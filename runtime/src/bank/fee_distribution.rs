@@ -211,13 +211,12 @@ impl Bank {
                 };
                 if rent_to_be_paid > 0 {
                     let check_account_owner = self.validate_fee_collector_account();
-                    let check_rent_paying = self.prevent_rent_paying_rent_recipients();
                     match self.deposit_fees(
                         &pubkey,
                         rent_to_be_paid,
                         DepositFeeOptions {
                             check_account_owner,
-                            check_rent_paying,
+                            check_rent_paying: true,
                         },
                     ) {
                         Ok(post_balance) => {
@@ -633,164 +632,129 @@ pub mod tests {
         let mut genesis_config = genesis_config_info.genesis_config;
         genesis_config.rent = Rent::default(); // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
 
-        for deactivate_feature in [false, true] {
-            if deactivate_feature {
-                genesis_config
-                    .accounts
-                    .remove(&feature_set::prevent_rent_paying_rent_recipients::id())
-                    .unwrap();
+        let bank = Bank::new_for_tests(&genesis_config);
+        let rent = &bank.rent_collector().rent;
+        let rent_exempt_minimum = rent.minimum_balance(0);
+
+        // Make one validator have an empty identity account
+        let mut empty_validator_account = bank
+            .get_account_with_fixed_root(&empty_validator.node_keypair.pubkey())
+            .unwrap();
+        empty_validator_account.set_lamports(0);
+        bank.store_account(
+            &empty_validator.node_keypair.pubkey(),
+            &empty_validator_account,
+        );
+
+        // Make one validator almost rent-exempt, less RENT_PER_VALIDATOR
+        let mut becomes_rent_exempt_validator_account = bank
+            .get_account_with_fixed_root(&becomes_rent_exempt_validator.node_keypair.pubkey())
+            .unwrap();
+        becomes_rent_exempt_validator_account
+            .set_lamports(rent_exempt_minimum - RENT_PER_VALIDATOR);
+        bank.store_account(
+            &becomes_rent_exempt_validator.node_keypair.pubkey(),
+            &becomes_rent_exempt_validator_account,
+        );
+
+        // Make one validator rent-exempt
+        let mut rent_exempt_validator_account = bank
+            .get_account_with_fixed_root(&rent_exempt_validator.node_keypair.pubkey())
+            .unwrap();
+        rent_exempt_validator_account.set_lamports(rent_exempt_minimum);
+        bank.store_account(
+            &rent_exempt_validator.node_keypair.pubkey(),
+            &rent_exempt_validator_account,
+        );
+
+        let get_rent_state = |bank: &Bank, address: &Pubkey| -> RentState {
+            let account = bank
+                .get_account_with_fixed_root(address)
+                .unwrap_or_default();
+            RentState::from_account(&account, rent)
+        };
+
+        // Assert starting RentStates
+        assert_eq!(
+            get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
+            RentState::Uninitialized
+        );
+        assert_eq!(
+            get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
+            RentState::RentPaying {
+                lamports: 42,
+                data_size: 0,
             }
-            let bank = Bank::new_for_tests(&genesis_config);
-            let rent = &bank.rent_collector().rent;
-            let rent_exempt_minimum = rent.minimum_balance(0);
+        );
+        assert_eq!(
+            get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
+            RentState::RentPaying {
+                lamports: rent_exempt_minimum - RENT_PER_VALIDATOR,
+                data_size: 0,
+            }
+        );
+        assert_eq!(
+            get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
+            RentState::RentExempt
+        );
 
-            // Make one validator have an empty identity account
-            let mut empty_validator_account = bank
-                .get_account_with_fixed_root(&empty_validator.node_keypair.pubkey())
-                .unwrap();
-            empty_validator_account.set_lamports(0);
-            bank.store_account(
-                &empty_validator.node_keypair.pubkey(),
-                &empty_validator_account,
-            );
+        let old_empty_validator_lamports = bank.get_balance(&empty_validator.node_keypair.pubkey());
+        let old_rent_paying_validator_lamports =
+            bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
+        let old_becomes_rent_exempt_validator_lamports =
+            bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
+        let old_rent_exempt_validator_lamports =
+            bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
 
-            // Make one validator almost rent-exempt, less RENT_PER_VALIDATOR
-            let mut becomes_rent_exempt_validator_account = bank
-                .get_account_with_fixed_root(&becomes_rent_exempt_validator.node_keypair.pubkey())
-                .unwrap();
-            becomes_rent_exempt_validator_account
-                .set_lamports(rent_exempt_minimum - RENT_PER_VALIDATOR);
-            bank.store_account(
-                &becomes_rent_exempt_validator.node_keypair.pubkey(),
-                &becomes_rent_exempt_validator_account,
-            );
+        bank.distribute_rent_to_validators(&bank.vote_accounts(), TOTAL_RENT);
 
-            // Make one validator rent-exempt
-            let mut rent_exempt_validator_account = bank
-                .get_account_with_fixed_root(&rent_exempt_validator.node_keypair.pubkey())
-                .unwrap();
-            rent_exempt_validator_account.set_lamports(rent_exempt_minimum);
-            bank.store_account(
-                &rent_exempt_validator.node_keypair.pubkey(),
-                &rent_exempt_validator_account,
-            );
+        let new_empty_validator_lamports = bank.get_balance(&empty_validator.node_keypair.pubkey());
+        let new_rent_paying_validator_lamports =
+            bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
+        let new_becomes_rent_exempt_validator_lamports =
+            bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
+        let new_rent_exempt_validator_lamports =
+            bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
 
-            let get_rent_state = |bank: &Bank, address: &Pubkey| -> RentState {
-                let account = bank
-                    .get_account_with_fixed_root(address)
-                    .unwrap_or_default();
-                RentState::from_account(&account, rent)
-            };
+        // Assert ending balances; rent should be withheld if test is active and ending RentState
+        // is RentPaying, ie. empty_validator and rent_paying_validator
+        assert_eq!(old_empty_validator_lamports, new_empty_validator_lamports);
 
-            // Assert starting RentStates
-            assert_eq!(
-                get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
-                RentState::Uninitialized
-            );
-            assert_eq!(
-                get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
-                RentState::RentPaying {
-                    lamports: 42,
-                    data_size: 0,
-                }
-            );
-            assert_eq!(
-                get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
-                RentState::RentPaying {
-                    lamports: rent_exempt_minimum - RENT_PER_VALIDATOR,
-                    data_size: 0,
-                }
-            );
-            assert_eq!(
-                get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
-                RentState::RentExempt
-            );
+        assert_eq!(
+            old_rent_paying_validator_lamports,
+            new_rent_paying_validator_lamports
+        );
 
-            let old_empty_validator_lamports =
-                bank.get_balance(&empty_validator.node_keypair.pubkey());
-            let old_rent_paying_validator_lamports =
-                bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
-            let old_becomes_rent_exempt_validator_lamports =
-                bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
-            let old_rent_exempt_validator_lamports =
-                bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
+        assert_eq!(
+            old_becomes_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
+            new_becomes_rent_exempt_validator_lamports
+        );
 
-            bank.distribute_rent_to_validators(&bank.vote_accounts(), TOTAL_RENT);
+        assert_eq!(
+            old_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
+            new_rent_exempt_validator_lamports
+        );
 
-            let new_empty_validator_lamports =
-                bank.get_balance(&empty_validator.node_keypair.pubkey());
-            let new_rent_paying_validator_lamports =
-                bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
-            let new_becomes_rent_exempt_validator_lamports =
-                bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
-            let new_rent_exempt_validator_lamports =
-                bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
-
-            // Assert ending balances; rent should be withheld if test is active and ending RentState
-            // is RentPaying, ie. empty_validator and rent_paying_validator
-            assert_eq!(
-                if deactivate_feature {
-                    old_empty_validator_lamports + RENT_PER_VALIDATOR
-                } else {
-                    old_empty_validator_lamports
-                },
-                new_empty_validator_lamports
-            );
-
-            assert_eq!(
-                if deactivate_feature {
-                    old_rent_paying_validator_lamports + RENT_PER_VALIDATOR
-                } else {
-                    old_rent_paying_validator_lamports
-                },
-                new_rent_paying_validator_lamports
-            );
-
-            assert_eq!(
-                old_becomes_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
-                new_becomes_rent_exempt_validator_lamports
-            );
-
-            assert_eq!(
-                old_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
-                new_rent_exempt_validator_lamports
-            );
-
-            // Assert ending RentStates
-            assert_eq!(
-                if deactivate_feature {
-                    RentState::RentPaying {
-                        lamports: RENT_PER_VALIDATOR,
-                        data_size: 0,
-                    }
-                } else {
-                    RentState::Uninitialized
-                },
-                get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
-            );
-            assert_eq!(
-                if deactivate_feature {
-                    RentState::RentPaying {
-                        lamports: old_rent_paying_validator_lamports + RENT_PER_VALIDATOR,
-                        data_size: 0,
-                    }
-                } else {
-                    RentState::RentPaying {
-                        lamports: old_rent_paying_validator_lamports,
-                        data_size: 0,
-                    }
-                },
-                get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
-            );
-            assert_eq!(
-                RentState::RentExempt,
-                get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
-            );
-            assert_eq!(
-                RentState::RentExempt,
-                get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
-            );
-        }
+        // Assert ending RentStates
+        assert_eq!(
+            RentState::Uninitialized,
+            get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            RentState::RentPaying {
+                lamports: old_rent_paying_validator_lamports,
+                data_size: 0,
+            },
+            get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            RentState::RentExempt,
+            get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            RentState::RentExempt,
+            get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
+        );
     }
 
     #[test]

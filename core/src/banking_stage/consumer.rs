@@ -587,6 +587,10 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
+        let ((last_blockhash, lamports_per_signature), last_blockhash_us) =
+            measure_us!(bank.last_blockhash_and_lamports_per_signature());
+        execute_and_commit_timings.last_blockhash_us = last_blockhash_us;
+
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), executed_transactions));
@@ -623,6 +627,8 @@ impl Consumer {
                 batch,
                 &mut loaded_transactions,
                 execution_results,
+                last_blockhash,
+                lamports_per_signature,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
@@ -1724,14 +1730,19 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let keypair = Keypair::new();
 
         let address_table_key = Pubkey::new_unique();
         let address_table_state = generate_new_address_lookup_table(None, 2);
         store_address_lookup_table(&bank, address_table_key, address_table_state);
 
-        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), 1));
+        let new_bank = Bank::new_from_parent(bank, &Pubkey::new_unique(), 2);
+        let bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(new_bank)
+            .clone_without_scheduler();
         let message = VersionedMessage::V0(v0::Message {
             header: MessageHeader {
                 num_required_signatures: 1,

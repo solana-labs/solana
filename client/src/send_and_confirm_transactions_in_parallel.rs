@@ -102,7 +102,7 @@ fn create_blockhash_data_updating_task(
 fn create_transaction_confirmation_task(
     rpc_client: Arc<RpcClient>,
     current_block_height: Arc<AtomicU64>,
-    unconfirmed_transasction_map: Arc<DashMap<Signature, TransactionData>>,
+    unconfirmed_transaction_map: Arc<DashMap<Signature, TransactionData>>,
     errors_map: Arc<DashMap<usize, TransactionError>>,
     num_confirmed_transactions: Arc<AtomicUsize>,
 ) -> JoinHandle<()> {
@@ -111,9 +111,9 @@ fn create_transaction_confirmation_task(
         let mut last_block_height = current_block_height.load(Ordering::Relaxed);
 
         loop {
-            if !unconfirmed_transasction_map.is_empty() {
+            if !unconfirmed_transaction_map.is_empty() {
                 let current_block_height = current_block_height.load(Ordering::Relaxed);
-                let transactions_to_verify: Vec<Signature> = unconfirmed_transasction_map
+                let transactions_to_verify: Vec<Signature> = unconfirmed_transaction_map
                     .iter()
                     .filter(|x| {
                         let is_not_expired = current_block_height <= x.last_valid_block_height;
@@ -135,7 +135,7 @@ fn create_transaction_confirmation_task(
                                     status.satisfies_commitment(rpc_client.commitment())
                                 })
                                 .and_then(|status| {
-                                    unconfirmed_transasction_map
+                                    unconfirmed_transaction_map
                                         .remove(signature)
                                         .map(|(_, data)| (status, data))
                                 })
@@ -158,7 +158,7 @@ fn create_transaction_confirmation_task(
 
 #[derive(Clone, Debug)]
 struct SendingContext {
-    unconfirmed_transasction_map: Arc<DashMap<Signature, TransactionData>>,
+    unconfirmed_transaction_map: Arc<DashMap<Signature, TransactionData>>,
     error_map: Arc<DashMap<usize, TransactionError>>,
     blockhash_data_rw: Arc<RwLock<BlockHashData>>,
     num_confirmed_transactions: Arc<AtomicUsize>,
@@ -249,7 +249,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
         transaction
             .try_sign(signers, blockhashdata.blockhash)
             .expect("Transaction should be signable");
-        let serialized_transaction = serialize(&transaction).expect("Transaction should serailize");
+        let serialized_transaction = serialize(&transaction).expect("Transaction should serialize");
         let signature = transaction.signatures[0];
         futures.push(
             send_transaction_with_rpc_fallback(
@@ -263,7 +263,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
             )
             .and_then(move |_| async move {
                 // send to confirm the transaction
-                context.unconfirmed_transasction_map.insert(
+                context.unconfirmed_transaction_map.insert(
                     signature,
                     TransactionData {
                         index: *index,
@@ -300,11 +300,11 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
     tpu_client: &Option<QuicTpuClient>,
     context: &SendingContext,
 ) {
-    let unconfirmed_transasction_map = context.unconfirmed_transasction_map.clone();
+    let unconfirmed_transaction_map = context.unconfirmed_transaction_map.clone();
     let current_block_height = context.current_block_height.clone();
 
-    let transactions_to_confirm = unconfirmed_transasction_map.len();
-    let max_valid_block_height = unconfirmed_transasction_map
+    let transactions_to_confirm = unconfirmed_transaction_map.len();
+    let max_valid_block_height = unconfirmed_transaction_map
         .iter()
         .map(|x| x.last_valid_block_height)
         .max();
@@ -321,7 +321,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
         }
 
         // wait till all transactions are confirmed or we have surpassed max processing age for the last sent transaction
-        while !unconfirmed_transasction_map.is_empty()
+        while !unconfirmed_transaction_map.is_empty()
             && current_block_height.load(Ordering::Relaxed) <= max_valid_block_height
         {
             let block_height = current_block_height.load(Ordering::Relaxed);
@@ -339,7 +339,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
                 let instant = Instant::now();
                 // retry sending transaction only over TPU port
                 // any transactions sent over RPC will be automatically rebroadcast by the RPC server
-                let txs_to_resend_over_tpu = unconfirmed_transasction_map
+                let txs_to_resend_over_tpu = unconfirmed_transaction_map
                     .iter()
                     .filter(|x| block_height < x.last_valid_block_height)
                     .map(|x| x.serialized_transaction.clone())
@@ -356,7 +356,7 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
             if let Some(max_valid_block_height_in_remaining_transaction) =
-                unconfirmed_transasction_map
+                unconfirmed_transaction_map
                     .iter()
                     .map(|x| x.last_valid_block_height)
                     .max()
@@ -439,7 +439,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
     let mut initial = true;
     let signing_count = config.resign_txs_count.unwrap_or(1);
     let context = SendingContext {
-        unconfirmed_transasction_map: unconfirmed_transasction_map.clone(),
+        unconfirmed_transaction_map: unconfirmed_transasction_map.clone(),
         blockhash_data_rw: blockhash_data_rw.clone(),
         num_confirmed_transactions: num_confirmed_transactions.clone(),
         current_block_height: current_block_height.clone(),

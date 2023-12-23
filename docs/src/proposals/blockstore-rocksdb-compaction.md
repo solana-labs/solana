@@ -22,7 +22,7 @@ required for storing each entry.  In other words, RocksDB uses compactions
 to balance [write, space, and read amplifications](https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html).
 
 As different workloads have different requirements, RocksDB makes its options
-highly configerable.  However, it also means its default settings might not
+highly configurable.  However, it also means its default settings might not
 be always suitable.  This document focuses on RocksDB's compaction
 optimization for Solana's Blockstore.
 
@@ -109,7 +109,7 @@ close to 1 read amplification.  As each key is only inserted once, we have
 space amplification 1.
 
 ### Use Current Settings for Metadata Column Families
-The second type of the column families related to shred insertion is medadata
+The second type of the column families related to shred insertion is metadata
 column families.  These metadata column families contributes ~1% of the shred
 insertion data in size.  The largest metadata column family here is the Index
 column family, which occupies 0.8% of the shred insertion data.
@@ -160,7 +160,7 @@ in Solana's BlockStore use case:
 Here we discuss Level to FIFO and FIFO to Level migrations:
 
 ### Level to FIFO
-heoretically, FIFO compaction is the superset of all other compaction styles,
+Theoretically, FIFO compaction is the superset of all other compaction styles,
 as it does not have any assumption of the LSM tree structure.  However, the
 current RocksDB implementation does not offer such flexibility while it is
 theoretically doable.

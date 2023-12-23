@@ -114,12 +114,13 @@ impl SchedulerController {
     ) -> Result<(), SchedulerError> {
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
-                let (scheduling_summary, schedule_time_us) =
-                    measure_us!(self
-                        .scheduler
-                        .schedule(&mut self.container, |txs, results| {
-                            Self::pre_scheduling_filter(txs, results, &bank_start.working_bank)
-                        })?);
+                let (scheduling_summary, schedule_time_us) = measure_us!(self.scheduler.schedule(
+                    &mut self.container,
+                    |txs, results| {
+                        Self::pre_graph_filter(txs, results, &bank_start.working_bank)
+                    },
+                    |_| true // no pre-lock filter for now
+                )?);
                 saturating_add_assign!(
                     self.count_metrics.num_scheduled,
                     scheduling_summary.num_scheduled
@@ -152,11 +153,7 @@ impl SchedulerController {
         Ok(())
     }
 
-    fn pre_scheduling_filter(
-        transactions: &[&SanitizedTransaction],
-        results: &mut [bool],
-        bank: &Bank,
-    ) {
+    fn pre_graph_filter(transactions: &[&SanitizedTransaction], results: &mut [bool], bank: &Bank) {
         let lock_results = vec![Ok(()); transactions.len()];
         let mut error_counters = TransactionErrorMetrics::default();
         let check_results = bank.check_transactions(

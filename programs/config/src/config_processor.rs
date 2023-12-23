@@ -127,7 +127,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         ic_msg!(invoke_context, "instruction data too large");
         return Err(InstructionError::InvalidInstructionData);
     }
-    config_account.get_data_mut()?[..data.len()].copy_from_slice(data);
+    config_account.get_data_mut(&invoke_context.feature_set)?[..data.len()].copy_from_slice(data);
     Ok(())
 });
 

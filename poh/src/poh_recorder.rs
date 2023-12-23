@@ -1608,7 +1608,7 @@ mod tests {
         assert!(poh_recorder.working_bank.is_some());
 
         // Drop entry receiver, and try to tick again. Because
-        // the reciever is closed, the ticks will not be drained from the cache,
+        // the receiver is closed, the ticks will not be drained from the cache,
         // and the working bank will be cleared
         drop(entry_receiver);
         poh_recorder.tick();

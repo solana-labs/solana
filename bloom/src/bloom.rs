@@ -141,16 +141,19 @@ impl<T: AsRef<[u8]>> BloomHashIndex for T {
     }
 }
 
-pub struct AtomicBloom<T> {
+/// Bloom filter that can be used concurrently.
+/// Concurrent reads/writes are safe, but are not atomic at the struct level,
+/// this means that reads may see partial writes.
+pub struct ConcurrentBloom<T> {
     num_bits: u64,
     keys: Vec<u64>,
     bits: Vec<AtomicU64>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
+impl<T: BloomHashIndex> From<Bloom<T>> for ConcurrentBloom<T> {
     fn from(bloom: Bloom<T>) -> Self {
-        AtomicBloom {
+        ConcurrentBloom {
             num_bits: bloom.bits.len(),
             keys: bloom.keys,
             bits: bloom
@@ -164,7 +167,7 @@ impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
     }
 }
 
-impl<T: BloomHashIndex> AtomicBloom<T> {
+impl<T: BloomHashIndex> ConcurrentBloom<T> {
     fn pos(&self, key: &T, hash_index: u64) -> (usize, u64) {
         let pos = key
             .hash_at_index(hash_index)
@@ -199,15 +202,15 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
         })
     }
 
-    pub fn clear_for_tests(&mut self) {
+    pub fn clear(&self) {
         self.bits.iter().for_each(|bit| {
             bit.store(0u64, Ordering::Relaxed);
         });
     }
 }
 
-impl<T: BloomHashIndex> From<AtomicBloom<T>> for Bloom<T> {
-    fn from(atomic_bloom: AtomicBloom<T>) -> Self {
+impl<T: BloomHashIndex> From<ConcurrentBloom<T>> for Bloom<T> {
+    fn from(atomic_bloom: ConcurrentBloom<T>) -> Self {
         let bits: Vec<_> = atomic_bloom
             .bits
             .into_iter()
@@ -325,7 +328,7 @@ mod test {
         let hash_values: Vec<_> = std::iter::repeat_with(generate_random_hash)
             .take(1200)
             .collect();
-        let bloom: AtomicBloom<_> = Bloom::<Hash>::random(1287, 0.1, 7424).into();
+        let bloom: ConcurrentBloom<_> = Bloom::<Hash>::random(1287, 0.1, 7424).into();
         assert_eq!(bloom.keys.len(), 3);
         assert_eq!(bloom.num_bits, 6168);
         assert_eq!(bloom.bits.len(), 97);
@@ -360,7 +363,7 @@ mod test {
         let num_bits_set = bloom.num_bits_set;
         assert!(num_bits_set > 2000, "# bits set: {num_bits_set}");
         // Round-trip with no inserts.
-        let bloom: AtomicBloom<_> = bloom.into();
+        let bloom: ConcurrentBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
         for hash_value in &hash_values {
@@ -372,7 +375,7 @@ mod test {
             assert!(bloom.contains(hash_value));
         }
         // Round trip, re-inserting the same hash values.
-        let bloom: AtomicBloom<_> = bloom.into();
+        let bloom: ConcurrentBloom<_> = bloom.into();
         hash_values.par_iter().for_each(|v| {
             bloom.add(v);
         });
@@ -389,7 +392,7 @@ mod test {
         let more_hash_values: Vec<_> = std::iter::repeat_with(generate_random_hash)
             .take(1000)
             .collect();
-        let bloom: AtomicBloom<_> = bloom.into();
+        let bloom: ConcurrentBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
         more_hash_values.par_iter().for_each(|v| {

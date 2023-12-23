@@ -350,7 +350,7 @@ impl ContactInfo {
     }
 
     // Removes the IP address at the given index if
-    // no socket entry refrences that index.
+    // no socket entry references that index.
     fn maybe_remove_addr(&mut self, index: u8) {
         if !self.sockets.iter().any(|entry| entry.index == index) {
             self.addrs.remove(usize::from(index));

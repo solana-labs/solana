@@ -892,28 +892,37 @@ mod test {
         solana_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
+        let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
             ..Config::default()
         };
 
-        let root_bank = Arc::new(Bank::new_from_parent(
+        let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
-        ));
+        );
+        let root_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(root_bank)
+            .clone_without_scheduler();
+
         let rooted_signature = root_bank
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
-        let working_bank = Arc::new(Bank::new_from_parent(
-            root_bank.clone(),
-            &Pubkey::default(),
-            2,
-        ));
+        let working_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(
+                root_bank.clone(),
+                &Pubkey::default(),
+                2,
+            ))
+            .clone_without_scheduler();
 
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
@@ -1158,19 +1167,24 @@ mod test {
         solana_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank);
+        let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
             ..Config::default()
         };
 
-        let root_bank = Arc::new(Bank::new_from_parent(
+        let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
-        ));
+        );
+        let root_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(root_bank)
+            .clone_without_scheduler();
+
         let rooted_signature = root_bank
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
@@ -1184,11 +1198,15 @@ mod test {
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
 
-        let working_bank = Arc::new(Bank::new_from_parent(
-            root_bank.clone(),
-            &Pubkey::default(),
-            2,
-        ));
+        let working_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(
+                root_bank.clone(),
+                &Pubkey::default(),
+                2,
+            ))
+            .clone_without_scheduler();
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();

@@ -1,7 +1,7 @@
 use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::pubkey::Pubkey,
+    solana_sdk::{pubkey::Pubkey, quic::NotifyKeyUpdate},
     std::{
         collections::HashSet,
         sync::{Arc, RwLock},
@@ -14,4 +14,5 @@ pub struct AdminRpcRequestMetadataPostInit {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub vote_account: Pubkey,
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    pub notifies: Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>,
 }

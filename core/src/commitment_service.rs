@@ -263,6 +263,20 @@ mod tests {
         },
     };
 
+    fn new_bank_from_parent_with_bank_forks(
+        bank_forks: &RwLock<BankForks>,
+        parent: Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+    ) -> Arc<Bank> {
+        let bank = Bank::new_from_parent(parent, collector_id, slot);
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(bank)
+            .clone_without_scheduler()
+    }
+
     #[test]
     fn test_get_highest_super_majority_root() {
         assert_eq!(get_highest_super_majority_root(vec![], 10), 0);
@@ -508,14 +522,18 @@ mod tests {
             vec![100; 1],
         );
 
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new_rw_arc(bank0);
+        let (_bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
         // Fill bank_forks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root slots 0 and 1
         for x in 0..33 {
             let previous_bank = bank_forks.read().unwrap().get(x).unwrap();
-            let bank = Bank::new_from_parent(previous_bank.clone(), &Pubkey::default(), x + 1);
+            let bank = new_bank_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                previous_bank.clone(),
+                &Pubkey::default(),
+                x + 1,
+            );
             let vote = vote_transaction::new_vote_transaction(
                 vec![x],
                 previous_bank.hash(),
@@ -526,7 +544,6 @@ mod tests {
                 None,
             );
             bank.process_transaction(&vote).unwrap();
-            bank_forks.write().unwrap().insert(bank);
         }
 
         let working_bank = bank_forks.read().unwrap().working_bank();
@@ -543,7 +560,12 @@ mod tests {
 
         // Add an additional bank/vote that will root slot 2
         let bank33 = bank_forks.read().unwrap().get(33).unwrap();
-        let bank34 = Bank::new_from_parent(bank33.clone(), &Pubkey::default(), 34);
+        let bank34 = new_bank_from_parent_with_bank_forks(
+            bank_forks.as_ref(),
+            bank33.clone(),
+            &Pubkey::default(),
+            34,
+        );
         let vote33 = vote_transaction::new_vote_transaction(
             vec![33],
             bank33.hash(),
@@ -554,7 +576,6 @@ mod tests {
             None,
         );
         bank34.process_transaction(&vote33).unwrap();
-        bank_forks.write().unwrap().insert(bank34);
 
         let working_bank = bank_forks.read().unwrap().working_bank();
         let root = get_vote_account_root_slot(
@@ -587,8 +608,12 @@ mod tests {
         // Add a forked bank. Because the vote for bank 33 landed in the non-ancestor, the vote
         // account's root (and thus the highest_super_majority_root) rolls back to slot 1
         let bank33 = bank_forks.read().unwrap().get(33).unwrap();
-        let bank35 = Bank::new_from_parent(bank33, &Pubkey::default(), 35);
-        bank_forks.write().unwrap().insert(bank35);
+        let _bank35 = new_bank_from_parent_with_bank_forks(
+            bank_forks.as_ref(),
+            bank33,
+            &Pubkey::default(),
+            35,
+        );
 
         let working_bank = bank_forks.read().unwrap().working_bank();
         let ancestors = working_bank.status_cache_ancestors();
@@ -613,7 +638,12 @@ mod tests {
         // continues normally
         for x in 35..=37 {
             let previous_bank = bank_forks.read().unwrap().get(x).unwrap();
-            let bank = Bank::new_from_parent(previous_bank.clone(), &Pubkey::default(), x + 1);
+            let bank = new_bank_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                previous_bank.clone(),
+                &Pubkey::default(),
+                x + 1,
+            );
             let vote = vote_transaction::new_vote_transaction(
                 vec![x],
                 previous_bank.hash(),
@@ -624,7 +654,6 @@ mod tests {
                 None,
             );
             bank.process_transaction(&vote).unwrap();
-            bank_forks.write().unwrap().insert(bank);
         }
 
         let working_bank = bank_forks.read().unwrap().working_bank();

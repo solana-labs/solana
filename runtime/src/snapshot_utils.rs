@@ -715,7 +715,7 @@ pub fn archive_snapshot_package(
         .map_err(|err| SnapshotError::IoWithSource(err, "create staging snapshots path"))?;
 
     let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
-    // To be a source for symlinking and archiving, the path need to be an aboslute path
+    // To be a source for symlinking and archiving, the path need to be an absolute path
     let src_snapshot_dir = src_snapshot_dir
         .canonicalize()
         .map_err(|_e| SnapshotError::InvalidSnapshotDirPath(src_snapshot_dir.clone()))?;
@@ -2024,7 +2024,7 @@ pub fn verify_snapshot_archive(
 
     // The new the status_cache file is inside the slot directory together with the snapshot file.
     // When unpacking an archive, the status_cache file from the archive is one-level up outside of
-    //  the slot direcotry.
+    //  the slot directory.
     // The unpacked status_cache file need to be put back into the slot directory for the directory
     // comparison to pass.
     let existing_unpacked_status_cache_file =
@@ -3031,7 +3031,7 @@ mod tests {
         }
 
         // Ensure the remaining incremental snapshots are at the right slot
-        let expected_remaing_incremental_snapshot_archive_slots =
+        let expected_remaining_incremental_snapshot_archive_slots =
             (latest_full_snapshot_archive_slot..)
                 .step_by(incremental_snapshot_interval)
                 .take(num_incremental_snapshots_per_full_snapshot)
@@ -3048,7 +3048,7 @@ mod tests {
                 .collect::<HashSet<_>>();
         assert_eq!(
             actual_remaining_incremental_snapshot_archive_slots,
-            expected_remaing_incremental_snapshot_archive_slots
+            expected_remaining_incremental_snapshot_archive_slots
         );
     }
 

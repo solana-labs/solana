@@ -6,7 +6,7 @@ mod tests {
                 epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, BankTestConfig,
                 EpochRewardStatus, StartBlockHeightAndRewards,
             },
-            genesis_utils::{activate_all_features, activate_feature},
+            genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
@@ -34,7 +34,6 @@ mod tests {
         },
         solana_sdk::{
             epoch_schedule::EpochSchedule,
-            feature_set,
             genesis_config::create_genesis_config,
             hash::Hash,
             pubkey::Pubkey,
@@ -100,7 +99,6 @@ mod tests {
     ) {
         solana_logger::setup();
         let (mut genesis_config, _) = create_genesis_config(500);
-        activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);

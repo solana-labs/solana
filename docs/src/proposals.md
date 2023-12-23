@@ -1,5 +1,6 @@
 ---
 title: System Design Proposals
+sidebar_label: Overview
 ---
 
 Changes to the Solana architecture are performed through a public proposal process (via pull requests) on the [Solana GitHub repository](https://github.com/solana-labs/solana). New proposals should be submitted with the "[Submit a Design Proposal](#submit-a-design-proposal)" guide below.
@@ -7,13 +8,13 @@ Changes to the Solana architecture are performed through a public proposal proce
 There are currently two different states of these design proposals:
 
 1. [Accepted Proposals](./proposals/accepted-design-proposals.md)
-2. [Implemented Proposals](./implemented-proposals/implemented-proposals.md)
+2. [Implemented Proposals](./implemented-proposals/index.md)
 
 ## Accepted Proposals
 
 These architectural proposals have been accepted by the Solana team, but are not yet fully implemented.
 
-Each proposal may be implemented as described, implemented differently as issues in the designs become evident, or not implemented at all. If implemented, the proposal will be moved to [Implemented Proposals](./implemented-proposals/implemented-proposals.md) and the details will be added to relevant sections of the docs.
+Each proposal may be implemented as described, implemented differently as issues in the designs become evident, or not implemented at all. If implemented, the proposal will be moved to [Implemented Proposals](./implemented-proposals/index.md) and the details will be added to relevant sections of the docs.
 
 ## Implemented Proposals
 

@@ -338,7 +338,7 @@ impl RepairWeight {
             }
             Some(TreeRoot::PrunedRoot(subtree_root)) => {
                 // Even if these orphaned slots were previously pruned, they should be added back to
-                // `self.trees` as we are no longer sure of their ancestory.
+                // `self.trees` as we are no longer sure of their ancestry.
                 // After they are repaired there is a chance that they  are now part of the rooted path.
                 // This is possible for a duplicate slot with multiple ancestors, if the
                 // version we had pruned before had the wrong ancestor, and the correct version is
@@ -892,7 +892,7 @@ impl RepairWeight {
         );
     }
 
-    /// Finds any ancestors avaiable from `blockstore` for `slot`.
+    /// Finds any ancestors available from `blockstore` for `slot`.
     /// Ancestor search is stopped when finding one that chains to any
     /// tree in `self.trees` or `self.pruned_trees` or if the ancestor is < self.root.
     ///
@@ -2201,21 +2201,21 @@ mod test {
         let (blockstore, _, mut repair_weight) = setup_orphan_repair_weight();
 
         // Ancestor of slot 4 is slot 2, with an existing subtree rooted at 0
-        // because there wass a vote for a descendant
+        // because there was a vote for a descendant
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 4),
             (VecDeque::from([2]), Some(TreeRoot::Root(0)))
         );
 
         // Ancestors of 5 are [1, 3], with an existing subtree rooted at 0
-        // because there wass a vote for a descendant
+        // because there was a vote for a descendant
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 5),
             (VecDeque::from([1, 3]), Some(TreeRoot::Root(0)))
         );
 
         // Ancestors of slot 23 are [20, 22], with an existing subtree of 20
-        // because there wass a vote for 20
+        // because there was a vote for 20
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 23),
             (VecDeque::from([20, 22]), Some(TreeRoot::Root(20)))

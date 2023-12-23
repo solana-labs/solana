@@ -378,6 +378,7 @@ pub enum SystemInstruction {
 /// };
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
@@ -594,6 +595,7 @@ pub fn create_account_with_seed(
 /// };
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
@@ -804,6 +806,7 @@ pub fn assign_with_seed(
 /// };
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
@@ -1023,6 +1026,7 @@ pub fn transfer_with_seed(
 /// };
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
@@ -1220,6 +1224,7 @@ pub fn allocate_with_seed(
 /// /// - 1: system_program - executable
 /// /// - *: to - writable
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct TransferLamportsToManyInstruction {
 ///     pub bank_pda_bump_seed: u8,
 ///     pub amount_list: Vec<u64>,

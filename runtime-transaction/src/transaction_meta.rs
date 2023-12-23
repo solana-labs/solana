@@ -14,10 +14,13 @@
 use solana_sdk::hash::Hash;
 
 /// metadata can be extracted statically from sanitized transaction,
-/// for example: message hash, simple-vote-tx flag, compute budget limits,
+/// for example: message hash, simple-vote-tx flag, limits set by instructions
 pub trait StaticMeta {
     fn message_hash(&self) -> &Hash;
     fn is_simple_vote_tx(&self) -> bool;
+    fn compute_unit_limit(&self) -> u32;
+    fn compute_unit_price(&self) -> u64;
+    fn loaded_accounts_bytes(&self) -> u32;
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
@@ -31,6 +34,9 @@ pub trait DynamicMeta: StaticMeta {}
 pub struct TransactionMeta {
     pub(crate) message_hash: Hash,
     pub(crate) is_simple_vote_tx: bool,
+    pub(crate) compute_unit_limit: u32,
+    pub(crate) compute_unit_price: u64,
+    pub(crate) loaded_accounts_bytes: u32,
 }
 
 impl TransactionMeta {
@@ -40,5 +46,17 @@ impl TransactionMeta {
 
     pub(crate) fn set_is_simple_vote_tx(&mut self, is_simple_vote_tx: bool) {
         self.is_simple_vote_tx = is_simple_vote_tx;
+    }
+
+    pub(crate) fn set_compute_unit_limit(&mut self, compute_unit_limit: u32) {
+        self.compute_unit_limit = compute_unit_limit;
+    }
+
+    pub(crate) fn set_compute_unit_price(&mut self, compute_unit_price: u64) {
+        self.compute_unit_price = compute_unit_price;
+    }
+
+    pub(crate) fn set_loaded_accounts_bytes(&mut self, loaded_accounts_bytes: u32) {
+        self.loaded_accounts_bytes = loaded_accounts_bytes;
     }
 }
