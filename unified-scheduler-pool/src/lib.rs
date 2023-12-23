@@ -975,7 +975,7 @@ where
                             }
                             drop(task);
                         }
-                        Ok(SessionedMessage::StartSession(_result_with_timings)) => {
+                        Ok(SessionedMessage::StartSession(())) => {
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
