@@ -846,8 +846,7 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
-                                let r = executed_task.is_err().then(|| executed_task.result_with_timings.clone());
-                                if let Some(r) = r {
+                                if let Some(r) = executed_task.is_err().then(|| executed_task.result_with_timings) {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
                                     drop(schedulable_transaction_receiver);
