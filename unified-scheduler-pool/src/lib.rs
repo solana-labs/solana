@@ -788,7 +788,8 @@ where
                 let (do_now, dont_now) = (&disconnected::<()>(), &never::<()>());
 
                 while !thread_ending {
-                    loop {
+                    let mut is_finished = false;
+                    while !is_finished {
                         let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
@@ -796,7 +797,7 @@ where
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
                                     drop(schedulable_transaction_receiver);
-                                    return executed_task.result_with_timings;
+                                    return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
@@ -852,7 +853,7 @@ where
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
                                     drop(schedulable_transaction_receiver);
-                                    return executed_task.result_with_timings;
+                                    return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
@@ -864,11 +865,7 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        let is_finished =
-                            state_machine.is_empty() && (session_ending || thread_ending);
-                        if is_finished {
-                            break;
-                        }
+                        is_finished = state_machine.is_empty() && (session_ending || thread_ending);
                     }
 
                     if session_ending {
@@ -888,12 +885,12 @@ where
 
                 log_scheduler!("T:ended");
                 let result_with_timings = if session_ending {
-                    initialized_result_with_timings()
+                    None
                 } else {
                     executed_task_sender
                         .send(SessionedMessage::EndSession)
                         .unwrap();
-                    accumulated_result_receiver.recv().unwrap()
+                    Some(accumulated_result_receiver.recv().unwrap())
                 };
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -965,7 +962,6 @@ where
         let accumulator_main_thread = || {
             move || {
                 'outer: loop {
-                    info!("hi!");
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
                             result_with_timings
@@ -1028,7 +1024,6 @@ where
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            error!("session end!");
                             accumulated_result_sender
                                 .send(replace(
                                     &mut result_with_timings,
@@ -1040,7 +1035,6 @@ where
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
-                error!("accumulator thread ended!");
             }
         };
 
