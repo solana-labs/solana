@@ -693,7 +693,11 @@ where
     }
 
     fn reset_session_result_err(&mut self) -> Result<()> {
-        let err = self.session_result_with_timings.replace(initialized_result_with_timings()).unwrap().0;
+        let err = self
+            .session_result_with_timings
+            .replace(initialized_result_with_timings())
+            .unwrap()
+            .0;
         assert_matches!(err, Err(_));
         err
     }
