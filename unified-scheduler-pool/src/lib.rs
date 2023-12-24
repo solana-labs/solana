@@ -851,7 +851,7 @@ where
                                     log_scheduler!("T:aborted");
                                     result_sender.send(r.clone()).unwrap();
                                     drop(schedulable_transaction_receiver);
-                                    return (None, r);
+                                    return r;
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
@@ -898,7 +898,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                (Some(schedulable_transaction_receiver), result_with_timings)
+                result_with_timings
             }
         };
 
