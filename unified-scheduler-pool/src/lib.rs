@@ -736,7 +736,7 @@ where
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
-            let schedulable_transaction_receiver =
+            let mut schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.take().unwrap();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
