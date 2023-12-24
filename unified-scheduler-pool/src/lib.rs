@@ -1018,7 +1018,10 @@ where
                                 ))
                                 .unwrap();
                         }
-                        Err(RecvTimeoutError::Disconnected) => break 'outer,
+                        Err(RecvTimeoutError::Disconnected) => {
+                            error!("disconnected!");
+                            break 'outer;
+                        }
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
