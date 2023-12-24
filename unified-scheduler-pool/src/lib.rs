@@ -486,7 +486,7 @@ where
 {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
-    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<(Receiver<SessionedMessage<Task, SchedulingContext>>, ResultWithTimings)>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
