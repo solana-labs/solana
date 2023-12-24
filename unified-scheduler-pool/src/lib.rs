@@ -1233,9 +1233,9 @@ where
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
-                let r = thread_manager.take_session_result_with_timings().0;
-                assert_matches!(r, Err(_));
-                r
+                let err = thread_manager.take_session_result_with_timings().0;
+                assert_matches!(err, Err(_));
+                err
             } else {
                 Ok(())
             }
