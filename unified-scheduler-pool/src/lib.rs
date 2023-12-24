@@ -486,7 +486,7 @@ where
 {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
-    scheduler_thread_and_tid: Option<(JoinHandle<(Option<Receiver<SessionedMessage<Task, SchedulingContext>>>, ResultWithTimings)>, Tid)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<ResultWithTimings>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
@@ -629,7 +629,7 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<(Option<Receiver<SessionedMessage<Task, SchedulingContext>>>, ResultWithTimings)>> {
+    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
         self.scheduler_thread_and_tid
             .take()
             .map(|(thread, _tid)| thread)
