@@ -1237,7 +1237,7 @@ where
             let abort_detected = self
                 .ensure_thread_manager_started(&self.context)
                 .send_task(task);
-            info!("a: {}", abort_detected);
+            info!("abort_detected: {}", abort_detected);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
