@@ -486,7 +486,7 @@ where
 {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
-    scheduler_thread_and_tid: Option<(JoinHandle<(Receiver<SessionedMessage<Task, SchedulingContext>>, ResultWithTimings)>, Tid)>,
+    scheduler_thread_and_tid: Option<(JoinHandle<(Option<Receiver<SessionedMessage<Task, SchedulingContext>>>, ResultWithTimings)>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
@@ -629,7 +629,7 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<(Receiver<SessionedMessage<Task, SchedulingContext>>, ResultWithTimings)>> {
+    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<(Option<Receiver<SessionedMessage<Task, SchedulingContext>>>, ResultWithTimings)>> {
         self.scheduler_thread_and_tid
             .take()
             .map(|(thread, _tid)| thread)
@@ -846,7 +846,7 @@ where
                                 if let Some(r) = r {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(r.clone()).unwrap();
-                                    return (owned_schedulable_transaction_receiver, r);
+                                    return (None, r);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
@@ -893,7 +893,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                (owned_schedulable_transaction_receiver, result_with_timings)
+                (Some(owned_schedulable_transaction_receiver), result_with_timings)
             }
         };
 
