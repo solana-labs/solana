@@ -1127,6 +1127,7 @@ where
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
         } else {
+            assert_matches!(self.session_result_with_timings, Some(_));
             self.start_threads(context);
         }
     }
