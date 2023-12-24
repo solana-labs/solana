@@ -491,7 +491,7 @@ where
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
     schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
-    schedulable_transaction_receiver: Receiver<SessionedMessage<Task, SchedulingContext>>,
+    schedulable_transaction_receiver: Option<Receiver<SessionedMessage<Task, SchedulingContext>>>,
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
@@ -612,7 +612,7 @@ where
         Self {
             scheduler_id: pool.new_scheduler_id(),
             schedulable_transaction_sender,
-            schedulable_transaction_receiver,
+            schedulable_transaction_receiver: Some(schedulable_transaction_sender),
             result_sender,
             result_receiver,
             scheduler_thread_and_tid: None,
@@ -736,8 +736,9 @@ where
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
-            let mut schedulable_transaction_receiver =
-                self.schedulable_transaction_receiver.clone();
+            let owned_schedulable_transaction_receiver =
+                self.schedulable_transaction_receiver.take().unwrap();
+            let mut schedulable_transaction_receiver = &owned_schedulable_transaction_receiver;
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
 
@@ -822,7 +823,7 @@ where
                                     Err(_) => {
                                         assert!(!thread_ending);
                                         thread_ending = true;
-                                        schedulable_transaction_receiver = never();
+                                        schedulable_transaction_receiver = &never();
                                         "T:ending"
                                     }
                                 }
@@ -890,7 +891,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                result_with_timings
+                (owned_schedulable_transaction_receiver, result_with_timings)
             }
         };
 
@@ -1075,10 +1076,11 @@ where
             std::thread::current()
         );
 
+        let (s, r) = unbounded();
         (
             self.schedulable_transaction_sender,
             self.schedulable_transaction_receiver,
-        ) = unbounded();
+        ) = (s, Some(r));
 
         let () = self.accumulator_thread.take().unwrap().join().unwrap();
         for thread in self.handler_threads.drain(..) {
