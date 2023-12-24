@@ -1009,6 +1009,7 @@ where
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
+                            error!("session end!");
                             accumulated_result_sender
                                 .send(replace(
                                     &mut result_with_timings,
