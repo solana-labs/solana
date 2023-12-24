@@ -1132,10 +1132,14 @@ where
             return;
         }
 
-        self.schedulable_transaction_sender
+        let mut abort_detected;
+        abort_detected |= self.schedulable_transaction_sender
             .send(SessionedMessage::EndSession)
-            .unwrap();
+            .is_err();
         self.put_session_result_with_timings(self.result_receiver.recv().unwrap());
+        if abort_detected {
+            self.stop_and_join_threads();
+        }
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
