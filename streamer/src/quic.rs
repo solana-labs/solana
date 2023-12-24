@@ -176,6 +176,7 @@ pub struct StreamStats {
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
     pub(crate) throttled_streams: AtomicUsize,
+    pub(crate) stream_load_ema: AtomicUsize,
 }
 
 impl StreamStats {
@@ -409,6 +410,11 @@ impl StreamStats {
             (
                 "throttled_streams",
                 self.throttled_streams.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_load_ema",
+                self.stream_load_ema.load(Ordering::Relaxed),
                 i64
             ),
         );
