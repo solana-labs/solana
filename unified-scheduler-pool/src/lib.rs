@@ -693,11 +693,16 @@ where
     }
 
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
-        assert_matches!(
+        if result_with_timings.0.is_err() {
             self.session_result_with_timings.lock().unwrap()
                 .replace(result_with_timings),
-            None
-        );
+        } else {
+            assert_matches!(
+                self.session_result_with_timings.lock().unwrap()
+                    .replace(result_with_timings),
+                None
+            );
+        }
     }
 
     fn start_threads(&mut self, context: &SchedulingContext) {
