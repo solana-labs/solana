@@ -1102,13 +1102,9 @@ where
 
     fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
-        match self
-            .schedulable_transaction_sender
+        self.schedulable_transaction_sender
             .send(SessionedMessage::Payload(task))
-        {
-            Ok(()) => false,
-            Err(SendError(_)) => true,
-        }
+            .is_err()
     }
 
     fn end_session(&mut self) {
