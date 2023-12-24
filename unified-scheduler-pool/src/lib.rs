@@ -797,7 +797,8 @@ where
                                     executed_task_sender
                                         .send(SessionedMessage::EndSession)
                                         .unwrap();
-                                    return r;
+                                    todo!();
+                                    //return r;
                                 }
                                 "step"
                             },
@@ -844,7 +845,7 @@ where
                                 if let Some(r) = r {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(r.clone()).unwrap();
-                                    return r;
+                                    return (owned_schedulable_transaction_receiver, r);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
