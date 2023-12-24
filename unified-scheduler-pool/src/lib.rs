@@ -629,7 +629,7 @@ where
         self.scheduler_thread_and_tid.is_some()
     }
 
-    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<ResultWithTimings>> {
+    pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<Option<ResultWithTimings>>> {
         self.scheduler_thread_and_tid
             .take()
             .map(|(thread, _tid)| thread)
