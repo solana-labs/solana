@@ -786,8 +786,17 @@ where
                 while !thread_ending {
                     loop {
                         let state_change = select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> _executed_task => {
-                                panic!();
+                            recv(handled_blocked_transaction_receiver) -> executed_task => {
+                                let executed_task = executed_task.unwrap();
+                                if executed_task.is_err() {
+                                    log_scheduler!("T:aborted");
+                                    result_sender.send(None).unwrap();
+                                    drop(schedulable_transaction_receiver);
+                                    return executed_task.result_with_timings;
+                                } else {
+                                    state_machine.deschedule_task(&executed_task.task);
+                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                }
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> message => {
