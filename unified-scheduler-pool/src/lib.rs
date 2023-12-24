@@ -739,6 +739,7 @@ where
             let owned_schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.take().unwrap();
             let mut schedulable_transaction_receiver = &owned_schedulable_transaction_receiver;
+            let mut n = &never();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
 
@@ -824,7 +825,7 @@ where
                                     Err(_) => {
                                         assert!(!thread_ending);
                                         thread_ending = true;
-                                        schedulable_transaction_receiver = &never();
+                                        schedulable_transaction_receiver = n;
                                         "T:ending"
                                     }
                                 }
