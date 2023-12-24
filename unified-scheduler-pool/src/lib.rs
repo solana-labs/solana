@@ -948,6 +948,7 @@ where
             move || 'outer: {
                 loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
+                        info!("hi!");
                         Ok(SessionedMessage::Payload(executed_task)) => {
                             result_with_timings
                                 .1
