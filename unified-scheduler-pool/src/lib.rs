@@ -1106,7 +1106,9 @@ where
     }
 
     fn ended_session_did_abort(&self) -> Option<bool> {
-        self.session_result_with_timings.as_ref().map(|(r, t)| r.is_err())
+        self.session_result_with_timings
+            .as_ref()
+            .map(|(r, t)| r.is_err())
     }
 
     fn end_session(&mut self) {
@@ -1232,7 +1234,9 @@ where
             let task = SchedulingStateMachine::create_task(transaction.clone(), index, |pubkey| {
                 self.inner.address_book.load(pubkey)
             });
-            let abort_detected = self.ensure_thread_manager_started(&self.context).send_task(task);
+            let abort_detected = self
+                .ensure_thread_manager_started(&self.context)
+                .send_task(task);
             info!("a: {}", abort_detected);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
