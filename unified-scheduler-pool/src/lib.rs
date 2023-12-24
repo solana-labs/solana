@@ -495,7 +495,7 @@ where
     result_sender: Sender<ResultWithTimings>,
     result_receiver: Receiver<ResultWithTimings>,
     handler_count: usize,
-    session_result_with_timings: Arc<Mutex<Option<ResultWithTimings>>>,
+    session_result_with_timings: Option<ResultWithTimings>,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
@@ -621,7 +621,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Arc::new(Mutex::new(Some(initialized_result_with_timings()))),
+            session_result_with_timings: Some(initialized_result_with_timings())),
         }
     }
 
@@ -689,16 +689,16 @@ where
     }
 
     fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
-        self.session_result_with_timings.lock().unwrap().take().unwrap()
+        self.session_result_with_timings.take().unwrap()
     }
 
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
         if result_with_timings.0.is_err() {
-            self.session_result_with_timings.lock().unwrap()
+            self.session_result_with_timings
                 .replace(result_with_timings);
         } else {
             assert_matches!(
-                self.session_result_with_timings.lock().unwrap()
+                self.session_result_with_timings
                     .replace(result_with_timings),
                 None
             );
@@ -1106,13 +1106,13 @@ where
     }
 
     fn ended_session_did_abort(&self) -> Option<bool> {
-        self.session_result_with_timings.lock().unwrap().as_ref().map(|(r, t)| r.is_err())
+        self.session_result_with_timings.as_ref().map(|(r, t)| r.is_err())
     }
 
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.has_active_threads_to_be_joined() {
-            assert_matches!(*self.session_result_with_timings.lock().unwrap(), Some(_));
+            assert_matches!(self.session_result_with_timings, Some(_));
             return;
         } else if let Some(did_aborted) = self.ended_session_did_abort() {
             if did_aborted {
