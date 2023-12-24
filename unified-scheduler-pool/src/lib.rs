@@ -692,8 +692,8 @@ where
         self.session_result_with_timings.take().unwrap()
     }
 
-    fn take_session_err(&mut self) -> Result<()> {
-        let err = self.take_session_result_with_timings().0;
+    fn reset_session_result_err(&mut self) -> Result<()> {
+        let err = self.session_result_with_timings.replace(initialized_result_with_timings());
         assert_matches!(err, Err(_));
         err
     }
@@ -1032,10 +1032,7 @@ where
                                 ))
                                 .unwrap();
                         }
-                        Err(RecvTimeoutError::Disconnected) => {
-                            error!("disconnected!");
-                            break 'outer;
-                        }
+                        Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
@@ -1247,7 +1244,7 @@ where
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
-                thread_manager.take_session_err()
+                thread_manager.reset_session_result_err()
             } else {
                 Ok(())
             }
