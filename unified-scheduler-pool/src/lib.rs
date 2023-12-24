@@ -736,7 +736,7 @@ where
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
-            let owned_schedulable_transaction_receiver =
+            let schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.take().unwrap();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
@@ -744,8 +744,6 @@ where
             let mut session_ending = false;
             let mut thread_ending = false;
             move || {
-                let mut schedulable_transaction_receiver = &owned_schedulable_transaction_receiver;
-                let mut n = &never();
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
                 // hint compiler about inline[never] and unlikely?
@@ -825,7 +823,7 @@ where
                                     Err(_) => {
                                         assert!(!thread_ending);
                                         thread_ending = true;
-                                        schedulable_transaction_receiver = n;
+                                        schedulable_transaction_receiver = never();
                                         "T:ending"
                                     }
                                 }
@@ -893,7 +891,7 @@ where
                     "solScheduler thread is ended at: {:?}",
                     std::thread::current()
                 );
-                (Some(owned_schedulable_transaction_receiver), result_with_timings)
+                (Some(schedulable_transaction_receiver), result_with_timings)
             }
         };
 
