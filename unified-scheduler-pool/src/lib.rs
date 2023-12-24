@@ -846,11 +846,11 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
-                                if let Some(r) = executed_task.is_err().then(|| executed_task.result_with_timings) {
+                                if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
                                     drop(schedulable_transaction_receiver);
-                                    return r;
+                                    return executed_task.result_with_timings;
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
                                     executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
