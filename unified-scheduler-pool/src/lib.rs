@@ -612,7 +612,7 @@ where
         Self {
             scheduler_id: pool.new_scheduler_id(),
             schedulable_transaction_sender,
-            schedulable_transaction_receiver: Some(schedulable_transaction_sender),
+            schedulable_transaction_receiver: Some(schedulable_transaction_receiver),
             result_sender,
             result_receiver,
             scheduler_thread_and_tid: None,
