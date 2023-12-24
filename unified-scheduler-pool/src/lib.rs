@@ -850,6 +850,7 @@ where
                                 if let Some(r) = r {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(r.clone()).unwrap();
+                                    drop(schedulable_transaction_receiver);
                                     return (None, r);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
