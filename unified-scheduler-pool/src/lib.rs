@@ -692,6 +692,12 @@ where
         self.session_result_with_timings.take().unwrap()
     }
 
+    fn take_session_err(&mut self) -> Result<()> {
+        let err = self.take_session_result_with_timings().0;
+        assert_matches!(err, Err(_));
+        err
+    }
+
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
         assert_matches!(
             self.session_result_with_timings
@@ -1235,9 +1241,7 @@ where
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
-                let err = thread_manager.take_session_result_with_timings().0;
-                assert_matches!(err, Err(_));
-                err
+                thread_manager.take_session_err();
             } else {
                 Ok(())
             }
