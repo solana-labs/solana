@@ -834,12 +834,15 @@ where
                             },
                             recv(handled_idle_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
-                                if executed_task.is_err() {
-                                    log_scheduler!("T:aborted");
-                                    return executed_task.result_with_timings;
-                                }
                                 state_machine.deschedule_task(&executed_task.task);
-                                executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                let r = executed_task.is_err().then(|| executed_task.result_with_timings.clone());
+                                if let Some(r) = r {
+                                    log_scheduler!("T:aborted");
+                                    result_sender.send(r.clone()).unwrap();
+                                    return r;
+                                } else {
+                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                }
                                 "step"
                             },
                         };
