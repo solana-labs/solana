@@ -1132,7 +1132,7 @@ where
             return;
         }
 
-        let mut abort_detected;
+        let mut abort_detected = false;
         abort_detected |= self.schedulable_transaction_sender
             .send(SessionedMessage::EndSession)
             .is_err();
