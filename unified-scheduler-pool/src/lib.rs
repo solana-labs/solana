@@ -877,7 +877,7 @@ where
                             .send(SessionedMessage::EndSession)
                             .unwrap();
                         result_sender
-                            .send(accumulated_result_receiver.recv().unwrap())
+                            .send(Some(accumulated_result_receiver.recv().unwrap()))
                             .unwrap();
                         if !thread_ending {
                             session_ending = false;
