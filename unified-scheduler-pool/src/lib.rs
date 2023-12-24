@@ -1113,21 +1113,12 @@ where
         }
     }
 
-    fn ended_session_did_abort(&self) -> Option<bool> {
-        self.session_result_with_timings
-            .as_ref()
-            .map(|(r, t)| r.is_err())
-    }
-
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.has_active_threads_to_be_joined() {
             assert_matches!(self.session_result_with_timings, Some(_));
             return;
-        } else if let Some(did_aborted) = self.ended_session_did_abort() {
-            if did_aborted {
-                self.stop_and_join_threads();
-            }
+        } else if self.session_result_with_timings().is_some() {
             return;
         }
 
