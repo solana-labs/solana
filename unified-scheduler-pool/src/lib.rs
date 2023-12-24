@@ -783,7 +783,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 state_machine.deschedule_task(&executed_task.task);
-                                let r = executed_task.is_err().then(|a| executed_task.result_with_timings.clone());
+                                let r = executed_task.is_err().then(|| executed_task.result_with_timings.clone());
                                 executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
                                 if Some(r) = r {
                                     log_scheduler!("T:aborted");
