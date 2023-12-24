@@ -13,7 +13,7 @@ use {
     assert_matches::assert_matches,
     crossbeam_channel::{
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
-        RecvTimeoutError, SendError, Sender, TryRecvError,
+        RecvTimeoutError, Sender, TryRecvError,
     },
     log::*,
     solana_ledger::blockstore_processor::{
