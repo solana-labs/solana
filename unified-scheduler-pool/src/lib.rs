@@ -1023,6 +1023,7 @@ where
                     }
                 }
             }
+            error!("accumulator thread ended!");
         };
 
         self.scheduler_thread_and_tid = Some((
