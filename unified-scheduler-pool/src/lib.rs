@@ -492,8 +492,8 @@ where
     handler: TH,
     schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
     schedulable_transaction_receiver: Option<Receiver<SessionedMessage<Task, SchedulingContext>>>,
-    result_sender: Sender<ResultWithTimings>,
-    result_receiver: Receiver<ResultWithTimings>,
+    result_sender: Sender<Option<ResultWithTimings>>,
+    result_receiver: Receiver<Option<ResultWithTimings>>,
     handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
 }
