@@ -40,8 +40,8 @@ use {
     tokio::{task::JoinHandle, time::timeout},
 };
 
-/// Limit to 500K PPS
-const MAX_STREAMS_PER_100MS: u64 = 500_000 / 10;
+/// Limit to 250K PPS
+const MAX_STREAMS_PER_100MS: u64 = 250_000 / 10;
 const MAX_UNSTAKED_STREAMS_PERCENT: u64 = 20;
 const STREAM_THROTTLING_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -2119,7 +2119,7 @@ pub mod test {
     #[test]
     fn test_max_streams_for_connection_in_100ms() {
         let load_ema = Arc::new(StakedStreamLoadEMA::new());
-        // 50K packets per ms * 20% / 500 max unstaked connections
+        // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Unstaked,
@@ -2127,10 +2127,10 @@ pub mod test {
                 10000,
                 load_ema.clone()
             ),
-            20
+            10
         );
 
-        // 50K packets per ms * 20% / 500 max unstaked connections
+        // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Unstaked,
@@ -2138,11 +2138,11 @@ pub mod test {
                 10000,
                 load_ema.clone()
             ),
-            20
+            10
         );
 
         // If stake is 0, same limits as unstaked connections will apply.
-        // 50K packets per ms * 20% / 500 max unstaked connections
+        // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Staked,
@@ -2150,12 +2150,37 @@ pub mod test {
                 10000,
                 load_ema.clone()
             ),
-            20
+            10
         );
 
-        load_ema.current_load_ema.store(20000, Ordering::Relaxed);
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 20K) * stake / total_stake
+        load_ema.current_load_ema.store(10000, Ordering::Relaxed);
+        // max staked streams = 25K packets per ms * 80% = 20K
+        // function = ((20K * 20K) / 10K) * stake / total_stake
+        assert_eq!(
+            max_streams_for_connection_in_100ms(
+                ConnectionPeerType::Staked,
+                15,
+                10000,
+                load_ema.clone()
+            ),
+            60
+        );
+
+        // max staked streams = 25K packets per ms * 80% = 40K
+        // function = ((20K * 20K) / 10K) * stake / total_stake
+        assert_eq!(
+            max_streams_for_connection_in_100ms(
+                ConnectionPeerType::Staked,
+                1000,
+                10000,
+                load_ema.clone()
+            ),
+            4000
+        );
+
+        load_ema.current_load_ema.store(5000, Ordering::Relaxed);
+        // max staked streams = 25K packets per ms * 80% = 20K
+        // function = ((20K * 20K) / 5000) * stake / total_stake
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Staked,
@@ -2166,8 +2191,8 @@ pub mod test {
             120
         );
 
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 20K) * stake / total_stake
+        // max staked streams = 25K packets per ms * 80% = 20K
+        // function = ((20K * 20K) / 5000) * stake / total_stake
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Staked,
@@ -2178,36 +2203,11 @@ pub mod test {
             8000
         );
 
-        load_ema.current_load_ema.store(10000, Ordering::Relaxed);
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 10000) * stake / total_stake
-        assert_eq!(
-            max_streams_for_connection_in_100ms(
-                ConnectionPeerType::Staked,
-                15,
-                10000,
-                load_ema.clone()
-            ),
-            240
-        );
-
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 10000) * stake / total_stake
-        assert_eq!(
-            max_streams_for_connection_in_100ms(
-                ConnectionPeerType::Staked,
-                1000,
-                10000,
-                load_ema.clone()
-            ),
-            16000
-        );
-
-        // At 3000, the load is less than 25% of max_load (40K).
+        // At 4000, the load is less than 25% of max_load (20K).
         // Test that we cap it to 10%, yielding the same result as if load was 4000.
-        load_ema.current_load_ema.store(9000, Ordering::Relaxed);
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 25% of 40K) * stake / total_stake
+        load_ema.current_load_ema.store(4000, Ordering::Relaxed);
+        // max staked streams = 25K packets per ms * 80% = 20K
+        // function = ((20K * 20K) / 25% of 20K) * stake / total_stake
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Staked,
@@ -2215,11 +2215,11 @@ pub mod test {
                 10000,
                 load_ema.clone()
             ),
-            240
+            120
         );
 
-        // max staked streams = 50K packets per ms * 80% = 40K
-        // function = ((40K * 40K) / 25% of 40K) * stake / total_stake
+        // max staked streams = 25K packets per ms * 80% = 20K
+        // function = ((20K * 20K) / 25% of 20K) * stake / total_stake
         assert_eq!(
             max_streams_for_connection_in_100ms(
                 ConnectionPeerType::Staked,
@@ -2227,7 +2227,7 @@ pub mod test {
                 10000,
                 load_ema.clone()
             ),
-            16000
+            8000
         );
     }
 
