@@ -8,7 +8,7 @@ use {
     },
 };
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct ProgramTiming {
     pub accumulated_us: u64,
     pub accumulated_units: u64,
@@ -40,7 +40,7 @@ impl ProgramTiming {
 }
 
 /// Used as an index for `Metrics`.
-#[derive(Debug, Sequence, Clone)]
+#[derive(Debug, Sequence)]
 pub enum ExecuteTimingType {
     CheckUs,
     LoadUs,
@@ -53,7 +53,6 @@ pub enum ExecuteTimingType {
     UpdateTransactionStatuses,
 }
 
-#[derive(Clone)]
 pub struct Metrics([u64; ExecuteTimingType::CARDINALITY]);
 
 impl Index<ExecuteTimingType> for Metrics {
@@ -336,7 +335,7 @@ impl ExecuteTimings {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct ExecuteProcessInstructionTimings {
     pub total_us: u64,
     pub verify_caller_us: u64,
@@ -356,7 +355,7 @@ impl ExecuteProcessInstructionTimings {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct ExecuteAccessoryTimings {
     pub feature_set_clone_us: u64,
     pub compute_budget_process_transaction_us: u64,
@@ -381,7 +380,7 @@ impl ExecuteAccessoryTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
     pub create_vm_us: u64,
