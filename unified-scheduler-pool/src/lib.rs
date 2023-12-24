@@ -695,7 +695,7 @@ where
     fn put_session_result_with_timings(&mut self, result_with_timings: ResultWithTimings) {
         if result_with_timings.0.is_err() {
             self.session_result_with_timings.lock().unwrap()
-                .replace(result_with_timings),
+                .replace(result_with_timings);
         } else {
             assert_matches!(
                 self.session_result_with_timings.lock().unwrap()
