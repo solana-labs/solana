@@ -1237,7 +1237,7 @@ where
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
                 thread_manager.stop_and_join_threads();
-                let r = thread_manager.session_result_with_timings.as_ref().unwrap().0.clone();
+                let r = thread_manager.take_session_result_with_timings();
                 assert_matches!(r, Err(_));
                 r
             } else {
