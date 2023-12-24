@@ -1086,8 +1086,9 @@ where
             debug!("joining...: {:?}", thread);
             () = thread.join().unwrap();
         }
-        let result_with_timings = scheduler_thread.join().unwrap();
-        self.put_session_result_with_timings(result_with_timings);
+        if let Some(result_with_timings) = scheduler_thread.join().unwrap() {
+            self.put_session_result_with_timings(result_with_timings);
+        }
 
         debug!(
             "stop_and_join_threads(): successfully stopped threads by {:?}",
