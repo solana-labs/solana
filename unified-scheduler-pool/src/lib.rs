@@ -945,8 +945,8 @@ where
         };
 
         let accumulator_main_thread = || {
-            move || 'outer: {
-                loop {
+            move || {
+                'outer: loop {
                     info!("hi!");
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
