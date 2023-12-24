@@ -780,20 +780,8 @@ where
                 while !thread_ending {
                     loop {
                         let state_change = select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> executed_task => {
+                            recv(handled_blocked_transaction_receiver) -> _executed_task => {
                                 panic!();
-                                let executed_task = executed_task.unwrap();
-                                state_machine.deschedule_task(&executed_task.task);
-                                let r = executed_task.is_err().then(|| executed_task.result_with_timings.clone());
-                                executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
-                                if let Some(r) = r {
-                                    log_scheduler!("T:aborted");
-                                    executed_task_sender
-                                        .send(SessionedMessage::EndSession)
-                                        .unwrap();
-                                    todo!();
-                                    //return r;
-                                }
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> message => {
