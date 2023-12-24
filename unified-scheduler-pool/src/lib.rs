@@ -738,14 +738,14 @@ where
             let result_sender = self.result_sender.clone();
             let owned_schedulable_transaction_receiver =
                 self.schedulable_transaction_receiver.take().unwrap();
-            let mut schedulable_transaction_receiver = &owned_schedulable_transaction_receiver;
-            let mut n = &never();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
 
             let mut session_ending = false;
             let mut thread_ending = false;
             move || {
+                let mut schedulable_transaction_receiver = &owned_schedulable_transaction_receiver;
+                let mut n = &never();
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
                 // hint compiler about inline[never] and unlikely?
