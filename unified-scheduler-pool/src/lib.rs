@@ -1022,8 +1022,8 @@ where
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
+                error!("accumulator thread ended!");
             }
-            error!("accumulator thread ended!");
         };
 
         self.scheduler_thread_and_tid = Some((
