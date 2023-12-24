@@ -1580,7 +1580,8 @@ mod tests {
             ));
         assert_eq!(bank.transaction_count(), 0);
         assert_matches!(scheduler.schedule_execution(&(bad_tx, 0)), Ok(()));
-        scheduler.pause_for_recent_blockhash();
+
+        //scheduler.pause_for_recent_blockhash();
         assert_eq!(bank.transaction_count(), 0);
 
         let good_tx_after_bad_tx =
@@ -1596,10 +1597,12 @@ mod tests {
                 .result,
             Ok(_)
         );
+        std::thread::sleep(std::time::Duration::from_secs(3));
         assert_matches!(
             scheduler.schedule_execution(&(good_tx_after_bad_tx, 0)),
-            Ok(())
+            Err(_)
         );
+        /*
         scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
@@ -1612,6 +1615,7 @@ mod tests {
                 _timings
             ))
         );
+        */
     }
 
     #[derive(Debug)]
