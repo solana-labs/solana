@@ -849,7 +849,7 @@ where
                                 let r = executed_task.is_err().then(|| executed_task.result_with_timings.clone());
                                 if let Some(r) = r {
                                     log_scheduler!("T:aborted");
-                                    result_sender.send(r.clone()).unwrap();
+                                    result_sender.send(None).unwrap();
                                     drop(schedulable_transaction_receiver);
                                     return r;
                                 } else {
