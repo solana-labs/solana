@@ -1135,7 +1135,14 @@ where
         let mut abort_detected = self.schedulable_transaction_sender
             .send(SessionedMessage::EndSession)
             .is_err();
-        self.put_session_result_with_timings(self.result_receiver.recv().unwrap());
+
+        if let Some(result_with_timings) = self.result_receiver.recv().unwrap() {
+            assert!(!abort_detected);
+            self.put_session_result_with_timings(result_with_timings);
+        } else {
+            abort_detected = true;
+        }
+
         if abort_detected {
             self.stop_and_join_threads();
         }
