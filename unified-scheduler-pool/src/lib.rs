@@ -1094,8 +1094,7 @@ where
             debug!("joining...: {:?}", thread);
             () = thread.join().unwrap();
         }
-        let (r, result_with_timings) = scheduler_thread.join().unwrap();
-        drop(r);
+        let result_with_timings = scheduler_thread.join().unwrap();
         self.put_session_result_with_timings(result_with_timings);
 
         debug!(
