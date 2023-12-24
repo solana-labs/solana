@@ -823,7 +823,13 @@ where
                                     Err(_) => {
                                         assert!(!thread_ending);
                                         thread_ending = true;
+
+                                        // Err(_) on schedulable_transaction_receiver guarantees
+                                        // that there's no live sender and no messages to be
+                                        // received anymore; so dropping by overriding it with
+                                        // never() should pose no possibility of missed messages 
                                         schedulable_transaction_receiver = never();
+
                                         "T:ending"
                                     }
                                 }
