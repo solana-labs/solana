@@ -621,7 +621,7 @@ where
             handler_count,
             handler,
             pool,
-            session_result_with_timings: Some(initialized_result_with_timings())),
+            session_result_with_timings: Some(initialized_result_with_timings(),
         }
     }
 
