@@ -537,7 +537,7 @@ where
         loop {
             let read = self.inner.thread_manager.read().unwrap();
             if read.has_active_threads_to_be_joined() {
-                debug!(if was_already_started {
+                debug!("{}", if was_already_started {
                     "ensure_thread_manager_started(): is already active..."
                 } else {
                     "ensure_thread_manager_started(): started..."
