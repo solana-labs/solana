@@ -949,7 +949,9 @@ where
                         &pool,
                         send_metrics,
                     );
-                    sender.send(task).unwrap();
+                    if sender.send(task).is_err() {
+                        break;
+                    }
                 }
                 trace!(
                     "solScHandler{:02} thread is ended at: {:?}",
