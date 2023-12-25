@@ -538,7 +538,7 @@ where
             let read = self.inner.thread_manager.read().unwrap();
             if read.has_active_threads_to_be_joined() {
                 debug!("{}", if was_already_started {
-                    "ensure_thread_manager_started(): was already active..."
+                    "ensure_thread_manager_started(): was already active."
                 } else {
                     "ensure_thread_manager_started(): wasn't already active..."
                 });
@@ -722,6 +722,10 @@ where
             // race-free in ensure_thread_manager_started()...
             warn!("start_threads(): already started");
             return;
+        } else if let Some(r) = &self.session_result_with_timings {
+            if r.0.is_err() {
+                return;
+            }
         }
         debug!("start_threads(): doing now");
 
