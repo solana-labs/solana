@@ -983,7 +983,7 @@ where
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
-                            aseert_matches!(executed_task.result_with_timings.0, Ok(()));
+                            assert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
