@@ -1635,10 +1635,7 @@ mod tests {
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(
             bank.wait_for_completed_scheduler(),
-            Some((
-                Ok(()),
-                _timings
-            ))
+            Some((Ok(()), _timings))
         );
     }
 
