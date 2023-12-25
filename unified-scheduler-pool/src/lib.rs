@@ -319,6 +319,8 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
+    fn drop(&mut self) {
+    }
 }
 
 impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
