@@ -330,6 +330,7 @@ where
         error!("drop2!");
         sleep(Duration::from_secs(5));
         error!("drop3!");
+        debug!("dropping at {:?}", std::thread::current());
         let () = self.watchdog_thread.take().unwrap().join().unwrap();
         error!("drop4!");
         sleep(Duration::from_secs(5));
