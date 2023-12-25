@@ -78,7 +78,7 @@ pub struct SchedulerPool<
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
     watchdog_exit_signal_sender: Sender<()>,
-    watchdog_thread: Option<JoinHandle<()>>,
+    watchdog_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 #[derive(Debug)]
@@ -268,7 +268,7 @@ where
             },
             weak_self: weak_self.clone(),
             next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
-            watchdog_thread: Some(watchdog_thread),
+            watchdog_thread: Mutex::new(Some(watchdog_thread)),
             watchdog_sender,
             watchdog_exit_signal_sender
         });
@@ -338,7 +338,6 @@ where
         sleep(Duration::from_secs(5));
         error!("drop3!");
         debug!("dropping at {:?}", std::thread::current());
-        let () = self.watchdog_thread.take().unwrap().join().unwrap();
         error!("drop4!");
         sleep(Duration::from_secs(5));
         error!("drop5!");
@@ -359,6 +358,7 @@ where
     fn uninstalled_from_bank_forks(self: Arc<Self>) {
         self.scheduler_inners.lock().unwrap().clear();
         self.watchdog_exit_signal_sender.send(()).unwrap();
+        let () = self.watchdog_thread.lock().unwrap().take().unwrap().join().unwrap();
     }
 }
 
