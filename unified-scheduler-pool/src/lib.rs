@@ -333,6 +333,10 @@ where
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>> {
         Box::new(self.do_take_scheduler(context))
     }
+
+    fn uninstalled_from_bank_forks(&self) {
+        error!("uninstalled!");
+    }
 }
 
 pub trait TaskHandler<SEA: ScheduleExecutionArg>:
