@@ -1679,7 +1679,6 @@ mod tests {
             Some((Ok(()), _timings))
         );
         pool.uninstalled_from_bank_forks();
-        drop(pool);
     }
 
     #[derive(Debug)]
