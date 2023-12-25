@@ -1125,9 +1125,11 @@ where
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.has_active_threads_to_be_joined() {
+            debug!("end_session(): no threads..");
             assert_matches!(self.session_result_with_timings, Some(_));
             return;
         } else if self.session_result_with_timings.is_some() {
+            debug!("end_session(): already result resides within thread manager..");
             return;
         }
 
