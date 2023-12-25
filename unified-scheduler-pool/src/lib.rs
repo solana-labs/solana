@@ -270,9 +270,11 @@ where
             next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
             watchdog_thread: Mutex::new(Some(watchdog_thread)),
             watchdog_sender,
-            watchdog_exit_signal_sender
+            watchdog_exit_signal_sender,
         });
-        scheduler_pool_sender.send(Arc::downgrade(&scheduler_pool)).unwrap();
+        scheduler_pool_sender
+            .send(Arc::downgrade(&scheduler_pool))
+            .unwrap();
         scheduler_pool
     }
 
@@ -338,8 +340,18 @@ where
     fn uninstalled_from_bank_forks(self: Arc<Self>) {
         self.scheduler_inners.lock().unwrap().clear();
         self.watchdog_exit_signal_sender.send(()).unwrap();
-        let () = self.watchdog_thread.lock().unwrap().take().unwrap().join().unwrap();
-        info!("SchedulerPool::uninstalled_from_bank_forks(): joined watchdog thread at {:?}...", std::thread::current());
+        let () = self
+            .watchdog_thread
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap()
+            .join()
+            .unwrap();
+        info!(
+            "SchedulerPool::uninstalled_from_bank_forks(): joined watchdog thread at {:?}...",
+            std::thread::current()
+        );
     }
 }
 
