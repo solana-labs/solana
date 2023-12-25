@@ -325,17 +325,6 @@ where
     }
 }
 
-impl<S, TH, SEA> Drop for SchedulerPool<S, TH, SEA>
-where
-    S: SpawnableScheduler<TH, SEA>,
-    TH: TaskHandler<SEA>,
-    SEA: ScheduleExecutionArg,
-{
-    fn drop(&mut self) {
-        assert_matches!(&*self.watchdog_thread.lock().unwrap(), None, "seems uninstalled_from_bank_forks() isn't called!");
-    }
-}
-
 impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
@@ -1669,7 +1658,7 @@ mod tests {
             bank.wait_for_completed_scheduler(),
             Some((Ok(()), _timings))
         );
-        //pool.uninstalled_from_bank_forks();
+        pool.uninstalled_from_bank_forks();
     }
 
     #[derive(Debug)]
