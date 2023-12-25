@@ -313,6 +313,14 @@ where
     }
 }
 
+impl<S, TH, SEA> Drop for SchedulerPool<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+}
+
 impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
