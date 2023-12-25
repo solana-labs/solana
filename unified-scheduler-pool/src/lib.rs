@@ -320,6 +320,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn drop(&mut self) {
+        error!("drop!");
     }
 }
 
