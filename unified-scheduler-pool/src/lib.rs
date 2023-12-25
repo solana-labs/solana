@@ -1080,6 +1080,7 @@ where
                 }
             })
             .collect();
+        Ok(())
     }
 
     fn stop_and_join_threads(&mut self) {
