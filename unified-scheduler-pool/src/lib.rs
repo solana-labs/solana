@@ -341,7 +341,7 @@ where
         error!("uninstalled!");
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
         self.scheduler_inners.lock().unwrap().clear();
-        sleep(Duration::from_secs(20));
+        sleep(Duration::from_secs(5));
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
     }
 }
@@ -1598,6 +1598,11 @@ mod tests {
 
     #[test]
     fn test_scheduler_schedule_execution_failure() {
+        do_test_scheduler_schedule_execution_failure();
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+
+    fn do_test_scheduler_schedule_execution_failure() {
         solana_logger::setup();
 
         let GenesisConfigInfo {
