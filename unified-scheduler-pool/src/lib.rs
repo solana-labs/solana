@@ -332,7 +332,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn drop(&mut self) {
-        assert_matches!(self.watchdog_thread.lock().unwrap(), None, "seems uninstalled_from_bank_forks() isn't called!");
+        assert_matches!(&*self.watchdog_thread.lock().unwrap(), None, "seems uninstalled_from_bank_forks() isn't called!");
     }
 }
 
