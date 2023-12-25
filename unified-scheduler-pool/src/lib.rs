@@ -356,7 +356,7 @@ where
         Box::new(self.do_take_scheduler(context))
     }
 
-    fn uninstalled_from_bank_forks(&self) {
+    fn uninstalled_from_bank_forks(self: Arc<Self>) {
         error!("uninstalled!");
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
         self.scheduler_inners.lock().unwrap().clear();
