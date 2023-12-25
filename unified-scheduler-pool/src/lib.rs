@@ -352,7 +352,8 @@ where
     fn uninstalled_from_bank_forks(&self) {
         error!("uninstalled!");
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
-        //self.scheduler_inners.lock().unwrap().clear();
+        self.scheduler_inners.lock().unwrap().clear();
+        self.watchdog_exit_signal_sender.send(()).unwrap();
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
         sleep(Duration::from_secs(5));
     }
