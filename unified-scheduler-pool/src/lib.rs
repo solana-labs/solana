@@ -1669,7 +1669,7 @@ mod tests {
             bank.wait_for_completed_scheduler(),
             Some((Ok(()), _timings))
         );
-        pool.uninstalled_from_bank_forks();
+        //pool.uninstalled_from_bank_forks();
     }
 
     #[derive(Debug)]
