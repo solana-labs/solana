@@ -726,7 +726,7 @@ where
             // race-free in ensure_thread_manager_started()...
             warn!("try_start_threads(): already started");
             return Ok(());
-        } else if self.session_result_with_timings.map(|(result, _) result.is_err()).unwrap_or(false) {
+        } else if self.session_result_with_timings.map(|(result, _)| result.is_err()).unwrap_or(false) {
             warn!("try_start_threads(): skipping starting due to err; cleared session result");
             return self.reset_session_on_error();
         }
