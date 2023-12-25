@@ -1026,12 +1026,15 @@ where
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            accumulated_result_sender
-                                .send(replace(
-                                    &mut result_with_timings,
-                                    initialized_result_with_timings(),
-                                ))
-                                .unwrap();
+                            let finalized_result_with_timings = replace(
+                                &mut result_with_timings,
+                                initialized_result_with_timings(),
+                            );
+                            if accumulated_result_sender
+                                .send(finalized_result_with_timings)
+                                .is_err() {
+                                    break 'outer;
+                            }
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
