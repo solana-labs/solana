@@ -77,7 +77,7 @@ pub struct SchedulerPool<
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
-    _watchdog_thread: JoinHandle<()>,
+    watchdog_thread: JoinHandle<()>,
 }
 
 #[derive(Debug)]
@@ -261,7 +261,7 @@ where
             },
             weak_self: weak_self.clone(),
             next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
-            _watchdog_thread: watchdog_thread,
+            watchdog_thread: watchdog_thread,
             watchdog_sender,
         });
         scheduler_pool_sender.send(Arc::downgrade(&scheduler_pool)).unwrap();
@@ -325,6 +325,8 @@ where
 {
     fn drop(&mut self) {
         error!("drop!");
+        let () = self.watchdog_thread.join().unwrap();
+        error!("joined!");
     }
 }
 
