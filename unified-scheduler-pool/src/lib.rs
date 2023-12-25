@@ -716,16 +716,16 @@ where
         );
     }
 
-    fn start_threads(&mut self, context: &SchedulingContext) {
+    fn start_threads(&mut self, context: &SchedulingContext) -> Result<()> {
         if self.has_active_threads_to_be_joined() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
             warn!("start_threads(): already started");
-            return;
+            return Ok(());
         } else if let Some(r) = &self.session_result_with_timings {
             if r.0.is_err() {
                 warn!("start_threads(): skipping starting due to err");
-                return;
+                return self.reset_session_result_err();
             }
         }
         debug!("start_threads(): doing now");
