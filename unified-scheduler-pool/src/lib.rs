@@ -1678,7 +1678,6 @@ mod tests {
             bank.wait_for_completed_scheduler(),
             Some((Ok(()), _timings))
         );
-        drop(bank);
         pool.uninstalled_from_bank_forks();
         drop(pool);
     }
