@@ -33,7 +33,7 @@ use {
     solana_sdk::{
         pubkey::Pubkey,
         slot_history::Slot,
-        transaction::{Result, SanitizedTransaction},
+        transaction::{Result, SanitizedTransaction, TransactionError},
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_vote::vote_sender_types::ReplayVoteSender,
@@ -48,7 +48,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_sdk::transaction::TransactionError;
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -533,16 +532,20 @@ where
     fn ensure_thread_manager_started(
         &self,
         context: &SchedulingContext,
-    ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError> {
+    ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError>
+    {
         let mut was_already_active = false;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
             if read.has_active_threads_to_be_joined() {
-                debug!("{}", if was_already_active {
-                    "ensure_thread_manager_started(): was already active."
-                } else {
-                    "ensure_thread_manager_started(): wasn't already active..."
-                });
+                debug!(
+                    "{}",
+                    if was_already_active {
+                        "ensure_thread_manager_started(): was already active."
+                    } else {
+                        "ensure_thread_manager_started(): wasn't already active..."
+                    }
+                );
                 return Ok(read);
             } else {
                 debug!("ensure_thread_manager_started(): will start threads...");
