@@ -543,7 +543,7 @@ where
                 } else {
                     "ensure_thread_manager_started(): wasn't already active..."
                 });
-                return read;
+                return Ok(read);
             } else {
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(read);
