@@ -547,7 +547,7 @@ where
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(read);
                 let mut write = self.inner.thread_manager.write().unwrap();
-                write.try_start_threads(context);
+                write.try_start_threads(context)?;
                 drop(write);
                 tried_to_start = true;
             }
