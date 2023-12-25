@@ -1586,7 +1586,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         assert_matches!(scheduler.schedule_execution(&(bad_tx, 0)), Ok(()));
 
-        //scheduler.pause_for_recent_blockhash();
+        scheduler.pause_for_recent_blockhash();
         assert_eq!(bank.transaction_count(), 0);
 
         let good_tx_after_bad_tx =
