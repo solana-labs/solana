@@ -78,6 +78,12 @@ pub struct BankForks {
     scheduler_pool: Option<InstalledSchedulerPoolArc<DefaultScheduleExecutionArg>>,
 }
 
+impl Drop for BankForks {
+    fn drop(&mut self) {
+        self.scheduler_pool.uninstalled_from_bank_forks();
+    }
+}
+
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
