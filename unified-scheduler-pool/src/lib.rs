@@ -532,7 +532,7 @@ where
     fn ensure_thread_manager_started(
         &self,
         context: &SchedulingContext,
-    ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
+    ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError> {
         let mut tried_to_start = false;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
@@ -547,7 +547,7 @@ where
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(read);
                 let mut write = self.inner.thread_manager.write().unwrap();
-                write.start_threads(context);
+                write.try_start_threads(context);
                 drop(write);
                 tried_to_start = true;
             }
@@ -716,19 +716,19 @@ where
         );
     }
 
-    fn start_threads(&mut self, context: &SchedulingContext) -> Result<()> {
+    fn try_start_threads(&mut self, context: &SchedulingContext) -> Result<()> {
         if self.has_active_threads_to_be_joined() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
-            warn!("start_threads(): already started");
+            warn!("try_start_threads(): already started");
             return Ok(());
         } else if let Some(r) = &self.session_result_with_timings {
             if r.0.is_err() {
-                warn!("start_threads(): skipping starting due to err");
+                warn!("try_start_threads(): skipping starting due to err");
                 return self.reset_session_result_err();
             }
         }
-        debug!("start_threads(): doing now");
+        debug!("try_start_threads(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
@@ -1155,7 +1155,7 @@ where
                 .unwrap();
         } else {
             assert_matches!(self.session_result_with_timings, Some((Ok(()), _)));
-            self.start_threads(context);
+            assert_matches!(self.try_start_threads(context), Ok(()));
         }
     }
 
