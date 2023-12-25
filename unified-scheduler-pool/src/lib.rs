@@ -1622,8 +1622,8 @@ mod tests {
             scheduler.schedule_execution(&(good_tx_after_bad_tx, 0)),
             Err(_)
         );
-        /*
         scheduler.pause_for_recent_blockhash();
+        /*
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
