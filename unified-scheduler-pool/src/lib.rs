@@ -202,7 +202,7 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
+                let scheduler_pool: Weak<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
                 let mut thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
@@ -260,7 +260,7 @@ where
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
         });
-        scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
+        scheduler_pool_sender.send(Arc::downgrade(scheduler_pool.clone())).unwrap();
         scheduler_pool
     }
 
@@ -335,6 +335,7 @@ where
     }
 
     fn uninstalled_from_bank_forks(&self) {
+        error!("uninstalled!");
         self.scheduler_inners.lock().unwrap().clear();
     }
 }
