@@ -534,11 +534,11 @@ where
         &self,
         context: &SchedulingContext,
     ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError> {
-        let mut tried_to_start = false;
+        let mut was_already_active = false;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
-            if read.has_active_threads_to_be_joined() || tried_to_start {
-                debug!("{}", if !tried_to_start {
+            if read.has_active_threads_to_be_joined() {
+                debug!("{}", if was_already_active {
                     "ensure_thread_manager_started(): was already active."
                 } else {
                     "ensure_thread_manager_started(): wasn't already active..."
@@ -550,7 +550,7 @@ where
                 let mut write = self.inner.thread_manager.write().unwrap();
                 write.try_start_threads(context)?;
                 drop(write);
-                tried_to_start = true;
+                was_already_active = false;
             }
         }
     }
