@@ -332,16 +332,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn drop(&mut self) {
-        error!("drop!");
-        self.scheduler_inners.lock().unwrap().clear();
-        error!("drop2!");
-        sleep(Duration::from_secs(5));
-        error!("drop3!");
-        debug!("dropping at {:?}", std::thread::current());
-        error!("drop4!");
-        sleep(Duration::from_secs(5));
-        error!("drop5!");
-        info!("SchedulerPool::drop(): joined watchdog thread at {:?}...", std::thread::current());
+        assert_matches!(self.watchdog_thread.lock().unwrap(), None, "seems uninstalled_from_bank_forks() isn't called!");
     }
 }
 
@@ -359,6 +350,7 @@ where
         self.scheduler_inners.lock().unwrap().clear();
         self.watchdog_exit_signal_sender.send(()).unwrap();
         let () = self.watchdog_thread.lock().unwrap().take().unwrap().join().unwrap();
+        info!("SchedulerPool::uninstalled_from_bank_forks(): joined watchdog thread at {:?}...", std::thread::current());
     }
 }
 
