@@ -353,8 +353,8 @@ where
         error!("uninstalled!");
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
         self.scheduler_inners.lock().unwrap().clear();
-        sleep(Duration::from_secs(5));
         error!("aaa: {}", Arc::strong_count(&self.self_arc()));
+        sleep(Duration::from_secs(5));
     }
 }
 
