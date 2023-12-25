@@ -334,8 +334,14 @@ where
     fn drop(&mut self) {
         error!("drop!");
         self.scheduler_inners.lock().unwrap().clear();
+        error!("drop2!");
         sleep(Duration::from_secs(5));
+        error!("drop3!");
+        debug!("dropping at {:?}", std::thread::current());
         let () = self.watchdog_thread.take().unwrap().join().unwrap();
+        error!("drop4!");
+        sleep(Duration::from_secs(5));
+        error!("drop5!");
         info!("SchedulerPool::drop(): joined watchdog thread at {:?}...", std::thread::current());
     }
 }
