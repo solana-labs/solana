@@ -1618,10 +1618,6 @@ mod tests {
 
     #[test]
     fn test_scheduler_schedule_execution_failure() {
-        do_test_scheduler_schedule_execution_failure();
-    }
-
-    fn do_test_scheduler_schedule_execution_failure() {
         solana_logger::setup();
 
         let GenesisConfigInfo {
