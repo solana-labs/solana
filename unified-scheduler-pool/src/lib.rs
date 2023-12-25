@@ -39,7 +39,6 @@ use {
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
-        mem::replace,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
@@ -773,12 +772,12 @@ where
         let (executed_task_sender, executed_task_receiver) =
             unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
         let (accumulated_result_sender, accumulated_result_receiver) =
-            unbounded::<ResultWithTimings>();
+            unbounded::<Option<ResultWithTimings>>();
 
         let scheduler_id = self.scheduler_id;
         let mut slot = context.bank().slot();
         let (tid_sender, tid_receiver) = bounded(1);
-        let mut result_with_timings = self.take_session_result_with_timings();
+        let mut result_with_timings = self.session_result_with_timings.take();
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
@@ -917,7 +916,12 @@ where
                             .send(SessionedMessage::EndSession)
                             .unwrap();
                         result_sender
-                            .send(Some(accumulated_result_receiver.recv().unwrap()))
+                            .send(Some(
+                                accumulated_result_receiver
+                                    .recv()
+                                    .unwrap()
+                                    .unwrap_or_else(initialized_result_with_timings),
+                            ))
                             .unwrap();
                         if !thread_ending {
                             session_ending = false;
@@ -932,7 +936,7 @@ where
                     executed_task_sender
                         .send(SessionedMessage::EndSession)
                         .unwrap();
-                    Some(accumulated_result_receiver.recv().unwrap())
+                    accumulated_result_receiver.recv().unwrap()
                 };
                 trace!(
                     "solScheduler thread is ended at: {:?}",
@@ -1009,6 +1013,7 @@ where
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
                             result_with_timings
+                                .get_or_insert_with(initialized_result_with_timings)
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
                             match &executed_task.result_with_timings.0 {
@@ -1068,12 +1073,8 @@ where
                             unreachable!();
                         }
                         Ok(SessionedMessage::EndSession) => {
-                            let finalized_result_with_timings = replace(
-                                &mut result_with_timings,
-                                initialized_result_with_timings(),
-                            );
                             if accumulated_result_sender
-                                .send(finalized_result_with_timings)
+                                .send(result_with_timings.take())
                                 .is_err()
                             {
                                 break 'outer;
@@ -1152,11 +1153,13 @@ where
             .is_err()
     }
 
-    fn end_session(&mut self) {
+    fn end_session(&mut self, is_dropped: bool) {
         debug!("end_session(): will end session...");
         if !self.has_active_threads_to_be_joined() {
             debug!("end_session(): no threads..");
-            assert_matches!(self.session_result_with_timings, Some(_));
+            if !is_dropped {
+                assert_matches!(self.session_result_with_timings, Some(_));
+            }
             return;
         } else if self.session_result_with_timings.is_some() {
             debug!("end_session(): already result resides within thread manager..");
@@ -1187,7 +1190,6 @@ where
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
         } else {
-            assert_matches!(self.session_result_with_timings, Some((Ok(()), _)));
             assert_matches!(self.try_start_threads(context), Ok(()));
         }
     }
@@ -1214,7 +1216,7 @@ where
 {
     type Inner: Debug + Send + Sync + RetirableSchedulerInner;
 
-    fn into_inner(self) -> (ResultWithTimings, Self::Inner);
+    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner);
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
 
@@ -1238,11 +1240,18 @@ where
 {
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
-    fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
+    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
         let result_with_timings = {
             let mut manager = self.inner.thread_manager.write().unwrap();
-            manager.end_session();
-            manager.take_session_result_with_timings()
+            manager.end_session(is_dropped);
+            if !is_dropped {
+                manager.take_session_result_with_timings()
+            } else {
+                manager
+                    .session_result_with_timings
+                    .take()
+                    .unwrap_or(initialized_result_with_timings())
+            }
         };
         (result_with_timings, self.inner)
     }
@@ -1302,14 +1311,18 @@ where
 
     fn wait_for_termination(
         self: Box<Self>,
-        _is_dropped: bool,
+        is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        let (result_with_timings, uninstalled_scheduler) = self.into_inner();
+        let (result_with_timings, uninstalled_scheduler) = self.into_inner(is_dropped);
         (result_with_timings, Box::new(uninstalled_scheduler))
     }
 
     fn pause_for_recent_blockhash(&mut self) {
-        self.inner.thread_manager.write().unwrap().end_session();
+        self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .end_session(false);
     }
 }
 
@@ -1460,10 +1473,10 @@ mod tests {
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        let (result_with_timings, scheduler1) = scheduler1.into_inner();
+        let (result_with_timings, scheduler1) = scheduler1.into_inner(false);
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler1);
-        let (result_with_timings, scheduler2) = scheduler2.into_inner();
+        let (result_with_timings, scheduler2) = scheduler2.into_inner(false);
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler2);
 
@@ -1508,7 +1521,7 @@ mod tests {
 
         let scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        pool.return_scheduler(scheduler.into_inner().1);
+        pool.return_scheduler(scheduler.into_inner(false).1);
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -1738,7 +1751,7 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            let result_with_timings = replace(
+            let result_with_timings = std::mem::replace(
                 &mut *self.0.lock().unwrap(),
                 initialized_result_with_timings(),
             );
@@ -1770,7 +1783,7 @@ mod tests {
         // well, i wish i can use ! (never type).....
         type Inner = Self;
 
-        fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
+        fn into_inner(self, _is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
             todo!();
         }
 
