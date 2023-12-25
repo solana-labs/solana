@@ -242,6 +242,7 @@ where
                     // sleep here instead of recv_timeout() to write all logs at once.
                     sleep(Duration::from_secs(2));
                 }
+                info!("watchdog thread ended!");
             }
         };
 
