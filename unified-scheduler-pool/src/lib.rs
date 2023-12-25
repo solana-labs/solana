@@ -328,6 +328,7 @@ where
         error!("drop!");
         self.scheduler_inners.lock().unwrap().clear();
         let () = self.watchdog_thread.take().unwrap().join().unwrap();
+        sleep(Duration::from_secs(5));
         error!("joined!");
     }
 }
