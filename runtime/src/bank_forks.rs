@@ -80,7 +80,7 @@ pub struct BankForks {
 
 impl Drop for BankForks {
     fn drop(&mut self) {
-        self.scheduler_pool.map(|sp| sp.uninstalled_from_bank_forks());
+        self.scheduler_pool.as_ref().map(|sp| sp.uninstalled_from_bank_forks());
     }
 }
 
