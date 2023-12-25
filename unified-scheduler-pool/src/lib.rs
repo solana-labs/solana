@@ -48,6 +48,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use solana_sdk::transaction::TransactionError;
 
 type AtomicSchedulerId = AtomicU64;
 
