@@ -77,6 +77,7 @@ pub struct SchedulerPool<
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
     watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
+    watchdog_exit_signal_sender: Sender<()>,
     watchdog_thread: Option<JoinHandle<()>>,
 }
 
@@ -199,6 +200,7 @@ where
     ) -> Arc<Self> {
         let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
         let (watchdog_sender, watchdog_receiver) = unbounded();
+        let (watchdog_exit_signal_sender, watchdog_exit_signal_receiver) = unbounded();
 
         let watchdog_main_loop = || {
             move || {
@@ -240,8 +242,12 @@ where
                         thread_manager_len_pre_push,
                         thread_managers.len(),
                     );
-                    // sleep here instead of recv_timeout() to write all logs at once.
-                    sleep(Duration::from_secs(1));
+                    // wait for signal with timeout here instead of recv_timeout() to write all the
+                    // preceeding logs at once.
+                    match watchdog_exit_signal_receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(()) | Err(RecvTimeoutError::Disconnected) => break 'outer,
+                        Err(RecvTimeoutError::Timeout) => continue,
+                    }
                 }
                 info!("watchdog thread ended!");
             }
@@ -264,6 +270,7 @@ where
             next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
             watchdog_thread: Some(watchdog_thread),
             watchdog_sender,
+            watchdog_exit_signal_sender
         });
         scheduler_pool_sender.send(Arc::downgrade(&scheduler_pool)).unwrap();
         scheduler_pool
