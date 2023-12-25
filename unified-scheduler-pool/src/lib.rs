@@ -1032,8 +1032,9 @@ where
                             );
                             if accumulated_result_sender
                                 .send(finalized_result_with_timings)
-                                .is_err() {
-                                    break 'outer;
+                                .is_err()
+                            {
+                                break 'outer;
                             }
                         }
                         Err(RecvTimeoutError::Disconnected) => break 'outer,
