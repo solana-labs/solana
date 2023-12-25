@@ -340,6 +340,7 @@ where
     fn uninstalled_from_bank_forks(&self) {
         error!("uninstalled!");
         self.scheduler_inners.lock().unwrap().clear();
+        sleep(Duration::from_secs(20));
     }
 }
 
