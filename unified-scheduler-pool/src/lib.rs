@@ -260,7 +260,7 @@ where
             _watchdog_thread: watchdog_thread,
             watchdog_sender,
         });
-        scheduler_pool_sender.send(Arc::downgrade(scheduler_pool)).unwrap();
+        scheduler_pool_sender.send(Arc::downgrade(&scheduler_pool)).unwrap();
         scheduler_pool
     }
 
