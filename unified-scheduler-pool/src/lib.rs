@@ -1256,7 +1256,7 @@ where
                 self.inner.address_book.load(pubkey)
             });
             let abort_detected = self
-                .ensure_thread_manager_started(&self.context)
+                .ensure_thread_manager_started(&self.context)?
                 .send_task(task);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
