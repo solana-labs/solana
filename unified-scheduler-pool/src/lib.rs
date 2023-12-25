@@ -44,7 +44,7 @@ use {
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
         },
-        thread::{sleep, JoinHandle},
+        thread::JoinHandle,
         time::{Duration, Instant, SystemTime},
     },
 };
