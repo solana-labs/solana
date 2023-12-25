@@ -332,17 +332,9 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn drop(&mut self) {
-        error!("drop!");
         self.scheduler_inners.lock().unwrap().clear();
-        error!("drop2!");
-        sleep(Duration::from_secs(5));
-        error!("drop3!");
-        debug!("dropping at {:?}", std::thread::current());
         let () = self.watchdog_thread.take().unwrap().join().unwrap();
-        error!("drop4!");
-        sleep(Duration::from_secs(5));
-        error!("drop5!");
-        error!("joined!");
+        info!("SchedulerPool::drop(): joined watchdog thread at {:?}...", std::thread::current());
     }
 }
 
@@ -357,12 +349,8 @@ where
     }
 
     fn uninstalled_from_bank_forks(self: Arc<Self>) {
-        error!("uninstalled!");
-        error!("aaa: {}", Arc::strong_count(&self.self_arc()));
         self.scheduler_inners.lock().unwrap().clear();
         self.watchdog_exit_signal_sender.send(()).unwrap();
-        error!("aaa: {}", Arc::strong_count(&self.self_arc()));
-        sleep(Duration::from_secs(5));
     }
 }
 
@@ -1025,10 +1013,13 @@ where
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
-                            assert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
+                            match &executed_task.result_with_timings.0 {
+                                Ok(()) => {}
+                                Err(_err) => unreachable!(),
+                            }
                             if let Some(handler_timings) = &executed_task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
