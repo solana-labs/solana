@@ -533,14 +533,14 @@ where
         &self,
         context: &SchedulingContext,
     ) -> RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>> {
-        let mut has_been_started = true;
+        let mut was_already_started = true;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
             if read.has_active_threads_to_be_joined() {
-                debug!("{}", if has_been_started {
-                    "ensure_thread_manager_started(): has been already active..."
+                debug!("{}", if was_already_started {
+                    "ensure_thread_manager_started(): was already active..."
                 } else {
-                    "ensure_thread_manager_started(): hasn't already active..."
+                    "ensure_thread_manager_started(): wasn't already active..."
                 });
                 return read;
             } else {
@@ -549,7 +549,7 @@ where
                 let mut write = self.inner.thread_manager.write().unwrap();
                 write.start_threads(context);
                 drop(write);
-                has_been_started = false;
+                was_already_started = false;
             }
         }
     }
