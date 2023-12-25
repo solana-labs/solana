@@ -1629,7 +1629,6 @@ mod tests {
         );
         error!("last pause!");
         scheduler.pause_for_recent_blockhash();
-        /*
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
@@ -1637,11 +1636,10 @@ mod tests {
         assert_matches!(
             bank.wait_for_completed_scheduler(),
             Some((
-                Err(solana_sdk::transaction::TransactionError::AccountNotFound),
+                Ok(()),
                 _timings
             ))
         );
-        */
     }
 
     #[derive(Debug)]
