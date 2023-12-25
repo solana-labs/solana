@@ -211,6 +211,7 @@ where
                     let Some(scheduler_pool) = scheduler_pool.upgrade() else {
                         break;
                     };
+                    infor!("upgrade sucessed!");
                     let mut schedulers = scheduler_pool.scheduler_inners.lock().unwrap();
                     let schedulers_len_pre_retain = schedulers.len();
                     schedulers.retain_mut(|scheduler| scheduler.retire_if_stale());
