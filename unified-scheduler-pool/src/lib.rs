@@ -204,16 +204,12 @@ where
 
         let watchdog_main_loop = || {
             move || {
-                let scheduler_pool: Weak<Self> = scheduler_pool_receiver.recv().unwrap();
+                let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
                 let mut thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
 
                 'outer: loop {
-                    let Some(scheduler_pool) = scheduler_pool.upgrade() else {
-                        break;
-                    };
-                    info!("upgrade sucessed!");
                     let mut schedulers = scheduler_pool.scheduler_inners.lock().unwrap();
                     let schedulers_len_pre_retain = schedulers.len();
                     schedulers.retain_mut(|scheduler| scheduler.retire_if_stale());
@@ -272,9 +268,7 @@ where
             watchdog_sender,
             watchdog_exit_signal_sender,
         });
-        scheduler_pool_sender
-            .send(Arc::downgrade(&scheduler_pool))
-            .unwrap();
+        scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
         scheduler_pool
     }
 
