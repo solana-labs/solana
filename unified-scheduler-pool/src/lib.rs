@@ -983,13 +983,10 @@ where
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(SessionedMessage::Payload(executed_task)) => {
+                            aseert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
-                            match &executed_task.result_with_timings.0 {
-                                Ok(()) => {}
-                                Err(_err) => unreachable!(),
-                            }
                             if let Some(handler_timings) = &executed_task.handler_timings {
                                 use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
