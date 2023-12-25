@@ -725,7 +725,7 @@ where
             return Ok(());
         } else if let Some(r) = &self.session_result_with_timings {
             if r.0.is_err() {
-                warn!("try_start_threads(): skipping starting due to err");
+                warn!("try_start_threads(): skipping starting due to err; cleared session result");
                 return self.reset_session_result_err();
             }
         }
