@@ -1599,7 +1599,7 @@ mod tests {
     #[test]
     fn test_scheduler_schedule_execution_failure() {
         do_test_scheduler_schedule_execution_failure();
-        std::thread::sleep(std::time::Duration::from_secs(3));
+        //std::thread::sleep(std::time::Duration::from_secs(3));
     }
 
     fn do_test_scheduler_schedule_execution_failure() {
