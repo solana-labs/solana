@@ -536,7 +536,7 @@ where
             .parse::<usize>()
             .unwrap();
         let scheduler = Self::from_inner(
-            PooledSchedulerInner::<Self, TH, SEA> {
+            PooledSchedulerInner {
                 thread_manager: Arc::new(RwLock::new(ThreadManager::<Self, TH, SEA>::new(
                     handler,
                     pool.clone(),
