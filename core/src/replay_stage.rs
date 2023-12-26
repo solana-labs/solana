@@ -581,8 +581,6 @@ impl ReplayStage {
             loop {
                 // Stop getting entries if we get exit signal
                 if exit.load(Ordering::Relaxed) {
-                    info!("exit3");
-                    bank_forks.write().unwrap().prepare_to_drop();
                     break;
                 }
 
