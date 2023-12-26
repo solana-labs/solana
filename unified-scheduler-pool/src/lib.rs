@@ -537,7 +537,7 @@ where
             .unwrap();
         let scheduler = Self::from_inner(
             PooledSchedulerInner {
-                thread_manager: Arc::new(RwLock::new(ThreadManager::<Self, TH, SEA>::new(
+                thread_manager: Arc::new(RwLock::new(ThreadManager::new(
                     handler,
                     pool.clone(),
                     handler_count,
