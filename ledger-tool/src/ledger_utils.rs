@@ -362,10 +362,8 @@ pub fn load_and_process_ledger(
             let tss_blockstore = if enable_rpc_transaction_history {
                 Arc::new(open_blockstore(
                     blockstore.ledger_path(),
+                    arg_matches,
                     AccessType::PrimaryForMaintenance,
-                    None,
-                    false,
-                    false,
                 ))
             } else {
                 blockstore.clone()
@@ -416,11 +414,14 @@ pub fn load_and_process_ledger(
 
 pub fn open_blockstore(
     ledger_path: &Path,
+    matches: &ArgMatches,
     access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    force_update_to_open: bool,
-    enforce_ulimit_nofile: bool,
 ) -> Blockstore {
+    let wal_recovery_mode = matches
+        .value_of("wal_recovery_mode")
+        .map(BlockstoreRecoveryMode::from);
+    let force_update_to_open = matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
         &format!(
