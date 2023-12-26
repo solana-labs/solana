@@ -1,6 +1,8 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
+    crate::{
+        args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, output::*, program::*,
+    },
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -98,6 +100,7 @@ use {
 
 mod args;
 mod bigtable;
+mod blockstore;
 mod ledger_path;
 mod ledger_utils;
 mod output;
@@ -1165,6 +1168,7 @@ fn main() {
                 .help("Show additional information where supported"),
         )
         .bigtable_subcommand()
+        .blockstore_subcommand()
         .subcommand(
             SubCommand::with_name("print")
                 .about("Print the ledger")
@@ -2020,6 +2024,7 @@ fn main() {
 
     match matches.subcommand() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
+        ("blockstore", Some(arg_matches)) => blockstore_process_command(&ledger_path, arg_matches),
         ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
