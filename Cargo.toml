@@ -181,7 +181,7 @@ criterion = "0.5.1"
 criterion-stats = "0.3.0"
 crossbeam-channel = "0.5.9"
 csv = "1.3.0"
-ctrlc = "3.4.1"
+ctrlc = "3.4.2"
 curve25519-dalek = "3.2.1"
 dashmap = "5.5.3"
 derivation-path = { version = "0.2.0", default-features = false }
