@@ -16,7 +16,6 @@ use {
         ser::{SerializeSeq, Serializer},
         Serialize,
     },
-    serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_accounts_db::{
         accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
@@ -40,7 +39,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{self, columns as cf, Column, ColumnName, Database},
+        blockstore_db::{columns as cf, Column, ColumnName},
         blockstore_options::{AccessType, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
         blockstore_processor::ProcessOptions,
         shred::Shred,
@@ -484,104 +483,6 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
 
     dot.push("}".to_string());
     dot.join("\n")
-}
-
-fn analyze_column<
-    C: solana_ledger::blockstore_db::Column + solana_ledger::blockstore_db::ColumnName,
->(
-    db: &Database,
-    name: &str,
-) {
-    let mut key_len: u64 = 0;
-    let mut key_tot: u64 = 0;
-    let mut val_hist = histogram::Histogram::new();
-    let mut val_tot: u64 = 0;
-    let mut row_hist = histogram::Histogram::new();
-    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
-        // Key length is fixed, only need to calculate it once
-        if key_len == 0 {
-            key_len = C::key(key).len() as u64;
-        }
-        let val_len = val.len() as u64;
-
-        key_tot += key_len;
-        val_hist.increment(val_len).unwrap();
-        val_tot += val_len;
-
-        row_hist.increment(key_len + val_len).unwrap();
-    }
-
-    let json_result = if val_hist.entries() > 0 {
-        json!({
-            "column":name,
-            "entries":val_hist.entries(),
-            "key_stats":{
-                "max":key_len,
-                "total_bytes":key_tot,
-            },
-            "val_stats":{
-                "p50":val_hist.percentile(50.0).unwrap(),
-                "p90":val_hist.percentile(90.0).unwrap(),
-                "p99":val_hist.percentile(99.0).unwrap(),
-                "p999":val_hist.percentile(99.9).unwrap(),
-                "min":val_hist.minimum().unwrap(),
-                "max":val_hist.maximum().unwrap(),
-                "stddev":val_hist.stddev().unwrap(),
-                "total_bytes":val_tot,
-            },
-            "row_stats":{
-                "p50":row_hist.percentile(50.0).unwrap(),
-                "p90":row_hist.percentile(90.0).unwrap(),
-                "p99":row_hist.percentile(99.0).unwrap(),
-                "p999":row_hist.percentile(99.9).unwrap(),
-                "min":row_hist.minimum().unwrap(),
-                "max":row_hist.maximum().unwrap(),
-                "stddev":row_hist.stddev().unwrap(),
-                "total_bytes":key_tot + val_tot,
-            },
-        })
-    } else {
-        json!({
-        "column":name,
-        "entries":val_hist.entries(),
-        "key_stats":{
-            "max":key_len,
-            "total_bytes":0,
-        },
-        "val_stats":{
-            "total_bytes":0,
-        },
-        "row_stats":{
-            "total_bytes":0,
-        },
-        })
-    };
-
-    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
-}
-
-fn analyze_storage(database: &Database) {
-    use blockstore_db::columns::*;
-    analyze_column::<SlotMeta>(database, "SlotMeta");
-    analyze_column::<Orphans>(database, "Orphans");
-    analyze_column::<DeadSlots>(database, "DeadSlots");
-    analyze_column::<DuplicateSlots>(database, "DuplicateSlots");
-    analyze_column::<ErasureMeta>(database, "ErasureMeta");
-    analyze_column::<BankHash>(database, "BankHash");
-    analyze_column::<Root>(database, "Root");
-    analyze_column::<Index>(database, "Index");
-    analyze_column::<ShredData>(database, "ShredData");
-    analyze_column::<ShredCode>(database, "ShredCode");
-    analyze_column::<TransactionStatus>(database, "TransactionStatus");
-    analyze_column::<AddressSignatures>(database, "AddressSignatures");
-    analyze_column::<TransactionMemos>(database, "TransactionMemos");
-    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
-    analyze_column::<Rewards>(database, "Rewards");
-    analyze_column::<Blocktime>(database, "Blocktime");
-    analyze_column::<PerfSamples>(database, "PerfSamples");
-    analyze_column::<BlockHeight>(database, "BlockHeight");
-    analyze_column::<ProgramCosts>(database, "ProgramCosts");
-    analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
 }
 
 fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
@@ -1169,6 +1070,10 @@ fn main() {
         )
         .bigtable_subcommand()
         .blockstore_subcommand()
+        // All of the blockstore commands are added under the blockstore command.
+        // For the sake of legacy support, also directly add the blockstore commands here so that
+        // these subcommands can continue to be called from the top level of the binary.
+        .subcommands(blockstore_subcommands(true))
         .subcommand(
             SubCommand::with_name("print")
                 .about("Print the ledger")
@@ -1967,9 +1872,6 @@ fn main() {
                         .help("Override the maximum number of slots to check for root repair"),
                 ),
         )
-        .subcommand(SubCommand::with_name("analyze-storage").about(
-            "Output statistics in JSON format about all column families in the ledger rocksdb",
-        ))
         .subcommand(
             SubCommand::with_name("compute-slot-cost")
                 .about(
@@ -2026,6 +1928,9 @@ fn main() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
         ("blockstore", Some(arg_matches)) => blockstore_process_command(&ledger_path, arg_matches),
         ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
+        // This match case provides legacy support for commands that were previously top level
+        // subcommands of the binary, but have been moved under the blockstore subcommand.
+        ("analyze-storage", Some(_)) => blockstore_process_command(&ledger_path, &matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -3889,11 +3794,6 @@ fn main() {
                             exit(1);
                         }
                     };
-                }
-                ("analyze-storage", Some(arg_matches)) => {
-                    analyze_storage(
-                        &open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
-                    );
                 }
                 ("compute-slot-cost", Some(arg_matches)) => {
                     let blockstore =
