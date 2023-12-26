@@ -1410,8 +1410,10 @@ impl Validator {
 
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
+        info!("exit1");
         self.validator_exit.write().unwrap().exit();
 
+        info!("exit2");
         // drop all signals in blockstore
         self.blockstore.drop_signal();
     }

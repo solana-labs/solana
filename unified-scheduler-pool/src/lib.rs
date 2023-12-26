@@ -183,6 +183,17 @@ where
     }
 }
 
+impl<S, TH, SEA> Drop for SchedulerPool<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn drop(&mut self) {
+        info!("SchedulerPool::drop() is successfully called");
+    }
+}
+
 impl<S, TH, SEA> SchedulerPool<S, TH, SEA>
 where
     S: SpawnableScheduler<TH, SEA>,
