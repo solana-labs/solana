@@ -94,20 +94,6 @@ pub(crate) enum LoadAndProcessLedgerError {
     ProcessBlockstoreFromRoot(#[source] BlockstoreProcessorError),
 }
 
-pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once
-    // the rocksdb options can be constructed via load_options_file() as the
-    // value picked by passing None for `max_shred_storage_size` could affect
-    // the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, None) {
-        Some(s) => s,
-        None => {
-            info!("{}", message);
-            ShredStorageType::RocksLevel
-        }
-    }
-}
-
 pub fn load_and_process_ledger_or_exit(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
@@ -504,6 +490,20 @@ pub fn open_blockstore(
         Err(err) => {
             eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
             exit(1);
+        }
+    }
+}
+
+pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
+        Some(s) => s,
+        None => {
+            info!("{}", message);
+            ShredStorageType::RocksLevel
         }
     }
 }
