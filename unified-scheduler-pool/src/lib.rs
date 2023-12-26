@@ -511,15 +511,15 @@ where
 {
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
+    handler: TH,
+    handler_count: usize,
     scheduler_thread_and_tid: Option<(JoinHandle<Option<ResultWithTimings>>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
-    handler: TH,
     schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
     schedulable_transaction_receiver: Option<Receiver<SessionedMessage<Task, SchedulingContext>>>,
     result_sender: Sender<Option<ResultWithTimings>>,
     result_receiver: Receiver<Option<ResultWithTimings>>,
-    handler_count: usize,
     session_result_with_timings: Option<ResultWithTimings>,
 }
 
@@ -646,6 +646,9 @@ where
 
         Self {
             scheduler_id: pool.new_scheduler_id(),
+            pool,
+            handler,
+            handler_count,
             schedulable_transaction_sender,
             schedulable_transaction_receiver: Some(schedulable_transaction_receiver),
             result_sender,
@@ -653,9 +656,6 @@ where
             scheduler_thread_and_tid: None,
             accumulator_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
-            handler_count,
-            handler,
-            pool,
             session_result_with_timings: Some(initialized_result_with_timings()),
         }
     }
