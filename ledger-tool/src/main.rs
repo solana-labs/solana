@@ -1122,11 +1122,6 @@ fn main() {
                 .arg(&allow_dead_slots_arg),
         )
         .subcommand(
-            SubCommand::with_name("dead-slots")
-                .arg(&starting_slot_arg)
-                .about("Print all the dead slots in the ledger"),
-        )
-        .subcommand(
             SubCommand::with_name("duplicate-slots")
                 .arg(&starting_slot_arg)
                 .about("Print all the duplicate slots in the ledger"),
@@ -1914,7 +1909,7 @@ fn main() {
         ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
         // This match case provides legacy support for commands that were previously top level
         // subcommands of the binary, but have been moved under the blockstore subcommand.
-        ("analyze-storage", Some(_)) | ("bounds", Some(_)) => {
+        ("analyze-storage", Some(_)) | ("bounds", Some(_)) | ("dead-slots", Some(_)) => {
             blockstore_process_command(&ledger_path, &matches)
         }
         _ => {
@@ -2157,14 +2152,6 @@ fn main() {
                         std::u64::MAX,
                         true,
                     );
-                }
-                ("dead-slots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
-                        println!("{slot}");
-                    }
                 }
                 ("duplicate-slots", Some(arg_matches)) => {
                     let blockstore =

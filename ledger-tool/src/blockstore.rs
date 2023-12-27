@@ -5,13 +5,14 @@ use {
         ledger_path::canonicalize_ledger_path,
         output::{SlotBounds, SlotInfo},
     },
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
     serde_json::json,
     solana_cli_output::OutputFormat,
     solana_ledger::{
         blockstore_db::{self, Database},
         blockstore_options::AccessType,
     },
+    solana_sdk::clock::Slot,
     std::path::Path,
 };
 
@@ -136,6 +137,13 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
         vec![]
     };
 
+    let starting_slot_arg = Arg::with_name("starting_slot")
+        .long("starting-slot")
+        .value_name("SLOT")
+        .takes_value(true)
+        .default_value("0")
+        .help("Start at this slot");
+
     vec![
         SubCommand::with_name("analyze-storage")
             .about(
@@ -156,6 +164,10 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(false)
                     .help("Additionally print all the non-empty slots within the bounds"),
             ),
+        SubCommand::with_name("dead-slots")
+            .about("Print all the dead slots in the ledger")
+            .settings(&hidden)
+            .arg(&starting_slot_arg),
     ]
 }
 
@@ -234,6 +246,14 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                     std::process::exit(1);
                 }
             };
+        }
+        ("dead-slots", Some(arg_matches)) => {
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
+                println!("{slot}");
+            }
         }
         _ => unreachable!(),
     }
