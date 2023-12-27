@@ -8,11 +8,13 @@ use {
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
+    itertools::Itertools,
+    log::*,
     serde_json::json,
-    solana_clap_utils::input_validators::is_slot,
+    solana_clap_utils::{hidden_unless_forced, input_validators::is_slot},
     solana_cli_output::OutputFormat,
     solana_ledger::{
-        blockstore::Blockstore,
+        blockstore::{Blockstore, PurgeType},
         blockstore_db::{self, Column, ColumnName, Database},
         blockstore_options::AccessType,
     },
@@ -306,6 +308,59 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                          specified, it will print the metadata of all ledger files.",
                     ),
             ),
+        SubCommand::with_name("purge")
+            .about("Delete a range of slots from the ledger")
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("start_slot")
+                    .index(1)
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Start slot to purge from (inclusive)"),
+            )
+            .arg(Arg::with_name("end_slot").index(2).value_name("SLOT").help(
+                "Ending slot to stop purging (inclusive) \
+                [default: the highest slot in the ledger]",
+            ))
+            .arg(
+                Arg::with_name("batch_size")
+                    .long("batch-size")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .default_value("1000")
+                    .help("Removes at most BATCH_SIZE slots while purging in loop"),
+            )
+            .arg(
+                Arg::with_name("no_compaction")
+                    .long("no-compaction")
+                    .required(false)
+                    .takes_value(false)
+                    .help(
+                        "--no-compaction is deprecated, ledger compaction after purge is \
+                         disabled by default",
+                    )
+                    .conflicts_with("enable_compaction")
+                    .hidden(hidden_unless_forced()),
+            )
+            .arg(
+                Arg::with_name("enable_compaction")
+                    .long("enable-compaction")
+                    .required(false)
+                    .takes_value(false)
+                    .help(
+                        "Perform ledger compaction after purge. Compaction will optimize \
+                         storage space, but may take a long time to complete.",
+                    )
+                    .conflicts_with("no_compaction"),
+            )
+            .arg(
+                Arg::with_name("dead_slots_only")
+                    .long("dead-slots-only")
+                    .required(false)
+                    .takes_value(false)
+                    .help("Limit purging to dead slots only"),
+            ),
         SubCommand::with_name("remove-dead-slot")
             .about("Remove the dead flag for a slot")
             .settings(&hidden)
@@ -499,6 +554,88 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             let sst_file_name = arg_matches.value_of("file_name");
             if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                 eprintln!("{err}");
+            }
+        }
+        ("purge", Some(arg_matches)) => {
+            let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
+            let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
+            let perform_compaction = arg_matches.is_present("enable_compaction");
+            if arg_matches.is_present("no_compaction") {
+                warn!("--no-compaction is deprecated and is now the default behavior.");
+            }
+            let dead_slots_only = arg_matches.is_present("dead_slots_only");
+            let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
+
+            let blockstore = crate::open_blockstore(
+                &ledger_path,
+                arg_matches,
+                AccessType::PrimaryForMaintenance,
+            );
+
+            let end_slot = match end_slot {
+                Some(end_slot) => end_slot,
+                None => match blockstore.slot_meta_iterator(start_slot) {
+                    Ok(metas) => {
+                        let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                        if slots.is_empty() {
+                            eprintln!("Purge range is empty");
+                            std::process::exit(1);
+                        }
+                        *slots.last().unwrap()
+                    }
+                    Err(err) => {
+                        eprintln!("Unable to read the Ledger: {err:?}");
+                        std::process::exit(1);
+                    }
+                },
+            };
+
+            if end_slot < start_slot {
+                eprintln!("end slot {end_slot} is less than start slot {start_slot}");
+                std::process::exit(1);
+            }
+            info!(
+                "Purging data from slots {} to {} ({} slots) (do compaction: {}) \
+                (dead slot only: {})",
+                start_slot,
+                end_slot,
+                end_slot - start_slot,
+                perform_compaction,
+                dead_slots_only,
+            );
+            let purge_from_blockstore = |start_slot, end_slot| {
+                blockstore.purge_from_next_slots(start_slot, end_slot);
+                if perform_compaction {
+                    blockstore.purge_and_compact_slots(start_slot, end_slot);
+                } else {
+                    blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+                }
+            };
+            if !dead_slots_only {
+                let slots_iter = &(start_slot..=end_slot).chunks(batch_size);
+                for slots in slots_iter {
+                    let slots = slots.collect::<Vec<_>>();
+                    assert!(!slots.is_empty());
+
+                    let start_slot = *slots.first().unwrap();
+                    let end_slot = *slots.last().unwrap();
+                    info!(
+                        "Purging chunked slots from {} to {} ({} slots)",
+                        start_slot,
+                        end_slot,
+                        end_slot - start_slot
+                    );
+                    purge_from_blockstore(start_slot, end_slot);
+                }
+            } else {
+                let dead_slots_iter = blockstore
+                    .dead_slots_iterator(start_slot)
+                    .unwrap()
+                    .take_while(|s| *s <= end_slot);
+                for dead_slot in dead_slots_iter {
+                    info!("Purging dead slot {}", dead_slot);
+                    purge_from_blockstore(dead_slot, dead_slot);
+                }
             }
         }
         ("remove-dead-slot", Some(arg_matches)) => {
