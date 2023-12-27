@@ -186,6 +186,19 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(true)
                     .help("Slots to mark dead"),
             ),
+        SubCommand::with_name("remove-dead-slot")
+            .about("Remove the dead flag for a slot")
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark as not dead"),
+            ),
     ]
 }
 
@@ -279,6 +292,18 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{slot}");
+            }
+        }
+        ("remove-dead-slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let blockstore = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
+            for slot in slots {
+                match blockstore.remove_dead_slot(slot) {
+                    Ok(_) => println!("Slot {slot} not longer marked dead"),
+                    Err(err) => {
+                        eprintln!("Failed to remove dead flag for slot {slot}, {err:?}")
+                    }
+                }
             }
         }
         ("set-dead-slot", Some(arg_matches)) => {
