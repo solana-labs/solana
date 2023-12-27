@@ -21,6 +21,7 @@ use {
         fs::File,
         io::{stdout, Write},
         path::Path,
+        sync::atomic::AtomicBool,
     },
 };
 
@@ -318,6 +319,35 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(true)
                     .help("Slots to mark as not dead"),
             ),
+        SubCommand::with_name("repair-roots")
+            .about(
+                "Traverses the AncestorIterator backward from a last known root to restore \
+                 missing roots to the Root column",
+            )
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("start_root")
+                    .long("before")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("Recent root after the range to repair"),
+            )
+            .arg(
+                Arg::with_name("end_root")
+                    .long("until")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("Earliest slot to check for root repair"),
+            )
+            .arg(
+                Arg::with_name("max_slots")
+                    .long("repair-limit")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .default_value("2000")
+                    .required(true)
+                    .help("Override the maximum number of slots to check for root repair"),
+            ),
         SubCommand::with_name("set-dead-slot")
             .about("Mark one or more slots dead")
             .settings(&hidden)
@@ -482,6 +512,32 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                     }
                 }
             }
+        }
+        ("repair-roots", Some(arg_matches)) => {
+            let blockstore = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
+
+            let start_root =
+                value_t!(arg_matches, "start_root", Slot).unwrap_or_else(|_| blockstore.max_root());
+            let max_slots = value_t_or_exit!(arg_matches, "max_slots", u64);
+            let end_root = value_t!(arg_matches, "end_root", Slot)
+                .unwrap_or_else(|_| start_root.saturating_sub(max_slots));
+            assert!(start_root > end_root);
+            let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
+            if arg_matches.is_present("end_root") && num_slots > max_slots {
+                eprintln!(
+                    "Requested range {num_slots} too large, max {max_slots}. Either adjust \
+                 `--until` value, or pass a larger `--repair-limit` to override the limit",
+                );
+                std::process::exit(1);
+            }
+
+            let num_repaired_roots = blockstore
+                .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
+                .unwrap_or_else(|err| {
+                    eprintln!("Unable to repair roots: {err}");
+                    std::process::exit(1);
+                });
+            println!("Successfully repaired {num_repaired_roots} roots");
         }
         ("set-dead-slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);

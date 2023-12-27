@@ -664,7 +664,6 @@ fn main() {
     }
 
     const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
-    const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     // Use std::usize::MAX for DEFAULT_MAX_*_SNAPSHOTS_TO_RETAIN such that
     // ledger-tool commands won't accidentally remove any snapshots by default
     const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
@@ -1678,36 +1677,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("repair-roots")
-                .about(
-                    "Traverses the AncestorIterator backward from a last known root to restore \
-                     missing roots to the Root column",
-                )
-                .arg(
-                    Arg::with_name("start_root")
-                        .long("before")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Recent root after the range to repair"),
-                )
-                .arg(
-                    Arg::with_name("end_root")
-                        .long("until")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Earliest slot to check for root repair"),
-                )
-                .arg(
-                    Arg::with_name("max_slots")
-                        .long("repair-limit")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value(DEFAULT_MAX_SLOTS_ROOT_REPAIR)
-                        .required(true)
-                        .help("Override the maximum number of slots to check for root repair"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("compute-slot-cost")
                 .about(
                     "runs cost_model over the block at the given slots, computes how expensive a \
@@ -1755,6 +1724,7 @@ fn main() {
         | ("list-roots", Some(_))
         | ("print-file-metadata", Some(_))
         | ("remove-dead-slot", Some(_))
+        | ("repair-roots", Some(_))
         | ("set-dead-slot", Some(_)) => blockstore_process_command(&ledger_path, &matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
@@ -3442,37 +3412,6 @@ fn main() {
                             slot, &hash_str, &time_str, !contains_nonvote
                         );
                     }
-                }
-                ("repair-roots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
-
-                    let start_root = value_t!(arg_matches, "start_root", Slot)
-                        .unwrap_or_else(|_| blockstore.max_root());
-                    let max_slots = value_t_or_exit!(arg_matches, "max_slots", u64);
-                    let end_root = value_t!(arg_matches, "end_root", Slot)
-                        .unwrap_or_else(|_| start_root.saturating_sub(max_slots));
-                    assert!(start_root > end_root);
-                    let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
-                    if arg_matches.is_present("end_root") && num_slots > max_slots {
-                        eprintln!(
-                        "Requested range {num_slots} too large, max {max_slots}. Either adjust \
-                         `--until` value, or pass a larger `--repair-limit` to override the limit",
-                    );
-                        exit(1);
-                    }
-
-                    let num_repaired_roots = blockstore
-                        .scan_and_fix_roots(
-                            Some(start_root),
-                            Some(end_root),
-                            &AtomicBool::new(false),
-                        )
-                        .unwrap_or_else(|err| {
-                            eprintln!("Unable to repair roots: {err}");
-                            exit(1);
-                        });
-                    println!("Successfully repaired {num_repaired_roots} roots");
                 }
                 ("compute-slot-cost", Some(arg_matches)) => {
                     let blockstore =
