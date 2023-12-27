@@ -5,8 +5,9 @@ use {
         ledger_path::canonicalize_ledger_path,
         output::{SlotBounds, SlotInfo},
     },
-    clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
     serde_json::json,
+    solana_clap_utils::input_validators::is_slot,
     solana_cli_output::OutputFormat,
     solana_ledger::{
         blockstore_db::{self, Database},
@@ -172,6 +173,19 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
             .about("Print all the duplicate slots in the ledger")
             .settings(&hidden)
             .arg(&starting_slot_arg),
+        SubCommand::with_name("set-dead-slot")
+            .about("Mark one or more slots dead")
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark dead"),
+            ),
     ]
 }
 
@@ -265,6 +279,16 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{slot}");
+            }
+        }
+        ("set-dead-slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let blockstore = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
+            for slot in slots {
+                match blockstore.set_dead_slot(slot) {
+                    Ok(_) => println!("Slot {slot} dead"),
+                    Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
+                }
             }
         }
         _ => unreachable!(),
