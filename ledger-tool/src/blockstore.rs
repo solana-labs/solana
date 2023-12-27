@@ -5,7 +5,9 @@ use {
         ledger_path::canonicalize_ledger_path,
         output::{SlotBounds, SlotInfo},
     },
-    clap::{value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{
+        value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+    },
     serde_json::json,
     solana_clap_utils::input_validators::is_slot,
     solana_cli_output::OutputFormat,
@@ -15,7 +17,11 @@ use {
         blockstore_options::AccessType,
     },
     solana_sdk::clock::Slot,
-    std::path::Path,
+    std::{
+        fs::File,
+        io::{stdout, Write},
+        path::Path,
+    },
 };
 
 fn analyze_column<
@@ -243,6 +249,46 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
             .about("Print all the duplicate slots in the ledger")
             .settings(&hidden)
             .arg(&starting_slot_arg),
+        SubCommand::with_name("list-roots")
+            .about(
+                "Output up to last <num-roots> root hashes and their heights starting at the \
+                 given block height",
+            )
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("max_height")
+                    .long("max-height")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("Maximum block height"),
+            )
+            .arg(
+                Arg::with_name("start_root")
+                    .long("start-root")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("First root to start searching from"),
+            )
+            .arg(
+                Arg::with_name("slot_list")
+                    .long("slot-list")
+                    .value_name("FILENAME")
+                    .required(false)
+                    .takes_value(true)
+                    .help(
+                        "The location of the output YAML file. A list of rollback slot \
+                         heights and hashes will be written to the file",
+                    ),
+            )
+            .arg(
+                Arg::with_name("num_roots")
+                    .long("num-roots")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .default_value("1")
+                    .required(false)
+                    .help("Number of roots in the output"),
+            ),
         SubCommand::with_name("set-dead-slot")
             .about("Mark one or more slots dead")
             .settings(&hidden)
@@ -379,6 +425,43 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{slot}");
             }
+        }
+        ("list-roots", Some(arg_matches)) => {
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+
+            let max_height = value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
+            let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
+            let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
+
+            let iter = blockstore
+                .rooted_slot_iterator(start_root)
+                .expect("Failed to get rooted slot");
+
+            let mut output: Box<dyn Write> = if let Some(path) = arg_matches.value_of("slot_list") {
+                match File::create(path) {
+                    Ok(file) => Box::new(file),
+                    _ => Box::new(stdout()),
+                }
+            } else {
+                Box::new(stdout())
+            };
+
+            iter.take(num_roots)
+                .take_while(|slot| *slot <= max_height as u64)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .for_each(|slot| {
+                    let blockhash = blockstore
+                        .get_slot_entries(slot, 0)
+                        .unwrap()
+                        .last()
+                        .unwrap()
+                        .hash;
+
+                    writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
+                });
         }
         ("print-file-metadata", Some(arg_matches)) => {
             let blockstore =

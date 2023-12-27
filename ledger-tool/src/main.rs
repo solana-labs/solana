@@ -663,7 +663,6 @@ fn main() {
         unsafe { signal_hook::low_level::register(signal_hook::consts::SIGUSR1, || {}) }.unwrap();
     }
 
-    const DEFAULT_ROOT_COUNT: &str = "1";
     const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     // Use std::usize::MAX for DEFAULT_MAX_*_SNAPSHOTS_TO_RETAIN such that
@@ -1657,47 +1656,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("list-roots")
-                .about(
-                    "Output up to last <num-roots> root hashes and their heights starting at the \
-                     given block height",
-                )
-                .arg(
-                    Arg::with_name("max_height")
-                        .long("max-height")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Maximum block height"),
-                )
-                .arg(
-                    Arg::with_name("start_root")
-                        .long("start-root")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("First root to start searching from"),
-                )
-                .arg(
-                    Arg::with_name("slot_list")
-                        .long("slot-list")
-                        .value_name("FILENAME")
-                        .required(false)
-                        .takes_value(true)
-                        .help(
-                            "The location of the output YAML file. A list of rollback slot \
-                             heights and hashes will be written to the file",
-                        ),
-                )
-                .arg(
-                    Arg::with_name("num_roots")
-                        .long("num-roots")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value(DEFAULT_ROOT_COUNT)
-                        .required(false)
-                        .help("Number of roots in the output"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("latest-optimistic-slots")
                 .about(
                     "Output up to the most recent <num-slots> optimistic slots with their hashes \
@@ -1794,6 +1752,7 @@ fn main() {
         | ("bounds", Some(_))
         | ("dead-slots", Some(_))
         | ("duplicate-slots", Some(_))
+        | ("list-roots", Some(_))
         | ("print-file-metadata", Some(_))
         | ("remove-dead-slot", Some(_))
         | ("set-dead-slot", Some(_)) => blockstore_process_command(&ledger_path, &matches),
@@ -3449,45 +3408,6 @@ fn main() {
                             purge_from_blockstore(dead_slot, dead_slot);
                         }
                     }
-                }
-                ("list-roots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    let max_height =
-                        value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
-                    let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
-                    let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
-
-                    let iter = blockstore
-                        .rooted_slot_iterator(start_root)
-                        .expect("Failed to get rooted slot");
-
-                    let mut output: Box<dyn Write> =
-                        if let Some(path) = arg_matches.value_of("slot_list") {
-                            match File::create(path) {
-                                Ok(file) => Box::new(file),
-                                _ => Box::new(stdout()),
-                            }
-                        } else {
-                            Box::new(stdout())
-                        };
-
-                    iter.take(num_roots)
-                        .take_while(|slot| *slot <= max_height as u64)
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                        .rev()
-                        .for_each(|slot| {
-                            let blockhash = blockstore
-                                .get_slot_entries(slot, 0)
-                                .unwrap()
-                                .last()
-                                .unwrap()
-                                .hash;
-
-                            writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
-                        });
                 }
                 ("latest-optimistic-slots", Some(arg_matches)) => {
                     let blockstore =
