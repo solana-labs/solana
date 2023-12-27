@@ -603,11 +603,6 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
-    let ending_slot_arg = Arg::with_name("ending_slot")
-        .long("ending-slot")
-        .value_name("SLOT")
-        .takes_value(true)
-        .help("The last slot to iterate to");
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
@@ -927,27 +922,6 @@ fn main() {
         // For the sake of legacy support, also directly add the blockstore commands here so that
         // these subcommands can continue to be called from the top level of the binary.
         .subcommands(blockstore_subcommands(true))
-        .subcommand(
-            SubCommand::with_name("print")
-                .about("Print the ledger")
-                .arg(&starting_slot_arg)
-                .arg(&allow_dead_slots_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("num_slots")
-                        .long("num-slots")
-                        .value_name("SLOT")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .help("Number of slots to print"),
-                )
-                .arg(
-                    Arg::with_name("only_rooted")
-                        .long("only-rooted")
-                        .takes_value(false)
-                        .help("Only print root slots"),
-                ),
-        )
         .subcommand(
             SubCommand::with_name("genesis")
                 .about("Prints the ledger's genesis config")
@@ -1525,6 +1499,7 @@ fn main() {
         | ("latest-optimistic-slots", Some(_))
         | ("list-roots", Some(_))
         | ("parse_full_frozen", Some(_))
+        | ("print", Some(_))
         | ("print-file-metadata", Some(_))
         | ("purge", Some(_))
         | ("remove-dead-slot", Some(_))
@@ -1536,24 +1511,6 @@ fn main() {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
             match matches.subcommand() {
-                ("print", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot =
-                        value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                    let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    let only_rooted = arg_matches.is_present("only_rooted");
-                    output_ledger(
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
-                        starting_slot,
-                        ending_slot,
-                        allow_dead_slots,
-                        OutputFormat::Display,
-                        num_slots,
-                        verbose_level,
-                        only_rooted,
-                    );
-                }
                 ("genesis", Some(arg_matches)) => {
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let print_accounts = arg_matches.is_present("accounts");

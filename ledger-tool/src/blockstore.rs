@@ -4,7 +4,7 @@ use {
     crate::{
         ledger_path::canonicalize_ledger_path,
         ledger_utils::{get_program_ids, get_shred_storage_type},
-        output::{output_slot, SlotBounds, SlotInfo},
+        output::{output_ledger, output_slot, SlotBounds, SlotInfo},
     },
     chrono::{DateTime, Utc},
     clap::{
@@ -427,6 +427,26 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .takes_value(true)
                     .help("path to log file to parse"),
             ),
+        SubCommand::with_name("print")
+            .about("Print the ledger")
+            .settings(&hidden)
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
+            .arg(&allow_dead_slots_arg)
+            .arg(
+                Arg::with_name("num_slots")
+                    .long("num-slots")
+                    .value_name("SLOT")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .help("Number of slots to print"),
+            )
+            .arg(
+                Arg::with_name("only_rooted")
+                    .long("only-rooted")
+                    .takes_value(false)
+                    .help("Only print root slots"),
+            ),
         SubCommand::with_name("print-file-metadata")
             .about(
                 "Print the metadata of the specified ledger-store file. If no file name is \
@@ -825,6 +845,23 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                 assert_eq!(slot1, slot2);
                 println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
             }
+        }
+        ("print", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
+            let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+            let only_rooted = arg_matches.is_present("only_rooted");
+            output_ledger(
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
+                starting_slot,
+                ending_slot,
+                allow_dead_slots,
+                OutputFormat::Display,
+                num_slots,
+                verbose_level,
+                only_rooted,
+            );
         }
         ("print-file-metadata", Some(arg_matches)) => {
             let blockstore =
