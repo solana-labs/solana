@@ -38,7 +38,6 @@ use {
         blockstore::{create_new_ledger, Blockstore},
         blockstore_options::{AccessType, LedgerColumnOptions},
         blockstore_processor::ProcessOptions,
-        shred::Shred,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_measure::{measure, measure::Measure},
@@ -1109,12 +1108,6 @@ fn main() {
                 .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
         )
         .subcommand(
-            SubCommand::with_name("shred-meta")
-                .about("Prints raw shred metadata")
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg),
-        )
-        .subcommand(
             SubCommand::with_name("bank-hash")
                 .about("Prints the hash of the working bank after reading the ledger")
                 .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1659,7 +1652,8 @@ fn main() {
         | ("purge", Some(_))
         | ("remove-dead-slot", Some(_))
         | ("repair-roots", Some(_))
-        | ("set-dead-slot", Some(_)) => blockstore_process_command(&ledger_path, &matches),
+        | ("set-dead-slot", Some(_))
+        | ("shred-meta", Some(_)) => blockstore_process_command(&ledger_path, &matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -1767,48 +1761,6 @@ fn main() {
                             Some(&bank_forks.read().unwrap().working_bank().hard_forks())
                         )
                     );
-                }
-                ("shred-meta", Some(arg_matches)) => {
-                    #[derive(Debug)]
-                    #[allow(dead_code)]
-                    struct ShredMeta<'a> {
-                        slot: Slot,
-                        full_slot: bool,
-                        shred_index: usize,
-                        data: bool,
-                        code: bool,
-                        last_in_slot: bool,
-                        data_complete: bool,
-                        shred: &'a Shred,
-                    }
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot =
-                        value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                    let ledger = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    for (slot, _meta) in ledger
-                        .slot_meta_iterator(starting_slot)
-                        .unwrap()
-                        .take_while(|(slot, _)| *slot <= ending_slot)
-                    {
-                        let full_slot = ledger.is_full(slot);
-                        if let Ok(shreds) = ledger.get_data_shreds_for_slot(slot, 0) {
-                            for (shred_index, shred) in shreds.iter().enumerate() {
-                                println!(
-                                    "{:#?}",
-                                    ShredMeta {
-                                        slot,
-                                        full_slot,
-                                        shred_index,
-                                        data: shred.is_data(),
-                                        code: shred.is_code(),
-                                        data_complete: shred.data_complete(),
-                                        last_in_slot: shred.last_in_slot(),
-                                        shred,
-                                    }
-                                );
-                            }
-                        }
-                    }
                 }
                 ("bank-hash", Some(arg_matches)) => {
                     let process_options = ProcessOptions {

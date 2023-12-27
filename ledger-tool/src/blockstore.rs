@@ -18,6 +18,7 @@ use {
         blockstore::{Blockstore, PurgeType},
         blockstore_db::{self, Column, ColumnName, Database},
         blockstore_options::{AccessType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
+        shred::Shred,
     },
     solana_sdk::clock::Slot,
     std::{
@@ -434,6 +435,11 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(true)
                     .help("Slots to mark dead"),
             ),
+        SubCommand::with_name("shred-meta")
+            .about("Prints raw shred metadata")
+            .settings(&hidden)
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg),
     ]
 }
 
@@ -734,6 +740,47 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                 match blockstore.set_dead_slot(slot) {
                     Ok(_) => println!("Slot {slot} dead"),
                     Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
+                }
+            }
+        }
+        ("shred-meta", Some(arg_matches)) => {
+            #[derive(Debug)]
+            #[allow(dead_code)]
+            struct ShredMeta<'a> {
+                slot: Slot,
+                full_slot: bool,
+                shred_index: usize,
+                data: bool,
+                code: bool,
+                last_in_slot: bool,
+                data_complete: bool,
+                shred: &'a Shred,
+            }
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
+            let ledger = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            for (slot, _meta) in ledger
+                .slot_meta_iterator(starting_slot)
+                .unwrap()
+                .take_while(|(slot, _)| *slot <= ending_slot)
+            {
+                let full_slot = ledger.is_full(slot);
+                if let Ok(shreds) = ledger.get_data_shreds_for_slot(slot, 0) {
+                    for (shred_index, shred) in shreds.iter().enumerate() {
+                        println!(
+                            "{:#?}",
+                            ShredMeta {
+                                slot,
+                                full_slot,
+                                shred_index,
+                                data: shred.is_data(),
+                                code: shred.is_code(),
+                                data_complete: shred.data_complete(),
+                                last_in_slot: shred.last_in_slot(),
+                                shred,
+                            }
+                        );
+                    }
                 }
             }
         }
