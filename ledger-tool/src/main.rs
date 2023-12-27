@@ -36,7 +36,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore},
-        blockstore_options::{AccessType, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
+        blockstore_options::{AccessType, LedgerColumnOptions},
         blockstore_processor::ProcessOptions,
         shred::Shred,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
@@ -1022,19 +1022,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("copy")
-                .about("Copy the ledger")
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("target_db")
-                        .long("target-db")
-                        .value_name("DIR")
-                        .takes_value(true)
-                        .help("Target db"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("slot")
                 .about("Print the contents of one or more slots")
                 .arg(
@@ -1664,6 +1651,7 @@ fn main() {
         // subcommands of the binary, but have been moved under the blockstore subcommand.
         ("analyze-storage", Some(_))
         | ("bounds", Some(_))
+        | ("copy", Some(_))
         | ("dead-slots", Some(_))
         | ("duplicate-slots", Some(_))
         | ("list-roots", Some(_))
@@ -1693,40 +1681,6 @@ fn main() {
                         verbose_level,
                         only_rooted,
                     );
-                }
-                ("copy", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                    let target_db =
-                        PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-
-                    let source = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    // Check if shred storage type can be inferred; if not, a new
-                    // ledger is being created. open_blockstore() will attempt to
-                    // to infer shred storage type as well, but this check provides
-                    // extra insight to user on how to create a FIFO ledger.
-                    let _ = get_shred_storage_type(
-                        &target_db,
-                        &format!(
-                            "No --target-db ledger at {:?} was detected, default compaction \
-                         (RocksLevel) will be used. Fifo compaction can be enabled for a new \
-                         ledger by manually creating {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} directory \
-                         within the specified --target_db directory.",
-                            &target_db
-                        ),
-                    );
-                    let target = open_blockstore(&target_db, arg_matches, AccessType::Primary);
-                    for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
-                        if slot > ending_slot {
-                            break;
-                        }
-                        if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
-                            if target.insert_shreds(shreds, None, true).is_err() {
-                                warn!("error inserting shreds for slot {}", slot);
-                            }
-                        }
-                    }
                 }
                 ("genesis", Some(arg_matches)) => {
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

@@ -3,6 +3,7 @@
 use {
     crate::{
         ledger_path::canonicalize_ledger_path,
+        ledger_utils::get_shred_storage_type,
         output::{SlotBounds, SlotInfo},
     },
     clap::{
@@ -16,13 +17,13 @@ use {
     solana_ledger::{
         blockstore::{Blockstore, PurgeType},
         blockstore_db::{self, Column, ColumnName, Database},
-        blockstore_options::AccessType,
+        blockstore_options::{AccessType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
     },
     solana_sdk::clock::Slot,
     std::{
         fs::File,
         io::{stdout, Write},
-        path::Path,
+        path::{Path, PathBuf},
         sync::atomic::AtomicBool,
     },
 };
@@ -223,6 +224,11 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
+    let ending_slot_arg = Arg::with_name("ending_slot")
+        .long("ending-slot")
+        .value_name("SLOT")
+        .takes_value(true)
+        .help("The last slot to iterate to");
 
     vec![
         SubCommand::with_name("analyze-storage")
@@ -243,6 +249,18 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .takes_value(false)
                     .required(false)
                     .help("Additionally print all the non-empty slots within the bounds"),
+            ),
+        SubCommand::with_name("copy")
+            .about("Copy the ledger")
+            .settings(&hidden)
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
+            .arg(
+                Arg::with_name("target_db")
+                    .long("target-db")
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Target db"),
             ),
         SubCommand::with_name("dead-slots")
             .about("Print all the dead slots in the ledger")
@@ -494,6 +512,39 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                     std::process::exit(1);
                 }
             };
+        }
+        ("copy", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
+
+            let source = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+
+            // Check if shred storage type can be inferred; if not, a new
+            // ledger is being created. open_blockstore() will attempt to
+            // to infer shred storage type as well, but this check provides
+            // extra insight to user on how to create a FIFO ledger.
+            let _ = get_shred_storage_type(
+                &target_db,
+                &format!(
+                    "No --target-db ledger at {:?} was detected, default compaction \
+                 (RocksLevel) will be used. Fifo compaction can be enabled for a new \
+                 ledger by manually creating {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} directory \
+                 within the specified --target_db directory.",
+                    &target_db
+                ),
+            );
+            let target = crate::open_blockstore(&target_db, arg_matches, AccessType::Primary);
+            for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
+                if slot > ending_slot {
+                    break;
+                }
+                if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
+                    if target.insert_shreds(shreds, None, true).is_err() {
+                        warn!("error inserting shreds for slot {}", slot);
+                    }
+                }
+            }
         }
         ("dead-slots", Some(arg_matches)) => {
             let blockstore =
