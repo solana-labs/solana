@@ -7973,7 +7973,7 @@ impl Bank {
             }
         }
         for precompile in get_precompiles() {
-            #[allow(clippy::blocks_in_if_conditions)]
+            #[allow(clippy::blocks_in_conditions)]
             if precompile.feature.map_or(false, |ref feature_id| {
                 self.feature_set.is_active(feature_id)
             }) {
