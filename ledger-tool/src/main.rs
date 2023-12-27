@@ -1,8 +1,6 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    crate::{
-        args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, output::*, program::*,
-    },
+    crate::{args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, program::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -1252,20 +1250,6 @@ fn main() {
                 .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
         )
         .subcommand(
-            SubCommand::with_name("bounds")
-                .about(
-                    "Print lowest and highest non-empty slots. Note that there may be empty slots \
-                     within the bounds",
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .long("all")
-                        .takes_value(false)
-                        .required(false)
-                        .help("Additionally print all the non-empty slots within the bounds"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("json")
                 .about("Print the ledger in JSON format")
                 .arg(&starting_slot_arg)
@@ -1930,7 +1914,9 @@ fn main() {
         ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
         // This match case provides legacy support for commands that were previously top level
         // subcommands of the binary, but have been moved under the blockstore subcommand.
-        ("analyze-storage", Some(_)) => blockstore_process_command(&ledger_path, &matches),
+        ("analyze-storage", Some(_)) | ("bounds", Some(_)) => {
+            blockstore_process_command(&ledger_path, &matches)
+        }
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -3727,73 +3713,6 @@ fn main() {
                             exit(1);
                         });
                     println!("Successfully repaired {num_repaired_roots} roots");
-                }
-                ("bounds", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    match blockstore.slot_meta_iterator(0) {
-                        Ok(metas) => {
-                            let output_format =
-                                OutputFormat::from_matches(arg_matches, "output_format", false);
-                            let all = arg_matches.is_present("all");
-
-                            let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-
-                            let slot_bounds = if slots.is_empty() {
-                                SlotBounds::default()
-                            } else {
-                                // Collect info about slot bounds
-                                let mut bounds = SlotBounds {
-                                    slots: SlotInfo {
-                                        total: slots.len(),
-                                        first: Some(*slots.first().unwrap()),
-                                        last: Some(*slots.last().unwrap()),
-                                        ..SlotInfo::default()
-                                    },
-                                    ..SlotBounds::default()
-                                };
-                                if all {
-                                    bounds.all_slots = Some(&slots);
-                                }
-
-                                // Consider also rooted slots, if present
-                                if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
-                                    let mut first_rooted = None;
-                                    let mut last_rooted = None;
-                                    let mut total_rooted = 0;
-                                    for (i, slot) in rooted.into_iter().enumerate() {
-                                        if i == 0 {
-                                            first_rooted = Some(slot);
-                                        }
-                                        last_rooted = Some(slot);
-                                        total_rooted += 1;
-                                    }
-                                    let last_root_for_comparison = last_rooted.unwrap_or_default();
-                                    let count_past_root = slots
-                                        .iter()
-                                        .rev()
-                                        .take_while(|slot| *slot > &last_root_for_comparison)
-                                        .count();
-
-                                    bounds.roots = SlotInfo {
-                                        total: total_rooted,
-                                        first: first_rooted,
-                                        last: last_rooted,
-                                        num_after_last_root: Some(count_past_root),
-                                    };
-                                }
-                                bounds
-                            };
-
-                            // Print collected data
-                            println!("{}", output_format.formatted_string(&slot_bounds));
-                        }
-                        Err(err) => {
-                            eprintln!("Unable to read the Ledger: {err:?}");
-                            exit(1);
-                        }
-                    };
                 }
                 ("compute-slot-cost", Some(arg_matches)) => {
                     let blockstore =

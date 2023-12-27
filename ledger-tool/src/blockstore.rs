@@ -1,9 +1,13 @@
 //! The `blockstore` subcommand
 
 use {
-    crate::ledger_path::canonicalize_ledger_path,
-    clap::{App, AppSettings, ArgMatches, SubCommand},
+    crate::{
+        ledger_path::canonicalize_ledger_path,
+        output::{SlotBounds, SlotInfo},
+    },
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     serde_json::json,
+    solana_cli_output::OutputFormat,
     solana_ledger::{
         blockstore_db::{self, Database},
         blockstore_options::AccessType,
@@ -132,9 +136,27 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
         vec![]
     };
 
-    vec![SubCommand::with_name("analyze-storage")
-        .about("Output statistics in JSON format about all column families in the ledger rocksdb")
-        .settings(&hidden)]
+    vec![
+        SubCommand::with_name("analyze-storage")
+            .about(
+                "Output statistics in JSON format about all column families in the ledger \
+                rocksdb",
+            )
+            .settings(&hidden),
+        SubCommand::with_name("bounds")
+            .about(
+                "Print lowest and highest non-empty slots. Note that there may be empty slots \
+                 within the bounds",
+            )
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("all")
+                    .long("all")
+                    .takes_value(false)
+                    .required(false)
+                    .help("Additionally print all the non-empty slots within the bounds"),
+            ),
+    ]
 }
 
 pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
@@ -145,6 +167,73 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             analyze_storage(
                 &crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
             );
+        }
+        ("bounds", Some(arg_matches)) => {
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+
+            match blockstore.slot_meta_iterator(0) {
+                Ok(metas) => {
+                    let output_format =
+                        OutputFormat::from_matches(arg_matches, "output_format", false);
+                    let all = arg_matches.is_present("all");
+
+                    let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+
+                    let slot_bounds = if slots.is_empty() {
+                        SlotBounds::default()
+                    } else {
+                        // Collect info about slot bounds
+                        let mut bounds = SlotBounds {
+                            slots: SlotInfo {
+                                total: slots.len(),
+                                first: Some(*slots.first().unwrap()),
+                                last: Some(*slots.last().unwrap()),
+                                ..SlotInfo::default()
+                            },
+                            ..SlotBounds::default()
+                        };
+                        if all {
+                            bounds.all_slots = Some(&slots);
+                        }
+
+                        // Consider also rooted slots, if present
+                        if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                            let mut first_rooted = None;
+                            let mut last_rooted = None;
+                            let mut total_rooted = 0;
+                            for (i, slot) in rooted.into_iter().enumerate() {
+                                if i == 0 {
+                                    first_rooted = Some(slot);
+                                }
+                                last_rooted = Some(slot);
+                                total_rooted += 1;
+                            }
+                            let last_root_for_comparison = last_rooted.unwrap_or_default();
+                            let count_past_root = slots
+                                .iter()
+                                .rev()
+                                .take_while(|slot| *slot > &last_root_for_comparison)
+                                .count();
+
+                            bounds.roots = SlotInfo {
+                                total: total_rooted,
+                                first: first_rooted,
+                                last: last_rooted,
+                                num_after_last_root: Some(count_past_root),
+                            };
+                        }
+                        bounds
+                    };
+
+                    // Print collected data
+                    println!("{}", output_format.formatted_string(&slot_bounds));
+                }
+                Err(err) => {
+                    eprintln!("Unable to read the Ledger: {err:?}");
+                    std::process::exit(1);
+                }
+            };
         }
         _ => unreachable!(),
     }
