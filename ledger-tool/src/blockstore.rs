@@ -4,7 +4,7 @@ use {
     crate::{
         ledger_path::canonicalize_ledger_path,
         ledger_utils::{get_program_ids, get_shred_storage_type},
-        output::{SlotBounds, SlotInfo},
+        output::{output_slot, SlotBounds, SlotInfo},
     },
     chrono::{DateTime, Utc},
     clap::{
@@ -28,7 +28,7 @@ use {
         hash::Hash,
     },
     std::{
-        collections::{BTreeMap, BTreeSet},
+        collections::{BTreeMap, BTreeSet, HashMap},
         fs::File,
         io::{stdout, BufRead, BufReader, Write},
         path::{Path, PathBuf},
@@ -305,6 +305,10 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
         .value_name("SLOT")
         .takes_value(true)
         .help("The last slot to iterate to");
+    let allow_dead_slots_arg = Arg::with_name("allow_dead_slots")
+        .long("allow-dead-slots")
+        .takes_value(false)
+        .help("Output dead slots as well");
 
     vec![
         SubCommand::with_name("analyze-storage")
@@ -552,11 +556,26 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
             .settings(&hidden)
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg),
+        SubCommand::with_name("slot")
+            .about("Print the contents of one or more slots")
+            .settings(&hidden)
+            .arg(&allow_dead_slots_arg)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to print"),
+            ),
     ]
 }
 
 pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let ledger_path = canonicalize_ledger_path(ledger_path);
+    let verbose_level = matches.occurrences_of("verbose");
 
     match matches.subcommand() {
         ("analyze-storage", Some(arg_matches)) => {
@@ -983,6 +1002,25 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                             }
                         );
                     }
+                }
+            }
+        }
+        ("slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            for slot in slots {
+                println!("Slot {slot}");
+                if let Err(err) = output_slot(
+                    &blockstore,
+                    slot,
+                    allow_dead_slots,
+                    &OutputFormat::Display,
+                    verbose_level,
+                    &mut HashMap::new(),
+                ) {
+                    eprintln!("{err}");
                 }
             }
         }

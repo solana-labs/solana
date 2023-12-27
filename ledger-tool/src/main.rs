@@ -949,21 +949,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("slot")
-                .about("Print the contents of one or more slots")
-                .arg(
-                    Arg::with_name("slots")
-                        .index(1)
-                        .value_name("SLOTS")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(true)
-                        .help("Slots to print"),
-                )
-                .arg(&allow_dead_slots_arg),
-        )
-        .subcommand(
             SubCommand::with_name("genesis")
                 .about("Prints the ledger's genesis config")
                 .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1545,7 +1530,8 @@ fn main() {
         | ("remove-dead-slot", Some(_))
         | ("repair-roots", Some(_))
         | ("set-dead-slot", Some(_))
-        | ("shred-meta", Some(_)) => blockstore_process_command(&ledger_path, &matches),
+        | ("shred-meta", Some(_))
+        | ("slot", Some(_)) => blockstore_process_command(&ledger_path, &matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -1677,25 +1663,6 @@ fn main() {
                         incremental_snapshot_archive_path,
                     );
                     println!("{}", &bank_forks.read().unwrap().working_bank().hash());
-                }
-                ("slot", Some(arg_matches)) => {
-                    let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    for slot in slots {
-                        println!("Slot {slot}");
-                        if let Err(err) = output_slot(
-                            &blockstore,
-                            slot,
-                            allow_dead_slots,
-                            &OutputFormat::Display,
-                            verbose_level,
-                            &mut HashMap::new(),
-                        ) {
-                            eprintln!("{err}");
-                        }
-                    }
                 }
                 ("json", Some(arg_matches)) => {
                     let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
