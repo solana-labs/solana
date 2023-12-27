@@ -168,6 +168,10 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
             .about("Print all the dead slots in the ledger")
             .settings(&hidden)
             .arg(&starting_slot_arg),
+        SubCommand::with_name("duplicate-slots")
+            .about("Print all the duplicate slots in the ledger")
+            .settings(&hidden)
+            .arg(&starting_slot_arg),
     ]
 }
 
@@ -252,6 +256,14 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
+                println!("{slot}");
+            }
+        }
+        ("duplicate-slots", Some(arg_matches)) => {
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{slot}");
             }
         }
