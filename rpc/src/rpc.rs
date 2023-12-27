@@ -1930,10 +1930,10 @@ impl JsonRpcRequestProcessor {
                         address: String::new(),
                         // Only allocate strings if we are adding to heap and returning
                         amount: UiTokenAmount {
-                            ui_amount: Default::default(),
+                            ui_amount: Option::default(),
                             decimals,
-                            amount: Default::default(),
-                            ui_amount_string: Default::default(),
+                            amount: String::default(),
+                            ui_amount_string: String::default(),
                         },
                     },
                     amount: Reverse(amount_u64),
