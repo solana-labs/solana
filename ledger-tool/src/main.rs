@@ -7,7 +7,6 @@ use {
     },
     dashmap::DashMap,
     log::*,
-    regex::Regex,
     serde::{
         ser::{SerializeSeq, Serializer},
         Serialize,
@@ -33,7 +32,6 @@ use {
     },
     solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_ledger::{
-        ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore},
         blockstore_options::{AccessType, LedgerColumnOptions},
         blockstore_processor::ProcessOptions,
@@ -75,10 +73,10 @@ use {
         vote_state::{self, VoteState},
     },
     std::{
-        collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         ffi::OsStr,
         fs::File,
-        io::{self, stdout, BufRead, BufReader, Write},
+        io::{self, stdout, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
@@ -990,22 +988,6 @@ fn main() {
                 .arg(&max_genesis_archive_unpacked_size_arg),
         )
         .subcommand(
-            SubCommand::with_name("parse_full_frozen")
-                .about(
-                    "Parses log for information about critical events about ancestors of the \
-                     given `ending_slot`",
-                )
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("log_path")
-                        .long("log-path")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .help("path to log file to parse"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("modify-genesis")
                 .about("Modifies genesis parameters")
                 .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1557,6 +1539,7 @@ fn main() {
         | ("duplicate-slots", Some(_))
         | ("latest-optimistic-slots", Some(_))
         | ("list-roots", Some(_))
+        | ("parse_full_frozen", Some(_))
         | ("print-file-metadata", Some(_))
         | ("purge", Some(_))
         | ("remove-dead-slot", Some(_))
@@ -1727,68 +1710,6 @@ fn main() {
                         std::u64::MAX,
                         true,
                     );
-                }
-                ("parse_full_frozen", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let mut ancestors = BTreeSet::new();
-                    assert!(
-                        blockstore.meta(ending_slot).unwrap().is_some(),
-                        "Ending slot doesn't exist"
-                    );
-                    for a in AncestorIterator::new(ending_slot, &blockstore) {
-                        ancestors.insert(a);
-                        if a <= starting_slot {
-                            break;
-                        }
-                    }
-                    println!("ancestors: {:?}", ancestors.iter());
-
-                    let mut frozen = BTreeMap::new();
-                    let mut full = BTreeMap::new();
-                    let frozen_regex = Regex::new(r"bank frozen: (\d*)").unwrap();
-                    let full_regex = Regex::new(r"slot (\d*) is full").unwrap();
-
-                    let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
-                    let f = BufReader::new(File::open(log_file).unwrap());
-                    println!("Reading log file");
-                    for line in f.lines().map_while(Result::ok) {
-                        let parse_results = {
-                            if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
-                                Some((slot_string, &mut frozen))
-                            } else {
-                                full_regex
-                                    .captures_iter(&line)
-                                    .next()
-                                    .map(|slot_string| (slot_string, &mut full))
-                            }
-                        };
-
-                        if let Some((slot_string, map)) = parse_results {
-                            let slot = slot_string
-                                .get(1)
-                                .expect("Only one match group")
-                                .as_str()
-                                .parse::<u64>()
-                                .unwrap();
-                            if ancestors.contains(&slot) && !map.contains_key(&slot) {
-                                map.insert(slot, line);
-                            }
-                            if slot == ending_slot
-                                && frozen.contains_key(&slot)
-                                && full.contains_key(&slot)
-                            {
-                                break;
-                            }
-                        }
-                    }
-
-                    for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
-                        assert_eq!(slot1, slot2);
-                        println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
-                    }
                 }
                 ("verify", Some(arg_matches)) => {
                     let exit_signal = Arc::new(AtomicBool::new(false));

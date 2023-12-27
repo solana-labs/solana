@@ -12,6 +12,7 @@ use {
     },
     itertools::Itertools,
     log::*,
+    regex::Regex,
     serde_json::json,
     solana_clap_utils::{hidden_unless_forced, input_validators::is_slot},
     solana_cli_output::OutputFormat,
@@ -27,8 +28,9 @@ use {
         hash::Hash,
     },
     std::{
+        collections::{BTreeMap, BTreeSet},
         fs::File,
-        io::{stdout, Write},
+        io::{stdout, BufRead, BufReader, Write},
         path::{Path, PathBuf},
         sync::atomic::AtomicBool,
         time::{Duration, UNIX_EPOCH},
@@ -406,6 +408,21 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(false)
                     .help("Number of roots in the output"),
             ),
+        SubCommand::with_name("parse_full_frozen")
+            .about(
+                "Parses log for information about critical events about ancestors of the given \
+                 `ending_slot`",
+            )
+            .settings(&hidden)
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
+            .arg(
+                Arg::with_name("log_path")
+                    .long("log-path")
+                    .value_name("PATH")
+                    .takes_value(true)
+                    .help("path to log file to parse"),
+            ),
         SubCommand::with_name("print-file-metadata")
             .about(
                 "Print the metadata of the specified ledger-store file. If no file name is \
@@ -729,6 +746,66 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
 
                     writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
                 });
+        }
+        ("parse_full_frozen", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            let mut ancestors = BTreeSet::new();
+            assert!(
+                blockstore.meta(ending_slot).unwrap().is_some(),
+                "Ending slot doesn't exist"
+            );
+            for a in AncestorIterator::new(ending_slot, &blockstore) {
+                ancestors.insert(a);
+                if a <= starting_slot {
+                    break;
+                }
+            }
+            println!("ancestors: {:?}", ancestors.iter());
+
+            let mut frozen = BTreeMap::new();
+            let mut full = BTreeMap::new();
+            let frozen_regex = Regex::new(r"bank frozen: (\d*)").unwrap();
+            let full_regex = Regex::new(r"slot (\d*) is full").unwrap();
+
+            let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
+            let f = BufReader::new(File::open(log_file).unwrap());
+            println!("Reading log file");
+            for line in f.lines().map_while(Result::ok) {
+                let parse_results = {
+                    if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
+                        Some((slot_string, &mut frozen))
+                    } else {
+                        full_regex
+                            .captures_iter(&line)
+                            .next()
+                            .map(|slot_string| (slot_string, &mut full))
+                    }
+                };
+
+                if let Some((slot_string, map)) = parse_results {
+                    let slot = slot_string
+                        .get(1)
+                        .expect("Only one match group")
+                        .as_str()
+                        .parse::<u64>()
+                        .unwrap();
+                    if ancestors.contains(&slot) && !map.contains_key(&slot) {
+                        map.insert(slot, line);
+                    }
+                    if slot == ending_slot && frozen.contains_key(&slot) && full.contains_key(&slot)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
+                assert_eq!(slot1, slot2);
+                println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
+            }
         }
         ("print-file-metadata", Some(arg_matches)) => {
             let blockstore =
