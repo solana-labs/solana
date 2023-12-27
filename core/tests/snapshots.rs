@@ -635,7 +635,7 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
                 .unwrap()
                 .set_root(current_bank.slot(), &request_sender, None);
 
-            // Since the accounts background services are not runnning, EpochAccountsHash
+            // Since the accounts background services are not running, EpochAccountsHash
             // calculation requests will not be handled. To prevent banks from hanging during
             // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Valid.
             let epoch_accounts_hash_manager = &current_bank

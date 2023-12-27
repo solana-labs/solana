@@ -1204,7 +1204,7 @@ mod tests {
             assert!(slot_hash_votes.contains(&pubkey));
         }
 
-        // Check that the received votes were pushed to other commponents
+        // Check that the received votes were pushed to other components
         // subscribing via `verified_vote_receiver`
         let all_expected_slots: BTreeSet<_> = gossip_vote_slots
             .clone()
@@ -1332,7 +1332,7 @@ mod tests {
         )
         .unwrap();
 
-        // Check that the received votes were pushed to other commponents
+        // Check that the received votes were pushed to other components
         // subscribing via a channel
         let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
         assert_eq!(received_votes.len(), validator_voting_keypairs.len());
