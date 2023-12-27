@@ -289,32 +289,6 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                     .required(false)
                     .help("Number of roots in the output"),
             ),
-        SubCommand::with_name("set-dead-slot")
-            .about("Mark one or more slots dead")
-            .settings(&hidden)
-            .arg(
-                Arg::with_name("slots")
-                    .index(1)
-                    .value_name("SLOTS")
-                    .validator(is_slot)
-                    .takes_value(true)
-                    .multiple(true)
-                    .required(true)
-                    .help("Slots to mark dead"),
-            ),
-        SubCommand::with_name("remove-dead-slot")
-            .about("Remove the dead flag for a slot")
-            .settings(&hidden)
-            .arg(
-                Arg::with_name("slots")
-                    .index(1)
-                    .value_name("SLOTS")
-                    .validator(is_slot)
-                    .takes_value(true)
-                    .multiple(true)
-                    .required(true)
-                    .help("Slots to mark as not dead"),
-            ),
         SubCommand::with_name("print-file-metadata")
             .about(
                 "Print the metadata of the specified ledger-store file. If no file name is \
@@ -330,6 +304,32 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
                         "The ledger file name (e.g. 011080.sst.) If no file name is \
                          specified, it will print the metadata of all ledger files.",
                     ),
+            ),
+        SubCommand::with_name("remove-dead-slot")
+            .about("Remove the dead flag for a slot")
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark as not dead"),
+            ),
+        SubCommand::with_name("set-dead-slot")
+            .about("Mark one or more slots dead")
+            .settings(&hidden)
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark dead"),
             ),
     ]
 }
