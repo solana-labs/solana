@@ -350,6 +350,12 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
             .about("Print all the duplicate slots in the ledger")
             .settings(&hidden)
             .arg(&starting_slot_arg),
+        SubCommand::with_name("json")
+            .about("Print the ledger in JSON format")
+            .settings(&hidden)
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
+            .arg(&allow_dead_slots_arg),
         SubCommand::with_name("latest-optimistic-slots")
             .about(
                 "Output up to the most recent <num-slots> optimistic slots with their hashes \
@@ -718,6 +724,21 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
             for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{slot}");
             }
+        }
+        ("json", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+            output_ledger(
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
+                starting_slot,
+                ending_slot,
+                allow_dead_slots,
+                OutputFormat::Json,
+                None,
+                std::u64::MAX,
+                true,
+            );
         }
         ("latest-optimistic-slots", Some(arg_matches)) => {
             let blockstore =

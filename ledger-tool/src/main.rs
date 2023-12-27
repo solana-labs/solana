@@ -597,12 +597,6 @@ fn main() {
 
     solana_logger::setup_with_default("solana=info");
 
-    let starting_slot_arg = Arg::with_name("starting_slot")
-        .long("starting-slot")
-        .value_name("SLOT")
-        .takes_value(true)
-        .default_value("0")
-        .help("Start at this slot");
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
@@ -989,12 +983,6 @@ fn main() {
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
                 .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
-        )
-        .subcommand(
-            SubCommand::with_name("json")
-                .about("Print the ledger in JSON format")
-                .arg(&starting_slot_arg)
-                .arg(&allow_dead_slots_arg),
         )
         .subcommand(
             SubCommand::with_name("verify")
@@ -1496,6 +1484,7 @@ fn main() {
         | ("copy", Some(_))
         | ("dead-slots", Some(_))
         | ("duplicate-slots", Some(_))
+        | ("json", Some(_))
         | ("latest-optimistic-slots", Some(_))
         | ("list-roots", Some(_))
         | ("parse_full_frozen", Some(_))
@@ -1620,20 +1609,6 @@ fn main() {
                         incremental_snapshot_archive_path,
                     );
                     println!("{}", &bank_forks.read().unwrap().working_bank().hash());
-                }
-                ("json", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    output_ledger(
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
-                        starting_slot,
-                        Slot::MAX,
-                        allow_dead_slots,
-                        OutputFormat::Json,
-                        None,
-                        std::u64::MAX,
-                        true,
-                    );
                 }
                 ("verify", Some(arg_matches)) => {
                     let exit_signal = Arc::new(AtomicBool::new(false));
