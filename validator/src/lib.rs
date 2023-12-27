@@ -24,12 +24,7 @@ pub mod dashboard;
 #[cfg(unix)]
 fn redirect_stderr(filename: &str) {
     use std::os::unix::io::AsRawFd;
-    match OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(filename)
-    {
+    match OpenOptions::new().create(true).append(true).open(filename) {
         Ok(file) => unsafe {
             libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
         },
