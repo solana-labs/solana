@@ -1199,12 +1199,14 @@ where
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
+        assert_matches!(self.session_result_with_timings, None);
+
         if self.has_active_threads_to_be_joined() {
-            assert_matches!(self.session_result_with_timings, None);
             self.schedulable_transaction_sender
                 .send(SessionedMessage::StartSession(context.clone()))
                 .unwrap();
         } else {
+            self.session_result_with_timings = Some(initialized_result_with_timings());
             assert_matches!(self.try_start_threads(context), Ok(()));
         }
     }
