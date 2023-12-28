@@ -524,8 +524,9 @@ where
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
-    schedulable_transaction_receiver: Option<Receiver<SessionedMessage<Task, SchedulingContext>>>,
+    schedulable_transaction_sender: Sender<SubchanneledPayload<Task, SchedulingContext>>,
+    schedulable_transaction_receiver:
+        Option<Receiver<SubchanneledPayload<Task, SchedulingContext>>>,
     result_sender: Sender<Option<ResultWithTimings>>,
     result_receiver: Receiver<Option<ResultWithTimings>>,
     handler_count: usize,
@@ -614,10 +615,10 @@ enum ChainedChannel<P1, P2> {
     PayloadAndChannel(Box<dyn WithChannelAndPayload<P1, P2>>),
 }
 
-enum SessionedMessage<P1, P2> {
+enum SubchanneledPayload<P1, P2> {
     Payload(P1),
-    StartSession(P2),
-    EndSession,
+    OpenSubchannel(P2),
+    CloseSubchannel,
 }
 
 impl<P1: Send + Sync + 'static, P2: Send + Sync + 'static> ChainedChannel<P1, P2> {
@@ -777,7 +778,7 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
         let (executed_task_sender, executed_task_receiver) =
-            unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
+            unbounded::<SubchanneledPayload<Box<ExecutedTask>, ()>>();
         let (accumulated_result_sender, accumulated_result_receiver) =
             unbounded::<Option<ResultWithTimings>>();
 
@@ -848,28 +849,28 @@ where
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
-                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                    executed_task_sender.send_buffered(SubchanneledPayload::Payload(executed_task)).unwrap();
                                 }
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> message => {
                                 match message {
-                                    Ok(SessionedMessage::Payload(task)) => {
+                                    Ok(SubchanneledPayload::Payload(task)) => {
                                         assert!(!session_ending && !thread_ending);
                                         if let Some(task) = state_machine.schedule_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
                                     }
-                                    Ok(SessionedMessage::StartSession(context)) => {
+                                    Ok(SubchanneledPayload::OpenSubchannel(context)) => {
                                         slot = context.bank().slot();
                                         Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
                                         executed_task_sender
-                                            .send(SessionedMessage::StartSession(()))
+                                            .send(SubchanneledPayload::OpenSubchannel(()))
                                             .unwrap();
                                         "started"
                                     }
-                                    Ok(SessionedMessage::EndSession) => {
+                                    Ok(SubchanneledPayload::CloseSubchannel) => {
                                         assert!(!session_ending && !thread_ending);
                                         session_ending = true;
                                         "S:ending"
@@ -907,7 +908,7 @@ where
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
-                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                    executed_task_sender.send_buffered(SubchanneledPayload::Payload(executed_task)).unwrap();
                                 }
                                 "step"
                             },
@@ -923,7 +924,7 @@ where
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) = <_>::default();
                         executed_task_sender
-                            .send(SessionedMessage::EndSession)
+                            .send(SubchanneledPayload::CloseSubchannel)
                             .unwrap();
                         result_sender
                             .send(Some(
@@ -944,7 +945,7 @@ where
                     None
                 } else {
                     executed_task_sender
-                        .send(SessionedMessage::EndSession)
+                        .send(SubchanneledPayload::CloseSubchannel)
                         .unwrap();
                     accumulated_result_receiver.recv().unwrap()
                 };
@@ -1021,7 +1022,7 @@ where
             move || {
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage::Payload(executed_task)) => {
+                        Ok(SubchanneledPayload::Payload(executed_task)) => {
                             assert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
                                 .as_mut()
@@ -1077,13 +1078,13 @@ where
                             }
                             drop(executed_task);
                         }
-                        Ok(SessionedMessage::StartSession(())) => {
+                        Ok(SubchanneledPayload::OpenSubchannel(())) => {
                             assert_matches!(
                                 result_with_timings.replace(initialized_result_with_timings()),
                                 None
                             );
                         }
-                        Ok(SessionedMessage::EndSession) => {
+                        Ok(SubchanneledPayload::CloseSubchannel) => {
                             if accumulated_result_sender
                                 .send(result_with_timings.take())
                                 .is_err()
@@ -1160,7 +1161,7 @@ where
     fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
         self.schedulable_transaction_sender
-            .send(SessionedMessage::Payload(task))
+            .send(SubchanneledPayload::Payload(task))
             .is_err()
     }
 
@@ -1179,7 +1180,7 @@ where
 
         let mut abort_detected = self
             .schedulable_transaction_sender
-            .send(SessionedMessage::EndSession)
+            .send(SubchanneledPayload::CloseSubchannel)
             .is_err();
 
         if let Some(result_with_timings) = self.result_receiver.recv().unwrap() {
@@ -1199,7 +1200,7 @@ where
 
         if self.has_active_threads_to_be_joined() {
             self.schedulable_transaction_sender
-                .send(SessionedMessage::StartSession(context.clone()))
+                .send(SubchanneledPayload::OpenSubchannel(context.clone()))
                 .unwrap();
         } else {
             self.session_result_with_timings = Some(initialized_result_with_timings());
