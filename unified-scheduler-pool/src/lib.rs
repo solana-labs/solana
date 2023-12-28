@@ -593,36 +593,36 @@ where
     }
 }
 
-type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
+type PayloadAndChannel<P1, P2> = (P2, Receiver<ChainedChannel<P1, P2>>);
 
-trait WithChannelAndPayload<T1, T2>: Send + Sync {
-    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2>;
+trait WithChannelAndPayload<P1, P2>: Send + Sync {
+    fn payload_and_channel(self: Box<Self>) -> PayloadAndChannel<P1, P2>;
 }
 
-struct ChannelAndPayloadWrapper<T1, T2>(ChannelAndPayload<T1, T2>);
+struct PayloadAndChannelWrapper<P1, P2>(PayloadAndChannel<P1, P2>);
 
-impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
-    for ChannelAndPayloadWrapper<T1, T2>
+impl<P1: Send + Sync, P2: Send + Sync> WithChannelAndPayload<P1, P2>
+    for PayloadAndChannelWrapper<P1, P2>
 {
-    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2> {
+    fn payload_and_channel(self: Box<Self>) -> PayloadAndChannel<P1, P2> {
         self.0
     }
 }
 
-enum ChainedChannel<T1, T2> {
-    Payload(T1),
-    ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
+enum ChainedChannel<P1, P2> {
+    Payload(P1),
+    PayloadAndChannel(Box<dyn WithChannelAndPayload<P1, P2>>),
 }
 
-enum SessionedMessage<T1, T2> {
-    Payload(T1),
-    StartSession(T2),
+enum SessionedMessage<P1, P2> {
+    Payload(P1),
+    StartSession(P2),
     EndSession,
 }
 
-impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
-    fn new_channel(receiver: Receiver<Self>, payload: T2) -> Self {
-        Self::ChannelWithPayload(Box::new(ChannelAndPayloadWrapper((receiver, payload))))
+impl<P1: Send + Sync + 'static, P2: Send + Sync + 'static> ChainedChannel<P1, P2> {
+    fn new_channel(receiver: Receiver<Self>, payload: P2) -> Self {
+        Self::PayloadAndChannel(Box::new(PayloadAndChannelWrapper((payload, receiver))))
     }
 }
 
@@ -979,9 +979,9 @@ where
                                 Ok(ChainedChannel::Payload(task)) => {
                                     (task, &handled_blocked_transaction_sender)
                                 }
-                                Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
+                                Ok(ChainedChannel::PayloadAndChannel(new_channel)) => {
                                     let new_context;
-                                    (blocked_transaction_sessioned_receiver, new_context) = new_channel.channel_and_payload();
+                                    (new_context, blocked_transaction_sessioned_receiver) = new_channel.payload_and_channel();
                                     bank = new_context.bank().clone();
                                     continue;
                                 }
