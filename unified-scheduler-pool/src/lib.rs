@@ -495,8 +495,8 @@ where
         self.pooled_at.elapsed()
     }
 
-    fn stop_thread_manager(&mut self) {
-        debug!("stop_thread_manager()");
+    fn suspend_thread_manager(&mut self) {
+        debug!("suspend_thread_manager()");
         self.thread_manager.write().unwrap().suspend();
     }
 
@@ -565,7 +565,7 @@ where
         scheduler
     }
 
-    fn ensure_thread_manager_started(
+    fn ensure_thread_manager_resumed(
         &self,
         context: &SchedulingContext,
     ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError>
@@ -577,14 +577,14 @@ where
                 debug!(
                     "{}",
                     if was_already_active {
-                        "ensure_thread_manager_started(): was already active."
+                        "ensure_thread_manager_resumed(): was already active."
                     } else {
-                        "ensure_thread_manager_started(): wasn't already active..."
+                        "ensure_thread_manager_resumed(): wasn't already active..."
                     }
                 );
                 return Ok(read);
             } else {
-                debug!("ensure_thread_manager_started(): will start threads...");
+                debug!("ensure_thread_manager_resumed(): will start threads...");
                 drop(read);
                 let mut write = self.inner.thread_manager.write().unwrap();
                 write.try_resume(context)?;
@@ -755,7 +755,7 @@ where
     fn try_resume(&mut self, context: &SchedulingContext) -> Result<()> {
         if self.has_active_threads_to_be_joined() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
-            // race-free in ensure_thread_manager_started()...
+            // race-free in ensure_thread_manager_resumed()...
             warn!("try_resume(): already started");
             return Ok(());
         } else if self
@@ -1310,7 +1310,7 @@ where
                 self.inner.address_book.load(pubkey)
             });
             let abort_detected = self
-                .ensure_thread_manager_started(&self.context)?
+                .ensure_thread_manager_resumed(&self.context)?
                 .send_task(task);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
@@ -1388,7 +1388,7 @@ where
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.stop_thread_manager();
+            self.suspend_thread_manager();
             return false;
         }
 
@@ -1402,7 +1402,7 @@ where
                 pooled_duration,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.stop_thread_manager();
+            self.suspend_thread_manager();
             false
         } else {
             true
