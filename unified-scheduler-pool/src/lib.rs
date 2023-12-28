@@ -616,16 +616,16 @@ enum ChainedChannel<P1, P2> {
     PayloadAndChannel(Box<dyn WithChannelAndPayload<P1, P2>>),
 }
 
-enum SubchanneledPayload<P1, P2> {
-    Payload(P1),
-    OpenSubchannel(P2),
-    CloseSubchannel,
-}
-
 impl<P1: Send + Sync + 'static, P2: Send + Sync + 'static> ChainedChannel<P1, P2> {
     fn new_channel(receiver: Receiver<Self>, payload: P2) -> Self {
         Self::PayloadAndChannel(Box::new(PayloadAndChannelWrapper((payload, receiver))))
     }
+}
+
+enum SubchanneledPayload<P1, P2> {
+    Payload(P1),
+    OpenSubchannel(P2),
+    CloseSubchannel,
 }
 
 #[derive(Default)]
