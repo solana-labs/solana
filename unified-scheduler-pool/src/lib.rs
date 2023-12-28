@@ -848,7 +848,7 @@ where
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
-                                    log_scheduler!("T:aborted");
+                                    log_scheduler!("S+T:aborted");
                                     result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
                                     drop(schedulable_transaction_receiver);
@@ -876,7 +876,7 @@ where
                                         executed_task_sender
                                             .send(SubchanneledPayload::OpenSubchannel(()))
                                             .unwrap();
-                                        "S:started"
+                                        "S+T:started"
                                     }
                                     Ok(SubchanneledPayload::CloseSubchannel) => {
                                         assert!(!session_ending && !thread_suspending);
