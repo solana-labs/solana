@@ -768,7 +768,7 @@ where
             .map(|(result, _)| result.is_err())
             .unwrap_or(false)
         {
-            warn!("try_resume(): skipping starting due to err. also cleared session result");
+            warn!("try_resume(): skipping resuming due to err, while resetting session result");
             return self.reset_session_on_error();
         }
         debug!("try_resume(): doing now");
@@ -801,7 +801,7 @@ where
                 blocked_transaction_sessioned_sender.clone();
 
             let mut session_ending = false;
-            let mut thread_ending = false;
+            let mut thread_suspending = false;
             move || {
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
@@ -813,7 +813,7 @@ where
                             "[sch_{:0width$x}]: slot: {}[{:12}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
-                            (if thread_ending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
+                            (if thread_suspending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
@@ -841,7 +841,7 @@ where
                     .unwrap();
                 let (do_now, dont_now) = (&disconnected::<()>(), &never::<()>());
 
-                while !thread_ending {
+                while !thread_suspending {
                     let mut is_finished = false;
                     while !is_finished {
                         let state_change = select_biased! {
@@ -850,7 +850,10 @@ where
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
+                                    // be explicit about specifically dropping this receiver
                                     drop(schedulable_transaction_receiver);
+                                    // this timings aren't for the accumulated one. but
+                                    // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
@@ -861,7 +864,7 @@ where
                             recv(schedulable_transaction_receiver) -> message => {
                                 match message {
                                     Ok(SubchanneledPayload::Payload(task)) => {
-                                        assert!(!session_ending && !thread_ending);
+                                        assert!(!session_ending && !thread_suspending);
                                         if let Some(task) = state_machine.schedule_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
@@ -876,13 +879,13 @@ where
                                         "S:started"
                                     }
                                     Ok(SubchanneledPayload::CloseSubchannel) => {
-                                        assert!(!session_ending && !thread_ending);
+                                        assert!(!session_ending && !thread_suspending);
                                         session_ending = true;
-                                        "S:suspending"
+                                        "S:ending"
                                     }
                                     Err(_) => {
-                                        assert!(!thread_ending);
-                                        thread_ending = true;
+                                        assert!(!thread_suspending);
+                                        thread_suspending = true;
 
                                         // Err(_) on schedulable_transaction_receiver guarantees
                                         // that there's no live sender and no messages to be
@@ -909,7 +912,10 @@ where
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
+                                    // be explicit about specifically dropping this receiver
                                     drop(schedulable_transaction_receiver);
+                                    // this timings aren't for the accumulated one. but
+                                    // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
@@ -922,7 +928,8 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        is_finished = state_machine.is_empty() && (session_ending || thread_ending);
+                        is_finished =
+                            state_machine.is_empty() && (session_ending || thread_suspending);
                     }
 
                     if session_ending {
@@ -939,7 +946,7 @@ where
                                     .unwrap_or_else(initialized_result_with_timings),
                             ))
                             .unwrap();
-                        if !thread_ending {
+                        if !thread_suspending {
                             session_ending = false;
                         }
                     }
@@ -1134,11 +1141,11 @@ where
 
     fn suspend(&mut self) {
         let Some(scheduler_thread) = self.take_scheduler_thread() else {
-            warn!("suspend(): already not active anymore...");
+            warn!("suspend(): already suspended...");
             return;
         };
         debug!(
-            "suspend(): stopping threads by {:?}",
+            "suspend(): terminating threads by {:?}",
             std::thread::current()
         );
 
@@ -1158,7 +1165,7 @@ where
         }
 
         debug!(
-            "suspend(): successfully stopped threads by {:?}",
+            "suspend(): successfully suspended threads by {:?}",
             std::thread::current()
         );
     }
