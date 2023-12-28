@@ -868,6 +868,9 @@ where
                                     Ok(SessionedMessage::StartSession(context)) => {
                                         slot = context.bank().slot();
                                         Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
+                                        executed_task_sender
+                                            .send(SessionedMessage::StartSession(()))
+                                            .unwrap();
                                         "started"
                                     }
                                     Ok(SessionedMessage::EndSession) => {
@@ -1025,7 +1028,8 @@ where
                         Ok(SessionedMessage::Payload(executed_task)) => {
                             assert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
-                                .get_or_insert_with(initialized_result_with_timings)
+                                .as_mut()
+                                .unwrap()
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
                             if let Some(handler_timings) = &executed_task.handler_timings {
@@ -1078,7 +1082,10 @@ where
                             drop(executed_task);
                         }
                         Ok(SessionedMessage::StartSession(())) => {
-                            unreachable!();
+                            assert_matches!(
+                                result_with_timings.replace(initialized_result_with_timings()),
+                                None
+                            );
                         }
                         Ok(SessionedMessage::EndSession) => {
                             if accumulated_result_sender
