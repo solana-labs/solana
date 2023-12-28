@@ -1541,11 +1541,14 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         let bank_forks = BankForks::new_rw_arc(bank);
-        let mut bank_forks = bank_forks.write().unwrap();
+        let mut bank_forks_write = bank_forks.write().unwrap();
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
-        bank_forks.install_scheduler_pool(pool);
+        bank_forks_write.install_scheduler_pool(pool);
+        bank_forks_write.prepare_to_drop();
+        drop(bank_forks_write);
+        drop::<BankForks>(Arc::into_inner(bank_forks).unwrap().into_inner().unwrap());
     }
 
     #[test]
