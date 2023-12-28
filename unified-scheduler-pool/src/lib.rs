@@ -1096,7 +1096,7 @@ where
 
         self.accumulator_thread = Some(
             std::thread::Builder::new()
-                .name("solScDrop".to_owned())
+                .name("solScAccmltr".to_owned())
                 .spawn(accumulator_main_loop())
                 .unwrap(),
         );
