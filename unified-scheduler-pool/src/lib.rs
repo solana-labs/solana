@@ -1257,13 +1257,11 @@ where
         let result_with_timings = {
             let mut manager = self.inner.thread_manager.write().unwrap();
             manager.end_session(is_dropped);
+            let session_result_with_timings = manager.session_result_with_timings.take();
             if !is_dropped {
-                manager.session_result_with_timings.take().unwrap()
+                session_result_with_timings.unwrap()
             } else {
-                manager
-                    .session_result_with_timings
-                    .take()
-                    .unwrap_or(initialized_result_with_timings())
+                session_result_with_timings.unwrap_or(initialized_result_with_timings())
             }
         };
         (result_with_timings, self.inner)
