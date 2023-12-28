@@ -573,7 +573,7 @@ where
         let mut was_already_active = false;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
-            if read.has_active_threads_to_be_joined() {
+            if !read.is_suspended() {
                 debug!(
                     "{}",
                     if was_already_active {
@@ -671,8 +671,8 @@ where
         }
     }
 
-    fn has_active_threads_to_be_joined(&self) -> bool {
-        self.scheduler_thread_and_tid.is_some()
+    fn is_suspended(&self) -> bool {
+        self.scheduler_thread_and_tid.is_none()
     }
 
     pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<Option<ResultWithTimings>>> {
@@ -757,10 +757,10 @@ where
     }
 
     fn try_resume(&mut self, context: &SchedulingContext) -> Result<()> {
-        if self.has_active_threads_to_be_joined() {
+        if !self.is_suspended() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_resumed()...
-            warn!("try_resume(): already started");
+            warn!("try_resume(): already resumed");
             return Ok(());
         } else if self
             .session_result_with_timings
@@ -827,7 +827,7 @@ where
                 }
 
                 trace!(
-                    "solScheduler thread is started at: {:?}",
+                    "solScheduler thread is running at: {:?}",
                     std::thread::current()
                 );
                 tid_sender
@@ -873,7 +873,7 @@ where
                                         executed_task_sender
                                             .send(SubchanneledPayload::OpenSubchannel(()))
                                             .unwrap();
-                                        "started"
+                                        "S:started"
                                     }
                                     Ok(SubchanneledPayload::CloseSubchannel) => {
                                         assert!(!session_ending && !thread_ending);
@@ -974,7 +974,7 @@ where
 
             move || {
                 trace!(
-                    "solScHandler{:02} thread is started at: {:?}",
+                    "solScHandler{:02} thread is running at: {:?}",
                     thx,
                     std::thread::current()
                 );
@@ -1172,7 +1172,7 @@ where
 
     fn end_session(&mut self) {
         debug!("end_session(): will end session...");
-        if !self.has_active_threads_to_be_joined() {
+        if self.is_suspended() {
             debug!("end_session(): no threads..");
             assert_matches!(self.session_result_with_timings, Some(_));
             return;
@@ -1201,7 +1201,7 @@ where
     fn start_session(&mut self, context: &SchedulingContext) {
         assert_matches!(self.session_result_with_timings, None);
 
-        if self.has_active_threads_to_be_joined() {
+        if !self.is_suspended() {
             self.schedulable_transaction_sender
                 .send(SubchanneledPayload::OpenSubchannel(context.clone()))
                 .unwrap();
@@ -1328,11 +1328,7 @@ where
     }
 
     fn pause_for_recent_blockhash(&mut self) {
-        self.inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .end_session();
+        self.inner.thread_manager.write().unwrap().end_session();
     }
 }
 
