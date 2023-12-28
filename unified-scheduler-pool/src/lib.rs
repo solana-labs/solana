@@ -734,6 +734,10 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
+    fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
+        self.session_result_with_timings.take().unwrap()
+    }
+
     fn reset_session_on_error(&mut self) -> Result<()> {
         let err = self
             .session_result_with_timings
@@ -1166,13 +1170,11 @@ where
             .is_err()
     }
 
-    fn end_session(&mut self, is_dropped: bool) {
+    fn end_session(&mut self) {
         debug!("end_session(): will end session...");
         if !self.has_active_threads_to_be_joined() {
             debug!("end_session(): no threads..");
-            if !is_dropped {
-                assert_matches!(self.session_result_with_timings, Some(_));
-            }
+            assert_matches!(self.session_result_with_timings, Some(_));
             return;
         } else if self.session_result_with_timings.is_some() {
             debug!("end_session(): already result resides within thread manager..");
@@ -1231,7 +1233,7 @@ where
 {
     type Inner: Debug + Send + Sync + RetirableSchedulerInner;
 
-    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner);
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
 
@@ -1255,16 +1257,11 @@ where
 {
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
-    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         let result_with_timings = {
             let mut manager = self.inner.thread_manager.write().unwrap();
-            manager.end_session(is_dropped);
-            let session_result_with_timings = manager.session_result_with_timings.take();
-            if !is_dropped {
-                session_result_with_timings.unwrap()
-            } else {
-                session_result_with_timings.unwrap_or(initialized_result_with_timings())
-            }
+            manager.end_session();
+            manager.take_session_result_with_timings()
         };
         (result_with_timings, self.inner)
     }
@@ -1324,9 +1321,9 @@ where
 
     fn wait_for_termination(
         self: Box<Self>,
-        is_dropped: bool,
+        _is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        let (result_with_timings, uninstalled_scheduler) = self.into_inner(is_dropped);
+        let (result_with_timings, uninstalled_scheduler) = self.into_inner();
         (result_with_timings, Box::new(uninstalled_scheduler))
     }
 
@@ -1335,7 +1332,7 @@ where
             .thread_manager
             .write()
             .unwrap()
-            .end_session(false);
+            .end_session();
     }
 }
 
@@ -1480,10 +1477,10 @@ mod tests {
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        let (result_with_timings, scheduler1) = scheduler1.into_inner(false);
+        let (result_with_timings, scheduler1) = scheduler1.into_inner();
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler1);
-        let (result_with_timings, scheduler2) = scheduler2.into_inner(false);
+        let (result_with_timings, scheduler2) = scheduler2.into_inner();
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler2);
 
@@ -1528,7 +1525,7 @@ mod tests {
 
         let scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        pool.return_scheduler(scheduler.into_inner(false).1);
+        pool.return_scheduler(scheduler.into_inner().1);
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -1790,7 +1787,7 @@ mod tests {
         // well, i wish i can use ! (never type).....
         type Inner = Self;
 
-        fn into_inner(self, _is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
+        fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
             todo!();
         }
 
