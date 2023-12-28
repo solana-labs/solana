@@ -172,7 +172,7 @@ where
                         elapsed,
                         width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                     );
-                    thread_manager.stop_and_join_threads();
+                    thread_manager.suspend();
                     self.tick = 0;
                     self.updated_at = Instant::now();
                 }
@@ -255,7 +255,7 @@ where
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
-                info!("watchdog thread ended!");
+                info!("watchdog thread terminating!");
             }
         };
 
@@ -497,7 +497,7 @@ where
 
     fn stop_thread_manager(&mut self) {
         debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_and_join_threads();
+        self.thread_manager.write().unwrap().suspend();
     }
 
     fn id(&self) -> SchedulerId {
@@ -510,6 +510,8 @@ type Tid = i32;
 // using 0 for special purpose at user-land is totally safe.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 const DUMMY_TID: Tid = 0;
+
+type TaskPayload = SubchanneledPayload<Task, SchedulingContext>;
 
 #[derive(Debug)]
 struct ThreadManager<S, TH, SEA>
@@ -524,9 +526,8 @@ where
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
     handler: TH,
-    schedulable_transaction_sender: Sender<SubchanneledPayload<Task, SchedulingContext>>,
-    schedulable_transaction_receiver:
-        Option<Receiver<SubchanneledPayload<Task, SchedulingContext>>>,
+    schedulable_transaction_sender: Sender<TaskPayload>,
+    schedulable_transaction_receiver: Option<Receiver<TaskPayload>>,
     result_sender: Sender<Option<ResultWithTimings>>,
     result_receiver: Receiver<Option<ResultWithTimings>>,
     handler_count: usize,
@@ -586,7 +587,7 @@ where
                 debug!("ensure_thread_manager_started(): will start threads...");
                 drop(read);
                 let mut write = self.inner.thread_manager.write().unwrap();
-                write.try_start_threads(context)?;
+                write.try_resume(context)?;
                 drop(write);
                 was_already_active = false;
             }
@@ -751,11 +752,11 @@ where
         );
     }
 
-    fn try_start_threads(&mut self, context: &SchedulingContext) -> Result<()> {
+    fn try_resume(&mut self, context: &SchedulingContext) -> Result<()> {
         if self.has_active_threads_to_be_joined() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
             // race-free in ensure_thread_manager_started()...
-            warn!("try_start_threads(): already started");
+            warn!("try_resume(): already started");
             return Ok(());
         } else if self
             .session_result_with_timings
@@ -763,10 +764,10 @@ where
             .map(|(result, _)| result.is_err())
             .unwrap_or(false)
         {
-            warn!("try_start_threads(): skipping starting due to err. also cleared session result");
+            warn!("try_resume(): skipping starting due to err. also cleared session result");
             return self.reset_session_on_error();
         }
-        debug!("try_start_threads(): doing now");
+        debug!("try_resume(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
@@ -805,7 +806,7 @@ where
                     ($prefix:tt) => {
                         const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
-                            "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            "[sch_{:0width$x}]: slot: {}[{:12}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
                             (if thread_ending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
@@ -873,7 +874,7 @@ where
                                     Ok(SubchanneledPayload::CloseSubchannel) => {
                                         assert!(!session_ending && !thread_ending);
                                         session_ending = true;
-                                        "S:ending"
+                                        "S:suspending"
                                     }
                                     Err(_) => {
                                         assert!(!thread_ending);
@@ -885,7 +886,7 @@ where
                                         // never() should pose no possibility of missed messages.
                                         schedulable_transaction_receiver = never();
 
-                                        "T:ending"
+                                        "T:suspending"
                                     }
                                 }
                             },
@@ -940,7 +941,7 @@ where
                     }
                 }
 
-                log_scheduler!("T:ended");
+                log_scheduler!("T:suspended");
                 let result_with_timings = if session_ending {
                     None
                 } else {
@@ -950,7 +951,7 @@ where
                     accumulated_result_receiver.recv().unwrap()
                 };
                 trace!(
-                    "solScheduler thread is ended at: {:?}",
+                    "solScheduler thread is terminating at: {:?}",
                     std::thread::current()
                 );
                 result_with_timings
@@ -1011,7 +1012,7 @@ where
                     }
                 }
                 trace!(
-                    "solScHandler{:02} thread is ended at: {:?}",
+                    "solScHandler{:02} thread is terminating at: {:?}",
                     thx,
                     std::thread::current()
                 );
@@ -1127,13 +1128,13 @@ where
         Ok(())
     }
 
-    fn stop_and_join_threads(&mut self) {
+    fn suspend(&mut self) {
         let Some(scheduler_thread) = self.take_scheduler_thread() else {
-            warn!("stop_and_join_threads(): already not active anymore...");
+            warn!("suspend(): already not active anymore...");
             return;
         };
         debug!(
-            "stop_and_join_threads(): stopping threads by {:?}",
+            "suspend(): stopping threads by {:?}",
             std::thread::current()
         );
 
@@ -1153,7 +1154,7 @@ where
         }
 
         debug!(
-            "stop_and_join_threads(): successfully stopped threads by {:?}",
+            "suspend(): successfully stopped threads by {:?}",
             std::thread::current()
         );
     }
@@ -1191,7 +1192,7 @@ where
         }
 
         if abort_detected {
-            self.stop_and_join_threads();
+            self.suspend();
         }
     }
 
@@ -1204,7 +1205,7 @@ where
                 .unwrap();
         } else {
             self.session_result_with_timings = Some(initialized_result_with_timings());
-            assert_matches!(self.try_start_threads(context), Ok(()));
+            assert_matches!(self.try_resume(context), Ok(()));
         }
     }
 
@@ -1313,7 +1314,7 @@ where
                 .send_task(task);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
-                thread_manager.stop_and_join_threads();
+                thread_manager.suspend();
                 thread_manager.reset_session_on_error()
             } else {
                 Ok(())
