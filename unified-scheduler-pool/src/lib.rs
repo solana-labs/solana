@@ -732,10 +732,6 @@ where
         *blocked_transaction_sessioned_sender = next_blocked_transaction_sessioned_sender;
     }
 
-    fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
-        self.session_result_with_timings.take().unwrap()
-    }
-
     fn reset_session_on_error(&mut self) -> Result<()> {
         let err = self
             .session_result_with_timings
@@ -766,7 +762,7 @@ where
             .map(|(result, _)| result.is_err())
             .unwrap_or(false)
         {
-            warn!("try_start_threads(): skipping starting due to err; cleared session result");
+            warn!("try_start_threads(): skipping starting due to err. also cleared session result");
             return self.reset_session_on_error();
         }
         debug!("try_start_threads(): doing now");
@@ -1262,7 +1258,7 @@ where
             let mut manager = self.inner.thread_manager.write().unwrap();
             manager.end_session(is_dropped);
             if !is_dropped {
-                manager.take_session_result_with_timings()
+                manager.session_result_with_timings.take().unwrap()
             } else {
                 manager
                     .session_result_with_timings
@@ -1350,13 +1346,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn return_to_pool(mut self: Box<Self>) {
-        let pool = {
-            let mut manager = self.thread_manager.write().unwrap();
-            if !manager.has_active_threads_to_be_joined() {
-                manager.put_session_result_with_timings(initialized_result_with_timings());
-            }
-            manager.pool.clone()
-        };
+        let pool = self.thread_manager.write().unwrap().clone();
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
     }
