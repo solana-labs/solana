@@ -1438,7 +1438,7 @@ pub struct AccountsDb {
 
     write_cache_limit_bytes: Option<u64>,
 
-    sender_bg_hasher: Option<Sender<CachedAccount>>,
+    sender_bg_hasher: Option<Sender<Vec<CachedAccount>>>,
     read_only_accounts_cache: ReadOnlyAccountsCache,
 
     recycle_stores: RwLock<RecycleStores>,
@@ -2865,17 +2865,19 @@ impl AccountsDb {
         }
     }
 
-    fn background_hasher(receiver: Receiver<CachedAccount>) {
+    fn background_hasher(receiver: Receiver<Vec<CachedAccount>>) {
         info!("Background account hasher has started");
         loop {
             let result = receiver.recv();
             match result {
-                Ok(account) => {
-                    // if we hold the only ref, then this account doesn't need to be hashed, we ignore this account and it will disappear
-                    if Arc::strong_count(&account) > 1 {
-                        // this will cause the hash to be calculated and store inside account if it needs to be calculated
-                        let _ = (*account).hash();
-                    };
+                Ok(accounts) => {
+                    for account in accounts {
+                        // if we hold the only ref, then this account doesn't need to be hashed, we ignore this account and it will disappear
+                        if Arc::strong_count(&account) > 1 {
+                            // this will cause the hash to be calculated and store inside account if it needs to be calculated
+                            let _ = (*account).hash();
+                        };
+                    }
                 }
                 Err(err) => {
                     info!("Background account hasher is stopping because: {err}");
@@ -6694,7 +6696,15 @@ impl AccountsDb {
     where
         P: Iterator<Item = u64>,
     {
-        txn_iter
+        let allocation_size = if self.sender_bg_hasher.is_some() {
+            // Batch size of at most 1024
+            1024.min(accounts_and_meta_to_store.len())
+        } else {
+            0
+        };
+        // Does not allocate if size is zero
+        let mut cached_accounts = Vec::with_capacity(allocation_size);
+        let infos = txn_iter
             .enumerate()
             .map(|(i, txn)| {
                 let account = accounts_and_meta_to_store
@@ -6717,13 +6727,24 @@ impl AccountsDb {
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
-                        let _ = sender.send(cached_account);
+                        cached_accounts.push(cached_account);
+                        // If batch is full, send it over
+                        if cached_accounts.len() == 1024 {
+                            let _ = sender.send(core::mem::take(&mut cached_accounts));
+                        }
                     }
                     None => (),
                 };
                 account_info
             })
-            .collect()
+            .collect();
+        // Send over batch to hash
+        if !cached_accounts.is_empty() {
+            if let Some(ref sender) = self.sender_bg_hasher {
+                let _ = sender.send(cached_accounts);
+            }
+        }
+        infos
     }
 
     fn store_accounts_to<
