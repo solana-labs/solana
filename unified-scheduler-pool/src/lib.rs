@@ -810,10 +810,10 @@ where
                     ($prefix:tt) => {
                         const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
-                            "[sch_{:0width$x}]: slot: {}[{:12}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            "[sch_{:0width$x}]: slot: {}[{:12}]({}{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
-                            (if thread_suspending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
+                            (if session_ending {"S"} else {"-"}), (if thread_suspending {"T"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
