@@ -3792,22 +3792,70 @@ pub mod rpc_full {
                 if result.is_err() {
                     Some(vec![None; config_accounts.addresses.len()])
                 } else {
-                    Some(
-                        config_accounts
-                            .addresses
-                            .iter()
-                            .map(|address_str| {
-                                let address = verify_pubkey(address_str)?;
-                                post_simulation_accounts
-                                    .iter()
-                                    .find(|(key, _account)| key == &address)
-                                    .map(|(pubkey, account)| {
-                                        encode_account(account, pubkey, accounts_encoding, None)
-                                    })
-                                    .transpose()
-                            })
-                            .collect::<Result<Vec<_>>>()?,
-                    )
+                    match accounts_encoding {
+                        UiAccountEncoding::Binary | UiAccountEncoding::Base58 => unreachable!(),
+                        UiAccountEncoding::Base64 | UiAccountEncoding::Base64Zstd => Some(
+                            config_accounts
+                                .addresses
+                                .iter()
+                                .map(|address_str| {
+                                    let address = verify_pubkey(address_str)?;
+                                    post_simulation_accounts
+                                        .iter()
+                                        .find(|(key, _account)| key == &address)
+                                        .map(|(pubkey, account)| {
+                                            encode_account(account, pubkey, accounts_encoding, None)
+                                        })
+                                        .transpose()
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                        ),
+                        UiAccountEncoding::JsonParsed => {
+                            let mut post_simulation_accounts_map = HashMap::new();
+                            for (pubkey, data) in post_simulation_accounts {
+                                post_simulation_accounts_map.insert(pubkey, data);
+                            }
+
+                            Some(
+                                config_accounts
+                                .addresses
+                                .iter()
+                                .map(|address_str| {
+                                    let pubkey = verify_pubkey(address_str).ok()?;
+                                    let account = post_simulation_accounts_map.get(&pubkey)?;
+
+                                    if is_known_spl_token_id(account.owner()) {
+                                        let additional_data = solana_account_decoder::parse_token::get_token_account_mint(account.data()).
+                                        and_then(|mint_pubkey| {
+                                            match post_simulation_accounts_map.get(&mint_pubkey) {
+                                                Some(mint_account) => crate::parsed_token_accounts::get_mint_decimals(mint_account.data()).ok(),
+                                                None => crate::parsed_token_accounts::get_mint_owner_and_decimals( bank, &mint_pubkey,).ok().map(| (_owner, decimals)| decimals),
+                                            }
+                                        })
+                                        .map(|decimals|  solana_account_decoder::parse_account_data::AccountAdditionalData {
+                                                spl_token_decimals: Some(decimals),
+                                            });
+
+                                        Some(UiAccount::encode(
+                                            &pubkey,
+                                            account,
+                                            UiAccountEncoding::JsonParsed,
+                                            additional_data,
+                                            None,
+                                        ))
+                                    } else {
+                                        encode_account(
+                                            account,
+                                            &pubkey,
+                                            accounts_encoding,
+                                            None,
+                                        ).ok()
+                                    }
+                                })
+                            .collect::<Vec<_>>()
+                          )
+                        }
+                    }
                 }
             } else {
                 None
@@ -6135,6 +6183,149 @@ pub mod tests {
             "id": 1,
         });
 
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rpc_simulate_transaction_with_parsing_token_accounts() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let RpcHandler {
+            ref meta, ref io, ..
+        } = rpc;
+
+        // init mint
+        let mint_rent_exempt_amount =
+            bank.get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN);
+        let mint_pubkey = Pubkey::from_str("mint111111111111111111111111111111111111111").unwrap();
+        let mut mint_data = [0u8; spl_token::state::Mint::LEN];
+        Pack::pack_into_slice(
+            &spl_token::state::Mint {
+                mint_authority: COption::None,
+                supply: 0,
+                decimals: 8,
+                is_initialized: true,
+                freeze_authority: COption::None,
+            },
+            &mut mint_data,
+        );
+        let account = AccountSharedData::create(
+            mint_rent_exempt_amount,
+            mint_data.into(),
+            spl_token::id(),
+            false,
+            0,
+        );
+        bank.store_account(&mint_pubkey, &account);
+
+        // init token account
+        let token_account_rent_exempt_amount =
+            bank.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN);
+        let token_account_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::from_str("owner11111111111111111111111111111111111111").unwrap();
+        let mut token_account_data = [0u8; spl_token::state::Account::LEN];
+        Pack::pack_into_slice(
+            &spl_token::state::Account {
+                mint: mint_pubkey,
+                owner: owner_pubkey,
+                amount: 1,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+            &mut token_account_data,
+        );
+        let account = AccountSharedData::create(
+            token_account_rent_exempt_amount,
+            token_account_data.into(),
+            spl_token::id(),
+            false,
+            0,
+        );
+        bank.store_account(&token_account_pubkey, &account);
+
+        // prepare tx
+        let fee_payer = rpc.mint_keypair;
+        let recent_blockhash = bank.confirmed_last_blockhash();
+        let tx =
+            system_transaction::transfer(&fee_payer, &token_account_pubkey, 1, recent_blockhash);
+        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+
+        // Simulation bank must be frozen
+        bank.freeze();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "encoding": "jsonParsed",
+                       "addresses": ["{}", "{}"]
+                     }}
+                   }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+            solana_sdk::pubkey::new_rand(),
+            token_account_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": [
+                        null,
+                        {
+                            "data": {
+                                "parsed": {
+                                  "info": {
+                                    "isNative": false,
+                                    "mint": "mint111111111111111111111111111111111111111",
+                                    "owner": "owner11111111111111111111111111111111111111",
+                                    "state": "initialized",
+                                    "tokenAmount": {
+                                      "amount": "1",
+                                      "decimals": 8,
+                                      "uiAmount": 0.00000001,
+                                      "uiAmountString": "0.00000001"
+                                    }
+                                  },
+                                  "type": "account"
+                                },
+                                "program": "spl-token",
+                                "space": 165
+                              },
+                              "executable": false,
+                              "lamports": (token_account_rent_exempt_amount + 1),
+                              "owner": bs58::encode(spl_token::id()).into_string(),
+                              "rentEpoch": u64::MAX,
+                              "space": spl_token::state::Account::LEN
+                        },
+                    ],
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "returnData": null,
+                    "unitsConsumed": 150,
+                }
+            },
+            "id": 1,
+        });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

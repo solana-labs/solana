@@ -84,7 +84,7 @@ pub fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Result<(Pubkey
     }
 }
 
-fn get_mint_decimals(data: &[u8]) -> Result<u8> {
+pub(crate) fn get_mint_decimals(data: &[u8]) -> Result<u8> {
     StateWithExtensions::<Mint>::unpack(data)
         .map_err(|_| {
             Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
