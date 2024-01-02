@@ -505,7 +505,19 @@ impl ThreadLocalUnprocessedPackets {
     }
 
     fn max_receive_size(&self) -> usize {
-        self.unprocessed_packet_batches.capacity() - self.unprocessed_packet_batches.len()
+        let remaining_capacity =
+            self.unprocessed_packet_batches.capacity() - self.unprocessed_packet_batches.len();
+        if remaining_capacity < self.unprocessed_packet_batches.capacity() / 2 {
+            // If over half the capacity is used, then receive fewer packets per call.
+            // It's likely we're close to our leader slot, and do not want to miss the
+            // start of it due to a large receive.
+            const BACK_OFF_RECEIVE_SIZE: usize = 2_000;
+            BACK_OFF_RECEIVE_SIZE
+        } else {
+            // Don't receive more than 10k packets regardless of capacity.
+            const MAX_RECEIVE_SIZE: usize = 10_000;
+            MAX_RECEIVE_SIZE
+        }
     }
 
     #[cfg(test)]
