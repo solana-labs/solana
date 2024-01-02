@@ -3090,15 +3090,11 @@ impl Bank {
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
                     let vote_pubkey = delegation.voter_pubkey;
-                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
-                        return None;
-                    };
+                    let vote_account = get_vote_account(&vote_pubkey)?;
                     if vote_account.owner() != &solana_vote_program {
                         return None;
                     }
-                    let Ok(vote_state) = vote_account.vote_state().cloned() else {
-                        return None;
-                    };
+                    let vote_state = vote_account.vote_state().cloned().ok()?;
 
                     let pre_lamport = stake_account.lamports();
 
@@ -4775,9 +4771,7 @@ impl Bank {
         ) -> Option<u128> {
             let mut lamports_sum = 0u128;
             for i in 0..message.account_keys().len() {
-                let Some((_, account)) = accounts.get(i) else {
-                    return None;
-                };
+                let (_, account) = accounts.get(i)?;
                 lamports_sum = lamports_sum.checked_add(u128::from(account.lamports()))?;
             }
             Some(lamports_sum)
