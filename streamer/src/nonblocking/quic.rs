@@ -89,19 +89,13 @@ struct PacketAccumulator {
     pub chunks: Vec<PacketChunk>,
 }
 
+#[derive(Default)]
 struct StakedStreamLoadEMA {
     current_load_ema: AtomicU64,
-    load_in_recent_interval: Arc<AtomicU64>,
+    load_in_recent_interval: AtomicU64,
 }
 
 impl StakedStreamLoadEMA {
-    fn new() -> Self {
-        Self {
-            current_load_ema: AtomicU64::default(),
-            load_in_recent_interval: Arc::new(AtomicU64::default()),
-        }
-    }
-
     async fn update_ema(self: Arc<Self>, exit: Arc<AtomicBool>, stats: Arc<StreamStats>) {
         while !exit.load(Ordering::Relaxed) {
             tokio::time::interval(STREAM_LOAD_EMA_INTERVAL_MS)
@@ -203,7 +197,7 @@ async fn run_server(
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
         ConnectionTable::new(ConnectionPeerType::Unstaked),
     ));
-    let stream_load_ema = Arc::new(StakedStreamLoadEMA::new());
+    let stream_load_ema = Arc::new(StakedStreamLoadEMA::default());
     tokio::spawn(
         stream_load_ema
             .clone()
@@ -2118,7 +2112,7 @@ pub mod test {
 
     #[test]
     fn test_max_streams_for_connection_in_100ms() {
-        let load_ema = Arc::new(StakedStreamLoadEMA::new());
+        let load_ema = Arc::new(StakedStreamLoadEMA::default());
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
             max_streams_for_connection_in_100ms(
@@ -2233,7 +2227,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_update_ema() {
-        let stream_load_ema = Arc::new(StakedStreamLoadEMA::new());
+        let stream_load_ema = Arc::new(StakedStreamLoadEMA::default());
         stream_load_ema
             .load_in_recent_interval
             .store(2500, Ordering::Relaxed);
