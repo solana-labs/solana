@@ -1063,10 +1063,10 @@ fn test_rent_complex() {
                 MockInstruction::Deduction => {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .checked_add_lamports(1)?;
+                        .checked_add_lamports(1, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 2)?
-                        .checked_sub_lamports(1)?;
+                        .checked_sub_lamports(1, &invoke_context.feature_set)?;
                     Ok(())
                 }
             }
@@ -2130,8 +2130,7 @@ fn test_purge_empty_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
         let amount = genesis_config.rent.minimum_balance(0);
         let (mut bank, bank_forks) =
-            Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default())
-                .wrap_with_bank_forks_for_tests();
+            Bank::new_for_tests(&genesis_config).wrap_with_bank_forks_for_tests();
 
         for _ in 0..10 {
             let blockhash = bank.last_blockhash();
@@ -3769,10 +3768,7 @@ fn test_bank_update_sysvar_account() {
         for feature_id in FeatureSet::default().inactive {
             activate_feature(&mut genesis_config, feature_id);
         }
-        let bank1 = Arc::new(Bank::new_for_tests_with_config(
-            &genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank1 = Arc::new(Bank::new_for_tests(&genesis_config));
         if pass == 0 {
             add_root_and_flush_write_cache(&bank1);
             assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
@@ -3970,7 +3966,7 @@ fn test_bank_epoch_vote_accounts() {
         // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
         //   in the prior epoch (0 in this case)
         assert_eq!(
-            leader_stake.stake(0, None, None),
+            leader_stake.stake(0, &StakeHistory::default(), None),
             vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
         );
 
@@ -3986,7 +3982,7 @@ fn test_bank_epoch_vote_accounts() {
 
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None, None),
+        leader_stake.stake(child.epoch(), &StakeHistory::default(), None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()
@@ -4004,7 +4000,7 @@ fn test_bank_epoch_vote_accounts() {
     );
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None, None),
+        leader_stake.stake(child.epoch(), &StakeHistory::default(), None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()
@@ -5985,16 +5981,16 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
         let lamports = u64::from_le_bytes(instruction_data.try_into().unwrap());
         instruction_context
             .try_borrow_instruction_account(transaction_context, 2)?
-            .checked_sub_lamports(lamports)?;
+            .checked_sub_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .checked_add_lamports(lamports)?;
+            .checked_add_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 0)?
-            .checked_sub_lamports(lamports)?;
+            .checked_sub_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .checked_add_lamports(lamports)?;
+            .checked_add_lamports(lamports, &invoke_context.feature_set)?;
         Ok(())
     });
 
@@ -6496,7 +6492,7 @@ fn test_same_program_id_uses_unique_executable_accounts() {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         instruction_context
             .try_borrow_program_account(transaction_context, 0)?
-            .set_data_length(2)
+            .set_data_length(2, &invoke_context.feature_set)
     });
 
     let (genesis_config, mint_keypair) = create_genesis_config(50000);
@@ -6960,10 +6956,7 @@ fn test_add_precompiled_account() {
         let program_id = solana_sdk::pubkey::new_rand();
 
         let bank = Arc::new(Bank::new_from_parent(
-            Arc::new(Bank::new_for_tests_with_config(
-                &genesis_config,
-                BankTestConfig::default(),
-            )),
+            Arc::new(Bank::new_for_tests(&genesis_config)),
             &Pubkey::default(),
             slot,
         ));
@@ -7005,7 +6998,7 @@ fn test_add_precompiled_account_inherited_cap_while_replacing() {
     // and then want to continue modifying the bank
     for pass in 0..4 {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-        let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
+        let bank = Bank::new_for_tests(&genesis_config);
         let program_id = solana_sdk::pubkey::new_rand();
 
         bank.add_precompiled_account(&program_id);
@@ -7039,7 +7032,7 @@ fn test_add_precompiled_account_inherited_cap_while_replacing() {
 fn test_add_precompiled_account_squatted_while_not_replacing() {
     for pass in 0..3 {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-        let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
+        let bank = Bank::new_for_tests(&genesis_config);
         let program_id = solana_sdk::pubkey::new_rand();
 
         // someone managed to squat at program_id!
@@ -9464,7 +9457,7 @@ fn test_transfer_sysvar() {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .set_data(vec![0; 40])?;
+            .set_data(vec![0; 40], &invoke_context.feature_set)?;
         Ok(())
     });
 
@@ -10317,10 +10310,10 @@ declare_process_instruction!(MockTransferBuiltin, 1, |invoke_context| {
             MockTransferInstruction::Transfer(amount) => {
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .checked_sub_lamports(amount)?;
+                    .checked_sub_lamports(amount, &invoke_context.feature_set)?;
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .checked_add_lamports(amount)?;
+                    .checked_add_lamports(amount, &invoke_context.feature_set)?;
                 Ok(())
             }
         }
@@ -11087,7 +11080,7 @@ declare_process_instruction!(MockReallocBuiltin, 1, |invoke_context| {
                 // Set data length
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data_length(new_size)?;
+                    .set_data_length(new_size, &invoke_context.feature_set)?;
 
                 // set balance
                 let current_balance = instruction_context
@@ -11098,17 +11091,17 @@ declare_process_instruction!(MockReallocBuiltin, 1, |invoke_context| {
                 if diff_balance.is_positive() {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_sub_lamports(amount)?;
+                        .checked_sub_lamports(amount, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_lamports(new_balance)?;
+                        .set_lamports(new_balance, &invoke_context.feature_set)?;
                 } else {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(amount)?;
+                        .checked_add_lamports(amount, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_lamports(new_balance)?;
+                        .set_lamports(new_balance, &invoke_context.feature_set)?;
                 }
                 Ok(())
             }

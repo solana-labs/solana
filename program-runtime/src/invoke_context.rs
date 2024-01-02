@@ -410,7 +410,7 @@ impl<'a> InvokeContext<'a> {
             })?;
         let borrowed_program_account = instruction_context
             .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
-        if !borrowed_program_account.is_executable() {
+        if !borrowed_program_account.is_executable(&self.feature_set) {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
@@ -821,17 +821,17 @@ mod tests {
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyNotOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyReadonly => instruction_context
                         .try_borrow_instruction_account(transaction_context, 2)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::UnbalancedPush => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
-                            .checked_add_lamports(1)?;
+                            .checked_add_lamports(1, &invoke_context.feature_set)?;
                         let program_id = *transaction_context.get_key_of_account_at_index(3)?;
                         let metas = vec![
                             AccountMeta::new_readonly(
@@ -862,7 +862,7 @@ mod tests {
                     }
                     MockInstruction::UnbalancedPop => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(1)?,
+                        .checked_add_lamports(1, &invoke_context.feature_set)?,
                     MockInstruction::ConsumeComputeUnits {
                         compute_units_to_consume,
                         desired_result,
@@ -874,7 +874,7 @@ mod tests {
                     }
                     MockInstruction::Resize { new_len } => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data(vec![0; new_len as usize])?,
+                        .set_data(vec![0; new_len as usize], &invoke_context.feature_set)?,
                 }
             } else {
                 return Err(InstructionError::InvalidInstructionData);

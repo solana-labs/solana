@@ -238,7 +238,7 @@ where
         // Move on to next chunk
         self.chunk_index = (self.chunk_index + 1) % self.account_chunks.source.len();
 
-        // Switch directions after transfering for each "chunk"
+        // Switch directions after transferring for each "chunk"
         if self.chunk_index == 0 {
             self.reclaim_lamports_back_to_source_account =
                 !self.reclaim_lamports_back_to_source_account;

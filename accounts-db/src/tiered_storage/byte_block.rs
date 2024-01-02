@@ -85,7 +85,7 @@ impl ByteBlockWriter {
 
     /// Write all the Some fields of the specified AccountMetaOptionalFields.
     ///
-    /// Note that the existance of each optional field is stored separately in
+    /// Note that the existence of each optional field is stored separately in
     /// AccountMetaFlags.
     pub fn write_optional_fields(
         &mut self,

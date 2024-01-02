@@ -347,7 +347,7 @@ impl Instruction {
     /// `program_id` is the address of the program that will execute the instruction.
     /// `accounts` contains a description of all accounts that may be accessed by the program.
     ///
-    /// Borsh serialization is often prefered over bincode as it has a stable
+    /// Borsh serialization is often preferred over bincode as it has a stable
     /// [specification] and an [implementation in JavaScript][jsb], neither of
     /// which are true of bincode.
     ///

@@ -341,7 +341,7 @@ impl RpcClient {
     /// behavior in specific scenarios:
     ///
     /// - It is customary to set the `url` to "succeeds" for mocks that should
-    ///   return sucessfully, though this value is not actually interpreted.
+    ///   return successfully, though this value is not actually interpreted.
     ///
     /// - If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
@@ -396,7 +396,7 @@ impl RpcClient {
     ///    scenarios.
     ///
     ///    It is customary to set the `url` to "succeeds" for mocks that should
-    ///    return sucessfully, though this value is not actually interpreted.
+    ///    return successfully, though this value is not actually interpreted.
     ///
     ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
@@ -424,7 +424,7 @@ impl RpcClient {
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use std::collections::HashMap;
     /// # use serde_json::json;
-    /// // Create a mock with a custom repsonse to the `GetBalance` request
+    /// // Create a mock with a custom response to the `GetBalance` request
     /// let account_balance = 50;
     /// let account_balance_response = json!(Response {
     ///     context: RpcResponseContext { slot: 1, api_version: None },
@@ -1480,7 +1480,7 @@ impl RpcClient {
     /// recent slots, plus up to
     /// [`MAX_RECENT_BLOCKHASHES`][solana_sdk::clock::MAX_RECENT_BLOCKHASHES]
     /// rooted slots. To search the full transaction history use the
-    /// [`get_signature_statuse_with_commitment_and_history`][RpcClient::get_signature_status_with_commitment_and_history]
+    /// [`get_signature_status_with_commitment_and_history`][RpcClient::get_signature_status_with_commitment_and_history]
     /// method.
     ///
     /// # RPC Reference
@@ -1700,7 +1700,7 @@ impl RpcClient {
     /// recent slots, plus up to
     /// [`MAX_RECENT_BLOCKHASHES`][solana_sdk::clock::MAX_RECENT_BLOCKHASHES]
     /// rooted slots. To search the full transaction history use the
-    /// [`get_signature_statuse_with_commitment_and_history`][RpcClient::get_signature_status_with_commitment_and_history]
+    /// [`get_signature_status_with_commitment_and_history`][RpcClient::get_signature_status_with_commitment_and_history]
     /// method.
     ///
     /// # RPC Reference

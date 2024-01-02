@@ -147,7 +147,7 @@ pub enum TransactionVerificationMode {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-/// An atomically-commited sequence of instructions.
+/// An atomically-committed sequence of instructions.
 ///
 /// While [`Instruction`]s are the basic unit of computation in Solana,
 /// they are submitted by clients in [`Transaction`]s containing one or

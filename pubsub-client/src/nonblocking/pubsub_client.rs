@@ -519,7 +519,7 @@ impl PubsubClient {
     /// Receives messages of type [`SlotUpdate`] when various updates to a slot occur.
     ///
     /// Note that this method operates differently than other subscriptions:
-    /// instead of sending the message to a reciever on a channel, it accepts a
+    /// instead of sending the message to a receiver on a channel, it accepts a
     /// `handler` callback that processes the message directly. This processing
     /// occurs on another thread.
     ///

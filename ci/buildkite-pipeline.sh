@@ -30,7 +30,7 @@ annotate() {
   fi
 }
 
-# Assume everyting needs to be tested when this file or any Dockerfile changes
+# Assume everything needs to be tested when this file or any Dockerfile changes
 mandatory_affected_files=()
 mandatory_affected_files+=(^ci/buildkite-pipeline.sh)
 mandatory_affected_files+=(^ci/docker-rust/Dockerfile)

@@ -1734,7 +1734,7 @@ mod tests {
     ///     - take an incremental snapshot
     ///     - ensure deserializing from this snapshot is equal to this bank
     /// slot 3:
-    ///     - remove Account2's reference back to slot 2 by transfering from the mint to Account2
+    ///     - remove Account2's reference back to slot 2 by transferring from the mint to Account2
     /// slot 4:
     ///     - ensure `clean_accounts()` has run and that Account1 is gone
     ///     - take another incremental snapshot

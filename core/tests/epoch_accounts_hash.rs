@@ -20,7 +20,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        bank::{epoch_accounts_hash_utils, Bank, BankTestConfig},
+        bank::{epoch_accounts_hash_utils, Bank},
         bank_forks::BankForks,
         genesis_utils::{self, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
@@ -113,10 +113,8 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests_with_config(
-            &genesis_config_info.genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank_forks =
+            BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank_forks
             .write()
             .unwrap()
