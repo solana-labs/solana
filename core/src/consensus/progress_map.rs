@@ -293,7 +293,6 @@ impl ForkProgress {
 
 #[derive(Debug, Clone, Default)]
 pub struct ForkStats {
-    pub weight: u128,
     pub fork_weight: u128,
     pub total_stake: Stake,
     pub block_height: u64,

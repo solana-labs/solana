@@ -3295,6 +3295,7 @@ impl ReplayStage {
                     let ComputedBankState {
                         voted_stakes,
                         total_stake,
+                        bank_weight,
                         lockout_intervals,
                         my_latest_landed_vote,
                         ..
@@ -3305,6 +3306,7 @@ impl ReplayStage {
                     stats.total_stake = total_stake;
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
+                    stats.fork_weight = bank_weight;
                     stats.block_height = bank.block_height();
                     stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
@@ -3313,13 +3315,12 @@ impl ReplayStage {
                         "bank_weight",
                         ("slot", bank_slot, i64),
                         // u128 too large for influx, convert to hex
-                        ("weight", format!("{:X}", stats.weight), String),
+                        ("weight", format!("{:X}", stats.fork_weight), String),
                     );
                     info!(
-                        "{} slot_weight: {} {} {} {}",
+                        "{} slot_weight: {} {} {}",
                         my_vote_pubkey,
                         bank_slot,
-                        stats.weight,
                         stats.fork_weight,
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
@@ -3677,7 +3678,7 @@ impl ReplayStage {
                     fork_stats.vote_threshold,
                     propagated_stats.propagated_validators_stake,
                     propagated_stats.is_leader_slot,
-                    fork_stats.weight,
+                    fork_stats.fork_weight,
                     fork_stats.total_stake,
                     propagated_stats.total_epoch_stake,
                 )

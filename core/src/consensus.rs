@@ -156,8 +156,7 @@ pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
-    #[allow(dead_code)]
-    bank_weight: u128,
+    pub bank_weight: u128,
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
