@@ -41,29 +41,29 @@ pub const TARGET_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
-    cost_model_throttled_transactions_count: usize,
+    pub(crate) cost_model_throttled_transactions_count: usize,
     // Amount of time spent running the cost model
-    cost_model_us: u64,
+    pub(crate) cost_model_us: u64,
     pub execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
     // Total number of transactions that were passed as candidates for execution
-    transactions_attempted_execution_count: usize,
+    pub(crate) transactions_attempted_execution_count: usize,
     // The number of transactions of that were executed. See description of in `ProcessTransactionsSummary`
     // for possible outcomes of execution.
-    executed_transactions_count: usize,
+    pub(crate) executed_transactions_count: usize,
     // Total number of the executed transactions that returned success/not
     // an error.
-    executed_with_successful_result_count: usize,
+    pub(crate) executed_with_successful_result_count: usize,
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
     pub(crate) retryable_transaction_indexes: Vec<usize>,
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream.
     pub commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
-    execute_and_commit_timings: LeaderExecuteAndCommitTimings,
-    error_counters: TransactionErrorMetrics,
+    pub(crate) execute_and_commit_timings: LeaderExecuteAndCommitTimings,
+    pub(crate) error_counters: TransactionErrorMetrics,
 }
 
 pub struct Consumer {
@@ -587,6 +587,10 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
+        let ((last_blockhash, lamports_per_signature), last_blockhash_us) =
+            measure_us!(bank.last_blockhash_and_lamports_per_signature());
+        execute_and_commit_timings.last_blockhash_us = last_blockhash_us;
+
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), executed_transactions));
@@ -623,6 +627,8 @@ impl Consumer {
                 batch,
                 &mut loaded_transactions,
                 execution_results,
+                last_blockhash,
+                lamports_per_signature,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
@@ -881,7 +887,7 @@ mod tests {
         } = &genesis_config_info;
         let blockstore =
             Blockstore::open(ledger_path).expect("Expected to be able to open database ledger");
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config).0;
         let exit = Arc::new(AtomicBool::default());
         let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
@@ -938,7 +944,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = sanitize_transactions(vec![system_transaction::transfer(
@@ -1067,7 +1073,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = {
@@ -1160,11 +1166,12 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let mut bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.ns_per_slot = std::u128::MAX;
         if !apply_cost_tracker_during_replay_enabled {
             bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
         }
-        let bank = Arc::new(bank);
+        let bank = bank.wrap_with_bank_forks_for_tests().0;
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -1264,7 +1271,7 @@ mod tests {
             let commit_transactions_result = commit_transactions_result.unwrap();
             assert_eq!(commit_transactions_result.len(), 2);
             assert_matches!(
-                commit_transactions_result.get(0),
+                commit_transactions_result.first(),
                 Some(CommitTransactionDetails::Committed { .. })
             );
             assert_matches!(
@@ -1274,7 +1281,7 @@ mod tests {
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
-                let actual_bpf_execution_cost = match commit_transactions_result.get(0).unwrap() {
+                let actual_bpf_execution_cost = match commit_transactions_result.first().unwrap() {
                     CommitTransactionDetails::Committed { compute_units } => *compute_units,
                     CommitTransactionDetails::NotCommitted => {
                         unreachable!()
@@ -1312,7 +1319,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
@@ -1390,7 +1397,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(lamports);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         // set cost tracker limits to MAX so it will not filter out TXs
         bank.write_cost_tracker()
             .unwrap()
@@ -1451,7 +1458,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         // set cost tracker limits to MAX so it will not filter out TXs
         bank.write_cost_tracker()
             .unwrap()
@@ -1510,7 +1517,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
 
         let pubkey = solana_sdk::pubkey::new_rand();
 
@@ -1592,7 +1599,7 @@ mod tests {
         } = create_slow_genesis_config(solana_sdk::native_token::sol_to_lamports(1000.0));
         genesis_config.rent.lamports_per_byte_year = 50;
         genesis_config.rent.exemption_threshold = 2.0;
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
@@ -1723,14 +1730,19 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let keypair = Keypair::new();
 
         let address_table_key = Pubkey::new_unique();
         let address_table_state = generate_new_address_lookup_table(None, 2);
         store_address_lookup_table(&bank, address_table_key, address_table_state);
 
-        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), 1));
+        let new_bank = Bank::new_from_parent(bank, &Pubkey::new_unique(), 2);
+        let bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(new_bank)
+            .clone_without_scheduler();
         let message = VersionedMessage::V0(v0::Message {
             header: MessageHeader {
                 num_required_signatures: 1,

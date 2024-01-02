@@ -9,6 +9,7 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
+    solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
     solana_ledger::{
         blockstore_options::{AccessType, BlockstoreRecoveryMode},
         blockstore_processor::ProcessOptions,
@@ -27,14 +28,13 @@ use {
         account::AccountSharedData,
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set,
         pubkey::Pubkey,
         slot_history::Slot,
         transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
         collections::HashSet,
-        fmt::{Debug, Formatter},
+        fmt::{self, Debug, Formatter},
         fs::File,
         io::{Read, Seek, Write},
         path::{Path, PathBuf},
@@ -120,18 +120,14 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         force_update_to_open,
         enforce_ulimit_nofile,
     );
-    let (bank_forks, ..) = load_and_process_ledger(
+    let (bank_forks, ..) = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
-    )
-    .unwrap_or_else(|err| {
-        eprintln!("Ledger loading failed: {err:?}");
-        exit(1);
-    });
+    );
     let bank = bank_forks.read().unwrap().working_bank();
     bank
 }
@@ -144,8 +140,8 @@ impl ProgramSubCommand for App<'_, '_> {
     fn program_subcommand(self) -> Self {
         let program_arg = Arg::with_name("PROGRAM")
             .help(
-                "Program file to use. This is either an ELF shared-object file to be executed, \
-                 or an assembly file to be assembled and executed.",
+                "Program file to use. This is either an ELF shared-object file to be executed, or \
+                 an assembly file to be assembled and executed.",
             )
             .required(true)
             .index(1);
@@ -268,8 +264,9 @@ struct Output {
     log: Vec<String>,
 }
 
-impl Debug for Output {
+impl fmt::Display for Output {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Program output:")?;
         writeln!(f, "Result: {}", self.result)?;
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
@@ -279,6 +276,9 @@ impl Debug for Output {
         Ok(())
     }
 }
+
+impl QuietDisplay for Output {}
+impl VerboseDisplay for Output {}
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
@@ -358,9 +358,6 @@ fn load_program<'a>(
     #[allow(unused_mut)]
     let mut verified_executable = if is_elf {
         let result = load_program_from_bytes(
-            invoke_context
-                .feature_set
-                .is_active(&feature_set::delay_visibility_of_program_deployment::id()),
             log_collector,
             &mut load_program_metrics,
             &contents,
@@ -552,7 +549,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .clone(),
     );
     for key in cached_account_keys {
-        loaded_programs.replenish(key, bank.load_program(&key, false));
+        loaded_programs.replenish(key, bank.load_program(&key, false, None));
         debug!("Loaded program {}", key);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
@@ -574,6 +571,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_current_instruction_context()
             .unwrap(),
         true, // copy_account_data
+        &invoke_context.feature_set,
     )
     .unwrap();
 
@@ -620,16 +618,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_recorded_content()
             .to_vec(),
     };
-    match matches.value_of("output_format") {
-        Some("json") => {
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
-        }
-        Some("json-compact") => {
-            println!("{}", serde_json::to_string(&output).unwrap());
-        }
-        _ => {
-            println!("Program output:");
-            println!("{output:?}");
-        }
-    }
+    let output_format = OutputFormat::from_matches(matches, "output_format", false);
+    println!("{}", output_format.formatted_string(&output));
 }

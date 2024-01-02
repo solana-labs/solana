@@ -1,30 +1,34 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_type,
+        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
+    bytemuck::{Pod, Zeroable},
     memmap2::Mmap,
     solana_sdk::pubkey::Pubkey,
 };
 
 /// The in-memory struct for the writing index block.
-/// The actual storage format of a tiered account index entry might be different
-/// from this.
 #[derive(Debug)]
-pub struct AccountIndexWriterEntry<'a> {
+pub struct AccountIndexWriterEntry<'a, Offset: AccountOffset> {
+    /// The account address.
     pub address: &'a Pubkey,
-    pub block_offset: u64,
-    pub intra_block_offset: u64,
+    /// The offset to the account.
+    pub offset: Offset,
 }
 
-/// The offset to an account stored inside its accounts block.
-/// This struct is used to access the meta and data of an account by looking through
-/// its accounts block.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AccountOffset {
-    /// The offset to the accounts block that contains the account meta/data.
-    pub block: usize,
-}
+/// The offset to an account.
+pub trait AccountOffset: Clone + Copy + Pod + Zeroable {}
+
+/// The offset to an account/address entry in the accounts index block.
+/// This can be used to obtain the AccountOffset and address by looking through
+/// the accounts index block.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Pod, Zeroable)]
+pub struct IndexOffset(pub u32);
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<IndexOffset>() == 4);
 
 /// The index format of a tiered accounts file.
 #[repr(u16)]
@@ -41,11 +45,14 @@ pub struct AccountOffset {
 )]
 pub enum IndexBlockFormat {
     /// This format optimizes the storage size by storing only account addresses
-    /// and offsets.  It skips storing the size of account data by storing account
-    /// block entries and index block entries in the same order.
+    /// and block offsets.  It skips storing the size of account data by storing
+    /// account block entries and index block entries in the same order.
     #[default]
-    AddressAndOffset = 0,
+    AddressAndBlockOffsetOnly = 0,
 }
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<IndexBlockFormat>() == 2);
 
 impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
@@ -53,16 +60,16 @@ impl IndexBlockFormat {
     pub fn write_index_block(
         &self,
         file: &TieredStorageFile,
-        index_entries: &[AccountIndexWriterEntry],
+        index_entries: &[AccountIndexWriterEntry<impl AccountOffset>],
     ) -> TieredStorageResult<usize> {
         match self {
-            Self::AddressAndOffset => {
+            Self::AddressAndBlockOffsetOnly => {
                 let mut bytes_written = 0;
                 for index_entry in index_entries {
-                    bytes_written += file.write_type(index_entry.address)?;
+                    bytes_written += file.write_pod(index_entry.address)?;
                 }
                 for index_entry in index_entries {
-                    bytes_written += file.write_type(&index_entry.block_offset)?;
+                    bytes_written += file.write_pod(&index_entry.offset)?;
                 }
                 Ok(bytes_written)
             }
@@ -72,43 +79,65 @@ impl IndexBlockFormat {
     /// Returns the address of the account given the specified index.
     pub fn get_account_address<'a>(
         &self,
-        map: &'a Mmap,
+        mmap: &'a Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
+        index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
         let offset = match self {
-            Self::AddressAndOffset => {
-                footer.index_block_offset as usize + std::mem::size_of::<Pubkey>() * index
+            Self::AddressAndBlockOffsetOnly => {
+                debug_assert!(index_offset.0 < footer.account_entry_count);
+                footer.index_block_offset as usize
+                    + std::mem::size_of::<Pubkey>() * (index_offset.0 as usize)
             }
         };
-        let (address, _) = get_type::<Pubkey>(map, offset)?;
+
+        debug_assert!(
+            offset.saturating_add(std::mem::size_of::<Pubkey>())
+                <= footer.owners_block_offset as usize,
+            "reading IndexOffset ({}) would exceed index block boundary ({}).",
+            offset,
+            footer.owners_block_offset,
+        );
+
+        let (address, _) = get_pod::<Pubkey>(mmap, offset)?;
         Ok(address)
     }
 
     /// Returns the offset to the account given the specified index.
-    pub fn get_account_offset(
+    pub fn get_account_offset<Offset: AccountOffset>(
         &self,
-        map: &Mmap,
+        mmap: &Mmap,
         footer: &TieredStorageFooter,
-        index: usize,
-    ) -> TieredStorageResult<AccountOffset> {
-        match self {
-            Self::AddressAndOffset => {
-                let offset = footer.index_block_offset as usize
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<Offset> {
+        let offset = match self {
+            Self::AddressAndBlockOffsetOnly => {
+                debug_assert!(index_offset.0 < footer.account_entry_count);
+                footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
-                    + index * std::mem::size_of::<u64>();
-                let (account_block_offset, _) = get_type(map, offset)?;
-                Ok(AccountOffset {
-                    block: *account_block_offset,
-                })
+                    + std::mem::size_of::<Offset>() * index_offset.0 as usize
             }
-        }
+        };
+
+        debug_assert!(
+            offset.saturating_add(std::mem::size_of::<Offset>())
+                <= footer.owners_block_offset as usize,
+            "reading IndexOffset ({}) would exceed index block boundary ({}).",
+            offset,
+            footer.owners_block_offset,
+        );
+
+        let (account_offset, _) = get_pod::<Offset>(mmap, offset)?;
+
+        Ok(*account_offset)
     }
 
     /// Returns the size of one index entry.
-    pub fn entry_size(&self) -> usize {
+    pub fn entry_size<Offset: AccountOffset>(&self) -> usize {
         match self {
-            Self::AddressAndOffset => std::mem::size_of::<Pubkey>() + std::mem::size_of::<u64>(),
+            Self::AddressAndBlockOffsetOnly => {
+                std::mem::size_of::<Pubkey>() + std::mem::size_of::<Offset>()
+            }
         }
     }
 }
@@ -116,14 +145,21 @@ impl IndexBlockFormat {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions, rand::Rng,
-        std::fs::OpenOptions, tempfile::TempDir,
+        super::*,
+        crate::tiered_storage::{
+            file::TieredStorageFile,
+            hot::{HotAccountOffset, HOT_ACCOUNT_ALIGNMENT},
+        },
+        memmap2::MmapOptions,
+        rand::Rng,
+        std::fs::OpenOptions,
+        tempfile::TempDir,
     };
 
     #[test]
     fn test_address_and_offset_indexer() {
         const ENTRY_COUNT: usize = 100;
-        let footer = TieredStorageFooter {
+        let mut footer = TieredStorageFooter {
             account_entry_count: ENTRY_COUNT as u32,
             ..TieredStorageFooter::default()
         };
@@ -137,29 +173,182 @@ mod tests {
             .iter()
             .map(|address| AccountIndexWriterEntry {
                 address,
-                block_offset: rng.gen_range(128..2048),
-                intra_block_offset: 0,
+                offset: HotAccountOffset::new(
+                    rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_ALIGNMENT,
+                )
+                .unwrap(),
             })
             .collect();
 
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
-            let indexer = IndexBlockFormat::AddressAndOffset;
-            indexer.write_index_block(&file, &index_entries).unwrap();
+            let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
+            let cursor = indexer.write_index_block(&file, &index_entries).unwrap();
+            footer.owners_block_offset = cursor as u64;
         }
 
-        let indexer = IndexBlockFormat::AddressAndOffset;
+        let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
         let file = OpenOptions::new()
             .read(true)
             .create(false)
             .open(&path)
             .unwrap();
-        let map = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         for (i, index_entry) in index_entries.iter().enumerate() {
-            let account_offset = indexer.get_account_offset(&map, &footer, i).unwrap();
-            assert_eq!(index_entry.block_offset, account_offset.block as u64);
-            let address = indexer.get_account_address(&map, &footer, i).unwrap();
+            let account_offset = indexer
+                .get_account_offset::<HotAccountOffset>(&mmap, &footer, IndexOffset(i as u32))
+                .unwrap();
+            assert_eq!(index_entry.offset, account_offset);
+            let address = indexer
+                .get_account_address(&mmap, &footer, IndexOffset(i as u32))
+                .unwrap();
             assert_eq!(index_entry.address, address);
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "index_offset.0 < footer.account_entry_count")]
+    fn test_get_account_address_out_of_bounds() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_get_account_address_out_of_bounds");
+
+        let footer = TieredStorageFooter {
+            account_entry_count: 100,
+            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            // we only write a footer here as the test should hit an assert
+            // failure before it actually reads the file.
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let file = OpenOptions::new()
+            .read(true)
+            .create(false)
+            .open(&path)
+            .unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        footer
+            .index_block_format
+            .get_account_address(&mmap, &footer, IndexOffset(footer.account_entry_count))
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "would exceed index block boundary")]
+    fn test_get_account_address_exceeds_index_block_boundary() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_get_account_address_exceeds_index_block_boundary");
+
+        let footer = TieredStorageFooter {
+            account_entry_count: 100,
+            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_offset: 1024,
+            // only holds one index entry
+            owners_block_offset: 1024 + std::mem::size_of::<HotAccountOffset>() as u64,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            // we only write a footer here as the test should hit an assert
+            // failure before it actually reads the file.
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let file = OpenOptions::new()
+            .read(true)
+            .create(false)
+            .open(&path)
+            .unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        // IndexOffset does not exceed the account_entry_count but exceeds
+        // the index block boundary.
+        footer
+            .index_block_format
+            .get_account_address(&mmap, &footer, IndexOffset(2))
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "index_offset.0 < footer.account_entry_count")]
+    fn test_get_account_offset_out_of_bounds() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_get_account_offset_out_of_bounds");
+
+        let footer = TieredStorageFooter {
+            account_entry_count: 100,
+            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            // we only write a footer here as the test should hit an assert
+            // failure before we actually read the file.
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let file = OpenOptions::new()
+            .read(true)
+            .create(false)
+            .open(&path)
+            .unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        footer
+            .index_block_format
+            .get_account_offset::<HotAccountOffset>(
+                &mmap,
+                &footer,
+                IndexOffset(footer.account_entry_count),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "would exceed index block boundary")]
+    fn test_get_account_offset_exceeds_index_block_boundary() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_get_account_offset_exceeds_index_block_boundary");
+
+        let footer = TieredStorageFooter {
+            account_entry_count: 100,
+            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_offset: 1024,
+            // only holds one index entry
+            owners_block_offset: 1024 + std::mem::size_of::<HotAccountOffset>() as u64,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            // we only write a footer here as the test should hit an assert
+            // failure before we actually read the file.
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            footer.write_footer_block(&file).unwrap();
+        }
+
+        let file = OpenOptions::new()
+            .read(true)
+            .create(false)
+            .open(&path)
+            .unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        // IndexOffset does not exceed the account_entry_count but exceeds
+        // the index block boundary.
+        footer
+            .index_block_format
+            .get_account_offset::<HotAccountOffset>(&mmap, &footer, IndexOffset(2))
+            .unwrap();
     }
 }

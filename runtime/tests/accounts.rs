@@ -9,7 +9,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
-        genesis_config::ClusterType,
         pubkey::Pubkey,
         sysvar::epoch_schedule::EpochSchedule,
     },
@@ -81,7 +80,7 @@ fn test_shrink_and_clean() {
 #[test]
 fn test_bad_bank_hash() {
     solana_logger::setup();
-    let db = AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development);
+    let db = AccountsDb::new_single_for_tests();
 
     let some_slot: Slot = 0;
     let max_accounts = 200;

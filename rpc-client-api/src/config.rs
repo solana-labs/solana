@@ -44,6 +44,8 @@ pub struct RpcSimulateTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub accounts: Option<RpcSimulateTransactionAccountsConfig>,
     pub min_context_slot: Option<Slot>,
+    #[serde(default)]
+    pub inner_instructions: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]

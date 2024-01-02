@@ -80,7 +80,8 @@ where
             return Err(InstructionError::InvalidAccountData);
         }
 
-        proof_context_account.set_data_from_slice(&context_state_data)?;
+        proof_context_account
+            .set_data_from_slice(&context_state_data, &invoke_context.feature_set)?;
     }
 
     Ok(())
@@ -122,10 +123,13 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
 
     let mut destination_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
-    destination_account.checked_add_lamports(proof_context_account.get_lamports())?;
-    proof_context_account.set_lamports(0)?;
-    proof_context_account.set_data_length(0)?;
-    proof_context_account.set_owner(system_program::id().as_ref())?;
+    destination_account.checked_add_lamports(
+        proof_context_account.get_lamports(),
+        &invoke_context.feature_set,
+    )?;
+    proof_context_account.set_lamports(0, &invoke_context.feature_set)?;
+    proof_context_account.set_data_length(0, &invoke_context.feature_set)?;
+    proof_context_account.set_owner(system_program::id().as_ref(), &invoke_context.feature_set)?;
 
     Ok(())
 }
@@ -135,6 +139,11 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
     let native_programs_consume_cu = invoke_context
         .feature_set
         .is_active(&feature_set::native_programs_consume_cu::id());
+
+    let enable_zk_transfer_with_fee = invoke_context
+        .feature_set
+        .is_active(&feature_set::enable_zk_transfer_with_fee::id());
+
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -198,6 +207,11 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
             process_verify_proof::<TransferData, TransferProofContext>(invoke_context)
         }
         ProofInstruction::VerifyTransferWithFee => {
+            // transfer with fee related proofs are not enabled
+            if !enable_zk_transfer_with_fee {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
@@ -291,6 +305,11 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
             >(invoke_context)
         }
         ProofInstruction::VerifyFeeSigma => {
+            // transfer with fee related proofs are not enabled
+            if !enable_zk_transfer_with_fee {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
             invoke_context
                 .consume_checked(VERIFY_FEE_SIGMA_COMPUTE_UNITS)
                 .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;

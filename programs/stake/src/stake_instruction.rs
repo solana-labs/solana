@@ -12,7 +12,6 @@ use {
         declare_process_instruction, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        clock::Clock,
         feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
@@ -74,82 +73,53 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         Ok(StakeInstruction::Initialize(authorized, lockup)) => {
             let mut me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            initialize(&mut me, &authorized, &lockup, &rent)
+            initialize(
+                &mut me,
+                &authorized,
+                &lockup,
+                &rent,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
             let mut me = get_stake_account()?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+            instruction_context.check_number_of_instruction_accounts(3)?;
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
-
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize(
-                    &mut me,
-                    &signers,
-                    &authorized_pubkey,
-                    stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
-            }
+            authorize(
+                &mut me,
+                &signers,
+                &authorized_pubkey,
+                stake_authorize,
+                &clock,
+                custodian_pubkey,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let require_custodian_for_locked_stake_authorize = invoke_context
-                .feature_set
-                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-            if require_custodian_for_locked_stake_authorize {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    &args.new_authorized_pubkey,
-                    args.stake_authorize,
-                    require_custodian_for_locked_stake_authorize,
-                    &Clock::default(),
-                    None,
-                )
-            }
+            authorize_with_seed(
+                transaction_context,
+                instruction_context,
+                &mut me,
+                1,
+                &args.authority_seed,
+                &args.authority_owner,
+                &args.new_authorized_pubkey,
+                args.stake_authorize,
+                &clock,
+                custodian_pubkey,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::DelegateStake) => {
             let me = get_stake_account()?;
@@ -251,6 +221,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                     None
                 },
                 new_warmup_cooldown_rate_epoch(invoke_context),
+                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::Deactivate) => {
@@ -262,123 +233,112 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         Ok(StakeInstruction::SetLockup(lockup)) => {
             let mut me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            set_lockup(&mut me, &lockup, &signers, &clock)
+            set_lockup(
+                &mut me,
+                &lockup,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::InitializeChecked) => {
             let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let staker_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(2)?,
-                )?;
-                let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-
-                let authorized = Authorized {
-                    staker: *staker_pubkey,
-                    withdrawer: *withdrawer_pubkey,
-                };
-
-                let rent =
-                    get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-                initialize(&mut me, &authorized, &Lockup::default(), &rent)
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+            instruction_context.check_number_of_instruction_accounts(4)?;
+            let staker_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(2)?,
+            )?;
+            let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+            )?;
+            if !instruction_context.is_instruction_account_signer(3)? {
+                return Err(InstructionError::MissingRequiredSignature);
             }
+
+            let authorized = Authorized {
+                staker: *staker_pubkey,
+                withdrawer: *withdrawer_pubkey,
+            };
+
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
+            initialize(
+                &mut me,
+                &authorized,
+                &Lockup::default(),
+                &rent,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
             let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
-
-                authorize(
-                    &mut me,
-                    &signers,
-                    authorized_pubkey,
-                    stake_authorize,
-                    true,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+            instruction_context.check_number_of_instruction_accounts(4)?;
+            let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+            )?;
+            if !instruction_context.is_instruction_account_signer(3)? {
+                return Err(InstructionError::MissingRequiredSignature);
             }
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
+
+            authorize(
+                &mut me,
+                &signers,
+                authorized_pubkey,
+                stake_authorize,
+                &clock,
+                custodian_pubkey,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
             let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                instruction_context.check_number_of_instruction_accounts(2)?;
-                let clock =
-                    get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
-                )?;
-                if !instruction_context.is_instruction_account_signer(3)? {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
-
-                authorize_with_seed(
-                    transaction_context,
-                    instruction_context,
-                    &mut me,
-                    1,
-                    &args.authority_seed,
-                    &args.authority_owner,
-                    authorized_pubkey,
-                    args.stake_authorize,
-                    true,
-                    &clock,
-                    custodian_pubkey,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+            instruction_context.check_number_of_instruction_accounts(4)?;
+            let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(3)?,
+            )?;
+            if !instruction_context.is_instruction_account_signer(3)? {
+                return Err(InstructionError::MissingRequiredSignature);
             }
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
+
+            authorize_with_seed(
+                transaction_context,
+                instruction_context,
+                &mut me,
+                1,
+                &args.authority_seed,
+                &args.authority_owner,
+                authorized_pubkey,
+                args.stake_authorize,
+                &clock,
+                custodian_pubkey,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
             let mut me = get_stake_account()?;
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::vote_stake_checked_instructions::id())
-            {
-                let custodian_pubkey =
-                    get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
+            let custodian_pubkey =
+                get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
 
-                let lockup = LockupArgs {
-                    unix_timestamp: lockup_checked.unix_timestamp,
-                    epoch: lockup_checked.epoch,
-                    custodian: custodian_pubkey.cloned(),
-                };
-                let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                set_lockup(&mut me, &lockup, &signers, &clock)
-            } else {
-                Err(InstructionError::InvalidInstructionData)
-            }
+            let lockup = LockupArgs {
+                unix_timestamp: lockup_checked.unix_timestamp,
+                epoch: lockup_checked.epoch,
+                custodian: custodian_pubkey.cloned(),
+            };
+            let clock = invoke_context.get_sysvar_cache().get_clock()?;
+            set_lockup(
+                &mut me,
+                &lockup,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         Ok(StakeInstruction::GetMinimumDelegation) => {
             let feature_set = invoke_context.feature_set.as_ref();
@@ -460,7 +420,7 @@ mod tests {
                 WritableAccount,
             },
             account_utils::StateMut,
-            clock::{Epoch, UnixTimestamp},
+            clock::{Clock, Epoch, UnixTimestamp},
             epoch_schedule::EpochSchedule,
             feature_set::FeatureSet,
             instruction::{AccountMeta, Instruction},
@@ -635,7 +595,7 @@ mod tests {
             if let StakeStateV2::Stake(_meta, stake, _stake_flags) = account.state().unwrap() {
                 let stake_status = stake.delegation.stake_activating_and_deactivating(
                     clock.epoch,
-                    Some(stake_history),
+                    stake_history,
                     None,
                 );
                 active_stake += stake_status.effective;
@@ -6886,15 +6846,11 @@ mod tests {
                 create_account_shared_data_for_test(&stake_history),
             );
             if stake_amount
-                == stake.stake(
-                    clock.epoch,
-                    Some(&stake_history),
-                    new_warmup_cooldown_rate_epoch,
-                )
+                == stake.stake(clock.epoch, &stake_history, new_warmup_cooldown_rate_epoch)
                 && merge_from_amount
                     == merge_from_stake.stake(
                         clock.epoch,
-                        Some(&stake_history),
+                        &stake_history,
                         new_warmup_cooldown_rate_epoch,
                     )
             {
@@ -6975,14 +6931,10 @@ mod tests {
                 stake_history::id(),
                 create_account_shared_data_for_test(&stake_history),
             );
-            if 0 == stake.stake(
-                clock.epoch,
-                Some(&stake_history),
-                new_warmup_cooldown_rate_epoch,
-            ) && 0
-                == merge_from_stake.stake(
+            if 0 == stake.stake(clock.epoch, &stake_history, new_warmup_cooldown_rate_epoch)
+                && 0 == merge_from_stake.stake(
                     clock.epoch,
-                    Some(&stake_history),
+                    &stake_history,
                     new_warmup_cooldown_rate_epoch,
                 )
             {
@@ -7428,11 +7380,7 @@ mod tests {
                     initial_stake_state
                         .delegation()
                         .unwrap()
-                        .stake_activating_and_deactivating(
-                            current_epoch,
-                            Some(&stake_history),
-                            None
-                        )
+                        .stake_activating_and_deactivating(current_epoch, &stake_history, None)
                 );
             }
 
@@ -7928,7 +7876,7 @@ mod tests {
                 },
                 stake.delegation.stake_activating_and_deactivating(
                     current_epoch,
-                    Some(&stake_history),
+                    &stake_history,
                     None
                 )
             );

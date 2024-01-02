@@ -15,7 +15,7 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::PedersenOpening,
         },
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         sigma_proofs::ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof,
         transcript::TranscriptProtocol,
     },
@@ -65,7 +65,7 @@ impl CiphertextCiphertextEqualityProofData {
         destination_ciphertext: &ElGamalCiphertext,
         destination_opening: &PedersenOpening,
         amount: u64,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let pod_source_pubkey = pod::ElGamalPubkey(source_keypair.pubkey().to_bytes());
         let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
         let pod_source_ciphertext = pod::ElGamalCiphertext(source_ciphertext.to_bytes());
@@ -104,7 +104,7 @@ impl ZkProofData<CiphertextCiphertextEqualityProofContext>
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
         let source_pubkey = self.context.source_pubkey.try_into()?;

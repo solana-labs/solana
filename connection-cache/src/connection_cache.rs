@@ -9,7 +9,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::timing::AtomicInterval,
+    solana_sdk::{signature::Keypair, timing::AtomicInterval},
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
@@ -38,6 +38,7 @@ pub trait ConnectionManager: Send + Sync + 'static {
 
     fn new_connection_pool(&self) -> Self::ConnectionPool;
     fn new_connection_config(&self) -> Self::NewConnectionConfig;
+    fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct ConnectionCache<
@@ -137,6 +138,11 @@ where
             .unwrap()
     }
 
+    pub fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        let mut map = self.map.write().unwrap();
+        map.clear();
+        self.connection_manager.update_key(key)
+    }
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough used connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
@@ -635,6 +641,10 @@ mod tests {
 
         fn new_connection_config(&self) -> Self::NewConnectionConfig {
             MockUdpConfig::new().unwrap()
+        }
+
+        fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
         }
     }
 

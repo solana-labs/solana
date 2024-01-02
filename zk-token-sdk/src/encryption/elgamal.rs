@@ -78,6 +78,10 @@ pub enum ElGamalError {
     SeedLengthTooShort,
     #[error("seed length too long for derivation")]
     SeedLengthTooLong,
+    #[error("failed to deserialize ciphertext")]
+    CiphertextDeserialization,
+    #[error("failed to deserialize public key")]
+    PubkeyDeserialization,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -160,7 +164,7 @@ impl ElGamal {
     }
 
     /// On input a secret key and a ciphertext, the function returns the decrypted amount
-    /// interpretted as a positive 32-bit number (but still of type `u64`).
+    /// interpreted as a positive 32-bit number (but still of type `u64`).
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
     /// returns `None`.

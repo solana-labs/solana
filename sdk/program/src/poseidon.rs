@@ -21,12 +21,16 @@ pub enum PoseidonSyscallError {
         "Invalid length of the input. The length matching the modulus of the prime field is 32."
     )]
     InvalidInputLength,
+    #[error("Failed to convert bytest into a prime field element.")]
+    BytesToPrimeFieldElement,
     #[error("Input is larger than the modulus of the prime field.")]
     InputLargerThanModulus,
     #[error("Failed to convert a vector of bytes into an array.")]
     VecToArray,
     #[error("Failed to convert the number of inputs from u64 to u8.")]
     U64Tou8,
+    #[error("Failed to convert bytes to BigInt")]
+    BytesToBigInt,
     #[error("Invalid width. Choose a width between 2 and 16 for 1 to 15 inputs.")]
     InvalidWidthCircom,
     #[error("Unexpected error")]
@@ -41,10 +45,12 @@ impl From<u64> for PoseidonSyscallError {
             3 => PoseidonSyscallError::InvalidNumberOfInputs,
             4 => PoseidonSyscallError::EmptyInput,
             5 => PoseidonSyscallError::InvalidInputLength,
-            6 => PoseidonSyscallError::InputLargerThanModulus,
-            7 => PoseidonSyscallError::VecToArray,
-            8 => PoseidonSyscallError::U64Tou8,
-            9 => PoseidonSyscallError::InvalidWidthCircom,
+            6 => PoseidonSyscallError::BytesToPrimeFieldElement,
+            7 => PoseidonSyscallError::InputLargerThanModulus,
+            8 => PoseidonSyscallError::VecToArray,
+            9 => PoseidonSyscallError::U64Tou8,
+            10 => PoseidonSyscallError::BytesToBigInt,
+            11 => PoseidonSyscallError::InvalidWidthCircom,
             _ => PoseidonSyscallError::Unexpected,
         }
     }
@@ -58,11 +64,13 @@ impl From<PoseidonSyscallError> for u64 {
             PoseidonSyscallError::InvalidNumberOfInputs => 3,
             PoseidonSyscallError::EmptyInput => 4,
             PoseidonSyscallError::InvalidInputLength => 5,
-            PoseidonSyscallError::InputLargerThanModulus => 6,
-            PoseidonSyscallError::VecToArray => 7,
-            PoseidonSyscallError::U64Tou8 => 8,
-            PoseidonSyscallError::InvalidWidthCircom => 9,
-            PoseidonSyscallError::Unexpected => 10,
+            PoseidonSyscallError::BytesToPrimeFieldElement => 6,
+            PoseidonSyscallError::InputLargerThanModulus => 7,
+            PoseidonSyscallError::VecToArray => 8,
+            PoseidonSyscallError::U64Tou8 => 9,
+            PoseidonSyscallError::BytesToBigInt => 10,
+            PoseidonSyscallError::InvalidWidthCircom => 11,
+            PoseidonSyscallError::Unexpected => 12,
         }
     }
 }
@@ -210,25 +218,25 @@ pub fn hashv(
         impl From<PoseidonError> for PoseidonSyscallError {
             fn from(error: PoseidonError) -> Self {
                 match error {
-                    PoseidonError::InvalidNumberOfInputs {
-                        inputs: _,
-                        max_limit: _,
-                        width: _,
-                    } => PoseidonSyscallError::InvalidNumberOfInputs,
+                    PoseidonError::InvalidNumberOfInputs { .. } => {
+                        PoseidonSyscallError::InvalidNumberOfInputs
+                    }
                     PoseidonError::EmptyInput => PoseidonSyscallError::EmptyInput,
-                    PoseidonError::InvalidInputLength {
-                        len: _,
-                        modulus_bytes_len: _,
-                    } => PoseidonSyscallError::InvalidInputLength,
+                    PoseidonError::InvalidInputLength { .. } => {
+                        PoseidonSyscallError::InvalidInputLength
+                    }
+                    PoseidonError::BytesToPrimeFieldElement { .. } => {
+                        PoseidonSyscallError::BytesToPrimeFieldElement
+                    }
                     PoseidonError::InputLargerThanModulus => {
                         PoseidonSyscallError::InputLargerThanModulus
                     }
                     PoseidonError::VecToArray => PoseidonSyscallError::VecToArray,
                     PoseidonError::U64Tou8 => PoseidonSyscallError::U64Tou8,
-                    PoseidonError::InvalidWidthCircom {
-                        width: _,
-                        max_limit: _,
-                    } => PoseidonSyscallError::InvalidWidthCircom,
+                    PoseidonError::BytesToBigInt => PoseidonSyscallError::BytesToBigInt,
+                    PoseidonError::InvalidWidthCircom { .. } => {
+                        PoseidonSyscallError::InvalidWidthCircom
+                    }
                 }
             }
         }

@@ -15,12 +15,13 @@ use {
         timing::AtomicInterval,
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_storage_proto::convert::{generated, tx_by_addr},
+    solana_storage_proto::convert::{entries, generated, tx_by_addr},
     solana_transaction_status::{
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
+        ConfirmedTransactionWithStatusMeta, EntrySummary, Reward, TransactionByAddrInfo,
         TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
-        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
+        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedConfirmedBlockWithEntries,
+        VersionedTransactionWithStatusMeta,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -88,6 +89,10 @@ fn slot_to_key(slot: Slot) -> String {
 }
 
 fn slot_to_blocks_key(slot: Slot) -> String {
+    slot_to_key(slot)
+}
+
+fn slot_to_entries_key(slot: Slot) -> String {
     slot_to_key(slot)
 }
 
@@ -606,6 +611,25 @@ impl LedgerStorage {
         Ok(block_exists)
     }
 
+    /// Fetches a vector of block entries via a multirow fetch
+    pub async fn get_entries(&self, slot: Slot) -> Result<impl Iterator<Item = EntrySummary>> {
+        trace!(
+            "LedgerStorage::get_block_entries request received: {:?}",
+            slot
+        );
+        self.stats.increment_num_queries();
+        let mut bigtable = self.connection.client();
+        let entry_cell_data = bigtable
+            .get_protobuf_cell::<entries::Entries>("entries", slot_to_entries_key(slot))
+            .await
+            .map_err(|err| match err {
+                bigtable::Error::RowNotFound => Error::BlockNotFound(slot),
+                _ => err.into(),
+            })?;
+        let entries = entry_cell_data.entries.into_iter().map(Into::into);
+        Ok(entries)
+    }
+
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
         trace!(
             "LedgerStorage::get_signature_status request received: {:?}",
@@ -799,7 +823,7 @@ impl LedgerStorage {
             .unwrap_or(0);
 
         // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
-        // number that might be flitered out
+        // number that might be filtered out
         let tx_by_addr_data = bigtable
             .get_row_data(
                 "tx-by-addr",
@@ -883,9 +907,32 @@ impl LedgerStorage {
             "LedgerStorage::upload_confirmed_block request received: {:?}",
             slot
         );
-        let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
+        self.upload_confirmed_block_with_entries(
+            slot,
+            VersionedConfirmedBlockWithEntries {
+                block: confirmed_block,
+                entries: vec![],
+            },
+        )
+        .await
+    }
 
-        let mut tx_cells = vec![];
+    pub async fn upload_confirmed_block_with_entries(
+        &self,
+        slot: Slot,
+        confirmed_block: VersionedConfirmedBlockWithEntries,
+    ) -> Result<()> {
+        trace!(
+            "LedgerStorage::upload_confirmed_block_with_entries request received: {:?}",
+            slot
+        );
+        let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
+        let VersionedConfirmedBlockWithEntries {
+            block: confirmed_block,
+            entries,
+        } = confirmed_block;
+
+        let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
             let err = meta.status.clone().err();
@@ -934,6 +981,14 @@ impl LedgerStorage {
             })
             .collect();
 
+        let num_entries = entries.len();
+        let entry_cell = (
+            slot_to_entries_key(slot),
+            entries::Entries {
+                entries: entries.into_iter().enumerate().map(Into::into).collect(),
+            },
+        );
+
         let mut tasks = vec![];
 
         if !tx_cells.is_empty() {
@@ -952,6 +1007,14 @@ impl LedgerStorage {
                     &tx_by_addr_cells,
                 )
                 .await
+            }));
+        }
+
+        if num_entries > 0 {
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_protobuf_cells_with_retry::<entries::Entries>("entries", &[entry_cell])
+                    .await
             }));
         }
 
@@ -995,6 +1058,7 @@ impl LedgerStorage {
             "storage-bigtable-upload-block",
             ("slot", slot, i64),
             ("transactions", num_transactions, i64),
+            ("entries", num_entries, i64),
             ("bytes", bytes_written, i64),
         );
         Ok(())
@@ -1088,6 +1152,13 @@ impl LedgerStorage {
             vec![]
         };
 
+        let entries_exist = self
+            .connection
+            .client()
+            .row_key_exists("entries", slot_to_entries_key(slot))
+            .await
+            .is_ok_and(|x| x);
+
         if !dry_run {
             if !address_slot_rows.is_empty() {
                 self.connection
@@ -1101,17 +1172,24 @@ impl LedgerStorage {
                     .await?;
             }
 
+            if entries_exist {
+                self.connection
+                    .delete_rows_with_retry("entries", &[slot_to_entries_key(slot)])
+                    .await?;
+            }
+
             self.connection
                 .delete_rows_with_retry("blocks", &[slot_to_blocks_key(slot)])
                 .await?;
         }
 
         info!(
-            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows",
+            "{}deleted ledger data for slot {}: {} transaction rows, {} address slot rows, {} entry row",
             if dry_run { "[dry run] " } else { "" },
             slot,
             tx_deletion_rows.len(),
-            address_slot_rows.len()
+            address_slot_rows.len(),
+            if entries_exist { "with" } else {"WITHOUT"}
         );
 
         Ok(())

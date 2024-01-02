@@ -8,7 +8,7 @@ use {
     solana_sdk::clock::Slot,
 };
 
-#[derive(Debug, Default, AbiExample, Clone)]
+#[derive(Debug, AbiExample, Clone)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,

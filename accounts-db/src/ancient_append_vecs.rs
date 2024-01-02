@@ -867,7 +867,11 @@ pub struct AccountsToStore<'a> {
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
-    pub slot: Slot,
+    slot: Slot,
+    /// bytes required to store primary accounts
+    bytes_primary: usize,
+    /// bytes required to store overflow accounts
+    bytes_overflow: usize,
 }
 
 impl<'a> AccountsToStore<'a> {
@@ -880,8 +884,11 @@ impl<'a> AccountsToStore<'a> {
         slot: Slot,
     ) -> Self {
         let num_accounts = accounts.len();
+        let mut bytes_primary = alive_total_bytes;
+        let mut bytes_overflow = 0;
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
+        let initial_available_bytes = available_bytes as usize;
         if alive_total_bytes > available_bytes as usize {
             // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
             for (i, account) in accounts.iter().enumerate() {
@@ -891,6 +898,9 @@ impl<'a> AccountsToStore<'a> {
                 } else if index_first_item_overflow == num_accounts {
                     // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
                     index_first_item_overflow = i;
+                    bytes_primary =
+                        initial_available_bytes.saturating_sub(available_bytes as usize);
+                    bytes_overflow = alive_total_bytes.saturating_sub(bytes_primary);
                     break;
                 }
             }
@@ -899,12 +909,22 @@ impl<'a> AccountsToStore<'a> {
             accounts,
             index_first_item_overflow,
             slot,
+            bytes_primary,
+            bytes_overflow,
         }
     }
 
     /// true if a request to 'get' 'Overflow' would return accounts & hashes
     pub fn has_overflow(&self) -> bool {
         self.index_first_item_overflow < self.accounts.len()
+    }
+
+    /// return # required bytes for the given selector
+    pub fn get_bytes(&self, selector: StorageSelector) -> usize {
+        match selector {
+            StorageSelector::Primary => self.bytes_primary,
+            StorageSelector::Overflow => self.bytes_overflow,
+        }
     }
 
     /// get the accounts to store in the given 'storage'
@@ -915,16 +935,33 @@ impl<'a> AccountsToStore<'a> {
         };
         &self.accounts[range]
     }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
+    }
 }
 
 /// capacity of an ancient append vec
-pub fn get_ancient_append_vec_capacity() -> u64 {
+#[allow(clippy::assertions_on_constants, dead_code)]
+pub const fn get_ancient_append_vec_capacity() -> u64 {
+    // There is a trade-off for selecting the ancient append vec size. Smaller non-ancient append vec are getting
+    // combined into large ancient append vec. Too small size of ancient append vec will result in too many ancient append vec
+    // memory mapped files. Too big size will make it difficult to clean and shrink them. Hence, we choose approximately
+    // 128MB for the ancient append vec size.
+    const RESULT: u64 = 128 * 1024 * 1024;
+
     use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
-    // smaller than max by a bit just in case
-    // some functions add slop on allocation
-    // The bigger an append vec is, the more unwieldy it becomes to shrink, create, write.
-    // 1/10 of max is a reasonable size in practice.
-    MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
+    const _: () = assert!(
+        RESULT < MAXIMUM_APPEND_VEC_FILE_SIZE,
+        "ancient append vec size should be less than the maximum append vec size"
+    );
+    const PAGE_SIZE: u64 = 4 * 1024;
+    const _: () = assert!(
+        RESULT % PAGE_SIZE == 0,
+        "ancient append vec size should be a multiple of PAGE_SIZE"
+    );
+
+    RESULT
 }
 
 /// is this a max-size append vec designed to be used as an ancient append vec?
@@ -2040,6 +2077,9 @@ pub mod tests {
                 accounts_to_store.has_overflow()
             );
             assert!(accounts.is_empty());
+
+            assert_eq!(accounts_to_store.get_bytes(selector), account_size);
+            assert_eq!(accounts_to_store.get_bytes(get_opposite(&selector)), 0);
         }
     }
     fn get_opposite(selector: &StorageSelector) -> StorageSelector {
@@ -2051,10 +2091,7 @@ pub mod tests {
 
     #[test]
     fn test_get_ancient_append_vec_capacity() {
-        assert_eq!(
-            get_ancient_append_vec_capacity(),
-            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
-        );
+        assert_eq!(get_ancient_append_vec_capacity(), 128 * 1024 * 1024);
     }
 
     #[test]
@@ -3261,7 +3298,6 @@ pub mod tests {
                 // irrelevant fields
                 slot: 0,
                 capacity: 0,
-                aligned_total_bytes: 0,
                 alive_accounts: ShrinkCollectAliveSeparatedByRefs {
                     one_ref: AliveAccounts::default(),
                     many_refs_this_is_newest_alive: AliveAccounts::default(),

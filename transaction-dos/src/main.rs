@@ -238,6 +238,7 @@ fn run_transactions_dos(
         config.signers = vec![payer_keypairs[0], &program_keypair];
         config.command = CliCommand::Program(ProgramCliCommand::Deploy {
             program_location: Some(program_location),
+            fee_payer_signer_index: 0,
             program_signer_index: Some(1),
             program_pubkey: None,
             buffer_signer_index: None,
@@ -513,7 +514,7 @@ fn main() {
                 .long("batch-sleep-ms")
                 .takes_value(true)
                 .value_name("NUM")
-                .help("Sleep for this long the num outstanding transctions is greater than the batch size."),
+                .help("Sleep for this long the num outstanding transactions is greater than the batch size."),
         )
         .arg(
             Arg::with_name("check_gossip")

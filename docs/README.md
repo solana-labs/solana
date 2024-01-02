@@ -1,11 +1,11 @@
-# Solana Docs Readme
+# Solana Validator Docs Readme
 
-Solana's Docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
+This validator's docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
 Static content delivery is handled using `vercel`.
 
 ## Local Development
 
-To set up the Solana Docs site locally:
+To set up the Solana Validator Docs site locally:
 
 - install dependencies using `npm`
 - build locally via `./build.sh`
@@ -30,7 +30,7 @@ The build script generates static content into the `build` directory and can be 
 ./build.sh
 ```
 
-Running this build script requires **Docker**, and will auto fetch the [solanalabs/rust](https://hub.docker.com/r/solanalabs/rust) image from Docker hub to compile the desired version of the [Solana CLI](https://docs.solana.com/cli) from source.
+Running this build script requires **Docker**, and will auto fetch the [solanalabs/rust](https://hub.docker.com/r/solanalabs/rust) image from Docker hub to compile the desired version of the [Solana CLI](https://docs.solanalabs.com/cli) from source.
 
 This build script will also:
 
@@ -75,9 +75,9 @@ The docs are built and published in Travis CI with the `./build.sh` script. On e
 
 In each post-commit build, docs are built and published using `vercel` to their respective domain depending on the build branch.
 
-- Master branch docs are published to `edge.docs.solana.com`
-- Beta branch docs are published to `beta.docs.solana.com`
-- Latest release tag docs are published to `docs.solana.com`
+- Master branch docs are published to `edge.docs.solanalabs.com`
+- Beta branch docs are published to `beta.docs.solanalabs.com`
+- Latest release tag docs are published to `docs.solanalabs.com`
 
 ## Common Issues
 

@@ -88,7 +88,11 @@ fn verify_keybase(
         if client.head(&url).send()?.status().is_success() {
             Ok(())
         } else {
-            Err(format!("keybase_username could not be confirmed at: {url}. Please add this pubkey file to your keybase profile to connect").into())
+            Err(format!(
+                "keybase_username could not be confirmed at: {url}. Please add this pubkey file \
+                 to your keybase profile to connect"
+            )
+            .into())
         }
     } else {
         Err(format!("keybase_username could not be parsed as String: {keybase_username}").into())
@@ -204,7 +208,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .value_name("DETAILS")
                                 .takes_value(true)
                                 .validator(check_details_length)
-                                .help("Validator description")
+                                .help("Validator description"),
                         )
                         .arg(
                             Arg::with_name("force")
@@ -223,9 +227,12 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .value_name("PUBKEY")
                                 .takes_value(true)
                                 .validator(is_pubkey)
-                                .help("The pubkey of the Validator info account; without this argument, returns all"),
+                                .help(
+                                    "The pubkey of the Validator info account; without this \
+                                     argument, returns all Validator info accounts",
+                                ),
                         ),
-                )
+                ),
         )
     }
 }
@@ -607,7 +614,12 @@ mod tests {
         let max_short_string =
             "Max Length String KWpP299aFCBWvWg1MHpSuaoTsud7cv8zMJsh99aAtP8X1s26yrR1".to_string();
         // 300-character string
-        let max_long_string = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut libero quam, volutpat et aliquet eu, varius in mi. Aenean vestibulum ex in tristique faucibus. Maecenas in imperdiet turpis. Nullam feugiat aliquet erat. Morbi malesuada turpis sed dui pulvinar lobortis. Pellentesque a lectus eu leo nullam.".to_string();
+        let max_long_string = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut libero \
+                               quam, volutpat et aliquet eu, varius in mi. Aenean vestibulum ex \
+                               in tristique faucibus. Maecenas in imperdiet turpis. Nullam \
+                               feugiat aliquet erat. Morbi malesuada turpis sed dui pulvinar \
+                               lobortis. Pellentesque a lectus eu leo nullam."
+            .to_string();
         let mut info = Map::new();
         info.insert("name".to_string(), Value::String(max_short_string.clone()));
         info.insert(

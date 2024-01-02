@@ -1,14 +1,16 @@
-#![allow(dead_code)]
 //! The account meta and related structs for the tiered storage.
+
 use {
-    crate::accounts_hash::AccountHash, modular_bitfield::prelude::*,
+    crate::{accounts_hash::AccountHash, tiered_storage::owners::OwnerOffset},
+    bytemuck::{Pod, Zeroable},
+    modular_bitfield::prelude::*,
     solana_sdk::stake_history::Epoch,
 };
 
 /// The struct that handles the account meta flags.
 #[bitfield(bits = 32)]
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
 pub struct AccountMetaFlags {
     /// whether the account meta has rent epoch
     pub has_rent_epoch: bool,
@@ -17,6 +19,9 @@ pub struct AccountMetaFlags {
     /// the reserved bits.
     reserved: B30,
 }
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<AccountMetaFlags>() == 4);
 
 /// A trait that allows different implementations of the account meta that
 /// support different tiers of the accounts storage.
@@ -31,8 +36,8 @@ pub trait TieredAccountMeta: Sized {
     /// for the account data associated with the current meta.
     fn with_account_data_padding(self, padding: u8) -> Self;
 
-    /// A builder function that initializes the owner's index.
-    fn with_owner_index(self, index: u32) -> Self;
+    /// A builder function that initializes the owner offset.
+    fn with_owner_offset(self, owner_offset: OwnerOffset) -> Self;
 
     /// A builder function that initializes the account data size.
     /// The size here represents the logical data size without compression.
@@ -48,8 +53,8 @@ pub trait TieredAccountMeta: Sized {
     /// Returns the number of padding bytes for the associated account data
     fn account_data_padding(&self) -> u8;
 
-    /// Returns the index to the accounts' owner in the current AccountsFile.
-    fn owner_index(&self) -> u32;
+    /// Returns the offset to the accounts' owner in the current AccountsFile.
+    fn owner_offset(&self) -> OwnerOffset;
 
     /// Returns the AccountMetaFlags of the current meta.
     fn flags(&self) -> &AccountMetaFlags;

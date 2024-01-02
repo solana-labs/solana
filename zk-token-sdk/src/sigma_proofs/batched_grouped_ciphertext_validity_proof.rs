@@ -16,7 +16,7 @@ use crate::encryption::{
 use {
     crate::{
         sigma_proofs::{
-            errors::ValidityProofError,
+            errors::ValidityProofVerificationError,
             grouped_ciphertext_validity_proof::GroupedCiphertext2HandlesValidityProof,
         },
         transcript::TranscriptProtocol,
@@ -80,7 +80,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         (destination_handle_lo, destination_handle_hi): (&DecryptHandle, &DecryptHandle),
         (auditor_handle_lo, auditor_handle_hi): (&DecryptHandle, &DecryptHandle),
         transcript: &mut Transcript,
-    ) -> Result<(), ValidityProofError> {
+    ) -> Result<(), ValidityProofVerificationError> {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
 
         let t = transcript.challenge_scalar(b"t");
@@ -103,7 +103,7 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofVerificationError> {
         GroupedCiphertext2HandlesValidityProof::from_bytes(bytes).map(Self)
     }
 }

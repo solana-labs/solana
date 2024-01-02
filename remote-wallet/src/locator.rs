@@ -124,7 +124,7 @@ impl Locator {
         let host = uri.host().map(|h| h.to_string());
         match (scheme, host) {
             (Some(scheme), Some(host)) if scheme == "usb" => {
-                let path = uri.path().segments().get(0).and_then(|s| {
+                let path = uri.path().segments().first().and_then(|s| {
                     if !s.is_empty() {
                         Some(s.as_str())
                     } else {

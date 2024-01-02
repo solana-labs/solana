@@ -14,7 +14,6 @@ use {
             tower_storage::{NullTowerStorage, TowerStorage},
             ExternalRootSource, Tower,
         },
-        ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -56,6 +55,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
+        blockstore_metric_report_service::BlockstoreMetricReportService,
         blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         entry_notifier_interface::EntryNotifierArc,
@@ -83,7 +83,7 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
-        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_notifier_interface::TransactionNotifierArc,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -108,7 +108,7 @@ use {
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         exit::Exit,
-        genesis_config::GenesisConfig,
+        genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
@@ -118,6 +118,7 @@ use {
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::vote_state,
     solana_wen_restart::wen_restart::wait_for_wen_restart,
     std::{
@@ -144,6 +145,7 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 pub enum BlockVerificationMethod {
     #[default]
     BlockstoreProcessor,
+    UnifiedScheduler,
 }
 
 impl BlockVerificationMethod {
@@ -168,6 +170,7 @@ impl BlockVerificationMethod {
 pub enum BlockProductionMethod {
     #[default]
     ThreadLocalMultiIterator,
+    CentralScheduler,
 }
 
 impl BlockProductionMethod {
@@ -465,15 +468,15 @@ pub struct Validator {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub blockstore: Arc<Blockstore>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    ledger_metric_report_service: LedgerMetricReportService,
+    blockstore_metric_report_service: BlockstoreMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
-    turbine_quic_endpoint: Endpoint,
+    turbine_quic_endpoint: Option<Endpoint>,
     turbine_quic_endpoint_runtime: Option<TokioRuntime>,
-    turbine_quic_endpoint_join_handle: solana_turbine::quic_endpoint::AsyncTryJoinHandle,
-    repair_quic_endpoint: Endpoint,
+    turbine_quic_endpoint_join_handle: Option<solana_turbine::quic_endpoint::AsyncTryJoinHandle>,
+    repair_quic_endpoint: Option<Endpoint>,
     repair_quic_endpoint_runtime: Option<TokioRuntime>,
-    repair_quic_endpoint_join_handle: repair::quic_endpoint::AsyncTryJoinHandle,
+    repair_quic_endpoint_join_handle: Option<repair::quic_endpoint::AsyncTryJoinHandle>,
 }
 
 impl Validator {
@@ -747,13 +750,7 @@ impl Validator {
 
         let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
+                let enable_gossip_push = true;
                 let (snapshot_package_sender, snapshot_package_receiver) =
                     crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
@@ -817,6 +814,24 @@ impl Validator {
         // block min prioritization fee cache should be readable by RPC, and writable by validator
         // (by both replay stage and banking stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
+        match &config.block_verification_method {
+            BlockVerificationMethod::BlockstoreProcessor => {
+                info!("no scheduler pool is installed for block verification...");
+            }
+            BlockVerificationMethod::UnifiedScheduler => {
+                let scheduler_pool = DefaultSchedulerPool::new_dyn(
+                    config.runtime_config.log_messages_bytes_limit,
+                    transaction_status_sender.clone(),
+                    Some(replay_vote_sender.clone()),
+                    prioritization_fee_cache.clone(),
+                );
+                bank_forks
+                    .write()
+                    .unwrap()
+                    .install_scheduler_pool(scheduler_pool);
+            }
+        }
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let entry_notification_sender = entry_notifier_service
@@ -1085,13 +1100,6 @@ impl Validator {
             exit.clone(),
         );
 
-        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
-            bank_forks: bank_forks.clone(),
-            cluster_info: cluster_info.clone(),
-            vote_account: *vote_account,
-            repair_whitelist: config.repair_whitelist.clone(),
-        });
-
         let waited_for_supermajority = wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
@@ -1102,8 +1110,8 @@ impl Validator {
         )
         .map_err(|err| format!("wait_for_supermajority failed: {err:?}"))?;
 
-        let ledger_metric_report_service =
-            LedgerMetricReportService::new(blockstore.clone(), exit.clone());
+        let blockstore_metric_report_service =
+            BlockstoreMetricReportService::new(blockstore.clone(), exit.clone());
 
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
@@ -1128,7 +1136,7 @@ impl Validator {
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
-        let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+        let (duplicate_confirmed_slot_sender, duplicate_confirmed_slots_receiver) = unbounded();
 
         let rpc_completed_slots_service = RpcCompletedSlotsService::spawn(
             completed_slots_receiver,
@@ -1162,58 +1170,74 @@ impl Validator {
         // Outside test-validator crate, we always need a tokio runtime (and
         // the respective handle) to initialize the turbine QUIC endpoint.
         let current_runtime_handle = tokio::runtime::Handle::try_current();
-        let turbine_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("solTurbineQuic")
-                .build()
-                .unwrap()
-        });
+        let turbine_quic_endpoint_runtime = (current_runtime_handle.is_err()
+            && genesis_config.cluster_type != ClusterType::MainnetBeta)
+            .then(|| {
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .thread_name("solTurbineQuic")
+                    .build()
+                    .unwrap()
+            });
         let (turbine_quic_endpoint_sender, turbine_quic_endpoint_receiver) = unbounded();
         let (
             turbine_quic_endpoint,
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_join_handle,
-        ) = solana_turbine::quic_endpoint::new_quic_endpoint(
-            turbine_quic_endpoint_runtime
-                .as_ref()
-                .map(TokioRuntime::handle)
-                .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
-            &identity_keypair,
-            node.sockets.tvu_quic,
-            node.info
-                .tvu(Protocol::QUIC)
-                .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
-                .ip(),
-            turbine_quic_endpoint_sender,
-            bank_forks.clone(),
-        )
-        .unwrap();
-
-        // Repair quic endpoint.
-        let repair_quic_endpoint_runtime = current_runtime_handle.is_err().then(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("solRepairQuic")
-                .build()
-                .unwrap()
-        });
-        let (repair_quic_endpoint, repair_quic_endpoint_sender, repair_quic_endpoint_join_handle) =
-            repair::quic_endpoint::new_quic_endpoint(
-                repair_quic_endpoint_runtime
+        ) = if genesis_config.cluster_type == ClusterType::MainnetBeta {
+            let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+            (None, sender, None)
+        } else {
+            solana_turbine::quic_endpoint::new_quic_endpoint(
+                turbine_quic_endpoint_runtime
                     .as_ref()
                     .map(TokioRuntime::handle)
                     .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                 &identity_keypair,
-                node.sockets.serve_repair_quic,
+                node.sockets.tvu_quic,
                 node.info
-                    .serve_repair(Protocol::QUIC)
-                    .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
+                    .tvu(Protocol::QUIC)
+                    .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
                     .ip(),
-                repair_quic_endpoint_sender,
+                turbine_quic_endpoint_sender,
                 bank_forks.clone(),
             )
-            .unwrap();
+            .map(|(endpoint, sender, join_handle)| (Some(endpoint), sender, Some(join_handle)))
+            .unwrap()
+        };
+
+        // Repair quic endpoint.
+        let repair_quic_endpoint_runtime = (current_runtime_handle.is_err()
+            && genesis_config.cluster_type != ClusterType::MainnetBeta)
+            .then(|| {
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .thread_name("solRepairQuic")
+                    .build()
+                    .unwrap()
+            });
+        let (repair_quic_endpoint, repair_quic_endpoint_sender, repair_quic_endpoint_join_handle) =
+            if genesis_config.cluster_type == ClusterType::MainnetBeta {
+                let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+                (None, sender, None)
+            } else {
+                repair::quic_endpoint::new_quic_endpoint(
+                    repair_quic_endpoint_runtime
+                        .as_ref()
+                        .map(TokioRuntime::handle)
+                        .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
+                    &identity_keypair,
+                    node.sockets.serve_repair_quic,
+                    node.info
+                        .serve_repair(Protocol::QUIC)
+                        .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
+                        .ip(),
+                    repair_quic_endpoint_sender,
+                    bank_forks.clone(),
+                )
+                .map(|(endpoint, sender, join_handle)| (Some(endpoint), sender, Some(join_handle)))
+                .unwrap()
+            };
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
         let tower = match process_blockstore.process_to_create_tower() {
@@ -1263,7 +1287,7 @@ impl Validator {
             replay_vote_sender.clone(),
             completed_data_sets_sender,
             bank_notification_sender.clone(),
-            cluster_confirmed_slot_receiver,
+            duplicate_confirmed_slots_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version(),
@@ -1300,7 +1324,7 @@ impl Validator {
             };
         }
 
-        let tpu = Tpu::new(
+        let (tpu, mut key_notifies) = Tpu::new(
             &cluster_info,
             &poh_recorder,
             entry_receiver,
@@ -1328,7 +1352,7 @@ impl Validator {
             replay_vote_sender,
             bank_notification_sender.map(|sender| sender.sender),
             config.tpu_coalesce,
-            cluster_confirmed_slot_sender,
+            duplicate_confirmed_slot_sender,
             &connection_cache,
             turbine_quic_endpoint_sender,
             &identity_keypair,
@@ -1351,6 +1375,16 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
+        key_notifies.push(connection_cache);
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+            repair_whitelist: config.repair_whitelist.clone(),
+            notifies: key_notifies,
+        });
+
         Ok(Self {
             stats_reporter_service,
             gossip_service,
@@ -1378,7 +1412,7 @@ impl Validator {
             bank_forks,
             blockstore,
             geyser_plugin_service,
-            ledger_metric_report_service,
+            blockstore_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
             turbine_quic_endpoint,
@@ -1496,18 +1530,22 @@ impl Validator {
         }
 
         self.gossip_service.join().expect("gossip_service");
-        repair::quic_endpoint::close_quic_endpoint(&self.repair_quic_endpoint);
+        if let Some(repair_quic_endpoint) = &self.repair_quic_endpoint {
+            repair::quic_endpoint::close_quic_endpoint(repair_quic_endpoint);
+        }
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
-        self.repair_quic_endpoint_runtime
-            .map(|runtime| runtime.block_on(self.repair_quic_endpoint_join_handle))
-            .transpose()
-            .unwrap();
+        if let Some(repair_quic_endpoint_join_handle) = self.repair_quic_endpoint_join_handle {
+            self.repair_quic_endpoint_runtime
+                .map(|runtime| runtime.block_on(repair_quic_endpoint_join_handle))
+                .transpose()
+                .unwrap();
+        };
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
-        self.ledger_metric_report_service
+        self.blockstore_metric_report_service
             .join()
             .expect("ledger_metric_report_service");
         self.accounts_background_service
@@ -1516,13 +1554,17 @@ impl Validator {
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
-        solana_turbine::quic_endpoint::close_quic_endpoint(&self.turbine_quic_endpoint);
+        if let Some(turbine_quic_endpoint) = &self.turbine_quic_endpoint {
+            solana_turbine::quic_endpoint::close_quic_endpoint(turbine_quic_endpoint);
+        }
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
-        self.turbine_quic_endpoint_runtime
-            .map(|runtime| runtime.block_on(self.turbine_quic_endpoint_join_handle))
-            .transpose()
-            .unwrap();
+        if let Some(turbine_quic_endpoint_join_handle) = self.turbine_quic_endpoint_join_handle {
+            self.turbine_quic_endpoint_runtime
+                .map(|runtime| runtime.block_on(turbine_quic_endpoint_join_handle))
+                .transpose()
+                .unwrap();
+        }
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
@@ -1689,7 +1731,7 @@ fn load_blockstore(
     exit: Arc<AtomicBool>,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    transaction_notifier: Option<TransactionNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
     entry_notifier: Option<EntryNotifierArc>,
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> Result<
@@ -1747,7 +1789,7 @@ fn load_blockstore(
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
-    let original_blockstore_root = blockstore.last_root();
+    let original_blockstore_root = blockstore.max_root();
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, blockstore.clone(), exit.clone());
@@ -1806,7 +1848,8 @@ fn load_blockstore(
                 .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
-        );
+        )
+        .map_err(|err| err.to_string())?;
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
     // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank
@@ -2167,7 +2210,7 @@ fn initialize_rpc_transaction_history_services(
     exit: Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
     enable_extended_tx_metadata_storage: bool,
-    transaction_notifier: Option<TransactionNotifierLock>,
+    transaction_notifier: Option<TransactionNotifierArc>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();

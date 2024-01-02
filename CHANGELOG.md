@@ -15,11 +15,28 @@ Release channels have their own copy of this changelog:
 ## [1.18.0] - Unreleased
 * Changes
   * Added a github check to support `changelog` label
+  * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
+    * The default for `solana-ledger-tool`, however, remains `always` (#34228)
+  * Added `central-scheduler` option for `--block-production-method` (#33890)
+  * Updated to Borsh v1
+  * Added allow_commission_decrease_at_any_time feature which will allow commission on a vote account to be
+    decreased even in the second half of epochs when the commission_updates_only_allowed_in_first_half_of_epoch
+    feature would have prevented it
+  * Updated local ledger storage so that the RPC endpoint
+    `getSignaturesForAddress` always returns signatures in block-inclusion order
+  * RPC's `simulateTransaction` now returns `innerInstructions` as `json`/`jsonParsed` (#34313).
+  * Bigtable upload now includes entry summary data for each slot, stored in a
+    new `entries` table
 * Upgrade Notes
+  * `solana-program` and `solana-sdk` default to support for Borsh v1, with
+limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
+  * Operators running their own bigtable instances need to create the `entries`
+    table before upgrading their warehouse nodes
 
 ## [1.17.0]
 * Changes
   * Added a changelog.
+  * Added `--use-snapshot-archives-at-startup` for faster validator restarts
 * Upgrade Notes
 
 ## Adding to this Changelog

@@ -8,7 +8,7 @@ Validator votes are messages that have a critical function for consensus and con
 
 1. Leader rotation is triggered by PoH, which is clock with high drift. So many nodes are likely to have an incorrect view if the next leader is active in realtime or not.
 2. The next leader may be easily be flooded. Thus a DDOS would not only prevent delivery of regular transactions, but also consensus messages.
-3. UDP is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger. Retransmittion could potentially cause an unintentional _thundering herd_ against the leader with a large number of validators. Worst case flood would be `(num_nodes * num_retransmits)`.
+3. UDP is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger. Retransmission could potentially cause an unintentional _thundering herd_ against the leader with a large number of validators. Worst case flood would be `(num_nodes * num_retransmits)`.
 4. Tracking if the vote has been transmitted or not via the ledger does not guarantee it will appear in a confirmed block. The current observed block may be unrolled. Validators would need to maintain state for each vote and fork.
 
 ## Design
@@ -20,7 +20,7 @@ Validator votes are messages that have a critical function for consensus and con
 
 Each vote transaction should maintain a `wallclock` in its data. The merge strategy for Votes will keep the last N set of votes as configured by the local client. For push/pull the vector is traversed recursively and each Transaction is treated as an individual CrdsValue with its own local wallclock and signature.
 
-Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transfered between any nodes.
+Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transferred between any nodes.
 
 ## How this design solves the Challenges
 

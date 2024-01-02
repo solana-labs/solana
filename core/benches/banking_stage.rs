@@ -37,8 +37,7 @@ use {
     },
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
     solana_runtime::{
-        bank::Bank, bank_forks::BankForks, installed_scheduler_pool::BankWithScheduler,
-        prioritization_fee_cache::PrioritizationFeeCache,
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
         genesis_config::GenesisConfig,
@@ -82,7 +81,9 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
 #[bench]
 fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-    let bank = Arc::new(Bank::new_for_benches(&genesis_config));
+    let bank = Bank::new_for_benches(&genesis_config)
+        .wrap_with_bank_forks_for_tests()
+        .0;
     let ledger_path = get_tmp_ledger_path_auto_delete!();
     let blockstore = Arc::new(
         Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
@@ -392,8 +393,15 @@ fn simulate_process_entries(
     initial_lamports: u64,
     num_accounts: usize,
 ) {
-    let bank = Arc::new(Bank::new_for_benches(genesis_config));
-    let bank = BankWithScheduler::new_without_scheduler(bank);
+    let bank = Bank::new_for_benches(genesis_config);
+    let slot = bank.slot();
+    let bank_fork = BankForks::new_rw_arc(bank);
+    let bank = bank_fork.read().unwrap().get_with_scheduler(slot).unwrap();
+    bank.clone_without_scheduler()
+        .loaded_programs_cache
+        .write()
+        .unwrap()
+        .set_fork_graph(bank_fork.clone());
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())
