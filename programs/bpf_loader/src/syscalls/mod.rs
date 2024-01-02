@@ -1,5 +1,6 @@
 pub use self::{
     cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
+    feature::SyscallIsFeatureActive,
     logging::{
         SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
     },
@@ -41,7 +42,7 @@ use {
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
             reject_callx_r10, remaining_compute_units_syscall_enabled,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            switch_to_new_elf_parser, is_feature_active_syscall_enabled,
         },
         hash::{Hash, Hasher},
         instruction::{
@@ -70,6 +71,7 @@ use {
 };
 
 mod cpi;
+mod feature;
 mod logging;
 mod mem_ops;
 mod sysvar;
@@ -265,6 +267,8 @@ pub fn create_program_runtime_environment_v1<'a>(
     let enable_poseidon_syscall = feature_set.is_active(&enable_poseidon_syscall::id());
     let remaining_compute_units_syscall_enabled =
         feature_set.is_active(&remaining_compute_units_syscall_enabled::id());
+    let is_feature_active_syscall_enabled =
+        feature_set.is_active(&is_feature_active_syscall_enabled::id());
     // !!! ATTENTION !!!
     // When adding new features for RBPF here,
     // also add them to `Bank::apply_builtin_program_feature_transitions()`.
@@ -378,6 +382,14 @@ pub fn create_program_runtime_environment_v1<'a>(
         epoch_rewards_syscall_enabled,
         *b"sol_get_epoch_rewards_sysvar",
         SyscallGetEpochRewardsSysvar::vm,
+    )?;
+
+    // Feature Set
+    register_feature_gated_function!(
+        result,
+        is_feature_active_syscall_enabled,
+        *b"sol_is_feature_active",
+        SyscallIsFeatureActive::vm
     )?;
 
     // Memory ops

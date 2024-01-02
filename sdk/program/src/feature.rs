@@ -10,6 +10,9 @@
 //!    `Feature::default()`
 //! 2. When the next epoch is entered the runtime will check for new activation requests and
 //!    active them.  When this occurs, the activation slot is recorded in the feature account
+//!
+//! Feature status can be checked by programs at runtime by passing the feature id to
+//! `is_feature_active()`
 
 use crate::{
     account_info::AccountInfo, clock::Slot, instruction::Instruction, program_error::ProgramError,
@@ -56,6 +59,23 @@ pub fn activate_with_lamports(
         system_instruction::allocate(feature_id, Feature::size_of() as u64),
         system_instruction::assign(feature_id, &id()),
     ]
+}
+
+// TODO tests
+pub fn is_feature_active(feature_addr: &Pubkey) -> Result<bool, ProgramError> {
+    let mut var = false;
+    let var_addr = &mut var as *mut _ as *mut u8; // XXX i dont understand what this does
+
+    #[cfg(target_os = "solana")]
+    let result = unsafe { crate::syscalls::sol_is_feature_active(var_addr, feature_addr) };
+
+    #[cfg(not(target_os = "solana"))]
+    let result = crate::program_stubs::sol_is_feature_active(var_addr, feature_addr);
+
+    match result {
+        crate::entrypoint::SUCCESS => Ok(var),
+        e => Err(e.into()),
+    }
 }
 
 #[cfg(test)]

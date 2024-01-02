@@ -493,6 +493,7 @@ pub mod entrypoint_deprecated;
 pub mod epoch_rewards;
 pub mod epoch_schedule;
 pub mod feature;
+pub mod feature_set;
 pub mod fee_calculator;
 pub mod hash;
 pub mod incinerator;

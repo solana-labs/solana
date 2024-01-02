@@ -61,6 +61,10 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_last_restart_slot(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
+    fn sol_is_feature_active(&self, _var_addr: *mut u8, _feature_addr: *const Pubkey) -> u64 {
+        sol_log("SyscallStubs: sol_is_feature_active() defaulting to false");
+        0
+    }
     /// # Safety
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
@@ -169,6 +173,13 @@ pub(crate) fn sol_get_last_restart_slot(var_addr: *mut u8) -> u64 {
         .read()
         .unwrap()
         .sol_get_last_restart_slot(var_addr)
+}
+
+pub(crate) fn sol_is_feature_active(var_addr: *mut u8, feature_addr: *const Pubkey) -> u64 {
+    SYSCALL_STUBS
+        .read()
+        .unwrap()
+        .sol_is_feature_active(var_addr, feature_addr)
 }
 
 pub(crate) fn sol_memcpy(dst: *mut u8, src: *const u8, n: usize) {
