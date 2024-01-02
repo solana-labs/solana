@@ -181,6 +181,21 @@ fn progress_from_context_and_block_height(
     }
 }
 
+fn add_transaction_error_in_context(
+    context: &SendingContext,
+    transaction_error: &TransactionError,
+    index: usize,
+) {
+    match transaction_error {
+        TransactionError::BlockhashNotFound => {
+            // fall through so that we will resend with another blockhash
+        }
+        _ => {
+            context.error_map.insert(index, transaction_error.clone());
+        }
+    }
+}
+
 async fn send_transaction_with_rpc_fallback(
     rpc_client: &RpcClient,
     tpu_client: &Option<QuicTpuClient>,
@@ -205,8 +220,7 @@ async fn send_transaction_with_rpc_fallback(
                     // fall through on io error, we will retry the transaction
                 }
                 ErrorKind::TransactionError(transaction_error) => {
-                    context.error_map.insert(index, transaction_error.clone());
-                    return Ok(());
+                    add_transaction_error_in_context(context, transaction_error, index);
                 }
                 ErrorKind::RpcError(RpcError::RpcResponseError {
                     data:
@@ -218,8 +232,7 @@ async fn send_transaction_with_rpc_fallback(
                         ),
                     ..
                 }) => {
-                    context.error_map.insert(index, transaction_error.clone());
-                    return Ok(());
+                    add_transaction_error_in_context(context, transaction_error, index);
                 }
                 _ => {
                     return Err(TpuSenderError::from(e));
