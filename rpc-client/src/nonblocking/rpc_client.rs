@@ -2639,7 +2639,7 @@ impl RpcClient {
     /// [`getConfirmedBlocks`] RPC method.
     ///
     /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
-    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/http/getConfirmedblocks
+    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/deprecated/getconfirmedblocks
     ///
     /// # Examples
     ///
@@ -2701,7 +2701,7 @@ impl RpcClient {
     /// [`getConfirmedBlocks`] RPC method.
     ///
     /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
-    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/http/getConfirmedblocks
+    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/deprecated/getconfirmedblocks
     ///
     /// # Examples
     ///
@@ -2765,7 +2765,7 @@ impl RpcClient {
     /// it maps to the [`getConfirmedBlocksWithLimit`] RPC method.
     ///
     /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/http/getconfirmedblockswithlimit
+    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/deprecated/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2814,7 +2814,7 @@ impl RpcClient {
     /// it maps to the `getConfirmedBlocksWithLimit` RPC method.
     ///
     /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/http/getconfirmedblockswithlimit
+    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/deprecated/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2946,11 +2946,9 @@ impl RpcClient {
     /// # RPC Reference
     ///
     /// This method corresponds directly to the [`getSignaturesForAddress`] RPC
-    /// method, unless the remote node version is less than 1.7, in which case
-    /// it maps to the [`getSignaturesForAddress2`] RPC method.
+    /// method.
     ///
     /// [`getSignaturesForAddress`]: https://solana.com/docs/rpc/http/getsignaturesforaddress
-    /// [`getSignaturesForAddress2`]: https://solana.com/docs/rpc/http/getsignaturesforaddress2
     ///
     /// # Examples
     ///
@@ -2996,11 +2994,9 @@ impl RpcClient {
     /// # RPC Reference
     ///
     /// This method corresponds directly to the [`getSignaturesForAddress`] RPC
-    /// method, unless the remote node version is less than 1.7, in which case
-    /// it maps to the [`getSignaturesForAddress2`] RPC method.
+    /// method.
     ///
     /// [`getSignaturesForAddress`]: https://solana.com/docs/rpc/http/getsignaturesforaddress
-    /// [`getSignaturesForAddress2`]: https://solana.com/docs/rpc/http/getsignaturesforaddress2
     ///
     /// # Examples
     ///
@@ -3119,7 +3115,7 @@ impl RpcClient {
     /// to the [`getConfirmedTransaction`] RPC method.
     ///
     /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
-    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/http/getconfirmedtransaction
+    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/deprecated/getConfirmedTransaction
     ///
     /// # Examples
     ///
@@ -3178,7 +3174,7 @@ impl RpcClient {
     /// to the [`getConfirmedTransaction`] RPC method.
     ///
     /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
-    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/http/getconfirmedtransaction
+    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/deprecated/getConfirmedTransaction
     ///
     /// # Examples
     ///
