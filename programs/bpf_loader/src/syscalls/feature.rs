@@ -25,6 +25,8 @@ declare_builtin_function!(
             invoke_context.get_check_aligned(),
         )?;
 
+        // XXX TODO FIXME im 80% sure we can get rid of this and pass in a bool pointer
+        // but im in toolchain hell rn after rebasing 1.17 -> 1.18 so i cant test the change
         let var = translate_type_mut::<bool>(
             memory_mapping,
             var_addr,
