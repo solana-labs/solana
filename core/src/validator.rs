@@ -1586,11 +1586,10 @@ impl Validator {
             .expect("poh_timing_report_service");
         info!("join28");
         info!("Validator::join()... sleeping...");
-        std::thread::sleep(Duration::from_secs(15));
 
         info!("exit3");
         self.bank_forks.write().unwrap().prepare_to_drop();
-        drop(self.bank_forks);
+        drop::<BankForks>(Arc::into_inner(bank_forks).unwrap().into_inner().unwrap());
     }
 }
 
