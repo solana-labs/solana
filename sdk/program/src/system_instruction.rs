@@ -4,7 +4,7 @@
 //! accounts][na]. It is responsible for transferring lamports from accounts
 //! owned by the system program, including typical user wallet accounts.
 //!
-//! [na]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+//! [na]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 //!
 //! Account creation typically involves three steps: [`allocate`] space,
 //! [`transfer`] lamports for rent, [`assign`] to its owning program. The
@@ -12,7 +12,7 @@
 //! contain enough lamports to be [rent exempt], or else the creation
 //! instruction will fail.
 //!
-//! [rent exempt]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
+//! [rent exempt]: https://solana.com/docs/core/accounts#rent-exemption
 //!
 //! The accounts created by the system program can either be user-controlled,
 //! where the secret keys are held outside the blockchain,
@@ -1330,7 +1330,7 @@ pub fn create_nonce_account_with_seed(
 /// Consequently, it is not possible to sign a transaction, wait more than two
 /// minutes, then successfully execute that transaction.
 ///
-/// [dtn]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+/// [dtn]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 /// [rbh]: crate::message::Message::recent_blockhash
 /// [nonce]: https://en.wikipedia.org/wiki/Cryptographic_nonce
 ///
@@ -1601,7 +1601,7 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
 /// would leave the nonce account with a balance less than required for rent
 /// exemption, but also greater than zero, then the transaction will fail.
 ///
-/// [rent exemption]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
+/// [rent exemption]: https://solana.com/docs/core/accounts#rent-exemption
 ///
 /// This constructor creates a [`SystemInstruction::WithdrawNonceAccount`]
 /// instruction.
