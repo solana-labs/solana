@@ -480,10 +480,11 @@ fn validate_fee_payer(
         error_counters.account_not_found += 1;
         return Err(TransactionError::AccountNotFound);
     }
-    let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
+    let system_account_kind = get_system_account_kind(payer_account).ok_or_else(|| {
         error_counters.invalid_account_for_fee += 1;
         TransactionError::InvalidAccountForFee
-    })? {
+    })?;
+    let min_balance = match system_account_kind {
         SystemAccountKind::System => 0,
         SystemAccountKind::Nonce => {
             // Should we ever allow a fees charge to zero a nonce account's
