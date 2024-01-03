@@ -529,8 +529,8 @@ where
     scheduler_thread_and_tid: Option<(JoinHandle<Option<ResultWithTimings>>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
-    schedulable_transaction_sender: Sender<TaskPayload>,
-    schedulable_transaction_receiver: Option<Receiver<TaskPayload>>,
+    new_task_sender: Sender<TaskPayload>,
+    new_task_receiver: Option<Receiver<TaskPayload>>,
     result_sender: Sender<Option<ResultWithTimings>>,
     result_receiver: Receiver<Option<ResultWithTimings>>,
     session_result_with_timings: Option<ResultWithTimings>,
@@ -654,7 +654,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn new(handler: TH, pool: Arc<SchedulerPool<S, TH, SEA>>, handler_count: usize) -> Self {
-        let (schedulable_transaction_sender, schedulable_transaction_receiver) = unbounded();
+        let (new_task_sender, new_task_receiver) = unbounded();
         let (result_sender, result_receiver) = unbounded();
 
         Self {
@@ -662,8 +662,8 @@ where
             pool,
             handler,
             handler_count,
-            schedulable_transaction_sender,
-            schedulable_transaction_receiver: Some(schedulable_transaction_receiver),
+            new_task_sender,
+            new_task_receiver: Some(new_task_receiver),
             result_sender,
             result_receiver,
             scheduler_thread_and_tid: None,
@@ -797,8 +797,8 @@ where
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
-            let mut schedulable_transaction_receiver =
-                self.schedulable_transaction_receiver.take().unwrap();
+            let mut new_task_receiver =
+                self.new_task_receiver.take().unwrap();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
 
@@ -820,7 +820,7 @@ where
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
                             state_machine.rescheduled_task_count(),
-                            schedulable_transaction_receiver.len(),
+                            new_task_receiver.len(),
                             blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
                             handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
@@ -853,7 +853,7 @@ where
                                     log_scheduler!("S+T:aborted");
                                     result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
-                                    drop(schedulable_transaction_receiver);
+                                    drop(new_task_receiver);
                                     // this timings aren't for the accumulated one. but
                                     // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
@@ -863,7 +863,7 @@ where
                                 }
                                 "step"
                             },
-                            recv(schedulable_transaction_receiver) -> message => {
+                            recv(new_task_receiver) -> message => {
                                 match message {
                                     Ok(SubchanneledPayload::Payload(task)) => {
                                         assert!(!session_ending && !thread_suspending);
@@ -889,11 +889,11 @@ where
                                         assert!(!thread_suspending);
                                         thread_suspending = true;
 
-                                        // Err(_) on schedulable_transaction_receiver guarantees
+                                        // Err(_) on new_task_receiver guarantees
                                         // that there's no live sender and no messages to be
                                         // received anymore; so dropping by overriding it with
                                         // never() should pose no possibility of missed messages.
-                                        schedulable_transaction_receiver = never();
+                                        new_task_receiver = never();
 
                                         "T:suspending"
                                     }
@@ -915,7 +915,7 @@ where
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
-                                    drop(schedulable_transaction_receiver);
+                                    drop(new_task_receiver);
                                     // this timings aren't for the accumulated one. but
                                     // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
@@ -1153,8 +1153,8 @@ where
 
         let (s, r) = unbounded();
         (
-            self.schedulable_transaction_sender,
-            self.schedulable_transaction_receiver,
+            self.new_task_sender,
+            self.new_task_receiver,
         ) = (s, Some(r));
 
         let () = self.accumulator_thread.take().unwrap().join().unwrap();
@@ -1174,7 +1174,7 @@ where
 
     fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
-        self.schedulable_transaction_sender
+        self.new_task_sender
             .send(SubchanneledPayload::Payload(task))
             .is_err()
     }
@@ -1191,7 +1191,7 @@ where
         }
 
         let mut abort_detected = self
-            .schedulable_transaction_sender
+            .new_task_sender
             .send(SubchanneledPayload::CloseSubchannel)
             .is_err();
 
@@ -1211,7 +1211,7 @@ where
         assert_matches!(self.session_result_with_timings, None);
 
         if !self.is_suspended() {
-            self.schedulable_transaction_sender
+            self.new_task_sender
                 .send(SubchanneledPayload::OpenSubchannel(context.clone()))
                 .unwrap();
         } else {
