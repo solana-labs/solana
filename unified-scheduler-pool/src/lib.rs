@@ -531,8 +531,8 @@ where
     accumulator_thread: Option<JoinHandle<()>>,
     new_task_sender: Sender<TaskPayload>,
     new_task_receiver: Option<Receiver<TaskPayload>>,
-    result_sender: Sender<Option<ResultWithTimings>>,
-    result_receiver: Receiver<Option<ResultWithTimings>>,
+    session_result_sender: Sender<Option<ResultWithTimings>>,
+    session_result_receiver: Receiver<Option<ResultWithTimings>>,
     session_result_with_timings: Option<ResultWithTimings>,
 }
 
@@ -655,7 +655,7 @@ where
 {
     fn new(handler: TH, pool: Arc<SchedulerPool<S, TH, SEA>>, handler_count: usize) -> Self {
         let (new_task_sender, new_task_receiver) = unbounded();
-        let (result_sender, result_receiver) = unbounded();
+        let (session_result_sender, session_result_receiver) = unbounded();
 
         Self {
             scheduler_id: pool.new_scheduler_id(),
@@ -664,8 +664,8 @@ where
             handler_count,
             new_task_sender,
             new_task_receiver: Some(new_task_receiver),
-            result_sender,
-            result_receiver,
+            session_result_sender,
+            session_result_receiver,
             scheduler_thread_and_tid: None,
             accumulator_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
@@ -796,7 +796,7 @@ where
 
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
-            let result_sender = self.result_sender.clone();
+            let session_result_sender = self.session_result_sender.clone();
             let mut new_task_receiver = self.new_task_receiver.take().unwrap();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
@@ -850,7 +850,7 @@ where
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("S+T:aborted");
-                                    result_sender.send(None).unwrap();
+                                    session_result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
                                     drop(new_task_receiver);
                                     // this timings aren't for the accumulated one. but
@@ -912,7 +912,7 @@ where
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
-                                    result_sender.send(None).unwrap();
+                                    session_result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
                                     drop(new_task_receiver);
                                     // this timings aren't for the accumulated one. but
@@ -939,7 +939,7 @@ where
                         executed_task_sender
                             .send(SubchanneledPayload::CloseSubchannel)
                             .unwrap();
-                        result_sender
+                        session_result_sender
                             .send(Some(
                                 accumulated_result_receiver
                                     .recv()
@@ -1191,7 +1191,7 @@ where
             .send(SubchanneledPayload::CloseSubchannel)
             .is_err();
 
-        if let Some(result_with_timings) = self.result_receiver.recv().unwrap() {
+        if let Some(result_with_timings) = self.session_result_receiver.recv().unwrap() {
             assert!(!abort_detected);
             self.put_session_result_with_timings(result_with_timings);
         } else {
