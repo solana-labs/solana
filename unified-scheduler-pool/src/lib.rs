@@ -526,14 +526,14 @@ where
     pool: Arc<SchedulerPool<S, TH, SEA>>,
     handler: TH,
     handler_count: usize,
-    scheduler_thread_and_tid: Option<(JoinHandle<Option<ResultWithTimings>>, Tid)>,
-    handler_threads: Vec<JoinHandle<()>>,
-    accumulator_thread: Option<JoinHandle<()>>,
     new_task_sender: Sender<TaskPayload>,
     new_task_receiver: Option<Receiver<TaskPayload>>,
     session_result_sender: Sender<Option<ResultWithTimings>>,
     session_result_receiver: Receiver<Option<ResultWithTimings>>,
     session_result_with_timings: Option<ResultWithTimings>,
+    scheduler_thread_and_tid: Option<(JoinHandle<Option<ResultWithTimings>>, Tid)>,
+    handler_threads: Vec<JoinHandle<()>>,
+    accumulator_thread: Option<JoinHandle<()>>,
 }
 
 impl<TH, SEA> PooledScheduler<TH, SEA>
@@ -666,10 +666,10 @@ where
             new_task_receiver: Some(new_task_receiver),
             session_result_sender,
             session_result_receiver,
-            scheduler_thread_and_tid: None,
-            accumulator_thread: None,
-            handler_threads: Vec::with_capacity(handler_count),
             session_result_with_timings: None,
+            scheduler_thread_and_tid: None,
+            handler_threads: Vec::with_capacity(handler_count),
+            accumulator_thread: None,
         }
     }
 
