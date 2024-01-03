@@ -1062,13 +1062,6 @@ fn get_access_type(process_options: &ProcessOptions) -> AccessType {
     }
 }
 
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
-
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
-
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     // Ignore SIGUSR1 to prevent long-running calls being killed by logrotate
@@ -2768,6 +2761,11 @@ fn main() {
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
+                info!("bank forks sc: {}", Arc::strong_count(&bank_forks));
+                std::thread::sleep(Duration::from_secs(10));
+                bank_forks.write().unwrap().prepare_to_drop();
+                std::thread::sleep(Duration::from_secs(10));
+                info!("bank forks sc: {}", Arc::strong_count(&bank_forks));
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
@@ -4241,6 +4239,8 @@ fn main() {
         measure_total_execution_time.stop();
         info!("{}", measure_total_execution_time);
     }
+    info!("sleeping to wait for thread termination");
+    std::thread::sleep(Duration::from_secs(10));
 }
 
 #[cfg(test)]

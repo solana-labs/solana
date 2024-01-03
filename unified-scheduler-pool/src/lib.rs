@@ -172,7 +172,7 @@ where
                         elapsed,
                         width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                     );
-                    thread_manager.stop_and_join_threads();
+                    thread_manager.suspend();
                     self.tick = 0;
                     self.updated_at = Instant::now();
                 }
@@ -180,6 +180,17 @@ where
         }
 
         true
+    }
+}
+
+impl<S, TH, SEA> Drop for SchedulerPool<S, TH, SEA>
+where
+    S: SpawnableScheduler<TH, SEA>,
+    TH: TaskHandler<SEA>,
+    SEA: ScheduleExecutionArg,
+{
+    fn drop(&mut self) {
+        info!("SchedulerPool::drop() is successfully called");
     }
 }
 
@@ -244,7 +255,7 @@ where
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
-                info!("watchdog thread ended!");
+                info!("watchdog thread terminating!");
             }
         };
 
@@ -486,9 +497,9 @@ where
         self.pooled_at.elapsed()
     }
 
-    fn stop_thread_manager(&mut self) {
-        debug!("stop_thread_manager()");
-        self.thread_manager.write().unwrap().stop_and_join_threads();
+    fn suspend_thread_manager(&mut self) {
+        debug!("suspend_thread_manager()");
+        self.thread_manager.write().unwrap().suspend();
     }
 
     fn id(&self) -> SchedulerId {
@@ -501,6 +512,8 @@ type Tid = i32;
 // using 0 for special purpose at user-land is totally safe.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 const DUMMY_TID: Tid = 0;
+
+type TaskPayload = SubchanneledPayload<Task, SchedulingContext>;
 
 #[derive(Debug)]
 struct ThreadManager<S, TH, SEA>
@@ -516,8 +529,8 @@ where
     scheduler_thread_and_tid: Option<(JoinHandle<Option<ResultWithTimings>>, Tid)>,
     handler_threads: Vec<JoinHandle<()>>,
     accumulator_thread: Option<JoinHandle<()>>,
-    schedulable_transaction_sender: Sender<SessionedMessage<Task, SchedulingContext>>,
-    schedulable_transaction_receiver: Option<Receiver<SessionedMessage<Task, SchedulingContext>>>,
+    schedulable_transaction_sender: Sender<TaskPayload>,
+    schedulable_transaction_receiver: Option<Receiver<TaskPayload>>,
     result_sender: Sender<Option<ResultWithTimings>>,
     result_receiver: Receiver<Option<ResultWithTimings>>,
     session_result_with_timings: Option<ResultWithTimings>,
@@ -554,7 +567,7 @@ where
         scheduler
     }
 
-    fn ensure_thread_manager_started(
+    fn ensure_thread_manager_resumed(
         &self,
         context: &SchedulingContext,
     ) -> std::result::Result<RwLockReadGuard<'_, ThreadManager<Self, TH, SEA>>, TransactionError>
@@ -562,21 +575,21 @@ where
         let mut was_already_active = false;
         loop {
             let read = self.inner.thread_manager.read().unwrap();
-            if read.has_active_threads_to_be_joined() {
+            if !read.is_suspended() {
                 debug!(
                     "{}",
                     if was_already_active {
-                        "ensure_thread_manager_started(): was already active."
+                        "ensure_thread_manager_resumed(): was already active."
                     } else {
-                        "ensure_thread_manager_started(): wasn't already active..."
+                        "ensure_thread_manager_resumed(): wasn't already active..."
                     }
                 );
                 return Ok(read);
             } else {
-                debug!("ensure_thread_manager_started(): will start threads...");
+                debug!("ensure_thread_manager_resumed(): will start threads...");
                 drop(read);
                 let mut write = self.inner.thread_manager.write().unwrap();
-                write.try_start_threads(context)?;
+                write.try_resume(context)?;
                 drop(write);
                 was_already_active = false;
             }
@@ -584,37 +597,37 @@ where
     }
 }
 
-type ChannelAndPayload<T1, T2> = (Receiver<ChainedChannel<T1, T2>>, T2);
+type PayloadAndChannel<P1, P2> = (P2, Receiver<ChainedChannel<P1, P2>>);
 
-trait WithChannelAndPayload<T1, T2>: Send + Sync {
-    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2>;
+trait WithChannelAndPayload<P1, P2>: Send + Sync {
+    fn payload_and_channel(self: Box<Self>) -> PayloadAndChannel<P1, P2>;
 }
 
-struct ChannelAndPayloadWrapper<T1, T2>(ChannelAndPayload<T1, T2>);
+struct PayloadAndChannelWrapper<P1, P2>(PayloadAndChannel<P1, P2>);
 
-impl<T1: Send + Sync, T2: Send + Sync> WithChannelAndPayload<T1, T2>
-    for ChannelAndPayloadWrapper<T1, T2>
+impl<P1: Send + Sync, P2: Send + Sync> WithChannelAndPayload<P1, P2>
+    for PayloadAndChannelWrapper<P1, P2>
 {
-    fn channel_and_payload(self: Box<Self>) -> ChannelAndPayload<T1, T2> {
+    fn payload_and_channel(self: Box<Self>) -> PayloadAndChannel<P1, P2> {
         self.0
     }
 }
 
-enum ChainedChannel<T1, T2> {
-    Payload(T1),
-    ChannelWithPayload(Box<dyn WithChannelAndPayload<T1, T2>>),
+enum ChainedChannel<P1, P2> {
+    Payload(P1),
+    PayloadAndChannel(Box<dyn WithChannelAndPayload<P1, P2>>),
 }
 
-enum SessionedMessage<T1, T2> {
-    Payload(T1),
-    StartSession(T2),
-    EndSession,
-}
-
-impl<T1: Send + Sync + 'static, T2: Send + Sync + 'static> ChainedChannel<T1, T2> {
-    fn new_channel(receiver: Receiver<Self>, payload: T2) -> Self {
-        Self::ChannelWithPayload(Box::new(ChannelAndPayloadWrapper((receiver, payload))))
+impl<P1: Send + Sync + 'static, P2: Send + Sync + 'static> ChainedChannel<P1, P2> {
+    fn new_channel(receiver: Receiver<Self>, payload: P2) -> Self {
+        Self::PayloadAndChannel(Box::new(PayloadAndChannelWrapper((payload, receiver))))
     }
+}
+
+enum SubchanneledPayload<P1, P2> {
+    Payload(P1),
+    OpenSubchannel(P2),
+    CloseSubchannel,
 }
 
 #[derive(Default)]
@@ -656,12 +669,12 @@ where
             scheduler_thread_and_tid: None,
             accumulator_thread: None,
             handler_threads: Vec::with_capacity(handler_count),
-            session_result_with_timings: Some(initialized_result_with_timings()),
+            session_result_with_timings: None,
         }
     }
 
-    fn has_active_threads_to_be_joined(&self) -> bool {
-        self.scheduler_thread_and_tid.is_some()
+    fn is_suspended(&self) -> bool {
+        self.scheduler_thread_and_tid.is_none()
     }
 
     pub fn take_scheduler_thread(&mut self) -> Option<JoinHandle<Option<ResultWithTimings>>> {
@@ -745,11 +758,11 @@ where
         );
     }
 
-    fn try_start_threads(&mut self, context: &SchedulingContext) -> Result<()> {
-        if self.has_active_threads_to_be_joined() {
+    fn try_resume(&mut self, context: &SchedulingContext) -> Result<()> {
+        if !self.is_suspended() {
             // this can't be promoted to panic! as read => write upgrade isn't completely
-            // race-free in ensure_thread_manager_started()...
-            warn!("try_start_threads(): already started");
+            // race-free in ensure_thread_manager_resumed()...
+            warn!("try_resume(): already resumed");
             return Ok(());
         } else if self
             .session_result_with_timings
@@ -757,10 +770,10 @@ where
             .map(|(result, _)| result.is_err())
             .unwrap_or(false)
         {
-            warn!("try_start_threads(): skipping starting due to err; cleared session result");
+            warn!("try_resume(): skipping resuming due to err, while resetting session result");
             return self.reset_session_on_error();
         }
-        debug!("try_start_threads(): doing now");
+        debug!("try_resume(): doing now");
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
@@ -772,7 +785,7 @@ where
         let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
             unbounded::<Box<ExecutedTask>>();
         let (executed_task_sender, executed_task_receiver) =
-            unbounded::<SessionedMessage<Box<ExecutedTask>, ()>>();
+            unbounded::<SubchanneledPayload<Box<ExecutedTask>, ()>>();
         let (accumulated_result_sender, accumulated_result_receiver) =
             unbounded::<Option<ResultWithTimings>>();
 
@@ -790,7 +803,7 @@ where
                 blocked_transaction_sessioned_sender.clone();
 
             let mut session_ending = false;
-            let mut thread_ending = false;
+            let mut thread_suspending = false;
             move || {
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
@@ -799,10 +812,10 @@ where
                     ($prefix:tt) => {
                         const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
-                            "[sch_{:0width$x}]: slot: {}[{:8}]({}/{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
+                            "[sch_{:0width$x}]: slot: {}[{:12}]({}{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
-                            (if thread_ending {"T"} else {"-"}), (if session_ending {"S"} else {"-"}),
+                            (if session_ending {"S"} else {"-"}), (if thread_suspending {"T"} else {"-"}),
                             state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.reschedule_count(),
@@ -816,7 +829,7 @@ where
                 }
 
                 trace!(
-                    "solScheduler thread is started at: {:?}",
+                    "solScheduler thread is running at: {:?}",
                     std::thread::current()
                 );
                 tid_sender
@@ -830,45 +843,51 @@ where
                     .unwrap();
                 let (do_now, dont_now) = (&disconnected::<()>(), &never::<()>());
 
-                while !thread_ending {
+                while !thread_suspending {
                     let mut is_finished = false;
                     while !is_finished {
                         let state_change = select_biased! {
                             recv(handled_blocked_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
-                                    log_scheduler!("T:aborted");
+                                    log_scheduler!("S+T:aborted");
                                     result_sender.send(None).unwrap();
+                                    // be explicit about specifically dropping this receiver
                                     drop(schedulable_transaction_receiver);
+                                    // this timings aren't for the accumulated one. but
+                                    // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
-                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                    executed_task_sender.send_buffered(SubchanneledPayload::Payload(executed_task)).unwrap();
                                 }
                                 "step"
                             },
                             recv(schedulable_transaction_receiver) -> message => {
                                 match message {
-                                    Ok(SessionedMessage::Payload(task)) => {
-                                        assert!(!session_ending && !thread_ending);
+                                    Ok(SubchanneledPayload::Payload(task)) => {
+                                        assert!(!session_ending && !thread_suspending);
                                         if let Some(task) = state_machine.schedule_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
                                         "step"
                                     }
-                                    Ok(SessionedMessage::StartSession(context)) => {
+                                    Ok(SubchanneledPayload::OpenSubchannel(context)) => {
                                         slot = context.bank().slot();
                                         Self::propagate_context(&mut blocked_transaction_sessioned_sender, context, handler_count);
-                                        "started"
+                                        executed_task_sender
+                                            .send(SubchanneledPayload::OpenSubchannel(()))
+                                            .unwrap();
+                                        "S+T:started"
                                     }
-                                    Ok(SessionedMessage::EndSession) => {
-                                        assert!(!session_ending && !thread_ending);
+                                    Ok(SubchanneledPayload::CloseSubchannel) => {
+                                        assert!(!session_ending && !thread_suspending);
                                         session_ending = true;
                                         "S:ending"
                                     }
                                     Err(_) => {
-                                        assert!(!thread_ending);
-                                        thread_ending = true;
+                                        assert!(!thread_suspending);
+                                        thread_suspending = true;
 
                                         // Err(_) on schedulable_transaction_receiver guarantees
                                         // that there's no live sender and no messages to be
@@ -876,7 +895,7 @@ where
                                         // never() should pose no possibility of missed messages.
                                         schedulable_transaction_receiver = never();
 
-                                        "T:ending"
+                                        "T:suspending"
                                     }
                                 }
                             },
@@ -895,11 +914,14 @@ where
                                 if executed_task.is_err() {
                                     log_scheduler!("T:aborted");
                                     result_sender.send(None).unwrap();
+                                    // be explicit about specifically dropping this receiver
                                     drop(schedulable_transaction_receiver);
+                                    // this timings aren't for the accumulated one. but
+                                    // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
                                 } else {
                                     state_machine.deschedule_task(&executed_task.task);
-                                    executed_task_sender.send_buffered(SessionedMessage::Payload(executed_task)).unwrap();
+                                    executed_task_sender.send_buffered(SubchanneledPayload::Payload(executed_task)).unwrap();
                                 }
                                 "step"
                             },
@@ -908,14 +930,15 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        is_finished = state_machine.is_empty() && (session_ending || thread_ending);
+                        is_finished =
+                            state_machine.is_empty() && (session_ending || thread_suspending);
                     }
 
                     if session_ending {
                         log_scheduler!("S:ended");
                         (state_machine, log_interval) = <_>::default();
                         executed_task_sender
-                            .send(SessionedMessage::EndSession)
+                            .send(SubchanneledPayload::CloseSubchannel)
                             .unwrap();
                         result_sender
                             .send(Some(
@@ -925,23 +948,23 @@ where
                                     .unwrap_or_else(initialized_result_with_timings),
                             ))
                             .unwrap();
-                        if !thread_ending {
+                        if !thread_suspending {
                             session_ending = false;
                         }
                     }
                 }
 
-                log_scheduler!("T:ended");
+                log_scheduler!("T:suspended");
                 let result_with_timings = if session_ending {
                     None
                 } else {
                     executed_task_sender
-                        .send(SessionedMessage::EndSession)
+                        .send(SubchanneledPayload::CloseSubchannel)
                         .unwrap();
                     accumulated_result_receiver.recv().unwrap()
                 };
                 trace!(
-                    "solScheduler thread is ended at: {:?}",
+                    "solScheduler thread is terminating at: {:?}",
                     std::thread::current()
                 );
                 result_with_timings
@@ -960,7 +983,7 @@ where
 
             move || {
                 trace!(
-                    "solScHandler{:02} thread is started at: {:?}",
+                    "solScHandler{:02} thread is running at: {:?}",
                     thx,
                     std::thread::current()
                 );
@@ -971,9 +994,9 @@ where
                                 Ok(ChainedChannel::Payload(task)) => {
                                     (task, &handled_blocked_transaction_sender)
                                 }
-                                Ok(ChainedChannel::ChannelWithPayload(new_channel)) => {
+                                Ok(ChainedChannel::PayloadAndChannel(new_channel)) => {
                                     let new_context;
-                                    (blocked_transaction_sessioned_receiver, new_context) = new_channel.channel_and_payload();
+                                    (new_context, blocked_transaction_sessioned_receiver) = new_channel.payload_and_channel();
                                     bank = new_context.bank().clone();
                                     continue;
                                 }
@@ -1002,7 +1025,7 @@ where
                     }
                 }
                 trace!(
-                    "solScHandler{:02} thread is ended at: {:?}",
+                    "solScHandler{:02} thread is terminating at: {:?}",
                     thx,
                     std::thread::current()
                 );
@@ -1013,10 +1036,11 @@ where
             move || {
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(SessionedMessage::Payload(executed_task)) => {
+                        Ok(SubchanneledPayload::Payload(executed_task)) => {
                             assert_matches!(executed_task.result_with_timings.0, Ok(()));
                             result_with_timings
-                                .get_or_insert_with(initialized_result_with_timings)
+                                .as_mut()
+                                .unwrap()
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
                             if let Some(handler_timings) = &executed_task.handler_timings {
@@ -1068,10 +1092,13 @@ where
                             }
                             drop(executed_task);
                         }
-                        Ok(SessionedMessage::StartSession(())) => {
-                            unreachable!();
+                        Ok(SubchanneledPayload::OpenSubchannel(())) => {
+                            assert_matches!(
+                                result_with_timings.replace(initialized_result_with_timings()),
+                                None
+                            );
                         }
-                        Ok(SessionedMessage::EndSession) => {
+                        Ok(SubchanneledPayload::CloseSubchannel) => {
                             if accumulated_result_sender
                                 .send(result_with_timings.take())
                                 .is_err()
@@ -1114,13 +1141,13 @@ where
         Ok(())
     }
 
-    fn stop_and_join_threads(&mut self) {
+    fn suspend(&mut self) {
         let Some(scheduler_thread) = self.take_scheduler_thread() else {
-            warn!("stop_and_join_threads(): already not active anymore...");
+            warn!("suspend(): already suspended...");
             return;
         };
         debug!(
-            "stop_and_join_threads(): stopping threads by {:?}",
+            "suspend(): terminating threads by {:?}",
             std::thread::current()
         );
 
@@ -1140,7 +1167,7 @@ where
         }
 
         debug!(
-            "stop_and_join_threads(): successfully stopped threads by {:?}",
+            "suspend(): successfully suspended threads by {:?}",
             std::thread::current()
         );
     }
@@ -1148,17 +1175,15 @@ where
     fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
         self.schedulable_transaction_sender
-            .send(SessionedMessage::Payload(task))
+            .send(SubchanneledPayload::Payload(task))
             .is_err()
     }
 
-    fn end_session(&mut self, is_dropped: bool) {
+    fn end_session(&mut self) {
         debug!("end_session(): will end session...");
-        if !self.has_active_threads_to_be_joined() {
+        if self.is_suspended() {
             debug!("end_session(): no threads..");
-            if !is_dropped {
-                assert_matches!(self.session_result_with_timings, Some(_));
-            }
+            assert_matches!(self.session_result_with_timings, Some(_));
             return;
         } else if self.session_result_with_timings.is_some() {
             debug!("end_session(): already result resides within thread manager..");
@@ -1167,7 +1192,7 @@ where
 
         let mut abort_detected = self
             .schedulable_transaction_sender
-            .send(SessionedMessage::EndSession)
+            .send(SubchanneledPayload::CloseSubchannel)
             .is_err();
 
         if let Some(result_with_timings) = self.result_receiver.recv().unwrap() {
@@ -1178,18 +1203,20 @@ where
         }
 
         if abort_detected {
-            self.stop_and_join_threads();
+            self.suspend();
         }
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
-        if self.has_active_threads_to_be_joined() {
-            assert_matches!(self.session_result_with_timings, None);
+        assert_matches!(self.session_result_with_timings, None);
+
+        if !self.is_suspended() {
             self.schedulable_transaction_sender
-                .send(SessionedMessage::StartSession(context.clone()))
+                .send(SubchanneledPayload::OpenSubchannel(context.clone()))
                 .unwrap();
         } else {
-            assert_matches!(self.try_start_threads(context), Ok(()));
+            self.session_result_with_timings = Some(initialized_result_with_timings());
+            assert_matches!(self.try_resume(context), Ok(()));
         }
     }
 
@@ -1215,7 +1242,7 @@ where
 {
     type Inner: Debug + Send + Sync + RetirableSchedulerInner;
 
-    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner);
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
     fn from_inner(inner: Self::Inner, context: SchedulingContext) -> Self;
 
@@ -1239,18 +1266,11 @@ where
 {
     type Inner = PooledSchedulerInner<Self, TH, SEA>;
 
-    fn into_inner(self, is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
+    fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         let result_with_timings = {
             let mut manager = self.inner.thread_manager.write().unwrap();
-            manager.end_session(is_dropped);
-            if !is_dropped {
-                manager.take_session_result_with_timings()
-            } else {
-                manager
-                    .session_result_with_timings
-                    .take()
-                    .unwrap_or(initialized_result_with_timings())
-            }
+            manager.end_session();
+            manager.take_session_result_with_timings()
         };
         (result_with_timings, self.inner)
     }
@@ -1296,11 +1316,11 @@ where
                 self.inner.address_book.load(pubkey)
             });
             let abort_detected = self
-                .ensure_thread_manager_started(&self.context)?
+                .ensure_thread_manager_resumed(&self.context)?
                 .send_task(task);
             if abort_detected {
                 let mut thread_manager = self.inner.thread_manager.write().unwrap();
-                thread_manager.stop_and_join_threads();
+                thread_manager.suspend();
                 thread_manager.reset_session_on_error()
             } else {
                 Ok(())
@@ -1310,18 +1330,14 @@ where
 
     fn wait_for_termination(
         self: Box<Self>,
-        is_dropped: bool,
+        _is_dropped: bool,
     ) -> (ResultWithTimings, UninstalledSchedulerBox) {
-        let (result_with_timings, uninstalled_scheduler) = self.into_inner(is_dropped);
+        let (result_with_timings, uninstalled_scheduler) = self.into_inner();
         (result_with_timings, Box::new(uninstalled_scheduler))
     }
 
     fn pause_for_recent_blockhash(&mut self) {
-        self.inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .end_session(false);
+        self.inner.thread_manager.write().unwrap().end_session();
     }
 }
 
@@ -1332,13 +1348,7 @@ where
     SEA: ScheduleExecutionArg,
 {
     fn return_to_pool(mut self: Box<Self>) {
-        let pool = {
-            let mut manager = self.thread_manager.write().unwrap();
-            if !manager.has_active_threads_to_be_joined() {
-                manager.put_session_result_with_timings(initialized_result_with_timings());
-            }
-            manager.pool.clone()
-        };
+        let pool = self.thread_manager.write().unwrap().pool.clone();
         self.pooled_at = Instant::now();
         pool.return_scheduler(*self)
     }
@@ -1380,7 +1390,7 @@ where
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.stop_thread_manager();
+            self.suspend_thread_manager();
             return false;
         }
 
@@ -1394,7 +1404,7 @@ where
                 pooled_duration,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
-            self.stop_thread_manager();
+            self.suspend_thread_manager();
             false
         } else {
             true
@@ -1472,10 +1482,10 @@ mod tests {
         let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        let (result_with_timings, scheduler1) = scheduler1.into_inner(false);
+        let (result_with_timings, scheduler1) = scheduler1.into_inner();
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler1);
-        let (result_with_timings, scheduler2) = scheduler2.into_inner(false);
+        let (result_with_timings, scheduler2) = scheduler2.into_inner();
         assert_matches!(result_with_timings, (Ok(()), _));
         pool.return_scheduler(scheduler2);
 
@@ -1520,7 +1530,7 @@ mod tests {
 
         let scheduler = pool.do_take_scheduler(old_context.clone());
         let scheduler_id = scheduler.id();
-        pool.return_scheduler(scheduler.into_inner(false).1);
+        pool.return_scheduler(scheduler.into_inner().1);
 
         let scheduler = pool.take_scheduler(new_context.clone());
         assert_eq!(scheduler_id, scheduler.id());
@@ -1533,11 +1543,14 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         let bank_forks = BankForks::new_rw_arc(bank);
-        let mut bank_forks = bank_forks.write().unwrap();
+        let mut bank_forks_write = bank_forks.write().unwrap();
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
-        bank_forks.install_scheduler_pool(pool);
+        bank_forks_write.install_scheduler_pool(pool);
+        bank_forks_write.prepare_to_drop();
+        drop(bank_forks_write);
+        drop::<BankForks>(Arc::into_inner(bank_forks).unwrap().into_inner().unwrap());
     }
 
     #[test]
@@ -1782,7 +1795,7 @@ mod tests {
         // well, i wish i can use ! (never type).....
         type Inner = Self;
 
-        fn into_inner(self, _is_dropped: bool) -> (ResultWithTimings, Self::Inner) {
+        fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
             todo!();
         }
 

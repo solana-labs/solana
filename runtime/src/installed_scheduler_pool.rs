@@ -409,22 +409,23 @@ impl BankWithSchedulerInner {
         );
 
         let mut scheduler = scheduler.write().unwrap();
-        let result_with_timings =
+        let (was_noop, result_with_timings) =
             if let Some(scheduler) = scheduler.as_mut().filter(|_| reason.is_paused()) {
                 scheduler.pause_for_recent_blockhash();
-                None
+                (false, None)
             } else if let Some(scheduler) = scheduler.take() {
                 let (result_with_timings, uninstalled_scheduler) =
                     scheduler.wait_for_termination(reason.is_dropped());
                 uninstalled_scheduler.return_to_pool();
-                Some(result_with_timings)
+                (false, Some(result_with_timings))
             } else {
-                None
+                (true, None)
             };
         debug!(
-            "wait_for_scheduler_termination(slot: {}, reason: {:?}): finished with: {:?}...",
+            "wait_for_scheduler_termination(slot: {}, reason: {:?}): was_noop: {:?} finished with: {:?}...",
             bank.slot(),
             reason,
+            was_noop,
             result_with_timings.as_ref().map(|(result, _)| result),
         );
 

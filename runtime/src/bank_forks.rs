@@ -80,9 +80,7 @@ pub struct BankForks {
 
 impl Drop for BankForks {
     fn drop(&mut self) {
-        if let Some(sp) = self.scheduler_pool.take() {
-            sp.uninstalled_from_bank_forks();
-        }
+        info!("BankForks::drop(): successfully dropped");
     }
 }
 
@@ -231,6 +229,26 @@ impl BankForks {
             self.scheduler_pool.replace(pool).is_none(),
             "Reinstalling scheduler pool isn't supported"
         );
+    }
+
+    pub fn uninstall_scheduler_pool(&mut self) {
+        // hint scheduler pool to cut circular references of Arc<SchedulerPool>
+        if let Some(sp) = self.scheduler_pool.take() {
+            sp.uninstalled_from_bank_forks();
+        }
+    }
+
+    pub fn prepare_to_drop(&mut self) {
+        let root_bank = self.root_bank();
+        // drop all non root BankWithScheduler, which causes all schedulers wind down.
+        self.banks.clear();
+        self.uninstall_scheduler_pool();
+        // this cuts circular references of BankForks...
+        root_bank
+            .loaded_programs_cache
+            .write()
+            .unwrap()
+            .unset_fork_graph();
     }
 
     pub fn insert(&mut self, mut bank: Bank) -> BankWithScheduler {

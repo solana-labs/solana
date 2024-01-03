@@ -636,6 +636,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.fork_graph = Some(fork_graph);
     }
 
+    pub fn unset_fork_graph(&mut self) {
+        self.fork_graph = None;
+    }
+
     /// Returns the current environments depending on the given epoch
     pub fn get_environments_for_epoch(&self, epoch: Epoch) -> &ProgramRuntimeEnvironments {
         if epoch != self.latest_root_epoch {
