@@ -797,8 +797,7 @@ where
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let result_sender = self.result_sender.clone();
-            let mut new_task_receiver =
-                self.new_task_receiver.take().unwrap();
+            let mut new_task_receiver = self.new_task_receiver.take().unwrap();
             let mut blocked_transaction_sessioned_sender =
                 blocked_transaction_sessioned_sender.clone();
 
@@ -1152,10 +1151,7 @@ where
         );
 
         let (s, r) = unbounded();
-        (
-            self.new_task_sender,
-            self.new_task_receiver,
-        ) = (s, Some(r));
+        (self.new_task_sender, self.new_task_receiver) = (s, Some(r));
 
         let () = self.accumulator_thread.take().unwrap().join().unwrap();
         for thread in self.handler_threads.drain(..) {
