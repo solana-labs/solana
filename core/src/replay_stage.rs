@@ -3295,6 +3295,7 @@ impl ReplayStage {
                     let ComputedBankState {
                         voted_stakes,
                         total_stake,
+                        bank_stake,
                         bank_weight,
                         lockout_intervals,
                         my_latest_landed_vote,
@@ -3303,6 +3304,7 @@ impl ReplayStage {
                     let stats = progress
                         .get_fork_stats_mut(bank_slot)
                         .expect("All frozen banks must exist in the Progress map");
+                    stats.bank_stake = bank_stake;
                     stats.total_stake = total_stake;
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
@@ -3314,15 +3316,18 @@ impl ReplayStage {
                     datapoint_info!(
                         "bank_weight",
                         ("slot", bank_slot, i64),
+                        ("bank_stake", stats.bank_stake, i64),
                         // u128 too large for influx, convert to hex
                         ("weight", format!("{:X}", stats.fork_weight), String),
                     );
 
                     info!(
-                        "{} slot_weight: {} {} {}%",
+                        "{} slot_weight: {} {:2}% {}% {:.2} {}",
                         my_vote_pubkey,
                         bank_slot,
+                        100 * stats.bank_stake / stats.total_stake, // percentage vote stake in total_stake
                         100 * stats.fork_weight / stats.total_stake as u128,
+                        ((stats.fork_weight / stats.total_stake as u128) as f64).log2(), // average lockout depth for voted stake
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                 }

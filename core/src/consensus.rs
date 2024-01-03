@@ -156,6 +156,7 @@ pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
+    pub bank_stake: Stake,
     pub bank_weight: u128,
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
@@ -319,6 +320,7 @@ impl Tower {
         let mut voted_stakes = HashMap::new();
         let mut total_stake = 0;
         let mut bank_weight = 0;
+        let mut bank_stake = 0;
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = LockoutIntervals::new();
@@ -390,6 +392,7 @@ impl Tower {
 
             for vote in &vote_state.votes {
                 bank_weight += vote.lockout.lockout() as u128 * voted_stake as u128;
+                bank_stake += voted_stake;
                 vote_slots.insert(vote.slot());
             }
 
@@ -405,6 +408,7 @@ impl Tower {
             if let Some(root) = vote_state.root_slot {
                 let vote = Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
+                bank_stake += voted_stake;
                 vote_slots.insert(vote.slot());
             }
 
@@ -439,6 +443,7 @@ impl Tower {
         ComputedBankState {
             voted_stakes,
             total_stake,
+            bank_stake,
             bank_weight,
             lockout_intervals,
             my_latest_landed_vote,
