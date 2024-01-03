@@ -1565,31 +1565,25 @@ impl Blockstore {
     }
 
     /// Finds the corresponding shred at `shred_id` in the just inserted
-    /// shreds or the backing store. Panics if there is no shred.
+    /// shreds or the backing store. Returns None if there is no shred.
     fn get_shred_from_just_inserted_or_db<'a>(
         &'a self,
         just_inserted_shreds: &'a HashMap<ShredId, Shred>,
         shred_id: ShredId,
-    ) -> Cow<'a, Vec<u8>> {
+    ) -> Option<Cow<'a, Vec<u8>>> {
         let (slot, index, shred_type) = shred_id.unpack();
         match (just_inserted_shreds.get(&shred_id), shred_type) {
-            (Some(shred), _) => Cow::Borrowed(shred.payload()),
+            (Some(shred), _) => Some(Cow::Borrowed(shred.payload())),
             // If it doesn't exist in the just inserted set, it must exist in
             // the backing store
-            (_, ShredType::Data) => Cow::Owned(
-                self.get_data_shred(slot, u64::from(index))
-                    .unwrap()
-                    .unwrap_or_else(|| {
-                        panic!("{} {} {:?} must be present!", slot, index, shred_type)
-                    }),
-            ),
-            (_, ShredType::Code) => Cow::Owned(
-                self.get_coding_shred(slot, u64::from(index))
-                    .unwrap()
-                    .unwrap_or_else(|| {
-                        panic!("{} {} {:?} must be present!", slot, index, shred_type)
-                    }),
-            ),
+            (_, ShredType::Data) => self
+                .get_data_shred(slot, u64::from(index))
+                .unwrap()
+                .map(Cow::Owned),
+            (_, ShredType::Code) => self
+                .get_coding_shred(slot, u64::from(index))
+                .unwrap()
+                .map(Cow::Owned),
         }
     }
 
@@ -1633,6 +1627,9 @@ impl Blockstore {
             );
             let conflicting_shred = self
                 .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
+                .unwrap_or_else(|| {
+                    panic!("First received shred indicated by merkle root meta {:?} is missing from blockstore. This inconsistency may cause duplicate block detection to fail", merkle_root_meta);
+                })
                 .into_owned();
             duplicate_shreds.push(PossibleDuplicateShred::MerkleRootConflict(
                 shred.clone(),
@@ -1676,6 +1673,9 @@ impl Blockstore {
                 );
                 let ending_shred: Vec<u8> = self
                     .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
+                    .unwrap_or_else(|| {
+                        panic!("Last index data shred indicated by slot meta {:?} is missing from blockstore. This inconsistency may cause duplicate block detection to fail", slot_meta)
+                    })
                     .into_owned();
 
                 if self
@@ -1716,6 +1716,9 @@ impl Blockstore {
                 );
                 let ending_shred: Vec<u8> = self
                     .get_shred_from_just_inserted_or_db(just_inserted_shreds, shred_id)
+                    .unwrap_or_else(|| {
+                        panic!("Last received data shred indicated by slot meta {:?} is missing from blockstore. This inconsistency may cause duplicate block detection to fail", slot_meta)
+                    })
                     .into_owned();
 
                 if self
