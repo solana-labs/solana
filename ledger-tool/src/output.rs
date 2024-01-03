@@ -16,8 +16,9 @@ use {
     },
     std::{
         collections::HashMap,
-        fmt::{self, Display, Formatter, Result},
+        fmt::{self, Display, Formatter},
         io::{stdout, Write},
+        result::Result,
     },
 };
 
@@ -44,7 +45,7 @@ impl VerboseDisplay for SlotBounds<'_> {}
 impl QuietDisplay for SlotBounds<'_> {}
 
 impl Display for SlotBounds<'_> {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.slots.total > 0 {
             let first = self.slots.first.unwrap();
             let last = self.slots.last.unwrap();
@@ -280,7 +281,7 @@ impl EncodedConfirmedBlockWithEntries {
     pub fn try_from(
         block: EncodedConfirmedBlock,
         entries_iterator: impl Iterator<Item = EntrySummary>,
-    ) -> std::result::Result<Self, String> {
+    ) -> Result<Self, String> {
         let mut entries = vec![];
         for (i, entry) in entries_iterator.enumerate() {
             let ending_transaction_index = entry
@@ -403,7 +404,7 @@ pub fn output_slot(
     method: &OutputFormat,
     verbose_level: u64,
     all_program_ids: &mut HashMap<Pubkey, u64>,
-) -> std::result::Result<(), String> {
+) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
             if *method == OutputFormat::Display {
