@@ -2398,7 +2398,7 @@ fn main() {
                 let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
                 let f = BufReader::new(File::open(log_file).unwrap());
                 println!("Reading log file");
-                for line in f.lines().flatten() {
+                for line in f.lines().map_while(Result::ok) {
                     let parse_results = {
                         if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
                             Some((slot_string, &mut frozen))
