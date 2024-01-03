@@ -1809,6 +1809,10 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                invoke_context.feature_set = Arc::new(features);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
@@ -1848,7 +1852,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // Case: Not signed (Write instruction is no longer supported!)
+        // Case: Not signed
         process_instruction(
             &loader_id,
             &[],
@@ -1859,10 +1863,10 @@ mod tests {
                 is_signer: false,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Err(InstructionError::MissingRequiredSignature),
         );
 
-        // Case: Write bytes to an offset (Write instruction is no longer supported!)
+        // Case: Write bytes to an offset
         program_account.set_data(vec![0; 6]);
         let accounts = process_instruction(
             &loader_id,
@@ -1874,11 +1878,11 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Ok(()),
         );
-        assert_eq!(&vec![0, 0, 0, 0, 0, 0], accounts.first().unwrap().data());
+        assert_eq!(&vec![0, 0, 0, 1, 2, 3], accounts.first().unwrap().data());
 
-        // Case: Overflow (Write instruction is no longer supported!)
+        // Case: Overflow
         program_account.set_data(vec![0; 5]);
         process_instruction(
             &loader_id,
@@ -1890,7 +1894,7 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Err(InstructionError::AccountDataTooSmall),
         );
     }
 
@@ -1913,7 +1917,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // Case: Not signed (Finalize instruction is no longer supported!)
+        // Case: Not signed
         process_instruction(
             &loader_id,
             &[],
@@ -1924,10 +1928,10 @@ mod tests {
                 is_signer: false,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Err(InstructionError::MissingRequiredSignature),
         );
 
-        // Case: Finalize (Finalize instruction is no longer supported!)
+        // Case: Finalize
         let accounts = process_instruction(
             &loader_id,
             &[],
@@ -1938,11 +1942,11 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Ok(()),
         );
-        assert!(!accounts.first().unwrap().executable());
+        assert!(accounts.first().unwrap().executable());
 
-        // Case: Finalize bad ELF (Finalize instruction is no longer supported!)
+        // Case: Finalize bad ELF
         *program_account.data_as_mut_slice().get_mut(0).unwrap() = 0;
         process_instruction(
             &loader_id,
@@ -1954,7 +1958,7 @@ mod tests {
                 is_signer: true,
                 is_writable: true,
             }],
-            Err(InstructionError::UnsupportedProgramId),
+            Err(InstructionError::InvalidAccountData),
         );
     }
 
@@ -1962,7 +1966,7 @@ mod tests {
     fn test_bpf_loader_invoke_main() {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
-        let program_account =
+        let mut program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
@@ -2028,10 +2032,25 @@ mod tests {
             Err(InstructionError::ProgramFailedToComplete),
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                invoke_context.feature_set = Arc::new(features);
                 invoke_context.mock_set_remaining(0);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
+        );
+
+        // Case: Account not a program
+        program_account.set_executable(false);
+        process_instruction(
+            &loader_id,
+            &[0],
+            &[],
+            vec![(program_id, program_account)],
+            Vec::new(),
+            Err(InstructionError::IncorrectProgramId),
         );
     }
 
@@ -2562,7 +2581,12 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 Entrypoint::vm,
-                |_invoke_context| {},
+                |invoke_context| {
+                    let mut features = FeatureSet::all_enabled();
+                    features.deactivate(&disable_bpf_loader_instructions::id());
+                    features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                    invoke_context.feature_set = Arc::new(features);
+                },
                 |_invoke_context| {},
             )
         }
@@ -2701,11 +2725,34 @@ mod tests {
             &elf_orig,
             &elf_new,
         );
-        transaction_accounts.get_mut(1).unwrap().1.set_data(vec![]); // set the account data empty to make it not executable
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
+            .1
+            .set_executable(false);
         process_instruction(
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::AccountNotExecutable),
+        );
+
+        // Case: Program account now owned by loader
+        let (mut transaction_accounts, instruction_accounts) = get_accounts(
+            &buffer_address,
+            &upgrade_authority_address,
+            &upgrade_authority_address,
+            &elf_orig,
+            &elf_new,
+        );
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
+            .1
+            .set_owner(Pubkey::new_unique());
+        process_instruction(
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::IncorrectProgramId),
         );
 
         // Case: Program account not writable
@@ -2721,6 +2768,26 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Err(InstructionError::InvalidArgument),
+        );
+
+        // Case: Program account not initialized
+        let (mut transaction_accounts, instruction_accounts) = get_accounts(
+            &buffer_address,
+            &upgrade_authority_address,
+            &upgrade_authority_address,
+            &elf_orig,
+            &elf_new,
+        );
+        transaction_accounts
+            .get_mut(1)
+            .unwrap()
+            .1
+            .set_state(&UpgradeableLoaderState::Uninitialized)
+            .unwrap();
+        process_instruction(
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InvalidAccountData),
         );
 
         // Case: Program ProgramData account mismatch
