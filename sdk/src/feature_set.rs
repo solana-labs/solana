@@ -748,6 +748,10 @@ pub mod index_erasure_conflict_duplicate_proofs {
     solana_sdk::declare_id!("dupPajaLy2SSn8ko42aZz4mHANDNrLe8Nw8VQgFecLa");
 }
 
+pub mod merkle_conflict_duplicate_proofs {
+    solana_sdk::declare_id!("mrkPjRg79B2oK2ZLgd7S3AfEJaX9B6gAF3H9aEykRUS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -930,6 +934,7 @@ lazy_static! {
         (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
+        (merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for merkle root conflicts #34270"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
