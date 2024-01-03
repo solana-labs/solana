@@ -1,6 +1,6 @@
 //! Calculation of [shred] versions.
 //!
-//! [shred]: https://docs.solana.com/terminology#shred
+//! [shred]: https://solana.com/docs/terminology#shred
 
 #![cfg(feature = "full")]
 

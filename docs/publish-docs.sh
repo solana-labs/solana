@@ -121,6 +121,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "destination": "https://solana.com/docs/core/transactions/retry", "source": "/integrations/retrying-transactions" },
     { "destination": "https://solana.com/docs/intro/dev", "source": "/developing/programming-model/overview" },
     { "destination": "https://solana.com/docs/advanced/lookup-tables", "source": "/developing/lookup-tables" },
+    { "destination": "https://solana.com/docs", "source": "/developers" },
     { "destination": "https://solana.com/docs/advanced/state-compression", "source": "/learn/state-compression" },
     { "destination": "https://solana.com/developers/guides/javascript/compressed-nfts", "source": "/developing/guides/compressed-nfts" },
     { "destination": "https://solana.com/docs/programs", "source": "/developing/on-chain-programs/overview" },

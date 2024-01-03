@@ -5,7 +5,7 @@
 //! the program as well as the technical details of some of the proof instructions can be found in
 //! the [`ZK Token proof`] documentation.
 //!
-//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+//! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
 // Program Id of the ZkToken Proof program
 solana_program::declare_id!("ZkTokenProof1111111111111111111111111111111");

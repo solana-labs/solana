@@ -18,7 +18,7 @@
 //! [`Clock::unix_timestamp`], which is produced by an [oracle derived from the
 //! validator set][oracle].
 //!
-//! [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
+//! [oracle]: https://docs.solanalabs.com/implemented-proposals/validator-timestamp-oracle
 
 use solana_sdk_macro::CloneZeroed;
 
@@ -194,8 +194,8 @@ pub struct Clock {
     /// the [`timestamp_correction` and `timestamp_bounding`][tsc] features it
     /// is calculated using a [validator timestamp oracle][oracle].
     ///
-    /// [tsc]: https://docs.solana.com/implemented-proposals/bank-timestamp-correction
-    /// [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
+    /// [tsc]: https://docs.solanalabs.com/implemented-proposals/bank-timestamp-correction
+    /// [oracle]: https://docs.solanalabs.com/implemented-proposals/validator-timestamp-oracle
     pub unix_timestamp: UnixTimestamp,
 }
 
