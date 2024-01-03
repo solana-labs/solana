@@ -164,7 +164,7 @@ fn run_check_duplicate(
             shred_slot,
             &root_bank,
         );
-        let send_merkle_root_conflicts = cluster_nodes::check_feature_activation(
+        let merkle_conflict_duplicate_proofs = cluster_nodes::check_feature_activation(
             &feature_set::merkle_conflict_duplicate_proofs::id(),
             shred_slot,
             &root_bank,
@@ -179,7 +179,7 @@ fn run_check_duplicate(
                 }
             }
             PossibleDuplicateShred::MerkleRootConflict(shred, conflict) => {
-                if send_merkle_root_conflicts {
+                if merkle_conflict_duplicate_proofs {
                     // Although this proof can be immediately stored on detection, we wait until
                     // here in order to check the feature flag, as storage in blockstore can
                     // preclude the detection of other duplicate proofs in this slot

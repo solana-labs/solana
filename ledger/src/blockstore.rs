@@ -1264,7 +1264,7 @@ impl Blockstore {
                 // A previous shred has been inserted in this batch or in blockstore
                 // Compare our current shred against the previous shred for potential
                 // conflicts
-                if !self.perform_merkle_check(
+                if !self.check_merkle_root_consistency(
                     just_received_shreds,
                     slot,
                     merkle_root_meta.as_ref(),
@@ -1498,7 +1498,7 @@ impl Blockstore {
                 // A previous shred has been inserted in this batch or in blockstore
                 // Compare our current shred against the previous shred for potential
                 // conflicts
-                if !self.perform_merkle_check(
+                if !self.check_merkle_root_consistency(
                     just_inserted_shreds,
                     slot,
                     merkle_root_meta.as_ref(),
@@ -1598,7 +1598,7 @@ impl Blockstore {
     ///
     /// Otherwise return false and if not already present, add duplicate proof to
     /// `duplicate_shreds`.
-    fn perform_merkle_check(
+    fn check_merkle_root_consistency(
         &self,
         just_inserted_shreds: &HashMap<ShredId, Shred>,
         slot: Slot,
@@ -1615,13 +1615,11 @@ impl Blockstore {
 
         warn!(
             "Received conflicting merkle roots for slot: {}, erasure_set: {:?}
-                original merkle root {:?} shred index {} type {:?} vs
+                original merkle root meta {:?} vs
                 conflicting merkle root {:?} shred index {} type {:?}. Reporting as duplicate",
             slot,
             shred.erasure_set(),
-            merkle_root_meta.merkle_root(),
-            merkle_root_meta.first_received_shred_index(),
-            merkle_root_meta.first_received_shred_type(),
+            merkle_root_meta,
             new_merkle_root,
             shred.index(),
             shred.shred_type(),
