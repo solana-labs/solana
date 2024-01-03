@@ -823,7 +823,7 @@ impl LedgerStorage {
             .unwrap_or(0);
 
         // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
-        // number that might be flitered out
+        // number that might be filtered out
         let tx_by_addr_data = bigtable
             .get_row_data(
                 "tx-by-addr",

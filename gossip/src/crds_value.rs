@@ -1066,7 +1066,7 @@ mod test {
         assert!(!other.check_duplicate(&node_crds));
         assert_eq!(node.overrides(&other_crds), None);
         assert_eq!(other.overrides(&node_crds), None);
-        // Differnt crds value is not a duplicate.
+        // Different crds value is not a duplicate.
         let other = LegacyContactInfo::new_rand(&mut rng, Some(pubkey));
         let other = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(other));
         assert!(!node.check_duplicate(&other));

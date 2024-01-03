@@ -755,7 +755,7 @@ pub fn process_catchup(
         if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
             // go to new line to leave this message on console
             println!(
-                "Prefering explicitly given rpc ({}) as us, although --our-localhost is given\n",
+                "Preferring explicitly given rpc ({}) as us, although --our-localhost is given\n",
                 node_json_rpc_url.as_ref().unwrap()
             );
         } else {
@@ -771,7 +771,7 @@ pub fn process_catchup(
             (if node_pubkey.is_some() && node_pubkey != guessed_default {
                 // go to new line to leave this message on console
                 println!(
-                    "Prefering explicitly given node pubkey ({}) as us, although --our-localhost \
+                    "Preferring explicitly given node pubkey ({}) as us, although --our-localhost \
                      is given\n",
                     node_pubkey.unwrap()
                 );

@@ -1772,7 +1772,7 @@ impl JsonRpcRequestProcessor {
             deactivating,
         } = delegation.stake_activating_and_deactivating(
             epoch,
-            Some(&stake_history),
+            &stake_history,
             new_rate_activation_epoch,
         );
         let stake_activation_state = if deactivating > 0 {

@@ -30,6 +30,7 @@ use {
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
@@ -38,10 +39,11 @@ use {
         },
     },
     solana_sdk::{
-        clock::Slot, genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
-        timing::timestamp,
+        clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, signature::Signer,
+        signer::keypair::Keypair, timing::timestamp, transaction::VersionedTransaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     std::{
         path::{Path, PathBuf},
         process::exit,
@@ -90,20 +92,6 @@ pub(crate) enum LoadAndProcessLedgerError {
 
     #[error("failed to process blockstore from root: {0}")]
     ProcessBlockstoreFromRoot(#[source] BlockstoreProcessorError),
-}
-
-pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once
-    // the rocksdb options can be constructed via load_options_file() as the
-    // value picked by passing None for `max_shred_storage_size` could affect
-    // the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, None) {
-        Some(s) => s,
-        None => {
-            info!("{}", message);
-            ShredStorageType::RocksLevel
-        }
-    }
 }
 
 pub fn load_and_process_ledger_or_exit(
@@ -305,6 +293,25 @@ pub fn load_and_process_ledger(
         "Using: block-verification-method: {}",
         block_verification_method,
     );
+    match block_verification_method {
+        BlockVerificationMethod::BlockstoreProcessor => {
+            info!("no scheduler pool is installed for block verification...");
+        }
+        BlockVerificationMethod::UnifiedScheduler => {
+            let no_transaction_status_sender = None;
+            let no_replay_vote_sender = None;
+            let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+            bank_forks
+                .write()
+                .unwrap()
+                .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
+                    process_options.runtime_config.log_messages_bytes_limit,
+                    no_transaction_status_sender,
+                    no_replay_vote_sender,
+                    ignored_prioritization_fee_cache,
+                ));
+        }
+    }
 
     let node_id = Arc::new(Keypair::new());
     let cluster_info = Arc::new(ClusterInfo::new(
@@ -355,10 +362,8 @@ pub fn load_and_process_ledger(
             let tss_blockstore = if enable_rpc_transaction_history {
                 Arc::new(open_blockstore(
                     blockstore.ledger_path(),
+                    arg_matches,
                     AccessType::PrimaryForMaintenance,
-                    None,
-                    false,
-                    false,
                 ))
             } else {
                 blockstore.clone()
@@ -409,11 +414,14 @@ pub fn load_and_process_ledger(
 
 pub fn open_blockstore(
     ledger_path: &Path,
+    matches: &ArgMatches,
     access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    force_update_to_open: bool,
-    enforce_ulimit_nofile: bool,
 ) -> Blockstore {
+    let wal_recovery_mode = matches
+        .value_of("wal_recovery_mode")
+        .map(BlockstoreRecoveryMode::from);
+    let force_update_to_open = matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
         &format!(
@@ -487,6 +495,20 @@ pub fn open_blockstore(
     }
 }
 
+pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
+        Some(s) => s,
+        None => {
+            info!("{}", message);
+            ShredStorageType::RocksLevel
+        }
+    }
+}
+
 /// Open blockstore with temporary primary access to allow necessary,
 /// persistent changes to be made to the blockstore (such as creation of new
 /// column family(s)). Then, continue opening with `original_access_type`
@@ -529,4 +551,14 @@ pub fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> G
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
+}
+
+pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
+    let message = &tx.message;
+    let account_keys = message.static_account_keys();
+
+    message
+        .instructions()
+        .iter()
+        .map(|ix| ix.program_id(account_keys))
 }

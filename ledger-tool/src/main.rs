@@ -35,15 +35,11 @@ use {
         validator::BlockVerificationMethod,
     },
     solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
-    solana_entry::entry::Entry,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
-        blockstore_options::{
-            AccessType, BlockstoreRecoveryMode, LedgerColumnOptions,
-            BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-        },
+        blockstore_options::{AccessType, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
         blockstore_processor::ProcessOptions,
         shred::Shred,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
@@ -76,9 +72,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeStateV2},
         system_program,
-        transaction::{
-            MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
-        },
+        transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -109,257 +103,12 @@ mod ledger_utils;
 mod output;
 mod program;
 
-fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
-    let message = &tx.message;
-    let account_keys = message.static_account_keys();
-
-    message
-        .instructions()
-        .iter()
-        .map(|ix| ix.program_id(account_keys))
-}
-
 fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
     match matches.value_of("encoding") {
         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
         Some("base64") => UiAccountEncoding::Base64,
         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
         _ => UiAccountEncoding::Base64,
-    }
-}
-
-fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &OutputFormat) {
-    // Note: rewards are not output in JSON yet
-    if *method == OutputFormat::Display {
-        if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
-            if !rewards.is_empty() {
-                println!("  Rewards:");
-                println!(
-                    "    {:<44}  {:^15}  {:<15}  {:<20}  {:>10}",
-                    "Address", "Type", "Amount", "New Balance", "Commission",
-                );
-
-                for reward in rewards {
-                    let sign = if reward.lamports < 0 { "-" } else { "" };
-                    println!(
-                        "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
-                        reward.pubkey,
-                        if let Some(reward_type) = reward.reward_type {
-                            format!("{reward_type}")
-                        } else {
-                            "-".to_string()
-                        },
-                        sign,
-                        lamports_to_sol(reward.lamports.unsigned_abs()),
-                        lamports_to_sol(reward.post_balance),
-                        reward
-                            .commission
-                            .map(|commission| format!("{commission:>9}%"))
-                            .unwrap_or_else(|| "    -".to_string())
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn output_entry(
-    blockstore: &Blockstore,
-    method: &OutputFormat,
-    slot: Slot,
-    entry_index: usize,
-    entry: Entry,
-) {
-    match method {
-        OutputFormat::Display => {
-            println!(
-                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
-                entry_index,
-                entry.num_hashes,
-                entry.hash,
-                entry.transactions.len()
-            );
-            for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {transactions_index}");
-                let tx_signature = transaction.signatures[0];
-                let tx_status_meta = blockstore
-                    .read_transaction_status((tx_signature, slot))
-                    .unwrap_or_else(|err| {
-                        eprintln!(
-                            "Failed to read transaction status for {} at slot {}: {}",
-                            transaction.signatures[0], slot, err
-                        );
-                        None
-                    })
-                    .map(|meta| meta.into());
-
-                solana_cli_output::display::println_transaction(
-                    &transaction,
-                    tx_status_meta.as_ref(),
-                    "      ",
-                    None,
-                    None,
-                );
-            }
-        }
-        OutputFormat::Json => {
-            // Note: transaction status is not output in JSON yet
-            serde_json::to_writer(stdout(), &entry).expect("serialize entry");
-            stdout().write_all(b",\n").expect("newline");
-        }
-        _ => unreachable!(),
-    }
-}
-
-fn output_slot(
-    blockstore: &Blockstore,
-    slot: Slot,
-    allow_dead_slots: bool,
-    method: &OutputFormat,
-    verbose_level: u64,
-    all_program_ids: &mut HashMap<Pubkey, u64>,
-) -> Result<(), String> {
-    if blockstore.is_dead(slot) {
-        if allow_dead_slots {
-            if *method == OutputFormat::Display {
-                println!(" Slot is dead");
-            }
-        } else {
-            return Err("Dead slot".to_string());
-        }
-    }
-
-    let (entries, num_shreds, is_full) = blockstore
-        .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
-        .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
-
-    if *method == OutputFormat::Display {
-        if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 1 {
-                println!("  {meta:?} is_full: {is_full}");
-            } else {
-                println!(
-                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, \
-                     is_full: {}",
-                    num_shreds,
-                    meta.parent_slot,
-                    meta.next_slots,
-                    entries.len(),
-                    is_full,
-                );
-            }
-        }
-    }
-
-    if verbose_level >= 2 {
-        for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry);
-        }
-
-        output_slot_rewards(blockstore, slot, method);
-    } else if verbose_level >= 1 {
-        let mut transactions = 0;
-        let mut num_hashes = 0;
-        let mut program_ids = HashMap::new();
-        let blockhash = if let Some(entry) = entries.last() {
-            entry.hash
-        } else {
-            Hash::default()
-        };
-
-        for entry in entries {
-            transactions += entry.transactions.len();
-            num_hashes += entry.num_hashes;
-            for transaction in entry.transactions {
-                for program_id in get_program_ids(&transaction) {
-                    *program_ids.entry(*program_id).or_insert(0) += 1;
-                }
-            }
-        }
-
-        println!("  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",);
-        for (pubkey, count) in program_ids.iter() {
-            *all_program_ids.entry(*pubkey).or_insert(0) += count;
-        }
-        println!("  Programs:");
-        output_sorted_program_ids(program_ids);
-    }
-    Ok(())
-}
-
-fn output_ledger(
-    blockstore: Blockstore,
-    starting_slot: Slot,
-    ending_slot: Slot,
-    allow_dead_slots: bool,
-    method: OutputFormat,
-    num_slots: Option<Slot>,
-    verbose_level: u64,
-    only_rooted: bool,
-) {
-    let slot_iterator = blockstore
-        .slot_meta_iterator(starting_slot)
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
-            exit(1);
-        });
-
-    if method == OutputFormat::Json {
-        stdout().write_all(b"{\"ledger\":[\n").expect("open array");
-    }
-
-    let num_slots = num_slots.unwrap_or(Slot::MAX);
-    let mut num_printed = 0;
-    let mut all_program_ids = HashMap::new();
-    for (slot, slot_meta) in slot_iterator {
-        if only_rooted && !blockstore.is_root(slot) {
-            continue;
-        }
-        if slot > ending_slot {
-            break;
-        }
-
-        match method {
-            OutputFormat::Display => {
-                println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
-            }
-            OutputFormat::Json => {
-                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
-                stdout().write_all(b",\n").expect("newline");
-            }
-            _ => unreachable!(),
-        }
-
-        if let Err(err) = output_slot(
-            &blockstore,
-            slot,
-            allow_dead_slots,
-            &method,
-            verbose_level,
-            &mut all_program_ids,
-        ) {
-            eprintln!("{err}");
-        }
-        num_printed += 1;
-        if num_printed >= num_slots as usize {
-            break;
-        }
-    }
-
-    if method == OutputFormat::Json {
-        stdout().write_all(b"\n]}\n").expect("close array");
-    } else {
-        println!("Summary of Programs:");
-        output_sorted_program_ids(all_program_ids);
-    }
-}
-
-fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
-    let mut program_ids_array: Vec<_> = program_ids.into_iter().collect();
-    // Sort descending by count of program id
-    program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
-    for (program_id, count) in program_ids_array.iter() {
-        println!("{:<44}: {}", program_id.to_string(), count);
     }
 }
 
@@ -2267,11 +2016,6 @@ fn main() {
             .ok()
             .map(PathBuf::from);
 
-    let wal_recovery_mode = matches
-        .value_of("wal_recovery_mode")
-        .map(BlockstoreRecoveryMode::from);
-    let force_update_to_open = matches.is_present("force_update_to_open");
-    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let verbose_level = matches.occurrences_of("verbose");
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
@@ -2289,13 +2033,7 @@ fn main() {
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 let only_rooted = arg_matches.is_present("only_rooted");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    ),
+                    open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
@@ -2310,13 +2048,7 @@ fn main() {
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
 
-                let source = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let source = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 // Check if shred storage type can be inferred; if not, a new
                 // ledger is being created. open_blockstore() will attempt to
@@ -2332,13 +2064,7 @@ fn main() {
                         &target_db
                     ),
                 );
-                let target = open_blockstore(
-                    &target_db,
-                    AccessType::Primary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let target = open_blockstore(&target_db, arg_matches, AccessType::Primary);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2414,13 +2140,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2453,13 +2174,7 @@ fn main() {
                 }
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                let ledger = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let ledger = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
                     .unwrap()
@@ -2494,13 +2209,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2514,13 +2224,7 @@ fn main() {
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 for slot in slots {
                     println!("Slot {slot}");
                     if let Err(err) = output_slot(
@@ -2539,13 +2243,7 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    ),
+                    open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
@@ -2556,26 +2254,14 @@ fn main() {
                 );
             }
             ("dead-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
                     println!("{slot}");
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                     println!("{slot}");
@@ -2583,13 +2269,7 @@ fn main() {
             }
             ("set-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
                         Ok(_) => println!("Slot {slot} dead"),
@@ -2599,13 +2279,7 @@ fn main() {
             }
             ("remove-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
                         Ok(_) => println!("Slot {slot} not longer marked dead"),
@@ -2618,13 +2292,7 @@ fn main() {
             ("parse_full_frozen", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let mut ancestors = BTreeSet::new();
                 assert!(
                     blockstore.meta(ending_slot).unwrap().is_some(),
@@ -2646,7 +2314,7 @@ fn main() {
                 let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
                 let f = BufReader::new(File::open(log_file).unwrap());
                 println!("Reading log file");
-                for line in f.lines().flatten() {
+                for line in f.lines().map_while(Result::ok) {
                     let parse_results = {
                         if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
                             Some((slot_string, &mut frozen))
@@ -2738,13 +2406,8 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 info!("genesis hash: {}", genesis_config.hash());
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2794,13 +2457,8 @@ fn main() {
                 };
 
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2920,10 +2578,8 @@ fn main() {
                 };
                 let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
+                    arg_matches,
                     get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
                 ));
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
@@ -3340,13 +2996,8 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -3430,13 +3081,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -3926,13 +3572,8 @@ fn main() {
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::PrimaryForMaintenance,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, AccessType::PrimaryForMaintenance);
 
                 let end_slot = match end_slot {
                     Some(end_slot) => end_slot,
@@ -4001,13 +3642,7 @@ fn main() {
                 }
             }
             ("list-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 let max_height = value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
                 let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
@@ -4044,13 +3679,7 @@ fn main() {
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
                 let slots =
@@ -4080,13 +3709,7 @@ fn main() {
                 }
             }
             ("repair-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
 
                 let start_root = value_t!(arg_matches, "start_root", Slot)
                     .unwrap_or_else(|_| blockstore.max_root());
@@ -4112,13 +3735,7 @@ fn main() {
                 println!("Successfully repaired {num_repaired_roots} roots");
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
@@ -4183,26 +3800,13 @@ fn main() {
                     }
                 };
             }
-            ("analyze-storage", _) => {
+            ("analyze-storage", Some(arg_matches)) => {
                 analyze_storage(
-                    &open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    )
-                    .db(),
+                    &open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
                 );
             }
             ("compute-slot-cost", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {
@@ -4220,13 +3824,7 @@ fn main() {
                 }
             }
             ("print-file-metadata", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    false,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");

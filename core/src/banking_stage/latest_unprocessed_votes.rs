@@ -26,7 +26,7 @@ pub enum VoteSource {
     Tpu,
 }
 
-/// Holds deserialized vote messages as well as their source, foward status and slot
+/// Holds deserialized vote messages as well as their source, forward status and slot
 #[derive(Debug, Clone)]
 pub struct LatestValidatorVotePacket {
     vote_source: VoteSource,

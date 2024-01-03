@@ -26,7 +26,7 @@ env:
   RUSTC_WRAPPER: "sccache"
 
 jobs:
-  clippy:
+  clippy-stable:
     strategy:
       matrix:
         os:
@@ -44,7 +44,28 @@ jobs:
 
       - shell: bash
         run: |
-          source ci/rust-version.sh all
+          source ci/rust-version.sh stable
           rustup component add clippy --toolchain "$rust_stable"
+          scripts/cargo-clippy-stable.sh
+
+  clippy-nightly:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
+
+      - shell: bash
+        run: |
+          source ci/rust-version.sh nightly
           rustup component add clippy --toolchain "$rust_nightly"
-          scripts/cargo-clippy.sh
+          scripts/cargo-clippy-nightly.sh

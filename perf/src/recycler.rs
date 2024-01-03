@@ -241,7 +241,7 @@ mod tests {
             let count = rng.gen_range(1..128);
             let _packets: Vec<_> = repeat_with(|| recycler.allocate("")).take(count).collect();
         }
-        // Assert that the gc size has shrinked.
+        // Assert that the gc size has shrunk.
         assert_eq!(
             recycler.recycler.gc.lock().unwrap().len(),
             RECYCLER_SHRINK_SIZE

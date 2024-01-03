@@ -74,7 +74,7 @@ use {
     thiserror::Error,
 };
 
-struct TransactionBatchWithIndexes<'a, 'b> {
+pub struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
 }
@@ -134,7 +134,7 @@ fn get_first_error(
     first_err
 }
 
-fn execute_batch(
+pub fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -1832,7 +1832,7 @@ pub struct TransactionStatusBatch {
     pub transaction_indexes: Vec<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
 }
@@ -1947,7 +1947,9 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
-            installed_scheduler_pool::{MockInstalledScheduler, SchedulingContext, WaitReason},
+            installed_scheduler_pool::{
+                MockInstalledScheduler, MockUninstalledScheduler, SchedulingContext,
+            },
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -4545,11 +4547,12 @@ pub mod tests {
         let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
-        let mut seq = mockall::Sequence::new();
+        let seq = Arc::new(Mutex::new(mockall::Sequence::new()));
+        let seq_cloned = seq.clone();
         mocked_scheduler
             .expect_context()
             .times(1)
-            .in_sequence(&mut seq)
+            .in_sequence(&mut seq.lock().unwrap())
             .return_const(context);
         mocked_scheduler
             .expect_schedule_execution()
@@ -4557,15 +4560,21 @@ pub mod tests {
             .returning(|_| ());
         mocked_scheduler
             .expect_wait_for_termination()
-            .with(mockall::predicate::eq(WaitReason::DroppedFromBankForks))
+            .with(mockall::predicate::eq(true))
             .times(1)
-            .in_sequence(&mut seq)
-            .returning(|_| None);
-        mocked_scheduler
-            .expect_return_to_pool()
-            .times(1)
-            .in_sequence(&mut seq)
-            .returning(|| ());
+            .in_sequence(&mut seq.lock().unwrap())
+            .returning(move |_| {
+                let mut mocked_uninstalled_scheduler = MockUninstalledScheduler::new();
+                mocked_uninstalled_scheduler
+                    .expect_return_to_pool()
+                    .times(1)
+                    .in_sequence(&mut seq_cloned.lock().unwrap())
+                    .returning(|| ());
+                (
+                    (Ok(()), ExecuteTimings::default()),
+                    Box::new(mocked_uninstalled_scheduler),
+                )
+            });
         let bank = BankWithScheduler::new(bank, Some(Box::new(mocked_scheduler)));
 
         let batch = bank.prepare_sanitized_batch(&txs);
