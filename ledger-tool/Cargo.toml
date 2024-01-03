@@ -52,6 +52,9 @@ solana_rbpf = { workspace = true, features = ["debugger"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { workspace = true }
+
 [dev-dependencies]
 assert_cmd = { workspace = true }
 bytecount = { workspace = true }
