@@ -256,7 +256,7 @@ impl AdminRpc for AdminRpcImpl {
                 // (rocksdb background processing or some other stuck thread perhaps?).
                 //
                 // If the process is still alive after five seconds, exit harder
-                thread::sleep(Duration::from_secs(120));
+                thread::sleep(Duration::from_secs(5));
                 warn!("validator exit timeout");
                 std::process::exit(0);
             })
