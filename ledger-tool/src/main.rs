@@ -39,10 +39,7 @@ use {
         ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
-        blockstore_options::{
-            AccessType, BlockstoreRecoveryMode, LedgerColumnOptions,
-            BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-        },
+        blockstore_options::{AccessType, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
         blockstore_processor::ProcessOptions,
         shred::Shred,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
@@ -2019,11 +2016,6 @@ fn main() {
             .ok()
             .map(PathBuf::from);
 
-    let wal_recovery_mode = matches
-        .value_of("wal_recovery_mode")
-        .map(BlockstoreRecoveryMode::from);
-    let force_update_to_open = matches.is_present("force_update_to_open");
-    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let verbose_level = matches.occurrences_of("verbose");
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
@@ -2041,13 +2033,7 @@ fn main() {
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 let only_rooted = arg_matches.is_present("only_rooted");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    ),
+                    open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
@@ -2062,13 +2048,7 @@ fn main() {
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
 
-                let source = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let source = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 // Check if shred storage type can be inferred; if not, a new
                 // ledger is being created. open_blockstore() will attempt to
@@ -2084,13 +2064,7 @@ fn main() {
                         &target_db
                     ),
                 );
-                let target = open_blockstore(
-                    &target_db,
-                    AccessType::Primary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let target = open_blockstore(&target_db, arg_matches, AccessType::Primary);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2166,13 +2140,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2205,13 +2174,7 @@ fn main() {
                 }
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                let ledger = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    None,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let ledger = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
                     .unwrap()
@@ -2246,13 +2209,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2266,13 +2224,7 @@ fn main() {
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 for slot in slots {
                     println!("Slot {slot}");
                     if let Err(err) = output_slot(
@@ -2291,13 +2243,7 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    ),
+                    open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
@@ -2308,26 +2254,14 @@ fn main() {
                 );
             }
             ("dead-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
                     println!("{slot}");
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                     println!("{slot}");
@@ -2335,13 +2269,7 @@ fn main() {
             }
             ("set-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
                         Ok(_) => println!("Slot {slot} dead"),
@@ -2351,13 +2279,7 @@ fn main() {
             }
             ("remove-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
                         Ok(_) => println!("Slot {slot} not longer marked dead"),
@@ -2370,13 +2292,7 @@ fn main() {
             ("parse_full_frozen", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let mut ancestors = BTreeSet::new();
                 assert!(
                     blockstore.meta(ending_slot).unwrap().is_some(),
@@ -2490,13 +2406,8 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 info!("genesis hash: {}", genesis_config.hash());
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2546,13 +2457,8 @@ fn main() {
                 };
 
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -2672,10 +2578,8 @@ fn main() {
                 };
                 let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
+                    arg_matches,
                     get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
                 ));
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
@@ -3092,13 +2996,8 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -3182,13 +3081,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    get_access_type(&process_options),
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, get_access_type(&process_options));
                 let (bank_forks, _) = load_and_process_ledger_or_exit(
                     arg_matches,
                     &genesis_config,
@@ -3678,13 +3572,8 @@ fn main() {
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::PrimaryForMaintenance,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, arg_matches, AccessType::PrimaryForMaintenance);
 
                 let end_slot = match end_slot {
                     Some(end_slot) => end_slot,
@@ -3753,13 +3642,7 @@ fn main() {
                 }
             }
             ("list-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 let max_height = value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
                 let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
@@ -3796,13 +3679,7 @@ fn main() {
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
                 let slots =
@@ -3832,13 +3709,7 @@ fn main() {
                 }
             }
             ("repair-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
 
                 let start_root = value_t!(arg_matches, "start_root", Slot)
                     .unwrap_or_else(|_| blockstore.max_root());
@@ -3864,13 +3735,7 @@ fn main() {
                 println!("Successfully repaired {num_repaired_roots} roots");
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
@@ -3935,26 +3800,13 @@ fn main() {
                     }
                 };
             }
-            ("analyze-storage", _) => {
+            ("analyze-storage", Some(arg_matches)) => {
                 analyze_storage(
-                    &open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        force_update_to_open,
-                        enforce_ulimit_nofile,
-                    )
-                    .db(),
+                    &open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
                 );
             }
             ("compute-slot-cost", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {
@@ -3972,13 +3824,7 @@ fn main() {
                 }
             }
             ("print-file-metadata", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    false,
-                    enforce_ulimit_nofile,
-                );
+                let blockstore = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");

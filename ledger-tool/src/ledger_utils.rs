@@ -94,20 +94,6 @@ pub(crate) enum LoadAndProcessLedgerError {
     ProcessBlockstoreFromRoot(#[source] BlockstoreProcessorError),
 }
 
-pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once
-    // the rocksdb options can be constructed via load_options_file() as the
-    // value picked by passing None for `max_shred_storage_size` could affect
-    // the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, None) {
-        Some(s) => s,
-        None => {
-            info!("{}", message);
-            ShredStorageType::RocksLevel
-        }
-    }
-}
-
 pub fn load_and_process_ledger_or_exit(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
@@ -376,10 +362,8 @@ pub fn load_and_process_ledger(
             let tss_blockstore = if enable_rpc_transaction_history {
                 Arc::new(open_blockstore(
                     blockstore.ledger_path(),
+                    arg_matches,
                     AccessType::PrimaryForMaintenance,
-                    None,
-                    false,
-                    false,
                 ))
             } else {
                 blockstore.clone()
@@ -430,11 +414,14 @@ pub fn load_and_process_ledger(
 
 pub fn open_blockstore(
     ledger_path: &Path,
+    matches: &ArgMatches,
     access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    force_update_to_open: bool,
-    enforce_ulimit_nofile: bool,
 ) -> Blockstore {
+    let wal_recovery_mode = matches
+        .value_of("wal_recovery_mode")
+        .map(BlockstoreRecoveryMode::from);
+    let force_update_to_open = matches.is_present("force_update_to_open");
+    let enforce_ulimit_nofile = !matches.is_present("ignore_ulimit_nofile_error");
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
         &format!(
@@ -504,6 +491,20 @@ pub fn open_blockstore(
         Err(err) => {
             eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
             exit(1);
+        }
+    }
+}
+
+pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
+        Some(s) => s,
+        None => {
+            info!("{}", message);
+            ShredStorageType::RocksLevel
         }
     }
 }
