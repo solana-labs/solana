@@ -57,7 +57,6 @@ use {
         feature::{self, Feature},
         feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
-        hash::Hash,
         inflation::Inflation,
         native_token::{lamports_to_sol, sol_to_lamports, Sol},
         pubkey::Pubkey,
