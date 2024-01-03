@@ -35,7 +35,6 @@ use {
         validator::BlockVerificationMethod,
     },
     solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
-    solana_entry::entry::Entry,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
@@ -76,9 +75,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeStateV2},
         system_program,
-        transaction::{
-            MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
-        },
+        transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -109,257 +106,12 @@ mod ledger_utils;
 mod output;
 mod program;
 
-fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
-    let message = &tx.message;
-    let account_keys = message.static_account_keys();
-
-    message
-        .instructions()
-        .iter()
-        .map(|ix| ix.program_id(account_keys))
-}
-
 fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
     match matches.value_of("encoding") {
         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
         Some("base64") => UiAccountEncoding::Base64,
         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
         _ => UiAccountEncoding::Base64,
-    }
-}
-
-fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &OutputFormat) {
-    // Note: rewards are not output in JSON yet
-    if *method == OutputFormat::Display {
-        if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
-            if !rewards.is_empty() {
-                println!("  Rewards:");
-                println!(
-                    "    {:<44}  {:^15}  {:<15}  {:<20}  {:>10}",
-                    "Address", "Type", "Amount", "New Balance", "Commission",
-                );
-
-                for reward in rewards {
-                    let sign = if reward.lamports < 0 { "-" } else { "" };
-                    println!(
-                        "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
-                        reward.pubkey,
-                        if let Some(reward_type) = reward.reward_type {
-                            format!("{reward_type}")
-                        } else {
-                            "-".to_string()
-                        },
-                        sign,
-                        lamports_to_sol(reward.lamports.unsigned_abs()),
-                        lamports_to_sol(reward.post_balance),
-                        reward
-                            .commission
-                            .map(|commission| format!("{commission:>9}%"))
-                            .unwrap_or_else(|| "    -".to_string())
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn output_entry(
-    blockstore: &Blockstore,
-    method: &OutputFormat,
-    slot: Slot,
-    entry_index: usize,
-    entry: Entry,
-) {
-    match method {
-        OutputFormat::Display => {
-            println!(
-                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
-                entry_index,
-                entry.num_hashes,
-                entry.hash,
-                entry.transactions.len()
-            );
-            for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {transactions_index}");
-                let tx_signature = transaction.signatures[0];
-                let tx_status_meta = blockstore
-                    .read_transaction_status((tx_signature, slot))
-                    .unwrap_or_else(|err| {
-                        eprintln!(
-                            "Failed to read transaction status for {} at slot {}: {}",
-                            transaction.signatures[0], slot, err
-                        );
-                        None
-                    })
-                    .map(|meta| meta.into());
-
-                solana_cli_output::display::println_transaction(
-                    &transaction,
-                    tx_status_meta.as_ref(),
-                    "      ",
-                    None,
-                    None,
-                );
-            }
-        }
-        OutputFormat::Json => {
-            // Note: transaction status is not output in JSON yet
-            serde_json::to_writer(stdout(), &entry).expect("serialize entry");
-            stdout().write_all(b",\n").expect("newline");
-        }
-        _ => unreachable!(),
-    }
-}
-
-fn output_slot(
-    blockstore: &Blockstore,
-    slot: Slot,
-    allow_dead_slots: bool,
-    method: &OutputFormat,
-    verbose_level: u64,
-    all_program_ids: &mut HashMap<Pubkey, u64>,
-) -> Result<(), String> {
-    if blockstore.is_dead(slot) {
-        if allow_dead_slots {
-            if *method == OutputFormat::Display {
-                println!(" Slot is dead");
-            }
-        } else {
-            return Err("Dead slot".to_string());
-        }
-    }
-
-    let (entries, num_shreds, is_full) = blockstore
-        .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
-        .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
-
-    if *method == OutputFormat::Display {
-        if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 1 {
-                println!("  {meta:?} is_full: {is_full}");
-            } else {
-                println!(
-                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, \
-                     is_full: {}",
-                    num_shreds,
-                    meta.parent_slot,
-                    meta.next_slots,
-                    entries.len(),
-                    is_full,
-                );
-            }
-        }
-    }
-
-    if verbose_level >= 2 {
-        for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry);
-        }
-
-        output_slot_rewards(blockstore, slot, method);
-    } else if verbose_level >= 1 {
-        let mut transactions = 0;
-        let mut num_hashes = 0;
-        let mut program_ids = HashMap::new();
-        let blockhash = if let Some(entry) = entries.last() {
-            entry.hash
-        } else {
-            Hash::default()
-        };
-
-        for entry in entries {
-            transactions += entry.transactions.len();
-            num_hashes += entry.num_hashes;
-            for transaction in entry.transactions {
-                for program_id in get_program_ids(&transaction) {
-                    *program_ids.entry(*program_id).or_insert(0) += 1;
-                }
-            }
-        }
-
-        println!("  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",);
-        for (pubkey, count) in program_ids.iter() {
-            *all_program_ids.entry(*pubkey).or_insert(0) += count;
-        }
-        println!("  Programs:");
-        output_sorted_program_ids(program_ids);
-    }
-    Ok(())
-}
-
-fn output_ledger(
-    blockstore: Blockstore,
-    starting_slot: Slot,
-    ending_slot: Slot,
-    allow_dead_slots: bool,
-    method: OutputFormat,
-    num_slots: Option<Slot>,
-    verbose_level: u64,
-    only_rooted: bool,
-) {
-    let slot_iterator = blockstore
-        .slot_meta_iterator(starting_slot)
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
-            exit(1);
-        });
-
-    if method == OutputFormat::Json {
-        stdout().write_all(b"{\"ledger\":[\n").expect("open array");
-    }
-
-    let num_slots = num_slots.unwrap_or(Slot::MAX);
-    let mut num_printed = 0;
-    let mut all_program_ids = HashMap::new();
-    for (slot, slot_meta) in slot_iterator {
-        if only_rooted && !blockstore.is_root(slot) {
-            continue;
-        }
-        if slot > ending_slot {
-            break;
-        }
-
-        match method {
-            OutputFormat::Display => {
-                println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
-            }
-            OutputFormat::Json => {
-                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
-                stdout().write_all(b",\n").expect("newline");
-            }
-            _ => unreachable!(),
-        }
-
-        if let Err(err) = output_slot(
-            &blockstore,
-            slot,
-            allow_dead_slots,
-            &method,
-            verbose_level,
-            &mut all_program_ids,
-        ) {
-            eprintln!("{err}");
-        }
-        num_printed += 1;
-        if num_printed >= num_slots as usize {
-            break;
-        }
-    }
-
-    if method == OutputFormat::Json {
-        stdout().write_all(b"\n]}\n").expect("close array");
-    } else {
-        println!("Summary of Programs:");
-        output_sorted_program_ids(all_program_ids);
-    }
-}
-
-fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
-    let mut program_ids_array: Vec<_> = program_ids.into_iter().collect();
-    // Sort descending by count of program id
-    program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
-    for (program_id, count) in program_ids_array.iter() {
-        println!("{:<44}: {}", program_id.to_string(), count);
     }
 }
 

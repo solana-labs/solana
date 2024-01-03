@@ -39,8 +39,8 @@ use {
         },
     },
     solana_sdk::{
-        clock::Slot, genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
-        timing::timestamp,
+        clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, signature::Signer,
+        signer::keypair::Keypair, timing::timestamp, transaction::VersionedTransaction,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_unified_scheduler_pool::DefaultSchedulerPool,
@@ -550,4 +550,14 @@ pub fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> G
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
+}
+
+pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
+    let message = &tx.message;
+    let account_keys = message.static_account_keys();
+
+    message
+        .instructions()
+        .iter()
+        .map(|ix| ix.program_id(account_keys))
 }
