@@ -1025,6 +1025,8 @@ fn test_rent_exempt_executable_account() {
     let account_balance = 1;
     let mut account = AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
     account.set_executable(true);
+    account.set_owner(bpf_loader_upgradeable::id());
+    account.set_data(create_executable_meta(account.owner()).to_vec());
     bank.store_account(&account_pubkey, &account);
 
     let transfer_lamports = 1;
@@ -6458,25 +6460,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "3KE2bigpBiiMLGYNqmWkgbrQGSqMt5ccG6ED87CFCVpt"
+                "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "FpNDsd21HXznXf6tRpMNiWhFyhZ4aCCECQm3gL4jGV22"
+                "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "7gDCoXPfFtKPALi212akhhQHEuLdAqyf7DE3yUN4bR2p"
+                "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "6FREbeHdTNYnEXg4zobL2mqGfevukg75frkQJqKpYnk4"
+                "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
             );
             break;
         }
