@@ -2018,11 +2018,11 @@ fn main() {
 
     let verbose_level = matches.occurrences_of("verbose");
 
-    if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
-        bigtable_process_command(&ledger_path, arg_matches)
-    } else if let ("program", Some(arg_matches)) = matches.subcommand() {
-        program(&ledger_path, arg_matches)
-    } else {
+    match matches.subcommand() {
+        ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
+        ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
+        _ => {
+
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
         match matches.subcommand() {
@@ -3836,9 +3836,10 @@ fn main() {
             }
             _ => unreachable!(),
         };
-        measure_total_execution_time.stop();
-        info!("{}", measure_total_execution_time);
     }
+    };
+    measure_total_execution_time.stop();
+    info!("{}", measure_total_execution_time);
 }
 
 #[cfg(test)]
