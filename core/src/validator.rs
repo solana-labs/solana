@@ -1586,7 +1586,12 @@ impl Validator {
             .expect("poh_timing_report_service");
         info!("join28");
         self.bank_forks.write().unwrap().prepare_to_drop();
-        drop::<BankForks>(Arc::into_inner(self.bank_forks).unwrap().into_inner().unwrap());
+        drop::<BankForks>(
+            Arc::into_inner(self.bank_forks)
+                .unwrap()
+                .into_inner()
+                .unwrap(),
+        );
     }
 }
 
