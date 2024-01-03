@@ -61,10 +61,10 @@ pub fn activate_with_lamports(
     ]
 }
 
-// TODO tests
+// TODO HANA tests
 pub fn is_feature_active(feature_addr: &Pubkey) -> Result<bool, ProgramError> {
     let mut var = false;
-    let var_addr = &mut var as *mut _ as *mut u8; // XXX i dont understand what this does
+    let var_addr = &mut var as *mut bool;
 
     #[cfg(target_os = "solana")]
     let result = unsafe { crate::syscalls::sol_is_feature_active(var_addr, feature_addr) };

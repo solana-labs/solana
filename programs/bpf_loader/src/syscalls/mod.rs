@@ -39,10 +39,10 @@ use {
             disable_deploy_of_alloc_free_syscall, disable_fees_sysvar,
             enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
-            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            reject_callx_r10, remaining_compute_units_syscall_enabled,
+            error_on_syscall_bpf_function_hash_collisions, is_feature_active_syscall_enabled,
+            last_restart_slot_sysvar, reject_callx_r10, remaining_compute_units_syscall_enabled,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser, is_feature_active_syscall_enabled,
+            switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
         instruction::{

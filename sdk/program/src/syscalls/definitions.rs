@@ -72,7 +72,7 @@ define_syscall!(fn sol_get_epoch_rewards_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_poseidon(parameters: u64, endianness: u64, vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_remaining_compute_units() -> u64);
 define_syscall!(fn sol_alt_bn128_compression(op: u64, input: *const u8, input_size: u64, result: *mut u8) -> u64);
-define_syscall!(fn sol_is_feature_active(addr: *mut u8, feature: *const Pubkey) -> u64);
+define_syscall!(fn sol_is_feature_active(addr: *mut bool, feature: *const Pubkey) -> u64);
 
 #[cfg(target_feature = "static-syscalls")]
 pub const fn sys_hash(name: &str) -> usize {

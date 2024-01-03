@@ -1,6 +1,6 @@
-// TODO docs
+// TODO HANA docs
 
-// XXX found a note that "new rbpf features" must be added to "Bank::apply_builtin_program_feature_transitions()"
+// TODO HANA found a note that "new rbpf features" must be added to "Bank::apply_builtin_program_feature_transitions()"
 // i dont think this applies to me because i didnt see any other syscall feature flags there
 
 pub mod deprecate_rewards_sysvar {

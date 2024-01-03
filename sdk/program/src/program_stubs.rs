@@ -61,7 +61,7 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_last_restart_slot(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
-    fn sol_is_feature_active(&self, _var_addr: *mut u8, _feature_addr: *const Pubkey) -> u64 {
+    fn sol_is_feature_active(&self, _var_addr: *mut bool, _feature_addr: *const Pubkey) -> u64 {
         sol_log("SyscallStubs: sol_is_feature_active() defaulting to false");
         0
     }
@@ -175,7 +175,7 @@ pub(crate) fn sol_get_last_restart_slot(var_addr: *mut u8) -> u64 {
         .sol_get_last_restart_slot(var_addr)
 }
 
-pub(crate) fn sol_is_feature_active(var_addr: *mut u8, feature_addr: *const Pubkey) -> u64 {
+pub(crate) fn sol_is_feature_active(var_addr: *mut bool, feature_addr: *const Pubkey) -> u64 {
     SYSCALL_STUBS
         .read()
         .unwrap()

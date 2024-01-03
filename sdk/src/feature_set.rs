@@ -17,7 +17,7 @@
 //! 3. Add desired logic to check for and switch on feature availability.
 //!
 //! For more information on how features are picked up, see comments for `Feature`.
-// TODO fix docs for module changes
+// TODO HANA fix docs for module changes
 
 pub use solana_program::feature_set::*;
 use {
@@ -31,7 +31,7 @@ use {
     std::collections::{HashMap, HashSet},
 };
 
-// XXX should these move to solana_program too? it feels like staying here makes more sense
+// TODO HANA should these move to solana_program too? it feels like staying here makes more sense
 // since we dont really need these in-program. but otoh it means you need to edit *both* files to add a feature
 // oh actually it might be a moot point, iirc HashMap hash function isnt available in program context
 lazy_static! {
