@@ -1105,7 +1105,7 @@ mod tests {
 
         // setup nonce account with a durable nonce different from the current
         // bank so that it can be advanced in this bank
-        let durable_nonce = nonce::state::DurableNonce::from_blockhash(&Hash::new_unique());
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let nonce_hash = *durable_nonce.as_hash();
         let nonce_pubkey = solana_sdk::pubkey::new_rand();
         let nonce_state = nonce::State::Initialized(nonce::state::Data {
@@ -1140,16 +1140,15 @@ mod tests {
                 Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &PohConfig::default(),
-                Arc::new(AtomicBool::default()),
+                Arc::new(AtomicBool::new(false)),
             );
             let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             fn poh_tick_before_returning_record_response(
                 record_receiver: Receiver<Record>,
-                poh_recorder: &Arc<RwLock<PohRecorder>>,
+                poh_recorder: Arc<RwLock<PohRecorder>>,
             ) -> JoinHandle<()> {
-                let poh_recorder = poh_recorder.clone();
                 let is_exited = poh_recorder.read().unwrap().is_exited.clone();
                 let tick_producer = Builder::new()
                     .name("solana-simulate_poh".to_string())
@@ -1179,7 +1178,7 @@ mod tests {
             // bank blockhash queue is updated before transactions are
             // committed.
             let poh_simulator =
-                poh_tick_before_returning_record_response(record_receiver, &poh_recorder);
+                poh_tick_before_returning_record_response(record_receiver, poh_recorder.clone());
 
             poh_recorder
                 .write()
@@ -1227,8 +1226,6 @@ mod tests {
                 if !entry.is_tick() {
                     assert_eq!(entry.transactions.len(), transactions.len());
                     done = true;
-                }
-                if done {
                     break;
                 }
             }
