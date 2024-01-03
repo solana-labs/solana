@@ -1586,12 +1586,16 @@ impl Validator {
             .expect("poh_timing_report_service");
         info!("join28");
         self.bank_forks.write().unwrap().prepare_to_drop();
-        drop::<BankForks>(
-            Arc::into_inner(self.bank_forks)
-                .unwrap()
-                .into_inner()
-                .unwrap(),
-        );
+        let sc = Arc::strong_count(&self.bank_forks);
+        if let Some(bank_forks) = Arc::into_inner(self.bank_forks) {
+            drop::<BankForks>(
+                    bank_forks   
+                    .into_inner()
+                    .unwrap(),
+            );
+        } else { 
+            warn!("seems bankforks are leaking...{}:", sc);
+        }
     }
 }
 
