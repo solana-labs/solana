@@ -105,22 +105,42 @@ impl StakedStreamLoadEMA {
         }
     }
 
-    fn update_ema(&self) {
+    fn ema_function(current_ema: u128, recent_load: u128) -> u128 {
         // Using the EMA multiplier helps in avoiding the floating point math during EMA related calculations
         const STREAM_LOAD_EMA_MULTIPLIER: u128 = 1024;
         const STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER: u128 =
             2 * STREAM_LOAD_EMA_MULTIPLIER / (STREAM_LOAD_EMA_INTERVAL_COUNT + 1);
 
-        let recent_load = self.load_in_recent_interval.load(Ordering::Relaxed) as u128;
         // The formula is
         //    updated_ema = recent_load * smoothing_factor + current_ema * (1 - smoothing_factor)
         // To avoid floating point math, we are using STREAM_LOAD_EMA_MULTIPLIER
         //    updated_ema = (recent_load * multiplied_smoothing_factor
         //                   + current_ema * (multiplier - multiplied_smoothing_factor)) / multiplier
-        let updated_load_ema = (recent_load * STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER
-            + self.current_load_ema.load(Ordering::Relaxed) as u128
+        (recent_load * STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER
+            + current_ema
                 * (STREAM_LOAD_EMA_MULTIPLIER - STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER))
-            / STREAM_LOAD_EMA_MULTIPLIER;
+            / STREAM_LOAD_EMA_MULTIPLIER
+    }
+
+    fn update_ema(&self, time_since_last_update_ms: u128) {
+        let update_interval_ms = STREAM_LOAD_EMA_INTERVAL_MS.as_millis();
+
+        // if time_since_last_update_ms > STREAM_LOAD_EMA_INTERVAL_MS, there might be intervals where ema was not updated.
+        // count how many updates (1 + missed intervals) are needed.
+        let num_extra_updates = time_since_last_update_ms.saturating_sub(1) / update_interval_ms;
+
+        let mut updated_load_ema = Self::ema_function(
+            self.current_load_ema.load(Ordering::Relaxed) as u128,
+            self.load_in_recent_interval.load(Ordering::Relaxed) as u128,
+        );
+
+        for _ in 0..num_extra_updates {
+            updated_load_ema = Self::ema_function(
+                updated_load_ema,
+                self.load_in_recent_interval.load(Ordering::Relaxed) as u128,
+            );
+        }
+
         self.current_load_ema
             .store(updated_load_ema as u64, Ordering::Relaxed);
         self.stats
@@ -135,9 +155,10 @@ impl StakedStreamLoadEMA {
         {
             let mut last_update_w = self.last_update.write().unwrap();
             // Recheck as some other thread might have updated the ema since this thread tried to acquire the write lock.
-            if Instant::now().duration_since(*last_update_w) >= STREAM_LOAD_EMA_INTERVAL_MS {
+            let since_last_update = Instant::now().duration_since(*last_update_w);
+            if since_last_update >= STREAM_LOAD_EMA_INTERVAL_MS {
                 *last_update_w = Instant::now();
-                self.update_ema();
+                self.update_ema(since_last_update.as_millis());
             }
         }
     }
@@ -2300,12 +2321,28 @@ pub mod test {
             .current_load_ema
             .store(2000, Ordering::Relaxed);
 
-        stream_load_ema.update_ema();
+        stream_load_ema.update_ema(5);
 
         let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
         assert_eq!(updated_ema, 2090);
 
-        stream_load_ema.update_ema();
+        stream_load_ema.update_ema(5);
+
+        let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
+        assert_eq!(updated_ema, 2164);
+    }
+
+    #[test]
+    fn test_update_ema_missing_interval() {
+        let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
+        stream_load_ema
+            .load_in_recent_interval
+            .store(2500, Ordering::Relaxed);
+        stream_load_ema
+            .current_load_ema
+            .store(2000, Ordering::Relaxed);
+
+        stream_load_ema.update_ema(8);
 
         let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
         assert_eq!(updated_ema, 2164);
