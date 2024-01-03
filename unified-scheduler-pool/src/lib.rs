@@ -1204,14 +1204,13 @@ where
     }
 
     fn start_session(&mut self, context: &SchedulingContext) {
-        assert_matches!(self.session_result_with_timings, None);
-
         if !self.is_suspended() {
+            assert_matches!(self.session_result_with_timings, None);
             self.new_task_sender
                 .send(SubchanneledPayload::OpenSubchannel(context.clone()))
                 .unwrap();
         } else {
-            self.session_result_with_timings = Some(initialized_result_with_timings());
+            self.put_session_result_with_timings(initialized_result_with_timings());
             assert_matches!(self.try_resume(context), Ok(()));
         }
     }
