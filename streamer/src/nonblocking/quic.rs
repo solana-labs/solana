@@ -41,7 +41,7 @@ use {
 };
 
 /// Limit to 250K PPS
-const MAX_STREAMS_PER_100MS: u64 = 250_000 / 10;
+const MAX_STREAMS_PER_MS: u64 = 250;
 const MAX_UNSTAKED_STREAMS_PERCENT: u64 = 20;
 const STREAM_THROTTLING_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -62,8 +62,7 @@ const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 const STREAM_STOP_CODE_THROTTLING: u32 = 15;
 const STREAM_LOAD_EMA_INTERVAL_MS: Duration = Duration::from_millis(5);
-const STREAM_LOAD_EMA_INTERVAL_COUNT: f64 = 10f64;
-const STREAM_LOAD_EMA_SMOOTHING_FACTOR: f64 = 2f64 / (STREAM_LOAD_EMA_INTERVAL_COUNT + 1f64);
+const STREAM_LOAD_EMA_INTERVAL_COUNT: u128 = 10;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -89,49 +88,95 @@ struct PacketAccumulator {
     pub chunks: Vec<PacketChunk>,
 }
 
-#[derive(Default)]
 struct StakedStreamLoadEMA {
     current_load_ema: AtomicU64,
     load_in_recent_interval: AtomicU64,
+    last_update: RwLock<Instant>,
+    stats: Arc<StreamStats>,
 }
 
 impl StakedStreamLoadEMA {
-    async fn update_ema(self: Arc<Self>, exit: Arc<AtomicBool>, stats: Arc<StreamStats>) {
-        while !exit.load(Ordering::Relaxed) {
-            tokio::time::interval(STREAM_LOAD_EMA_INTERVAL_MS)
-                .tick()
-                .await;
+    fn new(stats: Arc<StreamStats>) -> Self {
+        Self {
+            current_load_ema: AtomicU64::default(),
+            load_in_recent_interval: AtomicU64::default(),
+            last_update: RwLock::new(Instant::now()),
+            stats,
+        }
+    }
 
-            let recent_load = self.load_in_recent_interval.load(Ordering::Relaxed);
-            let updated_load_ema = recent_load as f64 * STREAM_LOAD_EMA_SMOOTHING_FACTOR
-                + self.current_load_ema.load(Ordering::Relaxed) as f64
-                    * (1f64 - STREAM_LOAD_EMA_SMOOTHING_FACTOR);
-            self.current_load_ema
-                .store(updated_load_ema as u64, Ordering::Relaxed);
-            stats
-                .stream_load_ema
-                .store(updated_load_ema as usize, Ordering::Relaxed);
+    fn update_ema(&self) {
+        // Using the EMA multiplier helps in avoiding the floating point math during EMA related calculations
+        const STREAM_LOAD_EMA_MULTIPLIER: u128 = 1024;
+        const STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER: u128 =
+            2 * STREAM_LOAD_EMA_MULTIPLIER / (STREAM_LOAD_EMA_INTERVAL_COUNT + 1);
+
+        let recent_load = self.load_in_recent_interval.load(Ordering::Relaxed) as u128;
+        // The formula is
+        //    updated_ema = recent_load * smoothing_factor + current_ema * (1 - smoothing_factor)
+        // To avoid floating point math, we are using STREAM_LOAD_EMA_MULTIPLIER
+        //    updated_ema = (recent_load * multiplied_smoothing_factor
+        //                   + current_ema * (multiplier - multiplied_smoothing_factor)) / multiplier
+        let updated_load_ema = (recent_load * STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER
+            + self.current_load_ema.load(Ordering::Relaxed) as u128
+                * (STREAM_LOAD_EMA_MULTIPLIER - STREAM_LOAD_EMA_SMOOTHING_FACTOR_WITH_MULTIPLIER))
+            / STREAM_LOAD_EMA_MULTIPLIER;
+        self.current_load_ema
+            .store(updated_load_ema as u64, Ordering::Relaxed);
+        self.stats
+            .stream_load_ema
+            .store(updated_load_ema as usize, Ordering::Relaxed);
+    }
+
+    fn update_ema_if_needed(&self) {
+        // Read lock enables multiple connection handlers to run in parallel if interval is not expired
+        if Instant::now().duration_since(*self.last_update.read().unwrap())
+            >= STREAM_LOAD_EMA_INTERVAL_MS
+        {
+            let mut last_update_w = self.last_update.write().unwrap();
+            // Recheck as some other thread might have updated the ema since this thread tried to acquire the write lock.
+            if Instant::now().duration_since(*last_update_w) >= STREAM_LOAD_EMA_INTERVAL_MS {
+                *last_update_w = Instant::now();
+                self.update_ema();
+            }
         }
     }
 
     fn increment_load(&self) {
         self.load_in_recent_interval.fetch_add(1, Ordering::Relaxed);
+        self.update_ema_if_needed();
     }
     fn decrement_load(&self) {
         self.load_in_recent_interval.fetch_sub(1, Ordering::Relaxed);
+        self.update_ema_if_needed();
     }
 
-    fn available_load_capacity(&self, stake: u64, total_stake: u64) -> u64 {
-        let max_load: u64 = MAX_STREAMS_PER_100MS
-            - Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT).apply_to(MAX_STREAMS_PER_100MS);
+    fn available_load_capacity_in_duration(
+        &self,
+        stake: u64,
+        total_stake: u64,
+        duration_ms: u128,
+    ) -> u128 {
+        let ema_window_ms =
+            STREAM_LOAD_EMA_INTERVAL_MS.as_millis() * STREAM_LOAD_EMA_INTERVAL_COUNT;
+        let max_load_in_ema_window: u128 = (MAX_STREAMS_PER_MS as u128
+            - Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT).apply_to(MAX_STREAMS_PER_MS as u128))
+            * ema_window_ms;
+
         // If the current load is low, cap it to 25% of max_load.
-        let current_load = cmp::max(self.current_load_ema.load(Ordering::Relaxed), max_load / 4);
+        let current_load = cmp::max(
+            self.current_load_ema.load(Ordering::Relaxed) as u128,
+            max_load_in_ema_window / 4,
+        );
+
         // Formula is (max_load ^ 2 / current_load) * (stake / total_stake)
         // To avoid overflow due to multiplication, we are doing the following
         // (max_load / current_load) * (max_load / total_stake) * stake
-        ((max_load as f64 / current_load as f64)
-            * (max_load as f64 / total_stake as f64)
-            * stake as f64) as u64
+        let capacity_in_ema_window = ((max_load_in_ema_window as f64 / current_load as f64)
+            * (max_load_in_ema_window as f64 / total_stake as f64)
+            * stake as f64) as u128;
+
+        capacity_in_ema_window * duration_ms / ema_window_ms
     }
 }
 
@@ -197,12 +242,7 @@ async fn run_server(
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
         ConnectionTable::new(ConnectionPeerType::Unstaked),
     ));
-    let stream_load_ema = Arc::new(StakedStreamLoadEMA::default());
-    tokio::spawn(
-        stream_load_ema
-            .clone()
-            .update_ema(exit.clone(), stats.clone()),
-    );
+    let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(stats.clone()));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     let (sender, receiver) = async_unbounded();
@@ -750,18 +790,19 @@ async fn packet_batch_sender(
     }
 }
 
-fn max_streams_for_connection_in_100ms(
+fn max_streams_for_connection_in_duration(
     connection_type: ConnectionPeerType,
     stake: u64,
     total_stake: u64,
     ema_load: Arc<StakedStreamLoadEMA>,
-) -> u64 {
+    duration_ms: u128,
+) -> u128 {
     if matches!(connection_type, ConnectionPeerType::Unstaked) || stake == 0 {
         Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT)
-            .apply_to(MAX_STREAMS_PER_100MS)
-            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u64)
+            .apply_to(MAX_STREAMS_PER_MS as u128 * duration_ms)
+            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u128)
     } else {
-        ema_load.available_load_capacity(stake, total_stake)
+        ema_load.available_load_capacity_in_duration(stake, total_stake, duration_ms)
     }
 }
 
@@ -794,19 +835,24 @@ async fn handle_connection(
     );
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
-    let mut max_streams_per_100ms = max_streams_for_connection_in_100ms(
+    let mut max_streams_per_throttling_interval = max_streams_for_connection_in_duration(
         peer_type,
         params.stake,
         params.total_stake,
         stream_load_ema.clone(),
+        STREAM_THROTTLING_INTERVAL.as_millis(),
     );
     let mut last_throttling_instant = tokio::time::Instant::now();
     let mut streams_in_current_interval = 0;
     let staked_stream = matches!(peer_type, ConnectionPeerType::Staked) && params.stake > 0;
     while !stream_exit.load(Ordering::Relaxed) {
         if staked_stream {
-            max_streams_per_100ms =
-                stream_load_ema.available_load_capacity(params.stake, params.total_stake)
+            max_streams_per_throttling_interval = stream_load_ema
+                .available_load_capacity_in_duration(
+                    params.stake,
+                    params.total_stake,
+                    STREAM_THROTTLING_INTERVAL.as_millis(),
+                );
         }
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
@@ -815,7 +861,7 @@ async fn handle_connection(
                 Ok(mut stream) => {
                     if reset_throttling_params_if_needed(&mut last_throttling_instant) {
                         streams_in_current_interval = 0;
-                    } else if streams_in_current_interval >= max_streams_per_100ms {
+                    } else if streams_in_current_interval >= max_streams_per_throttling_interval {
                         stats.throttled_streams.fetch_add(1, Ordering::Relaxed);
                         let _ = stream.stop(VarInt::from_u32(STREAM_STOP_CODE_THROTTLING));
                         continue;
@@ -2111,26 +2157,28 @@ pub mod test {
     }
 
     #[test]
-    fn test_max_streams_for_connection_in_100ms() {
-        let load_ema = Arc::new(StakedStreamLoadEMA::default());
+    fn test_max_streams_for_unstaked_connection_in_100ms() {
+        let load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Unstaked,
                 0,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             10
         );
 
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Unstaked,
                 10,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             10
         );
@@ -2138,96 +2186,113 @@ pub mod test {
         // If stake is 0, same limits as unstaked connections will apply.
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 0,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             10
         );
+    }
+    #[test]
+    fn test_max_streams_for_staked_connection_in_100ms() {
+        let load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
+
+        // EMA load is used for staked connections to calculate max number of allowed streams.
+        // EMA window = 5ms interval * 10 intervals = 50ms
+        // max streams per window = 250K streams/sec * 80% = 200K/sec = 10K per 50ms
+        // max_streams in 50ms = ((10K * 10K) / ema_load) * stake / total_stake
+        //
+        // Stream throttling window is 100ms. So it'll double the amount of max streams.
+        // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / ema_load) * stake / total_stake
 
         load_ema.current_load_ema.store(10000, Ordering::Relaxed);
-        // max staked streams = 25K packets per ms * 80% = 20K
-        // function = ((20K * 20K) / 10K) * stake / total_stake
+        // ema_load = 10K, stake = 15, total_stake = 10K
+        // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 10K) * 15 / 10K  = 30
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 15,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
-            60
+            30
         );
 
-        // max staked streams = 25K packets per ms * 80% = 40K
-        // function = ((20K * 20K) / 10K) * stake / total_stake
+        // ema_load = 10K, stake = 1K, total_stake = 10K
+        // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 10K) * 1K / 10K  = 2K
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 1000,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
-            4000
+            2000
         );
 
-        load_ema.current_load_ema.store(5000, Ordering::Relaxed);
-        // max staked streams = 25K packets per ms * 80% = 20K
-        // function = ((20K * 20K) / 5000) * stake / total_stake
+        load_ema.current_load_ema.store(2500, Ordering::Relaxed);
+        // ema_load = 2.5K, stake = 15, total_stake = 10K
+        // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 2.5K) * 15 / 10K  = 120
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 15,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             120
         );
 
-        // max staked streams = 25K packets per ms * 80% = 20K
-        // function = ((20K * 20K) / 5000) * stake / total_stake
+        // ema_load = 2.5K, stake = 1K, total_stake = 10K
+        // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 2.5K) * 1K / 10K  = 8000
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 1000,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             8000
         );
 
-        // At 4000, the load is less than 25% of max_load (20K).
-        // Test that we cap it to 10%, yielding the same result as if load was 4000.
-        load_ema.current_load_ema.store(4000, Ordering::Relaxed);
-        // max staked streams = 25K packets per ms * 80% = 20K
-        // function = ((20K * 20K) / 25% of 20K) * stake / total_stake
+        // At 2000, the load is less than 25% of max_load (10K).
+        // Test that we cap it to 25%, yielding the same result as if load was 2500.
+        load_ema.current_load_ema.store(2000, Ordering::Relaxed);
+        // function = ((10K * 10K) / 25% of 10K) * stake / total_stake
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 15,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             120
         );
 
-        // max staked streams = 25K packets per ms * 80% = 20K
-        // function = ((20K * 20K) / 25% of 20K) * stake / total_stake
+        // function = ((10K * 10K) / 25% of 10K) * stake / total_stake
         assert_eq!(
-            max_streams_for_connection_in_100ms(
+            max_streams_for_connection_in_duration(
                 ConnectionPeerType::Staked,
                 1000,
                 10000,
-                load_ema.clone()
+                load_ema.clone(),
+                100
             ),
             8000
         );
     }
 
-    #[tokio::test]
-    async fn test_update_ema() {
-        let stream_load_ema = Arc::new(StakedStreamLoadEMA::default());
+    #[test]
+    fn test_update_ema() {
+        let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
         stream_load_ema
             .load_in_recent_interval
             .store(2500, Ordering::Relaxed);
@@ -2235,21 +2300,43 @@ pub mod test {
             .current_load_ema
             .store(2000, Ordering::Relaxed);
 
-        let exit = Arc::new(AtomicBool::new(false));
-        let stats = Arc::new(StreamStats::default());
+        stream_load_ema.update_ema();
 
-        let exit_clone = exit.clone();
-        tokio::spawn(async move {
-            tokio::time::interval(Duration::from_millis(6)).tick().await;
-            exit_clone.store(true, Ordering::Relaxed);
-        });
+        let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
+        assert_eq!(updated_ema, 2090);
 
-        stream_load_ema
-            .clone()
-            .update_ema(exit.clone(), stats.clone())
-            .await;
+        stream_load_ema.update_ema();
 
         let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
         assert_eq!(updated_ema, 2164);
+    }
+
+    #[test]
+    fn test_update_ema_if_needed() {
+        let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
+        stream_load_ema
+            .load_in_recent_interval
+            .store(2500, Ordering::Relaxed);
+        stream_load_ema
+            .current_load_ema
+            .store(2000, Ordering::Relaxed);
+
+        stream_load_ema.update_ema_if_needed();
+
+        let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
+        assert_eq!(updated_ema, 2000);
+
+        *stream_load_ema.last_update.write().unwrap() = Instant::now()
+            .checked_sub(STREAM_LOAD_EMA_INTERVAL_MS)
+            .unwrap();
+
+        stream_load_ema.update_ema_if_needed();
+        assert!(
+            Instant::now().duration_since(*stream_load_ema.last_update.read().unwrap())
+                < STREAM_LOAD_EMA_INTERVAL_MS
+        );
+
+        let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
+        assert_eq!(updated_ema, 2090);
     }
 }
