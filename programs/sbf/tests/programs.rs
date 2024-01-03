@@ -457,7 +457,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
         bank_forks
             .write()
             .unwrap()
-            .remove_without_scheduler(slot)
+            .remove_bank_without_scheduler(slot)
             .unwrap(),
     )
     .unwrap();
@@ -489,7 +489,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
         bank_forks
             .write()
             .unwrap()
-            .remove_without_scheduler(slot)
+            .remove_bank_without_scheduler(slot)
             .unwrap(),
     )
     .unwrap();

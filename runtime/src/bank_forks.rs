@@ -299,7 +299,7 @@ impl BankForks {
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub fn remove_without_scheduler(&mut self, slot: Slot) -> Option<Arc<Bank>> {
+    pub fn remove_bank_without_scheduler(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         self.remove(slot).map(|bank| {
             // This closure will drop BankWithScheduler, which in turn would terminate the
             // scheduler if installed. Ensure the very odd operation is prevented with assert!(),
