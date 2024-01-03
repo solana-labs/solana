@@ -3317,11 +3317,12 @@ impl ReplayStage {
                         // u128 too large for influx, convert to hex
                         ("weight", format!("{:X}", stats.fork_weight), String),
                     );
+
                     info!(
-                        "{} slot_weight: {} {} {}",
+                        "{} slot_weight: {} {} {}%",
                         my_vote_pubkey,
                         bank_slot,
-                        stats.fork_weight,
+                        100 * stats.fork_weight / stats.total_stake as u128,
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                 }
