@@ -1585,9 +1585,6 @@ impl Validator {
             .join()
             .expect("poh_timing_report_service");
         info!("join28");
-        info!("Validator::join()... sleeping...");
-
-        info!("exit3");
         self.bank_forks.write().unwrap().prepare_to_drop();
         drop::<BankForks>(Arc::into_inner(self.bank_forks).unwrap().into_inner().unwrap());
     }
