@@ -30,7 +30,7 @@ use {
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
-        clock::Slot,
+        clock::{Epoch, Slot},
         entrypoint::{deserialize, ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
@@ -65,7 +65,6 @@ use {
     tokio::task::JoinHandle,
 };
 // Export types so test clients can limit their solana crate dependencies
-use solana_sdk::clock::Epoch;
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
     solana_banks_interface::BanksTransactionResultWithMetadata,
