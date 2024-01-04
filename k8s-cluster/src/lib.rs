@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 use {
     bzip2::bufread::BzDecoder,
     console::Emoji,
@@ -190,7 +191,7 @@ pub fn calculate_stake_allocations(
     let nodes_per_stake_grouping = NonZeroUsize::new(num_validators_usize / distribution.len())
         .ok_or_else(|| format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators_usize, distribution.len()))?;
 
-    let num_extra_validators = num_validators_usize as usize % distribution.len();
+    let num_extra_validators = num_validators_usize % distribution.len();
     if num_extra_validators != 0 {
         warn!("WARNING: number of desired validators does not evenly split across desired distribution. \
         additional validators added one by one to distribution buckets starting with heaviest buckets by stake ({:?}%)
@@ -201,7 +202,6 @@ pub fn calculate_stake_allocations(
         let mut nodes_per_bucket = nodes_per_stake_grouping.get();
         if i < num_extra_validators {
             nodes_per_bucket = nodes_per_bucket.saturating_add(1);
-            // nodes_per_bucket += 1;
         }
         buckets.insert(*percentage, nodes_per_bucket);
     }
