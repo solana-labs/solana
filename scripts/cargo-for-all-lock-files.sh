@@ -39,7 +39,21 @@ else
   files="$(git ls-files :**Cargo.lock)"
 fi
 
+exclude_lockfiles=()
+exclude_lockfiles+=(sdk/cargo-build-sbf/tests/crates/fail/Cargo.lock)
+exclude_lockfiles+=(sdk/cargo-build-sbf/tests/crates/noop/Cargo.lock)
+
 for lock_file in $files; do
+  skip=false
+  for exclude in "${exclude_lockfiles[@]}"; do
+    if [[ "$exclude" == "$lock_file" ]]; then
+      skip=true
+      break
+    fi
+  done
+  if [[ "$skip" == "true" ]]; then
+    continue
+  fi
   if [[ -n $CI ]]; then
     echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
   fi
