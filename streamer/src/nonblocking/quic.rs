@@ -191,11 +191,9 @@ impl StakedStreamLoadEMA {
         );
 
         // Formula is (max_load ^ 2 / current_load) * (stake / total_stake)
-        // To avoid overflow due to multiplication, we are doing the following
-        // (max_load / current_load) * (max_load / total_stake) * stake
-        let capacity_in_ema_window = ((max_load_in_ema_window as f64 / current_load as f64)
-            * (max_load_in_ema_window as f64 / total_stake as f64)
-            * stake as f64) as u128;
+        let capacity_in_ema_window =
+            (max_load_in_ema_window * max_load_in_ema_window * stake as u128)
+                / (current_load * total_stake as u128);
 
         capacity_in_ema_window * duration_ms / ema_window_ms
     }
