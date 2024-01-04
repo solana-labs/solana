@@ -4969,9 +4969,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.29"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15e0ef66bf939a7c890a0bf6d5a733c70202225f9888a89ed5c62298b019129"
+checksum = "b1bf28c79a99f70ee1f1d83d10c875d2e70618417fda01ad1785e027579d9d38"
 dependencies = [
  "indexmap 2.1.0",
  "itoa",
@@ -5485,7 +5485,7 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "serde_json",
- "serde_yaml 0.9.29",
+ "serde_yaml 0.9.30",
  "serial_test",
  "solana-clap-utils",
  "solana-cli-config",
@@ -5755,7 +5755,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "serde_derive",
- "serde_yaml 0.9.29",
+ "serde_yaml 0.9.30",
  "solana-clap-utils",
  "solana-sdk",
  "url 2.5.0",
@@ -6147,7 +6147,7 @@ dependencies = [
  "itertools",
  "serde",
  "serde_json",
- "serde_yaml 0.9.29",
+ "serde_yaml 0.9.30",
  "solana-accounts-db",
  "solana-clap-utils",
  "solana-cli-config",
@@ -6280,7 +6280,7 @@ dependencies = [
  "semver 1.0.20",
  "serde",
  "serde_yaml 0.8.26",
- "serde_yaml 0.9.29",
+ "serde_yaml 0.9.30",
  "solana-clap-utils",
  "solana-config-program",
  "solana-logger",
@@ -7594,7 +7594,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "serde_yaml 0.9.29",
+ "serde_yaml 0.9.30",
  "signal-hook",
  "solana-account-decoder",
  "solana-accounts-db",
