@@ -17,7 +17,7 @@ use {
 };
 use {
     crate::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{is_builtin, is_executable, AccountSharedData, ReadableAccount},
         feature_set::FeatureSet,
         instruction::InstructionError,
         pubkey::Pubkey,
@@ -1040,8 +1040,8 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is executable (transaction wide)
     #[inline]
-    pub fn is_executable(&self, _feature_set: &FeatureSet) -> bool {
-        self.account.executable()
+    pub fn is_executable(&self, feature_set: &FeatureSet) -> bool {
+        is_builtin(&*self.account) || is_executable(&*self.account, feature_set)
     }
 
     /// Configures whether this account is executable (transaction wide)

@@ -146,7 +146,7 @@ macro_rules! entrypoint {
 /// for [BPF] targets.
 ///
 /// [Cargo features]: https://doc.rust-lang.org/cargo/reference/features.html
-/// [BPF]: https://docs.solana.com/developing/on-chain-programs/overview#berkeley-packet-filter-bpf
+/// [BPF]: https://solana.com/docs/programs/faq#berkeley-packet-filter-bpf
 ///
 /// # Cargo features
 ///
@@ -181,7 +181,7 @@ macro_rules! custom_heap_default {
 /// for [BPF] targets.
 ///
 /// [Cargo features]: https://doc.rust-lang.org/cargo/reference/features.html
-/// [BPF]: https://docs.solana.com/developing/on-chain-programs/overview#berkeley-packet-filter-bpf
+/// [BPF]: https://solana.com/docs/programs/faq#berkeley-packet-filter-bpf
 ///
 /// # Cargo features
 ///
