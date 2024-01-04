@@ -10,10 +10,7 @@ use {
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
-    solana_ledger::{
-        blockstore_options::{AccessType, BlockstoreRecoveryMode},
-        blockstore_processor::ProcessOptions,
-    },
+    solana_ledger::{blockstore_options::AccessType, blockstore_processor::ProcessOptions},
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{LoadProgramMetrics, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
@@ -77,8 +74,6 @@ fn load_accounts(path: &Path) -> Result<Input> {
 fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank> {
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
-    let force_update_to_open = arg_matches.is_present("force_update_to_open");
-    let enforce_ulimit_nofile = !arg_matches.is_present("ignore_ulimit_nofile_error");
     let process_options = ProcessOptions {
         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
         run_verification: false,
@@ -108,18 +103,9 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
             .ok()
             .map(PathBuf::from);
 
-    let wal_recovery_mode = arg_matches
-        .value_of("wal_recovery_mode")
-        .map(BlockstoreRecoveryMode::from);
     let genesis_config = open_genesis_config_by(ledger_path, arg_matches);
     info!("genesis hash: {}", genesis_config.hash());
-    let blockstore = open_blockstore(
-        ledger_path,
-        AccessType::Secondary,
-        wal_recovery_mode,
-        force_update_to_open,
-        enforce_ulimit_nofile,
-    );
+    let blockstore = open_blockstore(ledger_path, arg_matches, AccessType::Secondary);
     let (bank_forks, ..) = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,

@@ -1,6 +1,6 @@
 //! A type to hold data for the [`SlotHistory` sysvar][sv].
 //!
-//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#slothistory
+//! [sv]: https://docs.solanalabs.com/runtime/sysvars#slothistory
 //!
 //! The sysvar ID is declared in [`sysvar::slot_history`].
 //!

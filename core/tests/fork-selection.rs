@@ -1,6 +1,6 @@
 //! Fork Selection Simulation
 //!
-//! Description of the algorithm can be found in [docs/src/cluster/managing-forks.md](docs/src/cluster/managing-forks.md).
+//! Description of the algorithm can be found in [Managing Forks](https://docs.solanalabs.com/consensus/managing-forks).
 //!
 //! A test library function exists for configuring networks.
 //! ```
@@ -11,7 +11,7 @@
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
-//! ```
+//! ```no_run
 //! #[test]
 //! #[ignore]
 //! fn test_all_partitions() {
