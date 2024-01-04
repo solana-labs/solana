@@ -130,8 +130,7 @@ mod tests {
             },
         },
         solana_accounts_db::{
-            accounts_db::AccountShrinkThreshold,
-            accounts_index::AccountSecondaryIndexes,
+            accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
         },
         solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
         solana_runtime::{
@@ -143,10 +142,7 @@ mod tests {
             runtime_config::RuntimeConfig,
         },
         solana_sdk::{hash::Hash, signature::Signer, timing::timestamp},
-        std::{
-            collections::HashMap,
-            sync::Arc,
-        },
+        std::{collections::HashMap, sync::Arc},
     };
 
     #[test]

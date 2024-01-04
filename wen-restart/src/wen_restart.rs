@@ -256,8 +256,7 @@ mod tests {
     use {
         crate::wen_restart::*,
         solana_accounts_db::{
-            accounts_db::AccountShrinkThreshold,
-            accounts_index::AccountSecondaryIndexes,
+            accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
         },
         solana_entry::entry,
         solana_gossip::{
