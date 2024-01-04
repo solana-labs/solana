@@ -237,8 +237,8 @@ jsonrpc-http-server = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
-kube = "0.85.0"
-k8s-openapi ={ version = "0.19.0", features = ["v1_27"] }
+kube = "0.87.2"
+k8s-openapi ={ version = "0.20.0", features = ["v1_28"] }
 lazy_static = "1.4.0"
 libc = "0.2.151"
 libloading = "0.7.4"
