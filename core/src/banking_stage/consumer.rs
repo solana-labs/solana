@@ -19,7 +19,9 @@ use {
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
     },
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::{
+        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
+    },
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
@@ -64,6 +66,8 @@ pub struct ExecuteAndCommitTransactionsOutput {
     pub commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     pub(crate) execute_and_commit_timings: LeaderExecuteAndCommitTimings,
     pub(crate) error_counters: TransactionErrorMetrics,
+    pub(crate) scheduled_min_prioritization_fees: usize,
+    pub(crate) scheduled_max_prioritization_fees: usize,
 }
 
 pub struct Consumer {
@@ -286,6 +290,8 @@ impl Consumer {
         let mut total_execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
         let mut total_error_counters = TransactionErrorMetrics::default();
         let mut reached_max_poh_height = false;
+        let mut total_scheduled_min_prioritization_fees: usize = usize::MAX;
+        let mut total_scheduled_max_prioritization_fees: usize = 0;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
@@ -316,6 +322,8 @@ impl Consumer {
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
                 error_counters: new_error_counters,
+                scheduled_min_prioritization_fees,
+                scheduled_max_prioritization_fees,
                 ..
             } = execute_and_commit_transactions_output;
 
@@ -324,6 +332,14 @@ impl Consumer {
             saturating_add_assign!(
                 total_transactions_attempted_execution_count,
                 new_transactions_attempted_execution_count
+            );
+            total_scheduled_min_prioritization_fees = std::cmp::min(
+                total_scheduled_min_prioritization_fees,
+                scheduled_min_prioritization_fees,
+            );
+            total_scheduled_max_prioritization_fees = std::cmp::min(
+                total_scheduled_max_prioritization_fees,
+                scheduled_max_prioritization_fees,
             );
 
             trace!(
@@ -385,6 +401,8 @@ impl Consumer {
             cost_model_us: total_cost_model_us,
             execute_and_commit_timings: total_execute_and_commit_timings,
             error_counters: total_error_counters,
+            scheduled_min_prioritization_fees: total_scheduled_min_prioritization_fees,
+            scheduled_max_prioritization_fees: total_scheduled_max_prioritization_fees,
         }
     }
 
@@ -545,6 +563,18 @@ impl Consumer {
         });
         execute_and_commit_timings.collect_balances_us = collect_balances_us;
 
+        let min_max = batch
+            .sanitized_transactions()
+            .iter()
+            .filter_map(|transaction| {
+                let message = transaction.message();
+                process_compute_budget_instructions(message.program_instructions_iter()).ok()
+            })
+            .map(|cu_limits| cu_limits.compute_unit_price)
+            .minmax();
+        let (scheduled_min_prioritization_fees, scheduled_max_prioritization_fees) =
+            min_max.into_option().unwrap_or_default();
+
         let (load_and_execute_transactions_output, load_execute_us) = measure_us!(bank
             .load_and_execute_transactions(
                 batch,
@@ -619,6 +649,8 @@ impl Consumer {
                 commit_transactions_result: Err(recorder_err),
                 execute_and_commit_timings,
                 error_counters,
+                scheduled_min_prioritization_fees: scheduled_min_prioritization_fees as usize,
+                scheduled_max_prioritization_fees: scheduled_max_prioritization_fees as usize,
             };
         }
 
@@ -674,6 +706,8 @@ impl Consumer {
             commit_transactions_result: Ok(commit_transaction_statuses),
             execute_and_commit_timings,
             error_counters,
+            scheduled_min_prioritization_fees: scheduled_min_prioritization_fees as usize,
+            scheduled_max_prioritization_fees: scheduled_max_prioritization_fees as usize,
         }
     }
 

@@ -212,6 +212,8 @@ impl ConsumeWorkerMetrics {
             retryable_transaction_indexes,
             execute_and_commit_timings,
             error_counters,
+            scheduled_min_prioritization_fees,
+            scheduled_max_prioritization_fees,
             ..
         }: &ExecuteAndCommitTransactionsOutput,
     ) {
@@ -227,7 +229,20 @@ impl ConsumeWorkerMetrics {
         self.count_metrics
             .retryable_transaction_count
             .fetch_add(retryable_transaction_indexes.len(), Ordering::Relaxed);
-
+        let min_prioritization_fees = self
+            .count_metrics
+            .scheduled_min_prioritization_fees
+            .fetch_min(*scheduled_min_prioritization_fees, Ordering::Relaxed);
+        let max_prioritization_fees = self
+            .count_metrics
+            .scheduled_max_prioritization_fees
+            .fetch_max(*scheduled_max_prioritization_fees, Ordering::Relaxed);
+        self.count_metrics
+            .scheduled_min_prioritization_fees
+            .swap(min_prioritization_fees, Ordering::Relaxed);
+        self.count_metrics
+            .scheduled_max_prioritization_fees
+            .swap(max_prioritization_fees, Ordering::Relaxed);
         self.update_on_execute_and_commit_timings(execute_and_commit_timings);
         self.update_on_error_counters(error_counters);
     }
@@ -376,6 +391,8 @@ struct ConsumeWorkerCountMetrics {
     retryable_transaction_count: AtomicUsize,
     retryable_expired_bank_count: AtomicUsize,
     cost_model_throttled_transactions_count: AtomicUsize,
+    scheduled_min_prioritization_fees: AtomicUsize,
+    scheduled_max_prioritization_fees: AtomicUsize,
 }
 
 impl ConsumeWorkerCountMetrics {
@@ -413,6 +430,18 @@ impl ConsumeWorkerCountMetrics {
             (
                 "cost_model_throttled_transactions_count",
                 self.cost_model_throttled_transactions_count
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "scheduled_min_prioritization_fees",
+                self.scheduled_min_prioritization_fees
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "scheduled_max_prioritization_fees",
+                self.scheduled_max_prioritization_fees
                     .swap(0, Ordering::Relaxed),
                 i64
             ),

@@ -1,7 +1,9 @@
 use {
     super::{
         leader_slot_timing_metrics::{LeaderExecuteAndCommitTimings, LeaderSlotTimingMetrics},
-        unprocessed_transaction_storage::{InsertPacketBatchSummary, UnprocessedTransactionStorage},
+        unprocessed_transaction_storage::{
+            InsertPacketBatchSummary, UnprocessedTransactionStorage,
+        },
     },
     solana_accounts_db::transaction_error_metrics::*,
     solana_poh::poh_recorder::BankStart,
@@ -52,6 +54,9 @@ pub(crate) struct ProcessTransactionsSummary {
 
     // Breakdown of all the transaction errors from transactions passed for execution
     pub error_counters: TransactionErrorMetrics,
+
+    pub scheduled_min_prioritization_fees: usize,
+    pub scheduled_max_prioritization_fees: usize,
 }
 
 // Metrics describing prioritization fee information for each transaction storage before processing transactions
@@ -66,9 +71,13 @@ struct LeaderPrioritizationFeesMetrics {
 impl LeaderPrioritizationFeesMetrics {
     fn new(unprocessed_transaction_storage: Option<&UnprocessedTransactionStorage>) -> Self {
         if let Some(unprocessed_transaction_storage) = unprocessed_transaction_storage {
-            Self{
-                min_prioritization_fees_per_cu : unprocessed_transaction_storage.get_min_priority().unwrap_or_default(),
-                max_prioritization_fees_per_cu: unprocessed_transaction_storage.get_max_priority().unwrap_or_default(),
+            Self {
+                min_prioritization_fees_per_cu: unprocessed_transaction_storage
+                    .get_min_priority()
+                    .unwrap_or_default(),
+                max_prioritization_fees_per_cu: unprocessed_transaction_storage
+                    .get_max_priority()
+                    .unwrap_or_default(),
             }
         } else {
             Self::default()
@@ -89,7 +98,8 @@ impl LeaderPrioritizationFeesMetrics {
                 "max_prioritization_fees_per_cu",
                 self.max_prioritization_fees_per_cu as i64,
                 i64
-            ));
+            )
+        );
     }
 }
 
@@ -177,6 +187,11 @@ struct LeaderSlotPacketCountMetrics {
     // total number of forwardable batches that were attempted for forwarding. A forwardable batch
     // is defined in `ForwardPacketBatchesByAccounts` in `forward_packet_batches_by_accounts.rs`
     forwardable_batches_count: u64,
+
+    // min prioritization fees for scheduled transactions
+    scheduled_min_prioritization_fees: u64,
+    // max prioritization fees for scheduled transactions
+    scheduled_max_prioritization_fees: u64,
 }
 
 impl LeaderSlotPacketCountMetrics {
@@ -294,6 +309,16 @@ impl LeaderSlotPacketCountMetrics {
                 self.end_of_slot_unprocessed_buffer_len as i64,
                 i64
             ),
+            (
+                "scheduled_min_prioritization_fees",
+                self.scheduled_min_prioritization_fees as i64,
+                i64
+            ),
+            (
+                "scheduled_max_prioritization_fees",
+                self.scheduled_max_prioritization_fees as i64,
+                i64
+            ),
         );
     }
 }
@@ -323,7 +348,12 @@ pub(crate) struct LeaderSlotMetrics {
 }
 
 impl LeaderSlotMetrics {
-    pub(crate) fn new(id: u32, slot: Slot, bank_creation_time: &Instant, unprocessed_transaction_storage: Option<&UnprocessedTransactionStorage>) -> Self {
+    pub(crate) fn new(
+        id: u32,
+        slot: Slot,
+        bank_creation_time: &Instant,
+        unprocessed_transaction_storage: Option<&UnprocessedTransactionStorage>,
+    ) -> Self {
         Self {
             id,
             slot,
@@ -331,7 +361,9 @@ impl LeaderSlotMetrics {
             transaction_error_metrics: TransactionErrorMetrics::new(),
             vote_packet_count_metrics: VotePacketCountMetrics::new(),
             timing_metrics: LeaderSlotTimingMetrics::new(bank_creation_time),
-            prioritization_fees_metric: LeaderPrioritizationFeesMetrics::new(unprocessed_transaction_storage),
+            prioritization_fees_metric: LeaderPrioritizationFeesMetrics::new(
+                unprocessed_transaction_storage,
+            ),
             is_reported: false,
         }
     }
@@ -495,6 +527,8 @@ impl LeaderSlotMetricsTracker {
                 cost_model_us,
                 ref execute_and_commit_timings,
                 error_counters,
+                scheduled_min_prioritization_fees,
+                scheduled_max_prioritization_fees,
                 ..
             } = process_transactions_summary;
 
@@ -569,6 +603,23 @@ impl LeaderSlotMetricsTracker {
                     .process_packets_timings
                     .cost_model_us,
                 *cost_model_us
+            );
+
+            leader_slot_metrics
+                .packet_count_metrics
+                .scheduled_min_prioritization_fees = std::cmp::min(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .scheduled_min_prioritization_fees,
+                *scheduled_min_prioritization_fees as u64,
+            );
+            leader_slot_metrics
+                .packet_count_metrics
+                .scheduled_max_prioritization_fees = std::cmp::min(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .scheduled_max_prioritization_fees,
+                *scheduled_max_prioritization_fees as u64,
             );
 
             leader_slot_metrics
@@ -962,8 +1013,8 @@ mod tests {
         // Test case where the thread has not detected a leader bank, and now sees a leader bank.
         // Metrics should not be reported because leader slot has not ended
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
-        let action =
-            leader_slot_metrics_tracker.check_leader_slot_boundary(Some(&first_poh_recorder_bank), None);
+        let action = leader_slot_metrics_tracker
+            .check_leader_slot_boundary(Some(&first_poh_recorder_bank), None);
         assert_eq!(
             mem::discriminant(&MetricsTrackerAction::NewTracker(None)),
             mem::discriminant(&action)
