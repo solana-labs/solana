@@ -34,7 +34,7 @@ record with the most recent timestamp.
 
 ### Push Message
 
-A node sends a push message to tells the cluster it has information to share.
+A node sends a push message to tell the cluster it has information to share.
 Nodes send push messages to `PUSH_FANOUT` push peers.
 
 Upon receiving a push message, a node examines the message for:
@@ -56,7 +56,7 @@ Upon receiving a push message, a node examines the message for:
 
 ### Push Peers, Prune Message
 
-A nodes selects its push peers at random from the active set of known peers. The
+A node selects its push peers at random from the active set of known peers. The
 node keeps this selection for a relatively long time. When a prune message is
 received, the node drops the push peer that sent the prune. Prune is an
 indication that there is another, higher stake weighted path to that node than
@@ -133,6 +133,6 @@ The main differences are:
 - Push messages have a wallclock that is signed by the originator. Once the
   wallclock expires the message is dropped. A hop limit is difficult to
   implement in an adversarial setting.
-- Lazy Push is not implemented because its not obvious how to prevent an
+- Lazy Push is not implemented because it's not obvious how to prevent an
   adversary from forging the message fingerprint. A naive approach would allow
   an adversary to be prioritized for pull based on their input.

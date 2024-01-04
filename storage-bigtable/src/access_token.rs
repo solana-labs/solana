@@ -34,12 +34,24 @@ fn load_stringified_credentials(credential: String) -> Result<Credentials, Strin
     Credentials::from_str(&credential).map_err(|err| format!("{err}"))
 }
 
-#[derive(Clone)]
-pub struct AccessToken {
+pub struct AccessTokenInner {
     credentials: Credentials,
     scope: Scope,
-    refresh_active: Arc<AtomicBool>,
-    token: Arc<RwLock<(Token, Instant)>>,
+    token: RwLock<(Token, Instant)>,
+    refresh_active: AtomicBool,
+}
+
+#[derive(Clone)]
+pub struct AccessToken {
+    inner: Arc<AccessTokenInner>,
+}
+
+impl std::ops::Deref for AccessToken {
+    type Target = AccessTokenInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl AccessToken {
@@ -52,12 +64,14 @@ impl AccessToken {
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {err}"))
         } else {
-            let token = Arc::new(RwLock::new(Self::get_token(&credentials, &scope).await?));
+            let token = RwLock::new(Self::get_token(&credentials, &scope).await?);
             let access_token = Self {
-                credentials,
-                scope,
-                token,
-                refresh_active: Arc::new(AtomicBool::new(false)),
+                inner: Arc::new(AccessTokenInner {
+                    credentials,
+                    scope,
+                    token,
+                    refresh_active: AtomicBool::new(false),
+                }),
             };
             Ok(access_token)
         }
@@ -109,20 +123,17 @@ impl AccessToken {
             return;
         }
 
-        let credentials = self.credentials.clone();
-        let scope = self.scope.clone();
-        let refresh_active = Arc::clone(&self.refresh_active);
-        let token = Arc::clone(&self.token);
+        let this = self.clone();
         tokio::spawn(async move {
             match time::timeout(
                 time::Duration::from_secs(5),
-                Self::get_token(&credentials, &scope),
+                Self::get_token(&this.credentials, &this.scope),
             )
             .await
             {
                 Ok(new_token) => match new_token {
                     Ok(new_token) => {
-                        let mut token_w = token.write().unwrap();
+                        let mut token_w = this.token.write().unwrap();
                         *token_w = new_token;
                     }
                     Err(err) => error!("Failed to fetch new token: {}", err),
@@ -131,7 +142,7 @@ impl AccessToken {
                     warn!("Token refresh timeout")
                 }
             }
-            refresh_active.store(false, Ordering::Relaxed);
+            this.refresh_active.store(false, Ordering::Relaxed);
             info!("Token refreshed");
         });
     }

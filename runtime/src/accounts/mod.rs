@@ -24,12 +24,14 @@ use {
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{
+            create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
+            ReadableAccount, WritableAccount,
+        },
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
+            include_loaded_accounts_data_size_in_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -80,12 +82,9 @@ pub(super) fn load_accounts(
                         lamports_per_signature,
                         &process_compute_budget_instructions(
                             tx.message().program_instructions_iter(),
-                            feature_set,
                         )
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     )
@@ -170,7 +169,7 @@ fn load_transaction_accounts(
         feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
 
     let requested_loaded_accounts_data_size_limit =
-        get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+        get_requested_loaded_accounts_data_size_limit(tx)?;
     let mut accumulated_accounts_data_size: usize = 0;
 
     let instruction_accounts = message
@@ -203,12 +202,8 @@ fn load_transaction_accounts(
                 .then_some(())
                 .and_then(|_| loaded_programs.find(key))
                 {
-                    // This condition block does special handling for accounts that are passed
-                    // as instruction account to any of the instructions in the transaction.
-                    // It's been noticed that some programs are reading other program accounts
-                    // (that are passed to the program as instruction accounts). So such accounts
-                    // are needed to be loaded even though corresponding compiled program may
-                    // already be present in the cache.
+                    // Optimization to skip loading of accounts which are only used as
+                    // programs in top-level instructions and not passed as instruction accounts.
                     account_shared_data_from_program(key, program_accounts)
                         .map(|program_account| (program.account_size, program_account, 0))?
                 } else {
@@ -274,7 +269,6 @@ fn load_transaction_accounts(
                         i as IndexOfAccount,
                         error_counters,
                         rent_collector,
-                        feature_set,
                         fee,
                     )?;
 
@@ -288,7 +282,7 @@ fn load_transaction_accounts(
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        if account.executable() {
+                        if is_builtin(&account) || is_executable(&account, feature_set) {
                             // The upgradeable loader requires the derived ProgramData account
                             if let Ok(UpgradeableLoaderState::Program {
                                 programdata_address,
@@ -306,9 +300,13 @@ fn load_transaction_accounts(
                                 return Err(TransactionError::InvalidProgramForExecution);
                             }
                         }
-                    } else if account.executable() && message.is_writable(i) {
-                        error_counters.invalid_writable_account += 1;
-                        return Err(TransactionError::InvalidWritableAccount);
+                    } else {
+                        if (is_builtin(&account) || is_executable(&account, feature_set))
+                            && message.is_writable(i)
+                        {
+                            error_counters.invalid_writable_account += 1;
+                            return Err(TransactionError::InvalidWritableAccount);
+                        }
                     }
                 }
 
@@ -355,15 +353,17 @@ fn load_transaction_accounts(
             let (program_id, program_account) = accounts
                 .get(program_index)
                 .ok_or(TransactionError::ProgramAccountNotFound)?;
-            let account_found = accounts_found.get(program_index).unwrap_or(&true);
             if native_loader::check_id(program_id) {
                 return Ok(account_indices);
             }
+
+            let account_found = accounts_found.get(program_index).unwrap_or(&true);
             if !account_found {
                 error_counters.account_not_found += 1;
                 return Err(TransactionError::ProgramAccountNotFound);
             }
-            if !program_account.executable() {
+
+            if !(is_builtin(program_account) || is_executable(program_account, feature_set)) {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -385,7 +385,8 @@ fn load_transaction_accounts(
                     accounts_db.load_with_fixed_root(ancestors, owner_id)
                 {
                     if !native_loader::check_id(owner_account.owner())
-                        || !owner_account.executable()
+                        || !(is_builtin(&owner_account)
+                            || is_executable(&owner_account, feature_set))
                     {
                         error_counters.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);
@@ -416,8 +417,7 @@ fn load_transaction_accounts(
     })
 }
 
-/// If feature `cap_transaction_accounts_data_size` is active, total accounts data a
-/// transaction can load is limited to
+/// Total accounts data a transaction can load is limited to
 ///   if `set_tx_loaded_accounts_data_size` instruction is not activated or not used, then
 ///     default value of 64MiB to not break anyone in Mainnet-beta today
 ///   else
@@ -425,26 +425,18 @@ fn load_transaction_accounts(
 ///     Note, requesting zero bytes will result transaction error
 fn get_requested_loaded_accounts_data_size_limit(
     tx: &SanitizedTransaction,
-    feature_set: &FeatureSet,
 ) -> Result<Option<NonZeroUsize>> {
-    if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-        let compute_budget_limits = process_compute_budget_instructions(
-            tx.message().program_instructions_iter(),
-            feature_set,
-        )
-        .unwrap_or_default();
-        // sanitize against setting size limit to zero
-        NonZeroUsize::new(
-            usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
-        )
-        .map_or(
-            Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
-            |v| Ok(Some(v)),
-        )
-    } else {
-        // feature not activated, no loaded accounts data limit imposed.
-        Ok(None)
-    }
+    let compute_budget_limits =
+        process_compute_budget_instructions(tx.message().program_instructions_iter())
+            .unwrap_or_default();
+    // sanitize against setting size limit to zero
+    NonZeroUsize::new(
+        usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
+    )
+    .map_or(
+        Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
+        |v| Ok(Some(v)),
+    )
 }
 
 fn account_shared_data_from_program(
@@ -460,6 +452,7 @@ fn account_shared_data_from_program(
         .ok_or(TransactionError::AccountNotFound)?;
     program_account.set_owner(**program_owner);
     program_account.set_executable(true);
+    program_account.set_data_from_slice(create_executable_meta(program_owner));
     Ok(program_account)
 }
 
@@ -492,17 +485,17 @@ fn validate_fee_payer(
     payer_index: IndexOfAccount,
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
-    feature_set: &FeatureSet,
     fee: u64,
 ) -> Result<()> {
     if payer_account.lamports() == 0 {
         error_counters.account_not_found += 1;
         return Err(TransactionError::AccountNotFound);
     }
-    let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
+    let system_account_kind = get_system_account_kind(payer_account).ok_or_else(|| {
         error_counters.invalid_account_for_fee += 1;
         TransactionError::InvalidAccountForFee
-    })? {
+    })?;
+    let min_balance = match system_account_kind {
         SystemAccountKind::System => 0,
         SystemAccountKind::Nonce => {
             // Should we ever allow a fees charge to zero a nonce account's
@@ -511,23 +504,14 @@ fn validate_fee_payer(
         }
     };
 
-    // allow collapsible-else-if to make removing the feature gate safer once activated
-    #[allow(clippy::collapsible_else_if)]
-    if feature_set.is_active(&feature_set::checked_arithmetic_in_fee_validation::id()) {
-        payer_account
-            .lamports()
-            .checked_sub(min_balance)
-            .and_then(|v| v.checked_sub(fee))
-            .ok_or_else(|| {
-                error_counters.insufficient_funds += 1;
-                TransactionError::InsufficientFundsForFee
-            })?;
-    } else {
-        if payer_account.lamports() < fee + min_balance {
+    payer_account
+        .lamports()
+        .checked_sub(min_balance)
+        .and_then(|v| v.checked_sub(fee))
+        .ok_or_else(|| {
             error_counters.insufficient_funds += 1;
-            return Err(TransactionError::InsufficientFundsForFee);
-        }
-    }
+            TransactionError::InsufficientFundsForFee
+        })?;
 
     let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
     payer_account
@@ -557,10 +541,7 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{
-            accounts::Accounts, accounts_db::AccountShrinkThreshold,
-            accounts_index::AccountSecondaryIndexes, rent_collector::RentCollector,
-        },
+        solana_accounts_db::{accounts::Accounts, rent_collector::RentCollector},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -569,7 +550,6 @@ mod tests {
             account::{AccountSharedData, WritableAccount},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
-            genesis_config::ClusterType,
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, SanitizedMessage},
@@ -580,7 +560,7 @@ mod tests {
             transaction::{Result, Transaction, TransactionError},
             transaction_context::TransactionAccount,
         },
-        std::convert::TryFrom,
+        std::{convert::TryFrom, sync::Arc},
     };
 
     fn load_accounts_with_fee_and_rent(
@@ -594,12 +574,8 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
             accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
         }
@@ -750,17 +726,13 @@ mod tests {
             instructions,
         );
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
-
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+            &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -947,7 +919,8 @@ mod tests {
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
-        account.set_executable(true);
+        account.set_owner(bpf_loader_upgradeable::id());
+        account.set_data(create_executable_meta(account.owner()).to_vec());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -981,7 +954,7 @@ mod tests {
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = AccountSharedData::new(40, 1, &native_loader::id());
+        let account = AccountSharedData::new(40, 0, &native_loader::id());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -1010,7 +983,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::from([5u8; 32]);
+        let key1 = bpf_loader_upgradeable::id();
         let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
@@ -1027,6 +1000,7 @@ mod tests {
         account.set_executable(true);
         account.set_rent_epoch(1);
         account.set_owner(key1);
+        account.set_data(create_executable_meta(account.owner()).to_vec());
         accounts.push((key2, account));
 
         let instructions = vec![
@@ -1407,12 +1381,8 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
         let keypair = Keypair::new();
@@ -1433,12 +1403,8 @@ mod tests {
     #[test]
     fn test_overrides() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
         let account = AccountSharedData::new(42, 0, &Pubkey::default());
@@ -1519,7 +1485,6 @@ mod tests {
         // an prrivate helper function
         fn test(
             instructions: &[solana_sdk::instruction::Instruction],
-            feature_set: &FeatureSet,
             expected_result: &Result<Option<NonZeroUsize>>,
         ) {
             let payer_keypair = Keypair::new();
@@ -1530,7 +1495,7 @@ mod tests {
             ));
             assert_eq!(
                 *expected_result,
-                get_requested_loaded_accounts_data_size_limit(&tx, feature_set)
+                get_requested_loaded_accounts_data_size_limit(&tx)
             );
         }
 
@@ -1550,7 +1515,6 @@ mod tests {
                 solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ];
 
-        let result_no_limit = Ok(None);
         let result_default_limit = Ok(Some(
             NonZeroUsize::new(
                 usize::try_from(compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
@@ -1562,35 +1526,13 @@ mod tests {
             Ok(Some(NonZeroUsize::new(99).unwrap()));
         let result_invalid_limit = Err(TransactionError::InvalidLoadedAccountsDataSizeLimit);
 
-        let mut feature_set = FeatureSet::default();
-
-        // if `cap_transaction_accounts_data_size feature` is disable,
-        // the result will always be no limit
-        test(tx_not_set_limit, &feature_set, &result_no_limit);
-        test(tx_set_limit_99, &feature_set, &result_no_limit);
-        test(tx_set_limit_0, &feature_set, &result_no_limit);
-
-        // if `cap_transaction_accounts_data_size` is enabled, and
-        //    `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
-        // the result will always be default limit (64MiB)
-        feature_set.activate(&feature_set::cap_transaction_accounts_data_size::id(), 0);
-        test(tx_not_set_limit, &feature_set, &result_default_limit);
-        test(tx_set_limit_99, &feature_set, &result_default_limit);
-        test(tx_set_limit_0, &feature_set, &result_default_limit);
-
-        // if `cap_transaction_accounts_data_size` and
-        //    `add_set_tx_loaded_accounts_data_size_instruction` are both enabled,
-        // the results are:
+        // the results should be:
         //    if tx doesn't set limit, then default limit (64MiB)
         //    if tx sets limit, then requested limit
         //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
-        feature_set.activate(
-            &solana_sdk::feature_set::add_set_tx_loaded_accounts_data_size_instruction::id(),
-            0,
-        );
-        test(tx_not_set_limit, &feature_set, &result_default_limit);
-        test(tx_set_limit_99, &feature_set, &result_requested_limit);
-        test(tx_set_limit_0, &feature_set, &result_invalid_limit);
+        test(tx_not_set_limit, &result_default_limit);
+        test(tx_set_limit_99, &result_requested_limit);
+        test(tx_set_limit_0, &result_invalid_limit);
     }
 
     #[test]
@@ -1621,17 +1563,13 @@ mod tests {
             Hash::default(),
         );
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
-
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
+            &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);
@@ -1661,7 +1599,6 @@ mod tests {
         fee: u64,
         expected_result: Result<()>,
         payer_post_balance: u64,
-        feature_checked_arithmmetic_enable: bool,
     }
     fn validate_fee_payer_account(
         test_parameter: ValidateFeePayerTestParameter,
@@ -1678,17 +1615,12 @@ mod tests {
         } else {
             AccountSharedData::new(test_parameter.payer_init_balance, 0, &system_program::id())
         };
-        let mut feature_set = FeatureSet::default();
-        if test_parameter.feature_checked_arithmmetic_enable {
-            feature_set.activate(&feature_set::checked_arithmetic_in_fee_validation::id(), 0);
-        };
         let result = validate_fee_payer(
             &payer_account_keys.pubkey(),
             &mut account,
             0,
             &mut TransactionErrorMetrics::default(),
             rent_collector,
-            &feature_set,
             test_parameter.fee,
         );
 
@@ -1713,79 +1645,67 @@ mod tests {
         // If payer account has sufficient balance, expect successful fee deduction,
         // regardless feature gate status, or if payer is nonce account.
         {
-            for feature_checked_arithmmetic_enable in [true, false] {
-                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
-                    validate_fee_payer_account(
-                        ValidateFeePayerTestParameter {
-                            is_nonce,
-                            payer_init_balance: min_balance + fee,
-                            fee,
-                            expected_result: Ok(()),
-                            payer_post_balance: min_balance,
-                            feature_checked_arithmmetic_enable,
-                        },
-                        &rent_collector,
-                    );
-                }
+            for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                validate_fee_payer_account(
+                    ValidateFeePayerTestParameter {
+                        is_nonce,
+                        payer_init_balance: min_balance + fee,
+                        fee,
+                        expected_result: Ok(()),
+                        payer_post_balance: min_balance,
+                    },
+                    &rent_collector,
+                );
             }
         }
 
         // If payer account has no balance, expected AccountNotFound Error
         // regardless feature gate status, or if payer is nonce account.
         {
-            for feature_checked_arithmmetic_enable in [true, false] {
-                for is_nonce in [true, false] {
-                    validate_fee_payer_account(
-                        ValidateFeePayerTestParameter {
-                            is_nonce,
-                            payer_init_balance: 0,
-                            fee,
-                            expected_result: Err(TransactionError::AccountNotFound),
-                            payer_post_balance: 0,
-                            feature_checked_arithmmetic_enable,
-                        },
-                        &rent_collector,
-                    );
-                }
+            for is_nonce in [true, false] {
+                validate_fee_payer_account(
+                    ValidateFeePayerTestParameter {
+                        is_nonce,
+                        payer_init_balance: 0,
+                        fee,
+                        expected_result: Err(TransactionError::AccountNotFound),
+                        payer_post_balance: 0,
+                    },
+                    &rent_collector,
+                );
             }
         }
 
-        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // If payer account has insufficient balance, expect InsufficientFundsForFee error
         // regardless feature gate status, or if payer is nonce account.
         {
-            for feature_checked_arithmmetic_enable in [true, false] {
-                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
-                    validate_fee_payer_account(
-                        ValidateFeePayerTestParameter {
-                            is_nonce,
-                            payer_init_balance: min_balance + fee - 1,
-                            fee,
-                            expected_result: Err(TransactionError::InsufficientFundsForFee),
-                            payer_post_balance: min_balance + fee - 1,
-                            feature_checked_arithmmetic_enable,
-                        },
-                        &rent_collector,
-                    );
-                }
+            for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                validate_fee_payer_account(
+                    ValidateFeePayerTestParameter {
+                        is_nonce,
+                        payer_init_balance: min_balance + fee - 1,
+                        fee,
+                        expected_result: Err(TransactionError::InsufficientFundsForFee),
+                        payer_post_balance: min_balance + fee - 1,
+                    },
+                    &rent_collector,
+                );
             }
         }
 
         // normal payer account has balance of u64::MAX, so does fee; since it does not  require
         // min_balance, expect successful fee deduction, regardless of feature gate status
         {
-            for feature_checked_arithmmetic_enable in [true, false] {
-                validate_fee_payer_account(
-                    ValidateFeePayerTestParameter {
-                        is_nonce: false,
-                        payer_init_balance: u64::MAX,
-                        fee: u64::MAX,
-                        expected_result: Ok(()),
-                        payer_post_balance: 0,
-                        feature_checked_arithmmetic_enable,
-                    },
-                    &rent_collector,
-                );
-            }
+            validate_fee_payer_account(
+                ValidateFeePayerTestParameter {
+                    is_nonce: false,
+                    payer_init_balance: u64::MAX,
+                    fee: u64::MAX,
+                    expected_result: Ok(()),
+                    payer_post_balance: 0,
+                },
+                &rent_collector,
+            );
         }
     }
 
@@ -1811,39 +1731,6 @@ mod tests {
                 fee: u64::MAX,
                 expected_result: Err(TransactionError::InsufficientFundsForFee),
                 payer_post_balance: u64::MAX,
-                feature_checked_arithmmetic_enable: true,
-            },
-            &rent_collector,
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_validate_nonce_fee_payer_without_checked_arithmetic() {
-        let rent_collector = RentCollector::new(
-            0,
-            EpochSchedule::default(),
-            500_000.0,
-            Rent {
-                lamports_per_byte_year: 1,
-                ..Rent::default()
-            },
-        );
-
-        // same test setup as `test_validate_nonce_fee_payer_with_checked_arithmetic`:
-        // nonce payer account has balance of u64::MAX, so does fee; and nonce account
-        // requires additional min_balance, if feature gate is not enabled, in `debug`
-        // mode, `u64::MAX + min_balance` would panic on "attempt to add with overflow";
-        // in `release` mode, the addition will wrap, so the expected result would be
-        // `Ok(())` with post payer balance `0`, therefore fails test with a panic.
-        validate_fee_payer_account(
-            ValidateFeePayerTestParameter {
-                is_nonce: true,
-                payer_init_balance: u64::MAX,
-                fee: u64::MAX,
-                expected_result: Err(TransactionError::InsufficientFundsForFee),
-                payer_post_balance: u64::MAX,
-                feature_checked_arithmmetic_enable: false,
             },
             &rent_collector,
         );

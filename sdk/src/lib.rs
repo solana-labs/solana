@@ -26,7 +26,7 @@
 //! [`solana-client`]: https://docs.rs/solana-client
 //! [`solana-cli-config`]: https://docs.rs/solana-cli-config
 //! [`solana-clap-utils`]: https://docs.rs/solana-clap-utils
-//! [json]: https://docs.solana.com/developing/clients/jsonrpc-api
+//! [json]: https://solana.com/docs/rpc
 //! [`clap`]: https://docs.rs/clap
 
 #![allow(incomplete_features)]
@@ -78,6 +78,7 @@ pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
 pub mod inflation;
+pub mod inner_instruction;
 pub mod log;
 pub mod native_loader;
 pub mod net;

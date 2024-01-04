@@ -64,7 +64,7 @@ This may be any arbitrary bytes. For instance the on-chain address of a program,
 DAO instance, Candy Machine, etc.
 
 This field **SHOULD** be displayed to users as a base58-encoded ASCII string rather
-than interpretted otherwise.
+than interpreted otherwise.
 
 #### Message Format
 

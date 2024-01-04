@@ -94,7 +94,7 @@ solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 
 You can also view the balance of any account address on the Accounts tab in the
 [Explorer](https://explorer.solana.com/accounts) and paste the address in the
-box to view the balance in you web browser.
+box to view the balance in your web browser.
 
 Note: Any address with a balance of 0 SOL, such as a newly created one on your
 Ledger, will show as "Not Found" in the explorer. Empty accounts and

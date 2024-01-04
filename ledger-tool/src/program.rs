@@ -9,10 +9,8 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
-    solana_ledger::{
-        blockstore_options::{AccessType, BlockstoreRecoveryMode},
-        blockstore_processor::ProcessOptions,
-    },
+    solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
+    solana_ledger::{blockstore_options::AccessType, blockstore_processor::ProcessOptions},
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{LoadProgramMetrics, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
@@ -33,7 +31,7 @@ use {
     },
     std::{
         collections::HashSet,
-        fmt::{Debug, Formatter},
+        fmt::{self, Debug, Formatter},
         fs::File,
         io::{Read, Seek, Write},
         path::{Path, PathBuf},
@@ -76,8 +74,6 @@ fn load_accounts(path: &Path) -> Result<Input> {
 fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank> {
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
-    let force_update_to_open = arg_matches.is_present("force_update_to_open");
-    let enforce_ulimit_nofile = !arg_matches.is_present("ignore_ulimit_nofile_error");
     let process_options = ProcessOptions {
         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
         run_verification: false,
@@ -107,30 +103,17 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
             .ok()
             .map(PathBuf::from);
 
-    let wal_recovery_mode = arg_matches
-        .value_of("wal_recovery_mode")
-        .map(BlockstoreRecoveryMode::from);
     let genesis_config = open_genesis_config_by(ledger_path, arg_matches);
     info!("genesis hash: {}", genesis_config.hash());
-    let blockstore = open_blockstore(
-        ledger_path,
-        AccessType::Secondary,
-        wal_recovery_mode,
-        force_update_to_open,
-        enforce_ulimit_nofile,
-    );
-    let (bank_forks, ..) = load_and_process_ledger(
+    let blockstore = open_blockstore(ledger_path, arg_matches, AccessType::Secondary);
+    let (bank_forks, ..) = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
-    )
-    .unwrap_or_else(|err| {
-        eprintln!("Ledger loading failed: {err:?}");
-        exit(1);
-    });
+    );
     let bank = bank_forks.read().unwrap().working_bank();
     bank
 }
@@ -267,8 +250,9 @@ struct Output {
     log: Vec<String>,
 }
 
-impl Debug for Output {
+impl fmt::Display for Output {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Program output:")?;
         writeln!(f, "Result: {}", self.result)?;
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
@@ -278,6 +262,9 @@ impl Debug for Output {
         Ok(())
     }
 }
+
+impl QuietDisplay for Output {}
+impl VerboseDisplay for Output {}
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
@@ -570,6 +557,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_current_instruction_context()
             .unwrap(),
         true, // copy_account_data
+        &invoke_context.feature_set,
     )
     .unwrap();
 
@@ -616,16 +604,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_recorded_content()
             .to_vec(),
     };
-    match matches.value_of("output_format") {
-        Some("json") => {
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
-        }
-        Some("json-compact") => {
-            println!("{}", serde_json::to_string(&output).unwrap());
-        }
-        _ => {
-            println!("Program output:");
-            println!("{output:?}");
-        }
-    }
+    let output_format = OutputFormat::from_matches(matches, "output_format", false);
+    println!("{}", output_format.formatted_string(&output));
 }

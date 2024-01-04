@@ -76,7 +76,7 @@ impl ConnectionCache {
         Self::new_with_client_options(name, connection_pool_size, None, None, None)
     }
 
-    /// Create a quic conneciton_cache with more client options
+    /// Create a quic connection_cache with more client options
     pub fn new_with_client_options(
         name: &'static str,
         connection_pool_size: usize,

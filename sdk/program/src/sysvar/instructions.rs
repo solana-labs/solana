@@ -5,7 +5,7 @@
 //! introspection][in], which is required for correctly interoperating with
 //! native programs like the [secp256k1] and [ed25519] programs.
 //!
-//! [in]: https://docs.solana.com/implemented-proposals/instruction_introspection
+//! [in]: https://docs.solanalabs.com/implemented-proposals/instruction_introspection
 //! [secp256k1]: crate::secp256k1_program
 //! [ed25519]: crate::ed25519_program
 //!
@@ -18,7 +18,7 @@
 //!
 //! See also the Solana [documentation on the instructions sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#instructions
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#instructions
 //!
 //! # Examples
 //!

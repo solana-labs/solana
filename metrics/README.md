@@ -4,10 +4,10 @@
 
 ## InfluxDB
 
-In oder to explore validator specific metrics from mainnet-beta, testnet or devnet you can use Chronograf:
+In order to explore validator specific metrics from mainnet-beta, testnet or devnet you can use Chronograf:
 
-* https://metrics.solana.com:8888/ (production enviroment)
-* https://metrics.solana.com:8889/ (testing enviroment)
+* https://metrics.solana.com:8888/ (production environment)
+* https://metrics.solana.com:8889/ (testing environment)
 
 For local cluster deployments you should use:
 
@@ -47,4 +47,4 @@ The fee market dashboard shows:
 
 ### Ping Results
 
-The ping reults dashboard displays relevant information about the Ping API
+The ping results dashboard displays relevant information about the Ping API

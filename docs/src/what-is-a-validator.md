@@ -6,13 +6,13 @@ A validator is a computer that helps to run the Solana network. Each validator e
 
 The more independent entities that run validators, the less vulnerable the cluster is to an attack or catastrophe that affects the cluster.
 
-> For an more in depth look at the health of the Solana network, see the [Solana Foundation Validator Health Report](https://solana.com/news/validator-health-report-march-2023).
+> For a more in depth look at the health of the Solana network, see the [Solana Foundation Validator Health Report](https://solana.com/news/validator-health-report-march-2023).
 
 By becoming a validator, you are helping to grow the network. You are also learning first hand how the Solana cluster functions at the lowest level. You will become part of an active community of operators that are passionate about the Solana ecosystem.
 
 ## Consensus vs RPC
 
-Before, we discuss validators in more detail, it's useful to make some distinctions. Using the same validator software, you have the option of running a voting/consensus node or choosing to instead run an RPC node. An RPC node helps Solana devs and others interact with the blockchain but for performance reasons should not vote. We go into more detail on RPC nodes in the next section, [what is an rpc node](./what-is-an-rpc-node.md).
+Before we discuss validators in more detail, it's useful to make some distinctions. Using the same validator software, you have the option of running a voting/consensus node or choosing to instead run an RPC node. An RPC node helps Solana devs and others interact with the blockchain but for performance reasons should not vote. We go into more detail on RPC nodes in the next section, [what is an rpc node](./what-is-an-rpc-node.md).
 
 For this document, when a validator is mentioned, we are talking about a voting/consensus node. Now, to better understand what your validator is doing, it would help to understand how the Solana network functions in more depth.
 

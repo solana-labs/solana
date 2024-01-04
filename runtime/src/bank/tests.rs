@@ -1025,6 +1025,8 @@ fn test_rent_exempt_executable_account() {
     let account_balance = 1;
     let mut account = AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
     account.set_executable(true);
+    account.set_owner(bpf_loader_upgradeable::id());
+    account.set_data(create_executable_meta(account.owner()).to_vec());
     bank.store_account(&account_pubkey, &account);
 
     let transfer_lamports = 1;
@@ -1063,10 +1065,10 @@ fn test_rent_complex() {
                 MockInstruction::Deduction => {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .checked_add_lamports(1)?;
+                        .checked_add_lamports(1, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 2)?
-                        .checked_sub_lamports(1)?;
+                        .checked_sub_lamports(1, &invoke_context.feature_set)?;
                     Ok(())
                 }
             }
@@ -2130,8 +2132,7 @@ fn test_purge_empty_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
         let amount = genesis_config.rent.minimum_balance(0);
         let (mut bank, bank_forks) =
-            Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default())
-                .wrap_with_bank_forks_for_tests();
+            Bank::new_for_tests(&genesis_config).wrap_with_bank_forks_for_tests();
 
         for _ in 0..10 {
             let blockhash = bank.last_blockhash();
@@ -2650,8 +2651,6 @@ fn test_bank_tx_compute_unit_fee() {
             .create_fee_calculator()
             .lamports_per_signature,
         &FeeStructure::default(),
-        false,
-        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -2831,8 +2830,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         cheap_lamports_per_signature,
         &FeeStructure::default(),
-        false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2849,8 +2846,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         expensive_lamports_per_signature,
         &FeeStructure::default(),
-        false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2962,8 +2957,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .create_fee_calculator()
                             .lamports_per_signature,
                         &FeeStructure::default(),
-                        false,
-                        true,
                     ) * 2
                 )
                 .0
@@ -3777,10 +3770,7 @@ fn test_bank_update_sysvar_account() {
         for feature_id in FeatureSet::default().inactive {
             activate_feature(&mut genesis_config, feature_id);
         }
-        let bank1 = Arc::new(Bank::new_for_tests_with_config(
-            &genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank1 = Arc::new(Bank::new_for_tests(&genesis_config));
         if pass == 0 {
             add_root_and_flush_write_cache(&bank1);
             assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
@@ -3978,7 +3968,7 @@ fn test_bank_epoch_vote_accounts() {
         // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
         //   in the prior epoch (0 in this case)
         assert_eq!(
-            leader_stake.stake(0, None, None),
+            leader_stake.stake(0, &StakeHistory::default(), None),
             vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
         );
 
@@ -3994,7 +3984,7 @@ fn test_bank_epoch_vote_accounts() {
 
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None, None),
+        leader_stake.stake(child.epoch(), &StakeHistory::default(), None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()
@@ -4012,7 +4002,7 @@ fn test_bank_epoch_vote_accounts() {
     );
     assert!(child.epoch_vote_accounts(epoch).is_some());
     assert_eq!(
-        leader_stake.stake(child.epoch(), None, None),
+        leader_stake.stake(child.epoch(), &StakeHistory::default(), None),
         child
             .epoch_vote_accounts(epoch)
             .unwrap()
@@ -5993,16 +5983,16 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
         let lamports = u64::from_le_bytes(instruction_data.try_into().unwrap());
         instruction_context
             .try_borrow_instruction_account(transaction_context, 2)?
-            .checked_sub_lamports(lamports)?;
+            .checked_sub_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .checked_add_lamports(lamports)?;
+            .checked_add_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 0)?
-            .checked_sub_lamports(lamports)?;
+            .checked_sub_lamports(lamports, &invoke_context.feature_set)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .checked_add_lamports(lamports)?;
+            .checked_add_lamports(lamports, &invoke_context.feature_set)?;
         Ok(())
     });
 
@@ -6470,25 +6460,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "3KE2bigpBiiMLGYNqmWkgbrQGSqMt5ccG6ED87CFCVpt"
+                "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "FpNDsd21HXznXf6tRpMNiWhFyhZ4aCCECQm3gL4jGV22"
+                "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "7gDCoXPfFtKPALi212akhhQHEuLdAqyf7DE3yUN4bR2p"
+                "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "6FREbeHdTNYnEXg4zobL2mqGfevukg75frkQJqKpYnk4"
+                "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
             );
             break;
         }
@@ -6504,7 +6494,7 @@ fn test_same_program_id_uses_unique_executable_accounts() {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         instruction_context
             .try_borrow_program_account(transaction_context, 0)?
-            .set_data_length(2)
+            .set_data_length(2, &invoke_context.feature_set)
     });
 
     let (genesis_config, mint_keypair) = create_genesis_config(50000);
@@ -6968,10 +6958,7 @@ fn test_add_precompiled_account() {
         let program_id = solana_sdk::pubkey::new_rand();
 
         let bank = Arc::new(Bank::new_from_parent(
-            Arc::new(Bank::new_for_tests_with_config(
-                &genesis_config,
-                BankTestConfig::default(),
-            )),
+            Arc::new(Bank::new_for_tests(&genesis_config)),
             &Pubkey::default(),
             slot,
         ));
@@ -7013,7 +7000,7 @@ fn test_add_precompiled_account_inherited_cap_while_replacing() {
     // and then want to continue modifying the bank
     for pass in 0..4 {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-        let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
+        let bank = Bank::new_for_tests(&genesis_config);
         let program_id = solana_sdk::pubkey::new_rand();
 
         bank.add_precompiled_account(&program_id);
@@ -7047,7 +7034,7 @@ fn test_add_precompiled_account_inherited_cap_while_replacing() {
 fn test_add_precompiled_account_squatted_while_not_replacing() {
     for pass in 0..3 {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-        let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
+        let bank = Bank::new_for_tests(&genesis_config);
         let program_id = solana_sdk::pubkey::new_rand();
 
         // someone managed to squat at program_id!
@@ -9472,7 +9459,7 @@ fn test_transfer_sysvar() {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
-            .set_data(vec![0; 40])?;
+            .set_data(vec![0; 40], &invoke_context.feature_set)?;
         Ok(())
     });
 
@@ -10001,30 +9988,12 @@ fn calculate_test_fee(
     message: &SanitizedMessage,
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
-    support_set_accounts_data_size_limit_ix: bool,
-    remove_congestion_multiplier: bool,
 ) -> u64 {
-    let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&solana_sdk::feature_set::remove_deprecated_request_unit_ix::id());
+    let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
+        .unwrap_or_default()
+        .into();
 
-    if !support_set_accounts_data_size_limit_ix {
-        feature_set.deactivate(
-            &solana_sdk::feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
-        );
-    }
-
-    let budget_limits =
-        process_compute_budget_instructions(message.program_instructions_iter(), &feature_set)
-            .unwrap_or_default()
-            .into();
-
-    fee_structure.calculate_fee(
-        message,
-        lamports_per_signature,
-        &budget_limits,
-        remove_congestion_multiplier,
-        false,
-    )
+    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false)
 }
 
 #[test]
@@ -10032,38 +10001,30 @@ fn test_calculate_fee() {
     // Default: no fee.
     let message =
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                0,
-                &FeeStructure {
-                    lamports_per_signature: 0,
-                    ..FeeStructure::default()
-                },
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            0
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(
+            &message,
+            0,
+            &FeeStructure {
+                lamports_per_signature: 0,
+                ..FeeStructure::default()
+            },
+        ),
+        0
+    );
 
     // One signature, a fee.
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                1,
-                &FeeStructure {
-                    lamports_per_signature: 1,
-                    ..FeeStructure::default()
-                },
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            1
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(
+            &message,
+            1,
+            &FeeStructure {
+                lamports_per_signature: 1,
+                ..FeeStructure::default()
+            },
+        ),
+        1
+    );
 
     // Two signatures, double the fee.
     let key0 = Pubkey::new_unique();
@@ -10071,21 +10032,17 @@ fn test_calculate_fee() {
     let ix0 = system_instruction::transfer(&key0, &key1, 1);
     let ix1 = system_instruction::transfer(&key1, &key0, 1);
     let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                2,
-                &FeeStructure {
-                    lamports_per_signature: 2,
-                    ..FeeStructure::default()
-                },
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            4
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(
+            &message,
+            2,
+            &FeeStructure {
+                lamports_per_signature: 2,
+                ..FeeStructure::default()
+            },
+        ),
+        4
+    );
 }
 
 #[test]
@@ -10101,18 +10058,10 @@ fn test_calculate_fee_compute_units() {
 
     let message =
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                1,
-                &fee_structure,
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            max_fee + lamports_per_signature
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(&message, 1, &fee_structure,),
+        max_fee + lamports_per_signature
+    );
 
     // Three signatures, two instructions, no unit request
 
@@ -10120,18 +10069,10 @@ fn test_calculate_fee_compute_units() {
     let ix1 = system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1);
     let message =
         SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique()))).unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                1,
-                &fee_structure,
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            max_fee + 3 * lamports_per_signature
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(&message, 1, &fee_structure,),
+        max_fee + 3 * lamports_per_signature
+    );
 
     // Explicit fee schedule
 
@@ -10162,19 +10103,11 @@ fn test_calculate_fee_compute_units() {
             Some(&Pubkey::new_unique()),
         ))
         .unwrap();
-        for support_set_accounts_data_size_limit_ix in [true, false] {
-            let fee = calculate_test_fee(
-                &message,
-                1,
-                &fee_structure,
-                support_set_accounts_data_size_limit_ix,
-                true,
-            );
-            assert_eq!(
-                fee,
-                lamports_per_signature + prioritization_fee_details.get_fee()
-            );
-        }
+        let fee = calculate_test_fee(&message, 1, &fee_structure);
+        assert_eq!(
+            fee,
+            lamports_per_signature + prioritization_fee_details.get_fee()
+        );
     }
 }
 
@@ -10206,8 +10139,6 @@ fn test_calculate_prioritization_fee() {
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,
-        true,
     );
     assert_eq!(
         fee,
@@ -10245,18 +10176,7 @@ fn test_calculate_fee_secp256k1() {
         Some(&key0),
     ))
     .unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                1,
-                &fee_structure,
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            2
-        );
-    }
+    assert_eq!(calculate_test_fee(&message, 1, &fee_structure,), 2);
 
     secp_instruction1.data = vec![0];
     secp_instruction2.data = vec![10];
@@ -10265,18 +10185,7 @@ fn test_calculate_fee_secp256k1() {
         Some(&key0),
     ))
     .unwrap();
-    for support_set_accounts_data_size_limit_ix in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                1,
-                &fee_structure,
-                support_set_accounts_data_size_limit_ix,
-                true,
-            ),
-            11
-        );
-    }
+    assert_eq!(calculate_test_fee(&message, 1, &fee_structure,), 11);
 }
 
 #[test]
@@ -10403,10 +10312,10 @@ declare_process_instruction!(MockTransferBuiltin, 1, |invoke_context| {
             MockTransferInstruction::Transfer(amount) => {
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .checked_sub_lamports(amount)?;
+                    .checked_sub_lamports(amount, &invoke_context.feature_set)?;
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .checked_add_lamports(amount)?;
+                    .checked_add_lamports(amount, &invoke_context.feature_set)?;
                 Ok(())
             }
         }
@@ -11173,7 +11082,7 @@ declare_process_instruction!(MockReallocBuiltin, 1, |invoke_context| {
                 // Set data length
                 instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data_length(new_size)?;
+                    .set_data_length(new_size, &invoke_context.feature_set)?;
 
                 // set balance
                 let current_balance = instruction_context
@@ -11184,17 +11093,17 @@ declare_process_instruction!(MockReallocBuiltin, 1, |invoke_context| {
                 if diff_balance.is_positive() {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_sub_lamports(amount)?;
+                        .checked_sub_lamports(amount, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_lamports(new_balance)?;
+                        .set_lamports(new_balance, &invoke_context.feature_set)?;
                 } else {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(amount)?;
+                        .checked_add_lamports(amount, &invoke_context.feature_set)?;
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_lamports(new_balance)?;
+                        .set_lamports(new_balance, &invoke_context.feature_set)?;
                 }
                 Ok(())
             }
@@ -12017,39 +11926,17 @@ fn test_calculate_fee_with_congestion_multiplier() {
 
     // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
     // congestion_multiplier has no effect on fee.
-    for remove_congestion_multiplier in [true, false] {
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                cheap_lamports_per_signature,
-                &fee_structure,
-                true,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(&message, cheap_lamports_per_signature, &fee_structure),
+        signature_fee * signature_count
+    );
 
     // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
     // congestion_multiplier will change calculated fee.
-    for remove_congestion_multiplier in [true, false] {
-        let denominator: u64 = if remove_congestion_multiplier {
-            1
-        } else {
-            lamports_scale
-        };
-
-        assert_eq!(
-            calculate_test_fee(
-                &message,
-                expensive_lamports_per_signature,
-                &fee_structure,
-                true,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count / denominator
-        );
-    }
+    assert_eq!(
+        calculate_test_fee(&message, expensive_lamports_per_signature, &fee_structure,),
+        signature_fee * signature_count
+    );
 }
 
 #[test]
@@ -12078,7 +11965,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
     assert_eq!(
-        calculate_test_fee(&message, lamports_per_signature, &fee_structure, true, true,),
+        calculate_test_fee(&message, lamports_per_signature, &fee_structure),
         signature_fee + request_cu * lamports_per_cu
     );
 }
@@ -14114,4 +14001,30 @@ fn test_rebuild_skipped_rewrites() {
     // Ensure the snapshot bank's skipped rewrites match the original bank's
     let snapshot_skipped_rewrites = snapshot_bank.calculate_skipped_rewrites();
     assert_eq!(snapshot_skipped_rewrites, actual_skipped_rewrites);
+}
+
+/// Test that simulations report the compute units of failed transactions
+#[test]
+fn test_failed_simulation_compute_units() {
+    let (genesis_config, mint_keypair) = create_genesis_config(LAMPORTS_PER_SOL);
+    let program_id = Pubkey::new_unique();
+    let bank =
+        Bank::new_with_mockup_builtin_for_tests(&genesis_config, program_id, MockBuiltin::vm).0;
+
+    const TEST_UNITS: u64 = 10_000;
+    declare_process_instruction!(MockBuiltin, 1, |invoke_context| {
+        invoke_context.consume_checked(TEST_UNITS).unwrap();
+        Err(InstructionError::InvalidInstructionData)
+    });
+
+    let message = Message::new(
+        &[Instruction::new_with_bincode(program_id, &0, vec![])],
+        Some(&mint_keypair.pubkey()),
+    );
+    let transaction = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
+
+    bank.freeze();
+    let sanitized = SanitizedTransaction::from_transaction_for_tests(transaction);
+    let simulation = bank.simulate_transaction(&sanitized, false);
+    assert_eq!(TEST_UNITS, simulation.units_consumed);
 }

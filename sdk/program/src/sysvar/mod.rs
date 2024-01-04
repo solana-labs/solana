@@ -79,7 +79,7 @@
 //!
 //! For more details see the Solana [documentation on sysvars][sysvardoc].
 //!
-//! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
+//! [sysvardoc]: https://docs.solanalabs.com/runtime/sysvars
 
 use {
     crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},

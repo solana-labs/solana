@@ -1,7 +1,16 @@
 # Solana Validator Docs Readme
 
-This validator's docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
+This validator's documentation is built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
 Static content delivery is handled using `vercel`.
+
+> Note: The documentation within this repo is specifically focused on the
+> Solana validator client maintained by Solana Labs. The more "common"
+> documentation which is generalize to the Solana protocol as a whole, and apply
+> to all Solana validator implementations, are maintained within the
+> [`developer-content`](https://github.com/solana-foundation/developer-content/)
+> repo. Those "common docs" are manged by the Solana Foundation within their
+> GitHub organization and are publicly accessible via
+> [solana.com/docs](https://solana.com/docs)
 
 ## Local Development
 

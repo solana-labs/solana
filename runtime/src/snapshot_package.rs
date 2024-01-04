@@ -8,7 +8,7 @@ use {
     log::*,
     solana_accounts_db::{
         accounts::Accounts,
-        accounts_db::AccountStorageEntry,
+        accounts_db::{AccountStorageEntry, AccountsDb},
         accounts_hash::{AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -159,6 +159,8 @@ impl AccountsPackage {
     /// Create a new Accounts Package where basically every field is defaulted.
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
+        let accounts_db = AccountsDb::default_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         Self {
             package_kind: AccountsPackageKind::AccountsHashVerifier,
             slot: Slot::default(),
@@ -166,7 +168,7 @@ impl AccountsPackage {
             snapshot_storages: Vec::default(),
             expected_capitalization: u64::default(),
             accounts_hash_for_testing: Option::default(),
-            accounts: Arc::new(Accounts::default_for_tests()),
+            accounts: Arc::new(accounts),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),

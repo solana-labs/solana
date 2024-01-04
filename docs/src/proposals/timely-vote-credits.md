@@ -47,7 +47,7 @@ transmitted immediately and landed in an earlier slot.
 
 If landing a vote with 1 slot latency awarded more credit than landing that
 same vote in 2 slots latency, then validators who could land votes
-consistently wihthin 1 slot would have a credits earning advantage over those
+consistently within 1 slot would have a credits earning advantage over those
 who could not.  Part of the latency when transmitting votes is unavoidable as
 it's a function of geographical distance between the sender and receiver of
 the vote.  The Solana network is spread around the world but it is not evenly

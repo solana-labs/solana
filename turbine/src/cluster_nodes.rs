@@ -311,7 +311,7 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
 // fanout + k, 2*fanout + k, ..., fanout*fanout + k
 fn get_retransmit_peers<T: Copy>(
     fanout: usize,
-    index: usize, // Local node's index withing the nodes slice.
+    index: usize, // Local node's index within the nodes slice.
     nodes: &[T],
 ) -> impl Iterator<Item = T> + '_ {
     // Node's index within its neighborhood.
@@ -513,7 +513,7 @@ fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool
 
 // Returns true if the feature is effective for the shred slot.
 #[must_use]
-fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
+pub fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
     match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {

@@ -4,7 +4,7 @@
 //! [leader schedule][ls] is in effect. The epoch schedule determines the length
 //! of epochs, and the timing of the next leader-schedule selection.
 //!
-//! [ls]: https://docs.solana.com/cluster/leader-rotation#leader-schedule-rotation
+//! [ls]: https://docs.solanalabs.com/consensus/leader-rotation#leader-schedule-rotation
 //!
 //! The epoch schedule does not change during the life of a blockchain,
 //! though the length of an epoch does &mdash; during the initial launch of

@@ -20,7 +20,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        bank::{epoch_accounts_hash_utils, Bank, BankTestConfig},
+        bank::{epoch_accounts_hash_utils, Bank},
         bank_forks::BankForks,
         genesis_utils::{self, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
@@ -32,7 +32,6 @@ use {
     solana_sdk::{
         clock::Slot,
         epoch_schedule::EpochSchedule,
-        feature_set,
         native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -114,10 +113,8 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests_with_config(
-            &genesis_config_info.genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank_forks =
+            BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank_forks
             .write()
             .unwrap()
@@ -145,9 +142,6 @@ impl TestEnvironment {
             Arc::clone(&bank_forks),
         );
         let bank = bank_forks.read().unwrap().working_bank();
-        assert!(bank
-            .feature_set
-            .is_active(&feature_set::epoch_accounts_hash::id()));
         assert!(epoch_accounts_hash_utils::is_enabled_this_epoch(&bank));
 
         bank.set_startup_verification_complete();
