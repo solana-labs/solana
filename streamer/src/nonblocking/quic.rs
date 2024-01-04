@@ -63,6 +63,7 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 const STREAM_STOP_CODE_THROTTLING: u32 = 15;
 const STREAM_LOAD_EMA_INTERVAL_MS: Duration = Duration::from_millis(5);
 const STREAM_LOAD_EMA_INTERVAL_COUNT: u128 = 10;
+const MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION: u128 = 8;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -195,7 +196,10 @@ impl StakedStreamLoadEMA {
             (max_load_in_ema_window * max_load_in_ema_window * stake as u128)
                 / (current_load * total_stake as u128);
 
-        capacity_in_ema_window * duration_ms / ema_window_ms
+        cmp::max(
+            capacity_in_ema_window * duration_ms / ema_window_ms,
+            MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION,
+        )
     }
 }
 
@@ -459,14 +463,16 @@ fn handle_and_cache_new_connection(
             remote_addr,
         );
 
-        if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
-            ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
-            remote_addr.port(),
-            Some(connection.clone()),
-            params.stake,
-            timing::timestamp(),
-            params.max_connections_per_peer,
-        ) {
+        if let Some((last_update, stream_exit, stream_counter)) = connection_table_l
+            .try_add_connection(
+                ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
+                remote_addr.port(),
+                Some(connection.clone()),
+                params.stake,
+                timing::timestamp(),
+                params.max_connections_per_peer,
+            )
+        {
             let peer_type = connection_table_l.peer_type;
             drop(connection_table_l);
             tokio::spawn(handle_connection(
@@ -479,6 +485,7 @@ fn handle_and_cache_new_connection(
                 peer_type,
                 wait_for_chunk_timeout,
                 stream_load_ema,
+                stream_counter,
             ));
             Ok(())
         } else {
@@ -825,15 +832,6 @@ fn max_streams_for_connection_in_duration(
     }
 }
 
-fn reset_throttling_params_if_needed(last_instant: &mut tokio::time::Instant) -> bool {
-    if tokio::time::Instant::now().duration_since(*last_instant) > STREAM_THROTTLING_INTERVAL {
-        *last_instant = tokio::time::Instant::now();
-        true
-    } else {
-        false
-    }
-}
-
 async fn handle_connection(
     connection: Connection,
     remote_addr: SocketAddr,
@@ -844,6 +842,7 @@ async fn handle_connection(
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
     stream_load_ema: Arc<StakedStreamLoadEMA>,
+    stream_counter: Arc<ConnectionStreamCounter>,
 ) {
     let stats = params.stats;
     debug!(
@@ -861,8 +860,6 @@ async fn handle_connection(
         stream_load_ema.clone(),
         STREAM_THROTTLING_INTERVAL.as_millis(),
     );
-    let mut last_throttling_instant = tokio::time::Instant::now();
-    let mut streams_in_current_interval = 0;
     let staked_stream = matches!(peer_type, ConnectionPeerType::Staked) && params.stake > 0;
     while !stream_exit.load(Ordering::Relaxed) {
         if staked_stream {
@@ -878,9 +875,10 @@ async fn handle_connection(
         {
             match stream {
                 Ok(mut stream) => {
-                    if reset_throttling_params_if_needed(&mut last_throttling_instant) {
-                        streams_in_current_interval = 0;
-                    } else if streams_in_current_interval >= max_streams_per_throttling_interval {
+                    stream_counter.reset_throttling_params_if_needed();
+                    if stream_counter.stream_count.load(Ordering::Relaxed) as u128
+                        >= max_streams_per_throttling_interval
+                    {
                         stats.throttled_streams.fetch_add(1, Ordering::Relaxed);
                         let _ = stream.stop(VarInt::from_u32(STREAM_STOP_CODE_THROTTLING));
                         continue;
@@ -888,7 +886,7 @@ async fn handle_connection(
                     if staked_stream {
                         stream_load_ema.increment_load();
                     }
-                    streams_in_current_interval = streams_in_current_interval.saturating_add(1);
+                    stream_counter.stream_count.fetch_add(1, Ordering::Relaxed);
                     stats.total_streams.fetch_add(1, Ordering::Relaxed);
                     stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
                     let stream_exit = stream_exit.clone();
@@ -1078,12 +1076,43 @@ async fn handle_chunk(
 }
 
 #[derive(Debug)]
+struct ConnectionStreamCounter {
+    stream_count: AtomicU64,
+    last_throttling_instant: RwLock<tokio::time::Instant>,
+}
+
+impl ConnectionStreamCounter {
+    fn new() -> Self {
+        Self {
+            stream_count: AtomicU64::default(),
+            last_throttling_instant: RwLock::new(tokio::time::Instant::now()),
+        }
+    }
+
+    fn reset_throttling_params_if_needed(&self) {
+        if tokio::time::Instant::now().duration_since(*self.last_throttling_instant.read().unwrap())
+            > STREAM_THROTTLING_INTERVAL
+        {
+            let mut last_throttling_instant = self.last_throttling_instant.write().unwrap();
+            // Recheck as some other thread might have done throttling since this thread tried to acquire the write lock.
+            if tokio::time::Instant::now().duration_since(*last_throttling_instant)
+                > STREAM_THROTTLING_INTERVAL
+            {
+                *last_throttling_instant = tokio::time::Instant::now();
+                self.stream_count.store(0, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 struct ConnectionEntry {
     exit: Arc<AtomicBool>,
     stake: u64,
     last_update: Arc<AtomicU64>,
     port: u16,
     connection: Option<Connection>,
+    stream_counter: Arc<ConnectionStreamCounter>,
 }
 
 impl ConnectionEntry {
@@ -1093,6 +1122,7 @@ impl ConnectionEntry {
         last_update: Arc<AtomicU64>,
         port: u16,
         connection: Option<Connection>,
+        stream_counter: Arc<ConnectionStreamCounter>,
     ) -> Self {
         Self {
             exit,
@@ -1100,6 +1130,7 @@ impl ConnectionEntry {
             last_update,
             port,
             connection,
+            stream_counter,
         }
     }
 
@@ -1210,7 +1241,11 @@ impl ConnectionTable {
         stake: u64,
         last_update: u64,
         max_connections_per_peer: usize,
-    ) -> Option<(Arc<AtomicU64>, Arc<AtomicBool>)> {
+    ) -> Option<(
+        Arc<AtomicU64>,
+        Arc<AtomicBool>,
+        Arc<ConnectionStreamCounter>,
+    )> {
         let connection_entry = self.table.entry(key).or_default();
         let has_connection_capacity = connection_entry
             .len()
@@ -1220,15 +1255,20 @@ impl ConnectionTable {
         if has_connection_capacity {
             let exit = Arc::new(AtomicBool::new(false));
             let last_update = Arc::new(AtomicU64::new(last_update));
+            let stream_counter = connection_entry
+                .first()
+                .map(|entry| entry.stream_counter.clone())
+                .unwrap_or(Arc::new(ConnectionStreamCounter::new()));
             connection_entry.push(ConnectionEntry::new(
                 exit.clone(),
                 stake,
                 last_update.clone(),
                 port,
                 connection,
+                stream_counter.clone(),
             ));
             self.total_size += 1;
-            Some((last_update, exit))
+            Some((last_update, exit, stream_counter))
         } else {
             if let Some(connection) = connection {
                 connection.close(
@@ -2306,6 +2346,19 @@ pub mod test {
                 100
             ),
             8000
+        );
+
+        // At 1/40000 stake weight, and minimum load, it should still allow
+        // MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION of streams.
+        assert_eq!(
+            max_streams_for_connection_in_duration(
+                ConnectionPeerType::Staked,
+                1,
+                40000,
+                load_ema.clone(),
+                100
+            ),
+            MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION
         );
     }
 
