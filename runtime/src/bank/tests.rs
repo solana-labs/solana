@@ -14028,3 +14028,49 @@ fn test_failed_simulation_compute_units() {
     let simulation = bank.simulate_transaction(&sanitized, false);
     assert_eq!(TEST_UNITS, simulation.units_consumed);
 }
+
+#[test]
+fn test_halve_rent() {
+    let initial_lamports_per_byte_year = 100_000;
+    let initial_rent = Rent {
+        lamports_per_byte_year: initial_lamports_per_byte_year,
+        ..Default::default()
+    };
+    let genesis_config = GenesisConfig {
+        rent: initial_rent.clone(),
+        ..Default::default()
+    };
+    let bank = Bank::new_for_tests(&genesis_config);
+    let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+
+    let bank = Bank::new_from_parent(bank.into(), &Pubkey::default(), last_slot_in_epoch);
+    let feature_account = feature::create_account(
+        &Feature::default(),
+        initial_rent.minimum_balance(Feature::size_of()),
+    );
+    bank.store_account(&feature_set::halve_rent::id(), &feature_account);
+    assert!(!bank.feature_set.is_active(&feature_set::halve_rent::id()));
+
+    // Make a new bank that crosses the epoch boundary.  This will activate the feature gate to
+    // halve the rent.  Then ensure the rent is actually halved in the Bank's RentCollector, the
+    // sysvar cache, and the sysvar account.
+    let bank = Bank::new_from_parent(bank.into(), &Pubkey::default(), last_slot_in_epoch + 1);
+    assert!(bank.feature_set.is_active(&feature_set::halve_rent::id()));
+    let expected_lamports_per_byte_year = initial_lamports_per_byte_year / 2;
+    assert_eq!(
+        bank.rent_collector().rent.lamports_per_byte_year,
+        expected_lamports_per_byte_year,
+    );
+    assert_eq!(
+        bank.sysvar_cache
+            .read()
+            .unwrap()
+            .get_rent()
+            .unwrap()
+            .lamports_per_byte_year,
+        expected_lamports_per_byte_year,
+    );
+    let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
+    let rent = from_account::<sysvar::rent::Rent, _>(&rent_account).unwrap();
+    assert_eq!(rent.lamports_per_byte_year, expected_lamports_per_byte_year,);
+}

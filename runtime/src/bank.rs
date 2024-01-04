@@ -7888,6 +7888,11 @@ impl Bank {
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick6::id()) {
             self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK6);
         }
+
+        if new_feature_activations.contains(&feature_set::halve_rent::id()) {
+            self.rent_collector.rent.lamports_per_byte_year /= 2;
+            self.update_rent();
+        }
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
