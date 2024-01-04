@@ -126,7 +126,7 @@ mod test {
     #[test]
     fn test_parse_create_address_lookup_table_ix() {
         let from_pubkey = Pubkey::new_unique();
-        // use explicit key to have predicatble bump_seed
+        // use explicit key to have predictable bump_seed
         let authority = Pubkey::from_str("HkxY6vXdrKzoCQLmdJ3cYo9534FdZQxzBNWTyrJzzqJM").unwrap();
         let slot = 42;
 

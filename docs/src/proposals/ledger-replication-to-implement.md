@@ -219,7 +219,7 @@ For each turn of the PoRep game, both Validators and Archivers evaluate each sta
 
 For any random seed, we force everyone to use a signature that is derived from a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
 
-Since there are many more client identities then encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
+Since there are many more client identities than encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
 
 Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
 

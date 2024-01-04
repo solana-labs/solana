@@ -115,7 +115,7 @@ fn setup(apply_cost_tracker_during_replay: bool) -> BenchFrame {
     bank.write_cost_tracker()
         .unwrap()
         .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
-    let bank = Arc::new(bank);
+    let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let ledger_path = TempDir::new().unwrap();
     let blockstore = Arc::new(

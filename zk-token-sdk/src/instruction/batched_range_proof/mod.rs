@@ -54,15 +54,15 @@ impl BatchedRangeProofContext {
     fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"BatchedRangeProof");
         transcript.append_message(b"commitments", bytes_of(&self.commitments));
-        transcript.append_message(b"bit-legnths", bytes_of(&self.bit_lengths));
+        transcript.append_message(b"bit-lengths", bytes_of(&self.bit_lengths));
         transcript
     }
 
     fn new(
-        commitments: &Vec<&PedersenCommitment>,
-        amounts: &Vec<u64>,
-        bit_lengths: &Vec<usize>,
-        openings: &Vec<&PedersenOpening>,
+        commitments: &[&PedersenCommitment],
+        amounts: &[u64],
+        bit_lengths: &[usize],
+        openings: &[&PedersenOpening],
     ) -> Result<Self, ProofGenerationError> {
         // the number of commitments is capped at 8
         let num_commitments = commitments.len();

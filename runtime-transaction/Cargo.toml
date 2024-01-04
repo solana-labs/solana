@@ -22,6 +22,7 @@ name = "solana_runtime_transaction"
 [dev-dependencies]
 bincode = { workspace = true }
 rand = { workspace = true }
+solana-program ={ workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

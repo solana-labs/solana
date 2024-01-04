@@ -274,7 +274,7 @@ pub enum InstructionError {
 /// clients. Instructions are also used to describe [cross-program
 /// invocations][cpi].
 ///
-/// [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+/// [cpi]: https://solana.com/docs/core/cpi
 ///
 /// During execution, a program will receive a list of account data as one of
 /// its arguments, in the same order as specified during `Instruction`
@@ -347,7 +347,7 @@ impl Instruction {
     /// `program_id` is the address of the program that will execute the instruction.
     /// `accounts` contains a description of all accounts that may be accessed by the program.
     ///
-    /// Borsh serialization is often prefered over bincode as it has a stable
+    /// Borsh serialization is often preferred over bincode as it has a stable
     /// [specification] and an [implementation in JavaScript][jsb], neither of
     /// which are true of bincode.
     ///
@@ -364,6 +364,7 @@ impl Instruction {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct MyInstruction {
     ///     pub lamports: u64,
     /// }
@@ -391,7 +392,7 @@ impl Instruction {
         data: &T,
         accounts: Vec<AccountMeta>,
     ) -> Self {
-        let data = data.try_to_vec().unwrap();
+        let data = borsh::to_vec(data).unwrap();
         Self {
             program_id,
             accounts,
@@ -466,10 +467,10 @@ impl Instruction {
     /// #     pubkey::Pubkey,
     /// #     instruction::{AccountMeta, Instruction},
     /// # };
-    /// # use borsh::{BorshSerialize, BorshDeserialize};
-    /// # use anyhow::Result;
+    /// # use borsh::{io::Error, BorshSerialize, BorshDeserialize};
     /// #
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct MyInstruction {
     ///     pub lamports: u64,
     /// }
@@ -479,7 +480,7 @@ impl Instruction {
     ///     from: &Pubkey,
     ///     to: &Pubkey,
     ///     lamports: u64,
-    /// ) -> Result<Instruction> {
+    /// ) -> Result<Instruction, Error> {
     ///     let instr = MyInstruction { lamports };
     ///
     ///     let mut instr_in_bytes: Vec<u8> = Vec::new();
@@ -558,6 +559,7 @@ impl AccountMeta {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// # pub struct MyInstruction;
     /// #
     /// # let instruction = MyInstruction;
@@ -593,6 +595,7 @@ impl AccountMeta {
     /// # use borsh::{BorshSerialize, BorshDeserialize};
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// # pub struct MyInstruction;
     /// #
     /// # let instruction = MyInstruction;

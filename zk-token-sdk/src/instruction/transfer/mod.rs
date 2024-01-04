@@ -31,8 +31,8 @@ pub enum Role {
 }
 
 /// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
-///  - the `bit_length` low bits of `amount` interpretted as u64
-///  - the (64 - `bit_length`) high bits of `amount` interpretted as u64
+///  - the `bit_length` low bits of `amount` interpreted as u64
+///  - the (64 - `bit_length`) high bits of `amount` interpreted as u64
 #[cfg(not(target_os = "solana"))]
 pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
     if bit_length == 64 {

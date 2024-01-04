@@ -248,9 +248,13 @@ where
     fn send<C: BenchTpsClient + ?Sized>(&self, client: &Arc<C>) {
         let mut send_txs = Measure::start("send_and_clone_txs");
         let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
-        client.send_batch(batch).expect("transfer");
+        let result = client.send_batch(batch);
         send_txs.stop();
-        debug!("send {} {}", self.len(), send_txs);
+        if result.is_err() {
+            debug!("Failed to send batch {result:?}");
+        } else {
+            debug!("send {} {}", self.len(), send_txs);
+        }
     }
 
     fn verify<C: 'static + BenchTpsClient + Send + Sync + ?Sized>(

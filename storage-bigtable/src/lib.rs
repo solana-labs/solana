@@ -18,7 +18,7 @@ use {
     solana_storage_proto::convert::{entries, generated, tx_by_addr},
     solana_transaction_status::{
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
+        ConfirmedTransactionWithStatusMeta, EntrySummary, Reward, TransactionByAddrInfo,
         TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedConfirmedBlockWithEntries,
         VersionedTransactionWithStatusMeta,
@@ -611,6 +611,25 @@ impl LedgerStorage {
         Ok(block_exists)
     }
 
+    /// Fetches a vector of block entries via a multirow fetch
+    pub async fn get_entries(&self, slot: Slot) -> Result<impl Iterator<Item = EntrySummary>> {
+        trace!(
+            "LedgerStorage::get_block_entries request received: {:?}",
+            slot
+        );
+        self.stats.increment_num_queries();
+        let mut bigtable = self.connection.client();
+        let entry_cell_data = bigtable
+            .get_protobuf_cell::<entries::Entries>("entries", slot_to_entries_key(slot))
+            .await
+            .map_err(|err| match err {
+                bigtable::Error::RowNotFound => Error::BlockNotFound(slot),
+                _ => err.into(),
+            })?;
+        let entries = entry_cell_data.entries.into_iter().map(Into::into);
+        Ok(entries)
+    }
+
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
         trace!(
             "LedgerStorage::get_signature_status request received: {:?}",
@@ -804,7 +823,7 @@ impl LedgerStorage {
             .unwrap_or(0);
 
         // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
-        // number that might be flitered out
+        // number that might be filtered out
         let tx_by_addr_data = bigtable
             .get_row_data(
                 "tx-by-addr",

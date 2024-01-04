@@ -167,7 +167,6 @@ pub(crate) struct RewardsStoreMetrics {
     pub(crate) post_capitalization: u64,
 }
 
-#[allow(dead_code)]
 pub(crate) fn report_partitioned_reward_metrics(bank: &Bank, timings: RewardsStoreMetrics) {
     datapoint_info!(
         "bank-partitioned_epoch_rewards_credit",

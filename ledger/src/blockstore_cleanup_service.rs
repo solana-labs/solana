@@ -303,7 +303,7 @@ mod tests {
     fn flush_blockstore_contents_to_disk(blockstore: Blockstore) -> Blockstore {
         // The find_slots_to_clean() routine uses a method that queries data
         // from RocksDB SST files. On a running validator, these are created
-        // fairly reguarly as new data is coming in and contents of memory are
+        // fairly regularly as new data is coming in and contents of memory are
         // pushed to disk. In a unit test environment, we aren't pushing nearly
         // enough data for this to happen organically. So, instead open and
         // close the Blockstore which will perform the flush to SSTs.

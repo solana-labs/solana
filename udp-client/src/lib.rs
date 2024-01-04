@@ -15,6 +15,7 @@ use {
         },
         connection_cache_stats::ConnectionCacheStats,
     },
+    solana_sdk::signature::Keypair,
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::Arc,
@@ -111,5 +112,9 @@ impl ConnectionManager for UdpConnectionManager {
 
     fn new_connection_config(&self) -> Self::NewConnectionConfig {
         UdpConfig::new().unwrap()
+    }
+
+    fn update_key(&self, _key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
     }
 }

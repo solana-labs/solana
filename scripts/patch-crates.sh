@@ -7,11 +7,15 @@ update_solana_dependencies() {
   while IFS='' read -r line; do tomls+=("$line"); done < <(find "$project_root" -name Cargo.toml)
 
   sed -i -e "s#\(solana-program = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-program = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-program-test = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-program-test = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-sdk = \"\).*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-sdk = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-client = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-client = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-cli-config = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-cli-config = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-clap-utils = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-clap-utils = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-account-decoder = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
@@ -30,6 +34,7 @@ patch_crates_io_solana() {
 solana-account-decoder = { path = "$solana_dir/account-decoder" }
 solana-clap-utils = { path = "$solana_dir/clap-utils" }
 solana-client = { path = "$solana_dir/client" }
+solana-cli-config = { path = "$solana_dir/cli-config" }
 solana-program = { path = "$solana_dir/sdk/program" }
 solana-program-test = { path = "$solana_dir/program-test" }
 solana-sdk = { path = "$solana_dir/sdk" }

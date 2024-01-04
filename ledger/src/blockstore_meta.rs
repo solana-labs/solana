@@ -406,7 +406,6 @@ impl ErasureMeta {
     }
 }
 
-#[allow(dead_code)]
 impl MerkleRootMeta {
     pub(crate) fn from_shred(shred: &Shred) -> Self {
         Self {

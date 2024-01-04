@@ -8,7 +8,10 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
-    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
+    solana_accounts_db::{
+        accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
+        epoch_accounts_hash::EpochAccountsHash,
+    },
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
@@ -27,7 +30,7 @@ use {
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
-        clock::Slot,
+        clock::{Epoch, Slot},
         entrypoint::{deserialize, ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
@@ -127,6 +130,7 @@ pub fn invoke_builtin_function(
             .transaction_context
             .get_current_instruction_context()?,
         true, // copy_account_data // There is no VM so direct mapping can not be implemented here
+        &invoke_context.feature_set,
     )?;
 
     // Deserialize data back into instruction params
@@ -157,18 +161,25 @@ pub fn invoke_builtin_function(
         if borrowed_account.is_writable() {
             if let Some(account_info) = account_info_map.get(borrowed_account.get_key()) {
                 if borrowed_account.get_lamports() != account_info.lamports() {
-                    borrowed_account.set_lamports(account_info.lamports())?;
+                    borrowed_account
+                        .set_lamports(account_info.lamports(), &invoke_context.feature_set)?;
                 }
 
                 if borrowed_account
                     .can_data_be_resized(account_info.data_len())
                     .is_ok()
-                    && borrowed_account.can_data_be_changed().is_ok()
+                    && borrowed_account
+                        .can_data_be_changed(&invoke_context.feature_set)
+                        .is_ok()
                 {
-                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
+                    borrowed_account.set_data_from_slice(
+                        &account_info.data.borrow(),
+                        &invoke_context.feature_set,
+                    )?;
                 }
                 if borrowed_account.get_owner() != account_info.owner {
-                    borrowed_account.set_owner(account_info.owner.as_ref())?;
+                    borrowed_account
+                        .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)?;
                 }
             }
         }
@@ -279,17 +290,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .unwrap();
             if borrowed_account.get_lamports() != account_info.lamports() {
                 borrowed_account
-                    .set_lamports(account_info.lamports())
+                    .set_lamports(account_info.lamports(), &invoke_context.feature_set)
                     .unwrap();
             }
             let account_info_data = account_info.try_borrow_data().unwrap();
             // The redundant check helps to avoid the expensive data comparison if we can
             match borrowed_account
                 .can_data_be_resized(account_info_data.len())
-                .and_then(|_| borrowed_account.can_data_be_changed())
+                .and_then(|_| borrowed_account.can_data_be_changed(&invoke_context.feature_set))
             {
                 Ok(()) => borrowed_account
-                    .set_data_from_slice(&account_info_data)
+                    .set_data_from_slice(&account_info_data, &invoke_context.feature_set)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
                     panic!("{err:?}");
@@ -299,7 +310,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             // Change the owner at the end so that we are allowed to change the lamports and data before
             if borrowed_account.get_owner() != account_info.owner {
                 borrowed_account
-                    .set_owner(account_info.owner.as_ref())
+                    .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)
                     .unwrap();
             }
             if instruction_account.is_writable {
@@ -805,7 +816,7 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_with_runtime_config_for_tests(
+        let mut bank = Bank::new_with_paths(
             &genesis_config,
             Arc::new(RuntimeConfig {
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
@@ -815,6 +826,15 @@ impl ProgramTest {
                 transaction_account_lock_limit: self.transaction_account_lock_limit,
                 ..RuntimeConfig::default()
             }),
+            Vec::default(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            None,
+            None,
+            Arc::default(),
         );
 
         // Add commonly-used SPL programs as a convenience to the user
@@ -1185,6 +1205,14 @@ impl ProgramTestContext {
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
+    }
+
+    pub fn warp_to_epoch(&mut self, warp_epoch: Epoch) -> Result<(), ProgramTestError> {
+        let warp_slot = self
+            .genesis_config
+            .epoch_schedule
+            .get_first_slot_in_epoch(warp_epoch);
+        self.warp_to_slot(warp_slot)
     }
 
     /// warp forward one more slot and force reward interval end

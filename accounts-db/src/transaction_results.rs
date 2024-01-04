@@ -1,3 +1,9 @@
+// Re-exported since these have moved to `solana_sdk`.
+#[deprecated(
+    since = "1.18.0",
+    note = "Please use `solana_sdk::inner_instruction` types instead"
+)]
+pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
     crate::{
         nonce_info::{NonceFull, NonceInfo, NoncePartial},
@@ -104,22 +110,6 @@ impl DurableNonceFee {
         }
     }
 }
-
-/// An ordered list of compiled instructions that were invoked during a
-/// transaction instruction
-pub type InnerInstructions = Vec<InnerInstruction>;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InnerInstruction {
-    pub instruction: CompiledInstruction,
-    /// Invocation stack height of this instruction. Instruction stack height
-    /// starts at 1 for transaction instructions.
-    pub stack_height: u8,
-}
-
-/// A list of compiled instructions that were invoked during each instruction of
-/// a transaction
-pub type InnerInstructionsList = Vec<InnerInstructions>;
 
 /// Extract the InnerInstructionsList from a TransactionContext
 pub fn inner_instructions_list_from_instruction_trace(

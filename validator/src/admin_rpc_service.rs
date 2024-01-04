@@ -682,6 +682,12 @@ impl AdminRpcImpl {
                     })?;
             }
 
+            for n in post_init.notifies.iter() {
+                if let Err(err) = n.update_key(&identity_keypair) {
+                    error!("Error updating network layer keypair: {err}");
+                }
+            }
+
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
             post_init
                 .cluster_info
@@ -888,6 +894,7 @@ mod tests {
                     bank_forks: bank_forks.clone(),
                     vote_account,
                     repair_whitelist,
+                    notifies: Vec::new(),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,

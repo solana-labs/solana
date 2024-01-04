@@ -47,7 +47,7 @@ pub(crate) struct ProcessTransactionsSummary {
     // Total amount of time spent running the cost model
     pub cost_model_us: u64,
 
-    // Breakdown of time spent executing and comitting transactions
+    // Breakdown of time spent executing and committing transactions
     pub execute_and_commit_timings: LeaderExecuteAndCommitTimings,
 
     // Breakdown of all the transaction errors from transactions passed for execution
@@ -104,7 +104,7 @@ struct LeaderSlotPacketCountMetrics {
 
     // total number of transactions that were executed, but failed to be committed into the Poh stream because
     // the block ended. Some of these may be already counted in `nonretryable_errored_transactions_count` if they
-    // then hit the age limit after failing to be comitted.
+    // then hit the age limit after failing to be committed.
     executed_transactions_failed_commit_count: u64,
 
     // total number of transactions that were excluded from the block because there were concurrent write locks active.

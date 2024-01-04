@@ -746,6 +746,14 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .collect())
     }
 
+    pub async fn get_protobuf_cell<P>(&mut self, table: &str, key: RowKey) -> Result<P>
+    where
+        P: prost::Message + Default,
+    {
+        let row_data = self.get_single_row_data(table, key.clone()).await?;
+        deserialize_protobuf_cell_data(&row_data, table, key.to_string())
+    }
+
     pub async fn get_protobuf_or_bincode_cell<B, P>(
         &mut self,
         table: &str,

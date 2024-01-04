@@ -1230,7 +1230,7 @@ pub enum ZeroLamportAccounts {
 pub struct AccountHash(pub Hash);
 
 // Ensure the newtype wrapper never changes size from the underlying Hash
-// This also ensures there are no padding bytes, which is requried to safely implement Pod
+// This also ensures there are no padding bytes, which is required to safely implement Pod
 const _: () = assert!(std::mem::size_of::<AccountHash>() == std::mem::size_of::<Hash>());
 
 /// Hash of accounts

@@ -501,7 +501,6 @@ fn add_to_path(new_path: &str) -> bool {
                     fn append_file(dest: &Path, line: &str) -> io::Result<()> {
                         use std::io::Write;
                         let mut dest_file = fs::OpenOptions::new()
-                            .write(true)
                             .append(true)
                             .create(true)
                             .open(dest)?;

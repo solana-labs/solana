@@ -1,9 +1,6 @@
 use {
     crate::compute_budget_processor::{self, process_compute_budget_instructions},
-    solana_sdk::{
-        feature_set::FeatureSet, instruction::CompiledInstruction, pubkey::Pubkey,
-        transaction::Result,
-    },
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, transaction::Result},
 };
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -183,9 +180,8 @@ impl ComputeBudget {
 
     pub fn try_from_instructions<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        feature_set: &FeatureSet,
     ) -> Result<Self> {
-        let compute_budget_limits = process_compute_budget_instructions(instructions, feature_set)?;
+        let compute_budget_limits = process_compute_budget_instructions(instructions)?;
         Ok(ComputeBudget {
             compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
             heap_size: compute_budget_limits.updated_heap_bytes,
