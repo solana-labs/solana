@@ -1,4 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
 use {
     bzip2::bufread::BzDecoder,
     console::Emoji,
@@ -10,6 +9,7 @@ use {
         env,
         fs::{self, File},
         io::{self, BufReader, Cursor, Read},
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         time::Duration,
     },
@@ -164,7 +164,6 @@ pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<V
     })
 }
 
-//TODO: ensure math division and modulo and += safe and remove clippy at top
 pub fn calculate_stake_allocations(
     total_sol: f64,
     num_validators: i32,
@@ -173,7 +172,9 @@ pub fn calculate_stake_allocations(
     if distribution.iter().sum::<u8>() != 100 {
         return Err("The sum of distribution percentages must be 100".to_string());
     }
-    if (num_validators as usize) < distribution.len() {
+    let num_validators_usize =
+        usize::try_from(num_validators).map_err(|_| "num validators conversion failed.")?;
+    if num_validators_usize < distribution.len() {
         return Err(format!(
             "num_validators < distribution.len(). {} < {}",
             num_validators,
@@ -185,12 +186,11 @@ pub fn calculate_stake_allocations(
 
     let mut buckets: IndexMap<u8, usize> = IndexMap::new();
     distribution.sort_by(|a, b| b.cmp(a)); // sort largest to smallest
-    let nodes_per_stake_grouping = num_validators as usize / distribution.len();
-    if nodes_per_stake_grouping == 0 {
-        return Err(format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators, distribution.len()));
-    }
 
-    let num_extra_validators = num_validators as usize % distribution.len();
+    let nodes_per_stake_grouping = NonZeroUsize::new(num_validators_usize / distribution.len())
+        .ok_or_else(|| format!("Fewer validators than distribution called for. num_validators: {}, distribution_len: {}", num_validators_usize, distribution.len()))?;
+
+    let num_extra_validators = num_validators_usize as usize % distribution.len();
     if num_extra_validators != 0 {
         warn!("WARNING: number of desired validators does not evenly split across desired distribution. \
         additional validators added one by one to distribution buckets starting with heaviest buckets by stake ({:?}%)
@@ -198,9 +198,10 @@ pub fn calculate_stake_allocations(
     }
 
     for (i, percentage) in distribution.iter().enumerate() {
-        let mut nodes_per_bucket = nodes_per_stake_grouping;
+        let mut nodes_per_bucket = nodes_per_stake_grouping.get();
         if i < num_extra_validators {
-            nodes_per_bucket += 1;
+            nodes_per_bucket = nodes_per_bucket.saturating_add(1);
+            // nodes_per_bucket += 1;
         }
         buckets.insert(*percentage, nodes_per_bucket);
     }
@@ -208,8 +209,15 @@ pub fn calculate_stake_allocations(
     for (percent, num_nodes) in buckets.iter() {
         let total_sol_per_bucket = total_sol * (*percent as f64 / 100.0);
         stake_per_bucket.push(total_sol_per_bucket);
+
+        let num_nodes_f64 = *num_nodes as f64;
+        if num_nodes_f64 == 0.0 {
+            return Err("num_nodes is 0. we can't divide by zero".to_string());
+        }
+
+        let allocation_per_node = total_sol_per_bucket / num_nodes_f64;
         for _ in 0..*num_nodes {
-            allocations.push(total_sol_per_bucket / *num_nodes as f64);
+            allocations.push(allocation_per_node);
         }
     }
     Ok((stake_per_bucket, allocations))
