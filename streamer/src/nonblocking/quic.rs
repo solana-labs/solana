@@ -832,6 +832,7 @@ fn max_streams_for_connection_in_duration(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     connection: Connection,
     remote_addr: SocketAddr,
