@@ -431,7 +431,7 @@ impl JsonRpcRequestProcessor {
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
 
-        let response = get_encoded_account(&bank, pubkey, encoding, data_slice)?;
+        let response = get_encoded_account(&bank, pubkey, encoding, data_slice, None)?;
         Ok(new_response(&bank, response))
     }
 
@@ -454,7 +454,7 @@ impl JsonRpcRequestProcessor {
 
         let accounts = pubkeys
             .into_iter()
-            .map(|pubkey| get_encoded_account(&bank, &pubkey, encoding, data_slice))
+            .map(|pubkey| get_encoded_account(&bank, &pubkey, encoding, data_slice, None))
             .collect::<Result<Vec<_>>>()?;
         Ok(new_response(&bank, accounts))
     }
@@ -2287,13 +2287,14 @@ fn get_encoded_account(
     pubkey: &Pubkey,
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
+    overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> Result<Option<UiAccount>> {
-    match bank.get_account(pubkey) {
+    match crate::common::get_account(pubkey, bank, overwrite_accounts) {
         Some(account) => {
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(bank, pubkey, account)
+                get_parsed_token_account(bank, pubkey, account, overwrite_accounts)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
@@ -3792,70 +3793,27 @@ pub mod rpc_full {
                 if result.is_err() {
                     Some(vec![None; config_accounts.addresses.len()])
                 } else {
-                    match accounts_encoding {
-                        UiAccountEncoding::Binary | UiAccountEncoding::Base58 => unreachable!(),
-                        UiAccountEncoding::Base64 | UiAccountEncoding::Base64Zstd => Some(
-                            config_accounts
-                                .addresses
-                                .iter()
-                                .map(|address_str| {
-                                    let address = verify_pubkey(address_str)?;
-                                    post_simulation_accounts
-                                        .iter()
-                                        .find(|(key, _account)| key == &address)
-                                        .map(|(pubkey, account)| {
-                                            encode_account(account, pubkey, accounts_encoding, None)
-                                        })
-                                        .transpose()
-                                })
-                                .collect::<Result<Vec<_>>>()?,
-                        ),
-                        UiAccountEncoding::JsonParsed => {
-                            let mut post_simulation_accounts_map = HashMap::new();
-                            for (pubkey, data) in post_simulation_accounts {
-                                post_simulation_accounts_map.insert(pubkey, data);
-                            }
-
-                            Some(
-                                config_accounts
-                                .addresses
-                                .iter()
-                                .map(|address_str| {
-                                    let pubkey = verify_pubkey(address_str).ok()?;
-                                    let account = post_simulation_accounts_map.get(&pubkey)?;
-
-                                    if is_known_spl_token_id(account.owner()) {
-                                        let additional_data = solana_account_decoder::parse_token::get_token_account_mint(account.data()).
-                                        and_then(|mint_pubkey| {
-                                            match post_simulation_accounts_map.get(&mint_pubkey) {
-                                                Some(mint_account) => crate::parsed_token_accounts::get_mint_decimals(mint_account.data()).ok(),
-                                                None => crate::parsed_token_accounts::get_mint_owner_and_decimals( bank, &mint_pubkey,).ok().map(| (_owner, decimals)| decimals),
-                                            }
-                                        })
-                                        .map(|decimals|  solana_account_decoder::parse_account_data::AccountAdditionalData {
-                                                spl_token_decimals: Some(decimals),
-                                            });
-
-                                        Some(UiAccount::encode(
-                                            &pubkey,
-                                            account,
-                                            UiAccountEncoding::JsonParsed,
-                                            additional_data,
-                                            None,
-                                        ))
-                                    } else {
-                                        encode_account(
-                                            account,
-                                            &pubkey,
-                                            accounts_encoding,
-                                            None,
-                                        ).ok()
-                                    }
-                                })
-                            .collect::<Vec<_>>()
-                          )
-                        }
+                    let mut post_simulation_accounts_map = HashMap::new();
+                    for (pubkey, data) in post_simulation_accounts {
+                        post_simulation_accounts_map.insert(pubkey, data);
                     }
+
+                    Some(
+                        config_accounts
+                            .addresses
+                            .iter()
+                            .map(|address_str| {
+                                let pubkey = verify_pubkey(address_str)?;
+                                get_encoded_account(
+                                    bank,
+                                    &pubkey,
+                                    accounts_encoding,
+                                    None,
+                                    Some(&post_simulation_accounts_map),
+                                )
+                            })
+                            .collect::<Result<Vec<_>>>()?,
+                    )
                 }
             } else {
                 None

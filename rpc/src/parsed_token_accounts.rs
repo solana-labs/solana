@@ -18,11 +18,12 @@ pub fn get_parsed_token_account(
     bank: &Bank,
     pubkey: &Pubkey,
     account: AccountSharedData,
+    overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(account.data())
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(bank, &mint_pubkey).ok())
-        .map(|(_, decimals)| AccountAdditionalData {
-            spl_token_decimals: Some(decimals),
+        .and_then(|mint_pubkey| crate::common::get_account(&mint_pubkey, bank, overwrite_accounts))
+        .map(|mint_account| AccountAdditionalData {
+            spl_token_decimals: get_mint_decimals(mint_account.data()).ok(),
         });
 
     UiAccount::encode(
