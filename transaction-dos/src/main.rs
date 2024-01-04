@@ -514,7 +514,7 @@ fn main() {
                 .long("batch-sleep-ms")
                 .takes_value(true)
                 .value_name("NUM")
-                .help("Sleep for this long the num outstanding transctions is greater than the batch size."),
+                .help("Sleep for this long the num outstanding transactions is greater than the batch size."),
         )
         .arg(
             Arg::with_name("check_gossip")

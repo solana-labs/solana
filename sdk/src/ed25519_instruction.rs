@@ -1,6 +1,6 @@
 //! Instructions for the [ed25519 native program][np].
 //!
-//! [np]: https://docs.solana.com/developing/runtime-facilities/programs#ed25519-program
+//! [np]: https://docs.solanalabs.com/runtime/programs#ed25519-program
 
 #![cfg(feature = "full")]
 

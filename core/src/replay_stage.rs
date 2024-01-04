@@ -6591,7 +6591,7 @@ pub(crate) mod tests {
         vote_simulator.progress = progress;
         vote_simulator.fill_bank_forks(forks, &HashMap::<Pubkey, Vec<u64>>::new(), true);
         let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
-        // 4 is still the heaviest slot, but not votable beecause of lockout.
+        // 4 is still the heaviest slot, but not votable because of lockout.
         // 9 is the deepest slot from our last voted fork (5), so it is what we should
         // reset to.
         let (vote_fork, reset_fork, heaviest_fork_failures) = run_compute_and_select_forks(
@@ -6983,7 +6983,7 @@ pub(crate) mod tests {
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
 
         // Mark fork choice branch as invalid so select forks below doesn't panic
-        // on a nonexistent `heaviest_bank_on_same_fork` after we dump the duplciate fork.
+        // on a nonexistent `heaviest_bank_on_same_fork` after we dump the duplicate fork.
         let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
             duplicate_confirmed_bank2_hash,
             || progress.is_dead(2).unwrap_or(false),

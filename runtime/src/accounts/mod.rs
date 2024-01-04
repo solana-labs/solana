@@ -24,12 +24,14 @@ use {
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{
+            create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
+            ReadableAccount, WritableAccount,
+        },
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation,
             simplify_writable_program_account_check, FeatureSet,
         },
         fee::FeeStructure,
@@ -83,8 +85,6 @@ pub(super) fn load_accounts(
                         )
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     )
@@ -202,12 +202,8 @@ fn load_transaction_accounts(
                 .then_some(())
                 .and_then(|_| loaded_programs.find(key))
                 {
-                    // This condition block does special handling for accounts that are passed
-                    // as instruction account to any of the instructions in the transaction.
-                    // It's been noticed that some programs are reading other program accounts
-                    // (that are passed to the program as instruction accounts). So such accounts
-                    // are needed to be loaded even though corresponding compiled program may
-                    // already be present in the cache.
+                    // Optimization to skip loading of accounts which are only used as
+                    // programs in top-level instructions and not passed as instruction accounts.
                     account_shared_data_from_program(key, program_accounts)
                         .map(|program_account| (program.account_size, program_account, 0))?
                 } else {
@@ -286,7 +282,7 @@ fn load_transaction_accounts(
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        if account.executable() {
+                        if is_builtin(&account) || is_executable(&account, feature_set) {
                             // The upgradeable loader requires the derived ProgramData account
                             if let Ok(UpgradeableLoaderState::Program {
                                 programdata_address,
@@ -304,9 +300,13 @@ fn load_transaction_accounts(
                                 return Err(TransactionError::InvalidProgramForExecution);
                             }
                         }
-                    } else if account.executable() && message.is_writable(i) {
-                        error_counters.invalid_writable_account += 1;
-                        return Err(TransactionError::InvalidWritableAccount);
+                    } else {
+                        if (is_builtin(&account) || is_executable(&account, feature_set))
+                            && message.is_writable(i)
+                        {
+                            error_counters.invalid_writable_account += 1;
+                            return Err(TransactionError::InvalidWritableAccount);
+                        }
                     }
                 }
 
@@ -353,15 +353,17 @@ fn load_transaction_accounts(
             let (program_id, program_account) = accounts
                 .get(program_index)
                 .ok_or(TransactionError::ProgramAccountNotFound)?;
-            let account_found = accounts_found.get(program_index).unwrap_or(&true);
             if native_loader::check_id(program_id) {
                 return Ok(account_indices);
             }
+
+            let account_found = accounts_found.get(program_index).unwrap_or(&true);
             if !account_found {
                 error_counters.account_not_found += 1;
                 return Err(TransactionError::ProgramAccountNotFound);
             }
-            if !program_account.executable() {
+
+            if !(is_builtin(program_account) || is_executable(program_account, feature_set)) {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -383,7 +385,8 @@ fn load_transaction_accounts(
                     accounts_db.load_with_fixed_root(ancestors, owner_id)
                 {
                     if !native_loader::check_id(owner_account.owner())
-                        || !owner_account.executable()
+                        || !(is_builtin(&owner_account)
+                            || is_executable(&owner_account, feature_set))
                     {
                         error_counters.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);
@@ -449,6 +452,7 @@ fn account_shared_data_from_program(
         .ok_or(TransactionError::AccountNotFound)?;
     program_account.set_owner(**program_owner);
     program_account.set_executable(true);
+    program_account.set_data_from_slice(create_executable_meta(program_owner));
     Ok(program_account)
 }
 
@@ -487,10 +491,11 @@ fn validate_fee_payer(
         error_counters.account_not_found += 1;
         return Err(TransactionError::AccountNotFound);
     }
-    let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
+    let system_account_kind = get_system_account_kind(payer_account).ok_or_else(|| {
         error_counters.invalid_account_for_fee += 1;
         TransactionError::InvalidAccountForFee
-    })? {
+    })?;
+    let min_balance = match system_account_kind {
         SystemAccountKind::System => 0,
         SystemAccountKind::Nonce => {
             // Should we ever allow a fees charge to zero a nonce account's
@@ -728,7 +733,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -915,7 +919,8 @@ mod tests {
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
-        account.set_executable(true);
+        account.set_owner(bpf_loader_upgradeable::id());
+        account.set_data(create_executable_meta(account.owner()).to_vec());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -949,7 +954,7 @@ mod tests {
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = AccountSharedData::new(40, 1, &native_loader::id());
+        let account = AccountSharedData::new(40, 0, &native_loader::id());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -978,7 +983,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::from([5u8; 32]);
+        let key1 = bpf_loader_upgradeable::id();
         let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
@@ -995,6 +1000,7 @@ mod tests {
         account.set_executable(true);
         account.set_rent_epoch(1);
         account.set_owner(key1);
+        account.set_data(create_executable_meta(account.owner()).to_vec());
         accounts.push((key2, account));
 
         let instructions = vec![
@@ -1564,7 +1570,6 @@ mod tests {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            true,
             false,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);
@@ -1671,7 +1676,7 @@ mod tests {
             }
         }
 
-        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // If payer account has insufficient balance, expect InsufficientFundsForFee error
         // regardless feature gate status, or if payer is nonce account.
         {
             for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {

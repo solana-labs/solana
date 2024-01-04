@@ -228,16 +228,16 @@ mod tests {
                     MockSystemInstruction::TransferLamports { lamports } => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
-                            .checked_sub_lamports(lamports)?;
+                            .checked_sub_lamports(lamports, &invoke_context.feature_set)?;
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .checked_add_lamports(lamports)?;
+                            .checked_add_lamports(lamports, &invoke_context.feature_set)?;
                         Ok(())
                     }
                     MockSystemInstruction::ChangeData { data } => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_data(vec![data])?;
+                            .set_data(vec![data], &invoke_context.feature_set)?;
                         Ok(())
                     }
                 }
@@ -457,14 +457,14 @@ mod tests {
                     MockSystemInstruction::DoWork { lamports, data } => {
                         let mut dup_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 2)?;
-                        dup_account.checked_sub_lamports(lamports)?;
-                        to_account.checked_add_lamports(lamports)?;
-                        dup_account.set_data(vec![data])?;
+                        dup_account.checked_sub_lamports(lamports, &invoke_context.feature_set)?;
+                        to_account.checked_add_lamports(lamports, &invoke_context.feature_set)?;
+                        dup_account.set_data(vec![data], &invoke_context.feature_set)?;
                         drop(dup_account);
                         let mut from_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?;
-                        from_account.checked_sub_lamports(lamports)?;
-                        to_account.checked_add_lamports(lamports)?;
+                        from_account.checked_sub_lamports(lamports, &invoke_context.feature_set)?;
+                        to_account.checked_add_lamports(lamports, &invoke_context.feature_set)?;
                         Ok(())
                     }
                 }

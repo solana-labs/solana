@@ -2108,7 +2108,7 @@ mod tests {
         let accounts = Accounts::new(Arc::new(accounts_db));
 
         /* This test assumes pubkey0 < pubkey1 < pubkey2.
-         * But the keys created with new_unique() does not gurantee this
+         * But the keys created with new_unique() does not guarantee this
          * order because of the endianness.  new_unique() calls add 1 at each
          * key generaration as the little endian integer.  A pubkey stores its
          * value in a 32-byte array bytes, and its eq-partial trait considers

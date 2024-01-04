@@ -76,7 +76,7 @@ const CACHED_OFFSET: OffsetReduced = (1 << (OffsetReduced::BITS - 1)) - 1;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub struct PackedOffsetAndFlags {
-    /// this provides 2^31 bits, which when multipled by 8 (sizeof(u64)) = 16G, which is the maximum size of an append vec
+    /// this provides 2^31 bits, which when multiplied by 8 (sizeof(u64)) = 16G, which is the maximum size of an append vec
     offset_reduced: B31,
     /// use 1 bit to specify that the entry is zero lamport
     is_zero_lamport: bool,

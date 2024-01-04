@@ -59,10 +59,10 @@ impl BatchedRangeProofContext {
     }
 
     fn new(
-        commitments: &Vec<&PedersenCommitment>,
-        amounts: &Vec<u64>,
-        bit_lengths: &Vec<usize>,
-        openings: &Vec<&PedersenOpening>,
+        commitments: &[&PedersenCommitment],
+        amounts: &[u64],
+        bit_lengths: &[usize],
+        openings: &[&PedersenOpening],
     ) -> Result<Self, ProofGenerationError> {
         // the number of commitments is capped at 8
         let num_commitments = commitments.len();

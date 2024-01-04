@@ -33,6 +33,10 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+#[cfg(feature = "dev-context-only-utils")]
+use solana_accounts_db::accounts_db::{
+    ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -76,7 +80,6 @@ use {
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
@@ -123,9 +126,9 @@ use {
     },
     solana_sdk::{
         account::{
-            create_account_shared_data_with_fields as create_account, from_account, Account,
-            AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
-            PROGRAM_OWNERS,
+            create_account_shared_data_with_fields as create_account, create_executable_meta,
+            from_account, Account, AccountSharedData, InheritableAccountFields, ReadableAccount,
+            WritableAccount, PROGRAM_OWNERS,
         },
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -139,10 +142,7 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
-        feature_set::{
-            self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_congestion_multiplier_from_fee_calculation, FeatureSet,
-        },
+        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -955,25 +955,6 @@ pub(super) enum RewardInterval {
 }
 
 impl Bank {
-    pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths_for_benches(genesis_config, Vec::new())
-    }
-
-    /// Intended for use by tests only.
-    /// create new bank with the given configs.
-    pub fn new_with_runtime_config_for_tests(
-        genesis_config: &GenesisConfig,
-        runtime_config: Arc<RuntimeConfig>,
-    ) -> Self {
-        Self::new_with_paths_for_tests(
-            genesis_config,
-            runtime_config,
-            Vec::new(),
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        )
-    }
-
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             skipped_rewrites: Mutex::default(),
@@ -1046,46 +1027,6 @@ impl Bank {
         bank.accounts_data_size_initial = accounts_data_size_initial;
 
         bank
-    }
-
-    pub fn new_with_paths_for_tests(
-        genesis_config: &GenesisConfig,
-        runtime_config: Arc<RuntimeConfig>,
-        paths: Vec<PathBuf>,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_paths(
-            genesis_config,
-            runtime_config,
-            paths,
-            None,
-            None,
-            account_indexes,
-            shrink_ratio,
-            false,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
-            None,
-            Arc::default(),
-        )
-    }
-
-    /// Intended for use by benches only.
-    /// create new bank with the given config and paths.
-    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
-        Self::new_with_paths(
-            genesis_config,
-            Arc::<RuntimeConfig>::default(),
-            paths,
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-            false,
-            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
-            None,
-            Arc::default(),
-        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3043,7 +2984,7 @@ impl Bank {
                     stake_state::calculate_points(
                         stake_account.stake_state(),
                         vote_state,
-                        Some(stake_history),
+                        stake_history,
                         new_warmup_cooldown_rate_epoch,
                     )
                     .unwrap_or(0)
@@ -3080,7 +3021,7 @@ impl Bank {
                             stake_state::calculate_points(
                                 stake_account.stake_state(),
                                 vote_state,
-                                Some(stake_history),
+                                stake_history,
                                 new_warmup_cooldown_rate_epoch,
                             )
                             .unwrap_or(0)
@@ -3149,15 +3090,11 @@ impl Bank {
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
                     let vote_pubkey = delegation.voter_pubkey;
-                    let Some(vote_account) = get_vote_account(&vote_pubkey) else {
-                        return None;
-                    };
+                    let vote_account = get_vote_account(&vote_pubkey)?;
                     if vote_account.owner() != &solana_vote_program {
                         return None;
                     }
-                    let Ok(vote_state) = vote_account.vote_state().cloned() else {
-                        return None;
-                    };
+                    let vote_state = vote_account.vote_state().cloned().ok()?;
 
                     let pre_lamport = stake_account.lamports();
 
@@ -3167,7 +3104,7 @@ impl Bank {
                         &mut stake_account,
                         &vote_state,
                         &point_value,
-                        Some(stake_history),
+                        stake_history,
                         reward_calc_tracer.as_ref(),
                         new_warmup_cooldown_rate_epoch,
                     );
@@ -3286,7 +3223,7 @@ impl Bank {
                         &mut stake_account,
                         &vote_state,
                         &point_value,
-                        Some(stake_history),
+                        stake_history,
                         reward_calc_tracer.as_ref(),
                         new_warmup_cooldown_rate_epoch,
                     );
@@ -3945,7 +3882,6 @@ impl Bank {
     fn add_precompiled_account_with_owner(&self, program_id: &Pubkey, owner: Pubkey) {
         if let Some(account) = self.get_account_with_fixed_root(program_id) {
             if account.executable() {
-                // The account is already executable, that's all we need
                 return;
             } else {
                 // malicious account is pre-occupying at program_id
@@ -3961,10 +3897,13 @@ impl Bank {
 
         // Add a bogus executable account, which will be loaded and ignored.
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
+
+        // Mock account_data with executable_meta so that the account is executable.
+        let account_data = create_executable_meta(&owner);
         let account = AccountSharedData::from(Account {
             lamports,
             owner,
-            data: vec![],
+            data: account_data.to_vec(),
             executable: true,
             rent_epoch,
         });
@@ -4072,8 +4011,6 @@ impl Bank {
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
-            self.feature_set
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         )
@@ -4836,9 +4773,7 @@ impl Bank {
         ) -> Option<u128> {
             let mut lamports_sum = 0u128;
             for i in 0..message.account_keys().len() {
-                let Some((_, account)) = accounts.get(i) else {
-                    return None;
-                };
+                let (_, account) = accounts.get(i)?;
                 lamports_sum = lamports_sum.checked_add(u128::from(account.lamports()))?;
             }
             Some(lamports_sum)
@@ -5765,7 +5700,7 @@ impl Bank {
     /// Calculates (and returns) skipped rewrites for this bank
     ///
     /// Refer to `rebuild_skipped_rewrites()` for more documentation.
-    /// This implementaion is purposely separate to facilitate testing.
+    /// This implementation is purposely separate to facilitate testing.
     ///
     /// The key observation is that accounts in Bank::skipped_rewrites are only used IFF the
     /// specific account is *not* already in the accounts delta hash.  If an account is not in
@@ -7322,7 +7257,7 @@ impl Bank {
     /// This should only be used for developing purposes.
     pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
-        // We cannot debug verify the hash calculation here becuase calculate_capitalization will use the index calculation due to callers using the write cache.
+        // We cannot debug verify the hash calculation here because calculate_capitalization will use the index calculation due to callers using the write cache.
         // debug_verify only exists as an extra debugging step under the assumption that this code path is only used for tests. But, this is used by ledger-tool create-snapshot
         // for example.
         let debug_verify = false;
@@ -8037,10 +7972,12 @@ impl Bank {
             }
         }
         for precompile in get_precompiles() {
-            #[allow(clippy::blocks_in_if_conditions)]
-            if precompile.feature.map_or(false, |ref feature_id| {
-                self.feature_set.is_active(feature_id)
-            }) {
+            let should_add_precompile = precompile
+                .feature
+                .as_ref()
+                .map(|feature_id| self.feature_set.is_active(feature_id))
+                .unwrap_or(false);
+            if should_add_precompile {
                 self.add_precompile(&precompile.program_id);
             }
         }
@@ -8257,6 +8194,50 @@ impl Bank {
             Vec::new(),
             account_indexes,
             shrink_ratio,
+        )
+    }
+
+    pub fn new_with_paths_for_tests(
+        genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
+        paths: Vec<PathBuf>,
+        account_indexes: AccountSecondaryIndexes,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            runtime_config,
+            paths,
+            None,
+            None,
+            account_indexes,
+            shrink_ratio,
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            Arc::default(),
+        )
+    }
+
+    pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
+        Self::new_with_paths_for_benches(genesis_config, Vec::new())
+    }
+
+    /// Intended for use by benches only.
+    /// create new bank with the given config and paths.
+    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            Arc::<RuntimeConfig>::default(),
+            paths,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+            None,
+            Arc::default(),
         )
     }
 

@@ -109,7 +109,7 @@ impl Secp256k1Pubkey {
 /// arbitrary message, signed by some public key.
 ///
 /// The recovery ID is a value in the range [0, 3] that is generated during
-/// signing, and allows the recovery process to be more efficent. Note that the
+/// signing, and allows the recovery process to be more efficient. Note that the
 /// `recovery_id` here does not directly correspond to an Ethereum recovery ID
 /// as used in `ecrecover`. This function accepts recovery IDs in the range of
 /// [0, 3], while Ethereum's recovery IDs have a value of 27 or 28. To convert
