@@ -106,6 +106,8 @@ const PROGRAM_COSTS_CF: &str = "program_costs";
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 /// Column family for merkle roots
 const MERKLE_ROOT_META_CF: &str = "merkle_root_meta";
+/// Column family for last fec set details
+const LAST_FEC_SET_DETAILS_CF: &str = "last_fec_set_details";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -352,8 +354,18 @@ pub mod columns {
     /// Its index type is (Slot, fec_set_index).
     ///
     /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u32)`
-    /// * value type: [`blockstore_meta::MerkleRootMeta`]`
+    /// * value type: [`blockstore_meta::MerkleRootMeta`]
     pub struct MerkleRootMeta;
+
+    #[derive(Debug)]
+    /// The last fec set details column
+    ///
+    /// Stores relevant details needed for verification checks in replay about
+    /// the last FEC set for each slot.
+    ///
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::LastFecSetDetails`]
+    pub struct LastFecSetDetails;
 
     // When adding a new column ...
     // - Add struct below and implement `Column` and `ColumnName` traits
@@ -494,6 +506,7 @@ impl Rocks {
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
             new_cf_descriptor::<MerkleRootMeta>(options, oldest_slot),
+            new_cf_descriptor::<LastFecSetDetails>(options, oldest_slot),
         ];
 
         // If the access type is Secondary, we don't need to open all of the
@@ -567,6 +580,7 @@ impl Rocks {
             ProgramCosts::NAME,
             OptimisticSlots::NAME,
             MerkleRootMeta::NAME,
+            LastFecSetDetails::NAME,
         ]
     }
 
@@ -1320,6 +1334,14 @@ impl ColumnName for columns::MerkleRootMeta {
 }
 impl TypedColumn for columns::MerkleRootMeta {
     type Type = MerkleRootMeta;
+}
+
+impl SlotColumn for columns::LastFecSetDetails {}
+impl ColumnName for columns::LastFecSetDetails {
+    const NAME: &'static str = LAST_FEC_SET_DETAILS_CF;
+}
+impl TypedColumn for columns::LastFecSetDetails {
+    type Type = blockstore_meta::LastFecSetDetails;
 }
 
 #[derive(Debug)]

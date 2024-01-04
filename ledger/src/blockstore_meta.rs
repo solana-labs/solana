@@ -526,6 +526,19 @@ impl OptimisticSlotMetaVersioned {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SizeDetails {
+    pub last_fec_set_index: u32,
+    pub num_coding_received: usize,
+    pub num_data_received: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LastFecSetDetails {
+    SizeDetails(SizeDetails),
+}
+
 #[cfg(test)]
 mod test {
     use {
