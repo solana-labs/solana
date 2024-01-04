@@ -27,6 +27,7 @@ rand = { workspace = true }
 serial_test = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-entry = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-streamer = { workspace = true }
 
 [build-dependencies]

@@ -129,20 +129,15 @@ mod tests {
                 LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsRecord,
             },
         },
-        solana_accounts_db::{
-            accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
-        },
         solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
         solana_runtime::{
             bank::Bank,
-            bank_forks::BankForks,
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
-            runtime_config::RuntimeConfig,
         },
         solana_sdk::{hash::Hash, signature::Signer, timing::timestamp},
-        std::{collections::HashMap, sync::Arc},
+        std::collections::HashMap,
     };
 
     #[test]
@@ -155,14 +150,7 @@ mod tests {
             &validator_voting_keypairs,
             vec![100; validator_voting_keypairs.len()],
         );
-        let bank = Bank::new_with_paths_for_tests(
-            &genesis_config,
-            Arc::new(RuntimeConfig::default()),
-            Vec::new(),
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        let bank_forks = BankForks::new_rw_arc(bank);
+        let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let root_bank = bank_forks.read().unwrap().root_bank();
         let root_slot = root_bank.slot();
         let shred_version = 52;
