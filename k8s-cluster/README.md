@@ -141,10 +141,10 @@ cargo run --bin solana-k8s --
     --internal-node-stake-sol 20 # each validator in this cluster stakes 20 sol
 ```
 ^ this is another way to dictate stake distribution
-    - 3 nodes with 10 sol stake each
-    - 4 nodes with 20 sol stake each
+- 3 nodes with 10 sol stake each
+- 4 nodes with 20 sol stake each
 
-If you want to do this with `--deploy-method tar`, we an do something like:
+If you want to do this with `--deploy-method tar`, we can do something like:
 ```
 cargo run --bin solana-k8s --
     -n greg-test
@@ -183,7 +183,7 @@ cargo run --bin solana-k8s --
 - Therefore, we need to deploy our first cluster as above BUT also need to generate client accounts without actually running the client
 - We will run the client once all clusters are deployed.
 
-Deploy Bootstrap/Cluster 1/3 and generate client accounts
+Deploy Bootstrap, Cluster 1/3, and generate client accounts
 ```
 cargo run --bin solana-k8s --
     -n greg-test
@@ -203,7 +203,7 @@ cargo run --bin solana-k8s --
     # do not pass in `--run-client` here since we just want to create the client accounts initially
 ```
 
-Deploying Cluster 2/3 (and assuming we want to deploy client after these two clusters are deployed)
+Deploy Cluster 2/3
 ```
 cargo run --bin solana-k8s --
     -n greg-test
@@ -221,7 +221,7 @@ cargo run --bin solana-k8s --
     --no-bootstrap
 ```
 
-Deploying Cluster 3/3 (and assuming we want to deploy client after these three clusters are deployed)
+Deploy Cluster 3/3 (and assuming we want to deploy client after these three clusters are deployed)
 ```
 cargo run --bin solana-k8s --
     -n greg-test
@@ -242,7 +242,7 @@ cargo run --bin solana-k8s --
     --client-delay-start 60 # optional: seconds to wait before booting up client
     --run-client # actually deploy and run the client
 ```
-^ note this is not an ideal setup since we have to pass in `--bench-tps-args` on each deployment. But `solana-bench-tps` uses `tx-count` to calculate the number of client accounts
+^ note this is not an ideal setup since we have to pass in `--bench-tps-args` for first and last deployment. But `solana-bench-tps` uses `tx-count` to calculate the number of client accounts
 
 ## Deploying with a specific kube config location
 ```
