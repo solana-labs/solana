@@ -397,7 +397,7 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
-        let mut error_counters = TransactionErrorMetrics::default(); // todo how to actually accumulate these?
+        let mut error_counters = TransactionErrorMetrics::default();
         let pre_results = vec![Ok(()); txs.len()];
         let check_results =
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
@@ -437,12 +437,19 @@ impl Consumer {
             })
             .collect();
 
-        self.process_and_record_transactions_with_pre_results(
+        let mut output = self.process_and_record_transactions_with_pre_results(
             bank,
             txs,
             chunk_offset,
             fee_check_results.into_iter(),
-        )
+        );
+
+        // Accumulate error counters from the initial checks into final results
+        output
+            .execute_and_commit_transactions_output
+            .error_counters
+            .accumulate(&error_counters);
+        output
     }
 
     pub fn process_and_record_aged_transactions(
