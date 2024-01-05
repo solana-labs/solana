@@ -214,6 +214,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::MerkleRootMeta>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
@@ -336,6 +340,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_file_in_range_cf::<cf::OptimisticSlots>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::MerkleRootMeta>(from_slot, to_slot)
                 .is_ok()
     }
 
