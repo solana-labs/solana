@@ -55,8 +55,8 @@ pub(crate) struct ProcessTransactionsSummary {
     // Breakdown of all the transaction errors from transactions passed for execution
     pub error_counters: TransactionErrorMetrics,
 
-    pub scheduled_min_prioritization_fees: usize,
-    pub scheduled_max_prioritization_fees: usize,
+    pub min_prioritization_fees: usize,
+    pub max_prioritization_fees: usize,
 }
 
 // Metrics describing prioritization fee information for each transaction storage before processing transactions
@@ -86,17 +86,17 @@ impl LeaderPrioritizationFeesMetrics {
 
     fn report(&self, id: u32, slot: Slot) {
         datapoint_info!(
-            "banking_stage-leader_prioritization_fees_info_by_thread",
-            ("id", id as i64, i64),
-            ("slot", slot as i64, i64),
+            "banking_stage-leader_prioritization_fees_info",
+            ("id", id, i64),
+            ("slot", slot, i64),
             (
                 "min_prioritization_fees_per_cu",
-                self.min_prioritization_fees_per_cu as i64,
+                self.min_prioritization_fees_per_cu,
                 i64
             ),
             (
                 "max_prioritization_fees_per_cu",
-                self.max_prioritization_fees_per_cu as i64,
+                self.max_prioritization_fees_per_cu,
                 i64
             )
         );
@@ -189,9 +189,9 @@ struct LeaderSlotPacketCountMetrics {
     forwardable_batches_count: u64,
 
     // min prioritization fees for scheduled transactions
-    scheduled_min_prioritization_fees: u64,
+    min_prioritization_fees: u64,
     // max prioritization fees for scheduled transactions
-    scheduled_max_prioritization_fees: u64,
+    max_prioritization_fees: u64,
 }
 
 impl LeaderSlotPacketCountMetrics {
@@ -310,13 +310,13 @@ impl LeaderSlotPacketCountMetrics {
                 i64
             ),
             (
-                "scheduled_min_prioritization_fees",
-                self.scheduled_min_prioritization_fees as i64,
+                "min_prioritization_fees",
+                self.min_prioritization_fees as i64,
                 i64
             ),
             (
-                "scheduled_max_prioritization_fees",
-                self.scheduled_max_prioritization_fees as i64,
+                "max_prioritization_fees",
+                self.max_prioritization_fees as i64,
                 i64
             ),
         );
@@ -527,8 +527,8 @@ impl LeaderSlotMetricsTracker {
                 cost_model_us,
                 ref execute_and_commit_timings,
                 error_counters,
-                scheduled_min_prioritization_fees,
-                scheduled_max_prioritization_fees,
+                min_prioritization_fees,
+                max_prioritization_fees,
                 ..
             } = process_transactions_summary;
 
@@ -607,19 +607,19 @@ impl LeaderSlotMetricsTracker {
 
             leader_slot_metrics
                 .packet_count_metrics
-                .scheduled_min_prioritization_fees = std::cmp::min(
+                .min_prioritization_fees = std::cmp::min(
                 leader_slot_metrics
                     .packet_count_metrics
-                    .scheduled_min_prioritization_fees,
-                *scheduled_min_prioritization_fees as u64,
+                    .min_prioritization_fees,
+                *min_prioritization_fees as u64,
             );
             leader_slot_metrics
                 .packet_count_metrics
-                .scheduled_max_prioritization_fees = std::cmp::min(
+                .max_prioritization_fees = std::cmp::min(
                 leader_slot_metrics
                     .packet_count_metrics
-                    .scheduled_max_prioritization_fees,
-                *scheduled_max_prioritization_fees as u64,
+                    .max_prioritization_fees,
+                *max_prioritization_fees as u64,
             );
 
             leader_slot_metrics
