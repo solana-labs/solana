@@ -1,6 +1,6 @@
 use {
     crate::LEDGER_TOOL_DIRECTORY,
-    clap::{value_t, values_t_or_exit, ArgMatches},
+    clap::{value_t, values_t, values_t_or_exit, ArgMatches},
     solana_accounts_db::{
         accounts_db::{AccountsDb, AccountsDbConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
@@ -38,14 +38,10 @@ pub fn get_accounts_db_config(
             TestPartitionedEpochRewards::None
         };
 
-    let accounts_index_drives: Vec<PathBuf> = if arg_matches.is_present("accounts_index_path") {
-        values_t_or_exit!(arg_matches, "accounts_index_path", String)
-            .into_iter()
-            .map(PathBuf::from)
-            .collect()
-    } else {
-        vec![ledger_tool_ledger_path.join("accounts_index")]
-    };
+    let accounts_index_drives = values_t!(arg_matches, "accounts_index_path", String)
+        .ok()
+        .map(|drives| drives.into_iter().map(PathBuf::from).collect())
+        .unwrap_or_else(|| vec![ledger_tool_ledger_path.join("accounts_index")]);
     let accounts_index_config = AccountsIndexConfig {
         bins: accounts_index_bins,
         index_limit_mb: accounts_index_index_limit_mb,
