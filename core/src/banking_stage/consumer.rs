@@ -1093,7 +1093,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_process_and_record_transactions_in_last_tick() {
+    fn test_bank_nonce_update_blockhash_queried_before_transaction_record() {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
@@ -1101,13 +1101,13 @@ mod tests {
             ..
         } = create_slow_genesis_config(10_000);
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = Pubkey::new_unique();
 
         // setup nonce account with a durable nonce different from the current
         // bank so that it can be advanced in this bank
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let nonce_hash = *durable_nonce.as_hash();
-        let nonce_pubkey = solana_sdk::pubkey::new_rand();
+        let nonce_pubkey = Pubkey::new_unique();
         let nonce_state = nonce::State::Initialized(nonce::state::Data {
             authority: mint_keypair.pubkey(),
             durable_nonce,
@@ -1239,6 +1239,8 @@ mod tests {
             let _ = poh_simulator.join();
 
             // check that the nonce was advanced to the current bank's last blockhash
+            // rather than the current bank's blockhash as would occur had the update
+            // blockhash been queried _after_ transaction recording
             let expected_nonce = DurableNonce::from_blockhash(&genesis_config.hash());
             let expected_nonce_hash = expected_nonce.as_hash();
             let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
