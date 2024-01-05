@@ -20,6 +20,7 @@ pub fn get_accounts_db_config(
     arg_matches: &ArgMatches<'_>,
 ) -> AccountsDbConfig {
     let ledger_tool_ledger_path = ledger_path.join(LEDGER_TOOL_DIRECTORY);
+
     let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
     let accounts_index_index_limit_mb =
         if let Ok(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize) {
@@ -29,15 +30,6 @@ pub fn get_accounts_db_config(
         } else {
             IndexLimitMb::Unspecified
         };
-    let test_partitioned_epoch_rewards =
-        if arg_matches.is_present("partitioned_epoch_rewards_compare_calculation") {
-            TestPartitionedEpochRewards::CompareResults
-        } else if arg_matches.is_present("partitioned_epoch_rewards_force_enable_single_slot") {
-            TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock
-        } else {
-            TestPartitionedEpochRewards::None
-        };
-
     let accounts_index_drives = values_t!(arg_matches, "accounts_index_path", String)
         .ok()
         .map(|drives| drives.into_iter().map(PathBuf::from).collect())
@@ -48,6 +40,15 @@ pub fn get_accounts_db_config(
         drives: Some(accounts_index_drives),
         ..AccountsIndexConfig::default()
     };
+
+    let test_partitioned_epoch_rewards =
+        if arg_matches.is_present("partitioned_epoch_rewards_compare_calculation") {
+            TestPartitionedEpochRewards::CompareResults
+        } else if arg_matches.is_present("partitioned_epoch_rewards_force_enable_single_slot") {
+            TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock
+        } else {
+            TestPartitionedEpochRewards::None
+        };
 
     let accounts_hash_cache_path = arg_matches
         .value_of("accounts_hash_cache_path")
