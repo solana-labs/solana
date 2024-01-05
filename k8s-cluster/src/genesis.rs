@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT, add_tag_to_name},
+    crate::{add_tag_to_name, boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     log::*,
@@ -251,16 +251,21 @@ impl Genesis {
 
         let mut filename_prefix_with_optional_tag = filename_prefix;
         if let Some(tag) = &deployment_tag {
-            filename_prefix_with_optional_tag = add_tag_to_name(filename_prefix_with_optional_tag.as_str(), tag);
+            filename_prefix_with_optional_tag =
+                add_tag_to_name(filename_prefix_with_optional_tag.as_str(), tag);
         }
 
         info!(
             "generating {} {} accounts...",
             number_of_accounts, validator_type
         );
-        (0..number_of_accounts)
-            .into_par_iter()
-            .try_for_each(|i| self.generate_account(validator_type, filename_prefix_with_optional_tag.as_str(), i))?;
+        (0..number_of_accounts).into_par_iter().try_for_each(|i| {
+            self.generate_account(
+                validator_type,
+                filename_prefix_with_optional_tag.as_str(),
+                i,
+            )
+        })?;
 
         Ok(())
     }

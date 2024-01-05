@@ -2,8 +2,7 @@ use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
     solana_k8s_cluster::{
-        add_tag_to_name,
-        calculate_stake_allocations,
+        add_tag_to_name, calculate_stake_allocations,
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
             Genesis, GenesisFlags, DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
@@ -767,7 +766,11 @@ async fn main() {
             }
         }
 
-        match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators, deployment_tag.clone()) {
+        match genesis.generate_accounts(
+            ValidatorType::Standard,
+            setup_config.num_validators,
+            deployment_tag.clone(),
+        ) {
             Ok(_) => (),
             Err(err) => {
                 error!("generate accounts error! {}", err);
@@ -775,7 +778,11 @@ async fn main() {
             }
         }
 
-        match genesis.generate_accounts(ValidatorType::NonVoting, num_non_voting_validators, deployment_tag.clone()) {
+        match genesis.generate_accounts(
+            ValidatorType::NonVoting,
+            num_non_voting_validators,
+            deployment_tag.clone(),
+        ) {
             Ok(_) => (),
             Err(err) => {
                 error!("generate non voting accounts error! {}", err);
@@ -937,14 +944,14 @@ async fn main() {
     };
 
     if !no_bootstrap {
-        let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
-        {
-            Ok(secret) => secret,
-            Err(err) => {
-                error!("Failed to create bootstrap secret! {}", err);
-                return;
-            }
-        };
+        let bootstrap_secret =
+            match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret") {
+                Ok(secret) => secret,
+                Err(err) => {
+                    error!("Failed to create bootstrap secret! {}", err);
+                    return;
+                }
+            };
         match kub_controller.deploy_secret(&bootstrap_secret).await {
             Ok(_) => (),
             Err(err) => {
@@ -1002,8 +1009,8 @@ async fn main() {
             }
         };
 
-        let bootstrap_service_label =
-            kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
+        let bootstrap_service_label = kub_controller
+            .create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
         let bootstrap_service = kub_controller
             .create_bootstrap_service("bootstrap-validator-service", &bootstrap_service_label);
         match kub_controller.deploy_service(&bootstrap_service).await {
@@ -1048,7 +1055,6 @@ async fn main() {
         info!("replica set: {} Ready!", bootstrap_replica_set_name);
     }
 
-
     //Create and deploy non-voting validators and faucet behind a load balancer
     // NonVoting nodes also need 2 selectors. 1 for load balancer, 1 for direct
     if num_non_voting_validators > 0 {
@@ -1070,7 +1076,8 @@ async fn main() {
 
             let mut validator_with_optional_tag = "non-voting-validator".to_string();
             if let Some(tag) = &deployment_tag {
-                validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+                validator_with_optional_tag =
+                    add_tag_to_name(validator_with_optional_tag.as_str(), tag);
             }
 
             let identity_path = get_solana_root().join(format!(
@@ -1206,7 +1213,8 @@ async fn main() {
 
         let mut validator_with_optional_tag = "validator".to_string();
         if let Some(tag) = &deployment_tag {
-            validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+            validator_with_optional_tag =
+                add_tag_to_name(validator_with_optional_tag.as_str(), tag);
         }
 
         let identity_path = get_solana_root().join(format!(

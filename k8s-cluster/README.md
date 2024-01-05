@@ -47,7 +47,7 @@ cargo run --bin solana-k8s --
     --tag <imagetag. default: latest>
 ```
 
-Example
+Exmple
 ```
 cargo run --bin solana-k8s --
     -n greg-test
@@ -98,6 +98,80 @@ cargo run --bin solana-k8s --
     --bench-tps-args <bench-tps-args e.g. tx_count=25000>
 ```
 
+## Deploying wth multiple cluster versions
+- Use the `--deployment-tag <tag>` and `--no-bootstrap` flags.
+
+Example:
+Deploying cluster 1:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v1 # notice tag here. can be any unique string
+```
+Deploying cluster 2:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 4
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v2 # notice tag here. can be any unique string
+    --no-bootstrap # ensure we do not create a new genesis and new bootstrap validator
+```
+
+If you want to do this with `--deploy-method tar`, we an do something like:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method tar
+    --release-channel v1.17.2
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v1
+```
+
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method tar
+    --release-channel v1.17.3
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v2
+    --no-bootstrap
+```
+
 ## Deploying with a specific kube config location
 ```
 KUBECONFIG=/path/to/my/kubeconfig cargo run --bin solana-k8s -- ....
@@ -130,3 +204,7 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ### Notes
 - Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
+
+## TODO:
+- Big one here is that we rely on the local solana-cli on your host machine to create genesis currently. as a result, the local cli needs to be compatible
+with the validator version you are deploying in monogon. This will be fixed in the future
