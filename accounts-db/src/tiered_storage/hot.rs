@@ -7,6 +7,7 @@ use {
         accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
+            file::TieredStorageFile,
             footer::{
                 AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
             },
@@ -15,7 +16,8 @@ use {
             mmap_utils::{get_pod, get_slice},
             owners::{OwnerOffset, OwnersBlock},
             readable::TieredReadableAccount,
-            TieredStorageError, TieredStorageFormat, TieredStorageResult,
+            Borrow, ReadableAccount, StorableAccounts, StorableAccountsWithHashesAndWriteVersions,
+            StoredAccountInfo, TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
     },
     bytemuck::{Pod, Zeroable},
@@ -430,6 +432,51 @@ impl HotStorageReader {
     }
 }
 
+/// The writer that creates a hot accounts file.
+#[derive(Debug)]
+pub struct HotStorageWriter {
+    storage: TieredStorageFile,
+}
+
+impl<'format> HotStorageWriter {
+    pub fn new(file_path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        Ok(Self {
+            storage: TieredStorageFile::new_writable(file_path)?,
+        })
+    }
+
+    /// An internal helper function that creates a new default footer
+    /// for hot accounts storage.
+    fn new_footer() -> TieredStorageFooter {
+        TieredStorageFooter {
+            account_meta_format: HOT_FORMAT.account_meta_format,
+            account_meta_entry_size: HOT_FORMAT.meta_entry_size as u32,
+            account_block_format: HOT_FORMAT.account_block_format,
+            index_block_format: HOT_FORMAT.index_block_format,
+            owners_block_format: HOT_FORMAT.owners_block_format,
+            ..TieredStorageFooter::default()
+        }
+    }
+
+    pub fn write_accounts<
+        'a,
+        'b,
+        T: ReadableAccount + Sync,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<AccountHash>,
+    >(
+        &self,
+        _accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        _skip: usize,
+    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
+        let footer = HotStorageWriter::new_footer();
+
+        footer.write_footer_block(&self.storage)?;
+
+        Ok(vec![])
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
@@ -448,7 +495,13 @@ pub mod tests {
         assert_matches::assert_matches,
         memoffset::offset_of,
         rand::{seq::SliceRandom, Rng},
-        solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            hash::Hash,
+            pubkey::Pubkey,
+            slot_history::Slot,
+            stake_history::Epoch,
+        },
         tempfile::TempDir,
     };
 
@@ -1024,6 +1077,52 @@ pub mod tests {
         assert_matches!(
             hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
+        );
+    }
+
+    #[test]
+    fn test_hot_storage_writer_creation() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_hot_storage_writer_creation");
+
+        // Write a zero-account hot accounts file using the HotStorageWriter
+        {
+            let account_refs: Vec<(&Pubkey, &AccountSharedData)> = vec![];
+            let account_data = (Slot::MAX, &account_refs[..]);
+            let hashes: Vec<AccountHash> = vec![];
+            let storable_accounts =
+                StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                    &account_data,
+                    hashes,
+                    vec![],
+                );
+            let hot_writer = HotStorageWriter::new(&path).unwrap();
+            hot_writer.write_accounts(&storable_accounts, 0).unwrap();
+        }
+
+        // verifies the HotStorageReader can successfully open the created file
+        // with the expected format.
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        assert_eq!(
+            hot_storage.footer().account_meta_format,
+            HOT_FORMAT.account_meta_format
+        );
+        assert_eq!(
+            hot_storage.footer().account_block_format,
+            HOT_FORMAT.account_block_format
+        );
+        assert_eq!(
+            hot_storage.footer().owners_block_format,
+            HOT_FORMAT.owners_block_format
+        );
+        assert_eq!(
+            hot_storage.footer().index_block_format,
+            HOT_FORMAT.index_block_format
+        );
+        assert_eq!(
+            hot_storage.footer().account_meta_entry_size,
+            HOT_FORMAT.meta_entry_size as u32
         );
     }
 }
