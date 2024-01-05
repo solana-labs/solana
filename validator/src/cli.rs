@@ -844,6 +844,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Number of threads to use for servicing RPC requests"),
         )
         .arg(
+            Arg::with_name("rpc_blocking_threads")
+                .long("rpc-blocking-threads")
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .default_value(&default_args.rpc_blocking_threads)
+                .help("Number of blocking threads to use for servicing CPU bound RPC requests (eg getMultipleAccounts)"),
+        )
+        .arg(
             Arg::with_name("rpc_niceness_adj")
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
@@ -1921,6 +1930,7 @@ pub struct DefaultArgs {
     pub rpc_send_transaction_service_max_retries: String,
     pub rpc_send_transaction_batch_size: String,
     pub rpc_threads: String,
+    pub rpc_blocking_threads: String,
     pub rpc_niceness_adjustment: String,
     pub rpc_bigtable_timeout: String,
     pub rpc_bigtable_instance_name: String,
@@ -2005,6 +2015,7 @@ impl DefaultArgs {
                 .batch_size
                 .to_string(),
             rpc_threads: num_cpus::get().to_string(),
+            rpc_blocking_threads: (num_cpus::get() / 2).to_string(),
             rpc_niceness_adjustment: "0".to_string(),
             rpc_bigtable_timeout: "30".to_string(),
             rpc_bigtable_instance_name: solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string(),

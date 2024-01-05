@@ -1294,6 +1294,7 @@ pub fn main() {
             ),
             disable_health_check: false,
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
+            rpc_blocking_threads: value_t_or_exit!(matches, "rpc_blocking_threads", usize),
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),

@@ -145,6 +145,7 @@ pub struct JsonRpcConfig {
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
+    pub rpc_blocking_threads: usize,
     pub rpc_niceness_adj: i8,
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
