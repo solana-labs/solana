@@ -936,11 +936,6 @@ impl<'a> Kubernetes<'a> {
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
-        // let mut service_name_with_optional_tag = service_name.to_string();
-        // if let Some(tag) = &self.deployment_tag {
-        //     service_name_with_optional_tag = add_tag_to_name(service_name_with_optional_tag.as_str(), tag);
-        // }
-        // k8s_helpers::create_service(service_name_with_optional_tag.as_str(), self.namespace, label_selector, true)
         k8s_helpers::create_service(service_name, self.namespace, label_selector, true)
     }
 
