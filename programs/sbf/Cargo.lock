@@ -6544,11 +6544,17 @@ dependencies = [
 [[package]]
 name = "solana-unified-scheduler-logic"
 version = "1.18.0"
+dependencies = [
+ "solana-sdk",
+]
 
 [[package]]
 name = "solana-unified-scheduler-pool"
 version = "1.18.0"
 dependencies = [
+ "assert_matches",
+ "crossbeam-channel",
+ "log",
  "solana-ledger",
  "solana-program-runtime",
  "solana-runtime",
