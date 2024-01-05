@@ -530,8 +530,12 @@ impl OptimisticSlotMetaVersioned {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SizeDetails {
     pub last_fec_set_index: u32,
-    pub num_coding_received: usize,
-    pub num_data_received: usize,
+    /// These fields keep track of any shreds inserted into blockstore,
+    /// through turbine/repair or erasure recovery.
+    /// Before voting replay will check that the sum of these values are at
+    /// least 2 * `DATA_SHREDS_PER_FEC_BLOCK`.
+    pub num_coding_inserted: usize,
+    pub num_data_inserted: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
