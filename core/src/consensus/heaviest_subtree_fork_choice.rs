@@ -2872,7 +2872,7 @@ mod test {
             expected_best_slot_hash
         );
 
-        // All the stake dirctly voting on the duplicates have been outdated
+        // All the stake directly voting on the duplicates have been outdated
         for (i, duplicate_leaf) in duplicate_leaves_descended_from_4.iter().enumerate() {
             assert_eq!(
                 heaviest_subtree_fork_choice
@@ -3843,11 +3843,11 @@ mod test {
         }
 
         // Mark the larger duplicate slot as confirmed, all slots should no longer
-        // have any unconfirmed duplicate ancestors, and should be marked as duplciate confirmed
+        // have any unconfirmed duplicate ancestors, and should be marked as duplicate confirmed
         heaviest_subtree_fork_choice.mark_fork_valid_candidate(&larger_duplicate_slot.slot_hash());
         for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
             let slot = slot_hash_key.0;
-            // All slots <= the latest duplciate confirmed slot are ancestors of
+            // All slots <= the latest duplicate confirmed slot are ancestors of
             // that slot, so they should all be marked duplicate confirmed
             assert_eq!(
                 heaviest_subtree_fork_choice
@@ -3878,7 +3878,7 @@ mod test {
         heaviest_subtree_fork_choice.mark_fork_valid_candidate(&smaller_duplicate_slot.slot_hash());
         for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
             let slot = slot_hash_key.0;
-            // All slots <= the latest duplciate confirmed slot are ancestors of
+            // All slots <= the latest duplicate confirmed slot are ancestors of
             // that slot, so they should all be marked duplicate confirmed
             assert_eq!(
                 heaviest_subtree_fork_choice

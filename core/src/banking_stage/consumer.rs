@@ -150,7 +150,7 @@ impl Consumer {
         banking_stage_stats: &BankingStageStats,
         consumed_buffered_packets_count: &mut usize,
         rebuffered_packet_count: &mut usize,
-        packets_to_process: &Vec<Arc<ImmutableDeserializedPacket>>,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
     ) -> Option<Vec<usize>> {
         if payload.reached_end_of_slot {
             return None;

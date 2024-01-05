@@ -1,14 +1,19 @@
 //! Simple Bloom Filter
+
 use {
     bv::BitVec,
     fnv::FnvHasher,
     rand::{self, Rng},
     serde::{Deserialize, Serialize},
-    solana_sdk::sanitize::{Sanitize, SanitizeError},
+    solana_sdk::{
+        sanitize::{Sanitize, SanitizeError},
+        timing::AtomicInterval,
+    },
     std::{
         cmp, fmt,
         hash::Hasher,
         marker::PhantomData,
+        ops::Deref,
         sync::atomic::{AtomicU64, Ordering},
     },
 };
@@ -224,6 +229,40 @@ impl<T: BloomHashIndex> From<ConcurrentBloom<T>> for Bloom<T> {
             bits,
             num_bits_set,
             _phantom: PhantomData,
+        }
+    }
+}
+
+/// Wrapper around `ConcurrentBloom` and `AtomicInterval` so the bloom filter
+/// can be cleared periodically.
+pub struct ConcurrentBloomInterval<T: BloomHashIndex> {
+    interval: AtomicInterval,
+    bloom: ConcurrentBloom<T>,
+}
+
+// Directly allow all methods of `AtomicBloom` to be called on `AtomicBloomInterval`.
+impl<T: BloomHashIndex> Deref for ConcurrentBloomInterval<T> {
+    type Target = ConcurrentBloom<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.bloom
+    }
+}
+
+impl<T: BloomHashIndex> ConcurrentBloomInterval<T> {
+    /// Create a new filter with the given parameters.
+    /// See `Bloom::random` for details.
+    pub fn new(num_items: usize, false_positive_rate: f64, max_bits: usize) -> Self {
+        let bloom = Bloom::random(num_items, false_positive_rate, max_bits);
+        Self {
+            interval: AtomicInterval::default(),
+            bloom: ConcurrentBloom::from(bloom),
+        }
+    }
+
+    /// Reset the filter if the reset interval has elapsed.
+    pub fn maybe_reset(&self, reset_interval_ms: u64) {
+        if self.interval.should_update(reset_interval_ms) {
+            self.bloom.clear();
         }
     }
 }

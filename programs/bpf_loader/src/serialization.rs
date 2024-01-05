@@ -938,7 +938,7 @@ mod tests {
                 assert_eq!(account.lamports(), account_info.lamports());
                 assert_eq!(account.data(), &account_info.data.borrow()[..]);
                 assert_eq!(account.owner(), account_info.owner);
-                assert_eq!(account.executable(), account_info.executable);
+                assert!(account_info.executable);
                 assert_eq!(account.rent_epoch(), account_info.rent_epoch);
 
                 assert_eq!(
@@ -1023,7 +1023,7 @@ mod tests {
                 assert_eq!(account.lamports(), account_info.lamports());
                 assert_eq!(account.data(), &account_info.data.borrow()[..]);
                 assert_eq!(account.owner(), account_info.owner);
-                assert_eq!(account.executable(), account_info.executable);
+                assert!(account_info.executable);
                 assert_eq!(account.rent_epoch(), account_info.rent_epoch);
             }
 

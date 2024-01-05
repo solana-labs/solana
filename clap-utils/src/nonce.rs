@@ -9,7 +9,7 @@ pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
     help: "Provide the nonce account to use when creating a nonced \n\
            transaction. Nonced transactions are useful when a transaction \n\
            requires a lengthy signing process. Learn more about nonced \n\
-           transactions at https://docs.solana.com/offline-signing/durable-nonce",
+           transactions at https://docs.solanalabs.com/cli/examples/durable-nonce",
 };
 
 pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
