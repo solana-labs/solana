@@ -341,6 +341,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("client-type")
                 .takes_value(true)
                 .default_value("thin-client")
+                .possible_values(&["thin-client", "tpu-client", "rpc-client"])
                 .help("Client Config. options: thin-client, tpu-client, rpc-client. default: [thin-client]"),
         )
         .arg(
@@ -386,6 +387,11 @@ fn parse_matches() -> ArgMatches<'static> {
                 .short("-N")
                 .takes_value(true)
                 .help("Client Config. Optional: Wait for NUM nodes to converge: --num-nodes <NUM> "),
+        )
+        .arg(
+            Arg::with_name("run_client")
+                .long("run-client")
+                .help("Run the client(s)"),
         )
         //Metrics Config
         .arg(
@@ -533,7 +539,10 @@ async fn main() {
         num_nodes: matches
             .value_of("num_nodes")
             .map(|value_str| value_str.parse().expect("Invalid value for num_nodes")),
+        run_client: matches.is_present("run_client"),
     };
+
+    info!("client to run: {}", client_config.client_to_run);
 
     if let Some(ref bench_tps_args) = client_config.bench_tps_args {
         for s in bench_tps_args.iter() {
@@ -764,6 +773,21 @@ async fn main() {
                     return;
                 }
             }
+
+            // only create client accounts once
+            if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps" {
+                match genesis.create_client_accounts(
+                    client_config.num_clients,
+                    DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
+                    client_config.bench_tps_args,
+                ) {
+                    Ok(_) => (),
+                    Err(err) => {
+                        error!("generate client accounts error! {}", err);
+                        return;
+                    }
+                }
+            }
         }
 
         match genesis.generate_accounts(
@@ -787,20 +811,6 @@ async fn main() {
             Err(err) => {
                 error!("generate non voting accounts error! {}", err);
                 return;
-            }
-        }
-
-        if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps" {
-            match genesis.create_client_accounts(
-                client_config.num_clients,
-                DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
-                client_config.bench_tps_args,
-            ) {
-                Ok(_) => (),
-                Err(err) => {
-                    error!("generate client accounts error! {}", err);
-                    return;
-                }
             }
         }
     }
@@ -1290,7 +1300,7 @@ async fn main() {
         }
     }
 
-    if client_config.num_clients <= 0 {
+    if !client_config.run_client || client_config.num_clients <= 0 {
         return;
     }
 

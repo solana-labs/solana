@@ -102,6 +102,7 @@ pub struct ClientConfig {
     pub target_node: Option<Pubkey>,
     pub duration: u64,
     pub num_nodes: Option<u64>,
+    pub run_client: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -304,12 +305,10 @@ impl<'a> Kubernetes<'a> {
 
         flags.push("--duration".to_string());
         flags.push(self.client_config.duration.to_string());
-        info!("greg duration: {}", self.client_config.duration);
 
         if let Some(num_nodes) = self.client_config.num_nodes {
             flags.push("--num-nodes".to_string());
             flags.push(num_nodes.to_string());
-            info!("greg num nodes: {}", num_nodes);
         }
 
         flags
