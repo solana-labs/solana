@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT},
+    crate::{boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT, add_tag_to_name},
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     log::*,
@@ -202,13 +202,15 @@ pub struct Genesis {
 }
 
 impl Genesis {
-    pub fn new(flags: GenesisFlags) -> Self {
+    pub fn new(flags: GenesisFlags, retain_previous_genesis_directory: bool) -> Self {
         initialize_globals();
         let config_dir = SOLANA_ROOT.join("config-k8s");
-        if config_dir.exists() {
-            std::fs::remove_dir_all(&config_dir).unwrap();
+        if !retain_previous_genesis_directory {
+            if config_dir.exists() {
+                std::fs::remove_dir_all(&config_dir).unwrap();
+            }
+            std::fs::create_dir_all(&config_dir).unwrap();
         }
-        std::fs::create_dir_all(&config_dir).unwrap();
         Genesis {
             flags,
             config_dir,
@@ -239,6 +241,7 @@ impl Genesis {
         &self,
         validator_type: ValidatorType,
         number_of_accounts: i32,
+        deployment_tag: Option<String>,
     ) -> Result<(), Box<dyn Error + Send>> {
         let filename_prefix = match validator_type {
             ValidatorType::Bootstrap => format!("{}-validator", validator_type),
@@ -246,13 +249,18 @@ impl Genesis {
             ValidatorType::NonVoting => format!("{}-validator", validator_type),
         };
 
+        let mut filename_prefix_with_optional_tag = filename_prefix;
+        if let Some(tag) = &deployment_tag {
+            filename_prefix_with_optional_tag = add_tag_to_name(filename_prefix_with_optional_tag.as_str(), tag);
+        }
+
         info!(
             "generating {} {} accounts...",
             number_of_accounts, validator_type
         );
         (0..number_of_accounts)
             .into_par_iter()
-            .try_for_each(|i| self.generate_account(validator_type, &filename_prefix, i))?;
+            .try_for_each(|i| self.generate_account(validator_type, filename_prefix_with_optional_tag.as_str(), i))?;
 
         Ok(())
     }

@@ -2,6 +2,7 @@ use {
     clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     log::*,
     solana_k8s_cluster::{
+        add_tag_to_name,
         calculate_stake_allocations,
         docker::{DockerConfig, DockerImageConfig},
         genesis::{
@@ -139,6 +140,19 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .default_value_if("docker_build", None, "latest")
                 .help("Docker image tag."),
+        )
+        // Multiple Deployment Config
+        .arg(
+            Arg::with_name("deployment_tag")
+                .long("deployment-tag")
+                .takes_value(true)
+                .help("Add tag as suffix to this deployment's k8s components. Helps differentiate between two deployments
+                in the same cluster"),
+        )
+        .arg(
+            Arg::with_name("no_bootstrap")
+                .long("no-bootstrap")
+                .help("Do not deploy a bootstrap validator. Used when deploying multiple clusters"),
         )
         // Genesis config
         .arg(
@@ -406,7 +420,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("Metrics Config. Optional: Specify metrics password"),
         )
-        //Faucet config
+        //RPC config
         .arg(
             Arg::with_name("number_of_non_voting_validators")
                 .long("num-non-voting-validators")
@@ -677,6 +691,9 @@ async fn main() {
 
     info!("Node Type: {}", node_type);
 
+    let deployment_tag = matches.value_of("deployment_tag").map(|t| t.to_string());
+    let no_bootstrap = matches.is_present("no_bootstrap");
+
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(
         setup_config.namespace,
@@ -684,6 +701,7 @@ async fn main() {
         client_config.clone(),
         metrics,
         node_type,
+        deployment_tag.clone(),
     )
     .await;
     match kub_controller.namespace_exists().await {
@@ -717,16 +735,39 @@ async fn main() {
     }
 
     if !setup_config.skip_genesis_build {
-        info!("Creating Genesis");
-        let mut genesis = Genesis::new(genesis_flags);
-        match genesis.generate_faucet() {
-            Ok(_) => (),
-            Err(err) => {
-                error!("generate faucet error! {}", err);
-                return;
+        // if we are not deploying a bootstrap, we need to use the previous
+        // genesis as the genesis for new validators, so do not delete genesis directory
+        let retain_previous_genesis = no_bootstrap;
+        let mut genesis: Genesis = Genesis::new(genesis_flags, retain_previous_genesis);
+        if !no_bootstrap {
+            info!("Creating Genesis");
+            match genesis.generate_faucet() {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("generate faucet error! {}", err);
+                    return;
+                }
+            }
+
+            match genesis.generate_accounts(ValidatorType::Bootstrap, 1, None) {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("generate accounts error! {}", err);
+                    return;
+                }
+            }
+
+            // creates genesis and writes to binary file
+            match genesis.generate() {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("generate genesis error! {}", err);
+                    return;
+                }
             }
         }
-        match genesis.generate_accounts(ValidatorType::Bootstrap, 1) {
+
+        match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators, deployment_tag.clone()) {
             Ok(_) => (),
             Err(err) => {
                 error!("generate accounts error! {}", err);
@@ -734,15 +775,7 @@ async fn main() {
             }
         }
 
-        match genesis.generate_accounts(ValidatorType::Standard, setup_config.num_validators) {
-            Ok(_) => (),
-            Err(err) => {
-                error!("generate accounts error! {}", err);
-                return;
-            }
-        }
-
-        match genesis.generate_accounts(ValidatorType::NonVoting, num_non_voting_validators) {
+        match genesis.generate_accounts(ValidatorType::NonVoting, num_non_voting_validators, deployment_tag.clone()) {
             Ok(_) => (),
             Err(err) => {
                 error!("generate non voting accounts error! {}", err);
@@ -761,15 +794,6 @@ async fn main() {
                     error!("generate client accounts error! {}", err);
                     return;
                 }
-            }
-        }
-
-        // creates genesis and writes to binary file
-        match genesis.generate() {
-            Ok(_) => (),
-            Err(err) => {
-                error!("generate genesis error! {}", err);
-                return;
             }
         }
     }
@@ -865,6 +889,7 @@ async fn main() {
         }
     }
 
+    //TODO: clean this up. these should just all be the same.
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
         .unwrap_or_default();
@@ -911,118 +936,120 @@ async fn main() {
         }
     };
 
-    let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
-    {
-        Ok(secret) => secret,
-        Err(err) => {
-            error!("Failed to create bootstrap secret! {}", err);
-            return;
+    if !no_bootstrap {
+        let bootstrap_secret = match kub_controller.create_bootstrap_secret("bootstrap-accounts-secret")
+        {
+            Ok(secret) => secret,
+            Err(err) => {
+                error!("Failed to create bootstrap secret! {}", err);
+                return;
+            }
+        };
+        match kub_controller.deploy_secret(&bootstrap_secret).await {
+            Ok(_) => (),
+            Err(err) => {
+                error!("{}", err);
+                return;
+            }
         }
-    };
-    match kub_controller.deploy_secret(&bootstrap_secret).await {
-        Ok(_) => (),
-        Err(err) => {
-            error!("{}", err);
-            return;
-        }
-    }
 
-    // Bootstrap needs two labels. Because it is going to have two services. One via LB, one direct
-    let mut bootstrap_rs_labels =
-        kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
-    bootstrap_rs_labels.insert(
-        "app.kubernetes.io/name".to_string(),
-        "bootstrap-validator-selector".to_string(),
-    );
-    bootstrap_rs_labels.insert(
-        "app.kubernetes.io/type".to_string(),
-        "bootstrap".to_string(),
-    );
+        // Bootstrap needs two labels. Because it is going to have two services. One via LB, one direct
+        let mut bootstrap_rs_labels =
+            kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+        bootstrap_rs_labels.insert(
+            "app.kubernetes.io/name".to_string(),
+            "bootstrap-validator-selector".to_string(),
+        );
+        bootstrap_rs_labels.insert(
+            "app.kubernetes.io/type".to_string(),
+            "bootstrap".to_string(),
+        );
 
-    let identity_path = get_solana_root().join("config-k8s/bootstrap-validator/identity.json");
-    let bootstrap_keypair =
-        read_keypair_file(identity_path).expect("Failed to read bootstrap keypair file");
-    bootstrap_rs_labels.insert(
-        "app.kubernetes.io/identity".to_string(),
-        bootstrap_keypair.pubkey().to_string(),
-    );
+        let identity_path = get_solana_root().join("config-k8s/bootstrap-validator/identity.json");
+        let bootstrap_keypair =
+            read_keypair_file(identity_path).expect("Failed to read bootstrap keypair file");
+        bootstrap_rs_labels.insert(
+            "app.kubernetes.io/identity".to_string(),
+            bootstrap_keypair.pubkey().to_string(),
+        );
 
-    let bootstrap_replica_set = match kub_controller.create_bootstrap_validator_replica_set(
-        bootstrap_container_name,
-        bootstrap_image_name,
-        bootstrap_secret.metadata.name.clone(),
-        &bootstrap_rs_labels,
-    ) {
-        Ok(replica_set) => replica_set,
-        Err(err) => {
-            error!("Error creating bootstrap validator replicas_set: {}", err);
-            return;
-        }
-    };
-    let bootstrap_replica_set_name = match kub_controller
-        .deploy_replicas_set(&bootstrap_replica_set)
-        .await
-    {
-        Ok(replica_set) => {
-            info!("bootstrap validator replicas_set deployed successfully");
-            replica_set.metadata.name.unwrap()
-        }
-        Err(err) => {
-            error!(
-                "Error! Failed to deploy bootstrap validator replicas_set. err: {:?}",
-                err
-            );
-            return;
-        }
-    };
-
-    let bootstrap_service_label =
-        kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
-    let bootstrap_service = kub_controller
-        .create_validator_service("bootstrap-validator-service", &bootstrap_service_label);
-    match kub_controller.deploy_service(&bootstrap_service).await {
-        Ok(_) => info!("bootstrap validator service deployed successfully"),
-        Err(err) => error!(
-            "Error! Failed to deploy bootstrap validator service. err: {:?}",
-            err
-        ),
-    }
-
-    //load balancer service
-    let load_balancer_label =
-        kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
-    //create load balancer
-    let load_balancer = kub_controller.create_validator_load_balancer(
-        "bootstrap-and-non-voting-lb-service",
-        &load_balancer_label,
-    );
-
-    //deploy load balancer
-    match kub_controller.deploy_service(&load_balancer).await {
-        Ok(_) => info!("load balancer service deployed successfully"),
-        Err(err) => error!(
-            "Error! Failed to deploy load balancer service. err: {:?}",
-            err
-        ),
-    }
-
-    // wait for bootstrap replicaset to deploy
-    while {
-        match kub_controller
-            .check_replica_set_ready(bootstrap_replica_set_name.as_str())
+        let bootstrap_replica_set = match kub_controller.create_bootstrap_validator_replica_set(
+            bootstrap_container_name,
+            bootstrap_image_name,
+            bootstrap_secret.metadata.name.clone(),
+            &bootstrap_rs_labels,
+        ) {
+            Ok(replica_set) => replica_set,
+            Err(err) => {
+                error!("Error creating bootstrap validator replicas_set: {}", err);
+                return;
+            }
+        };
+        let bootstrap_replica_set_name = match kub_controller
+            .deploy_replicas_set(&bootstrap_replica_set)
             .await
         {
-            Ok(ok) => !ok, // Continue the loop if replica set is not ready: Ok(false)
-            Err(_) => panic!("Error occurred while checking replica set readiness"),
+            Ok(replica_set) => {
+                info!("bootstrap validator replicas_set deployed successfully");
+                replica_set.metadata.name.unwrap()
+            }
+            Err(err) => {
+                error!(
+                    "Error! Failed to deploy bootstrap validator replicas_set. err: {:?}",
+                    err
+                );
+                return;
+            }
+        };
+
+        let bootstrap_service_label =
+            kub_controller.create_selector("app.kubernetes.io/name", "bootstrap-validator-selector");
+        let bootstrap_service = kub_controller
+            .create_bootstrap_service("bootstrap-validator-service", &bootstrap_service_label);
+        match kub_controller.deploy_service(&bootstrap_service).await {
+            Ok(_) => info!("bootstrap validator service deployed successfully"),
+            Err(err) => error!(
+                "Error! Failed to deploy bootstrap validator service. err: {:?}",
+                err
+            ),
         }
-    } {
-        info!("replica set: {} not ready...", bootstrap_replica_set_name);
-        thread::sleep(Duration::from_secs(1));
+
+        //load balancer service. only create one and use for all deployments
+        let load_balancer_label =
+            kub_controller.create_selector("app.kubernetes.io/lb", "load-balancer-selector");
+        //create load balancer
+        let load_balancer = kub_controller.create_validator_load_balancer(
+            "bootstrap-and-non-voting-lb-service",
+            &load_balancer_label,
+        );
+
+        //deploy load balancer
+        match kub_controller.deploy_service(&load_balancer).await {
+            Ok(_) => info!("load balancer service deployed successfully"),
+            Err(err) => error!(
+                "Error! Failed to deploy load balancer service. err: {:?}",
+                err
+            ),
+        }
+
+        // wait for bootstrap replicaset to deploy
+        while {
+            match kub_controller
+                .check_replica_set_ready(bootstrap_replica_set_name.as_str())
+                .await
+            {
+                Ok(ok) => !ok, // Continue the loop if replica set is not ready: Ok(false)
+                Err(_) => panic!("Error occurred while checking replica set readiness"),
+            }
+        } {
+            info!("replica set: {} not ready...", bootstrap_replica_set_name);
+            thread::sleep(Duration::from_secs(1));
+        }
+        info!("replica set: {} Ready!", bootstrap_replica_set_name);
     }
-    info!("replica set: {} Ready!", bootstrap_replica_set_name);
+
 
     //Create and deploy non-voting validators and faucet behind a load balancer
-
     // NonVoting nodes also need 2 selectors. 1 for load balancer, 1 for direct
     if num_non_voting_validators > 0 {
         // we need one load balancer for all of these nv validators...
@@ -1041,9 +1068,14 @@ async fn main() {
                 "non-voting".to_string(),
             );
 
+            let mut validator_with_optional_tag = "non-voting-validator".to_string();
+            if let Some(tag) = &deployment_tag {
+                validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+            }
+
             let identity_path = get_solana_root().join(format!(
-                "config-k8s/non-voting-validator-identity-{}.json",
-                nvv_index
+                "config-k8s/{}-identity-{}.json",
+                validator_with_optional_tag, nvv_index
             ));
             let nvv_keypair = read_keypair_file(identity_path)
                 .expect("Failed to read non voting validator keypair file");
@@ -1172,9 +1204,14 @@ async fn main() {
             "validator".to_string(),
         );
 
+        let mut validator_with_optional_tag = "validator".to_string();
+        if let Some(tag) = &deployment_tag {
+            validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+        }
+
         let identity_path = get_solana_root().join(format!(
-            "config-k8s/validator-identity-{}.json",
-            validator_index
+            "config-k8s/{}-identity-{}.json",
+            validator_with_optional_tag, validator_index
         ));
         let validator_keypair =
             read_keypair_file(identity_path).expect("Failed to read validator keypair file");

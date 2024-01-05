@@ -1,7 +1,7 @@
 use {
     crate::{
         boxed_error, genesis::DEFAULT_INTERNAL_NODE_SOL_TO_STAKE_SOL_RATIO, k8s_helpers,
-        SOLANA_ROOT,
+        SOLANA_ROOT, add_tag_to_name
     },
     k8s_openapi::{
         api::{
@@ -162,6 +162,7 @@ pub struct Kubernetes<'a> {
     pub metrics: Option<Metrics>,
     nodes: Option<Vec<String>>,
     node_affinity: NodeAffinityType,
+    deployment_tag: Option<String>,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -171,6 +172,7 @@ impl<'a> Kubernetes<'a> {
         client_config: ClientConfig,
         metrics: Option<Metrics>,
         node_affinity: NodeAffinityType,
+        deployment_tag: Option<String>,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -180,6 +182,7 @@ impl<'a> Kubernetes<'a> {
             metrics,
             nodes: None,
             node_affinity,
+            deployment_tag,
         }
     }
 
@@ -291,8 +294,7 @@ impl<'a> Kubernetes<'a> {
         if let Some(bench_tps_args) = &self.client_config.bench_tps_args {
             flags.push(bench_tps_args.join(" "));
         }
-        // let bench_tps_args = self.client_config.bench_tps_args.expect("Need bench_tps_args!").join(" ");
-        // flags.push(bench_tps_args);
+
         flags.push(self.client_config.client_type.clone());
 
         if let Some(target_node) = self.client_config.target_node {
@@ -443,52 +445,79 @@ impl<'a> Kubernetes<'a> {
             (stake_key_path, "stake"),
         ];
 
-        k8s_helpers::create_secret_from_files(secret_name, &key_files)
+        let mut secret_name_with_optional_tag = secret_name.to_string();
+        if let Some(tag) = &self.deployment_tag {
+            secret_name_with_optional_tag = add_tag_to_name(secret_name, tag);
+        }
+
+        k8s_helpers::create_secret_from_files(secret_name_with_optional_tag.as_str(), &key_files)
     }
 
     pub fn create_validator_secret(&self, validator_index: i32) -> Result<Secret, Box<dyn Error>> {
-        let secret_name = format!("validator-accounts-secret-{}", validator_index);
+        let mut secret_name_with_optional_tag = format!("validator-accounts-secret-{}", validator_index);
+        if let Some(tag) = &self.deployment_tag {
+            secret_name_with_optional_tag = add_tag_to_name(secret_name_with_optional_tag.as_str(), tag);
+        }
+
         let key_path = SOLANA_ROOT.join("config-k8s");
 
         let accounts = ["identity", "vote", "stake"];
         let key_files: Vec<(PathBuf, &str)> = accounts
             .iter()
             .map(|&account| {
+                let mut validator_with_optional_tag = "validator".to_string();
+                if let Some(tag) = &self.deployment_tag {
+                    validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+                }
+
                 let file_name = if account == "identity" {
-                    format!("validator-{}-{}.json", account, validator_index)
+                    format!("{}-{}-{}.json", validator_with_optional_tag, account, validator_index)
                 } else {
-                    format!("validator-{}-account-{}.json", account, validator_index)
+                    format!("{}-{}-account-{}.json", validator_with_optional_tag, account, validator_index)
                 };
                 (key_path.join(file_name), account)
             })
             .collect();
 
-        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+        k8s_helpers::create_secret_from_files(&secret_name_with_optional_tag, &key_files)
     }
 
     pub fn create_client_secret(&self, client_index: i32) -> Result<Secret, Box<dyn Error>> {
-        let secret_name = format!("client-accounts-secret-{}", client_index);
+        let mut secret_name_with_optional_tag = format!("client-accounts-secret-{}", client_index);
+        if let Some(tag) = &self.deployment_tag {
+            secret_name_with_optional_tag = add_tag_to_name(secret_name_with_optional_tag.as_str(), tag);
+        }
+
         let faucet_key_path = SOLANA_ROOT.join("config-k8s/faucet.json");
 
         let key_files = vec![(faucet_key_path, "faucet")];
 
-        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+        k8s_helpers::create_secret_from_files(&secret_name_with_optional_tag, &key_files)
     }
 
     pub fn create_non_voting_secret(&self, nvv_index: i32) -> Result<Secret, Box<dyn Error>> {
-        let secret_name = format!("non-voting-validator-accounts-secret-{}", nvv_index);
+        let mut secret_name_with_optional_tag = format!("non-voting-validator-accounts-secret-{}", nvv_index);
+        if let Some(tag) = &self.deployment_tag {
+            secret_name_with_optional_tag = add_tag_to_name(secret_name_with_optional_tag.as_str(), tag);
+        }
+
         let config_path = SOLANA_ROOT.join("config-k8s");
 
         let accounts = ["identity", "stake"];
         let mut key_files: Vec<(PathBuf, &str)> = accounts
             .iter()
             .map(|&account| {
+                let mut validator_with_optional_tag = "non-voting-validator".to_string();
+                if let Some(tag) = &self.deployment_tag {
+                    validator_with_optional_tag = add_tag_to_name(validator_with_optional_tag.as_str(), tag);
+                }
+
                 let file_name = if account == "identity" {
-                    format!("non-voting-validator-{}-{}.json", account, nvv_index)
+                    format!("{}-{}-{}.json", validator_with_optional_tag, account, nvv_index)
                 } else {
                     format!(
-                        "non-voting-validator-{}-account-{}.json",
-                        account, nvv_index
+                        "{}-{}-account-{}.json",
+                        validator_with_optional_tag, account, nvv_index
                     )
                 };
                 (config_path.join(file_name), account)
@@ -497,7 +526,7 @@ impl<'a> Kubernetes<'a> {
 
         key_files.push((config_path.join("faucet.json"), "faucet"));
 
-        k8s_helpers::create_secret_from_files(&secret_name, &key_files)
+        k8s_helpers::create_secret_from_files(&secret_name_with_optional_tag, &key_files)
     }
 
     pub fn add_known_validator(&mut self, pubkey: Pubkey) {
@@ -695,8 +724,13 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
+        let mut replica_set_name_with_optional_tag = format!("validator-{}", validator_index);
+        if let Some(tag) = &self.deployment_tag {
+            replica_set_name_with_optional_tag = add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
+        }
+
         k8s_helpers::create_replica_set(
-            format!("validator-{}", validator_index).as_str(),
+            replica_set_name_with_optional_tag.as_str(),
             self.namespace,
             label_selector,
             container_name,
@@ -775,8 +809,13 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
+        let mut replica_set_name_with_optional_tag = format!("non-voting-{}", nvv_index);
+        if let Some(tag) = &self.deployment_tag {
+            replica_set_name_with_optional_tag = add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
+        }
+
         k8s_helpers::create_replica_set(
-            format!("non-voting-{}", nvv_index).as_str(),
+            replica_set_name_with_optional_tag.as_str(),
             self.namespace,
             label_selector,
             container_name,
@@ -827,8 +866,14 @@ impl<'a> Kubernetes<'a> {
             debug!("client command: {}", c);
         }
 
+        let mut replica_set_name_with_optional_tag = format!("client-{}", client_index);
+        if let Some(tag) = &self.deployment_tag {
+            replica_set_name_with_optional_tag = add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
+        }
+
+
         k8s_helpers::create_replica_set(
-            format!("client-{}", client_index).as_str(),
+            replica_set_name_with_optional_tag.as_str(),
             self.namespace,
             label_selector,
             container_name,
@@ -847,6 +892,18 @@ impl<'a> Kubernetes<'a> {
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
+        let mut service_name_with_optional_tag = service_name.to_string();
+        if let Some(tag) = &self.deployment_tag {
+            service_name_with_optional_tag = add_tag_to_name(service_name_with_optional_tag.as_str(), tag);
+        }
+        k8s_helpers::create_service(service_name_with_optional_tag.as_str(), self.namespace, label_selector, false)
+    }
+
+    pub fn create_bootstrap_service(
+        &self,
+        service_name: &str,
+        label_selector: &BTreeMap<String, String>,
+    ) -> Service {
         k8s_helpers::create_service(service_name, self.namespace, label_selector, false)
     }
 
@@ -855,6 +912,11 @@ impl<'a> Kubernetes<'a> {
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
     ) -> Service {
+        // let mut service_name_with_optional_tag = service_name.to_string();
+        // if let Some(tag) = &self.deployment_tag {
+        //     service_name_with_optional_tag = add_tag_to_name(service_name_with_optional_tag.as_str(), tag);
+        // }
+        // k8s_helpers::create_service(service_name_with_optional_tag.as_str(), self.namespace, label_selector, true)
         k8s_helpers::create_service(service_name, self.namespace, label_selector, true)
     }
 
