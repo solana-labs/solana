@@ -294,3 +294,10 @@ fn test_stake_allocations() {
         ),
     }
 }
+
+pub fn add_tag_to_name(name: &str, tag: &str) -> String {
+    let mut name_with_tag = name.to_string();
+    name_with_tag.push('-');
+    name_with_tag.push_str(tag);
+    name_with_tag
+}

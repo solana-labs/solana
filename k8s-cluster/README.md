@@ -96,7 +96,153 @@ cargo run --bin solana-k8s --
     --client-type <client-type e.g. thin-client>
     --client-to-run <type-of-client e.g. bench-tps>
     --bench-tps-args <bench-tps-args e.g. tx_count=25000>
+    --run-client # if not set, client accounts are created but no client is deployed
 ```
+
+## Deploying wth multiple cluster versions (with different stake)
+- Use the `--deployment-tag <tag>` and `--no-bootstrap` flags.
+
+Example:
+Deploying cluster 1:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v1 # notice tag here. can be any unique string
+    --internal-node-sol 500
+    --internal-node-stake-sol 10 # each validator stakes 10 sol
+```
+Deploying cluster 2:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 4
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v2 # notice tag here. can be any unique string
+    --no-bootstrap # ensure we do not create a new genesis and new bootstrap validator
+    --internal-node-sol 500
+    --internal-node-stake-sol 20 # each validator in this cluster stakes 20 sol
+```
+^ this is another way to dictate stake distribution
+- 3 nodes with 10 sol stake each
+- 4 nodes with 20 sol stake each
+
+If you want to do this with `--deploy-method tar`, we can do something like:
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method tar
+    --release-channel v1.17.2
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v1
+```
+
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method tar
+    --release-channel v1.17.3
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v2
+    --no-bootstrap
+```
+
+## Deploying multiple clusters with a client
+- For a client `bench-tps` test, the client accounts used for loading the validators must be included in the genesis
+- Therefore, we need to deploy our first cluster as above BUT also need to generate client accounts without actually running the client
+- We will run the client once all clusters are deployed.
+
+Deploy Bootstrap, Cluster 1/3, and generate client accounts
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 2
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v1
+    -c 1
+    --bench-tps-args 'tx-count=5000' # just need `tx-count` since it is used by solana-bench-tps to generate the number of client accounts
+    # do not pass in `--run-client` here since we just want to create the client accounts initially
+```
+
+Deploy Cluster 2/3
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 3
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v2
+    --no-bootstrap
+```
+
+Deploy Cluster 3/3 (and assuming we want to deploy client after these three clusters are deployed)
+```
+cargo run --bin solana-k8s --
+    -n greg-test
+    --num-validators 4
+    --bootstrap-image gregcusack/bootstrap-k8s-cluster-image:monogon
+    --validator-image gregcusack/validator-k8s-cluster-image:monogon
+    --deploy-method local
+    --do-build
+    --docker-build
+    --registry gregcusack
+    --image-name k8s-cluster-image
+    --base-image ubuntu:20.04
+    --tag monogon
+    --deployment-tag v3
+    --no-bootstrap
+    -c 1
+    --bench-tps-args 'tx-count=5000 thread-batch-cleep-ms=250 <other-args>'
+    --client-delay-start 60 # optional: seconds to wait before booting up client
+    --run-client # actually deploy and run the client
+```
+^ note this is not an ideal setup since we have to pass in `--bench-tps-args` for first and last deployment. But `solana-bench-tps` uses `tx-count` to calculate the number of client accounts
 
 ## Deploying with a specific kube config location
 ```
@@ -130,3 +276,7 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ### Notes
 - Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
+
+## TODO:
+- Big one here is that we rely on the local solana-cli on your host machine to create genesis currently. as a result, the local cli needs to be compatible
+with the validator version you are deploying in monogon. This will be fixed in the future

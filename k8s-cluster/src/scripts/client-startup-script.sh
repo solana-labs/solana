@@ -104,6 +104,5 @@ idle)
   exit 1
 esac
 
-echo "client command to run: $clientCommand" >> logs/client.log 2>&1
-
-$clientCommand >> logs/client.log 2>&1
+echo "client command to run: $clientCommand"
+$clientCommand
