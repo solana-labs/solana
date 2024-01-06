@@ -18,8 +18,9 @@ use {
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
         },
     },
-    solana_sdk::timing,
+    solana_sdk::{signature::Signature, timing},
     solana_streamer::streamer::{self, StreamerError},
+    solana_transaction_metrics_tracker::get_signature_from_packet,
     std::{
         thread::{self, Builder, JoinHandle},
         time::Instant,
@@ -78,8 +79,9 @@ struct SigVerifierStats {
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    batches_hist: histogram::Histogram,         // number of packet batches per verify call
-    packets_hist: histogram::Histogram,         // number of packets per verify call
+    process_sampled_packets_us_hist: histogram::Histogram, // per-packet time do do overall verify for sampled packets
+    batches_hist: histogram::Histogram, // number of packet batches per verify call
+    packets_hist: histogram::Histogram, // number of packets per verify call
     num_deduper_saturations: usize,
     total_batches: usize,
     total_packets: usize,
@@ -93,6 +95,7 @@ struct SigVerifierStats {
     total_discard_random_time_us: usize,
     total_verify_time_us: usize,
     total_shrink_time_us: usize,
+    perf_track_overhead_us: usize,
 }
 
 impl SigVerifierStats {
@@ -182,6 +185,28 @@ impl SigVerifierStats {
                 i64
             ),
             (
+                "process_sampled_packets_us_90pct",
+                self.process_sampled_packets_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_min",
+                self.process_sampled_packets_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_max",
+                self.process_sampled_packets_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_mean",
+                self.process_sampled_packets_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
                 "batches_90pct",
                 self.batches_hist.percentile(90.0).unwrap_or(0),
                 i64
@@ -214,6 +239,7 @@ impl SigVerifierStats {
             ),
             ("total_verify_time_us", self.total_verify_time_us, i64),
             ("total_shrink_time_us", self.total_shrink_time_us, i64),
+            ("perf_track_overhead_us", self.perf_track_overhead_us, i64),
         );
     }
 }
@@ -296,7 +322,25 @@ impl SigVerifyStage {
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
+        let mut packet_perf_measure: Vec<([u8; 64], std::time::Instant)> = Vec::default();
+
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
+
+        let mut start_perf_track_measure = Measure::start("start_perf_track");
+        // track sigverify start time for interested packets
+        for batch in &batches {
+            for packet in batch.iter() {
+                if packet.meta().is_perf_track_packet() {
+                    let signature = get_signature_from_packet(packet);
+                    if let Ok(signature) = signature {
+                        packet_perf_measure.push((*signature, Instant::now()));
+                    }
+                }
+            }
+        }
+        start_perf_track_measure.stop();
+
+        stats.perf_track_overhead_us = start_perf_track_measure.as_us() as usize;
 
         let batches_len = batches.len();
         debug!(
@@ -369,6 +413,22 @@ impl SigVerifyStage {
             num_packets,
             (num_packets as f32 / verify_time.as_s())
         );
+
+        let mut perf_track_end_measure = Measure::start("perf_track_end");
+        for (signature, start_time) in packet_perf_measure.iter() {
+            let duration = Instant::now().duration_since(*start_time);
+            debug!(
+                "Sigverify took {duration:?} for transaction {:?}",
+                Signature::from(*signature)
+            );
+            stats
+                .process_sampled_packets_us_hist
+                .increment(duration.as_micros() as u64)
+                .unwrap();
+        }
+
+        perf_track_end_measure.stop();
+        stats.perf_track_overhead_us += perf_track_end_measure.as_us() as usize;
 
         stats
             .recv_batches_us_hist

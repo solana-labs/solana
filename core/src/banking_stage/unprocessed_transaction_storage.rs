@@ -876,6 +876,7 @@ impl ThreadLocalUnprocessedPackets {
                 .iter()
                 .map(|p| (*p).clone())
                 .collect_vec();
+
             let retryable_packets = if let Some(retryable_transaction_indexes) =
                 processing_function(&packets_to_process, payload)
             {

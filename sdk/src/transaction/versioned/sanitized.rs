@@ -32,6 +32,10 @@ impl SanitizedVersionedTransaction {
     pub fn get_message(&self) -> &SanitizedVersionedMessage {
         &self.message
     }
+
+    pub fn get_signatures(&self) -> &Vec<Signature> {
+        &self.signatures
+    }
 }
 
 #[cfg(test)]

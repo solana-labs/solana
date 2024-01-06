@@ -5970,6 +5970,7 @@ dependencies = [
  "solana-stake-program",
  "solana-streamer",
  "solana-tpu-client",
+ "solana-transaction-metrics-tracker",
  "solana-transaction-status",
  "solana-turbine",
  "solana-version",
@@ -7213,9 +7214,11 @@ dependencies = [
  "rcgen",
  "rustls",
  "solana-logger",
+ "solana-measure",
  "solana-metrics",
  "solana-perf",
  "solana-sdk",
+ "solana-transaction-metrics-tracker",
  "thiserror",
  "tokio",
  "x509-parser",
@@ -7359,6 +7362,20 @@ dependencies = [
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
+]
+
+[[package]]
+name = "solana-transaction-metrics-tracker"
+version = "1.17.26"
+dependencies = [
+ "Inflector",
+ "base64 0.21.4",
+ "bincode",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "solana-perf",
+ "solana-sdk",
 ]
 
 [[package]]

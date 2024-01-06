@@ -839,6 +839,17 @@ impl LeaderSlotMetricsTracker {
             );
         }
     }
+
+    pub(crate) fn increment_process_sampled_packets_us(&mut self, us: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .timing_metrics
+                .process_packets_timings
+                .process_sampled_packets_us_hist
+                .increment(us)
+                .unwrap();
+        }
+    }
 }
 
 #[cfg(test)]

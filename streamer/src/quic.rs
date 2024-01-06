@@ -16,8 +16,8 @@ use {
     std::{
         net::{IpAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, RwLock,
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            Arc, Mutex, RwLock,
         },
         thread,
         time::{Duration, SystemTime},
@@ -157,10 +157,14 @@ pub struct StreamStats {
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
     pub(crate) throttled_streams: AtomicUsize,
+    pub(crate) process_sampled_packets_us_hist: Mutex<histogram::Histogram>,
+    pub(crate) perf_track_overhead_us: AtomicU64,
 }
 
 impl StreamStats {
     pub fn report(&self, name: &'static str) {
+        let mut process_sampled_packets_us_hist =
+            self.process_sampled_packets_us_hist.lock().unwrap();
         datapoint_info!(
             name,
             (
@@ -392,7 +396,35 @@ impl StreamStats {
                 self.throttled_streams.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "process_sampled_packets_us_90pct",
+                process_sampled_packets_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_min",
+                process_sampled_packets_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_max",
+                process_sampled_packets_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_mean",
+                process_sampled_packets_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "perf_track_overhead_us",
+                self.perf_track_overhead_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
+        process_sampled_packets_us_hist.clear();
     }
 }
 
