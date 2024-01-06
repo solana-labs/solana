@@ -383,32 +383,7 @@ impl JsonRpcService {
             .tpu(connection_cache.protocol())
             .map_err(|err| format!("{err}"))?;
 
-        // The jsonrpc_http_server crate supports two execution models:
-        //
-        // - By default, it spawns a number of threads - configured with .threads(N) - and runs a
-        //   single-threaded futures executor in each thread.
-        // - Alternatively when configured with .event_loop_executor(executor) and .threads(1),
-        //   it executes all the tasks on the given executor, not spawning any extra internal threads.
-        //
-        // We use the latter configuration, using a multi threaded tokio runtime as the executor. We
-        // do this so we can configure the number of worker threads, the number of blocking threads
-        // and then use tokio::task::spawn_blocking() to avoid blocking the worker threads on CPU
-        // bound operations like getMultipleAccounts. This results in reduced latency, since fast
-        // rpc calls (the majority) are not blocked by slow CPU bound ones.
-        //
-        // NB: `rpc_blocking_threads` shouldn't be set too high (defaults to num_cpus / 2). Too many
-        // (busy) blocking threads could compete with CPU time with other validator threads and
-        // negatively impact performance.
-        let runtime = Arc::new(
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(rpc_threads)
-                .max_blocking_threads(rpc_blocking_threads)
-                .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
-                .thread_name("solRpcEl")
-                .enable_all()
-                .build()
-                .expect("Runtime"),
-        );
+        let runtime = service_runtime(rpc_threads, rpc_blocking_threads, rpc_niceness_adj);
 
         let exit_bigtable_ledger_upload_service = Arc::new(AtomicBool::new(false));
 
@@ -485,6 +460,7 @@ impl JsonRpcService {
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             prioritization_fee_cache,
+            Arc::clone(&runtime),
         );
 
         let leader_info =
@@ -589,6 +565,40 @@ impl JsonRpcService {
         self.exit();
         self.thread_hdl.join()
     }
+}
+
+pub fn service_runtime(
+    rpc_threads: usize,
+    rpc_blocking_threads: usize,
+    rpc_niceness_adj: i8,
+) -> Arc<tokio::runtime::Runtime> {
+    // The jsonrpc_http_server crate supports two execution models:
+    //
+    // - By default, it spawns a number of threads - configured with .threads(N) - and runs a
+    //   single-threaded futures executor in each thread.
+    // - Alternatively when configured with .event_loop_executor(executor) and .threads(1),
+    //   it executes all the tasks on the given executor, not spawning any extra internal threads.
+    //
+    // We use the latter configuration, using a multi threaded tokio runtime as the executor. We
+    // do this so we can configure the number of worker threads, the number of blocking threads
+    // and then use tokio::task::spawn_blocking() to avoid blocking the worker threads on CPU
+    // bound operations like getMultipleAccounts. This results in reduced latency, since fast
+    // rpc calls (the majority) are not blocked by slow CPU bound ones.
+    //
+    // NB: `rpc_blocking_threads` shouldn't be set too high (defaults to num_cpus / 2). Too many
+    // (busy) blocking threads could compete with CPU time with other validator threads and
+    // negatively impact performance.
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(rpc_threads)
+            .max_blocking_threads(rpc_blocking_threads)
+            .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
+            .thread_name("solRpcEl")
+            .enable_all()
+            .build()
+            .expect("Runtime"),
+    );
+    runtime
 }
 
 #[cfg(test)]
