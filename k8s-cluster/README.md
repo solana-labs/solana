@@ -47,7 +47,7 @@ cargo run --bin solana-k8s --
     --tag <imagetag. default: latest>
 ```
 
-Exmple
+Example
 ```
 cargo run --bin solana-k8s --
     -n greg-test
