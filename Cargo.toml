@@ -106,6 +106,7 @@ members = [
     "tokens",
     "tpu-client",
     "transaction-dos",
+    "transaction-metrics-tracker",
     "transaction-status",
     "turbine",
     "udp-client",
@@ -378,6 +379,7 @@ solana-system-program = { path = "programs/system", version = "=1.19.0" }
 solana-test-validator = { path = "test-validator", version = "=1.19.0" }
 solana-thin-client = { path = "thin-client", version = "=1.19.0" }
 solana-tpu-client = { path = "tpu-client", version = "=1.19.0", default-features = false }
+solana-transaction-metrics-tracker = { path = "transaction-metrics-tracker", version = "=1.19.0" }
 solana-transaction-status = { path = "transaction-status", version = "=1.19.0" }
 solana-turbine = { path = "turbine", version = "=1.19.0" }
 solana-udp-client = { path = "udp-client", version = "=1.19.0" }

@@ -33,6 +33,8 @@ bitflags! {
         /// the packet is built.
         /// This field can be removed when the above feature gate is adopted by mainnet-beta.
         const ROUND_COMPUTE_UNIT_PRICE = 0b0010_0000;
+        /// For tracking performance
+        const PERF_TRACK_PACKET  = 0b0100_0000;
     }
 }
 
@@ -229,6 +231,12 @@ impl Meta {
     }
 
     #[inline]
+    pub fn set_track_performance(&mut self, is_performance_track: bool) {
+        self.flags
+            .set(PacketFlags::PERF_TRACK_PACKET, is_performance_track);
+    }
+
+    #[inline]
     pub fn set_simple_vote(&mut self, is_simple_vote: bool) {
         self.flags.set(PacketFlags::SIMPLE_VOTE_TX, is_simple_vote);
     }
@@ -259,6 +267,11 @@ impl Meta {
     #[inline]
     pub fn is_tracer_packet(&self) -> bool {
         self.flags.contains(PacketFlags::TRACER_PACKET)
+    }
+
+    #[inline]
+    pub fn is_perf_track_packet(&self) -> bool {
+        self.flags.contains(PacketFlags::PERF_TRACK_PACKET)
     }
 
     #[inline]

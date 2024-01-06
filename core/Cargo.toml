@@ -67,6 +67,7 @@ solana-send-transaction-service = { workspace = true }
 solana-streamer = { workspace = true }
 solana-svm = { workspace = true }
 solana-tpu-client = { workspace = true }
+solana-transaction-metrics-tracker = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-turbine = { workspace = true }
 solana-unified-scheduler-pool = { workspace = true }

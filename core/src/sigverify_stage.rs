@@ -18,9 +18,11 @@ use {
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
         },
     },
-    solana_sdk::timing,
+    solana_sdk::{signature::Signature, timing},
     solana_streamer::streamer::{self, StreamerError},
+    solana_transaction_metrics_tracker::get_signature_from_packet,
     std::{
+        collections::HashMap,
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -296,8 +298,20 @@ impl SigVerifyStage {
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
+        let mut packet_perf_measure: HashMap<[u8; 64], std::time::Instant> = HashMap::default();
 
+        let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
+        // track sigverify start time for interested packets
+        for batch in &batches {
+            for packet in batch.iter() {
+                if packet.meta().is_perf_track_packet() {
+                    let signature = get_signature_from_packet(packet);
+                    if let Ok(signature) = signature {
+                        packet_perf_measure.insert(*signature, Instant::now());
+                    }
+                }
+            }
+        }
         let batches_len = batches.len();
         debug!(
             "@{:?} verifier: verifying: {}",
@@ -370,6 +384,17 @@ impl SigVerifyStage {
             (num_packets as f32 / verify_time.as_s())
         );
 
+        for (signature, start_time) in packet_perf_measure.drain() {
+            let duration = Instant::now().duration_since(start_time);
+            debug!(
+                "Sigverify took {duration:?} for transaction {:?}",
+                Signature::from(signature)
+            );
+            inc_new_counter_info!(
+                "txn-metrics-sigverify-packet-verify-us",
+                duration.as_micros() as usize
+            );
+        }
         stats
             .recv_batches_us_hist
             .increment(recv_duration.as_micros() as u64)
