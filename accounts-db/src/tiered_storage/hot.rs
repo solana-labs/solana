@@ -35,6 +35,19 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
 
+/// An helper function that creates a new default footer for hot
+/// accounts storage.
+fn new_hot_footer() -> TieredStorageFooter {
+    TieredStorageFooter {
+        account_meta_format: HOT_FORMAT.account_meta_format,
+        account_meta_entry_size: HOT_FORMAT.meta_entry_size as u32,
+        account_block_format: HOT_FORMAT.account_block_format,
+        index_block_format: HOT_FORMAT.index_block_format,
+        owners_block_format: HOT_FORMAT.owners_block_format,
+        ..TieredStorageFooter::default()
+    }
+}
+
 /// The maximum number of padding bytes used in a hot account entry.
 const MAX_HOT_PADDING: u8 = 7;
 
@@ -438,27 +451,18 @@ pub struct HotStorageWriter {
     storage: TieredStorageFile,
 }
 
-impl<'format> HotStorageWriter {
+impl HotStorageWriter {
+    /// Create a new HotStorageWriter with the specified path.
     pub fn new(file_path: impl AsRef<Path>) -> TieredStorageResult<Self> {
         Ok(Self {
             storage: TieredStorageFile::new_writable(file_path)?,
         })
     }
 
-    /// An internal helper function that creates a new default footer
-    /// for hot accounts storage.
-    fn new_footer() -> TieredStorageFooter {
-        TieredStorageFooter {
-            account_meta_format: HOT_FORMAT.account_meta_format,
-            account_meta_entry_size: HOT_FORMAT.meta_entry_size as u32,
-            account_block_format: HOT_FORMAT.account_block_format,
-            index_block_format: HOT_FORMAT.index_block_format,
-            owners_block_format: HOT_FORMAT.owners_block_format,
-            ..TieredStorageFooter::default()
-        }
-    }
-
-    pub fn write_accounts<
+    /// An underdevelopment function that will implement append_accounts().
+    ///
+    /// The function is currently private and does not write any accounts.
+    fn write_accounts<
         'a,
         'b,
         T: ReadableAccount + Sync,
@@ -466,10 +470,10 @@ impl<'format> HotStorageWriter {
         V: Borrow<AccountHash>,
     >(
         &self,
-        _accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        _storable_accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         _skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let footer = HotStorageWriter::new_footer();
+        let footer = new_hot_footer();
 
         footer.write_footer_block(&self.storage)?;
 
