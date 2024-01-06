@@ -63,7 +63,7 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 const STREAM_STOP_CODE_THROTTLING: u32 = 15;
 const STREAM_LOAD_EMA_INTERVAL_MS: Duration = Duration::from_millis(5);
 const STREAM_LOAD_EMA_INTERVAL_COUNT: u128 = 10;
-const MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION: u128 = 8;
+const MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION: u64 = 8;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -178,7 +178,7 @@ impl StakedStreamLoadEMA {
         stake: u64,
         total_stake: u64,
         duration_ms: u128,
-    ) -> u128 {
+    ) -> u64 {
         let ema_window_ms =
             STREAM_LOAD_EMA_INTERVAL_MS.as_millis() * STREAM_LOAD_EMA_INTERVAL_COUNT;
         let max_load_in_ema_window: u128 = (MAX_STREAMS_PER_MS as u128
@@ -197,7 +197,7 @@ impl StakedStreamLoadEMA {
                 / (current_load * total_stake as u128);
 
         cmp::max(
-            capacity_in_ema_window * duration_ms / ema_window_ms,
+            (capacity_in_ema_window * duration_ms / ema_window_ms) as u64,
             MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION,
         )
     }
@@ -822,11 +822,11 @@ fn max_streams_for_connection_in_duration(
     total_stake: u64,
     ema_load: Arc<StakedStreamLoadEMA>,
     duration_ms: u128,
-) -> u128 {
+) -> u64 {
     if matches!(connection_type, ConnectionPeerType::Unstaked) || stake == 0 {
         Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT)
-            .apply_to(MAX_STREAMS_PER_MS as u128 * duration_ms)
-            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u128)
+            .apply_to(MAX_STREAMS_PER_MS * duration_ms as u64)
+            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u64)
     } else {
         ema_load.available_load_capacity_in_duration(stake, total_stake, duration_ms)
     }
@@ -877,7 +877,7 @@ async fn handle_connection(
             match stream {
                 Ok(mut stream) => {
                     stream_counter.reset_throttling_params_if_needed();
-                    if stream_counter.stream_count.load(Ordering::Relaxed) as u128
+                    if stream_counter.stream_count.load(Ordering::Relaxed)
                         >= max_streams_per_throttling_interval
                     {
                         stats.throttled_streams.fetch_add(1, Ordering::Relaxed);
