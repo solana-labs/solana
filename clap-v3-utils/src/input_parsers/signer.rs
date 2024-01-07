@@ -2,8 +2,8 @@ use {
     crate::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
         keypair::{
-            parse_signer_source, pubkey_from_path, resolve_signer_from_path, signer_from_path,
-            SignerSource, SignerSourceError, SignerSourceKind,
+            pubkey_from_path, resolve_signer_from_path, signer_from_path, SignerSource,
+            SignerSourceError, SignerSourceKind,
         },
     },
     clap::{builder::ValueParser, ArgMatches},
@@ -72,7 +72,7 @@ impl SignerSourceParserBuilder {
     pub fn build(self) -> ValueParser {
         ValueParser::from(
             move |arg: &str| -> Result<SignerSource, SignerSourceError> {
-                let signer_source = parse_signer_source(arg)?;
+                let signer_source = SignerSource::parse(arg)?;
                 if !self.allow_legacy && signer_source.legacy {
                     return Err(SignerSourceError::UnsupportedSource);
                 }
