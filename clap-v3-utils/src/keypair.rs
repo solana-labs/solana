@@ -554,7 +554,7 @@ pub fn signer_from_path(
     signer_from_path_with_config(matches, path, keypair_name, wallet_manager, &config)
 }
 
-fn signer_from_source(
+pub fn signer_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     keypair_name: &str,
@@ -632,7 +632,7 @@ pub fn signer_from_path_with_config(
     signer_from_source_with_config(matches, &source, keypair_name, wallet_manager, config)
 }
 
-fn signer_from_source_with_config(
+pub fn signer_from_source_with_config(
     matches: &ArgMatches,
     source: &SignerSource,
     keypair_name: &str,
@@ -750,7 +750,7 @@ pub fn pubkey_from_path(
     pubkey_from_source(matches, &source, keypair_name, wallet_manager)
 }
 
-fn pubkey_from_source(
+pub fn pubkey_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     keypair_name: &str,
@@ -772,7 +772,7 @@ pub fn resolve_signer_from_path(
     resolve_signer_from_source(matches, &source, keypair_name, wallet_manager)
 }
 
-fn resolve_signer_from_source(
+pub fn resolve_signer_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     keypair_name: &str,
@@ -912,7 +912,7 @@ pub fn keypair_from_path(
     Ok(keypair)
 }
 
-fn keypair_from_source(
+pub fn keypair_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     keypair_name: &str,
@@ -974,7 +974,7 @@ pub fn elgamal_keypair_from_path(
     Ok(elgamal_keypair)
 }
 
-fn elgamal_keypair_from_source(
+pub fn elgamal_keypair_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     elgamal_keypair_name: &str,
@@ -1039,7 +1039,7 @@ pub fn ae_key_from_path(
     encodable_key_from_path(path, key_name, skip_validation)
 }
 
-fn ae_key_from_source(
+pub fn ae_key_from_source(
     matches: &ArgMatches,
     source: &SignerSource,
     key_name: &str,
