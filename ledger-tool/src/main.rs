@@ -1585,13 +1585,7 @@ fn main() {
                     );
                 }
                 ("bank-hash", Some(arg_matches)) => {
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
