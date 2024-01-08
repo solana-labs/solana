@@ -503,6 +503,7 @@ pub mod test {
     use {
         super::*,
         crossbeam_channel::unbounded,
+        rand::Rng,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -544,6 +545,8 @@ pub mod test {
             &Keypair::new(),
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            Some(Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index,
             0,    // next_code_index
             true, // merkle_variant
