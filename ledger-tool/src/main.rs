@@ -1555,13 +1555,12 @@ fn main() {
                     println!("{}", open_genesis_config_by(&output_directory, arg_matches));
                 }
                 ("shred-version", Some(arg_matches)) => {
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: Some(0),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        ..ProcessOptions::default()
-                    };
+                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
+                    // Respect a user-set --halt-at-slot; otherwise, set Some(0) to avoid
+                    // processing any additional banks and just use the snapshot bank
+                    if process_options.halt_at_slot.is_none() {
+                        process_options.halt_at_slot = Some(0);
+                    }
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,

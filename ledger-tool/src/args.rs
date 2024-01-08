@@ -6,10 +6,34 @@ use {
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
     },
+    solana_ledger::blockstore_processor::ProcessOptions,
     solana_runtime::snapshot_utils,
     solana_sdk::clock::Slot,
     std::path::{Path, PathBuf},
 };
+
+/// Parse a `ProcessOptions` from subcommand arguments. This function attempts
+/// to parse all flags related to `ProcessOptions`; however, subcommands that
+/// use this function may not support all flags.
+pub fn parse_process_options(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> ProcessOptions {
+    let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
+    let accounts_db_config = Some(get_accounts_db_config(ledger_path, arg_matches));
+
+    if arg_matches.is_present("skip_poh_verify") {
+        eprintln!("--skip-poh-verify is deprecated.  Replace with --skip-verification.");
+    }
+    let run_verification =
+        !(arg_matches.is_present("skip_poh_verify") || arg_matches.is_present("skip_verification"));
+    let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+
+    ProcessOptions {
+        new_hard_forks,
+        accounts_db_config,
+        run_verification,
+        halt_at_slot,
+        ..ProcessOptions::default()
+    }
+}
 
 // Build an `AccountsDbConfig` from subcommand arguments. All of the arguments
 // matched by this functional are either optional or have a default value.
