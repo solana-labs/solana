@@ -1699,19 +1699,7 @@ fn main() {
                         ),
                     };
 
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
-
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
@@ -2259,19 +2247,7 @@ fn main() {
                     );
                 }
                 ("accounts", Some(arg_matches)) => {
-                    let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let include_sysvars = arg_matches.is_present("include_sysvars");
                     let blockstore = open_blockstore(
@@ -2353,19 +2329,7 @@ fn main() {
                     }
                 }
                 ("capitalization", Some(arg_matches)) => {
-                    let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,

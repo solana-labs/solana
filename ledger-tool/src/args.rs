@@ -1,12 +1,15 @@
 use {
     crate::LEDGER_TOOL_DIRECTORY,
-    clap::{value_t, values_t, values_t_or_exit, ArgMatches},
+    clap::{value_t, value_t_or_exit, values_t, values_t_or_exit, ArgMatches},
     solana_accounts_db::{
         accounts_db::{AccountsDb, AccountsDbConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
     },
-    solana_ledger::blockstore_processor::ProcessOptions,
+    solana_ledger::{
+        blockstore_processor::ProcessOptions,
+        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
+    },
     solana_runtime::snapshot_utils,
     solana_sdk::clock::Slot,
     std::path::{Path, PathBuf},
@@ -25,12 +28,18 @@ pub fn parse_process_options(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -
     let run_verification =
         !(arg_matches.is_present("skip_poh_verify") || arg_matches.is_present("skip_verification"));
     let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+    let use_snapshot_archives_at_startup = value_t_or_exit!(
+        arg_matches,
+        use_snapshot_archives_at_startup::cli::NAME,
+        UseSnapshotArchivesAtStartup
+    );
 
     ProcessOptions {
         new_hard_forks,
         accounts_db_config,
         run_verification,
         halt_at_slot,
+        use_snapshot_archives_at_startup,
         ..ProcessOptions::default()
     }
 }
