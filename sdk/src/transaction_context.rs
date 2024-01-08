@@ -712,6 +712,53 @@ pub struct BorrowedAccount<'a> {
     account: RefMut<'a, AccountSharedData>,
 }
 
+// Mainnet-beta program_ids that cannot deal with serializing executable accounts zero-length
+solana_sdk::pubkeys!(
+    program_ids_exe_zero_length_exceptions,
+    [
+        "7K3UpbZViPnQDLn2DAM853B9J5GBxd1L1rLHy4KqSmWG",
+        "5mpjDRgoRYRmSnAXZTfB2bBkbpwvRjobXUjb4WYjF225",
+        "SRDmexy38YTqtCmh7xU2eMFkWweYWF1pqdPyatTF1qP", // NO ELF MAGIC
+        /*
+        "Program log: Instruction: CykuraSwap",
+        "Program cysPXAjehMpVKUapzbMCCnpFxUFFryEWEaLgnb9NrR8 invoke [3]",
+        "Program log: Instruction: ExactInputSingle",
+        "Program log: ProgramError caused by account: core_program. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.",
+        */
+        "cysPXAjehMpVKUapzbMCCnpFxUFFryEWEaLgnb9NrR8",
+        /*
+        "Program 6e84wdHBa1joDWcyL7FZG9Fi2BtYTmvDNKfW2f8fNXnc invoke [1]",
+        "Program log: TestMode : 0",
+        "Program log: [from bot] Profitability : 1.036820375 Slot : 237528550 Dropped Slot : 0",
+        "Program log: panicked at 'index out of bounds: the len is 0 but the index is 291', src/exchange/orca.rs:41:22",
+        */
+        "6e84wdHBa1joDWcyL7FZG9Fi2BtYTmvDNKfW2f8fNXnc",
+        /*
+        "Program log: ProgramError caused by account: mine_program. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid."
+        */
+        "SPQR4kT3q2oUKEJes2L6NNSBCiPW9SfuhkuqC9bp6Sx", // NO ELF MAGIC
+        /*
+         *Program SCPv1LabixHirZbX6s7Zj3oiBogadWZvGUKRvXD3Zec failed: invalid account data for instruction
+         */
+        "SCPv1LabixHirZbX6s7Zj3oiBogadWZvGUKRvXD3Zec", // NO ELF MAGIC
+        //           "Program log: panicked at 'index out of bounds: the len is 4 but the index is 291', src/exchange/orca.rs:41:22",
+        "8nbexi4ReN1u6iTBkuEExXKGisgjFkY6AjChF1k19aFU",
+        //           "Program log: ProgramError caused by account: gem_bank. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.",
+        "DyziFCftH7CpoSLvXmtqyeMD2HBZVEqWk7xkRF1vcNqt",
+        //   "Program log: Instruction: WithdrawFromPool",
+        //           "Program log: An account's data contents was invalid",
+        "D83mNLnWHX1DmFTWFTG2zJXxjEnwX2dVTWNitExRJTsE",
+        // Program log: ProgramError caused by account: gem_bank. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.
+        "GzYDEAKs7vTsqAxBWrbUEpMMH5xRRazRPGdd6Kp3e7Rh",
+        //"Program log: ProgramError caused by account: gem_bank. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.",
+        "Dp8bcStZSpR4EyKuzcAJUFjnZKfoNo9iYM93BAxtDLve",
+        //"Program log: ProgramError occurred. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.",
+        "BsKyUMNe1jXxiv3Y57H6UfkeodUYgHKuafaN4HSWdXj1",
+        //"Program log: ProgramError caused by account: gem_bank. Error Code: InvalidAccountData. Error Number: 17179869184. Error Message: An account's data contents was invalid.",
+        "7NryUmAmy8hMbawRNUs9UdkgAGEiHFxghSfve31dC7xh",
+    ]
+);
+
 impl<'a> BorrowedAccount<'a> {
     /// Returns the transaction context
     pub fn transaction_context(&self) -> &TransactionContext {

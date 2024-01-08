@@ -26,6 +26,7 @@ use {
         loader_v4_instruction::LoaderV4Instruction,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         saturating_add_assign,
         transaction_context::{BorrowedAccount, InstructionContext},
     },
@@ -410,7 +411,7 @@ pub fn process_instruction_deploy(
         program_id: buffer.get_key().to_string(),
         ..LoadProgramMetrics::default()
     };
-    let executor = LoadedProgram::new(
+    let mut executor = LoadedProgram::new(
         &loader_v4::id(),
         invoke_context
             .programs_modified_by_tx
@@ -421,6 +422,8 @@ pub fn process_instruction_deploy(
         effective_slot,
         programdata,
         buffer.get_data().len(),
+        RENT_EXEMPT_RENT_EPOCH,
+        program.get_lamports(),
         &mut load_program_metrics,
     )
     .map_err(|err| {
@@ -436,6 +439,7 @@ pub fn process_instruction_deploy(
         source_program.set_data_length(0, &invoke_context.feature_set)?;
         source_program.checked_sub_lamports(transfer_lamports, &invoke_context.feature_set)?;
         program.checked_add_lamports(transfer_lamports, &invoke_context.feature_set)?;
+        executor.lamports = program.get_lamports();
     }
     let state = get_state_mut(program.get_data_mut(&invoke_context.feature_set)?)?;
     state.slot = current_slot;
@@ -661,6 +665,8 @@ mod tests {
                         0,
                         programdata,
                         account.data().len(),
+                        account.rent_epoch(),
+                        account.lamports(),
                         &mut load_program_metrics,
                     ) {
                         invoke_context.programs_modified_by_tx.set_slot_for_tests(0);

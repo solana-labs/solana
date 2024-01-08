@@ -4434,6 +4434,7 @@ fn test_deny_executable_write() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
+        feature_set.deactivate(&feature_set::dont_load_executable_accounts::id());
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
         let authority_keypair = Keypair::new();
