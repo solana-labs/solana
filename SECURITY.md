@@ -134,6 +134,11 @@ The following components are out of scope for the bounty program
 * Any asset whose source code does not exist in this repository (including, but not limited
 to, any and all web properties not explicitly listed on this page)
 
+The Solana Program Library has its own security policy for on-chain programs,
+such as spl-token, which is not covered here. For more information, please refer
+to the
+[SPL security policy](https://github.com/solana-labs/solana-program-library/security/policy).
+
 ### Eligibility:
 * Submissions _MUST_ include an exploit proof-of-concept to be considered eligible
 * The participant submitting the bug report shall follow the process outlined within this document
