@@ -3113,11 +3113,11 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683751d591e6d81200c39fb0d1032608b77724f34114db54f571ff1317b337c0"
+checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
 dependencies = [
- "num_enum_derive 0.7.1",
+ "num_enum_derive 0.7.2",
 ]
 
 [[package]]
@@ -3134,9 +3134,9 @@ dependencies = [
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
+checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
 dependencies = [
  "proc-macro-crate 2.0.1",
  "proc-macro2",
@@ -4692,7 +4692,7 @@ dependencies = [
  "num-derive 0.4.1",
  "num-traits",
  "num_cpus",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -4839,7 +4839,7 @@ dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "rand 0.8.5",
  "solana-measure",
  "solana-sdk",
@@ -4991,7 +4991,7 @@ dependencies = [
  "log",
  "lru",
  "min-max-heap",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "prio-graph",
  "quinn",
  "rand 0.8.5",
@@ -5270,7 +5270,7 @@ dependencies = [
  "lru",
  "mockall",
  "num_cpus",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "prost",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -5754,7 +5754,7 @@ dependencies = [
  "num-derive 0.4.1",
  "num-traits",
  "num_cpus",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "ouroboros",
  "percentage",
  "qualifier_attr",
@@ -6248,7 +6248,7 @@ dependencies = [
  "memmap2",
  "num-derive 0.4.1",
  "num-traits",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "pbkdf2 0.11.0",
  "qstring",
  "qualifier_attr",
@@ -6907,7 +6907,7 @@ dependencies = [
  "bytemuck",
  "num-derive 0.4.1",
  "num-traits",
- "num_enum 0.7.1",
+ "num_enum 0.7.2",
  "solana-program",
  "solana-security-txt",
  "solana-zk-token-sdk",
