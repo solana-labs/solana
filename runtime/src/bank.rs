@@ -1870,15 +1870,15 @@ impl Bank {
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
 
         datapoint_info!(
-            "bank-new-from-fields",
+            "bank-new_from_fields",
             (
-                "accounts_data_len-from-snapshot",
-                fields.accounts_data_len as i64,
+                "accounts_data_size_from_snapshot",
+                fields.accounts_data_len,
                 i64
             ),
             (
-                "accounts_data_len-from-generate_index",
-                accounts_data_size_initial as i64,
+                "accounts_data_size_from_generate_index",
+                accounts_data_size_initial,
                 i64
             ),
             (
