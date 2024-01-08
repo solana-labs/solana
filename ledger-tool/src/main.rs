@@ -41,7 +41,6 @@ use {
     solana_runtime::{
         bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_minimizer::SnapshotMinimizer,
@@ -1616,44 +1615,7 @@ fn main() {
                         },
                     );
 
-                    let debug_keys = pubkeys_of(arg_matches, "debug_key")
-                        .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
-
-                    if arg_matches.is_present("skip_poh_verify") {
-                        eprintln!(
-                            "--skip-poh-verify is deprecated.  Replace with --skip-verification."
-                        );
-                    }
-
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        run_verification: !(arg_matches.is_present("skip_poh_verify")
-                            || arg_matches.is_present("skip_verification")),
-                        on_halt_store_hash_raw_data_for_debug: arg_matches
-                            .is_present("halt_at_slot_store_hash_raw_data"),
-                        run_final_accounts_hash_calc: arg_matches.is_present("run_final_hash_calc"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        debug_keys,
-                        limit_load_slot_count_from_snapshot: value_t!(
-                            arg_matches,
-                            "limit_load_slot_count_from_snapshot",
-                            usize
-                        )
-                        .ok(),
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        verify_index: arg_matches.is_present("verify_accounts_index"),
-                        allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
-                        accounts_db_test_hash_calculation: arg_matches
-                            .is_present("accounts_db_test_hash_calculation"),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        runtime_config: RuntimeConfig::default(),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
                     let write_bank_file = arg_matches.is_present("write_bank_file");
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
