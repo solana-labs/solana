@@ -2426,27 +2426,24 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
-    let invoke_and_return = load_program(
-        &bank_client,
-        &bpf_loader::id(),
+
+    let invoke_and_return_buffer_keypair = Keypair::new();
+    let invoke_and_return_program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    let (bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
         &mint_keypair,
+        &invoke_and_return_buffer_keypair,
+        &invoke_and_return_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
@@ -2454,7 +2451,6 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     let buffer_keypair = Keypair::new();
     let program_keypair = Keypair::new();
     let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -2463,6 +2459,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     bank_client
         .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
@@ -2496,7 +2496,7 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         "solana_sbf_rust_upgraded",
     );
     bank_client.set_sysvar_for_tests(&clock::Clock {
-        slot: 2,
+        slot: 3,
         ..clock::Clock::default()
     });
     bank_client
