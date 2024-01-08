@@ -1058,13 +1058,15 @@ pub mod tests {
 
     #[test]
     fn test_hot_storage_writer_twice_on_same_path() {
-        // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir
             .path()
             .join("test_hot_storage_writer_twice_on_same_path");
 
+        // Expect the first returns Ok
         assert_matches!(HotStorageWriter::new(&path), Ok(_));
+        // Expect the second call on the same path returns Err, as the
+        // HotStorageWriter only writes once.
         assert_matches!(HotStorageWriter::new(&path), Err(_));
     }
 }
