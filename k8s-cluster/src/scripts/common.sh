@@ -73,8 +73,6 @@ solana_cli=$(solana_program)
 
 export RUST_BACKTRACE=1
 
-echo "solana command: $solana_validator"
-
 # https://gist.github.com/cdown/1163649
 urlencode() {
   declare s="$1"

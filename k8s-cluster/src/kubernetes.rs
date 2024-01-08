@@ -11,6 +11,7 @@ use {
                 Secret, SecretVolumeSource, Service, Volume, VolumeMount,
             },
         },
+        apimachinery::pkg::api::resource::Quantity,
         ByteString,
     },
     kube::{
@@ -155,6 +156,24 @@ impl std::fmt::Display for NodeAffinityType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PodRequests {
+    requests: BTreeMap<String, Quantity>,
+}
+
+impl PodRequests {
+    pub fn new(cpu_requests: String, memory_requests: String) -> PodRequests {
+        PodRequests {
+            requests: vec![
+                ("cpu".to_string(), Quantity(cpu_requests)),
+                ("memory".to_string(), Quantity(memory_requests)),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+}
+
 pub struct Kubernetes<'a> {
     client: Client,
     namespace: &'a str,
@@ -164,6 +183,7 @@ pub struct Kubernetes<'a> {
     nodes: Option<Vec<String>>,
     node_affinity: NodeAffinityType,
     deployment_tag: Option<String>,
+    pod_requests: PodRequests,
 }
 
 impl<'a> Kubernetes<'a> {
@@ -174,6 +194,7 @@ impl<'a> Kubernetes<'a> {
         metrics: Option<Metrics>,
         node_affinity: NodeAffinityType,
         deployment_tag: Option<String>,
+        pod_requests: PodRequests,
     ) -> Kubernetes<'a> {
         Kubernetes {
             client: Client::try_default().await.unwrap(),
@@ -184,6 +205,7 @@ impl<'a> Kubernetes<'a> {
             nodes: None,
             node_affinity,
             deployment_tag,
+            pod_requests,
         }
     }
 
@@ -386,6 +408,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
             self.nodes.clone(),
+            self.pod_requests.requests.clone(),
         )
     }
 
@@ -757,6 +780,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
             self.nodes.clone(),
+            self.pod_requests.requests.clone(),
         )
     }
 
@@ -843,6 +867,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             Some(readiness_probe),
             self.nodes.clone(),
+            self.pod_requests.requests.clone(),
         )
     }
 
@@ -901,6 +926,7 @@ impl<'a> Kubernetes<'a> {
             accounts_volume_mount,
             None,
             self.nodes.clone(),
+            self.pod_requests.requests.clone(),
         )
     }
 
