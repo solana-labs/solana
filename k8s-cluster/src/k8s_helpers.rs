@@ -5,11 +5,11 @@ use {
             core::v1::{
                 Affinity, Container, EnvVar, EnvVarSource, NodeAffinity, NodeSelector,
                 NodeSelectorRequirement, NodeSelectorTerm, ObjectFieldSelector, PodSecurityContext,
-                PodSpec, PodTemplateSpec, Probe, Secret, Service, ServicePort, ServiceSpec, Volume,
-                VolumeMount,
+                PodSpec, PodTemplateSpec, Probe, ResourceRequirements, Secret, Service,
+                ServicePort, ServiceSpec, Volume, VolumeMount,
             },
         },
-        apimachinery::pkg::apis::meta::v1::LabelSelector,
+        apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::LabelSelector},
         ByteString,
     },
     kube::api::ObjectMeta,
@@ -46,6 +46,7 @@ pub fn create_replica_set(
     volume_mounts: Option<Vec<VolumeMount>>,
     readiness_probe: Option<Probe>,
     nodes: Option<Vec<String>>,
+    pod_requests: BTreeMap<String, Quantity>,
 ) -> Result<ReplicaSet, Box<dyn Error>> {
     let node_affinity = nodes.clone().map(|_| NodeAffinity {
         required_during_scheduling_ignored_during_execution: Some(NodeSelector {
@@ -75,6 +76,10 @@ pub fn create_replica_set(
                 command: Some(command.to_owned()),
                 volume_mounts,
                 readiness_probe,
+                resources: Some(ResourceRequirements {
+                    requests: Some(pod_requests),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }],
             volumes,

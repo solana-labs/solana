@@ -9,7 +9,9 @@ use {
             DEFAULT_INTERNAL_NODE_SOL, DEFAULT_INTERNAL_NODE_STAKE_SOL,
         },
         get_solana_root, initialize_globals,
-        kubernetes::{ClientConfig, Kubernetes, Metrics, NodeAffinityType, ValidatorConfig},
+        kubernetes::{
+            ClientConfig, Kubernetes, Metrics, NodeAffinityType, PodRequests, ValidatorConfig,
+        },
         ledger_helper::LedgerHelper,
         parse_and_format_bench_tps_args,
         release::{BuildConfig, Deploy},
@@ -450,6 +452,24 @@ fn parse_matches() -> ArgMatches<'static> {
                     to equinix nodes only."
                 ),
         )
+        .arg(
+            Arg::with_name("cpu_requests")
+                .long("cpu-requests")
+                .takes_value(true)
+                .default_value("10") // 10 cores
+                .help("Kubernetes pod config. Specify minimum CPUs required for deploying validator.
+                    can use millicore notation as well. e.g. 500m (500 millicores) == 0.5 and is equivalent to half a core.
+                    [default: 10]"),
+        )
+        .arg(
+            Arg::with_name("memory_requests")
+                .long("memory-requests")
+                .takes_value(true)
+                .default_value("70Gi") // 70 Gigabytes
+                .help("Kubernetes pod config. Specify minimum memory required for deploying validator.
+                    Can specify unit here (B, Ki, Mi, Gi, Ti) for bytes, kilobytes, etc (2^N notation)
+                    e.g. 1Gi == 1024Mi == 1024Ki == 1,047,576B. [default: 70Gi]"),
+        )
         .get_matches()
 }
 
@@ -702,6 +722,11 @@ async fn main() {
     let deployment_tag = matches.value_of("deployment_tag").map(|t| t.to_string());
     let no_bootstrap = matches.is_present("no_bootstrap");
 
+    let pod_requests = PodRequests::new(
+        matches.value_of("cpu_requests").unwrap().to_string(),
+        matches.value_of("memory_requests").unwrap().to_string(),
+    );
+
     // Check if namespace exists
     let mut kub_controller = Kubernetes::new(
         setup_config.namespace,
@@ -710,6 +735,7 @@ async fn main() {
         metrics,
         node_type,
         deployment_tag.clone(),
+        pod_requests,
     )
     .await;
     match kub_controller.namespace_exists().await {
