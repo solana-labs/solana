@@ -1752,7 +1752,6 @@ fn main() {
                         });
                     let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
                     let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
-                    let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
 
                     let faucet_pubkey = pubkey_of(arg_matches, "faucet_pubkey");
                     let faucet_lamports =
@@ -1815,18 +1814,8 @@ fn main() {
                         NonZeroUsize
                     );
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let mut process_options = ProcessOptions {
-                        new_hard_forks,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
+
                     let blockstore = Arc::new(open_blockstore(
                         &ledger_path,
                         arg_matches,

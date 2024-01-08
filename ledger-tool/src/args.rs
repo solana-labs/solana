@@ -33,10 +33,12 @@ pub fn parse_process_options(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -
         use_snapshot_archives_at_startup::cli::NAME,
         UseSnapshotArchivesAtStartup
     );
+    let accounts_db_skip_shrink = arg_matches.is_present("accounts_db_skip_shrink");
 
     ProcessOptions {
         new_hard_forks,
         accounts_db_config,
+        accounts_db_skip_shrink,
         run_verification,
         halt_at_slot,
         use_snapshot_archives_at_startup,
