@@ -7,6 +7,7 @@ use {
         accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
+            file::TieredStorageFile,
             footer::{
                 AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
             },
@@ -32,6 +33,19 @@ pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     index_block_format: IndexBlockFormat::AddressesThenOffsets,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
+
+/// An helper function that creates a new default footer for hot
+/// accounts storage.
+fn new_hot_footer() -> TieredStorageFooter {
+    TieredStorageFooter {
+        account_meta_format: HOT_FORMAT.account_meta_format,
+        account_meta_entry_size: HOT_FORMAT.meta_entry_size as u32,
+        account_block_format: HOT_FORMAT.account_block_format,
+        index_block_format: HOT_FORMAT.index_block_format,
+        owners_block_format: HOT_FORMAT.owners_block_format,
+        ..TieredStorageFooter::default()
+    }
+}
 
 /// The maximum number of padding bytes used in a hot account entry.
 const MAX_HOT_PADDING: u8 = 7;
@@ -427,6 +441,21 @@ impl HotStorageReader {
             }),
             index_offset.0.saturating_add(1) as usize,
         )))
+    }
+}
+
+/// The writer that creates a hot accounts file.
+#[derive(Debug)]
+pub struct HotStorageWriter {
+    storage: TieredStorageFile,
+}
+
+impl HotStorageWriter {
+    /// Create a new HotStorageWriter with the specified path.
+    pub fn new(file_path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        Ok(Self {
+            storage: TieredStorageFile::new_writable(file_path)?,
+        })
     }
 }
 
@@ -1025,5 +1054,19 @@ pub mod tests {
             hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
         );
+    }
+
+    #[test]
+    fn test_hot_storage_writer_twice_on_same_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_hot_storage_writer_twice_on_same_path");
+
+        // Expect the first returns Ok
+        assert_matches!(HotStorageWriter::new(&path), Ok(_));
+        // Expect the second call on the same path returns Err, as the
+        // HotStorageWriter only writes once.
+        assert_matches!(HotStorageWriter::new(&path), Err(_));
     }
 }
