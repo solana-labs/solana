@@ -2437,7 +2437,7 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     let invoke_and_return_buffer_keypair = Keypair::new();
     let invoke_and_return_program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
-    let (bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
+    let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
@@ -2575,12 +2575,23 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         bank.deactivate_feature(
             &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
         );
-        bank.deactivate_feature(&feature_set::disable_bpf_loader_instructions::id());
-        bank.deactivate_feature(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-        let bank = bank.wrap_with_bank_forks_for_tests().0;
-        let bank_client = BankClient::new_shared(bank);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank);
 
-        let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
+        let program_buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
+        let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
+            &mut bank_client,
+            bank_forks.as_ref(),
+            &mint_keypair,
+            &program_buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
+            program,
+        );
+
         let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
         let instruction = Instruction::new_with_bytes(bpf_loader::id(), &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
