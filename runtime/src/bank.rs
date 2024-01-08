@@ -4882,7 +4882,7 @@ impl Bank {
             accounts,
             return_data,
             touched_account_count,
-            accounts_resize_delta,
+            accounts_resize_delta: accounts_data_len_delta,
         } = transaction_context.into();
 
         if status.is_ok()
@@ -4915,7 +4915,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
-                accounts_data_len_delta: accounts_resize_delta,
+                accounts_data_len_delta,
             },
             programs_modified_by_tx: Box::new(programs_modified_by_tx),
         }
