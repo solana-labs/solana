@@ -4900,7 +4900,6 @@ impl Bank {
             loaded_transaction.accounts.len() as u64
         );
         saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
-        let accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
 
         let return_data = if enable_return_data_recording && !return_data.data.is_empty() {
             Some(return_data)
@@ -4916,7 +4915,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
-                accounts_data_len_delta,
+                accounts_data_len_delta: accounts_resize_delta,
             },
             programs_modified_by_tx: Box::new(programs_modified_by_tx),
         }
@@ -5585,9 +5584,12 @@ impl Bank {
         let accounts_data_len_delta = execution_results
             .iter()
             .filter_map(|execution_result| {
-                execution_result
-                    .details()
-                    .map(|details| details.accounts_data_len_delta)
+                execution_result.details().map(|details| {
+                    details
+                        .status
+                        .as_ref()
+                        .map_or(0, |_| details.accounts_data_len_delta)
+                })
             })
             .sum();
         self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
