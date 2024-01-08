@@ -14016,14 +14016,7 @@ fn test_failed_simulation_compute_units() {
 
     const TEST_UNITS: u64 = 10_000;
     const MOCK_BUILTIN_UNITS: u64 = 1;
-    let expected_consumed_units = if bank
-        .feature_set
-        .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
-    {
-        TEST_UNITS + MOCK_BUILTIN_UNITS
-    } else {
-        TEST_UNITS
-    };
+    let expected_consumed_units = TEST_UNITS + MOCK_BUILTIN_UNITS;
     declare_process_instruction!(MockBuiltin, MOCK_BUILTIN_UNITS, |invoke_context| {
         invoke_context.consume_checked(TEST_UNITS).unwrap();
         Err(InstructionError::InvalidInstructionData)

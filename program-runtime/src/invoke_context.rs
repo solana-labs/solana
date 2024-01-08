@@ -19,7 +19,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader_deprecated,
-        feature_set::{native_programs_consume_cu, FeatureSet},
+        feature_set::FeatureSet,
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -62,9 +62,6 @@ macro_rules! declare_process_instruction {
                     $inner
 
                 let consumption_result = if $cu_to_consume > 0
-                    && invoke_context
-                        .feature_set
-                        .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
                 {
                     invoke_context.consume_checked($cu_to_consume)
                 } else {
@@ -522,13 +519,7 @@ impl<'a> InvokeContext<'a> {
         let post_remaining_units = self.get_remaining();
         *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-        if builtin_id == program_id
-            && result.is_ok()
-            && *compute_units_consumed == 0
-            && self
-                .feature_set
-                .is_active(&native_programs_consume_cu::id())
-        {
+        if builtin_id == program_id && result.is_ok() && *compute_units_consumed == 0 {
             return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 

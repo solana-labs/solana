@@ -135,11 +135,6 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
 }
 
 declare_process_instruction!(Entrypoint, 0, |invoke_context| {
-    // Consume compute units if feature `native_programs_consume_cu` is activated
-    let native_programs_consume_cu = invoke_context
-        .feature_set
-        .is_active(&feature_set::native_programs_consume_cu::id());
-
     let enable_zk_transfer_with_fee = invoke_context
         .feature_set
         .is_active(&feature_set::enable_zk_transfer_with_fee::id());
@@ -159,38 +154,30 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
 
     match instruction {
         ProofInstruction::CloseContextState => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(CLOSE_CONTEXT_STATE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(CLOSE_CONTEXT_STATE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
         ProofInstruction::VerifyZeroBalance => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_ZERO_BALANCE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_ZERO_BALANCE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyZeroBalance");
             process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_WITHDRAW_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_WITHDRAW_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
         ProofInstruction::VerifyCiphertextCiphertextEquality => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyCiphertextCiphertextEquality");
             process_verify_proof::<
                 CiphertextCiphertextEqualityProofData,
@@ -198,11 +185,9 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
             >(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_TRANSFER_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_TRANSFER_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyTransfer");
             process_verify_proof::<TransferData, TransferProofContext>(invoke_context)
         }
@@ -212,49 +197,39 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
                 return Err(InstructionError::InvalidInstructionData);
             }
 
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             process_verify_proof::<TransferWithFeeData, TransferWithFeeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyPubkeyValidity => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
         ProofInstruction::VerifyRangeProofU64 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyRangeProof");
             process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyBatchedRangeProofU64 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof64");
             process_verify_proof::<BatchedRangeProofU64Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }
         ProofInstruction::VerifyBatchedRangeProofU128 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof128");
             process_verify_proof::<BatchedRangeProofU128Data, BatchedRangeProofContext>(
                 invoke_context,
@@ -266,11 +241,9 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
                 return Err(InstructionError::InvalidInstructionData);
             }
 
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof256");
             process_verify_proof::<BatchedRangeProofU256Data, BatchedRangeProofContext>(
                 invoke_context,
