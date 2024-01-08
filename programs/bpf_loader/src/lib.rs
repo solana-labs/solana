@@ -34,7 +34,8 @@ use {
         clock::Slot,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            bpf_account_data_direct_mapping, enable_bpf_loader_extend_program_ix,
+            bpf_account_data_direct_mapping, deprecate_executable_meta_update_in_bpf_loader,
+            disable_bpf_loader_instructions, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, native_programs_consume_cu,
             remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
@@ -785,7 +786,15 @@ fn process_loader_upgradeable_instruction(
                 },
                 &invoke_context.feature_set,
             )?;
-            program.set_executable(true)?;
+
+            // Skip writing true to executable meta after bpf program deployment when
+            // `deprecate_executable_meta_update_in_bpf_loader` feature is activated.
+            if !invoke_context
+                .feature_set
+                .is_active(&deprecate_executable_meta_update_in_bpf_loader::id())
+            {
+                program.set_executable(true)?;
+            }
             drop(program);
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
@@ -1469,6 +1478,20 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
         );
         return Err(InstructionError::IncorrectProgramId);
     }
+
+    // Return `UnsupportedProgramId` error for bpf_loader when
+    // `disable_bpf_loader_instruction` feature is activated.
+    if invoke_context
+        .feature_set
+        .is_active(&disable_bpf_loader_instructions::id())
+    {
+        ic_msg!(
+            invoke_context,
+            "BPF loader management instructions are no longer supported"
+        );
+        return Err(InstructionError::UnsupportedProgramId);
+    }
+
     let is_program_signer = program.is_signer();
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
@@ -1493,6 +1516,13 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
                 {},
                 program.get_data(),
             );
+
+            // `deprecate_executable_meta_update_in_bpf_loader` feature doesn't
+            // apply to  bpf_loader v2. Instead, the deployment by bpf_loader
+            // will be deprecated by its own feature
+            // `disable_bpf_loader_instructions`. Before we activate
+            // deprecate_executable_meta_update_in_bpf_loader, we should
+            // activate `disable_bpf_loader_instructions` first.
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
@@ -1779,6 +1809,10 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                invoke_context.feature_set = Arc::new(features);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
@@ -1998,6 +2032,10 @@ mod tests {
             Err(InstructionError::ProgramFailedToComplete),
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                invoke_context.feature_set = Arc::new(features);
                 invoke_context.mock_set_remaining(0);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
@@ -2543,7 +2581,12 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 Entrypoint::vm,
-                |_invoke_context| {},
+                |invoke_context| {
+                    let mut features = FeatureSet::all_enabled();
+                    features.deactivate(&disable_bpf_loader_instructions::id());
+                    features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
+                    invoke_context.feature_set = Arc::new(features);
+                },
                 |_invoke_context| {},
             )
         }

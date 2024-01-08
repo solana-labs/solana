@@ -43,7 +43,7 @@
 //! transactions.
 //!
 //! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
-//! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+//! [durable transaction nonce]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!

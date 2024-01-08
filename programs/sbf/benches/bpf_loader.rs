@@ -34,7 +34,7 @@ use {
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_loader,
@@ -185,10 +185,21 @@ fn bench_program_alu(bencher: &mut Bencher) {
 #[bench]
 fn bench_program_execute_noop(bencher: &mut Bencher) {
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
+
+    // deactivate `disable_bpf_loader_instructions` feature so that the program
+    // can be loaded, finalized and benched.
+    genesis_config
+        .accounts
+        .remove(&feature_set::disable_bpf_loader_instructions::id());
+
+    genesis_config
+        .accounts
+        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
+
     let bank = Bank::new_for_benches(&genesis_config);
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());

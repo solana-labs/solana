@@ -4,7 +4,7 @@
 
 /// The maximum allowed size, in bytes, of the accounts data
 /// 128 GB was chosen because it is the RAM amount listed under Hardware Recommendations on
-/// [Validator Requirements](https://docs.solana.com/running-validator/validator-reqs), and
+/// [Validator Requirements](https://docs.solanalabs.com/operations/requirements), and
 /// validators often put the ledger on a RAM disk (i.e. tmpfs).
 pub const MAX_ACCOUNTS_DATA_LEN: u64 = 128_000_000_000;
 

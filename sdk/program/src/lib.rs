@@ -8,7 +8,7 @@
 //! [`solana-sdk`] crate, which reexports all modules from `solana-program`.
 //!
 //! [std]: https://doc.rust-lang.org/stable/std/
-//! [sstd]: https://docs.solana.com/developing/on-chain-programs/developing-rust#restrictions
+//! [sstd]: https://solana.com/docs/programs/lang-rust#restrictions
 //! [`solana-sdk`]: https://docs.rs/solana-sdk/latest/solana_sdk/
 //!
 //! This library defines
@@ -148,7 +148,7 @@
 //! For a more complete description of Solana's implementation of eBPF and its
 //! limitations, see the main Solana documentation for [on-chain programs][ocp].
 //!
-//! [ocp]: https://docs.solana.com/developing/on-chain-programs/overview
+//! [ocp]: https://solana.com/docs/programs
 //!
 //! # Core data types
 //!
@@ -173,7 +173,7 @@
 //!   [_lamports_], the smallest fractional unit of SOL, in the [`native_token`]
 //!   module.
 //!
-//! [acc]: https://docs.solana.com/developing/programming-model/accounts
+//! [acc]: https://solana.com/docs/core/accounts
 //! [`Pubkey`]: pubkey::Pubkey
 //! [`Hash`]: hash::Hash
 //! [`Instruction`]: instruction::Instruction
@@ -184,7 +184,7 @@
 //! [`Keypair`]: https://docs.rs/solana-sdk/latest/solana_sdk/signer/keypair/struct.Keypair.html
 //! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
 //! [`Sol`]: native_token::Sol
-//! [_lamports_]: https://docs.solana.com/introduction#what-are-sols
+//! [_lamports_]: https://solana.com/docs/intro#what-are-sols
 //!
 //! # Serialization
 //!
@@ -272,7 +272,7 @@
 //!
 //! [`invoke`]: program::invoke
 //! [`invoke_signed`]: program::invoke_signed
-//! [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+//! [cpi]: https://solana.com/docs/core/cpi
 //!
 //! A simple example of transferring lamports via CPI:
 //!
@@ -319,7 +319,7 @@
 //! `invoke_signed` to call another program while virtually "signing" for the
 //! PDA.
 //!
-//! [pdas]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+//! [pdas]: https://solana.com/docs/core/cpi#program-derived-addresses
 //! [`Pubkey::find_program_address`]: pubkey::Pubkey::find_program_address
 //!
 //! A simple example of creating an account for a PDA:
@@ -391,7 +391,7 @@
 //! Some solana programs are [_native programs_][np2], running native machine
 //! code that is distributed with the runtime, with well-known program IDs.
 //!
-//! [np2]: https://docs.solana.com/developing/runtime-facilities/programs
+//! [np2]: https://docs.solanalabs.com/runtime/programs
 //!
 //! Some native programs can be [invoked][cpi] by other programs, but some can
 //! only be executed as "top-level" instructions included by off-chain clients
@@ -416,7 +416,7 @@
 //! active on any particular network. The `solana feature status` CLI command
 //! can help in determining active features.
 //!
-//! [slot]: https://docs.solana.com/terminology#slot
+//! [slot]: https://solana.com/docs/terminology#slot
 //!
 //! Native programs important to Solana program authors include:
 //!
@@ -461,7 +461,7 @@
 //!   - Instruction: [`solana_program::loader_instruction`]
 //!   - Invokable by programs? yes
 //!
-//! [lut]: https://docs.solana.com/proposals/versioned-transactions
+//! [lut]: https://docs.solanalabs.com/proposals/versioned-transactions
 
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
@@ -554,7 +554,7 @@ pub use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The [config native program][np].
 ///
-/// [np]: https://docs.solana.com/developing/runtime-facilities/programs#config-program
+/// [np]: https://docs.solanalabs.com/runtime/programs#config-program
 pub mod config {
     pub mod program {
         crate::declare_id!("Config1111111111111111111111111111111111111");

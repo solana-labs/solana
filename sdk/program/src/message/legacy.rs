@@ -7,7 +7,7 @@
 //!
 //! [`legacy`]: crate::message::legacy
 //! [`v0`]: crate::message::v0
-//! [future message format]: https://docs.solana.com/proposals/versioned-transactions
+//! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
 #![allow(clippy::arithmetic_side_effects)]
 
@@ -330,7 +330,7 @@ impl Message {
 
     /// Create a new message for a [nonced transaction].
     ///
-    /// [nonced transaction]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+    /// [nonced transaction]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
     ///
     /// In this type of transaction, the blockhash is replaced with a _durable
     /// transaction nonce_, allowing for extended time to pass between the
