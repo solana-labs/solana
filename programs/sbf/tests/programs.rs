@@ -977,10 +977,8 @@ fn test_program_sbf_invoke_sanity() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, inner_instructions, log_messages) =
+        let (result, inner_instructions, _log_messages) =
             process_transaction_and_record_inner(&bank, tx);
-
-        println!("{:?}", log_messages);
         assert_eq!(result, Ok(()));
 
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
