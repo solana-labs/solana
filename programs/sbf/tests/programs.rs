@@ -281,12 +281,18 @@ fn load_upgradeable_program_and_advance_slot(
         &authority_keypair,
         name,
     );
-    (
-        bank_client
-            .advance_slot(1, bank_forks, &Pubkey::default())
-            .expect("Failed to advance the slot"),
-        program_keypair.pubkey(),
-    )
+
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    let bank = bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    (bank, program_keypair.pubkey())
 }
 
 #[test]
@@ -870,33 +876,49 @@ fn test_program_sbf_invoke_sanity() {
         println!("Test program: {:?}", program);
 
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
 
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
 
-        let invoke_program_id =
-            load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
-        let invoked_program_id =
-            load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.2);
-        let (bank, noop_program_id) = load_program_and_advance_slot(
+        let authority_keypair = Keypair::new();
+
+        let invoke_buffer_keypair = Keypair::new();
+        let invoke_program_keypair = Keypair::new();
+        let invoke_program_id = invoke_program_keypair.pubkey();
+        load_upgradeable_program(
+            &bank_client,
+            &mint_keypair,
+            &invoke_buffer_keypair,
+            &invoke_program_keypair,
+            &authority_keypair,
+            program.1,
+        );
+
+        let invoked_buffer_keypair = Keypair::new();
+        let invoked_program_keypair = Keypair::new();
+        let invoked_program_id = invoked_program_keypair.pubkey();
+        load_upgradeable_program(
+            &bank_client,
+            &mint_keypair,
+            &invoked_buffer_keypair,
+            &invoked_program_keypair,
+            &authority_keypair,
+            program.2,
+        );
+
+        let noop_program_buffer_keypair = Keypair::new();
+        let noop_program_keypair = Keypair::new();
+        let (bank, noop_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &noop_program_buffer_keypair,
+            &noop_program_keypair,
+            &authority_keypair,
             program.3,
         );
 
@@ -955,8 +977,10 @@ fn test_program_sbf_invoke_sanity() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, inner_instructions, _log_messages) =
+        let (result, inner_instructions, log_messages) =
             process_transaction_and_record_inner(&bank, tx);
+
+        println!("{:?}", log_messages);
         assert_eq!(result, Ok(()));
 
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
