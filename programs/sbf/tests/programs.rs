@@ -264,6 +264,31 @@ fn load_program_and_advance_slot(
     )
 }
 
+fn load_upgradeable_program_and_advance_slot(
+    bank_client: &mut BankClient,
+    bank_forks: &RwLock<BankForks>,
+    mint_keypair: &Keypair,
+    buffer_keypair: &Keypair,
+    program_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> (Arc<Bank>, Pubkey) {
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        name,
+    );
+    (
+        bank_client
+            .advance_slot(1, bank_forks, &Pubkey::default())
+            .expect("Failed to advance the slot"),
+        program_keypair.pubkey(),
+    )
+}
+
 #[test]
 #[cfg(any(feature = "sbf_c", feature = "sbf_rust"))]
 fn test_program_sbf_sanity() {
@@ -323,32 +348,29 @@ fn test_program_sbf_sanity() {
         println!("Test program: {:?}", program.0);
 
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
 
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
 
+        let buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
         // Call user program
-        let (_, program_id) = load_program_and_advance_slot(
+        let (_, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
             program.0,
         );
+
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
