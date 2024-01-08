@@ -458,27 +458,6 @@ impl HotStorageWriter {
             storage: TieredStorageFile::new_writable(file_path)?,
         })
     }
-
-    /// An underdevelopment function that will implement append_accounts().
-    ///
-    /// The function is currently private and does not write any accounts.
-    fn write_accounts<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<AccountHash>,
-    >(
-        &self,
-        _storable_accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
-        _skip: usize,
-    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let footer = new_hot_footer();
-
-        footer.write_footer_block(&self.storage)?;
-
-        Ok(vec![])
-    }
 }
 
 #[cfg(test)]
@@ -1081,52 +1060,6 @@ pub mod tests {
         assert_matches!(
             hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
-        );
-    }
-
-    #[test]
-    fn test_hot_storage_writer_creation() {
-        // Generate a new temp path that is guaranteed to NOT already have a file.
-        let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().join("test_hot_storage_writer_creation");
-
-        // Write a zero-account hot accounts file using the HotStorageWriter
-        {
-            let account_refs: Vec<(&Pubkey, &AccountSharedData)> = vec![];
-            let account_data = (Slot::MAX, &account_refs[..]);
-            let hashes: Vec<AccountHash> = vec![];
-            let storable_accounts =
-                StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                    &account_data,
-                    hashes,
-                    vec![],
-                );
-            let hot_writer = HotStorageWriter::new(&path).unwrap();
-            hot_writer.write_accounts(&storable_accounts, 0).unwrap();
-        }
-
-        // verifies the HotStorageReader can successfully open the created file
-        // with the expected format.
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
-        assert_eq!(
-            hot_storage.footer().account_meta_format,
-            HOT_FORMAT.account_meta_format
-        );
-        assert_eq!(
-            hot_storage.footer().account_block_format,
-            HOT_FORMAT.account_block_format
-        );
-        assert_eq!(
-            hot_storage.footer().owners_block_format,
-            HOT_FORMAT.owners_block_format
-        );
-        assert_eq!(
-            hot_storage.footer().index_block_format,
-            HOT_FORMAT.index_block_format
-        );
-        assert_eq!(
-            hot_storage.footer().account_meta_entry_size,
-            HOT_FORMAT.meta_entry_size as u32
         );
     }
 
