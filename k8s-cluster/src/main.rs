@@ -456,10 +456,10 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("cpu_requests")
                 .long("cpu-requests")
                 .takes_value(true)
-                .default_value("10") // 10 cores
+                .default_value("20") // 20 cores
                 .help("Kubernetes pod config. Specify minimum CPUs required for deploying validator.
                     can use millicore notation as well. e.g. 500m (500 millicores) == 0.5 and is equivalent to half a core.
-                    [default: 10]"),
+                    [default: 20]"),
         )
         .arg(
             Arg::with_name("memory_requests")
