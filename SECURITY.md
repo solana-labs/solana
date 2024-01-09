@@ -14,6 +14,10 @@ Provide a helpful title, detailed description of the vulnerability and an exploi
 proof-of-concept. Speculative submissions without proof-of-concept will be closed
 with no further consideration.
 
+Please refer to the
+[Solana Program Library (SPL) security policy](https://github.com/solana-labs/solana-program-library/security/policy)
+for vulnerabilities regarding SPL programs such as SPL Token.
+
 If you haven't done so already, please **enable two-factor auth** in your GitHub account.
 
 Expect a response as fast as possible in the advisory, typically within 72 hours.
