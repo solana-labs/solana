@@ -145,6 +145,9 @@ impl StakedStreamLoadEMA {
                 "Failed to convert EMA {} to a u64. Not updating the load EMA",
                 updated_load_ema
             );
+            self.stats
+                .stream_load_ema_overflow
+                .fetch_add(1, Ordering::Relaxed);
             return;
         };
 
@@ -209,6 +212,9 @@ impl StakedStreamLoadEMA {
                 "Failed to convert stream capacity {} to u64. Using minimum load capacity",
                 calculated_capacity
             );
+            self.stats
+                .stream_load_capacity_overflow
+                .fetch_add(1, Ordering::Relaxed);
             MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION
         });
 
