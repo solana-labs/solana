@@ -110,7 +110,6 @@ use {
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
-        accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::ComputeBudget,
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
@@ -5354,11 +5353,6 @@ impl Bank {
             signature_count,
             error_counters,
         }
-    }
-
-    /// The maximum allowed size, in bytes, of the accounts data
-    pub fn accounts_data_size_limit(&self) -> u64 {
-        MAX_ACCOUNTS_DATA_LEN
     }
 
     /// Load the accounts data size, in bytes
