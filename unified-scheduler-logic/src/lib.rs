@@ -67,6 +67,7 @@ impl TaskStatus {
         Self {
             lock_attempts,
             uncontended: 0,
+            uncommited_usage: Usage::Unused;
         }
     }
 }
