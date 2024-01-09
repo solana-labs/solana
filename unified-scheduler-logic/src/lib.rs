@@ -321,16 +321,15 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
+        uncommited_usages: &mut Vec<Usage>,
         task_source: &TaskSource,
     ) -> (usize, Vec<Usage>) {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let mut lock_count = 0;
-        let mut uncommited_usages = Vec::with_capacity(if rollback_on_failure {
-            0
-        } else {
-            lock_attempts.len()
-        });
+        if !rollback_on_failure {
+            uncommited_usages.clear();
+        };
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
