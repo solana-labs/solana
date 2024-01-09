@@ -456,9 +456,9 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             // the handler.
             //
             // Thus, it's fatal for unified scheduler's advertised superiority to squeeze every cpu
-            // cycles out of the scheduler thread. Thus, any kinds of overhead sources like
-            // syscalls and VDSO, and even memory (de)allocation should be avoided at all costs by
-            // design or by means of offloading at the last resort.
+            // cycles out of the scheduler thread. Thus, any kinds of unessential overhead sources
+            // like syscalls, VDSO, and even memory (de)allocation should be avoided at all costs
+            // by design or by means of offloading at the last resort.
             move || loop {
                 let mut is_finished = false;
                 while !is_finished {
