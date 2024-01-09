@@ -4,6 +4,7 @@ use {
         transaction_state::{SanitizedTransactionTTL, TransactionState},
     },
     crate::banking_stage::scheduler_messages::TransactionId,
+    itertools::{Itertools, MinMaxResult},
     min_max_heap::MinMaxHeap,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     std::collections::HashMap,
@@ -169,6 +170,13 @@ impl TransactionStateContainer {
         self.id_to_transaction_state
             .remove(id)
             .expect("transaction must exist");
+    }
+
+    pub(crate) fn get_min_max_prioritization_fees(&self) -> MinMaxResult<u64> {
+        self.priority_queue
+            .iter()
+            .map(|priorities| priorities.priority)
+            .minmax()
     }
 }
 

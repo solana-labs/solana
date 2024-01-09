@@ -383,7 +383,6 @@ impl ConsumeWorkerMetrics {
     }
 }
 
-#[derive(Default)]
 struct ConsumeWorkerCountMetrics {
     transactions_attempted_execution_count: AtomicUsize,
     executed_transactions_count: AtomicUsize,
@@ -393,6 +392,21 @@ struct ConsumeWorkerCountMetrics {
     cost_model_throttled_transactions_count: AtomicUsize,
     min_prioritization_fees: AtomicU64,
     max_prioritization_fees: AtomicU64,
+}
+
+impl Default for ConsumeWorkerCountMetrics {
+    fn default() -> Self {
+        Self {
+            min_prioritization_fees: AtomicU64::new(u64::MAX),
+            transactions_attempted_execution_count: Default::default(),
+            executed_transactions_count: Default::default(),
+            executed_with_successful_result_count: Default::default(),
+            retryable_transaction_count: Default::default(),
+            retryable_expired_bank_count: Default::default(),
+            cost_model_throttled_transactions_count: Default::default(),
+            max_prioritization_fees: Default::default(),
+        }
+    }
 }
 
 impl ConsumeWorkerCountMetrics {
