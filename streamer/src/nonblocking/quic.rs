@@ -128,16 +128,16 @@ impl StakedStreamLoadEMA {
         let num_extra_updates =
             time_since_last_update_ms.saturating_sub(1) / u128::from(STREAM_LOAD_EMA_INTERVAL_MS);
 
+        let load_in_recent_interval =
+            u128::from(self.load_in_recent_interval.swap(0, Ordering::Relaxed));
+
         let mut updated_load_ema = Self::ema_function(
             u128::from(self.current_load_ema.load(Ordering::Relaxed)),
-            u128::from(self.load_in_recent_interval.load(Ordering::Relaxed)),
+            load_in_recent_interval,
         );
 
         for _ in 0..num_extra_updates {
-            updated_load_ema = Self::ema_function(
-                updated_load_ema,
-                u128::from(self.load_in_recent_interval.load(Ordering::Relaxed)),
-            );
+            updated_load_ema = Self::ema_function(updated_load_ema, load_in_recent_interval);
         }
 
         let Ok(updated_load_ema) = u64::try_from(updated_load_ema) else {
@@ -174,10 +174,6 @@ impl StakedStreamLoadEMA {
 
     fn increment_load(&self) {
         self.load_in_recent_interval.fetch_add(1, Ordering::Relaxed);
-        self.update_ema_if_needed();
-    }
-    fn decrement_load(&self) {
-        self.load_in_recent_interval.fetch_sub(1, Ordering::Relaxed);
         self.update_ema_if_needed();
     }
 
@@ -965,7 +961,7 @@ async fn handle_connection(
                         }
                         stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                         if staked_stream {
-                            stream_load_ema.decrement_load();
+                            stream_load_ema.update_ema_if_needed();
                         }
                     });
                 }
@@ -2407,6 +2403,10 @@ pub mod test {
 
         let updated_ema = stream_load_ema.current_load_ema.load(Ordering::Relaxed);
         assert_eq!(updated_ema, 2090);
+
+        stream_load_ema
+            .load_in_recent_interval
+            .store(2500, Ordering::Relaxed);
 
         stream_load_ema.update_ema(5);
 
