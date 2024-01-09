@@ -1300,34 +1300,36 @@ fn test_program_sbf_invoke_sanity() {
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_program_id_spoofing() {
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let malicious_swap_pubkey = load_program(
+    let malicious_swap_buffer_keypair = Keypair::new();
+    let malicious_swap_program_keypair = Keypair::new();
+    let malicious_swap_pubkey = malicious_swap_program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &malicious_swap_buffer_keypair,
+        &malicious_swap_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_spoof1",
     );
-    let (bank, malicious_system_pubkey) = load_program_and_advance_slot(
+
+    let malicious_system_buffer_keypair = Keypair::new();
+    let malicious_system_program_keypair = Keypair::new();
+    let (bank, malicious_system_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &malicious_system_buffer_keypair,
+        &malicious_system_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_spoof1_system",
     );
 
