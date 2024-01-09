@@ -1363,36 +1363,39 @@ fn test_program_sbf_program_id_spoofing() {
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_caller_has_access_to_cpi_program() {
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let caller_pubkey = load_program(
+    let caller_buffer_keypair = Keypair::new();
+    let caller_program_keypair = Keypair::new();
+    let caller_pubkey = caller_program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &caller_buffer_keypair,
+        &caller_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
-    let (_, caller2_pubkey) = load_program_and_advance_slot(
+
+    let caller2_buffer_keypair = Keypair::new();
+    let caller2_program_keypair = Keypair::new();
+    let (_bank, caller2_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &caller2_buffer_keypair,
+        &caller2_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
+
     let account_metas = vec![
         AccountMeta::new_readonly(caller_pubkey, false),
         AccountMeta::new_readonly(caller2_pubkey, false),
