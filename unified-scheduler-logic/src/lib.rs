@@ -159,6 +159,7 @@ impl LockAttempt {
         Self {
             page,
             requested_usage: RequestedUsage::Readonly,
+            uncommited_usage: Usage::Unused,
         }
     }
 
@@ -166,6 +167,7 @@ impl LockAttempt {
         Self {
             page,
             requested_usage: RequestedUsage::Writable,
+            uncommited_usage: Usage::Unused,
         }
     }
 
