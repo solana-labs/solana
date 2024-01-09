@@ -48,7 +48,7 @@ pub enum IndexBlockFormat {
     /// and block offsets.  It skips storing the size of account data by storing
     /// account block entries and index block entries in the same order.
     #[default]
-    AddressAndBlockOffsetOnly = 0,
+    AddressesThenOffsets = 0,
 }
 
 // Ensure there are no implicit padding bytes
@@ -63,7 +63,7 @@ impl IndexBlockFormat {
         index_entries: &[AccountIndexWriterEntry<impl AccountOffset>],
     ) -> TieredStorageResult<usize> {
         match self {
-            Self::AddressAndBlockOffsetOnly => {
+            Self::AddressesThenOffsets => {
                 let mut bytes_written = 0;
                 for index_entry in index_entries {
                     bytes_written += file.write_pod(index_entry.address)?;
@@ -84,7 +84,7 @@ impl IndexBlockFormat {
         index_offset: IndexOffset,
     ) -> TieredStorageResult<&'a Pubkey> {
         let offset = match self {
-            Self::AddressAndBlockOffsetOnly => {
+            Self::AddressesThenOffsets => {
                 debug_assert!(index_offset.0 < footer.account_entry_count);
                 footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * (index_offset.0 as usize)
@@ -111,7 +111,7 @@ impl IndexBlockFormat {
         index_offset: IndexOffset,
     ) -> TieredStorageResult<Offset> {
         let offset = match self {
-            Self::AddressAndBlockOffsetOnly => {
+            Self::AddressesThenOffsets => {
                 debug_assert!(index_offset.0 < footer.account_entry_count);
                 footer.index_block_offset as usize
                     + std::mem::size_of::<Pubkey>() * footer.account_entry_count as usize
@@ -135,7 +135,7 @@ impl IndexBlockFormat {
     /// Returns the size of one index entry.
     pub fn entry_size<Offset: AccountOffset>(&self) -> usize {
         match self {
-            Self::AddressAndBlockOffsetOnly => {
+            Self::AddressesThenOffsets => {
                 std::mem::size_of::<Pubkey>() + std::mem::size_of::<Offset>()
             }
         }
@@ -182,12 +182,12 @@ mod tests {
 
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
-            let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
+            let indexer = IndexBlockFormat::AddressesThenOffsets;
             let cursor = indexer.write_index_block(&file, &index_entries).unwrap();
             footer.owners_block_offset = cursor as u64;
         }
 
-        let indexer = IndexBlockFormat::AddressAndBlockOffsetOnly;
+        let indexer = IndexBlockFormat::AddressesThenOffsets;
         let file = OpenOptions::new()
             .read(true)
             .create(false)
@@ -216,7 +216,7 @@ mod tests {
 
         let footer = TieredStorageFooter {
             account_entry_count: 100,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             ..TieredStorageFooter::default()
         };
 
@@ -249,7 +249,7 @@ mod tests {
 
         let footer = TieredStorageFooter {
             account_entry_count: 100,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             index_block_offset: 1024,
             // only holds one index entry
             owners_block_offset: 1024 + std::mem::size_of::<HotAccountOffset>() as u64,
@@ -287,7 +287,7 @@ mod tests {
 
         let footer = TieredStorageFooter {
             account_entry_count: 100,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             ..TieredStorageFooter::default()
         };
 
@@ -324,7 +324,7 @@ mod tests {
 
         let footer = TieredStorageFooter {
             account_entry_count: 100,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             index_block_offset: 1024,
             // only holds one index entry
             owners_block_offset: 1024 + std::mem::size_of::<HotAccountOffset>() as u64,

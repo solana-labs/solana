@@ -356,38 +356,40 @@ pub fn load_and_process_ledger(
 
     let enable_rpc_transaction_history = arg_matches.is_present("enable_rpc_transaction_history");
 
-    let (transaction_status_sender, transaction_status_service) =
-        if geyser_plugin_active || enable_rpc_transaction_history {
-            // Need Primary (R/W) access to insert transaction data
-            let tss_blockstore = if enable_rpc_transaction_history {
-                Arc::new(open_blockstore(
-                    blockstore.ledger_path(),
-                    arg_matches,
-                    AccessType::PrimaryForMaintenance,
-                ))
-            } else {
-                blockstore.clone()
-            };
-
-            let (transaction_status_sender, transaction_status_receiver) = unbounded();
-            let transaction_status_service = TransactionStatusService::new(
-                transaction_status_receiver,
-                Arc::default(),
-                enable_rpc_transaction_history,
-                transaction_notifier,
-                tss_blockstore,
-                false,
-                exit.clone(),
-            );
-            (
-                Some(TransactionStatusSender {
-                    sender: transaction_status_sender,
-                }),
-                Some(transaction_status_service),
-            )
+    let (transaction_status_sender, transaction_status_service) = if geyser_plugin_active
+        || enable_rpc_transaction_history
+    {
+        // Need Primary (R/W) access to insert transaction data;
+        // obtain Primary access if we do not already have it
+        let tss_blockstore = if enable_rpc_transaction_history && !blockstore.is_primary_access() {
+            Arc::new(open_blockstore(
+                blockstore.ledger_path(),
+                arg_matches,
+                AccessType::PrimaryForMaintenance,
+            ))
         } else {
-            (None, None)
+            blockstore.clone()
         };
+
+        let (transaction_status_sender, transaction_status_receiver) = unbounded();
+        let transaction_status_service = TransactionStatusService::new(
+            transaction_status_receiver,
+            Arc::default(),
+            enable_rpc_transaction_history,
+            transaction_notifier,
+            tss_blockstore,
+            false,
+            exit.clone(),
+        );
+        (
+            Some(TransactionStatusSender {
+                sender: transaction_status_sender,
+            }),
+            Some(transaction_status_service),
+        )
+    } else {
+        (None, None)
+    };
 
     let result = blockstore_processor::process_blockstore_from_root(
         blockstore.as_ref(),
