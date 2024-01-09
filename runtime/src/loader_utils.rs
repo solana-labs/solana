@@ -116,6 +116,7 @@ pub fn load_upgradeable_buffer<T: Client>(
     let program = load_program_from_file(name);
     let buffer_pubkey = buffer_keypair.pubkey();
     let buffer_authority_pubkey = buffer_authority_keypair.pubkey();
+    let program_buffer_bytes = UpgradeableLoaderState::size_of_programdata(program.len());
 
     bank_client
         .send_and_confirm_message(
@@ -127,7 +128,7 @@ pub fn load_upgradeable_buffer<T: Client>(
                     &buffer_authority_pubkey,
                     1.max(
                         bank_client
-                            .get_minimum_balance_for_rent_exemption(program.len())
+                            .get_minimum_balance_for_rent_exemption(program_buffer_bytes)
                             .unwrap(),
                     ),
                     program.len(),
