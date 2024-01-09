@@ -77,7 +77,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .long("authorized-withdrawer"),
-                    "Public key of the authorized withdrawer"
+                    "Authorized withdrawer."
                 ))
                 .arg(
                     Arg::with_name("commission")
@@ -91,7 +91,7 @@ impl VoteSubCommands for App<'_, '_> {
                     Arg::with_name("authorized_voter")
                         .long("authorized-voter")
                         .value_name("VOTER_PUBKEY"),
-                    "Public key of the authorized voter [default: validator identity pubkey]. "
+                    "Authorized voter [default: validator identity pubkey]."
                 ))
                 .arg(
                     Arg::with_name("allow_unsafe_authorized_withdrawer")
@@ -127,7 +127,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account in which to set the authorized voter. "
+                    "Vote account in which to set the authorized voter."
                 ))
                 .arg(
                     Arg::with_name("authorized")
@@ -142,7 +142,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("NEW_AUTHORIZED_PUBKEY")
                         .required(true),
-                    "New authorized vote signer. "
+                    "New authorized vote signer."
                 ))
                 .offline_args()
                 .nonce_args(false)
@@ -158,7 +158,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account in which to set the authorized withdrawer. "
+                    "Vote account in which to set the authorized withdrawer."
                 ))
                 .arg(
                     Arg::with_name("authorized")
@@ -173,7 +173,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("AUTHORIZED_PUBKEY")
                         .required(true),
-                    "New authorized withdrawer. "
+                    "New authorized withdrawer."
                 ))
                 .offline_args()
                 .nonce_args(false)
@@ -192,7 +192,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account in which to set the authorized voter. "
+                    "Vote account in which to set the authorized voter."
                 ))
                 .arg(
                     Arg::with_name("authorized")
@@ -227,7 +227,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account in which to set the authorized withdrawer. "
+                    "Vote account in which to set the authorized withdrawer."
                 ))
                 .arg(
                     Arg::with_name("authorized")
@@ -259,7 +259,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account to update. "
+                    "Vote account to update."
                 ))
                 .arg(
                     Arg::with_name("new_identity_account")
@@ -293,7 +293,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account to update. "
+                    "Vote account to update."
                 ))
                 .arg(
                     Arg::with_name("commission")
@@ -328,7 +328,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account pubkey. "
+                    "Vote account."
                 ))
                 .arg(
                     Arg::with_name("lamports")
@@ -370,14 +370,14 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account from which to withdraw. "
+                    "Vote account from which to withdraw."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "The recipient of withdrawn SOL. "
+                    "The recipient of withdrawn SOL."
                 ))
                 .arg(
                     Arg::with_name("amount")
@@ -413,14 +413,14 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                    "Vote account to be closed. "
+                    "Vote account to be closed."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "The recipient of all withdrawn SOL. "
+                    "The recipient of all withdrawn SOL."
                 ))
                 .arg(
                     Arg::with_name("authorized_withdrawer")

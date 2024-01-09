@@ -79,7 +79,7 @@ impl RestartableBucket {
             bucket.random = random;
         }
     }
-    /// retreive the file_name and random that were used prior to the current restart.
+    /// retrieve the file_name and random that were used prior to the current restart.
     /// This was written into the restart file on the prior run by `set_file`.
     pub(crate) fn get(&self) -> Option<(u128, u64)> {
         self.restart.as_ref().map(|restart| {

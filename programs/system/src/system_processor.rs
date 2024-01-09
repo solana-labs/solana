@@ -104,7 +104,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data_length(space as usize)?;
+    account.set_data_length(space as usize, &invoke_context.feature_set)?;
 
     Ok(())
 }
@@ -126,7 +126,7 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(&owner.to_bytes())
+    account.set_owner(&owner.to_bytes(), &invoke_context.feature_set)
 }
 
 fn allocate_and_assign(
@@ -203,11 +203,11 @@ fn transfer_verified(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    from.checked_sub_lamports(lamports)?;
+    from.checked_sub_lamports(lamports, &invoke_context.feature_set)?;
     drop(from);
     let mut to = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to.checked_add_lamports(lamports)?;
+    to.checked_add_lamports(lamports, &invoke_context.feature_set)?;
     Ok(())
 }
 
@@ -481,7 +481,9 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
             match nonce_versions.upgrade() {
                 None => Err(InstructionError::InvalidArgument),
-                Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
+                Some(nonce_versions) => {
+                    nonce_account.set_state(&nonce_versions, &invoke_context.feature_set)
+                }
             }
         }
         SystemInstruction::Allocate { space } => {

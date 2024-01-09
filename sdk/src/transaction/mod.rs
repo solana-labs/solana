@@ -43,7 +43,7 @@
 //! transactions.
 //!
 //! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
-//! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+//! [durable transaction nonce]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!
@@ -147,7 +147,7 @@ pub enum TransactionVerificationMode {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-/// An atomically-commited sequence of instructions.
+/// An atomically-committed sequence of instructions.
 ///
 /// While [`Instruction`]s are the basic unit of computation in Solana,
 /// they are submitted by clients in [`Transaction`]s containing one or

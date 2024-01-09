@@ -88,7 +88,7 @@ During replication we also need to replicate the information of accounts that ha
 up due to zero lamports, i.e. we need to be able to tell the difference between an account in a
 given slot which was not updated and hence has no storage entry in that slot, and one that
 holds 0 lamports and has been cleaned up through the history. We may record this via some
-"Tombstone" mechanism -- recording the dead accounts cleaned up fora slot. The tombstones
+"Tombstone" mechanism -- recording the dead accounts cleaned up for a slot. The tombstones
 themselves can be removed after exceeding the retention period expressed as epochs. Any
 attempt to replicate slots with tombstones removed will fail and the replica should skip
 this slot and try later ones.

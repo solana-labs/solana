@@ -43,7 +43,7 @@ $ ./gce.sh delete               #<-- Dispose of the network (billing stops here)
 
 ### Running the network over public IP addresses
 By default private IP addresses are used with all instances in the same
-availability zone to avoid GCE network engress charges.  However to run the
+availability zone to avoid GCE network egress charges. However to run the
 network over public IP addresses:
 ```bash
 $ ./gce.sh create -P ...

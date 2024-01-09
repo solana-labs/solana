@@ -6,7 +6,7 @@ set -e
 # so, here's some wild hack from ryoqun!
 
 if [[ $1 = "doit" ]]; then
-  # it's true that we put true just for truely-aligned lines
+  # it's true that we put true just for truly-aligned lines
   # shellcheck disable=SC2046 # our rust files are sanely named with no need to escape
   true &&
     sed -i -e 's/#\[cfg(test)\]/#[cfg(escaped_cfg_test)]/g' $(git ls-files :**.rs :^**/build.rs) &&

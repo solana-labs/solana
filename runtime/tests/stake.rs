@@ -105,12 +105,10 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
     stake.delegation.stake
         == stake.stake(
             bank.epoch(),
-            Some(
-                &from_account::<StakeHistory, _>(
-                    &bank.get_account(&sysvar::stake_history::id()).unwrap(),
-                )
-                .unwrap(),
-            ),
+            &from_account::<StakeHistory, _>(
+                &bank.get_account(&sysvar::stake_history::id()).unwrap(),
+            )
+            .unwrap(),
             bank.new_warmup_cooldown_rate_epoch(),
         )
 }
@@ -120,12 +118,10 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
         .unwrap()
         .stake(
             bank.epoch(),
-            Some(
-                &from_account::<StakeHistory, _>(
-                    &bank.get_account(&sysvar::stake_history::id()).unwrap(),
-                )
-                .unwrap(),
-            ),
+            &from_account::<StakeHistory, _>(
+                &bank.get_account(&sysvar::stake_history::id()).unwrap(),
+            )
+            .unwrap(),
             bank.new_warmup_cooldown_rate_epoch(),
         )
 }

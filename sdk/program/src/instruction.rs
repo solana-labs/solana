@@ -274,7 +274,7 @@ pub enum InstructionError {
 /// clients. Instructions are also used to describe [cross-program
 /// invocations][cpi].
 ///
-/// [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+/// [cpi]: https://solana.com/docs/core/cpi
 ///
 /// During execution, a program will receive a list of account data as one of
 /// its arguments, in the same order as specified during `Instruction`
@@ -347,7 +347,7 @@ impl Instruction {
     /// `program_id` is the address of the program that will execute the instruction.
     /// `accounts` contains a description of all accounts that may be accessed by the program.
     ///
-    /// Borsh serialization is often prefered over bincode as it has a stable
+    /// Borsh serialization is often preferred over bincode as it has a stable
     /// [specification] and an [implementation in JavaScript][jsb], neither of
     /// which are true of bincode.
     ///

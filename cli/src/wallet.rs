@@ -65,7 +65,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS")
                         .required(true),
-                    "Account key URI. "
+                    "Account contents to show."
                 ))
                 .arg(
                     Arg::with_name("output_file")
@@ -108,7 +108,7 @@ impl WalletSubCommands for App<'_, '_> {
                     Arg::with_name("to")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS"),
-                    "The account address of airdrop recipient. "
+                    "Account of airdrop recipient."
                 )),
         )
         .subcommand(
@@ -118,7 +118,7 @@ impl WalletSubCommands for App<'_, '_> {
                     Arg::with_name("pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS"),
-                    "The account address of the balance to check. "
+                    "Account balance to check."
                 ))
                 .arg(
                     Arg::with_name("lamports")
@@ -183,7 +183,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .long("from")
                         .value_name("FROM_PUBKEY")
                         .required(false),
-                    "From (base) key, [default: cli config keypair]. "
+                    "From (base) key, [default: cli config keypair]."
                 )),
         )
         .subcommand(
@@ -265,7 +265,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                    "The account address of recipient. "
+                    "Account of recipient."
                 ))
                 .arg(
                     Arg::with_name("amount")
@@ -280,7 +280,7 @@ impl WalletSubCommands for App<'_, '_> {
                     Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_ADDRESS"),
-                    "Source account of funds (if different from client local account). "
+                    "Source account of funds [default: cli config keypair]."
                 ))
                 .arg(
                     Arg::with_name("no_wait")
@@ -382,7 +382,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .long("signer")
                         .value_name("PUBKEY")
                         .required(false),
-                    "The pubkey of the message signer (if different from config default)"
+                    "Message signer [default: cli config keypair]."
                 )),
         )
     }

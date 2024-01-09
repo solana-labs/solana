@@ -33,9 +33,7 @@ impl Iterator for RollingBitFieldOnesIter<'_> {
         // Then iterate over the bit vec
         loop {
             // If there are no more bits in the range, then we've iterated over everything and are done
-            let Some(bit) = self.bit_range.next() else {
-                return None;
-            };
+            let bit = self.bit_range.next()?;
 
             if self.rolling_bit_field.contains_assume_in_range(&bit) {
                 break Some(bit);
