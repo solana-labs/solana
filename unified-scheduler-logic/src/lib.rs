@@ -65,7 +65,6 @@ static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
-            uncommited_usages: Vec::with_capacity(lock_attempts.len()),
             lock_attempts,
             uncontended: 0,
         }
@@ -152,6 +151,7 @@ impl TaskInner {
 struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
+    uncommited_usage: Usage,
 }
 
 impl LockAttempt {
