@@ -75,7 +75,7 @@ lazy_static! {
         .thread_name_fn(|| {
             static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
             let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
-            format!("solQuicClientWork{id:02}")
+            format!("solQuicClient{id:02}")
         })
         .enable_all()
         .build()

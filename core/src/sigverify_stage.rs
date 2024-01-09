@@ -418,7 +418,7 @@ impl SigVerifyStage {
         static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
         let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
         Builder::new()
-            .name(format!("solSigVerifier{id:02}"))
+            .name(format!("solSigVer{id:02}"))
             .spawn(move || {
                 let mut rng = rand::thread_rng();
                 let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);

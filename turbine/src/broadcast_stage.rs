@@ -319,7 +319,7 @@ impl BroadcastStage {
             static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
             let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
             Builder::new()
-                .name(format!("solBroadcastTx{id:02}"))
+                .name(format!("solBrdcstTx{id:02}"))
                 .spawn(run_transmit)
                 .unwrap()
         }));
@@ -338,7 +338,7 @@ impl BroadcastStage {
                 static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
                 let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
                 Builder::new()
-                    .name(format!("solBroadcastRec{id:02}"))
+                    .name(format!("solBrdcstRec{id:02}"))
                     .spawn(run_record)
                     .unwrap()
             })

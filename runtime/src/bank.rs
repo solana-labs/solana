@@ -1483,7 +1483,7 @@ impl Bank {
         let slot = self.slot();
         let (thread_pool, thread_pool_time) = measure!(
             ThreadPoolBuilder::new()
-                .thread_name(|i| format!("solBankNewEpoch{i:02}"))
+                .thread_name(|i| format!("solBnkNewEpch{i:02}"))
                 .build()
                 .unwrap(),
             "thread_pool_creation",

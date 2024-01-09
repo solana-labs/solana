@@ -238,7 +238,7 @@ impl EtcdTowerStorage {
             .thread_name_fn(|| {
                 static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
                 let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
-                format!("solEtcdStorage{id:02}")
+                format!("solEtcdStrg{id:02}")
             })
             .enable_io()
             .enable_time()

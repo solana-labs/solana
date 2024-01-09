@@ -186,7 +186,7 @@ impl GeyserPluginService {
         exit: Arc<AtomicBool>,
     ) {
         thread::Builder::new()
-            .name("solGeyserPluginRpc".to_string())
+            .name("solGeyserAdmRpc".to_string())
             .spawn(move || loop {
                 if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(5)) {
                     match request {

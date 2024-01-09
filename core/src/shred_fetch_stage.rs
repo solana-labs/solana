@@ -162,7 +162,7 @@ impl ShredFetchStage {
         static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
         let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
         let modifier_hdl = Builder::new()
-            .name(format!("solTvuFetchPMod{id:02}"))
+            .name(format!("solTvuFthPMod{id:02}"))
             .spawn(move || {
                 let repair_context = repair_context
                     .as_ref()

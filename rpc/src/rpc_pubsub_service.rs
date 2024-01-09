@@ -96,7 +96,7 @@ impl PubSubService {
                     .thread_name_fn(|| {
                         static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
                         let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
-                        format!("solRpcPubSubWork{id:02}")
+                        format!("solRpcPubSub{id:02}")
                     })
                     .enable_all()
                     .build()

@@ -106,7 +106,7 @@ fn rt(gid: usize) -> Runtime {
         .thread_name_fn(move || {
             static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
             let id = ATOMIC_ID.fetch_add(1, Ordering::Relaxed);
-            format!("solQuicServerWork{gid:02}.{id:02}")
+            format!("solQuicSrv{gid:02}.{id:02}")
         })
         .enable_all()
         .build()
@@ -455,7 +455,7 @@ pub fn spawn_server(
         )
     }?;
     let handle = thread::Builder::new()
-        .name(format!("solQuicServer{id:02}"))
+        .name(format!("solQuicSrv{id:02}"))
         .spawn(move || {
             if let Err(e) = runtime.block_on(task) {
                 warn!("error from runtime.block_on: {:?}", e);
