@@ -19,7 +19,6 @@ pub type Task = Arc<TaskInner>;
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    //uncommited_usages: Vec<Usage>,
     uncontended: usize,
 }
 
@@ -323,16 +322,11 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        //uncommited_usages: &mut Vec<Usage>,
         task_source: &TaskSource,
     ) -> (usize, Vec<Usage>) {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let mut lock_count = 0;
-        let mut uncommited_usages = vec![];
-        if !rollback_on_failure {
-            uncommited_usages.clear();
-        };
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
@@ -340,7 +334,7 @@ impl SchedulingStateMachine {
                     if rollback_on_failure {
                         attempt.page_mut(page_token).current_usage = usage;
                     } else {
-                        uncommited_usages.push(usage);
+                        attempt.uncommited_usage = usage;
                     }
                     lock_count += 1;
                 }
@@ -348,7 +342,7 @@ impl SchedulingStateMachine {
             }
         }
 
-        (lock_count, uncommited_usages)
+        lock_count
     }
 
     fn attempt_lock_address(
@@ -424,7 +418,7 @@ impl SchedulingStateMachine {
     }
 
     fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
-        let (lock_count, usages) = Self::attempt_lock_for_execution(
+        let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             &task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
@@ -442,11 +436,8 @@ impl SchedulingStateMachine {
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            for (usage, attempt) in usages
-                .into_iter()
-                .zip(task.lock_attempts_mut(&mut self.task_token))
-            {
-                attempt.page_mut(&mut self.page_token).current_usage = usage;
+            for attempt in task.lock_attempts_mut(&mut self.task_token) {
+                attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
             }
             // as soon as next tack is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
