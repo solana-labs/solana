@@ -391,8 +391,8 @@ struct ConsumeWorkerCountMetrics {
     retryable_transaction_count: AtomicUsize,
     retryable_expired_bank_count: AtomicUsize,
     cost_model_throttled_transactions_count: AtomicUsize,
-    min_prioritization_fees: AtomicUsize,
-    max_prioritization_fees: AtomicUsize,
+    min_prioritization_fees: AtomicU64,
+    max_prioritization_fees: AtomicU64,
 }
 
 impl ConsumeWorkerCountMetrics {

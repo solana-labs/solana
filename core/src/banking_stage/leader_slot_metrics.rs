@@ -55,8 +55,8 @@ pub(crate) struct ProcessTransactionsSummary {
     // Breakdown of all the transaction errors from transactions passed for execution
     pub error_counters: TransactionErrorMetrics,
 
-    pub min_prioritization_fees: usize,
-    pub max_prioritization_fees: usize,
+    pub min_prioritization_fees: u64,
+    pub max_prioritization_fees: u64,
 }
 
 // Metrics describing prioritization fee information for each transaction storage before processing transactions
@@ -611,7 +611,7 @@ impl LeaderSlotMetricsTracker {
                 leader_slot_metrics
                     .packet_count_metrics
                     .min_prioritization_fees,
-                *min_prioritization_fees as u64,
+                *min_prioritization_fees,
             );
             leader_slot_metrics
                 .packet_count_metrics
@@ -619,7 +619,7 @@ impl LeaderSlotMetricsTracker {
                 leader_slot_metrics
                     .packet_count_metrics
                     .max_prioritization_fees,
-                *max_prioritization_fees as u64,
+                *max_prioritization_fees,
             );
 
             leader_slot_metrics
