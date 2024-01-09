@@ -19,6 +19,7 @@ pub type Task = Arc<TaskInner>;
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
+    uncommited_lock_usages: Vec<Usage>,
     uncontended: usize,
 }
 
