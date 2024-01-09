@@ -235,7 +235,7 @@ impl OptimisticallyConfirmedBankTracker {
     }
 
     fn notify_new_root_slots(
-        roots: &mut Vec<Slot>,
+        roots: &mut [Slot],
         newest_root_slot: &mut Slot,
         slot_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {

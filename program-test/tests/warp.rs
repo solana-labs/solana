@@ -369,8 +369,15 @@ async fn stake_merge_immediately_after_activation() {
     check_credits_observed(&mut context.banks_client, base_stake_address, 100).await;
     context.increment_vote_account_credits(&vote_address, 100);
 
+    let clock_account = context
+        .banks_client
+        .get_account(clock::id())
+        .await
+        .expect("account exists")
+        .unwrap();
+    let clock: Clock = deserialize(&clock_account.data).unwrap();
+    context.warp_to_epoch(clock.epoch + 1).unwrap();
     current_slot += slots_per_epoch;
-    context.warp_to_slot(current_slot).unwrap();
     context.warp_forward_force_reward_interval_end().unwrap();
 
     // make another stake which will just have its credits observed advanced
