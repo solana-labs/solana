@@ -571,10 +571,9 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
                                 NewTaskPayload::OpenSubchannel(context) => {
                                     // signal about new SchedulingContext to both handler and
                                     // accumulator threads
-                                    runnable_task_sender.send_chained_channel(
-                                        context,
-                                        handler_count
-                                    ).unwrap();
+                                    runnable_task_sender
+                                        .send_chained_channel(context, handler_count)
+                                        .unwrap();
                                     executed_task_sender
                                         .send(ExecutedTaskPayload::OpenSubchannel(()))
                                         .unwrap();
