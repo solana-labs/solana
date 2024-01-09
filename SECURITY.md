@@ -98,7 +98,7 @@ mitigation to qualify.
 #### Loss of Funds:
 $2,000,000 USD in locked SOL tokens (locked for 12 months)
 * Theft of funds without users signature from any account
-* Theft of funds without users interaction in system, token, stake, vote programs
+* Theft of funds without users interaction in system, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 #### Consensus/Safety Violations:
