@@ -199,7 +199,7 @@ impl TaskHandler for DefaultTaskHandler {
     }
 }
 
-pub struct ExecutedTask {
+struct ExecutedTask {
     task: Task,
     result_with_timings: ResultWithTimings,
 }
