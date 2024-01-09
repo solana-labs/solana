@@ -426,6 +426,39 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
 
             let mut session_ending = false;
             let mut active_task_count: usize = 0;
+
+            // Now, this is the main loop for the scheduler thread, which is a special beast.
+            //
+            // That's because it's the most notable bottleneck of throughput. Unified scheduler's
+            // overall throughput is largely dependant on its ultra-low latency characteristic,
+            // which is the most important design goal of the scheduler in order to reduce the
+            // transaction confirmation latency for end users.
+            //
+            // Firstly, the scheduler thread must handle incoming messages from thread(s) owned by
+            // the replay stage or the banking stage. It also must handle incoming messages from
+            // the multi-threaded handlers. This heavily-multi-threaded whole processing load must
+            // be coped just with the single-threaded scheduler, to attain ideal cpu cache
+            // friendliness and main memory bandwidth saturation with its shared-nothing
+            // single-threaded account locking implementation. In other words, the per-task
+            // processing efficiency of the main loop codifies the upper bound of horizontal
+            // scalability of the unified scheduler.
+            //
+            // Moreover, the scheduler is designed to handle tasks without batching at all in the
+            // pursuit of saturating all of the handler threads with maximally-fine-grained
+            // concurrency density for throughput as the second design goal. This design goal
+            // relies on the assumption that there's no considerable penalty arising from the
+            // unbatched manner of processing.
+            //
+            // These two key elements of the design philosophy lead to the rather unforgiving
+            // implementation burden: Degraded performance would acutely manifest from an even tiny
+            // amount of individual cpu-bound processing delay in the scheduler thread, like when
+            // dispatching the next conflicting task after receiving the previous finished one from
+            // the handler.
+            //
+            // Thus, it's fatal for unified scheduler's advertised superiority to squeeze every cpu
+            // cycles out of the scheduler thread. Thus, any kinds of overhead sources like
+            // syscalls and VDSO, and even memory (de)allocation should be avoided at all costs by
+            // design or by means of offloading at the last resort.
             move || loop {
                 let mut is_finished = false;
                 while !is_finished {
