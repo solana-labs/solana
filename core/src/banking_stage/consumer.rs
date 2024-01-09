@@ -587,6 +587,13 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
+        // In order to avoid a race condition, leaders must get the last
+        // blockhash *before* recording transactions because recording
+        // transactions will only succeed if the block max tick height hasn't
+        // been reached yet. If they get the last blockhash *after* recording
+        // transactions, the block max tick height could have already been
+        // reached and the blockhash queue could have already been updated with
+        // a new blockhash.
         let ((last_blockhash, lamports_per_signature), last_blockhash_us) =
             measure_us!(bank.last_blockhash_and_lamports_per_signature());
         execute_and_commit_timings.last_blockhash_us = last_blockhash_us;
@@ -753,27 +760,32 @@ mod tests {
             leader_schedule_cache::LeaderScheduleCache,
         },
         solana_perf::packet::Packet,
-        solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+        solana_poh::poh_recorder::{PohRecorder, Record, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::prioritization_fee_cache::PrioritizationFeeCache,
         solana_sdk::{
             account::AccountSharedData,
+            account_utils::StateMut,
             address_lookup_table::{
                 self,
                 state::{AddressLookupTable, LookupTableMeta},
             },
             compute_budget,
+            fee_calculator::FeeCalculator,
+            hash::Hash,
             instruction::InstructionError,
             message::{
                 v0::{self, MessageAddressTableLookup},
                 Message, MessageHeader, VersionedMessage,
             },
+            nonce::{self, state::DurableNonce},
+            nonce_account::verify_nonce_account,
             poh_config::PohConfig,
             pubkey::Pubkey,
             signature::Keypair,
             signer::Signer,
-            system_instruction, system_transaction,
+            system_instruction, system_program, system_transaction,
             transaction::{MessageHash, Transaction, VersionedTransaction},
         },
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
@@ -784,7 +796,8 @@ mod tests {
                 atomic::{AtomicBool, AtomicU64},
                 RwLock,
             },
-            thread::JoinHandle,
+            thread::{Builder, JoinHandle},
+            time::Duration,
         },
     };
 
@@ -851,6 +864,20 @@ mod tests {
             },
             addresses: Cow::Owned(addresses),
         }
+    }
+
+    fn store_nonce_account(
+        bank: &Bank,
+        account_address: Pubkey,
+        nonce_state: nonce::State,
+    ) -> AccountSharedData {
+        let mut account = AccountSharedData::new(1, nonce::State::size(), &system_program::id());
+        account
+            .set_state(&nonce::state::Versions::new(nonce_state))
+            .unwrap();
+        bank.store_account(&account_address, &account);
+
+        account
     }
 
     fn store_address_lookup_table(
@@ -1061,6 +1088,163 @@ mod tests {
             let _ = poh_simulator.join();
 
             assert_eq!(bank.get_balance(&pubkey), 1);
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    #[test]
+    fn test_bank_nonce_update_blockhash_queried_before_transaction_record() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10_000);
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
+        let pubkey = Pubkey::new_unique();
+
+        // setup nonce account with a durable nonce different from the current
+        // bank so that it can be advanced in this bank
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
+        let nonce_hash = *durable_nonce.as_hash();
+        let nonce_pubkey = Pubkey::new_unique();
+        let nonce_state = nonce::State::Initialized(nonce::state::Data {
+            authority: mint_keypair.pubkey(),
+            durable_nonce,
+            fee_calculator: FeeCalculator::new(5000),
+        });
+
+        store_nonce_account(&bank, nonce_pubkey, nonce_state);
+
+        // setup a valid nonce tx which will fail during execution
+        let transactions = sanitize_transactions(vec![system_transaction::nonced_transfer(
+            &mint_keypair,
+            &pubkey,
+            u64::MAX,
+            &nonce_pubkey,
+            &mint_keypair,
+            nonce_hash,
+        )]);
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let blockstore = Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger");
+            let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &PohConfig::default(),
+                Arc::new(AtomicBool::new(false)),
+            );
+            let recorder = poh_recorder.new_recorder();
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
+
+            fn poh_tick_before_returning_record_response(
+                record_receiver: Receiver<Record>,
+                poh_recorder: Arc<RwLock<PohRecorder>>,
+            ) -> JoinHandle<()> {
+                let is_exited = poh_recorder.read().unwrap().is_exited.clone();
+                let tick_producer = Builder::new()
+                    .name("solana-simulate_poh".to_string())
+                    .spawn(move || loop {
+                        let timeout = Duration::from_millis(10);
+                        let record = record_receiver.recv_timeout(timeout);
+                        if let Ok(record) = record {
+                            let record_response = poh_recorder.write().unwrap().record(
+                                record.slot,
+                                record.mixin,
+                                record.transactions,
+                            );
+                            poh_recorder.write().unwrap().tick();
+                            if record.sender.send(record_response).is_err() {
+                                panic!("Error returning mixin hash");
+                            }
+                        }
+                        if is_exited.load(Ordering::Relaxed) {
+                            break;
+                        }
+                    });
+                tick_producer.unwrap()
+            }
+
+            // Simulate a race condition by setting up poh to do the last tick
+            // right before returning the transaction record response so that
+            // bank blockhash queue is updated before transactions are
+            // committed.
+            let poh_simulator =
+                poh_tick_before_returning_record_response(record_receiver, poh_recorder.clone());
+
+            poh_recorder
+                .write()
+                .unwrap()
+                .set_bank_for_test(bank.clone());
+
+            // Tick up to max tick height - 1 so that only one tick remains
+            // before recording transactions to poh
+            while poh_recorder.read().unwrap().tick_height() != bank.max_tick_height() - 1 {
+                poh_recorder.write().unwrap().tick();
+            }
+
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(
+                None,
+                replay_vote_sender,
+                Arc::new(PrioritizationFeeCache::new(0u64)),
+            );
+            let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
+
+            let process_transactions_batch_output =
+                consumer.process_and_record_transactions(&bank, &transactions, 0);
+            let ExecuteAndCommitTransactionsOutput {
+                transactions_attempted_execution_count,
+                executed_transactions_count,
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+
+            assert_eq!(transactions_attempted_execution_count, 1);
+            assert_eq!(executed_transactions_count, 1);
+            assert_eq!(executed_with_successful_result_count, 0);
+            assert!(commit_transactions_result.is_ok());
+
+            // Ensure that poh did the last tick after recording transactions
+            assert_eq!(
+                poh_recorder.read().unwrap().tick_height(),
+                bank.max_tick_height()
+            );
+
+            let mut done = false;
+            // read entries until I find mine, might be ticks...
+            while let Ok((_bank, (entry, _tick_height))) = entry_receiver.recv() {
+                if !entry.is_tick() {
+                    assert_eq!(entry.transactions.len(), transactions.len());
+                    done = true;
+                    break;
+                }
+            }
+            assert!(done);
+
+            poh_recorder
+                .read()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
+
+            // check that the nonce was advanced to the current bank's last blockhash
+            // rather than the current bank's blockhash as would occur had the update
+            // blockhash been queried _after_ transaction recording
+            let expected_nonce = DurableNonce::from_blockhash(&genesis_config.hash());
+            let expected_nonce_hash = expected_nonce.as_hash();
+            let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+            assert!(verify_nonce_account(&nonce_account, expected_nonce_hash).is_some());
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
     }

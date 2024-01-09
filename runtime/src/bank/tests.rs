@@ -10223,9 +10223,8 @@ fn test_transaction_log_collector_get_logs_for_address() {
 #[test]
 fn test_accounts_data_size_with_good_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000.));
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
     let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &mint_keypair,
@@ -10265,8 +10264,9 @@ fn test_accounts_data_size_with_good_transaction() {
 #[test]
 fn test_accounts_data_size_with_bad_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let mut bank = create_simple_test_bank(1_000_000_000_000);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &Keypair::new(),
         &Keypair::new(),
@@ -10275,8 +10275,6 @@ fn test_accounts_data_size_with_bad_transaction() {
         ACCOUNT_SIZE,
         &solana_sdk::system_program::id(),
     );
-
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let accounts_data_size_before = bank.load_accounts_data_size();
     let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();

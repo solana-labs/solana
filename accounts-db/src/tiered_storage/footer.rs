@@ -354,7 +354,7 @@ mod tests {
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 24,

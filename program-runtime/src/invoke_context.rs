@@ -59,9 +59,9 @@ macro_rules! declare_process_instruction {
             ) -> std::result::Result<u64, Box<dyn std::error::Error>> {
                 fn process_instruction_inner(
                     $invoke_context: &mut $crate::invoke_context::InvokeContext,
-                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError>
                     $inner
-                }
+
                 let consumption_result = if $cu_to_consume > 0
                     && invoke_context
                         .feature_set

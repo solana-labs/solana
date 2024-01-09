@@ -28,6 +28,7 @@ Release channels have their own copy of this changelog:
   * RPC's `simulateTransaction` now returns `innerInstructions` as `json`/`jsonParsed` (#34313).
   * Bigtable upload now includes entry summary data for each slot, stored in a
     new `entries` table
+  * Forbid multiple values for the `--signer` CLI flag, forcing users to specify multiple occurrences of `--signer`, one for each signature
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
