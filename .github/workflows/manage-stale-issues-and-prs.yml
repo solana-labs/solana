@@ -17,6 +17,11 @@ permissions:
 
 jobs:
   stale:
+    # Forks do not need to run this, especially on cron schedule.
+    if: >
+      github.event_name != 'schedule'
+      || github.repository == 'solana-labs/solana'
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/stale@v6

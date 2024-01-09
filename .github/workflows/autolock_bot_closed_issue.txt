@@ -14,6 +14,11 @@ concurrency:
 
 jobs:
   action:
+    # Forks do not need to run this, especially on cron schedule.
+    if: >
+      github.event_name != 'schedule'
+      || github.repository == 'solana-labs/solana'
+
     runs-on: ubuntu-latest
     steps:
       - uses: dessant/lock-threads@v3
