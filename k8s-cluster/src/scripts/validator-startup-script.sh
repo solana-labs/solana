@@ -48,7 +48,6 @@ EOF
   exit 1
 }
 
-echo "pre positional args"
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
@@ -233,12 +232,10 @@ fi
 
 echo "gossip entrypoint: $gossip_entrypoint"
 
-echo "pre default args"
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
   default_arg --rpc-faucet-address "$faucet_address"
 fi
-echo "post entrypoint arg"
 
 default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"

@@ -98,14 +98,14 @@ fn parse_spl_genesis_file(spl_file: &PathBuf) -> Result<Vec<String>, Box<dyn Err
 }
 
 fn append_client_accounts_to_file(
-    in_file: &PathBuf,  //bench-tps-x.yml
+    in_file: &PathBuf,  //bench-tps-i.yml
     out_file: &PathBuf, //client-accounts.yml
 ) -> io::Result<()> {
-    // Open the bench-tps-x file for reading.
+    // Open the bench-tps-i.yml file for reading.
     let input = File::open(in_file)?;
     let reader = io::BufReader::new(input);
 
-    // Open (or create) client-accounts.yml for appending.
+    // Open (or create) client-accounts.yml
     let output = OpenOptions::new()
         .create(true)
         .append(true)
@@ -276,6 +276,7 @@ impl Genesis {
         number_of_clients: i32,
         target_lamports_per_signature: u64,
         bench_tps_args: Option<Vec<String>>,
+        build_path: PathBuf,
     ) -> Result<(), Box<dyn Error>> {
         let client_accounts_file = SOLANA_ROOT.join("config-k8s/client-accounts.yml");
         for i in 0..number_of_clients {
@@ -295,7 +296,8 @@ impl Genesis {
             }
 
             info!("generating client accounts...");
-            let output = Command::new("solana-bench-tps")
+            let executable_path = build_path.join("solana-bench-tps");
+            let output = Command::new(executable_path)
                 .args(&args)
                 .output()
                 .expect("Failed to execute solana-bench-tps");
@@ -438,7 +440,7 @@ impl Genesis {
         parse_spl_genesis_file(&spl_file)
     }
 
-    pub fn generate(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn generate(&mut self, build_path: PathBuf) -> Result<(), Box<dyn Error>> {
         let mut args = self.setup_genesis_flags();
         let mut spl_args = self.setup_spl_args()?;
         args.append(&mut spl_args);
@@ -448,7 +450,8 @@ impl Genesis {
             debug!("{}", arg);
         }
 
-        let output = Command::new("solana-genesis")
+        let executable_path = build_path.join("solana-genesis");
+        let output = Command::new(executable_path)
             .args(&args)
             .output()
             .expect("Failed to execute solana-genesis");
