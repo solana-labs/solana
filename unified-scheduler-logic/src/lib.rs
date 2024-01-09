@@ -323,7 +323,7 @@ impl SchedulingStateMachine {
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
-    ) -> (usize, Vec<Usage>) {
+    ) -> usize {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let mut lock_count = 0;
