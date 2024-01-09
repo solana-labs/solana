@@ -213,7 +213,7 @@ impl ExecutedTask {
     }
 }
 
-// A very tiny generic message type to signal about opening and closing of subchannels, which is
+// A very tiny generic message type to signal about opening and closing of subchannels, which are
 // logically segmented series of Payloads (P1) over a signle continuous time-span, potentially
 // carrying some subchannel metadata (P2) upon opening a new subchannel.
 // Note that the above properties can be upheld only when this is used inside MPSC or SPSC channels
@@ -234,7 +234,7 @@ type ExecutedTaskPayload = SubchanneledPayload<Box<ExecutedTask>, ()>;
 // Usually, there's no way to prevent one of those threads from mixing current and next contexts
 // while processing messages with a multiple-consumer channel. A condvar or other
 // out-of-bound mechanism is needed to notify about switching of contextual data. That's because
-// there's no way to block those threads reliably on such an switching event just with a channel.
+// there's no way to block those threads reliably on such a switching event just with a channel.
 //
 // However, if the number of consumer can be determined, this can be accomplished just over a
 // single channel, which even carries an in-bound control meta-message with the contexts. The trick
@@ -949,9 +949,9 @@ mod tests {
         // That's because we're testing the serialized failing execution case in this test.
         // However, currently threaded impl can't properly abort in this situtation..
         // so, 1 should be observed, intead of 0.
-        // Also note that bank.transaction_count() is generally racy because blockstore_processor
-        // and unified_scheduler both tend to process non-conflicting batches in parallel as normal
-        // operation.
+        // Also note that bank.transaction_count() is generally racy by nature, because
+        // blockstore_processor and unified_scheduler both tend to process non-conflicting batches
+        // in parallel as part of the normal operation.
         assert_eq!(bank.transaction_count(), 1);
 
         let bank = BankWithScheduler::new(bank, Some(scheduler));
