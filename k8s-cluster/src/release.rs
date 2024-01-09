@@ -8,12 +8,57 @@ use {
 
 #[derive(Clone, Debug)]
 pub struct BuildConfig<'a> {
-    pub release_channel: &'a str,
-    pub deploy_method: &'a str,
-    pub do_build: bool,
-    pub debug_build: bool,
-    pub profile_build: bool,
-    pub docker_build: bool,
+    release_channel: &'a str,
+    deploy_method: &'a str,
+    do_build: bool,
+    debug_build: bool,
+    profile_build: bool,
+    docker_build: bool,
+    build_path: PathBuf,
+}
+
+impl<'a> BuildConfig<'a> {
+    pub fn new(
+        release_channel: &'a str,
+        deploy_method: &'a str,
+        do_build: bool,
+        debug_build: bool,
+        profile_build: bool,
+        docker_build: bool,
+    ) -> Self {
+        let build_path = if deploy_method == "local" {
+            SOLANA_ROOT.join("farf/bin")
+        } else if deploy_method == "tar" {
+            SOLANA_ROOT.join("solana-release/bin")
+        } else if deploy_method == "skip" {
+            SOLANA_ROOT.join("farf/bin")
+        } else {
+            warn!("deploy_method is invalid: {}", deploy_method);
+            SOLANA_ROOT.join("")
+        };
+
+        BuildConfig {
+            release_channel,
+            deploy_method,
+            do_build,
+            debug_build,
+            profile_build,
+            docker_build,
+            build_path,
+        }
+    }
+
+    pub fn deploy_method(&self) -> &str {
+        self.deploy_method
+    }
+
+    pub fn docker_build(&self) -> bool {
+        self.docker_build
+    }
+
+    pub fn build_path(&self) -> PathBuf {
+        self.build_path.clone()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -63,7 +108,6 @@ impl<'a> Deploy<'a> {
     }
 
     async fn setup_tar_deploy(&self, file_name: &str) -> Result<PathBuf, Box<dyn Error>> {
-        info!("tar file deploy");
         let tar_file = format!("{}{}", file_name, ".tar.bz2");
         if !self.config.release_channel.is_empty() {
             match self.download_release_from_channel(file_name).await {

@@ -148,7 +148,9 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("deployment-tag")
                 .takes_value(true)
                 .help("Add tag as suffix to this deployment's k8s components. Helps differentiate between two deployments
-                in the same cluster"),
+                in the same cluster. Tag gets added to pod, service, replica-set, etc names. As a result the tag must consist of
+                lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character
+                (e.g. 'v1-16-5', 'v1', etc, regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')"),
         )
         .arg(
             Arg::with_name("no_bootstrap")
@@ -570,14 +572,14 @@ async fn main() {
         }
     }
 
-    let build_config = BuildConfig {
-        release_channel: matches.value_of("release_channel").unwrap_or_default(),
-        deploy_method: matches.value_of("deploy_method").unwrap(),
-        do_build: matches.is_present("do_build"),
-        debug_build: matches.is_present("debug_build"),
-        profile_build: matches.is_present("profile_build"),
-        docker_build: matches.is_present("docker_build"),
-    };
+    let build_config = BuildConfig::new(
+        matches.value_of("release_channel").unwrap_or_default(),
+        matches.value_of("deploy_method").unwrap(),
+        matches.is_present("do_build"),
+        matches.is_present("debug_build"),
+        matches.is_present("profile_build"),
+        matches.is_present("docker_build"),
+    );
 
     let genesis_flags = GenesisFlags {
         hashes_per_tick: matches
@@ -768,6 +770,15 @@ async fn main() {
         }
     }
 
+    let deploy = Deploy::new(build_config.clone());
+    match deploy.prepare().await {
+        Ok(_) => info!("Validator setup prepared successfully"),
+        Err(err) => {
+            error!("Exiting........ {}", err);
+            return;
+        }
+    }
+
     if !setup_config.skip_genesis_build {
         // if we are not deploying a bootstrap, we need to use the previous
         // genesis as the genesis for new validators, so do not delete genesis directory
@@ -792,7 +803,7 @@ async fn main() {
             }
 
             // creates genesis and writes to binary file
-            match genesis.generate() {
+            match genesis.generate(build_config.build_path()) {
                 Ok(_) => (),
                 Err(err) => {
                     error!("generate genesis error! {}", err);
@@ -806,6 +817,7 @@ async fn main() {
                     client_config.num_clients,
                     DEFAULT_CLIENT_LAMPORTS_PER_SIGNATURE,
                     client_config.bench_tps_args,
+                    build_config.build_path(),
                 ) {
                     Ok(_) => (),
                     Err(err) => {
@@ -856,7 +868,7 @@ async fn main() {
     };
 
     if let Some(warp_slot) = actual_warp_slot {
-        match LedgerHelper::create_snapshot(warp_slot) {
+        match LedgerHelper::create_snapshot(warp_slot, build_config.build_path()) {
             Ok(_) => (),
             Err(err) => {
                 error!("Failed to create snapshot: {}", err);
@@ -866,7 +878,7 @@ async fn main() {
     }
 
     if wait_for_supermajority.is_some() {
-        match LedgerHelper::create_bank_hash() {
+        match LedgerHelper::create_bank_hash(build_config.build_path()) {
             Ok(bank_hash) => kub_controller.set_bank_hash(bank_hash),
             Err(err) => {
                 error!("Failed to get bank hash: {}", err);
@@ -876,7 +888,7 @@ async fn main() {
     }
 
     // Download validator version and Build docker image
-    let docker_image_config = if build_config.docker_build && !setup_config.skip_genesis_build {
+    let docker_image_config = if build_config.docker_build() && !setup_config.skip_genesis_build {
         Some(DockerImageConfig {
             base_image: matches.value_of("base_image").unwrap_or_default(),
             image_name: matches.value_of("image_name").unwrap(),
@@ -887,22 +899,19 @@ async fn main() {
         None
     };
 
-    let deploy = Deploy::new(build_config.clone());
-    match deploy.prepare().await {
-        Ok(_) => info!("Validator setup prepared successfully"),
-        Err(err) => {
-            error!("Exiting........ {}", err);
-            return;
-        }
-    }
-
     if let Some(config) = docker_image_config {
-        let docker = DockerConfig::new(config, build_config.deploy_method);
-        let image_types = vec![
-            ValidatorType::Bootstrap,
-            ValidatorType::Standard,
-            ValidatorType::NonVoting,
-        ];
+        let docker = DockerConfig::new(config, build_config.deploy_method());
+        let mut image_types = vec![];
+        if !no_bootstrap {
+            image_types.push(ValidatorType::Bootstrap);
+        }
+        if setup_config.num_validators > 0 {
+            image_types.push(ValidatorType::Standard);
+        }
+        if num_non_voting_validators > 0 {
+            image_types.push(ValidatorType::NonVoting);
+        }
+
         for image_type in &image_types {
             match docker.build_image(image_type) {
                 Ok(_) => info!("Docker image built successfully"),
@@ -914,31 +923,25 @@ async fn main() {
         }
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image(&ValidatorType::Bootstrap) {
-            Ok(_) => info!("Bootstrap Image pushed successfully to registry"),
-            Err(err) => {
-                error!("{}", err);
-                return;
-            }
-        }
-
-        // Need to push image to registry so Monogon nodes can pull image from registry to local
-        match docker.push_image(&ValidatorType::Standard) {
-            Ok(_) => info!("Validator Image pushed successfully to registry"),
-            Err(err) => {
-                error!("{}", err);
-                return;
+        for image_type in &image_types {
+            match docker.push_image(image_type) {
+                Ok(_) => info!("{} image built successfully", image_type),
+                Err(err) => {
+                    error!("Exiting........ {}", err);
+                    return;
+                }
             }
         }
     }
 
-    //TODO: clean this up. these should just all be the same.
     let bootstrap_container_name = matches
         .value_of("bootstrap_container_name")
         .unwrap_or_default();
     let bootstrap_image_name = matches
         .value_of("bootstrap_image_name")
         .expect("Bootstrap image name is required");
+
+    //TODO: clean this up. these should just all be the same.
     let validator_container_name = matches
         .value_of("validator_container_name")
         .unwrap_or_default();

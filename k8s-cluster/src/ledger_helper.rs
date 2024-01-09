@@ -3,7 +3,7 @@ use {
     log::*,
     solana_accounts_db::hardened_unpack::open_genesis_config,
     solana_sdk::{hash::Hash, shred_version::compute_shred_version},
-    std::{error::Error, process::Command, str::FromStr},
+    std::{error::Error, path::PathBuf, process::Command, str::FromStr},
 };
 
 fn ledger_directory_exists() -> Result<(), Box<dyn Error>> {
@@ -29,14 +29,15 @@ impl LedgerHelper {
         Ok(shred_version)
     }
 
-    pub fn create_snapshot(_warp_slot: u64) -> Result<(), Box<dyn Error>> {
+    pub fn create_snapshot(_warp_slot: u64, build_path: PathBuf) -> Result<(), Box<dyn Error>> {
         ledger_directory_exists()?;
         let config_dir = LEDGER_DIR.join("accounts_hash_cache");
         if config_dir.exists() {
             std::fs::remove_dir_all(&config_dir).unwrap();
         }
         std::fs::create_dir_all(&config_dir).unwrap();
-        let output = Command::new("solana-ledger-tool")
+        let executable_path = build_path.join("solana-ledger-tool");
+        let output = Command::new(executable_path)
             .arg("-l")
             .arg(LEDGER_DIR.as_os_str())
             .arg("create-snapshot")
@@ -56,9 +57,10 @@ impl LedgerHelper {
         Ok(())
     }
 
-    pub fn create_bank_hash() -> Result<Hash, Box<dyn Error>> {
+    pub fn create_bank_hash(build_path: PathBuf) -> Result<Hash, Box<dyn Error>> {
         ledger_directory_exists()?;
-        let output = Command::new("solana-ledger-tool")
+        let executable_path = build_path.join("solana-ledger-tool");
+        let output = Command::new(executable_path)
             .arg("-l")
             .arg(LEDGER_DIR.as_os_str())
             .arg("bank-hash")
