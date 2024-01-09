@@ -565,28 +565,25 @@ fn test_program_sbf_duplicate_accounts() {
         println!("Test program: {:?}", program);
 
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
 
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
-        let (bank, program_id) = load_program_and_advance_slot(
+
+        let program_buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &program_buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
             program,
         );
         let payee_account = AccountSharedData::new(10, 1, &program_id);
@@ -680,30 +677,28 @@ fn test_program_sbf_error_handling() {
         println!("Test program: {:?}", program);
 
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
 
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
-        let (_, program_id) = load_program_and_advance_slot(
+
+        let program_buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
+        let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &program_buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
             program,
         );
+
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
 
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
@@ -797,29 +792,25 @@ fn test_return_data_and_log_data_syscall() {
 
     for program in programs.iter() {
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
 
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
 
-        let (bank, program_id) = load_program_and_advance_slot(
+        let program_buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &program_buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
             program,
         );
 
@@ -3091,29 +3082,25 @@ fn test_program_sbf_ro_account_modify() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (bank, program_id) = load_program_and_advance_slot(
+    let program_buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+
+    let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &program_buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_ro_account_modify",
     );
 
@@ -3164,20 +3151,10 @@ fn test_program_sbf_realloc() {
     const START_BALANCE: u64 = 100_000_000_000;
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(1_000_000_000_000);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
 
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
@@ -3192,11 +3169,17 @@ fn test_program_sbf_realloc() {
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank.clone());
 
-        let (bank, program_id) = load_program_and_advance_slot(
+        let program_buffer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let authority_keypair = Keypair::new();
+
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
-            &bpf_loader::id(),
             &mint_keypair,
+            &program_buffer_keypair,
+            &program_keypair,
+            &authority_keypair,
             "solana_sbf_rust_realloc",
         );
 
@@ -3512,18 +3495,8 @@ fn test_program_sbf_realloc_invoke() {
         mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(1_000_000_000_000);
+    } = create_genesis_config(100_000_000_000_000);
     genesis_config.rent = Rent::default();
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
 
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
@@ -3531,18 +3504,30 @@ fn test_program_sbf_realloc_invoke() {
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let realloc_program_id = load_program(
+    let realloc_program_buffer_keypair = Keypair::new();
+    let realloc_program_keypair = Keypair::new();
+    let realloc_program_id = realloc_program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &realloc_program_buffer_keypair,
+        &realloc_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_realloc",
     );
 
-    let (bank, realloc_invoke_program_id) = load_program_and_advance_slot(
+    let realloc_invoke_program_buffer_keypair = Keypair::new();
+    let realloc_invoke_program_keypair = Keypair::new();
+
+    let (bank, realloc_invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &realloc_invoke_program_buffer_keypair,
+        &realloc_invoke_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_realloc_invoke",
     );
 
@@ -3997,7 +3982,7 @@ fn test_program_sbf_realloc_invoke() {
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
 
-    // Realloc rescursively and fill data
+    // Realloc recursively and fill data
     let invoke_keypair = Keypair::new();
     let invoke_pubkey = invoke_keypair.pubkey().clone();
     let invoke_account = AccountSharedData::new(START_BALANCE, 0, &realloc_invoke_program_id);
@@ -4040,47 +4025,57 @@ fn test_program_sbf_processed_inner_instruction() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let sibling_program_id = load_program(
+    let sibling_program_buffer_keypair = Keypair::new();
+    let sibling_program_keypair = Keypair::new();
+    let sibling_program_id = sibling_program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &sibling_program_buffer_keypair,
+        &sibling_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_sibling_instructions",
     );
-    let sibling_inner_program_id = load_program(
+    let sibling_inner_program_buffer_keypair = Keypair::new();
+    let sibling_inner_program_keypair = Keypair::new();
+    let sibling_inner_program_id = sibling_inner_program_keypair.pubkey();
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &sibling_inner_program_buffer_keypair,
+        &sibling_inner_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_sibling_inner_instructions",
     );
-    let noop_program_id = load_program(
+    let noop_program_buffer_keypair = Keypair::new();
+    let noop_program_keypair = Keypair::new();
+    let noop_program_id = noop_program_keypair.pubkey();
+    load_upgradeable_program(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &noop_program_buffer_keypair,
+        &noop_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_noop",
     );
-    let (_, invoke_and_return_program_id) = load_program_and_advance_slot(
+    let invoke_and_return_buffer_keypair = Keypair::new();
+    let invoke_and_return_program_keypair = Keypair::new();
+    let (_, invoke_and_return_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &invoke_and_return_buffer_keypair,
+        &invoke_and_return_program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
@@ -4132,16 +4127,6 @@ fn test_program_fees() {
         ..
     } = create_genesis_config(500_000_000);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
     genesis_config.fee_rate_governor = FeeRateGovernor::new(congestion_multiplier, 0);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let fee_structure =
@@ -4150,11 +4135,17 @@ fn test_program_fees() {
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
 
-    let (_, program_id) = load_program_and_advance_slot(
+    let program_buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+
+    let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &program_buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_noop",
     );
 
@@ -4209,30 +4200,26 @@ fn test_program_fees() {
 #[cfg(feature = "sbf_rust")]
 fn test_get_minimum_delegation() {
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(100_123_456_789);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
 
     let bank = Bank::new_for_tests(&genesis_config);
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (_, program_id) = load_program_and_advance_slot(
+    let program_buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+
+    let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
-        &bpf_loader::id(),
         &mint_keypair,
+        &program_buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
         "solana_sbf_rust_get_minimum_delegation",
     );
 
