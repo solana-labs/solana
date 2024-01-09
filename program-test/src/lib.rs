@@ -112,6 +112,9 @@ pub fn invoke_builtin_function(
     let instruction_data = instruction_context.get_instruction_data();
     let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
+    // mock builtin program must consume units
+    invoke_context.consume_checked(1)?;
+
     let log_collector = invoke_context.get_log_collector();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
     stable_log::program_invoke(
