@@ -16,13 +16,13 @@ from clients (other validators/users of the network) as follows:
 the QUIC endpoint and applies some coalescing of packets received at
 the same time. Each stream is used to transmit a packet. There is a limit on
 the maximum streams can be concurrently opened per (source IP address,
-Node Pubkey) pair based on if the sender's stake, larger stakes will be
-allowed to openmore streams within a limit. The system also does rate
-limiting on the packet per second (PPS) and applied the limit to the
-connection based on the stake with higher stakes offering better bandwidth.
+Node Pubkey) pair based on the sender's stake. Higher stakes will be
+allowed to open more streams within a limit. The system also does rate
+limiting on the packets per second (PPS) and applied the limit to the
+connection based on the stake. Higher stakes offers better bandwidth.
 If the transfer rate is exceeded, the server can drop the stream with the
 error code (15 -- STREAM_STOP_CODE_THROTTLING). The client is expected to do
-some sort of exponential back off when running this situation.
+some sort of exponential back off when running into this situation.
 
 * sigverify stage: deduplicates packets and applies some load-shedding
 to remove excessive packets before then filtering packets with invalid
