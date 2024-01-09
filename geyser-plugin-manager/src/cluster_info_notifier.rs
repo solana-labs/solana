@@ -9,9 +9,6 @@ use {
     solana_gossip::cluster_info_notifier_interface::ClusterInfoNotifierInterface,
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_rpc::transaction_notifier_interface::TransactionNotifier,
-    solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
-    solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},
 };
 
@@ -34,29 +31,29 @@ impl ClusterInfoNotifierImpl {
     ) -> ReplicaClusterInfoNode {
         ReplicaClusterInfoNode {
             id: *legacy_info.pubkey(),
-            /// gossip address
+            // gossip address
             gossip: legacy_info.gossip().ok(),
-            /// address to connect to for replication
+            // address to connect to for replication
             tvu: legacy_info.tvu(Protocol::UDP).ok(),
-            /// TVU over QUIC protocol.
+            // TVU over QUIC protocol.
             tvu_quic: legacy_info.tvu(Protocol::QUIC).ok(),
-            /// repair service over QUIC protocol.
+            // repair service over QUIC protocol.
             serve_repair_quic: legacy_info.serve_repair(Protocol::QUIC).ok(),
-            /// transactions address
+            // transactions address
             tpu: legacy_info.tpu(Protocol::UDP).ok(),
-            /// address to forward unprocessed transactions to
+            // address to forward unprocessed transactions to
             tpu_forwards: legacy_info.tpu_forwards(Protocol::UDP).ok(),
-            /// address to which to send bank state requests
+            // address to which to send bank state requests
             tpu_vote: legacy_info.tpu_vote().ok(),
-            /// address to which to send JSON-RPC requests
+            // address to which to send JSON-RPC requests
             rpc: legacy_info.rpc().ok(),
-            /// websocket for JSON-RPC push notifications
+            // websocket for JSON-RPC push notifications
             rpc_pubsub: legacy_info.rpc_pubsub().ok(),
-            /// address to send repair requests to
+            // address to send repair requests to
             serve_repair: legacy_info.serve_repair(Protocol::UDP).ok(),
-            /// latest wallclock picked
+            // latest wallclock picked
             wallclock: legacy_info.wallclock(),
-            /// node shred version
+            // node shred version
             shred_version: legacy_info.shred_version(),
         }
     }

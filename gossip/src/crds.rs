@@ -324,7 +324,7 @@ impl Crds {
                 }
             }
         };
-        //notify geyzer interface
+        //notify geyser interface
         self.notify_clusterinfo_update(self.table.get(&gossip_label));
         ret
     }
@@ -550,7 +550,7 @@ impl Crds {
         self.shards.remove(index, &value);
         match value.value.data {
             CrdsData::LegacyContactInfo(_) => {
-                //notify geyzer interface
+                //notify geyser interface
                 self.notify_clusterinfo_remove(&value.value.pubkey());
                 self.nodes.swap_remove(&index);
             }

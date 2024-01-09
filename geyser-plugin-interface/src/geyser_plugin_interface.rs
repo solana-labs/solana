@@ -2,11 +2,11 @@
 /// the GeyserPlugin trait to work with the runtime.
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
-use solana_sdk::pubkey::Pubkey;
 use std::net::SocketAddr;
 use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
+        pubkey::Pubkey,
         signature::Signature,
         transaction::SanitizedTransaction,
     },
