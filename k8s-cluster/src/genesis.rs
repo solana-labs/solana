@@ -105,7 +105,7 @@ fn append_client_accounts_to_file(
     let input = File::open(in_file)?;
     let reader = io::BufReader::new(input);
 
-    // Open (or create) client-accounts.yml 
+    // Open (or create) client-accounts.yml
     let output = OpenOptions::new()
         .create(true)
         .append(true)

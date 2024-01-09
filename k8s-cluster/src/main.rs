@@ -1185,8 +1185,9 @@ async fn main() {
                 format!("non-voting-selector-{}", nvv_index).as_str(),
             );
             let nvv_service = kub_controller.create_validator_service(
-                format!("non-voting-{}-service", nvv_index).as_str(),
+                "non-voting-service",
                 &non_voting_label,
+                nvv_index,
             );
 
             //deploy nvv service
@@ -1314,8 +1315,9 @@ async fn main() {
         };
 
         let validator_service = kub_controller.create_validator_service(
-            format!("validator-{}-service", validator_index).as_str(),
+            "validator-service",
             &validator_labels,
+            validator_index,
         );
         match kub_controller.deploy_service(&validator_service).await {
             Ok(_) => info!(
@@ -1399,8 +1401,9 @@ async fn main() {
         };
 
         let client_service = kub_controller.create_validator_service(
-            format!("client-{}-service", client_index).as_str(),
+            "client-service",
             &label_selector,
+            client_index,
         );
         match kub_controller.deploy_service(&client_service).await {
             Ok(_) => info!("client service ({}) deployed successfully", client_index),

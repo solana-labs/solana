@@ -762,11 +762,13 @@ impl<'a> Kubernetes<'a> {
             debug!("validator command: {}", c);
         }
 
-        let mut replica_set_name_with_optional_tag = format!("validator-{}", validator_index);
+        let mut replica_set_name_with_optional_tag = "validator".to_string();
         if let Some(tag) = &self.deployment_tag {
             replica_set_name_with_optional_tag =
                 add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
         }
+        replica_set_name_with_optional_tag =
+            format!("{}-{}", replica_set_name_with_optional_tag, validator_index);
 
         k8s_helpers::create_replica_set(
             replica_set_name_with_optional_tag.as_str(),
@@ -849,11 +851,13 @@ impl<'a> Kubernetes<'a> {
             ..Default::default()
         };
 
-        let mut replica_set_name_with_optional_tag = format!("non-voting-{}", nvv_index);
+        let mut replica_set_name_with_optional_tag = "non-voting".to_string();
         if let Some(tag) = &self.deployment_tag {
             replica_set_name_with_optional_tag =
                 add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
         }
+        replica_set_name_with_optional_tag =
+            format!("{}-{}", replica_set_name_with_optional_tag, nvv_index);
 
         k8s_helpers::create_replica_set(
             replica_set_name_with_optional_tag.as_str(),
@@ -908,11 +912,13 @@ impl<'a> Kubernetes<'a> {
             debug!("client command: {}", c);
         }
 
-        let mut replica_set_name_with_optional_tag = format!("client-{}", client_index);
+        let mut replica_set_name_with_optional_tag = "client".to_string();
         if let Some(tag) = &self.deployment_tag {
             replica_set_name_with_optional_tag =
                 add_tag_to_name(replica_set_name_with_optional_tag.as_str(), tag);
         }
+        replica_set_name_with_optional_tag =
+            format!("{}-{}", replica_set_name_with_optional_tag, client_index);
 
         k8s_helpers::create_replica_set(
             replica_set_name_with_optional_tag.as_str(),
@@ -934,12 +940,15 @@ impl<'a> Kubernetes<'a> {
         &self,
         service_name: &str,
         label_selector: &BTreeMap<String, String>,
+        index: i32,
     ) -> Service {
         let mut service_name_with_optional_tag = service_name.to_string();
         if let Some(tag) = &self.deployment_tag {
             service_name_with_optional_tag =
                 add_tag_to_name(service_name_with_optional_tag.as_str(), tag);
         }
+        service_name_with_optional_tag = format!("{}-{}", service_name_with_optional_tag, index);
+
         k8s_helpers::create_service(
             service_name_with_optional_tag.as_str(),
             self.namespace,

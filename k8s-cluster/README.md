@@ -244,6 +244,25 @@ cargo run --bin solana-k8s --
 ```
 ^ note this is not an ideal setup since we have to pass in `--bench-tps-args` for first and last deployment. But `solana-bench-tps` uses `tx-count` to calculate the number of client accounts
 
+## Pod name format
+```
+kubectl get pods -n <namespace>
+```
+You'll see pods with the following format if you provide a `--deployment-tag`
+```
+bootstrap-validator-replicaset-<hash>
+validator-<deployment-tag>-<validator-index>-replicaset-<hash>
+# clients and non voting validators have same format
+```
+
+For services, you'll see something like:
+```
+bootstrap-validator-index
+validator-service-<deployment-tag>-<validator-index>
+# clients and non voting validators have same format
+```
+
+
 ## Deploying with a specific kube config location
 ```
 KUBECONFIG=/path/to/my/kubeconfig cargo run --bin solana-k8s -- ....
