@@ -19,7 +19,7 @@ pub type Task = Arc<TaskInner>;
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    uncommited_lock_usages: Vec<Usage>,
+    uncommited_usages: Vec<Usage>,
     uncontended: usize,
 }
 
@@ -65,6 +65,7 @@ static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
+            uncommited_usages: Vec::with_capacity(lock_attemtps.len()),
             lock_attempts,
             uncontended: 0,
         }
