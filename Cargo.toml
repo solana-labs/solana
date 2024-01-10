@@ -172,7 +172,7 @@ cc = "1.0.83"
 chrono = { version = "0.4.31", default-features = false }
 chrono-humanize = "0.2.3"
 clap = "2.33.1"
-console = "0.15.7"
+console = "0.15.8"
 console_error_panic_hook = "0.1.7"
 console_log = "0.2.2"
 const_format = "0.2.32"
