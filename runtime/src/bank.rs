@@ -5118,6 +5118,7 @@ impl Bank {
         );
         check_time.stop();
 
+        let mut program_cache_time = Measure::start("program_cache");
         let mut program_accounts_map = self.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
@@ -5133,6 +5134,7 @@ impl Bank {
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
             self.replenish_program_cache(&program_accounts_map),
         ));
+        program_cache_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
@@ -5239,6 +5241,10 @@ impl Bank {
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
+        timings.saturating_add_in_place(
+            ExecuteTimingType::ProgramCacheUs,
+            program_cache_time.as_us(),
+        );
 
         let mut executed_transactions_count: usize = 0;
         let mut executed_non_vote_transactions_count: usize = 0;
