@@ -37,10 +37,7 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ProcessedMessageInfo {
-    /// The change in accounts data len
-    pub accounts_data_len_delta: i64,
-}
+pub struct ProcessedMessageInfo {}
 
 impl MessageProcessor {
     /// Process a message.
@@ -173,9 +170,7 @@ impl MessageProcessor {
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
-        Ok(ProcessedMessageInfo {
-            accounts_data_len_delta: 0, // unused
-        })
+        Ok(ProcessedMessageInfo {})
     }
 }
 
