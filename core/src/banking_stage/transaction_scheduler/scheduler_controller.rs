@@ -73,6 +73,8 @@ impl SchedulerController {
     }
 
     pub fn run(mut self) -> Result<(), SchedulerError> {
+        let mut min_prioritization_fees = u64::MAX;
+        let mut max_prioritization_fees = 0;
         loop {
             // BufferedPacketsDecision is shared with legacy BankingStage, which will forward
             // packets. Initially, not renaming these decision variants but the actions taken
@@ -94,11 +96,29 @@ impl SchedulerController {
                 break;
             }
 
+            // update min/max priotization fees
+            let min_max = self.container.get_min_max_prioritization_fees();
+            match min_max {
+                itertools::MinMaxResult::NoElements => {
+                    // do nothing
+                }
+                itertools::MinMaxResult::OneElement(e) => {
+                    min_prioritization_fees = e;
+                    max_prioritization_fees = e;
+                }
+                itertools::MinMaxResult::MinMax(min, max) => {
+                    min_prioritization_fees = min;
+                    max_prioritization_fees = max;
+                }
+            }
             // Report metrics only if there is data.
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
-            self.count_metrics
-                .maybe_report_and_reset(should_report, &self.container);
+            self.count_metrics.maybe_report_and_reset(
+                should_report,
+                &mut min_prioritization_fees,
+                &mut max_prioritization_fees,
+            );
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
                 .iter()
@@ -412,22 +432,28 @@ impl SchedulerCountMetrics {
     fn maybe_report_and_reset(
         &mut self,
         should_report: bool,
-        container: &TransactionStateContainer,
+        min_prioritization_fees: &mut u64,
+        max_prioritization_fees: &mut u64,
     ) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report(container);
+                self.report(*min_prioritization_fees, *max_prioritization_fees);
             }
             self.reset();
+            *min_prioritization_fees = u64::MAX;
+            *max_prioritization_fees = 0;
         }
     }
 
-    fn report(&self, container: &TransactionStateContainer) {
-        let (min_prioritization_fees, max_prioritization_fees) = container
-            .get_min_max_prioritization_fees()
-            .into_option()
-            .unwrap_or_default();
+    fn report(&self, min_prioritization_fees: u64, max_prioritization_fees: u64) {
+        // to avoid getting u64::max recorded by metrics / in case of edge cases
+        let min_prioritization_fees = if min_prioritization_fees != u64::MAX {
+            min_prioritization_fees
+        } else {
+            0
+        };
+
         datapoint_info!(
             "banking_stage_scheduler_counts",
             ("num_received", self.num_received, i64),
