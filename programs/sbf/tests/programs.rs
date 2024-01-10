@@ -432,6 +432,13 @@ fn test_program_sbf_loader_deprecated() {
     }
 }
 
+/// This test is written with bpf_loader specific instructions, which will be
+/// deprecated when `disable_bpf_loader_instructions` feature is activated.
+///
+/// The same test has been migrated to
+/// `test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader` and
+/// `test_sol_alloc_free_deployable_with_upgradeable_loader`
+/// with a new version of bpf_upgradeable_loader!
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_sol_alloc_free_no_longer_deployable() {
@@ -458,7 +465,6 @@ fn test_sol_alloc_free_no_longer_deployable() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
-    // Populate loader account with elf that depends on _sol_alloc_free syscall
     let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
     let mut program_account = AccountSharedData::new(1, elf.len(), &bpf_loader::id());
     program_account
@@ -535,6 +541,138 @@ fn test_sol_alloc_free_no_longer_deployable() {
         .unwrap()
         .insert(bank)
         .clone_without_scheduler();
+
+    // invoke should still succeed because cached
+    assert!(bank.process_transaction(&invoke_tx).is_ok());
+
+    bank.clear_signatures();
+    bank.clear_program_cache();
+
+    // invoke should still succeed on execute because the program is already deployed
+    assert!(bank.process_transaction(&invoke_tx).is_ok());
+}
+
+#[test]
+#[cfg(feature = "sbf_rust")]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: TransactionError(InstructionError(1, InvalidAccountData))"
+)]
+fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+
+    // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
+    // depends on `sol_alloc_free_` syscall. This can be verified with
+    // $ elfdump solana_sbf_rust_deprecated_loader.so
+    // : 0000000000001ab8  000000070000000a R_BPF_64_32            0000000000000000 sol_alloc_free_
+    // In the symbol table, there is `sol_alloc_free_`.
+    // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
+    // AccountInfo::realloc() in the program code.
+    let program_buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+
+    // Expect that deployment to fail. B/C during deployment, there is an elf
+    // verification step, which uses the runtime to look up relocatable symbols
+    // in elf inside syscall table. In this case, `sol_alloc_free_` can't be
+    // found in syscall table. Hence, the verification fails and the deployment
+    // fails.
+    let (_bank, _program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &program_buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_deprecated_loader",
+    );
+}
+
+#[test]
+#[cfg(feature = "sbf_rust")]
+fn test_sol_alloc_free_deployable_with_upgradeable_loader() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+
+    // deactivate `disable_deploy_of_alloc_free_syscall` feature so that the program
+    // that depends on sol_alloc_free_ can be deployed and executed.
+    genesis_config
+        .accounts
+        .remove(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+
+    // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
+    // depends on `sol_alloc_free_` syscall. This can be verified with
+    // $ elfdump solana_sbf_rust_deprecated_loader.so
+    // : 0000000000001ab8  000000070000000a R_BPF_64_32            0000000000000000 sol_alloc_free_
+    // In the symbol table, there is `sol_alloc_free_`.
+    // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
+    // AccountInfo::realloc() in the program code.
+    let program_buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+
+    // expect that deployment success!
+    let (bank, program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &program_buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_deprecated_loader",
+    );
+
+    // expect that the program call success!
+    let instruction = Instruction::new_with_bytes(
+        program_id,
+        &[255],
+        vec![AccountMeta::new(mint_keypair.pubkey(), true)],
+    );
+
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    // now disable _sol_alloc_free
+    let slot = bank.slot();
+    drop(bank_client);
+    drop(bank);
+    let mut bank = Arc::try_unwrap(bank_forks.write().unwrap().remove(slot).unwrap()).unwrap();
+    bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
+    bank.clear_signatures();
+    let bank = bank_forks
+        .write()
+        .unwrap()
+        .insert(bank)
+        .clone_without_scheduler();
+
+    let invoke_tx = Transaction::new(
+        &[&mint_keypair],
+        Message::new(
+            &[Instruction::new_with_bytes(
+                program_id,
+                &[255],
+                vec![AccountMeta::new(mint_keypair.pubkey(), true)],
+            )],
+            Some(&mint_keypair.pubkey()),
+        ),
+        bank.last_blockhash(),
+    );
 
     // invoke should still succeed because cached
     assert!(bank.process_transaction(&invoke_tx).is_ok());
