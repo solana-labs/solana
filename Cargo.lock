@@ -7554,6 +7554,7 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "crossbeam-channel",
+ "derivative",
  "log",
  "solana-ledger",
  "solana-logger",

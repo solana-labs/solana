@@ -185,6 +185,7 @@ ctrlc = "3.4.2"
 curve25519-dalek = "3.2.1"
 dashmap = "5.5.3"
 derivation-path = { version = "0.2.0", default-features = false }
+derivative = "2.2.0"
 dialoguer = "0.10.4"
 digest = "0.10.7"
 dir-diff = "0.3.3"
