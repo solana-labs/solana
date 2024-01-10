@@ -35,13 +35,6 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     }
 }
 
-/// Resultant information gathered from calling process_message()
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ProcessedMessageInfo {
-    /// The change in accounts data len
-    pub accounts_data_len_delta: i64,
-}
-
 impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded accounts.
@@ -62,9 +55,8 @@ impl MessageProcessor {
         sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
-        current_accounts_data_len: u64,
         accumulated_consumed_units: &mut u64,
-    ) -> Result<ProcessedMessageInfo, TransactionError> {
+    ) -> Result<(), TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
             sysvar_cache,
@@ -75,7 +67,6 @@ impl MessageProcessor {
             feature_set,
             blockhash,
             lamports_per_signature,
-            current_accounts_data_len,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions().len());
@@ -174,9 +165,7 @@ impl MessageProcessor {
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
-        Ok(ProcessedMessageInfo {
-            accounts_data_len_delta: 0, // unused
-        })
+        Ok(())
     }
 }
 
@@ -313,7 +302,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert!(result.is_ok());
@@ -363,7 +351,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert_eq!(
@@ -402,7 +389,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
@@ -533,7 +519,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert_eq!(
@@ -567,7 +552,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert!(result.is_ok());
@@ -597,7 +581,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
@@ -685,7 +668,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
