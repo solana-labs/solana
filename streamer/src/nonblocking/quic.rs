@@ -888,19 +888,20 @@ async fn handle_connection(
     );
     let staked_stream = matches!(peer_type, ConnectionPeerType::Staked) && params.stake > 0;
     while !stream_exit.load(Ordering::Relaxed) {
-        if staked_stream {
-            max_streams_per_throttling_interval = stream_load_ema
-                .available_load_capacity_in_duration(
-                    params.stake,
-                    params.total_stake,
-                    STREAM_THROTTLING_INTERVAL_MS,
-                );
-        }
         if let Ok(stream) =
             tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
             match stream {
                 Ok(mut stream) => {
+                    if staked_stream {
+                        max_streams_per_throttling_interval = stream_load_ema
+                            .available_load_capacity_in_duration(
+                                params.stake,
+                                params.total_stake,
+                                STREAM_THROTTLING_INTERVAL_MS,
+                            );
+                    }
+
                     stream_counter.reset_throttling_params_if_needed();
                     if stream_counter.stream_count.load(Ordering::Relaxed)
                         >= max_streams_per_throttling_interval
@@ -1282,10 +1283,16 @@ impl ConnectionTable {
         if has_connection_capacity {
             let exit = Arc::new(AtomicBool::new(false));
             let last_update = Arc::new(AtomicU64::new(last_update));
-            let stream_counter = connection_entry
-                .first()
-                .map(|entry| entry.stream_counter.clone())
-                .unwrap_or(Arc::new(ConnectionStreamCounter::new()));
+            let stream_counter = if stake > 0 {
+                connection_entry
+                    .first()
+                    .map(|entry| entry.stream_counter.clone())
+                    .unwrap_or(Arc::new(ConnectionStreamCounter::new()))
+            } else {
+                // Unstaked connections are tracked using peer IP address. It's possible that different clients
+                // use the same IP due to NAT. So counting all the streams from a given IP could be too restrictive.
+                Arc::new(ConnectionStreamCounter::new())
+            };
             connection_entry.push(ConnectionEntry::new(
                 exit.clone(),
                 stake,
