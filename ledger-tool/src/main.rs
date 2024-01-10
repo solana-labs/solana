@@ -34,8 +34,7 @@ use {
     solana_ledger::{
         blockstore::{create_new_ledger, Blockstore},
         blockstore_options::{AccessType, LedgerColumnOptions},
-        blockstore_processor::ProcessOptions,
-        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
+        use_snapshot_archives_at_startup,
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
@@ -558,15 +557,6 @@ fn minimize_bank_for_snapshot(
 fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
-}
-
-/// Get the AccessType required, based on `process_options`
-fn get_access_type(process_options: &ProcessOptions) -> AccessType {
-    match process_options.use_snapshot_archives_at_startup {
-        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
-        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
-        UseSnapshotArchivesAtStartup::WhenNewest => AccessType::PrimaryForMaintenance,
-    }
 }
 
 #[cfg(not(target_env = "msvc"))]

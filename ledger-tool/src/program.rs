@@ -9,7 +9,7 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
-    solana_ledger::blockstore_options::AccessType,
+    solana_ledger::{blockstore_options::AccessType, use_snapshot_archives_at_startup},
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{LoadProgramMetrics, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
@@ -113,6 +113,17 @@ impl ProgramSubCommand for App<'_, '_> {
             .takes_value(true)
             .default_value("10485760")
             .help("maximum total uncompressed size of unpacked genesis archive");
+        let use_snapshot_archives_at_startup =
+            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+                .takes_value(true)
+                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+                .default_value(
+                    use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool(),
+                )
+                .help(use_snapshot_archives_at_startup::cli::HELP)
+                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
+
         self.subcommand(
             SubCommand::with_name("program")
         .about("Run to test, debug, and analyze on-chain programs.")
@@ -164,6 +175,7 @@ and the following fields are required
                         .default_value("0"),
                 )
                 .arg(&max_genesis_arg)
+                .arg(&use_snapshot_archives_at_startup)
                 .arg(
                     Arg::with_name("memory")
                         .help("Heap memory for the program to run on")
