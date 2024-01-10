@@ -53,7 +53,7 @@ fn signer_arg<'a>() -> Arg<'a> {
         .value_parser(value_parser!(PubkeySignature))
         .requires(BLOCKHASH_ARG.name)
         .multiple_occurrences(true)
-        .multiple_values(true)
+        .multiple_values(false)
         .help(SIGNER_ARG.help)
 }
 

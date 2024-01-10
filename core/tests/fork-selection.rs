@@ -11,7 +11,7 @@
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
-//! ```
+//! ```no_run
 //! #[test]
 //! #[ignore]
 //! fn test_all_partitions() {

@@ -1025,6 +1025,8 @@ fn test_rent_exempt_executable_account() {
     let account_balance = 1;
     let mut account = AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
     account.set_executable(true);
+    account.set_owner(bpf_loader_upgradeable::id());
+    account.set_data(create_executable_meta(account.owner()).to_vec());
     bank.store_account(&account_pubkey, &account);
 
     let transfer_lamports = 1;
@@ -6458,25 +6460,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "3KE2bigpBiiMLGYNqmWkgbrQGSqMt5ccG6ED87CFCVpt"
+                "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "FpNDsd21HXznXf6tRpMNiWhFyhZ4aCCECQm3gL4jGV22"
+                "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "7gDCoXPfFtKPALi212akhhQHEuLdAqyf7DE3yUN4bR2p"
+                "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "6FREbeHdTNYnEXg4zobL2mqGfevukg75frkQJqKpYnk4"
+                "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
             );
             break;
         }
@@ -9033,6 +9035,7 @@ where
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        None,
         Arc::default(),
     ));
     let vote_and_stake_accounts =
@@ -10221,9 +10224,8 @@ fn test_transaction_log_collector_get_logs_for_address() {
 #[test]
 fn test_accounts_data_size_with_good_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000.));
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
     let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &mint_keypair,
@@ -10263,8 +10265,9 @@ fn test_accounts_data_size_with_good_transaction() {
 #[test]
 fn test_accounts_data_size_with_bad_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let mut bank = create_simple_test_bank(1_000_000_000_000);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &Keypair::new(),
         &Keypair::new(),
@@ -10273,8 +10276,6 @@ fn test_accounts_data_size_with_bad_transaction() {
         ACCOUNT_SIZE,
         &solana_sdk::system_program::id(),
     );
-
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let accounts_data_size_before = bank.load_accounts_data_size();
     let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
@@ -12664,6 +12665,7 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
         false,
         Some(accounts_db_config),
         None,
+        None,
         Arc::default(),
     );
 
@@ -13383,6 +13385,7 @@ fn test_get_reward_distribution_num_blocks_cap() {
         false,
         Some(accounts_db_config),
         None,
+        Some(Pubkey::new_unique()),
         Arc::default(),
     );
 
@@ -13850,6 +13853,7 @@ fn test_rehash_with_skipped_rewrites() {
         false,
         Some(accounts_db_config),
         None,
+        Some(Pubkey::new_unique()),
         Arc::new(AtomicBool::new(false)),
     ));
     // This test is only meaningful while the bank hash contains rewrites.
@@ -13910,6 +13914,7 @@ fn test_rebuild_skipped_rewrites() {
         false,
         Some(accounts_db_config.clone()),
         None,
+        Some(Pubkey::new_unique()),
         Arc::new(AtomicBool::new(false)),
     ));
     // This test is only meaningful while the bank hash contains rewrites.

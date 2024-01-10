@@ -316,8 +316,8 @@ impl Blockstore {
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
         // Open the database
-        let mut measure = Measure::start("open");
-        info!("Opening database at {:?}", blockstore_path);
+        let mut measure = Measure::start("blockstore open");
+        info!("Opening blockstore at {:?}", blockstore_path);
         let db = Database::open(&blockstore_path, options)?;
 
         let meta_cf = db.column();
@@ -353,7 +353,7 @@ impl Blockstore {
         let max_root = AtomicU64::new(max_root);
 
         measure.stop();
-        info!("{:?} {}", blockstore_path, measure);
+        info!("Opening blockstore done; {measure}");
         let blockstore = Blockstore {
             ledger_path: ledger_path.to_path_buf(),
             db,

@@ -110,7 +110,6 @@ use {
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
-        accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::ComputeBudget,
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
@@ -126,9 +125,9 @@ use {
     },
     solana_sdk::{
         account::{
-            create_account_shared_data_with_fields as create_account, from_account, Account,
-            AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
-            PROGRAM_OWNERS,
+            create_account_shared_data_with_fields as create_account, create_executable_meta,
+            from_account, Account, AccountSharedData, InheritableAccountFields, ReadableAccount,
+            WritableAccount, PROGRAM_OWNERS,
         },
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -1041,6 +1040,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        #[allow(unused)] collector_id_for_tests: Option<Pubkey>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let accounts_db = AccountsDb::new_with_config(
@@ -1059,7 +1059,11 @@ impl Bank {
         bank.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
+        #[cfg(not(feature = "dev-context-only-utils"))]
         bank.process_genesis_config(genesis_config);
+        #[cfg(feature = "dev-context-only-utils")]
+        bank.process_genesis_config(genesis_config, collector_id_for_tests);
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -1317,15 +1321,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
-                feature_set
-                    .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| {
-                        parent
-                            .accounts_data_size_limit()
-                            .saturating_sub(accounts_data_size_initial)
-                    }),
-            )),
+            cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_size_initial,
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
@@ -3745,7 +3741,11 @@ impl Bank {
         self.parent_hash
     }
 
-    fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
+    fn process_genesis_config(
+        &mut self,
+        genesis_config: &GenesisConfig,
+        #[cfg(feature = "dev-context-only-utils")] collector_id_for_tests: Option<Pubkey>,
+    ) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
 
@@ -3771,14 +3771,15 @@ impl Bank {
             self.accounts_data_size_initial += account.data().len() as u64;
         }
 
-        // Highest staked node is the first collector but if a genesis config
-        // doesn't define any staked nodes, we assume this genesis config is for
-        // testing and set the collector id to a unique pubkey.
-        self.collector_id = self
-            .stakes_cache
-            .stakes()
-            .highest_staked_node()
-            .unwrap_or_else(Pubkey::new_unique);
+        // After storing genesis accounts, the bank stakes cache will be warmed
+        // up and can be used to set the collector id to the highest staked
+        // node. If no staked nodes exist, allow fallback to an unstaked test
+        // collector id during tests.
+        let collector_id = self.stakes_cache.stakes().highest_staked_node();
+        #[cfg(feature = "dev-context-only-utils")]
+        let collector_id = collector_id.or(collector_id_for_tests);
+        self.collector_id =
+            collector_id.expect("genesis processing failed because no staked nodes exist");
 
         self.blockhash_queue.write().unwrap().genesis_hash(
             &genesis_config.hash(),
@@ -3882,7 +3883,6 @@ impl Bank {
     fn add_precompiled_account_with_owner(&self, program_id: &Pubkey, owner: Pubkey) {
         if let Some(account) = self.get_account_with_fixed_root(program_id) {
             if account.executable() {
-                // The account is already executable, that's all we need
                 return;
             } else {
                 // malicious account is pre-occupying at program_id
@@ -3898,10 +3898,13 @@ impl Bank {
 
         // Add a bogus executable account, which will be loaded and ignored.
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
+
+        // Mock account_data with executable_meta so that the account is executable.
+        let account_data = create_executable_meta(&owner);
         let account = AccountSharedData::from(Account {
             lamports,
             owner,
-            data: vec![],
+            data: account_data.to_vec(),
             executable: true,
             rent_epoch,
         });
@@ -4880,7 +4883,7 @@ impl Bank {
             accounts,
             return_data,
             touched_account_count,
-            accounts_resize_delta,
+            accounts_resize_delta: accounts_data_len_delta,
         } = transaction_context.into();
 
         if status.is_ok()
@@ -4898,7 +4901,6 @@ impl Bank {
             loaded_transaction.accounts.len() as u64
         );
         saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
-        let accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
 
         let return_data = if enable_return_data_recording && !return_data.data.is_empty() {
             Some(return_data)
@@ -5362,11 +5364,6 @@ impl Bank {
         }
     }
 
-    /// The maximum allowed size, in bytes, of the accounts data
-    pub fn accounts_data_size_limit(&self) -> u64 {
-        MAX_ACCOUNTS_DATA_LEN
-    }
-
     /// Load the accounts data size, in bytes
     pub fn load_accounts_data_size(&self) -> u64 {
         self.accounts_data_size_initial
@@ -5582,10 +5579,12 @@ impl Bank {
 
         let accounts_data_len_delta = execution_results
             .iter()
-            .filter_map(|execution_result| {
-                execution_result
-                    .details()
-                    .map(|details| details.accounts_data_len_delta)
+            .filter_map(TransactionExecutionResult::details)
+            .filter_map(|details| {
+                details
+                    .status
+                    .is_ok()
+                    .then_some(details.accounts_data_len_delta)
             })
             .sum();
         self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
@@ -6621,16 +6620,6 @@ impl Bank {
                 &self.runtime_config.compute_budget.unwrap_or_default(),
                 false, /* debugging_features */
             ));
-
-        if self
-            .feature_set
-            .is_active(&feature_set::cap_accounts_data_len::id())
-        {
-            self.cost_tracker = RwLock::new(CostTracker::new_with_account_data_size_limit(Some(
-                self.accounts_data_size_limit()
-                    .saturating_sub(self.accounts_data_size_initial),
-            )));
-        }
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
@@ -7858,11 +7847,6 @@ impl Bank {
             );
         }
 
-        if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
-            const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
-            self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
-        }
-
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
         }
@@ -8210,6 +8194,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            Some(Pubkey::new_unique()),
             Arc::default(),
         )
     }
@@ -8232,6 +8217,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            Some(Pubkey::new_unique()),
             Arc::default(),
         )
     }
