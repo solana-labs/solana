@@ -24,7 +24,7 @@ pub enum LoaderV4Instruction {
     /// Decreasing to size zero closes the program account and resets it
     /// into an uninitialized state.
     /// Providing additional lamports upfront might be necessary to reach rent exemption.
-    /// Superflous funds are transfered to the recipient account.
+    /// Superflous funds are transferred to the recipient account.
     ///
     /// # Account references
     ///   0. `[(signer), writable]` The program account to change the size of.
@@ -51,7 +51,7 @@ pub enum LoaderV4Instruction {
 
     /// Undo the deployment of a program account.
     ///
-    /// The program is no longer executable and goes into maintainance.
+    /// The program is no longer executable and goes into maintenance.
     /// Necessary for writing data and truncating.
     ///
     /// # Account references

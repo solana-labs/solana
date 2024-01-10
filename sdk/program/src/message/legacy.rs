@@ -7,7 +7,7 @@
 //!
 //! [`legacy`]: crate::message::legacy
 //! [`v0`]: crate::message::v0
-//! [future message format]: https://docs.solana.com/proposals/versioned-transactions
+//! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
 #![allow(clippy::arithmetic_side_effects)]
 
@@ -26,7 +26,7 @@ use {
 };
 
 lazy_static! {
-    // Copied keys over since direct references create cyclical dependency.
+    // This will be deprecated and so this list shouldn't be modified
     pub static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
         let parse = |s| Pubkey::from_str(s).unwrap();
         [
@@ -193,6 +193,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -264,6 +265,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },
@@ -328,7 +330,7 @@ impl Message {
 
     /// Create a new message for a [nonced transaction].
     ///
-    /// [nonced transaction]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+    /// [nonced transaction]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
     ///
     /// In this type of transaction, the blockhash is replaced with a _durable
     /// transaction nonce_, allowing for extended time to pass between the
@@ -363,6 +365,7 @@ impl Message {
     /// // another crate so it can be shared between the on-chain program and
     /// // the client.
     /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// # #[borsh(crate = "borsh")]
     /// enum BankInstruction {
     ///     Initialize,
     ///     Deposit { lamports: u64 },

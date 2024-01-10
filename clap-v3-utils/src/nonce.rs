@@ -9,7 +9,7 @@ pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
     help: "Provide the nonce account to use when creating a nonced \n\
            transaction. Nonced transactions are useful when a transaction \n\
            requires a lengthy signing process. Learn more about nonced \n\
-           transactions at https://docs.solana.com/offline-signing/durable-nonce",
+           transactions at https://docs.solanalabs.com/cli/examples/durable-nonce",
 };
 
 pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
@@ -18,6 +18,7 @@ pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     help: "Provide the nonce authority keypair to use when signing a nonced transaction",
 };
 
+#[allow(deprecated)]
 fn nonce_arg<'a>() -> Arg<'a> {
     Arg::new(NONCE_ARG.name)
         .long(NONCE_ARG.long)
@@ -27,6 +28,7 @@ fn nonce_arg<'a>() -> Arg<'a> {
         .help(NONCE_ARG.help)
 }
 
+#[allow(deprecated)]
 pub fn nonce_authority_arg<'a>() -> Arg<'a> {
     Arg::new(NONCE_AUTHORITY_ARG.name)
         .long(NONCE_AUTHORITY_ARG.long)

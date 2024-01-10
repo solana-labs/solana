@@ -28,7 +28,7 @@ use {
         Rng,
     },
     rayon::{prelude::*, ThreadPool},
-    solana_bloom::bloom::{AtomicBloom, Bloom},
+    solana_bloom::bloom::{Bloom, ConcurrentBloom},
     solana_sdk::{
         hash::{hash, Hash},
         native_token::LAMPORTS_PER_SOL,
@@ -141,7 +141,7 @@ impl CrdsFilter {
 
 /// A vector of crds filters that together hold a complete set of Hashes.
 struct CrdsFilterSet {
-    filters: Vec<Option<AtomicBloom<Hash>>>,
+    filters: Vec<Option<ConcurrentBloom<Hash>>>,
     mask_bits: u32,
 }
 
@@ -159,7 +159,7 @@ impl CrdsFilterSet {
             let k = rng.gen_range(0..indices.len());
             let k = indices.swap_remove(k);
             let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
-            filters[k] = Some(AtomicBloom::<Hash>::from(filter));
+            filters[k] = Some(ConcurrentBloom::<Hash>::from(filter));
         }
         Self { filters, mask_bits }
     }

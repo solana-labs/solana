@@ -142,6 +142,7 @@ type SlotPrioritizationFee = DashMap<BankId, PrioritizationFee>;
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
 /// A separate internal thread `service_thread` handles additional tasks when a bank is frozen,
 /// and collecting stats and reporting metrics.
+#[derive(Debug)]
 pub struct PrioritizationFeeCache {
     cache: Arc<RwLock<LruCache<Slot, Arc<SlotPrioritizationFee>>>>,
     service_thread: Option<JoinHandle<()>>,

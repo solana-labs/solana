@@ -1,6 +1,6 @@
 //! A type to hold data for the [`SlotHashes` sysvar][sv].
 //!
-//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#slothashes
+//! [sv]: https://docs.solanalabs.com/runtime/sysvars#slothashes
 //!
 //! The sysvar ID is declared in [`sysvar::slot_hashes`].
 //!

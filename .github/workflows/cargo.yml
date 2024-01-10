@@ -1,0 +1,71 @@
+name: Cargo
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - ".github/scripts/cargo-clippy-before-script.sh"
+      - ".github/workflows/cargo.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELL: /bin/bash
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  clippy-stable:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
+
+      - shell: bash
+        run: |
+          source ci/rust-version.sh stable
+          rustup component add clippy --toolchain "$rust_stable"
+          scripts/cargo-clippy-stable.sh
+
+  clippy-nightly:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
+
+      - shell: bash
+        run: |
+          source ci/rust-version.sh nightly
+          rustup component add clippy --toolchain "$rust_nightly"
+          scripts/cargo-clippy-nightly.sh

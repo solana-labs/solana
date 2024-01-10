@@ -2,6 +2,3 @@
 build
 html
 static
-
-# prettier interferes with the json response too much
-src/developing/clients/jsonrpc-api.md

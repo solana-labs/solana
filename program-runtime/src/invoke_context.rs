@@ -59,9 +59,9 @@ macro_rules! declare_process_instruction {
             ) -> std::result::Result<u64, Box<dyn std::error::Error>> {
                 fn process_instruction_inner(
                     $invoke_context: &mut $crate::invoke_context::InvokeContext,
-                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError>
                     $inner
-                }
+
                 let consumption_result = if $cu_to_consume > 0
                     && invoke_context
                         .feature_set
@@ -410,7 +410,7 @@ impl<'a> InvokeContext<'a> {
             })?;
         let borrowed_program_account = instruction_context
             .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
-        if !borrowed_program_account.is_executable() {
+        if !borrowed_program_account.is_executable(&self.feature_set) {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
@@ -615,7 +615,7 @@ impl<'a> InvokeContext<'a> {
     pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|syscall_context| syscall_context.as_ref())
+            .and_then(std::option::Option::as_ref)
             .ok_or(InstructionError::CallDepth)
     }
 
@@ -821,17 +821,17 @@ mod tests {
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyNotOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyReadonly => instruction_context
                         .try_borrow_instruction_account(transaction_context, 2)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::UnbalancedPush => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
-                            .checked_add_lamports(1)?;
+                            .checked_add_lamports(1, &invoke_context.feature_set)?;
                         let program_id = *transaction_context.get_key_of_account_at_index(3)?;
                         let metas = vec![
                             AccountMeta::new_readonly(
@@ -862,7 +862,7 @@ mod tests {
                     }
                     MockInstruction::UnbalancedPop => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(1)?,
+                        .checked_add_lamports(1, &invoke_context.feature_set)?,
                     MockInstruction::ConsumeComputeUnits {
                         compute_units_to_consume,
                         desired_result,
@@ -874,7 +874,7 @@ mod tests {
                     }
                     MockInstruction::Resize { new_len } => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data(vec![0; new_len as usize])?,
+                        .set_data(vec![0; new_len as usize], &invoke_context.feature_set)?,
                 }
             } else {
                 return Err(InstructionError::InvalidInstructionData);
@@ -962,8 +962,8 @@ mod tests {
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
-        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
-        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        let loader_account = AccountSharedData::new(0, 1, &native_loader::id());
+        let mut program_account = AccountSharedData::new(1, 1, &native_loader::id());
         program_account.set_executable(true);
         let transaction_accounts = vec![
             (solana_sdk::pubkey::new_rand(), owned_account),
@@ -990,7 +990,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             callee_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
+            Arc::new(LoadedProgram::new_builtin(0, 1, MockBuiltin::vm)),
         );
         invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 

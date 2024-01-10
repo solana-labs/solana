@@ -80,10 +80,12 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_pubkey)
                                 .help(
-                                    "Lookup table authority address [default: the default configured keypair]. \
-                                    WARNING: Cannot be used for creating a lookup table for a cluster running v1.11
-                                    or earlier which requires the authority to sign for lookup table creation.",
-                                )
+                                    "Lookup table authority address \
+                                    [default: the default configured keypair]. \
+                                    WARNING: Cannot be used for creating a lookup table for \
+                                    a cluster running v1.11 or earlier which requires the \
+                                    authority to sign for lookup table creation.",
+                                ),
                         )
                         .arg(
                             Arg::with_name("authority_signer")
@@ -92,7 +94,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .conflicts_with("authority")
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority keypair [default: the default configured keypair].")
+                                .help(
+                                    "Lookup table authority keypair \
+                                    [default: the default configured keypair].",
+                                ),
                         )
                         .arg(
                             Arg::with_name("payer")
@@ -100,8 +105,11 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("PAYER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Account that will pay rent fees for the created lookup table [default: the default configured keypair]")
-                        )
+                                .help(
+                                    "Account that will pay rent fees for the created lookup table \
+                                     [default: the default configured keypair]",
+                                ),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("freeze")
@@ -113,7 +121,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(true)
                                 .validator(is_pubkey)
-                                .help("Address of the lookup table")
+                                .help("Address of the lookup table"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -121,7 +129,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority [default: the default configured keypair]")
+                                .help(
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("bypass_warning")
@@ -140,7 +151,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(true)
                                 .validator(is_pubkey)
-                                .help("Address of the lookup table")
+                                .help("Address of the lookup table"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -148,7 +159,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority [default: the default configured keypair]")
+                                .help(
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("payer")
@@ -156,7 +170,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("PAYER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Account that will pay rent fees for the extended lookup table [default: the default configured keypair]")
+                                .help(
+                                    "Account that will pay rent fees for the extended lookup \
+                                     table [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("addresses")
@@ -166,8 +183,8 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .use_delimiter(true)
                                 .required(true)
                                 .validator(is_pubkey)
-                                .help("Comma separated list of addresses to append")
-                        )
+                                .help("Comma separated list of addresses to append"),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("deactivate")
@@ -178,7 +195,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("LOOKUP_TABLE_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Address of the lookup table")
+                                .help("Address of the lookup table"),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -186,7 +203,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority [default: the default configured keypair]")
+                                .help(
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("bypass_warning")
@@ -204,7 +224,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("LOOKUP_TABLE_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Address of the lookup table")
+                                .help("Address of the lookup table"),
                         )
                         .arg(
                             Arg::with_name("recipient")
@@ -212,7 +232,10 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("RECIPIENT_ADDRESS")
                                 .takes_value(true)
                                 .validator(is_pubkey)
-                                .help("Address of the recipient account to deposit the closed account's lamports [default: the default configured keypair]")
+                                .help(
+                                    "Address of the recipient account to deposit the closed \
+                                     account's lamports [default: the default configured keypair]",
+                                ),
                         )
                         .arg(
                             Arg::with_name("authority")
@@ -220,8 +243,11 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority [default: the default configured keypair]")
-                        )
+                                .help(
+                                    "Lookup table authority \
+                                    [default: the default configured keypair]",
+                                ),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("get")
@@ -231,9 +257,9 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .index(1)
                                 .value_name("LOOKUP_TABLE_ADDRESS")
                                 .takes_value(true)
-                                .help("Address of the lookup table to show")
-                        )
-                )
+                                .help("Address of the lookup table to show"),
+                        ),
+                ),
         )
     }
 }
@@ -593,9 +619,9 @@ fn process_create_lookup_table(
     }
 }
 
-pub const FREEZE_LOOKUP_TABLE_WARNING: &str = "WARNING! \
-Once a lookup table is frozen, it can never be modified or unfrozen again. \
-To proceed with freezing, rerun the `freeze` command with the `--bypass-warning` flag";
+pub const FREEZE_LOOKUP_TABLE_WARNING: &str =
+    "WARNING! Once a lookup table is frozen, it can never be modified or unfrozen again. To \
+     proceed with freezing, rerun the `freeze` command with the `--bypass-warning` flag";
 
 fn process_freeze_lookup_table(
     rpc_client: &RpcClient,
@@ -613,9 +639,10 @@ fn process_freeze_lookup_table(
     })?;
     if !address_lookup_table::program::check_id(&lookup_table_account.owner) {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table program",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table \
+             program",
+        )
+        .into());
     }
 
     if !bypass_warning {
@@ -671,9 +698,10 @@ fn process_extend_lookup_table(
     })?;
     if !address_lookup_table::program::check_id(&lookup_table_account.owner) {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table program",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table \
+             program",
+        )
+        .into());
     }
 
     let authority_address = authority_signer.pubkey();
@@ -709,10 +737,10 @@ fn process_extend_lookup_table(
     }
 }
 
-pub const DEACTIVATE_LOOKUP_TABLE_WARNING: &str = "WARNING! \
-Once a lookup table is deactivated, it is no longer usable by transactions.
-Deactivated lookup tables may only be closed and cannot be recreated at the same address. \
-To proceed with deactivation, rerun the `deactivate` command with the `--bypass-warning` flag";
+pub const DEACTIVATE_LOOKUP_TABLE_WARNING: &str =
+    "WARNING! Once a lookup table is deactivated, it is no longer usable by transactions.
+Deactivated lookup tables may only be closed and cannot be recreated at the same address. To \
+     proceed with deactivation, rerun the `deactivate` command with the `--bypass-warning` flag";
 
 fn process_deactivate_lookup_table(
     rpc_client: &RpcClient,
@@ -730,9 +758,10 @@ fn process_deactivate_lookup_table(
     })?;
     if !address_lookup_table::program::check_id(&lookup_table_account.owner) {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table program",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table \
+             program",
+        )
+        .into());
     }
 
     if !bypass_warning {
@@ -783,17 +812,19 @@ fn process_close_lookup_table(
     })?;
     if !address_lookup_table::program::check_id(&lookup_table_account.owner) {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table program",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table \
+             program",
+        )
+        .into());
     }
 
     let lookup_table_account = AddressLookupTable::deserialize(&lookup_table_account.data)?;
     if lookup_table_account.meta.deactivation_slot == u64::MAX {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not deactivated. Only deactivated lookup tables may be closed",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not deactivated. Only deactivated \
+             lookup tables may be closed",
+        )
+        .into());
     }
 
     let authority_address = authority_signer.pubkey();
@@ -836,9 +867,10 @@ fn process_show_lookup_table(
     })?;
     if !address_lookup_table::program::check_id(&lookup_table_account.owner) {
         return Err(format!(
-                    "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table program",
-                )
-                .into());
+            "Lookup table account {lookup_table_pubkey} is not owned by the Address Lookup Table \
+             program",
+        )
+        .into());
     }
 
     let lookup_table_account = AddressLookupTable::deserialize(&lookup_table_account.data)?;

@@ -3,10 +3,10 @@ mod tests {
     use {
         crate::{
             bank::{
-                epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, BankTestConfig,
-                EpochRewardStatus, StartBlockHeightAndRewards,
+                epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
+                StartBlockHeightAndRewards,
             },
-            genesis_utils::{activate_all_features, activate_feature},
+            genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
@@ -34,7 +34,6 @@ mod tests {
         },
         solana_sdk::{
             epoch_schedule::EpochSchedule,
-            feature_set,
             genesis_config::create_genesis_config,
             hash::Hash,
             pubkey::Pubkey,
@@ -100,7 +99,6 @@ mod tests {
     ) {
         solana_logger::setup();
         let (mut genesis_config, _) = create_genesis_config(500);
-        activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
@@ -342,10 +340,7 @@ mod tests {
         for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
             let (genesis_config, _) = create_genesis_config(500);
 
-            let bank0 = Arc::new(Bank::new_for_tests_with_config(
-                &genesis_config,
-                BankTestConfig::default(),
-            ));
+            let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0.squash();
             let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
 
@@ -535,10 +530,7 @@ mod tests {
         solana_logger::setup();
         let (genesis_config, _) = create_genesis_config(500);
 
-        let bank0 = Arc::new(Bank::new_for_tests_with_config(
-            &genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.squash();
         let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         add_root_and_flush_write_cache(&bank0);

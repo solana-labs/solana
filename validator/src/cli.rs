@@ -1366,7 +1366,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("block_production_method")
                 .long("block-production-method")
-                .hidden(hidden_unless_forced())
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockProductionMethod::cli_names())

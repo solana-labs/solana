@@ -9,7 +9,10 @@ use {
         },
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
-    solana_sdk::{pubkey::Pubkey, signature::Keypair, transport::Result as TransportResult},
+    solana_sdk::{
+        pubkey::Pubkey, quic::NotifyKeyUpdate, signature::Keypair,
+        transport::Result as TransportResult,
+    },
     solana_streamer::streamer::StakedNodes,
     solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::{
@@ -43,6 +46,15 @@ pub enum NonblockingClientConnection {
     Udp(Arc<<UdpBaseClientConnection as BaseClientConnection>::NonblockingClientConnection>),
 }
 
+impl NotifyKeyUpdate for ConnectionCache {
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            Self::Udp(_) => Ok(()),
+            Self::Quic(backend) => backend.update_key(key),
+        }
+    }
+}
+
 impl ConnectionCache {
     pub fn new(name: &'static str) -> Self {
         if DEFAULT_CONNECTION_CACHE_USE_QUIC {
@@ -64,7 +76,7 @@ impl ConnectionCache {
         Self::new_with_client_options(name, connection_pool_size, None, None, None)
     }
 
-    /// Create a quic conneciton_cache with more client options
+    /// Create a quic connection_cache with more client options
     pub fn new_with_client_options(
         name: &'static str,
         connection_pool_size: usize,
@@ -217,7 +229,8 @@ mod tests {
         crossbeam_channel::unbounded,
         solana_sdk::{net::DEFAULT_TPU_COALESCE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, streamer::StakedNodes,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::SpawnServerResult,
+            streamer::StakedNodes,
         },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -245,7 +258,11 @@ mod tests {
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
-        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+        let SpawnServerResult {
+            endpoint: response_recv_endpoint,
+            thread: response_recv_thread,
+            key_updater: _,
+        } = solana_streamer::quic::spawn_server(
             "quic_streamer_test",
             response_recv_socket,
             &keypair2,

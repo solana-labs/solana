@@ -8,6 +8,7 @@ use {
         commitment_config::CommitmentLevel,
         fee_calculator::FeeCalculator,
         hash::Hash,
+        inner_instruction::InnerInstructions,
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
@@ -37,6 +38,7 @@ pub struct TransactionSimulationDetails {
     pub logs: Vec<String>,
     pub units_consumed: u64,
     pub return_data: Option<TransactionReturnData>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -13,16 +13,16 @@ use {
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
-            self, archive_snapshot_package, build_storage_from_snapshot_dir,
-            delete_contents_of_path, deserialize_snapshot_data_file,
-            deserialize_snapshot_data_files, get_bank_snapshot_dir, get_highest_bank_snapshot_post,
-            get_highest_full_snapshot_archive_info, get_highest_incremental_snapshot_archive_info,
-            get_snapshot_file_name, get_storages_to_serialize, hard_link_storages_to_snapshot,
-            serialize_snapshot_data_file, verify_and_unarchive_snapshots,
-            verify_unpacked_snapshots_dir_and_version, write_snapshot_version_file,
-            AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotType, SnapshotError,
-            SnapshotRootPaths, SnapshotVersion, StorageAndNextAppendVecId,
-            UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
+            self, archive_snapshot_package, delete_contents_of_path,
+            deserialize_snapshot_data_file, deserialize_snapshot_data_files, get_bank_snapshot_dir,
+            get_highest_bank_snapshot_post, get_highest_full_snapshot_archive_info,
+            get_highest_incremental_snapshot_archive_info, get_snapshot_file_name,
+            get_storages_to_serialize, hard_link_storages_to_snapshot,
+            rebuild_storages_from_snapshot_dir, serialize_snapshot_data_file,
+            verify_and_unarchive_snapshots, verify_unpacked_snapshots_dir_and_version,
+            write_snapshot_version_file, AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo,
+            BankSnapshotType, SnapshotError, SnapshotRootPaths, SnapshotVersion,
+            StorageAndNextAppendVecId, UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
         },
         status_cache,
     },
@@ -202,18 +202,18 @@ fn serialize_status_cache(
     })
 }
 
-#[derive(Debug, Default)]
-pub struct BankFromArchiveTimings {
-    pub rebuild_bank_from_snapshots_us: u64,
-    pub full_snapshot_untar_us: u64,
-    pub incremental_snapshot_untar_us: u64,
-    pub verify_snapshot_bank_us: u64,
+#[derive(Debug)]
+pub struct BankFromArchivesTimings {
+    pub untar_full_snapshot_archive_us: u64,
+    pub untar_incremental_snapshot_archive_us: u64,
+    pub rebuild_bank_us: u64,
+    pub verify_bank_us: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BankFromDirTimings {
-    pub rebuild_bank_from_snapshot_us: u64,
-    pub build_storage_us: u64,
+    pub rebuild_storages_us: u64,
+    pub rebuild_bank_us: u64,
 }
 
 /// Utility for parsing out bank specific information from a snapshot archive. This utility can be used
@@ -276,7 +276,7 @@ pub fn bank_from_snapshot_archives(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> snapshot_utils::Result<(Bank, BankFromArchiveTimings)> {
+) -> snapshot_utils::Result<(Bank, BankFromArchivesTimings)> {
     info!(
         "Loading bank from full snapshot archive: {}, and incremental snapshot archive: {:?}",
         full_snapshot_archive_info.path().display(),
@@ -375,37 +375,29 @@ pub fn bank_from_snapshot_archives(
     }
     measure_verify.stop();
 
-    let timings = BankFromArchiveTimings {
-        rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
-        full_snapshot_untar_us: unarchived_full_snapshot.measure_untar.as_us(),
-        incremental_snapshot_untar_us: unarchived_incremental_snapshot
+    let timings = BankFromArchivesTimings {
+        untar_full_snapshot_archive_us: unarchived_full_snapshot.measure_untar.as_us(),
+        untar_incremental_snapshot_archive_us: unarchived_incremental_snapshot
             .map_or(0, |unarchive_preparation_result| {
                 unarchive_preparation_result.measure_untar.as_us()
             }),
-        verify_snapshot_bank_us: measure_verify.as_us(),
+        rebuild_bank_us: measure_rebuild.as_us(),
+        verify_bank_us: measure_verify.as_us(),
     };
     datapoint_info!(
         "bank_from_snapshot_archives",
         (
-            "full_snapshot_untar_us",
-            timings.full_snapshot_untar_us,
+            "untar_full_snapshot_archive_us",
+            timings.untar_full_snapshot_archive_us,
             i64
         ),
         (
-            "incremental_snapshot_untar_us",
-            timings.incremental_snapshot_untar_us,
+            "untar_incremental_snapshot_archive_us",
+            timings.untar_incremental_snapshot_archive_us,
             i64
         ),
-        (
-            "rebuild_bank_from_snapshots_us",
-            timings.rebuild_bank_from_snapshots_us,
-            i64
-        ),
-        (
-            "verify_snapshot_bank_us",
-            timings.verify_snapshot_bank_us,
-            i64
-        ),
+        ("rebuild_bank_us", timings.rebuild_bank_us, i64),
+        ("verify_bank_us", timings.verify_bank_us, i64),
     );
     Ok((bank, timings))
 }
@@ -506,11 +498,15 @@ pub fn bank_from_snapshot_dir(
 
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
 
-    let (storage, measure_build_storage) = measure!(
-        build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?,
-        "build storage from snapshot dir"
+    let (storage, measure_rebuild_storages) = measure!(
+        rebuild_storages_from_snapshot_dir(
+            bank_snapshot,
+            account_paths,
+            next_append_vec_id.clone()
+        )?,
+        "rebuild storages from snapshot dir"
     );
-    info!("{}", measure_build_storage);
+    info!("{}", measure_rebuild_storages);
 
     let next_append_vec_id =
         Arc::try_unwrap(next_append_vec_id).expect("this is the only strong reference");
@@ -518,46 +514,39 @@ pub fn bank_from_snapshot_dir(
         storage,
         next_append_vec_id,
     };
-    let mut measure_rebuild = Measure::start("rebuild bank from snapshot");
-    let bank = rebuild_bank_from_snapshot(
-        bank_snapshot,
-        account_paths,
-        storage_and_next_append_vec_id,
-        genesis_config,
-        runtime_config,
-        debug_keys,
-        additional_builtins,
-        account_secondary_indexes,
-        limit_load_slot_count_from_snapshot,
-        shrink_ratio,
-        verify_index,
-        accounts_db_config,
-        accounts_update_notifier,
-        exit,
-    )?;
-    measure_rebuild.stop();
-    info!("{}", measure_rebuild);
+    let (bank, measure_rebuild_bank) = measure!(
+        rebuild_bank_from_snapshot(
+            bank_snapshot,
+            account_paths,
+            storage_and_next_append_vec_id,
+            genesis_config,
+            runtime_config,
+            debug_keys,
+            additional_builtins,
+            account_secondary_indexes,
+            limit_load_slot_count_from_snapshot,
+            shrink_ratio,
+            verify_index,
+            accounts_db_config,
+            accounts_update_notifier,
+            exit,
+        )?,
+        "rebuild bank from snapshot"
+    );
+    info!("{}", measure_rebuild_bank);
 
     // Skip bank.verify_snapshot_bank.  Subsequent snapshot requests/accounts hash verification requests
     // will calculate and check the accounts hash, so we will still have safety/correctness there.
     bank.set_initial_accounts_hash_verification_completed();
 
     let timings = BankFromDirTimings {
-        rebuild_bank_from_snapshot_us: measure_rebuild.as_us(),
-        build_storage_us: measure_build_storage.as_us(),
+        rebuild_storages_us: measure_rebuild_storages.as_us(),
+        rebuild_bank_us: measure_rebuild_bank.as_us(),
     };
     datapoint_info!(
         "bank_from_snapshot_dir",
-        (
-            "build_storage_from_snapshot_dir_us",
-            timings.build_storage_us,
-            i64
-        ),
-        (
-            "rebuild_bank_from_snapshot_us",
-            timings.rebuild_bank_from_snapshot_us,
-            i64
-        ),
+        ("rebuild_storages_us", timings.rebuild_storages_us, i64),
+        ("rebuild_bank_us", timings.rebuild_bank_us, i64),
     );
     Ok((bank, timings))
 }
@@ -1204,6 +1193,7 @@ pub fn package_and_archive_incremental_snapshot(
     ))
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn create_snapshot_dirs_for_tests(
     genesis_config: &GenesisConfig,
     bank_snapshots_dir: impl AsRef<Path>,
@@ -1260,6 +1250,7 @@ mod tests {
     use {
         super::*,
         crate::{
+            bank_forks::BankForks,
             genesis_utils,
             snapshot_utils::{
                 clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
@@ -1283,8 +1274,22 @@ mod tests {
             system_transaction,
             transaction::SanitizedTransaction,
         },
-        std::sync::{atomic::Ordering, Arc},
+        std::sync::{atomic::Ordering, Arc, RwLock},
     };
+
+    fn new_bank_from_parent_with_bank_forks(
+        bank_forks: &RwLock<BankForks>,
+        parent: Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+    ) -> Arc<Bank> {
+        let bank = Bank::new_from_parent(parent, collector_id, slot);
+        bank_forks
+            .write()
+            .unwrap()
+            .insert(bank)
+            .clone_without_scheduler()
+    }
 
     /// Test roundtrip of bank to a full snapshot, then back again.  This test creates the simplest
     /// bank possible, so the contents of the snapshot archive will be quite minimal.
@@ -1353,7 +1358,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1368,7 +1373,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1383,7 +1389,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1392,7 +1399,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1401,7 +1409,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1471,7 +1480,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1486,7 +1495,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1520,7 +1530,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1529,7 +1540,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1538,7 +1550,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1593,7 +1606,7 @@ mod tests {
         let key3 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank0
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1608,7 +1621,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1642,7 +1656,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -1651,7 +1666,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         bank3
             .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
             .unwrap();
@@ -1660,7 +1676,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         bank4
             .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
             .unwrap();
@@ -1717,7 +1734,7 @@ mod tests {
     ///     - take an incremental snapshot
     ///     - ensure deserializing from this snapshot is equal to this bank
     /// slot 3:
-    ///     - remove Account2's reference back to slot 2 by transfering from the mint to Account2
+    ///     - remove Account2's reference back to slot 2 by transferring from the mint to Account2
     /// slot 4:
     ///     - ensure `clean_accounts()` has run and that Account1 is gone
     ///     - take another incremental snapshot
@@ -1743,13 +1760,14 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
 
         let lamports_to_transfer = sol_to_lamports(123_456.);
-        let bank0 = Arc::new(Bank::new_with_paths_for_tests(
+        let (bank0, bank_forks) = Bank::new_with_paths_for_tests(
             &genesis_config,
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.clone()],
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
-        ));
+        )
+        .wrap_with_bank_forks_for_tests();
         bank0
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
             .unwrap();
@@ -1758,7 +1776,8 @@ mod tests {
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         bank1
             .transfer(lamports_to_transfer, &key2, &key1.pubkey())
             .unwrap();
@@ -1780,7 +1799,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         let blockhash = bank2.last_blockhash();
         let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &key1,
@@ -1847,7 +1867,8 @@ mod tests {
         );
 
         let slot = slot + 1;
-        let bank3 = Arc::new(Bank::new_from_parent(bank2, &collector, slot));
+        let bank3 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank2, &collector, slot);
         // Update Account2 so that it no longer holds a reference to slot2
         bank3
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
@@ -1857,7 +1878,8 @@ mod tests {
         }
 
         let slot = slot + 1;
-        let bank4 = Arc::new(Bank::new_from_parent(bank3, &collector, slot));
+        let bank4 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank3, &collector, slot);
         while !bank4.is_complete() {
             bank4.register_unique_tick();
         }
@@ -1925,13 +1947,14 @@ mod tests {
         let key1 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         while !bank0.is_complete() {
             bank0.register_unique_tick();
         }
 
         let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(bank0, &collector, slot));
+        let bank1 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank0, &collector, slot);
         while !bank1.is_complete() {
             bank1.register_unique_tick();
         }
@@ -1953,7 +1976,8 @@ mod tests {
         .unwrap();
 
         let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(bank1, &collector, slot));
+        let bank2 =
+            new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank1, &collector, slot);
         bank2
             .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -2192,12 +2216,18 @@ mod tests {
             bank.fill_bank_with_ticks_for_tests();
         };
 
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+        let (mut bank, bank_forks) =
+            Bank::new_with_bank_forks_for_tests(&genesis_config_info.genesis_config);
 
         // make some banks, do some transactions, ensure there's some zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
+            bank = new_bank_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                bank,
+                &Pubkey::new_unique(),
+                slot,
+            );
             do_transfers(&bank);
         }
 
@@ -2223,7 +2253,12 @@ mod tests {
         // make more banks, do more transactions, ensure there's more zero-lamport accounts
         for _ in 0..5 {
             let slot = bank.slot() + 1;
-            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), slot));
+            bank = new_bank_from_parent_with_bank_forks(
+                bank_forks.as_ref(),
+                bank,
+                &Pubkey::new_unique(),
+                slot,
+            );
             do_transfers(&bank);
         }
 

@@ -39,4 +39,5 @@ $solana_ledger_tool create-snapshot --ledger config/ledger "$snapshot_slot" conf
 cp config/ledger/genesis.tar.bz2 config/snapshot-ledger
 $solana_ledger_tool copy --ledger config/ledger \
   --target-db config/snapshot-ledger --starting-slot "$snapshot_slot" --ending-slot "$latest_slot"
-$solana_ledger_tool verify --ledger config/snapshot-ledger
+$solana_ledger_tool verify --ledger config/snapshot-ledger --block-verification-method blockstore-processor
+$solana_ledger_tool verify --ledger config/snapshot-ledger --block-verification-method unified-scheduler

@@ -715,7 +715,7 @@ pub fn archive_snapshot_package(
         .map_err(|err| SnapshotError::IoWithSource(err, "create staging snapshots path"))?;
 
     let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
-    // To be a source for symlinking and archiving, the path need to be an aboslute path
+    // To be a source for symlinking and archiving, the path need to be an absolute path
     let src_snapshot_dir = src_snapshot_dir
         .canonicalize()
         .map_err(|_e| SnapshotError::InvalidSnapshotDirPath(src_snapshot_dir.clone()))?;
@@ -1211,20 +1211,6 @@ pub(crate) fn get_storages_to_serialize(
         .collect::<Vec<_>>()
 }
 
-#[derive(Debug, Default)]
-pub struct BankFromArchiveTimings {
-    pub rebuild_bank_from_snapshots_us: u64,
-    pub full_snapshot_untar_us: u64,
-    pub incremental_snapshot_untar_us: u64,
-    pub verify_snapshot_bank_us: u64,
-}
-
-#[derive(Debug, Default)]
-pub struct BankFromDirTimings {
-    pub rebuild_bank_from_snapshot_us: u64,
-    pub build_storage_us: u64,
-}
-
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
@@ -1461,9 +1447,11 @@ fn streaming_snapshot_dir_files(
     Ok(())
 }
 
-/// Perform the common tasks when deserialize a snapshot.  Handles reading snapshot file, reading the version file,
-/// and then returning those fields plus the rebuilt storage
-pub fn build_storage_from_snapshot_dir(
+/// Performs the common tasks when deserializing a snapshot
+///
+/// Handles reading the snapshot file and version file,
+/// then returning those fields plus the rebuilt storages.
+pub fn rebuild_storages_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAppendVecId>,
@@ -2036,7 +2024,7 @@ pub fn verify_snapshot_archive(
 
     // The new the status_cache file is inside the slot directory together with the snapshot file.
     // When unpacking an archive, the status_cache file from the archive is one-level up outside of
-    //  the slot direcotry.
+    //  the slot directory.
     // The unpacked status_cache file need to be put back into the slot directory for the directory
     // comparison to pass.
     let existing_unpacked_status_cache_file =
@@ -3043,7 +3031,7 @@ mod tests {
         }
 
         // Ensure the remaining incremental snapshots are at the right slot
-        let expected_remaing_incremental_snapshot_archive_slots =
+        let expected_remaining_incremental_snapshot_archive_slots =
             (latest_full_snapshot_archive_slot..)
                 .step_by(incremental_snapshot_interval)
                 .take(num_incremental_snapshots_per_full_snapshot)
@@ -3060,7 +3048,7 @@ mod tests {
                 .collect::<HashSet<_>>();
         assert_eq!(
             actual_remaining_incremental_snapshot_archive_slots,
-            expected_remaing_incremental_snapshot_archive_slots
+            expected_remaining_incremental_snapshot_archive_slots
         );
     }
 

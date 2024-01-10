@@ -107,7 +107,7 @@ test-stable-sbf)
   _ cargo test \
     --manifest-path programs/sbf/Cargo.toml \
     --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
-    -- --nocapture &> "${sbf_target_path}"/deploy/instuction_counts.txt
+    -- --nocapture &> "${sbf_target_path}"/deploy/instruction_counts.txt
 
   sbf_dump_archive="sbf-dumps.tar.bz2"
   rm -f "$sbf_dump_archive"

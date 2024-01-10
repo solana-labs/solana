@@ -48,7 +48,7 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  # Assume everyting needs to be tested when any Dockerfile changes
+  # Assume everything needs to be tested when any Dockerfile changes
   for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
