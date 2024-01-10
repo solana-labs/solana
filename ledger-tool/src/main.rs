@@ -1,20 +1,16 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
-    chrono::{DateTime, Utc},
+    crate::{args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, program::*},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     dashmap::DashMap,
-    itertools::Itertools,
     log::*,
-    regex::Regex,
     serde::{
         ser::{SerializeSeq, Serializer},
         Serialize,
     },
-    serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_accounts_db::{
         accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
@@ -36,12 +32,9 @@ use {
     },
     solana_cost_model::{cost_model::CostModel, cost_tracker::CostTracker},
     solana_ledger::{
-        ancestor_iterator::AncestorIterator,
-        blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{self, columns as cf, Column, ColumnName, Database},
-        blockstore_options::{AccessType, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO},
+        blockstore::{create_new_ledger, Blockstore},
+        blockstore_options::{AccessType, LedgerColumnOptions},
         blockstore_processor::ProcessOptions,
-        shred::Shred,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     solana_measure::{measure, measure::Measure},
@@ -60,11 +53,10 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        clock::{Epoch, Slot, UnixTimestamp},
+        clock::{Epoch, Slot},
         feature::{self, Feature},
         feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
-        hash::Hash,
         inflation::Inflation,
         native_token::{lamports_to_sol, sol_to_lamports, Sol},
         pubkey::Pubkey,
@@ -80,10 +72,10 @@ use {
         vote_state::{self, VoteState},
     },
     std::{
-        collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         ffi::OsStr,
         fs::File,
-        io::{self, stdout, BufRead, BufReader, Write},
+        io::{self, stdout, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
@@ -92,12 +84,12 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        time::{Duration, UNIX_EPOCH},
     },
 };
 
 mod args;
 mod bigtable;
+mod blockstore;
 mod ledger_path;
 mod ledger_utils;
 mod output;
@@ -483,172 +475,6 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     dot.join("\n")
 }
 
-fn analyze_column<
-    C: solana_ledger::blockstore_db::Column + solana_ledger::blockstore_db::ColumnName,
->(
-    db: &Database,
-    name: &str,
-) {
-    let mut key_len: u64 = 0;
-    let mut key_tot: u64 = 0;
-    let mut val_hist = histogram::Histogram::new();
-    let mut val_tot: u64 = 0;
-    let mut row_hist = histogram::Histogram::new();
-    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
-        // Key length is fixed, only need to calculate it once
-        if key_len == 0 {
-            key_len = C::key(key).len() as u64;
-        }
-        let val_len = val.len() as u64;
-
-        key_tot += key_len;
-        val_hist.increment(val_len).unwrap();
-        val_tot += val_len;
-
-        row_hist.increment(key_len + val_len).unwrap();
-    }
-
-    let json_result = if val_hist.entries() > 0 {
-        json!({
-            "column":name,
-            "entries":val_hist.entries(),
-            "key_stats":{
-                "max":key_len,
-                "total_bytes":key_tot,
-            },
-            "val_stats":{
-                "p50":val_hist.percentile(50.0).unwrap(),
-                "p90":val_hist.percentile(90.0).unwrap(),
-                "p99":val_hist.percentile(99.0).unwrap(),
-                "p999":val_hist.percentile(99.9).unwrap(),
-                "min":val_hist.minimum().unwrap(),
-                "max":val_hist.maximum().unwrap(),
-                "stddev":val_hist.stddev().unwrap(),
-                "total_bytes":val_tot,
-            },
-            "row_stats":{
-                "p50":row_hist.percentile(50.0).unwrap(),
-                "p90":row_hist.percentile(90.0).unwrap(),
-                "p99":row_hist.percentile(99.0).unwrap(),
-                "p999":row_hist.percentile(99.9).unwrap(),
-                "min":row_hist.minimum().unwrap(),
-                "max":row_hist.maximum().unwrap(),
-                "stddev":row_hist.stddev().unwrap(),
-                "total_bytes":key_tot + val_tot,
-            },
-        })
-    } else {
-        json!({
-        "column":name,
-        "entries":val_hist.entries(),
-        "key_stats":{
-            "max":key_len,
-            "total_bytes":0,
-        },
-        "val_stats":{
-            "total_bytes":0,
-        },
-        "row_stats":{
-            "total_bytes":0,
-        },
-        })
-    };
-
-    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
-}
-
-fn analyze_storage(database: &Database) {
-    use blockstore_db::columns::*;
-    analyze_column::<SlotMeta>(database, "SlotMeta");
-    analyze_column::<Orphans>(database, "Orphans");
-    analyze_column::<DeadSlots>(database, "DeadSlots");
-    analyze_column::<DuplicateSlots>(database, "DuplicateSlots");
-    analyze_column::<ErasureMeta>(database, "ErasureMeta");
-    analyze_column::<BankHash>(database, "BankHash");
-    analyze_column::<Root>(database, "Root");
-    analyze_column::<Index>(database, "Index");
-    analyze_column::<ShredData>(database, "ShredData");
-    analyze_column::<ShredCode>(database, "ShredCode");
-    analyze_column::<TransactionStatus>(database, "TransactionStatus");
-    analyze_column::<AddressSignatures>(database, "AddressSignatures");
-    analyze_column::<TransactionMemos>(database, "TransactionMemos");
-    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
-    analyze_column::<Rewards>(database, "Rewards");
-    analyze_column::<Blocktime>(database, "Blocktime");
-    analyze_column::<PerfSamples>(database, "PerfSamples");
-    analyze_column::<BlockHeight>(database, "BlockHeight");
-    analyze_column::<ProgramCosts>(database, "ProgramCosts");
-    analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
-}
-
-fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
-    match column_name {
-        cf::SlotMeta::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
-        cf::Orphans::NAME => Some(cf::Orphans::slot(cf::Orphans::index(key))),
-        cf::DeadSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
-        cf::DuplicateSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
-        cf::ErasureMeta::NAME => Some(cf::ErasureMeta::slot(cf::ErasureMeta::index(key))),
-        cf::BankHash::NAME => Some(cf::BankHash::slot(cf::BankHash::index(key))),
-        cf::Root::NAME => Some(cf::Root::slot(cf::Root::index(key))),
-        cf::Index::NAME => Some(cf::Index::slot(cf::Index::index(key))),
-        cf::ShredData::NAME => Some(cf::ShredData::slot(cf::ShredData::index(key))),
-        cf::ShredCode::NAME => Some(cf::ShredCode::slot(cf::ShredCode::index(key))),
-        cf::TransactionStatus::NAME => Some(cf::TransactionStatus::slot(
-            cf::TransactionStatus::index(key),
-        )),
-        cf::AddressSignatures::NAME => Some(cf::AddressSignatures::slot(
-            cf::AddressSignatures::index(key),
-        )),
-        cf::TransactionMemos::NAME => None, // does not implement slot()
-        cf::TransactionStatusIndex::NAME => None, // does not implement slot()
-        cf::Rewards::NAME => Some(cf::Rewards::slot(cf::Rewards::index(key))),
-        cf::Blocktime::NAME => Some(cf::Blocktime::slot(cf::Blocktime::index(key))),
-        cf::PerfSamples::NAME => Some(cf::PerfSamples::slot(cf::PerfSamples::index(key))),
-        cf::BlockHeight::NAME => Some(cf::BlockHeight::slot(cf::BlockHeight::index(key))),
-        cf::ProgramCosts::NAME => None, // does not implement slot()
-        cf::OptimisticSlots::NAME => {
-            Some(cf::OptimisticSlots::slot(cf::OptimisticSlots::index(key)))
-        }
-        &_ => None,
-    }
-}
-
-fn print_blockstore_file_metadata(
-    blockstore: &Blockstore,
-    file_name: &Option<&str>,
-) -> Result<(), String> {
-    let live_files = blockstore
-        .live_files_metadata()
-        .map_err(|err| format!("{err:?}"))?;
-
-    // All files under live_files_metadata are prefixed with "/".
-    let sst_file_name = file_name.as_ref().map(|name| format!("/{name}"));
-    for file in live_files {
-        if sst_file_name.is_none() || file.name.eq(sst_file_name.as_ref().unwrap()) {
-            println!(
-                "[{}] cf_name: {}, level: {}, start_slot: {:?}, end_slot: {:?}, size: {}, \
-                 num_entries: {}",
-                file.name,
-                file.column_family_name,
-                file.level,
-                raw_key_to_slot(&file.start_key.unwrap(), &file.column_family_name),
-                raw_key_to_slot(&file.end_key.unwrap(), &file.column_family_name),
-                file.size,
-                file.num_entries,
-            );
-            if sst_file_name.is_some() {
-                return Ok(());
-            }
-        }
-    }
-    if sst_file_name.is_some() {
-        return Err(format!(
-            "Failed to find or load the metadata of the specified file {file_name:?}"
-        ));
-    }
-    Ok(())
-}
-
 fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         return Err("Dead slot".to_string());
@@ -709,73 +535,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     Ok(())
 }
 
-/// Returns true if the supplied slot contains any nonvote transactions
-fn slot_contains_nonvote_tx(blockstore: &Blockstore, slot: Slot) -> bool {
-    let (entries, _, _) = blockstore
-        .get_slot_entries_with_shred_info(slot, 0, false)
-        .expect("Failed to get slot entries");
-    let contains_nonvote = entries
-        .iter()
-        .flat_map(|entry| entry.transactions.iter())
-        .flat_map(get_program_ids)
-        .any(|program_id| *program_id != solana_vote_program::id());
-    contains_nonvote
-}
-
-type OptimisticSlotInfo = (Slot, Option<(Hash, UnixTimestamp)>, bool);
-
-/// Return the latest `num_slots` optimistically confirmed slots, including
-/// ancestors of optimistically confirmed slots that may not have been marked
-/// as optimistically confirmed themselves.
-fn get_latest_optimistic_slots(
-    blockstore: &Blockstore,
-    num_slots: usize,
-    exclude_vote_only_slots: bool,
-) -> Vec<OptimisticSlotInfo> {
-    // Consider a chain X -> Y -> Z where X and Z have been optimistically
-    // confirmed. Given that Y is an ancestor of Z, Y can implicitly be
-    // considered as optimistically confirmed. However, there isn't an explicit
-    // guarantee that Y will be marked as optimistically confirmed in the
-    // blockstore.
-    //
-    // Because retrieving optimistically confirmed slots is an important part
-    // of cluster restarts, exercise caution in this function and manually walk
-    // the ancestors of the latest optimistically confirmed slot instead of
-    // solely relying on the contents of the optimistically confirmed column.
-    let Some(latest_slot) = blockstore
-        .get_latest_optimistic_slots(1)
-        .expect("get_latest_optimistic_slots() failed")
-        .pop()
-    else {
-        eprintln!("Blockstore does not contain any optimistically confirmed slots");
-        return vec![];
-    };
-    let latest_slot = latest_slot.0;
-
-    let slot_iter = AncestorIterator::new_inclusive(latest_slot, blockstore).map(|slot| {
-        let contains_nonvote_tx = slot_contains_nonvote_tx(blockstore, slot);
-        let hash_and_timestamp_opt = blockstore
-            .get_optimistic_slot(slot)
-            .expect("get_optimistic_slot() failed");
-        if hash_and_timestamp_opt.is_none() {
-            warn!(
-                "Slot {slot} is an ancestor of latest optimistically confirmed slot \
-                 {latest_slot}, but was not marked as optimistically confirmed in blockstore."
-            );
-        }
-        (slot, hash_and_timestamp_opt, contains_nonvote_tx)
-    });
-
-    if exclude_vote_only_slots {
-        slot_iter
-            .filter(|(_, _, contains_nonvote)| *contains_nonvote)
-            .take(num_slots)
-            .collect()
-    } else {
-        slot_iter.take(num_slots).collect()
-    }
-}
-
 /// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
 /// Removes all other accounts from accounts_db, and updates the accounts hash
 /// and capitalization. This is used by the --minimize option in create-snapshot
@@ -830,9 +589,6 @@ fn main() {
         unsafe { signal_hook::low_level::register(signal_hook::consts::SIGUSR1, || {}) }.unwrap();
     }
 
-    const DEFAULT_ROOT_COUNT: &str = "1";
-    const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
-    const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     // Use std::usize::MAX for DEFAULT_MAX_*_SNAPSHOTS_TO_RETAIN such that
     // ledger-tool commands won't accidentally remove any snapshots by default
     const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
@@ -840,17 +596,6 @@ fn main() {
 
     solana_logger::setup_with_default("solana=info");
 
-    let starting_slot_arg = Arg::with_name("starting_slot")
-        .long("starting-slot")
-        .value_name("SLOT")
-        .takes_value(true)
-        .default_value("0")
-        .help("Start at this slot");
-    let ending_slot_arg = Arg::with_name("ending_slot")
-        .long("ending-slot")
-        .value_name("SLOT")
-        .takes_value(true)
-        .help("The last slot to iterate to");
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
@@ -1165,93 +910,11 @@ fn main() {
                 .help("Show additional information where supported"),
         )
         .bigtable_subcommand()
-        .subcommand(
-            SubCommand::with_name("print")
-                .about("Print the ledger")
-                .arg(&starting_slot_arg)
-                .arg(&allow_dead_slots_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("num_slots")
-                        .long("num-slots")
-                        .value_name("SLOT")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .help("Number of slots to print"),
-                )
-                .arg(
-                    Arg::with_name("only_rooted")
-                        .long("only-rooted")
-                        .takes_value(false)
-                        .help("Only print root slots"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("copy")
-                .about("Copy the ledger")
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("target_db")
-                        .long("target-db")
-                        .value_name("DIR")
-                        .takes_value(true)
-                        .help("Target db"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("slot")
-                .about("Print the contents of one or more slots")
-                .arg(
-                    Arg::with_name("slots")
-                        .index(1)
-                        .value_name("SLOTS")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(true)
-                        .help("Slots to print"),
-                )
-                .arg(&allow_dead_slots_arg),
-        )
-        .subcommand(
-            SubCommand::with_name("dead-slots")
-                .arg(&starting_slot_arg)
-                .about("Print all the dead slots in the ledger"),
-        )
-        .subcommand(
-            SubCommand::with_name("duplicate-slots")
-                .arg(&starting_slot_arg)
-                .about("Print all the duplicate slots in the ledger"),
-        )
-        .subcommand(
-            SubCommand::with_name("set-dead-slot")
-                .about("Mark one or more slots dead")
-                .arg(
-                    Arg::with_name("slots")
-                        .index(1)
-                        .value_name("SLOTS")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(true)
-                        .help("Slots to mark dead"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("remove-dead-slot")
-                .about("Remove the dead flag for a slot")
-                .arg(
-                    Arg::with_name("slots")
-                        .index(1)
-                        .value_name("SLOTS")
-                        .validator(is_slot)
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(true)
-                        .help("Slots to mark as not dead"),
-                ),
-        )
+        .blockstore_subcommand()
+        // All of the blockstore commands are added under the blockstore command.
+        // For the sake of legacy support, also directly add the blockstore commands here so that
+        // these subcommands can continue to be called from the top level of the binary.
+        .subcommands(blockstore_subcommands(true))
         .subcommand(
             SubCommand::with_name("genesis")
                 .about("Prints the ledger's genesis config")
@@ -1275,22 +938,6 @@ fn main() {
             SubCommand::with_name("genesis-hash")
                 .about("Prints the ledger's genesis hash")
                 .arg(&max_genesis_archive_unpacked_size_arg),
-        )
-        .subcommand(
-            SubCommand::with_name("parse_full_frozen")
-                .about(
-                    "Parses log for information about critical events about ancestors of the \
-                     given `ending_slot`",
-                )
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg)
-                .arg(
-                    Arg::with_name("log_path")
-                        .long("log-path")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .help("path to log file to parse"),
-                ),
         )
         .subcommand(
             SubCommand::with_name("modify-genesis")
@@ -1325,12 +972,6 @@ fn main() {
                 .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
         )
         .subcommand(
-            SubCommand::with_name("shred-meta")
-                .about("Prints raw shred metadata")
-                .arg(&starting_slot_arg)
-                .arg(&ending_slot_arg),
-        )
-        .subcommand(
             SubCommand::with_name("bank-hash")
                 .about("Prints the hash of the working bank after reading the ledger")
                 .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1341,26 +982,6 @@ fn main() {
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
                 .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
-        )
-        .subcommand(
-            SubCommand::with_name("bounds")
-                .about(
-                    "Print lowest and highest non-empty slots. Note that there may be empty slots \
-                     within the bounds",
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .long("all")
-                        .takes_value(false)
-                        .required(false)
-                        .help("Additionally print all the non-empty slots within the bounds"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("json")
-                .about("Print the ledger in JSON format")
-                .arg(&starting_slot_arg)
-                .arg(&allow_dead_slots_arg),
         )
         .subcommand(
             SubCommand::with_name("verify")
@@ -1817,156 +1438,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("purge")
-                .about("Delete a range of slots from the ledger")
-                .arg(
-                    Arg::with_name("start_slot")
-                        .index(1)
-                        .value_name("SLOT")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Start slot to purge from (inclusive)"),
-                )
-                .arg(Arg::with_name("end_slot").index(2).value_name("SLOT").help(
-                    "Ending slot to stop purging (inclusive) \
-                    [default: the highest slot in the ledger]",
-                ))
-                .arg(
-                    Arg::with_name("batch_size")
-                        .long("batch-size")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value("1000")
-                        .help("Removes at most BATCH_SIZE slots while purging in loop"),
-                )
-                .arg(
-                    Arg::with_name("no_compaction")
-                        .long("no-compaction")
-                        .required(false)
-                        .takes_value(false)
-                        .help(
-                            "--no-compaction is deprecated, ledger compaction after purge is \
-                             disabled by default",
-                        )
-                        .conflicts_with("enable_compaction")
-                        .hidden(hidden_unless_forced()),
-                )
-                .arg(
-                    Arg::with_name("enable_compaction")
-                        .long("enable-compaction")
-                        .required(false)
-                        .takes_value(false)
-                        .help(
-                            "Perform ledger compaction after purge. Compaction will optimize \
-                             storage space, but may take a long time to complete.",
-                        )
-                        .conflicts_with("no_compaction"),
-                )
-                .arg(
-                    Arg::with_name("dead_slots_only")
-                        .long("dead-slots-only")
-                        .required(false)
-                        .takes_value(false)
-                        .help("Limit purging to dead slots only"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("list-roots")
-                .about(
-                    "Output up to last <num-roots> root hashes and their heights starting at the \
-                     given block height",
-                )
-                .arg(
-                    Arg::with_name("max_height")
-                        .long("max-height")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Maximum block height"),
-                )
-                .arg(
-                    Arg::with_name("start_root")
-                        .long("start-root")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("First root to start searching from"),
-                )
-                .arg(
-                    Arg::with_name("slot_list")
-                        .long("slot-list")
-                        .value_name("FILENAME")
-                        .required(false)
-                        .takes_value(true)
-                        .help(
-                            "The location of the output YAML file. A list of rollback slot \
-                             heights and hashes will be written to the file",
-                        ),
-                )
-                .arg(
-                    Arg::with_name("num_roots")
-                        .long("num-roots")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value(DEFAULT_ROOT_COUNT)
-                        .required(false)
-                        .help("Number of roots in the output"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("latest-optimistic-slots")
-                .about(
-                    "Output up to the most recent <num-slots> optimistic slots with their hashes \
-                     and timestamps.",
-                )
-                .arg(
-                    Arg::with_name("num_slots")
-                        .long("num-slots")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value(DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT)
-                        .required(false)
-                        .help("Number of slots in the output"),
-                )
-                .arg(
-                    Arg::with_name("exclude_vote_only_slots")
-                        .long("exclude-vote-only-slots")
-                        .required(false)
-                        .help("Exclude slots that contain only votes from output"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("repair-roots")
-                .about(
-                    "Traverses the AncestorIterator backward from a last known root to restore \
-                     missing roots to the Root column",
-                )
-                .arg(
-                    Arg::with_name("start_root")
-                        .long("before")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Recent root after the range to repair"),
-                )
-                .arg(
-                    Arg::with_name("end_root")
-                        .long("until")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .help("Earliest slot to check for root repair"),
-                )
-                .arg(
-                    Arg::with_name("max_slots")
-                        .long("repair-limit")
-                        .value_name("NUM")
-                        .takes_value(true)
-                        .default_value(DEFAULT_MAX_SLOTS_ROOT_REPAIR)
-                        .required(true)
-                        .help("Override the maximum number of slots to check for root repair"),
-                ),
-        )
-        .subcommand(SubCommand::with_name("analyze-storage").about(
-            "Output statistics in JSON format about all column families in the ledger rocksdb",
-        ))
-        .subcommand(
             SubCommand::with_name("compute-slot-cost")
                 .about(
                     "runs cost_model over the block at the given slots, computes how expensive a \
@@ -1982,23 +1453,6 @@ fn main() {
                         .help(
                             "Slots that their blocks are computed for cost, default to all slots \
                              in ledger",
-                        ),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("print-file-metadata")
-                .about(
-                    "Print the metadata of the specified ledger-store file. If no file name is \
-                     specified, it will print the metadata of all ledger files.",
-                )
-                .arg(
-                    Arg::with_name("file_name")
-                        .long("file-name")
-                        .takes_value(true)
-                        .value_name("SST_FILE_NAME")
-                        .help(
-                            "The ledger file name (e.g. 011080.sst.) If no file name is \
-                             specified, it will print the metadata of all ledger files.",
                         ),
                 ),
         )
@@ -2020,63 +1474,31 @@ fn main() {
 
     match matches.subcommand() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
+        ("blockstore", Some(arg_matches)) => blockstore_process_command(&ledger_path, arg_matches),
         ("program", Some(arg_matches)) => program(&ledger_path, arg_matches),
+        // This match case provides legacy support for commands that were previously top level
+        // subcommands of the binary, but have been moved under the blockstore subcommand.
+        ("analyze-storage", Some(_))
+        | ("bounds", Some(_))
+        | ("copy", Some(_))
+        | ("dead-slots", Some(_))
+        | ("duplicate-slots", Some(_))
+        | ("json", Some(_))
+        | ("latest-optimistic-slots", Some(_))
+        | ("list-roots", Some(_))
+        | ("parse_full_frozen", Some(_))
+        | ("print", Some(_))
+        | ("print-file-metadata", Some(_))
+        | ("purge", Some(_))
+        | ("remove-dead-slot", Some(_))
+        | ("repair-roots", Some(_))
+        | ("set-dead-slot", Some(_))
+        | ("shred-meta", Some(_))
+        | ("slot", Some(_)) => blockstore_process_command(&ledger_path, &matches),
         _ => {
             let ledger_path = canonicalize_ledger_path(&ledger_path);
 
             match matches.subcommand() {
-                ("print", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot =
-                        value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                    let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    let only_rooted = arg_matches.is_present("only_rooted");
-                    output_ledger(
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
-                        starting_slot,
-                        ending_slot,
-                        allow_dead_slots,
-                        OutputFormat::Display,
-                        num_slots,
-                        verbose_level,
-                        only_rooted,
-                    );
-                }
-                ("copy", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                    let target_db =
-                        PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-
-                    let source = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    // Check if shred storage type can be inferred; if not, a new
-                    // ledger is being created. open_blockstore() will attempt to
-                    // to infer shred storage type as well, but this check provides
-                    // extra insight to user on how to create a FIFO ledger.
-                    let _ = get_shred_storage_type(
-                        &target_db,
-                        &format!(
-                            "No --target-db ledger at {:?} was detected, default compaction \
-                         (RocksLevel) will be used. Fifo compaction can be enabled for a new \
-                         ledger by manually creating {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} directory \
-                         within the specified --target_db directory.",
-                            &target_db
-                        ),
-                    );
-                    let target = open_blockstore(&target_db, arg_matches, AccessType::Primary);
-                    for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
-                        if slot > ending_slot {
-                            break;
-                        }
-                        if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
-                            if target.insert_shreds(shreds, None, true).is_err() {
-                                warn!("error inserting shreds for slot {}", slot);
-                            }
-                        }
-                    }
-                }
                 ("genesis", Some(arg_matches)) => {
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let print_accounts = arg_matches.is_present("accounts");
@@ -2163,48 +1585,6 @@ fn main() {
                         )
                     );
                 }
-                ("shred-meta", Some(arg_matches)) => {
-                    #[derive(Debug)]
-                    #[allow(dead_code)]
-                    struct ShredMeta<'a> {
-                        slot: Slot,
-                        full_slot: bool,
-                        shred_index: usize,
-                        data: bool,
-                        code: bool,
-                        last_in_slot: bool,
-                        data_complete: bool,
-                        shred: &'a Shred,
-                    }
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot =
-                        value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                    let ledger = open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    for (slot, _meta) in ledger
-                        .slot_meta_iterator(starting_slot)
-                        .unwrap()
-                        .take_while(|(slot, _)| *slot <= ending_slot)
-                    {
-                        let full_slot = ledger.is_full(slot);
-                        if let Ok(shreds) = ledger.get_data_shreds_for_slot(slot, 0) {
-                            for (shred_index, shred) in shreds.iter().enumerate() {
-                                println!(
-                                    "{:#?}",
-                                    ShredMeta {
-                                        slot,
-                                        full_slot,
-                                        shred_index,
-                                        data: shred.is_data(),
-                                        code: shred.is_code(),
-                                        data_complete: shred.data_complete(),
-                                        last_in_slot: shred.last_in_slot(),
-                                        shred,
-                                    }
-                                );
-                            }
-                        }
-                    }
-                }
                 ("bank-hash", Some(arg_matches)) => {
                     let process_options = ProcessOptions {
                         new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -2228,141 +1608,6 @@ fn main() {
                         incremental_snapshot_archive_path,
                     );
                     println!("{}", &bank_forks.read().unwrap().working_bank().hash());
-                }
-                ("slot", Some(arg_matches)) => {
-                    let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    for slot in slots {
-                        println!("Slot {slot}");
-                        if let Err(err) = output_slot(
-                            &blockstore,
-                            slot,
-                            allow_dead_slots,
-                            &OutputFormat::Display,
-                            verbose_level,
-                            &mut HashMap::new(),
-                        ) {
-                            eprintln!("{err}");
-                        }
-                    }
-                }
-                ("json", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                    output_ledger(
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary),
-                        starting_slot,
-                        Slot::MAX,
-                        allow_dead_slots,
-                        OutputFormat::Json,
-                        None,
-                        std::u64::MAX,
-                        true,
-                    );
-                }
-                ("dead-slots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
-                        println!("{slot}");
-                    }
-                }
-                ("duplicate-slots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
-                        println!("{slot}");
-                    }
-                }
-                ("set-dead-slot", Some(arg_matches)) => {
-                    let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
-                    for slot in slots {
-                        match blockstore.set_dead_slot(slot) {
-                            Ok(_) => println!("Slot {slot} dead"),
-                            Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
-                        }
-                    }
-                }
-                ("remove-dead-slot", Some(arg_matches)) => {
-                    let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
-                    for slot in slots {
-                        match blockstore.remove_dead_slot(slot) {
-                            Ok(_) => println!("Slot {slot} not longer marked dead"),
-                            Err(err) => {
-                                eprintln!("Failed to remove dead flag for slot {slot}, {err:?}")
-                            }
-                        }
-                    }
-                }
-                ("parse_full_frozen", Some(arg_matches)) => {
-                    let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-                    let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let mut ancestors = BTreeSet::new();
-                    assert!(
-                        blockstore.meta(ending_slot).unwrap().is_some(),
-                        "Ending slot doesn't exist"
-                    );
-                    for a in AncestorIterator::new(ending_slot, &blockstore) {
-                        ancestors.insert(a);
-                        if a <= starting_slot {
-                            break;
-                        }
-                    }
-                    println!("ancestors: {:?}", ancestors.iter());
-
-                    let mut frozen = BTreeMap::new();
-                    let mut full = BTreeMap::new();
-                    let frozen_regex = Regex::new(r"bank frozen: (\d*)").unwrap();
-                    let full_regex = Regex::new(r"slot (\d*) is full").unwrap();
-
-                    let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
-                    let f = BufReader::new(File::open(log_file).unwrap());
-                    println!("Reading log file");
-                    for line in f.lines().map_while(Result::ok) {
-                        let parse_results = {
-                            if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
-                                Some((slot_string, &mut frozen))
-                            } else {
-                                full_regex
-                                    .captures_iter(&line)
-                                    .next()
-                                    .map(|slot_string| (slot_string, &mut full))
-                            }
-                        };
-
-                        if let Some((slot_string, map)) = parse_results {
-                            let slot = slot_string
-                                .get(1)
-                                .expect("Only one match group")
-                                .as_str()
-                                .parse::<u64>()
-                                .unwrap();
-                            if ancestors.contains(&slot) && !map.contains_key(&slot) {
-                                map.insert(slot, line);
-                            }
-                            if slot == ending_slot
-                                && frozen.contains_key(&slot)
-                                && full.contains_key(&slot)
-                            {
-                                break;
-                            }
-                        }
-                    }
-
-                    for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
-                        assert_eq!(slot1, slot2);
-                        println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
-                    }
                 }
                 ("verify", Some(arg_matches)) => {
                     let exit_signal = Arc::new(AtomicBool::new(false));
@@ -3632,264 +2877,6 @@ fn main() {
                         println!("Capitalization: {}", Sol(bank.capitalization()));
                     }
                 }
-                ("purge", Some(arg_matches)) => {
-                    let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
-                    let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
-                    let perform_compaction = arg_matches.is_present("enable_compaction");
-                    if arg_matches.is_present("no_compaction") {
-                        warn!("--no-compaction is deprecated and is now the default behavior.");
-                    }
-                    let dead_slots_only = arg_matches.is_present("dead_slots_only");
-                    let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
-
-                    let blockstore = open_blockstore(
-                        &ledger_path,
-                        arg_matches,
-                        AccessType::PrimaryForMaintenance,
-                    );
-
-                    let end_slot = match end_slot {
-                        Some(end_slot) => end_slot,
-                        None => match blockstore.slot_meta_iterator(start_slot) {
-                            Ok(metas) => {
-                                let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                                if slots.is_empty() {
-                                    eprintln!("Purge range is empty");
-                                    exit(1);
-                                }
-                                *slots.last().unwrap()
-                            }
-                            Err(err) => {
-                                eprintln!("Unable to read the Ledger: {err:?}");
-                                exit(1);
-                            }
-                        },
-                    };
-
-                    if end_slot < start_slot {
-                        eprintln!("end slot {end_slot} is less than start slot {start_slot}");
-                        exit(1);
-                    }
-                    info!(
-                    "Purging data from slots {} to {} ({} slots) (do compaction: {}) (dead slot \
-                     only: {})",
-                    start_slot,
-                    end_slot,
-                    end_slot - start_slot,
-                    perform_compaction,
-                    dead_slots_only,
-                );
-                    let purge_from_blockstore = |start_slot, end_slot| {
-                        blockstore.purge_from_next_slots(start_slot, end_slot);
-                        if perform_compaction {
-                            blockstore.purge_and_compact_slots(start_slot, end_slot);
-                        } else {
-                            blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-                        }
-                    };
-                    if !dead_slots_only {
-                        let slots_iter = &(start_slot..=end_slot).chunks(batch_size);
-                        for slots in slots_iter {
-                            let slots = slots.collect::<Vec<_>>();
-                            assert!(!slots.is_empty());
-
-                            let start_slot = *slots.first().unwrap();
-                            let end_slot = *slots.last().unwrap();
-                            info!(
-                                "Purging chunked slots from {} to {} ({} slots)",
-                                start_slot,
-                                end_slot,
-                                end_slot - start_slot
-                            );
-                            purge_from_blockstore(start_slot, end_slot);
-                        }
-                    } else {
-                        let dead_slots_iter = blockstore
-                            .dead_slots_iterator(start_slot)
-                            .unwrap()
-                            .take_while(|s| *s <= end_slot);
-                        for dead_slot in dead_slots_iter {
-                            info!("Purging dead slot {}", dead_slot);
-                            purge_from_blockstore(dead_slot, dead_slot);
-                        }
-                    }
-                }
-                ("list-roots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    let max_height =
-                        value_t!(arg_matches, "max_height", usize).unwrap_or(usize::MAX);
-                    let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
-                    let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
-
-                    let iter = blockstore
-                        .rooted_slot_iterator(start_root)
-                        .expect("Failed to get rooted slot");
-
-                    let mut output: Box<dyn Write> =
-                        if let Some(path) = arg_matches.value_of("slot_list") {
-                            match File::create(path) {
-                                Ok(file) => Box::new(file),
-                                _ => Box::new(stdout()),
-                            }
-                        } else {
-                            Box::new(stdout())
-                        };
-
-                    iter.take(num_roots)
-                        .take_while(|slot| *slot <= max_height as u64)
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                        .rev()
-                        .for_each(|slot| {
-                            let blockhash = blockstore
-                                .get_slot_entries(slot, 0)
-                                .unwrap()
-                                .last()
-                                .unwrap()
-                                .hash;
-
-                            writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
-                        });
-                }
-                ("latest-optimistic-slots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
-                    let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
-                    let slots = get_latest_optimistic_slots(
-                        &blockstore,
-                        num_slots,
-                        exclude_vote_only_slots,
-                    );
-
-                    println!(
-                        "{:>20} {:>44} {:>32} {:>13}",
-                        "Slot", "Hash", "Timestamp", "Vote Only?"
-                    );
-                    for (slot, hash_and_timestamp_opt, contains_nonvote) in slots.iter() {
-                        let (time_str, hash_str) =
-                            if let Some((hash, timestamp)) = hash_and_timestamp_opt {
-                                let secs: u64 = (timestamp / 1_000) as u64;
-                                let nanos: u32 = ((timestamp % 1_000) * 1_000_000) as u32;
-                                let t = UNIX_EPOCH + Duration::new(secs, nanos);
-                                let datetime: DateTime<Utc> = t.into();
-
-                                (datetime.to_rfc3339(), format!("{hash}"))
-                            } else {
-                                let unknown = "Unknown";
-                                (String::from(unknown), String::from(unknown))
-                            };
-                        println!(
-                            "{:>20} {:>44} {:>32} {:>13}",
-                            slot, &hash_str, &time_str, !contains_nonvote
-                        );
-                    }
-                }
-                ("repair-roots", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
-
-                    let start_root = value_t!(arg_matches, "start_root", Slot)
-                        .unwrap_or_else(|_| blockstore.max_root());
-                    let max_slots = value_t_or_exit!(arg_matches, "max_slots", u64);
-                    let end_root = value_t!(arg_matches, "end_root", Slot)
-                        .unwrap_or_else(|_| start_root.saturating_sub(max_slots));
-                    assert!(start_root > end_root);
-                    let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
-                    if arg_matches.is_present("end_root") && num_slots > max_slots {
-                        eprintln!(
-                        "Requested range {num_slots} too large, max {max_slots}. Either adjust \
-                         `--until` value, or pass a larger `--repair-limit` to override the limit",
-                    );
-                        exit(1);
-                    }
-
-                    let num_repaired_roots = blockstore
-                        .scan_and_fix_roots(
-                            Some(start_root),
-                            Some(end_root),
-                            &AtomicBool::new(false),
-                        )
-                        .unwrap_or_else(|err| {
-                            eprintln!("Unable to repair roots: {err}");
-                            exit(1);
-                        });
-                    println!("Successfully repaired {num_repaired_roots} roots");
-                }
-                ("bounds", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-                    match blockstore.slot_meta_iterator(0) {
-                        Ok(metas) => {
-                            let output_format =
-                                OutputFormat::from_matches(arg_matches, "output_format", false);
-                            let all = arg_matches.is_present("all");
-
-                            let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-
-                            let slot_bounds = if slots.is_empty() {
-                                SlotBounds::default()
-                            } else {
-                                // Collect info about slot bounds
-                                let mut bounds = SlotBounds {
-                                    slots: SlotInfo {
-                                        total: slots.len(),
-                                        first: Some(*slots.first().unwrap()),
-                                        last: Some(*slots.last().unwrap()),
-                                        ..SlotInfo::default()
-                                    },
-                                    ..SlotBounds::default()
-                                };
-                                if all {
-                                    bounds.all_slots = Some(&slots);
-                                }
-
-                                // Consider also rooted slots, if present
-                                if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
-                                    let mut first_rooted = None;
-                                    let mut last_rooted = None;
-                                    let mut total_rooted = 0;
-                                    for (i, slot) in rooted.into_iter().enumerate() {
-                                        if i == 0 {
-                                            first_rooted = Some(slot);
-                                        }
-                                        last_rooted = Some(slot);
-                                        total_rooted += 1;
-                                    }
-                                    let last_root_for_comparison = last_rooted.unwrap_or_default();
-                                    let count_past_root = slots
-                                        .iter()
-                                        .rev()
-                                        .take_while(|slot| *slot > &last_root_for_comparison)
-                                        .count();
-
-                                    bounds.roots = SlotInfo {
-                                        total: total_rooted,
-                                        first: first_rooted,
-                                        last: last_rooted,
-                                        num_after_last_root: Some(count_past_root),
-                                    };
-                                }
-                                bounds
-                            };
-
-                            // Print collected data
-                            println!("{}", output_format.formatted_string(&slot_bounds));
-                        }
-                        Err(err) => {
-                            eprintln!("Unable to read the Ledger: {err:?}");
-                            exit(1);
-                        }
-                    };
-                }
-                ("analyze-storage", Some(arg_matches)) => {
-                    analyze_storage(
-                        &open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
-                    );
-                }
                 ("compute-slot-cost", Some(arg_matches)) => {
                     let blockstore =
                         open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
@@ -3909,14 +2896,6 @@ fn main() {
                         }
                     }
                 }
-                ("print-file-metadata", Some(arg_matches)) => {
-                    let blockstore =
-                        open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-                    let sst_file_name = arg_matches.value_of("file_name");
-                    if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
-                        eprintln!("{err}");
-                    }
-                }
                 ("", _) => {
                     eprintln!("{}", matches.usage());
                     exit(1);
@@ -3927,44 +2906,4 @@ fn main() {
     };
     measure_total_execution_time.stop();
     info!("{}", measure_total_execution_time);
-}
-
-#[cfg(test)]
-pub mod tests {
-    use {
-        super::*,
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
-    };
-
-    #[test]
-    fn test_latest_optimistic_ancestors() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        // Insert 5 slots into blockstore
-        let start_slot = 0;
-        let num_slots = 5;
-        let entries_per_shred = 5;
-        let (shreds, _) = make_many_slot_entries(start_slot, num_slots, entries_per_shred);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        // Mark even shreds as optimistically confirmed
-        (0..num_slots).step_by(2).for_each(|slot| {
-            blockstore
-                .insert_optimistic_slot(slot, &Hash::default(), UnixTimestamp::default())
-                .unwrap();
-        });
-
-        let exclude_vote_only_slots = false;
-        let optimistic_slots: Vec<_> =
-            get_latest_optimistic_slots(&blockstore, num_slots as usize, exclude_vote_only_slots)
-                .iter()
-                .map(|(slot, _, _)| *slot)
-                .collect();
-
-        // Should see all slots here since they're all chained, despite only evens getting marked
-        // get_latest_optimistic_slots() returns slots in descending order so use .rev()
-        let expected: Vec<_> = (start_slot..num_slots).rev().collect();
-        assert_eq!(optimistic_slots, expected);
-    }
 }
