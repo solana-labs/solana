@@ -837,6 +837,7 @@ impl ProgramTest {
             false,
             None,
             None,
+            None,
             Arc::default(),
         );
 
