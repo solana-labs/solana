@@ -1,6 +1,5 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
         ic_msg,
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
@@ -164,7 +163,6 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
-    accounts_data_meter: AccountsDataMeter,
     pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
     pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
@@ -187,7 +185,7 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        prev_accounts_data_len: u64,
+        _prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -196,7 +194,6 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
-            accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             programs_loaded_for_tx_batch,
             programs_modified_by_tx,
             feature_set,
@@ -568,11 +565,6 @@ impl<'a> InvokeContext<'a> {
     /// Only use for tests and benchmarks
     pub fn mock_set_remaining(&self, remaining: u64) {
         *self.compute_meter.borrow_mut() = remaining;
-    }
-
-    /// Get this invocation's AccountsDataMeter
-    pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
-        &self.accounts_data_meter
     }
 
     /// Get this invocation's compute budget
