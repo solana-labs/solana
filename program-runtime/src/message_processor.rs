@@ -35,10 +35,6 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     }
 }
 
-/// Resultant information gathered from calling process_message()
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ProcessedMessageInfo {}
-
 impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded accounts.
@@ -60,7 +56,7 @@ impl MessageProcessor {
         blockhash: Hash,
         lamports_per_signature: u64,
         accumulated_consumed_units: &mut u64,
-    ) -> Result<ProcessedMessageInfo, TransactionError> {
+    ) -> Result<(), TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
             sysvar_cache,
@@ -169,7 +165,7 @@ impl MessageProcessor {
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
-        Ok(ProcessedMessageInfo {})
+        Ok(())
     }
 }
 
