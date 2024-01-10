@@ -1702,6 +1702,8 @@ fn test_program_sbf_instruction_introspection() {
     assert!(bank.get_account(&sysvar::instructions::id()).is_none());
 }
 
+/// This test is to test bpf_loader v1 `Finalize` instruction. It is going to be
+/// deprecated once we activate `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_test_use_latest_executor() {
@@ -3011,6 +3013,8 @@ fn test_program_upgradeable_locks() {
     assert_eq!(results2[1], Err(TransactionError::AccountInUse));
 }
 
+/// This test is to test bpf_loader v1 `Finalize` instruction. It is going to be
+/// deprecated once we activate `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_finalize() {
