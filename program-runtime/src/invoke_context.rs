@@ -185,7 +185,6 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        _prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -680,7 +679,6 @@ macro_rules! with_mock_invoke_context {
             &mut programs_modified_by_tx,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
-            0,
             0,
         );
     };

@@ -62,7 +62,7 @@ impl MessageProcessor {
         sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
-        current_accounts_data_len: u64,
+        _current_accounts_data_len: u64,
         accumulated_consumed_units: &mut u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
@@ -75,7 +75,6 @@ impl MessageProcessor {
             feature_set,
             blockhash,
             lamports_per_signature,
-            current_accounts_data_len,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions().len());
