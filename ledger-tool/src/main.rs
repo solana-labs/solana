@@ -968,7 +968,8 @@ fn main() {
                 .arg(&disable_disk_index)
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
+                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
+                .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
@@ -980,7 +981,8 @@ fn main() {
                 .arg(&disable_disk_index)
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
+                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
+                .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("verify")
