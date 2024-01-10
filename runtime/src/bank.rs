@@ -4765,7 +4765,6 @@ impl Bank {
         log_messages_bytes_limit: Option<usize>,
         programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
     ) -> TransactionExecutionResult {
-        let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
 
         fn transaction_accounts_lamports_sum(
@@ -4827,7 +4826,6 @@ impl Bank {
             &self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
-            prev_accounts_data_len,
             &mut executed_units,
         );
         process_message_time.stop();

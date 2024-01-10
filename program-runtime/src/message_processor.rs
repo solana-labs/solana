@@ -59,7 +59,6 @@ impl MessageProcessor {
         sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
-        _current_accounts_data_len: u64,
         accumulated_consumed_units: &mut u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
@@ -307,7 +306,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert!(result.is_ok());
@@ -357,7 +355,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert_eq!(
@@ -396,7 +393,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
@@ -527,7 +523,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert_eq!(
@@ -561,7 +556,6 @@ mod tests {
             &sysvar_cache,
             Hash::default(),
             0,
-            0,
             &mut 0,
         );
         assert!(result.is_ok());
@@ -591,7 +585,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
@@ -679,7 +672,6 @@ mod tests {
             &mut ExecuteTimings::default(),
             &sysvar_cache,
             Hash::default(),
-            0,
             0,
             &mut 0,
         );
