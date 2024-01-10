@@ -192,7 +192,10 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &invoke_context.feature_set,
             )
         }
-
+        VoteInstruction::UpdateDuplicateAncestors(_) => {
+            // This transaction is for gossip use only
+            Err(InstructionError::InvalidInstructionData)
+        }
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;
@@ -251,6 +254,9 @@ mod tests {
             },
         },
         bincode::serialize,
+        solana_program::vote::{
+            instruction::update_duplicate_ancestors, state::DuplicateAncestorsUpdate,
+        },
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{self, Account, AccountSharedData, ReadableAccount},
@@ -1731,6 +1737,15 @@ mod tests {
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
+        process_instruction_as_one_arg(
+            &update_duplicate_ancestors(
+                &invalid_vote_state_pubkey(),
+                &Pubkey::default(),
+                DuplicateAncestorsUpdate::default(),
+            ),
+            // Rejected by vote program
+            Err(InstructionError::InvalidInstructionData),
+        );
     }
 
     #[test]
@@ -1902,6 +1917,16 @@ mod tests {
                 Hash::default(),
             ),
             Err(InstructionError::InvalidAccountData),
+        );
+
+        process_instruction_as_one_arg(
+            &update_duplicate_ancestors(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                DuplicateAncestorsUpdate::default(),
+            ),
+            // Rejected by vote program
+            Err(InstructionError::InvalidInstructionData),
         );
 
         process_instruction_as_one_arg(

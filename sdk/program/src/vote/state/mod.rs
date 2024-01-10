@@ -11,6 +11,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
+        serde_varint, short_vec,
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
@@ -194,6 +195,34 @@ impl VoteStateUpdate {
     pub fn last_voted_slot(&self) -> Option<Slot> {
         self.lockouts.back().map(|l| l.slot())
     }
+}
+
+#[frozen_abi(digest = "2o13WRwmHFCBnHtqCrNyvVz1cKwDwhgsKq8mT26r95Wi")]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+pub struct DuplicateSlotHash {
+    #[serde(with = "serde_varint")]
+    pub slot: Slot,
+    /// The last 96 bits of the bank hash. A normal bank hash
+    /// is 32 bytes or 256 bits. 96 bits allows us to compress
+    /// the size of this message while retaining security for
+    /// comparison with a full bank hash.
+    pub hash: [u8; 12],
+}
+
+#[frozen_abi(digest = "Bc3FRqqnqhiCS7GJiYujQbvDLBMHkQ7g9R3gAzwDA8GA")]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+pub struct DuplicateAncestorsUpdate {
+    /// The original vote serialized
+    pub vote: Vec<u8>,
+    /// List of slot hashes for duplicate ancestors of
+    /// the last voted slot in the proposed tower. This
+    /// list can contain a maximum of 80 values.
+    #[serde(with = "short_vec")]
+    pub duplicate_ancestor_slot_hashes: Vec<DuplicateSlotHash>,
+    /// The merkle root of the last FEC set for the voted on block.
+    /// Since we have voted on a duplicate fork this is the unique
+    /// identifier to disambiguate versions in repair.
+    pub last_merkle_root: Hash,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
@@ -800,7 +829,6 @@ pub mod serde_compact_vote_state_update {
 #[cfg(test)]
 mod tests {
     use {super::*, itertools::Itertools, rand::Rng};
-
     #[test]
     fn test_vote_serialize() {
         let mut buffer: Vec<u8> = vec![0; VoteState::size_of()];

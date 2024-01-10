@@ -69,7 +69,8 @@ fn parse_vote_instruction_data(
         | VoteInstruction::InitializeAccount(_)
         | VoteInstruction::UpdateCommission(_)
         | VoteInstruction::UpdateValidatorIdentity
-        | VoteInstruction::Withdraw(_) => None,
+        | VoteInstruction::Withdraw(_)
+        | VoteInstruction::UpdateDuplicateAncestors(_) => None,
     }
 }
 

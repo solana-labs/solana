@@ -1,6 +1,7 @@
 //! Vote program instructions
 
 use {
+    super::state::DuplicateAncestorsUpdate,
     crate::{
         clock::{Slot, UnixTimestamp},
         hash::Hash,
@@ -146,6 +147,17 @@ pub enum VoteInstruction {
         #[serde(with = "serde_compact_vote_state_update")] VoteStateUpdate,
         Hash,
     ),
+
+    /// For the included previous vote, communicate additional details about
+    /// duplicate ancestors.
+    ///
+    /// NOTE: this instruction is only for use through gossip and will be
+    /// rejected by the vote program.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    UpdateDuplicateAncestors(DuplicateAncestorsUpdate),
 }
 
 impl VoteInstruction {
@@ -510,6 +522,23 @@ pub fn compact_update_vote_state_switch(
     Instruction::new_with_bincode(
         id(),
         &VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, proof_hash),
+        account_metas,
+    )
+}
+
+pub fn update_duplicate_ancestors(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    duplicate_ancestors_update: DuplicateAncestorsUpdate,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::UpdateDuplicateAncestors(duplicate_ancestors_update),
         account_metas,
     )
 }

@@ -772,6 +772,10 @@ pub mod cost_model_requested_write_lock_cost {
     solana_sdk::declare_id!("wLckV1a64ngtcKPRGU4S4grVTestXjmNjxBjaKZrAcn");
 }
 
+pub mod enable_duplicate_ancestors_tx {
+    solana_sdk::declare_id!("dAncJV6hjCb1zpHzFTnpif19YbfyWCMbGNYz4NhABtA");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -960,6 +964,7 @@ lazy_static! {
         (enable_zk_proof_from_account::id(), "Enable zk token proof program to read proof from accounts instead of instruction data #34750"),
         (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
+        (enable_duplicate_ancestors_tx::id(), "enable the duplicate ancestors tx for use in gossip #34751"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -171,6 +171,10 @@ pub fn parse_vote(
                 }),
             })
         }
+        // UpdateDuplicateAncestors is only used for gossip
+        VoteInstruction::UpdateDuplicateAncestors(_) => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::Vote),
+        ),
         VoteInstruction::Withdraw(lamports) => {
             check_num_vote_accounts(&instruction.accounts, 3)?;
             Ok(ParsedInstructionEnum {
