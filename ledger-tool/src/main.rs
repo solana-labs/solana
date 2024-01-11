@@ -34,14 +34,12 @@ use {
     solana_ledger::{
         blockstore::{create_new_ledger, Blockstore},
         blockstore_options::{AccessType, LedgerColumnOptions},
-        blockstore_processor::ProcessOptions,
-        use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
+        use_snapshot_archives_at_startup,
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
         bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_minimizer::SnapshotMinimizer,
@@ -561,15 +559,6 @@ fn assert_capitalization(bank: &Bank) {
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
 
-/// Get the AccessType required, based on `process_options`
-fn get_access_type(process_options: &ProcessOptions) -> AccessType {
-    match process_options.use_snapshot_archives_at_startup {
-        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
-        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
-        UseSnapshotArchivesAtStartup::WhenNewest => AccessType::PrimaryForMaintenance,
-    }
-}
-
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -969,7 +958,8 @@ fn main() {
                 .arg(&disable_disk_index)
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
+                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
+                .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
@@ -981,7 +971,8 @@ fn main() {
                 .arg(&disable_disk_index)
                 .arg(&accountsdb_verify_refcounts)
                 .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash),
+                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
+                .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("verify")
@@ -1555,13 +1546,12 @@ fn main() {
                     println!("{}", open_genesis_config_by(&output_directory, arg_matches));
                 }
                 ("shred-version", Some(arg_matches)) => {
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: Some(0),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        ..ProcessOptions::default()
-                    };
+                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
+                    // Respect a user-set --halt-at-slot; otherwise, set Some(0) to avoid
+                    // processing any additional banks and just use the snapshot bank
+                    if process_options.halt_at_slot.is_none() {
+                        process_options.halt_at_slot = Some(0);
+                    }
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
@@ -1586,13 +1576,7 @@ fn main() {
                     );
                 }
                 ("bank-hash", Some(arg_matches)) => {
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
@@ -1623,44 +1607,7 @@ fn main() {
                         },
                     );
 
-                    let debug_keys = pubkeys_of(arg_matches, "debug_key")
-                        .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
-
-                    if arg_matches.is_present("skip_poh_verify") {
-                        eprintln!(
-                            "--skip-poh-verify is deprecated.  Replace with --skip-verification."
-                        );
-                    }
-
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        run_verification: !(arg_matches.is_present("skip_poh_verify")
-                            || arg_matches.is_present("skip_verification")),
-                        on_halt_store_hash_raw_data_for_debug: arg_matches
-                            .is_present("halt_at_slot_store_hash_raw_data"),
-                        run_final_accounts_hash_calc: arg_matches.is_present("run_final_hash_calc"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        debug_keys,
-                        limit_load_slot_count_from_snapshot: value_t!(
-                            arg_matches,
-                            "limit_load_slot_count_from_snapshot",
-                            usize
-                        )
-                        .ok(),
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        verify_index: arg_matches.is_present("verify_accounts_index"),
-                        allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
-                        accounts_db_test_hash_calculation: arg_matches
-                            .is_present("accounts_db_test_hash_calculation"),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        runtime_config: RuntimeConfig::default(),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
                     let write_bank_file = arg_matches.is_present("write_bank_file");
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1706,19 +1653,7 @@ fn main() {
                         ),
                     };
 
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
-
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
@@ -1771,7 +1706,6 @@ fn main() {
                         });
                     let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
                     let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
-                    let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
 
                     let faucet_pubkey = pubkey_of(arg_matches, "faucet_pubkey");
                     let faucet_lamports =
@@ -1834,18 +1768,8 @@ fn main() {
                         NonZeroUsize
                     );
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let mut process_options = ProcessOptions {
-                        new_hard_forks,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
+
                     let blockstore = Arc::new(open_blockstore(
                         &ledger_path,
                         arg_matches,
@@ -2266,19 +2190,7 @@ fn main() {
                     );
                 }
                 ("accounts", Some(arg_matches)) => {
-                    let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let include_sysvars = arg_matches.is_present("include_sysvars");
                     let blockstore = open_blockstore(
@@ -2360,19 +2272,7 @@ fn main() {
                     }
                 }
                 ("capitalization", Some(arg_matches)) => {
-                    let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                    let process_options = ProcessOptions {
-                        new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                        halt_at_slot,
-                        run_verification: false,
-                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                        use_snapshot_archives_at_startup: value_t_or_exit!(
-                            arg_matches,
-                            use_snapshot_archives_at_startup::cli::NAME,
-                            UseSnapshotArchivesAtStartup
-                        ),
-                        ..ProcessOptions::default()
-                    };
+                    let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let blockstore = open_blockstore(
                         &ledger_path,
