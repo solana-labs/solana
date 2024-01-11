@@ -432,13 +432,13 @@ fn test_program_sbf_loader_deprecated() {
     }
 }
 
-/// This test is written with bpf_loader specific instructions, which will be
+/// This test is written with bpf_loader v2 specific instructions, which will be
 /// deprecated when `disable_bpf_loader_instructions` feature is activated.
 ///
 /// The same test has been migrated to
 /// `test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader` and
-/// `test_sol_alloc_free_deployable_with_upgradeable_loader`
-/// with a new version of bpf_upgradeable_loader!
+/// `test_sol_alloc_free_deployable_with_upgradeable_loader` with a new version
+/// of bpf_upgradeable_loader!
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_sol_alloc_free_no_longer_deployable() {
@@ -1840,8 +1840,9 @@ fn test_program_sbf_instruction_introspection() {
     assert!(bank.get_account(&sysvar::instructions::id()).is_none());
 }
 
-/// This test is to test bpf_loader v1 `Finalize` instruction. It is going to be
-/// deprecated once we activate `disable_bpf_loader_instructions`.
+/// This test is to test bpf_loader v2 `Finalize` instruction with different
+/// programs. It is going to be deprecated once we activate
+/// `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_test_use_latest_executor() {
@@ -1892,6 +1893,7 @@ fn test_program_sbf_test_use_latest_executor() {
     bank_client
         .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
+
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
         .is_err());
@@ -3151,7 +3153,7 @@ fn test_program_upgradeable_locks() {
     assert_eq!(results2[1], Err(TransactionError::AccountInUse));
 }
 
-/// This test is to test bpf_loader v1 `Finalize` instruction. It is going to be
+/// This test is to test bpf_loader v2 `Finalize` instruction. It is going to be
 /// deprecated once we activate `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
