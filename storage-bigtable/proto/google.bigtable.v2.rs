@@ -281,7 +281,7 @@ pub mod row_filter {
         /// If multiple cells are produced with the same column and timestamp,
         /// they will all appear in the output row in an unspecified mutual order.
         /// Consider the following example, with three filters:
-        ///
+        ///```ignore
         ///                                   input row
         ///                                       |
         ///             -----------------------------------------------------
@@ -355,7 +355,7 @@ pub mod row_filter {
         /// Hook for introspection into the RowFilter. Outputs all cells directly to
         /// the output of the read rather than to any parent filter. Consider the
         /// following example:
-        ///
+        ///```ignore
         ///      Chain(
         ///        FamilyRegex("A"),
         ///        Interleave(
@@ -782,7 +782,7 @@ pub struct ReadRowsRequest {
     /// contents will not be affected by this flag.
     ///
     /// Example result set:
-    ///
+    ///```ignore
     ///      [
     ///        {key: "k2", "f:col1": "v1", "f:col2": "v1"},
     ///        {key: "k1", "f:col1": "v2", "f:col2": "v2"}
