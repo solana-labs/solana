@@ -93,7 +93,7 @@ impl FeeStructure {
 
         let signature_fee = message
             .num_signatures()
-            .saturating_mul(self.lamports_per_signature);
+            .saturating_mul(lamports_per_signature);
         let write_lock_fee = message
             .num_write_locks()
             .saturating_mul(self.lamports_per_write_lock);
