@@ -1230,6 +1230,7 @@ pub fn main() {
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
+            max_message_size: value_t_or_exit!(matches, "rpc_bigtable_max_message_size", usize),
         })
     } else {
         None
