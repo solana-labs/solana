@@ -264,23 +264,34 @@ fn load_program_and_advance_slot(
     )
 }
 
+fn load_upgradeable_program_wrapper(
+    bank_client: &BankClient,
+    mint_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    load_upgradeable_program(
+        bank_client,
+        mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        authority_keypair,
+        name,
+    );
+    return program_keypair.pubkey();
+}
+
 fn load_upgradeable_program_and_advance_slot(
     bank_client: &mut BankClient,
     bank_forks: &RwLock<BankForks>,
     mint_keypair: &Keypair,
-    buffer_keypair: &Keypair,
-    program_keypair: &Keypair,
     authority_keypair: &Keypair,
     name: &str,
 ) -> (Arc<Bank>, Pubkey) {
-    load_upgradeable_program(
-        &bank_client,
-        &mint_keypair,
-        &buffer_keypair,
-        &program_keypair,
-        &authority_keypair,
-        name,
-    );
+    let program_id =
+        load_upgradeable_program_wrapper(bank_client, mint_keypair, authority_keypair, name);
 
     // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
     // after 2 slots. They need to be called individually to create the correct fork graph in between.
@@ -292,7 +303,7 @@ fn load_upgradeable_program_and_advance_slot(
         .advance_slot(1, bank_forks, &Pubkey::default())
         .expect("Failed to advance the slot");
 
-    (bank, program_keypair.pubkey())
+    (bank, program_id)
 }
 
 #[test]
@@ -361,9 +372,6 @@ fn test_program_sbf_sanity() {
 
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
-
-        let buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         // Call user program
@@ -371,8 +379,6 @@ fn test_program_sbf_sanity() {
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             program.0,
         );
@@ -568,6 +574,7 @@ fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
 
     // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
     // depends on `sol_alloc_free_` syscall. This can be verified with
@@ -576,9 +583,6 @@ fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
     // In the symbol table, there is `sol_alloc_free_`.
     // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
     // AccountInfo::realloc() in the program code.
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
-    let authority_keypair = Keypair::new();
 
     // Expect that deployment to fail. B/C during deployment, there is an elf
     // verification step, which uses the runtime to look up relocatable symbols
@@ -589,8 +593,6 @@ fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_deprecated_loader",
     );
@@ -615,6 +617,7 @@ fn test_sol_alloc_free_deployable_with_upgradeable_loader() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
 
     // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
     // depends on `sol_alloc_free_` syscall. This can be verified with
@@ -623,17 +626,12 @@ fn test_sol_alloc_free_deployable_with_upgradeable_loader() {
     // In the symbol table, there is `sol_alloc_free_`.
     // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
     // AccountInfo::realloc() in the program code.
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
-    let authority_keypair = Keypair::new();
 
     // expect that deployment success!
     let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_deprecated_loader",
     );
@@ -710,17 +708,12 @@ fn test_program_sbf_duplicate_accounts() {
 
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
-
-        let program_buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &program_buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             program,
         );
@@ -822,17 +815,12 @@ fn test_program_sbf_error_handling() {
 
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
-
-        let program_buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &program_buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             program,
         );
@@ -937,17 +925,12 @@ fn test_return_data_and_log_data_syscall() {
 
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
-
-        let program_buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &program_buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             program,
         );
@@ -1012,41 +995,26 @@ fn test_program_sbf_invoke_sanity() {
 
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
-
         let authority_keypair = Keypair::new();
 
-        let invoke_buffer_keypair = Keypair::new();
-        let invoke_program_keypair = Keypair::new();
-        let invoke_program_id = invoke_program_keypair.pubkey();
-        load_upgradeable_program(
+        let invoke_program_id = load_upgradeable_program_wrapper(
             &bank_client,
             &mint_keypair,
-            &invoke_buffer_keypair,
-            &invoke_program_keypair,
             &authority_keypair,
             program.1,
         );
 
-        let invoked_buffer_keypair = Keypair::new();
-        let invoked_program_keypair = Keypair::new();
-        let invoked_program_id = invoked_program_keypair.pubkey();
-        load_upgradeable_program(
+        let invoked_program_id = load_upgradeable_program_wrapper(
             &bank_client,
             &mint_keypair,
-            &invoked_buffer_keypair,
-            &invoked_program_keypair,
             &authority_keypair,
             program.2,
         );
 
-        let noop_program_buffer_keypair = Keypair::new();
-        let noop_program_keypair = Keypair::new();
         let (bank, noop_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &noop_program_buffer_keypair,
-            &noop_program_keypair,
             &authority_keypair,
             program.3,
         );
@@ -1436,28 +1404,19 @@ fn test_program_sbf_program_id_spoofing() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let malicious_swap_buffer_keypair = Keypair::new();
-    let malicious_swap_program_keypair = Keypair::new();
-    let malicious_swap_pubkey = malicious_swap_program_keypair.pubkey();
     let authority_keypair = Keypair::new();
-    load_upgradeable_program(
+
+    let malicious_swap_pubkey = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &malicious_swap_buffer_keypair,
-        &malicious_swap_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_spoof1",
     );
 
-    let malicious_system_buffer_keypair = Keypair::new();
-    let malicious_system_program_keypair = Keypair::new();
     let (bank, malicious_system_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &malicious_system_buffer_keypair,
-        &malicious_system_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_spoof1_system",
     );
@@ -1499,28 +1458,19 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let caller_buffer_keypair = Keypair::new();
-    let caller_program_keypair = Keypair::new();
-    let caller_pubkey = caller_program_keypair.pubkey();
     let authority_keypair = Keypair::new();
-    load_upgradeable_program(
+
+    let caller_pubkey = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &caller_buffer_keypair,
-        &caller_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
 
-    let caller2_buffer_keypair = Keypair::new();
-    let caller2_program_keypair = Keypair::new();
     let (_bank, caller2_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &caller2_buffer_keypair,
-        &caller2_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
@@ -1550,17 +1500,12 @@ fn test_program_sbf_ro_modify() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (bank, program_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_ro_modify",
     );
@@ -1612,17 +1557,12 @@ fn test_program_sbf_call_depth() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_call_depth",
     );
@@ -1654,16 +1594,12 @@ fn test_program_sbf_compute_budget() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
+
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_noop",
     );
@@ -1789,16 +1725,12 @@ fn test_program_sbf_instruction_introspection() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
+
     let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_instruction_introspection",
     );
@@ -2559,29 +2491,20 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
-
-    let invoke_and_return_buffer_keypair = Keypair::new();
-    let invoke_and_return_program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
+
     let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &invoke_and_return_buffer_keypair,
-        &invoke_and_return_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
-    let program_id = program_keypair.pubkey();
-    load_upgradeable_program(
+    let program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
@@ -2703,17 +2626,12 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         );
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
-
-        let program_buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &program_buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             program,
         );
@@ -2741,17 +2659,12 @@ fn test_program_reads_from_program_account() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "read_program",
     );
@@ -2780,16 +2693,11 @@ fn test_program_sbf_c_dup() {
     bank.store_account(&account_address, &account);
 
     let mut bank_client = BankClient::new_shared(bank);
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "ser",
     );
@@ -3227,17 +3135,12 @@ fn test_program_sbf_ro_account_modify() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_ro_account_modify",
     );
@@ -3306,17 +3209,12 @@ fn test_program_sbf_realloc() {
         }
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank.clone());
-
-        let program_buffer_keypair = Keypair::new();
-        let program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &program_buffer_keypair,
-            &program_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
         );
@@ -3641,30 +3539,19 @@ fn test_program_sbf_realloc_invoke() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let realloc_program_buffer_keypair = Keypair::new();
-    let realloc_program_keypair = Keypair::new();
-    let realloc_program_id = realloc_program_keypair.pubkey();
     let authority_keypair = Keypair::new();
 
-    load_upgradeable_program(
+    let realloc_program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &realloc_program_buffer_keypair,
-        &realloc_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_realloc",
     );
-
-    let realloc_invoke_program_buffer_keypair = Keypair::new();
-    let realloc_invoke_program_keypair = Keypair::new();
 
     let (bank, realloc_invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &realloc_invoke_program_buffer_keypair,
-        &realloc_invoke_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_realloc_invoke",
     );
@@ -4170,49 +4057,30 @@ fn test_program_sbf_processed_inner_instruction() {
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let sibling_program_buffer_keypair = Keypair::new();
-    let sibling_program_keypair = Keypair::new();
-    let sibling_program_id = sibling_program_keypair.pubkey();
     let authority_keypair = Keypair::new();
-    load_upgradeable_program(
+
+    let sibling_program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &sibling_program_buffer_keypair,
-        &sibling_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_sibling_instructions",
     );
-    let sibling_inner_program_buffer_keypair = Keypair::new();
-    let sibling_inner_program_keypair = Keypair::new();
-    let sibling_inner_program_id = sibling_inner_program_keypair.pubkey();
-    load_upgradeable_program(
+    let sibling_inner_program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &sibling_inner_program_buffer_keypair,
-        &sibling_inner_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_sibling_inner_instructions",
     );
-    let noop_program_buffer_keypair = Keypair::new();
-    let noop_program_keypair = Keypair::new();
-    let noop_program_id = noop_program_keypair.pubkey();
-    load_upgradeable_program(
+    let noop_program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &noop_program_buffer_keypair,
-        &noop_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_noop",
     );
-    let invoke_and_return_buffer_keypair = Keypair::new();
-    let invoke_and_return_program_keypair = Keypair::new();
     let (_, invoke_and_return_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &invoke_and_return_buffer_keypair,
-        &invoke_and_return_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
@@ -4272,17 +4140,12 @@ fn test_program_fees() {
     bank.fee_structure = fee_structure.clone();
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_noop",
     );
@@ -4346,17 +4209,12 @@ fn test_get_minimum_delegation() {
     let bank = Bank::new_for_tests(&genesis_config);
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let program_buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &program_buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_get_minimum_delegation",
     );
@@ -4441,28 +4299,17 @@ fn test_cpi_account_ownership_writability() {
             "solana_sbf_rust_invoke",
         );
 
-        let invoked_program_buffer_keypair = Keypair::new();
-        let invoked_program_keypair = Keypair::new();
-        let invoked_program_id = invoked_program_keypair.pubkey();
-
-        load_upgradeable_program(
+        let invoked_program_id = load_upgradeable_program_wrapper(
             &bank_client,
             &mint_keypair,
-            &invoked_program_buffer_keypair,
-            &invoked_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoked",
         );
-
-        let realloc_program_buffer_keypair = Keypair::new();
-        let realloc_program_keypair = Keypair::new();
 
         let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &realloc_program_buffer_keypair,
-            &realloc_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
         );
@@ -4627,30 +4474,19 @@ fn test_cpi_account_data_updates() {
         bank.feature_set = Arc::new(feature_set);
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
-
-        let invoke_program_buffer_keypair = Keypair::new();
-        let invoke_program_keypair = Keypair::new();
-        let invoke_program_id = invoke_program_keypair.pubkey();
         let authority_keypair = Keypair::new();
 
-        load_upgradeable_program(
+        let invoke_program_id = load_upgradeable_program_wrapper(
             &bank_client,
             &mint_keypair,
-            &invoke_program_buffer_keypair,
-            &invoke_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoke",
         );
-
-        let realloc_program_buffer_keypair = Keypair::new();
-        let realloc_program_keypair = Keypair::new();
 
         let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &realloc_program_buffer_keypair,
-            &realloc_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
         );
@@ -4796,17 +4632,12 @@ fn test_cpi_deprecated_loader_realloc() {
         );
 
         let mut bank_client = BankClient::new_shared(bank);
-
-        let invoke_program_buffer_keypair = Keypair::new();
-        let invoke_program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &invoke_program_buffer_keypair,
-            &invoke_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoke",
         );
@@ -4945,17 +4776,12 @@ fn test_cpi_change_account_data_memory_allocation() {
 
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
-
-    let invoke_program_buffer_keypair = Keypair::new();
-    let invoke_program_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
 
     let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &invoke_program_buffer_keypair,
-        &invoke_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke",
     );
@@ -4995,29 +4821,15 @@ fn test_cpi_invalid_account_info_pointers() {
     let bank = Bank::new_for_tests(&genesis_config);
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
-
-    let c_invoke_program_buffer_keypair = Keypair::new();
-    let c_invoke_program_keypair = Keypair::new();
-    let c_invoke_program_id = c_invoke_program_keypair.pubkey();
     let authority_keypair = Keypair::new();
 
-    load_upgradeable_program(
-        &bank_client,
-        &mint_keypair,
-        &c_invoke_program_buffer_keypair,
-        &c_invoke_program_keypair,
-        &authority_keypair,
-        "invoke",
-    );
+    let c_invoke_program_id =
+        load_upgradeable_program_wrapper(&bank_client, &mint_keypair, &authority_keypair, "invoke");
 
-    let invoke_program_buffer_keypair = Keypair::new();
-    let invoke_program_keypair = Keypair::new();
     let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
         &mint_keypair,
-        &invoke_program_buffer_keypair,
-        &invoke_program_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke",
     );
@@ -5079,17 +4891,12 @@ fn test_deny_executable_write() {
         }
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
-
-        let invoke_program_buffer_keypair = Keypair::new();
-        let invoke_program_keypair = Keypair::new();
         let authority_keypair = Keypair::new();
 
         let (_bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
             &mint_keypair,
-            &invoke_program_buffer_keypair,
-            &invoke_program_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoke",
         );
