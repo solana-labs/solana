@@ -50,7 +50,7 @@ where
     let proof_data = if instruction_data.len() == PROOF_OFFSET_LENGTH {
         let proof_data_account = instruction_context
             .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
-        accessed_accounts += 1;
+        accessed_accounts = accessed_accounts.checked_add(1).unwrap();
 
         let proof_data_offset = u32::from_le_bytes(
             instruction_data[1..PROOF_OFFSET_LENGTH]
