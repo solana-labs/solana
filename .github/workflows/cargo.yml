@@ -30,7 +30,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - macos-latest
+          - macos-latest-large
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
