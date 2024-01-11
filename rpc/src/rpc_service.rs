@@ -414,6 +414,8 @@ impl JsonRpcService {
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                     app_profile_id: bigtable_app_profile_id.clone(),
+                    max_message_size: solana_storage_bigtable::LedgerStorageConfig::default()
+                        .max_message_size,
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
