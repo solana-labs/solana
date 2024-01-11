@@ -1230,6 +1230,7 @@ pub fn main() {
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
+            ..RpcBigtableConfig::default()
         })
     } else {
         None

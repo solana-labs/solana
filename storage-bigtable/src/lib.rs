@@ -381,7 +381,7 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
 pub const DEFAULT_APP_PROFILE_ID: &str = "default";
-const DEFAULT_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MB
+pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MB
 
 #[derive(Debug)]
 pub enum CredentialType {
