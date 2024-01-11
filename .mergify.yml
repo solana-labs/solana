@@ -67,6 +67,8 @@ pull_request_rules:
             - or:
               - check-success=clippy-nightly (macos-latest)
               - check-success=clippy-nightly (macos-latest-large)
+            - check-success=clippy-stable (macos-latest-xlarge)
+            - check-success=clippy-nightly (macos-latest-xlarge)
         - or:
           - -files~=(\.rs|Cargo\.toml|Cargo\.lock|cargo-build-bpf|cargo-test-bpf|cargo-build-sbf|cargo-test-sbf|ci/downstream-projects/run-spl\.sh|\.github/workflows/downstream-project-spl\.yml)$
           - and:
