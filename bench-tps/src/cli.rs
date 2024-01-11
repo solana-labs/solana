@@ -392,7 +392,6 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("client-node-id")
                 .value_name("PATH")
                 .takes_value(true)
-                .requires("json_rpc_url")
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
