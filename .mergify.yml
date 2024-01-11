@@ -61,7 +61,9 @@ pull_request_rules:
         - or:
           - -files~=(\.rs|Cargo\.toml|Cargo\.lock|\.github/scripts/cargo-clippy-before-script\.sh|\.github/workflows/cargo\.yml)$
           - and:
-            - check-success=clippy-stable (macos-latest)
+            - or:
+              - check-success=clippy-stable (macos-latest)
+              - check-success=clippy-stable (macos-latest-large)
             - or:
               - check-success=clippy-nightly (macos-latest)
               - check-success=clippy-nightly (macos-latest-large)
