@@ -1,3 +1,4 @@
+mod bpf_program;
 pub(crate) mod error;
 mod native_program;
 
