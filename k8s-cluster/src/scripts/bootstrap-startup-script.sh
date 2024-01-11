@@ -1,16 +1,12 @@
 #!/bin/bash
 set -e
 
-mkdir -p /home/solana/logs
-
 # start faucet
-nohup solana-faucet --keypair bootstrap-accounts/faucet.json >logs/faucet.log 2>&1 &
+nohup solana-faucet --keypair bootstrap-accounts/faucet.json &
 
 # Start the bootstrap validator node
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
-
-# solana-ledger-tool -l ledger/ create-snapshot 0 -l ledger/
 
 if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
   echo "Testnet requires GPUs, but none were found!  Aborting..."
@@ -137,7 +133,7 @@ args+=(
   --identity "$identity" \
   --vote-account "$vote_account" \
   --ledger ledger \
-  --log logs/solana-validator.log \
+  --log - \
   --gossip-host "$MY_POD_IP" \
   --gossip-port 8001 \
   --rpc-port 8899 \

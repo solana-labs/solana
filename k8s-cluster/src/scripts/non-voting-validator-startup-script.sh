@@ -1,15 +1,7 @@
 #!/bin/bash
 set -e
-echo "in non-voting-validator startup script!"
 
-mkdir -p /home/solana/logs
-
-echo "done decoding accounts. running faucet next..."
-# sleep 3600
-
-nohup solana-faucet --keypair non-voting-validator-accounts/faucet.json >logs/faucet.log 2>&1 &
-
-echo "faucet running"
+nohup solana-faucet --keypair non-voting-validator-accounts/faucet.json &
 
 # Start Validator
 # shellcheck disable=SC1091
@@ -231,7 +223,7 @@ fi
 
 default_arg --identity "$identity"
 default_arg --ledger "$ledger_dir"
-default_arg --log logs/solana-validator.log
+default_arg --log -
 default_arg --full-rpc-api
 default_arg --no-incremental-snapshots
 default_arg --allow-private-addr
