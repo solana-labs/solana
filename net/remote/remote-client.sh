@@ -68,6 +68,9 @@ solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
 
+  net/scripts/rsync-retry.sh -vPrc \
+    "$entrypointIp":~/solana/config/validator-identity-1.json ./validator-identity.json
+
   args=()
 
   if ${TPU_CLIENT}; then
@@ -87,6 +90,8 @@ solana-bench-tps)
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
+      --bind-address $entrypointIp \
+      --client-node-id ./validator-identity.json \
       ${args[*]} \
   "
   ;;
