@@ -474,6 +474,7 @@ impl LedgerStorage {
                 app_profile_id,
                 endpoint,
                 timeout,
+                LedgerStorageConfig::default().max_message_size,
             )?,
             stats,
         })
@@ -487,7 +488,7 @@ impl LedgerStorage {
             instance_name,
             app_profile_id,
             credential_type,
-            max_message_size: _max_message_size,
+            max_message_size,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
@@ -495,6 +496,7 @@ impl LedgerStorage {
             read_only,
             timeout,
             credential_type,
+            max_message_size,
         )
         .await?;
         Ok(Self { stats, connection })
