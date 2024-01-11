@@ -1,3 +1,6 @@
+pub(crate) mod error;
+mod native_program;
+
 use solana_sdk::pubkey::Pubkey;
 
 /// Enum representing the native programs that can be migrated to BPF
