@@ -890,6 +890,7 @@ struct PartitionedRewardsCalculation {
     foundation_rate: f64,
     prev_epoch_duration_in_years: f64,
     capitalization: u64,
+    parent_blockhash: Hash,
 }
 
 /// result of calculating the stake rewards at beginning of new epoch
@@ -907,6 +908,8 @@ struct CalculateRewardsAndDistributeVoteRewardsResult {
     distributed_rewards: u64,
     /// stake rewards that still need to be distributed, grouped by partition
     stake_rewards_by_partition: Vec<StakeRewards>,
+    /// blockhash of parent, used to create EpochRewardsHasher
+    parent_blockhash: Hash,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -1595,6 +1598,7 @@ impl Bank {
             total_rewards,
             distributed_rewards,
             stake_rewards_by_partition,
+            parent_blockhash: _parent_blockhash,
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
             reward_calc_tracer,
@@ -2377,6 +2381,7 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
+            parent_blockhash,
         }
     }
 
@@ -2397,6 +2402,7 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
+            parent_blockhash,
         } = self.calculate_rewards_for_partitioning(
             prev_epoch,
             reward_calc_tracer,
@@ -2466,6 +2472,7 @@ impl Bank {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
             stake_rewards_by_partition,
+            parent_blockhash,
         }
     }
 
