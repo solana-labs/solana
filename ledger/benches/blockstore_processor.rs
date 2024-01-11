@@ -108,6 +108,16 @@ fn bench_execute_batch(
     batch_size: usize,
     apply_cost_tracker_during_replay: bool,
 ) {
+    const TRANSACTIONS_PER_ITERATION: usize = 64;
+    assert_eq!(
+        TRANSACTIONS_PER_ITERATION % batch_size,
+        0,
+        "batch_size must be a factor of \
+        `TRANSACTIONS_PER_ITERATION` ({TRANSACTIONS_PER_ITERATION}) \
+        so that bench results are easily comparable"
+    );
+    let batches_per_iteration = TRANSACTIONS_PER_ITERATION / batch_size;
+
     let BenchFrame {
         bank,
         prioritization_fee_cache,
@@ -129,16 +139,18 @@ fn bench_execute_batch(
 
     let mut timing = ExecuteTimings::default();
     bencher.iter(|| {
-        let batch = batches_iter.next().unwrap();
-        execute_batch(
-            &batch,
-            &bank,
-            None,
-            None,
-            &mut timing,
-            None,
-            &prioritization_fee_cache,
-        )
+        for _ in 0..batches_per_iteration {
+            let batch = batches_iter.next().unwrap();
+            let _ = execute_batch(
+                &batch,
+                &bank,
+                None,
+                None,
+                &mut timing,
+                None,
+                &prioritization_fee_cache,
+            );
+        }
     });
 }
 
