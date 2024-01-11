@@ -180,12 +180,14 @@ fn consume_scan_should_process_packet(
             return ProcessingDecision::Never;
         }
 
-        if !payload.account_locks.check_locks(message) {
-            return ProcessingDecision::Later;
-        }
-
-        // Run initial transaction checks for fee-payability.
-        if Consumer::check_fee_payer_unlocked(bank, message, &mut payload.error_counters).is_err() {
+        // Only check fee-payer if we can actually take locks
+        // We do not immediately discard on check lock failures here,
+        // because the priority guard requires that we always take locks
+        // except in the cases of discarding transactions (i.e. `Never`).
+        if payload.account_locks.check_locks(message)
+            && Consumer::check_fee_payer_unlocked(bank, message, &mut payload.error_counters)
+                .is_err()
+        {
             payload
                 .message_hash_to_transaction
                 .remove(packet.message_hash());
@@ -201,10 +203,9 @@ fn consume_scan_should_process_packet(
         // Always take locks during batch creation.
         // This prevents lower-priority transactions from taking locks
         // needed by higher-priority txs that were skipped by this check.
-        //
-        // SAFETY: We just checked that the locks are available, before
-        //         checking fee-payer balance. They should still be available.
-        assert!(payload.account_locks.take_locks(message));
+        if !payload.account_locks.take_locks(message) {
+            return ProcessingDecision::Later;
+        }
 
         payload.sanitized_transactions.push(sanitized_transaction);
         ProcessingDecision::Now
