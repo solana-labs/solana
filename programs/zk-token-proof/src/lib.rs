@@ -32,6 +32,8 @@ pub const VERIFY_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 6_40
 pub const VERIFY_BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 13_000;
 pub const VERIFY_FEE_SIGMA_COMPUTE_UNITS: u64 = 6_500;
 
+const PROOF_OFFSET_LENGTH: usize = 5;
+
 fn process_verify_proof<T, U>(invoke_context: &mut InvokeContext) -> Result<(), InstructionError>
 where
     T: Pod + ZkProofData<U>,
@@ -40,24 +42,59 @@ where
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let proof_data = ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
-        ic_msg!(invoke_context, "invalid proof data");
-        InstructionError::InvalidInstructionData
-    })?;
+
+    // number of accessed accounts so far
+    let mut accessed_accounts = 0_u16;
+
+    // if instruction data is exactly 4 bytes, then read proof from an account
+    let proof_data = if instruction_data.len() == PROOF_OFFSET_LENGTH {
+        let proof_data_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
+        accessed_accounts += 1;
+
+        let proof_data_offset = u32::from_le_bytes(
+            instruction_data[1..PROOF_OFFSET_LENGTH]
+                .try_into()
+                .map_err(|_| InstructionError::InvalidInstructionData)?,
+        );
+        let proof_data_start: usize = proof_data_offset
+            .try_into()
+            .map_err(|_| InstructionError::InvalidInstructionData)?;
+        let proof_data_end = proof_data_start
+            .checked_add(std::mem::size_of::<T>())
+            .ok_or(InstructionError::InvalidInstructionData)?;
+        let proof_data = proof_data_account
+            .get_data()
+            .get(proof_data_start..proof_data_end)
+            .ok_or(InstructionError::InvalidAccountData)?;
+
+        *bytemuck::try_from_bytes::<T>(proof_data).map_err(|_| {
+            ic_msg!(invoke_context, "invalid proof data");
+            InstructionError::InvalidInstructionData
+        })?
+    } else {
+        *ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
+            ic_msg!(invoke_context, "invalid proof data");
+            InstructionError::InvalidInstructionData
+        })?
+    };
 
     proof_data.verify_proof().map_err(|err| {
         ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
         InstructionError::InvalidInstructionData
     })?;
 
-    // create context state if accounts are provided with the instruction
-    if instruction_context.get_number_of_instruction_accounts() > 0 {
+    // create context state if additional accounts are provided with the instruction
+    if instruction_context.get_number_of_instruction_accounts() > accessed_accounts {
         let context_state_authority = *instruction_context
-            .try_borrow_instruction_account(transaction_context, 1)?
+            .try_borrow_instruction_account(
+                transaction_context,
+                accessed_accounts.checked_add(1).unwrap(),
+            )?
             .get_key();
 
-        let mut proof_context_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let mut proof_context_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
 
         if *proof_context_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);

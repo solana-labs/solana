@@ -54,6 +54,11 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
+    ///   * TODO: Read proof from an account
+    ///   0. `[]` Proof account
+    ///   1. `[writable]` The proof context account
+    ///   2. `[]` The proof context account owner
+    ///
     ///   * Creating a proof context account
     ///   0. `[writable]` The proof context account
     ///   1. `[]` The proof context account owner
@@ -466,6 +471,32 @@ impl ProofInstruction {
 
         let mut data = vec![ToPrimitive::to_u8(self).unwrap()];
         data.extend_from_slice(bytes_of(proof_data));
+
+        Instruction {
+            program_id: crate::zk_token_proof_program::id(),
+            accounts,
+            data,
+        }
+    }
+
+    pub fn encode_verify_proof_from_account(
+        &self,
+        context_state_info: Option<ContextStateInfo>,
+        proof_account: &Pubkey,
+        offset: u32,
+    ) -> Instruction {
+        let accounts = if let Some(context_state_info) = context_state_info {
+            vec![
+                AccountMeta::new(*proof_account, false),
+                AccountMeta::new(*context_state_info.context_state_account, false),
+                AccountMeta::new_readonly(*context_state_info.context_state_authority, false),
+            ]
+        } else {
+            vec![AccountMeta::new(*proof_account, false)]
+        };
+
+        let mut data = vec![ToPrimitive::to_u8(self).unwrap()];
+        data.extend_from_slice(&offset.to_le_bytes());
 
         Instruction {
             program_id: crate::zk_token_proof_program::id(),
