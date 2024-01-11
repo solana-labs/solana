@@ -3,7 +3,15 @@ mod bpf_upgradeable_program;
 pub(crate) mod error;
 mod native_program;
 
-use solana_sdk::pubkey::Pubkey;
+use {
+    self::{
+        bpf_program::BpfProgramConfig, error::MigrateNativeProgramError,
+        native_program::NativeProgramConfig,
+    },
+    super::Bank,
+    solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+    std::sync::atomic::Ordering::Relaxed,
+};
 
 /// Enum representing the native programs that can be migrated to BPF
 /// programs
@@ -25,10 +33,9 @@ pub(crate) enum NativeProgram {
     Vote,
     ZkTokenProof,
 }
-#[allow(dead_code)] // Code is off the hot path until a migration is due
 impl NativeProgram {
     /// The program ID of the native program
-    fn id(&self) -> Pubkey {
+    pub(crate) fn id(&self) -> Pubkey {
         match self {
             Self::AddressLookupTable => solana_sdk::address_lookup_table::program::id(),
             Self::BpfLoader => solana_sdk::bpf_loader::id(),
@@ -60,4 +67,42 @@ impl NativeProgram {
             _ => false,
         }
     }
+}
+
+/// Migrate a native program to a BPF (non-upgradeable) program using a BPF
+/// version of the program deployed at some arbitrary address.
+#[allow(dead_code)] // Code is off the hot path until a migration is due
+pub(crate) fn migrate_native_program_to_bpf_non_upgradeable(
+    bank: &Bank,
+    target_program: NativeProgram,
+    source_program_address: &Pubkey,
+    datapoint_name: &'static str,
+) -> Result<(), MigrateNativeProgramError> {
+    datapoint_info!(datapoint_name, ("slot", bank.slot, i64));
+
+    let target = NativeProgramConfig::new_checked(bank, target_program)?;
+    let source = BpfProgramConfig::new_checked(bank, source_program_address)?;
+
+    // Burn lamports from the target program account
+    bank.capitalization
+        .fetch_sub(target.program_account.lamports, Relaxed);
+
+    // Copy the non-upgradeable BPF program's account into the native program's
+    // address, then clear the source BPF program account
+    bank.store_account(&target.program_address, &source.program_account);
+    bank.store_account(&source.program_address, &AccountSharedData::default());
+
+    // Update the account data size delta
+    bank.calculate_and_update_accounts_data_size_delta_off_chain(
+        target.total_data_size,
+        source.total_data_size,
+    );
+
+    // Unload the programs from the bank's cache
+    bank.loaded_programs_cache
+        .write()
+        .unwrap()
+        .remove_programs([*source_program_address, target.program_address].into_iter());
+
+    Ok(())
 }

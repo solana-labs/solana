@@ -12,18 +12,16 @@ use {
 ///
 /// This struct is used to validate the BPF (non-upgradeable) program's account
 /// and data account before the migration is performed.
-#[allow(dead_code)] // TODO: Removed in future commit
 #[derive(Debug)]
-struct BpfProgramConfig {
-    program_address: Pubkey,
-    program_account: Account,
-    total_data_size: usize,
+pub struct BpfProgramConfig {
+    pub program_address: Pubkey,
+    pub program_account: Account,
+    pub total_data_size: usize,
 }
-#[allow(dead_code)] // TODO: Removed in future commit
 impl BpfProgramConfig {
     /// Creates a new migration config for the given BPF (non-upgradeable)
     /// program, validating the BPF program's account and data account
-    fn new_checked(bank: &Bank, address: &Pubkey) -> Result<Self, MigrateNativeProgramError> {
+    pub fn new_checked(bank: &Bank, address: &Pubkey) -> Result<Self, MigrateNativeProgramError> {
         let program_address = *address;
         let program_account: Account = bank
             .get_account_with_fixed_root(&program_address)

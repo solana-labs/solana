@@ -14,19 +14,17 @@ use {
 ///
 /// This struct is used to validate the native program's account and data
 /// account before the migration is performed.
-#[allow(dead_code)] // TODO: Removed in future commit
 #[derive(Debug)]
-struct NativeProgramConfig {
-    program_address: Pubkey,
-    program_account: Account,
-    program_data_address: Pubkey,
-    total_data_size: usize,
+pub struct NativeProgramConfig {
+    pub program_address: Pubkey,
+    pub program_account: Account,
+    pub program_data_address: Pubkey,
+    pub total_data_size: usize,
 }
-#[allow(dead_code)] // TODO: Removed in future commit
 impl NativeProgramConfig {
     /// Creates a new migration config for the given native program,
     /// validating the native program's account and data account
-    fn new_checked(
+    pub fn new_checked(
         bank: &Bank,
         native_program: NativeProgram,
     ) -> Result<Self, MigrateNativeProgramError> {
