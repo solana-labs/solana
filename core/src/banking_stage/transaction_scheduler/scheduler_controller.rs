@@ -16,6 +16,7 @@ use {
         TOTAL_BUFFERED_PACKETS,
     },
     crossbeam_channel::RecvTimeoutError,
+    itertools::MinMaxResult,
     solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_measure::measure_us,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -73,8 +74,7 @@ impl SchedulerController {
     }
 
     pub fn run(mut self) -> Result<(), SchedulerError> {
-        let mut min_prioritization_fees = u64::MAX;
-        let mut max_prioritization_fees = 0;
+        let mut prio_fee_stat = SchedulerPrioritizationFeeStats::default();
         loop {
             // BufferedPacketsDecision is shared with legacy BankingStage, which will forward
             // packets. Initially, not renaming these decision variants but the actions taken
@@ -95,30 +95,12 @@ impl SchedulerController {
             if !self.receive_and_buffer_packets(&decision) {
                 break;
             }
-
-            // update min/max priotization fees
-            let min_max = self.container.get_min_max_prioritization_fees();
-            match min_max {
-                itertools::MinMaxResult::NoElements => {
-                    // do nothing
-                }
-                itertools::MinMaxResult::OneElement(e) => {
-                    min_prioritization_fees = e;
-                    max_prioritization_fees = e;
-                }
-                itertools::MinMaxResult::MinMax(min, max) => {
-                    min_prioritization_fees = min;
-                    max_prioritization_fees = max;
-                }
-            }
             // Report metrics only if there is data.
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
-            self.count_metrics.maybe_report_and_reset(
-                should_report,
-                &mut min_prioritization_fees,
-                &mut max_prioritization_fees,
-            );
+            prio_fee_stat.update(self.container.get_min_max_prioritization_fees());
+            self.count_metrics
+                .maybe_report_and_reset(should_report, &mut prio_fee_stat);
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
                 .iter()
@@ -432,28 +414,20 @@ impl SchedulerCountMetrics {
     fn maybe_report_and_reset(
         &mut self,
         should_report: bool,
-        min_prioritization_fees: &mut u64,
-        max_prioritization_fees: &mut u64,
+        prio_fee_stats: &mut SchedulerPrioritizationFeeStats,
     ) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report(*min_prioritization_fees, *max_prioritization_fees);
+                self.report();
+                prio_fee_stats.report();
             }
             self.reset();
-            *min_prioritization_fees = u64::MAX;
-            *max_prioritization_fees = 0;
+            prio_fee_stats.reset();
         }
     }
 
-    fn report(&self, min_prioritization_fees: u64, max_prioritization_fees: u64) {
-        // to avoid getting u64::max recorded by metrics / in case of edge cases
-        let min_prioritization_fees = if min_prioritization_fees != u64::MAX {
-            min_prioritization_fees
-        } else {
-            0
-        };
-
+    fn report(&self) {
         datapoint_info!(
             "banking_stage_scheduler_counts",
             ("num_received", self.num_received, i64),
@@ -489,9 +463,7 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_age_and_status,
                 i64
             ),
-            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
-            ("min_prioritization_fees", min_prioritization_fees, i64),
-            ("max_prioritization_fees", max_prioritization_fees, i64)
+            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
         );
     }
 
@@ -527,6 +499,58 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_age_and_status = 0;
         self.num_dropped_on_capacity = 0;
+    }
+}
+
+struct SchedulerPrioritizationFeeStats {
+    min_prioritization_fees: u64,
+    max_prioritization_fees: u64,
+}
+
+impl Default for SchedulerPrioritizationFeeStats {
+    fn default() -> Self {
+        Self {
+            min_prioritization_fees: u64::MAX,
+            max_prioritization_fees: 0,
+        }
+    }
+}
+
+impl SchedulerPrioritizationFeeStats {
+    pub fn update(&mut self, min_max_fees: MinMaxResult<u64>) {
+        // update min/max priotization fees
+        match min_max_fees {
+            itertools::MinMaxResult::NoElements => {
+                // do nothing
+            }
+            itertools::MinMaxResult::OneElement(e) => {
+                self.min_prioritization_fees = e;
+                self.max_prioritization_fees = e;
+            }
+            itertools::MinMaxResult::MinMax(min, max) => {
+                self.min_prioritization_fees = min;
+                self.max_prioritization_fees = max;
+            }
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.min_prioritization_fees = u64::MAX;
+        self.max_prioritization_fees = 0;
+    }
+
+    pub fn report(&self) {
+        // to avoid getting u64::max recorded by metrics / in case of edge cases
+        let min_prioritization_fees = if self.min_prioritization_fees != u64::MAX {
+            self.min_prioritization_fees
+        } else {
+            0
+        };
+        datapoint_info!(
+            "banking_stage_scheduler_prioritization_fee_stats",
+            ("min_prioritization_fees", min_prioritization_fees, i64),
+            ("max_prioritization_fees", self.max_prioritization_fees, i64)
+        );
     }
 }
 
