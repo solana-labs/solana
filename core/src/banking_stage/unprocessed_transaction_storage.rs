@@ -200,6 +200,7 @@ fn consume_scan_should_process_packet(
         //   be blocked by a transaction that did not take batch locks. This
         //   will lead to some transactions never being processed, and a
         //   mismatch in the priorty-queue and hash map sizes.
+        //
         // Always take locks during batch creation.
         // This prevents lower-priority transactions from taking locks
         // needed by higher-priority txs that were skipped by this check.
