@@ -3362,7 +3362,7 @@ fn test_program_sbf_realloc_invoke() {
         mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(100_000_000_000_000);
+    } = create_genesis_config(1_000_000_000_000);
     genesis_config.rent = Rent::default();
 
     let mint_pubkey = mint_keypair.pubkey();
