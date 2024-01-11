@@ -469,6 +469,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                         ],
                     })),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -494,6 +496,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                 filter: Some(RowFilter {
                     filter: Some(row_filter::Filter::StripValueTransformer(true)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -545,6 +549,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -577,6 +583,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -610,6 +618,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
