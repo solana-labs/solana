@@ -39,20 +39,18 @@ fn check_upgradeable_loader_state(
 ///
 /// This struct is used to validate the BPF upgradeable program's account and
 /// data account before the migration is performed.
-#[allow(dead_code)] // TODO: Removed in future commit
 #[derive(Debug)]
-struct BpfUpgradeableProgramConfig {
-    program_address: Pubkey,
-    program_account: Account,
-    program_data_address: Pubkey,
-    program_data_account: Account,
-    total_data_size: usize,
+pub struct BpfUpgradeableProgramConfig {
+    pub program_address: Pubkey,
+    pub program_account: Account,
+    pub program_data_address: Pubkey,
+    pub program_data_account: Account,
+    pub total_data_size: usize,
 }
-#[allow(dead_code)] // TODO: Removed in future commit
 impl BpfUpgradeableProgramConfig {
     /// Creates a new migration config for the given BPF upgradeable program,
     /// validating the BPF program's account and data account
-    fn new_checked(bank: &Bank, address: &Pubkey) -> Result<Self, MigrateNativeProgramError> {
+    pub fn new_checked(bank: &Bank, address: &Pubkey) -> Result<Self, MigrateNativeProgramError> {
         let program_address = *address;
         let program_account: Account = bank
             .get_account_with_fixed_root(&program_address)

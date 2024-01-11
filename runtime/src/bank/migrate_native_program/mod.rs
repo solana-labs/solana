@@ -9,7 +9,12 @@ use {
         native_program::NativeProgramConfig,
     },
     super::Bank,
-    solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+    crate::bank::migrate_native_program::bpf_upgradeable_program::BpfUpgradeableProgramConfig,
+    solana_sdk::{
+        account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::{UpgradeableLoaderState, ID as BPF_LOADER_UPGRADEABLE_ID},
+        pubkey::Pubkey,
+    },
     std::sync::atomic::Ordering::Relaxed,
 };
 
@@ -103,6 +108,75 @@ pub(crate) fn migrate_native_program_to_bpf_non_upgradeable(
         .write()
         .unwrap()
         .remove_programs([*source_program_address, target.program_address].into_iter());
+
+    Ok(())
+}
+
+/// Create a new `Account` with a pointer to the target's new data account.
+///
+/// Note the pointer is created manually, as well as the owner and
+/// executable values. The rest is inherited from the source program
+/// account, including the lamports.
+fn create_new_target_program_account(
+    target: &NativeProgramConfig,
+    source: &BpfUpgradeableProgramConfig,
+) -> Result<AccountSharedData, MigrateNativeProgramError> {
+    let state = UpgradeableLoaderState::Program {
+        programdata_address: target.program_data_address,
+    };
+    let data = bincode::serialize(&state)?;
+    let account = Account {
+        data,
+        owner: BPF_LOADER_UPGRADEABLE_ID,
+        executable: true,
+        ..source.program_account
+    };
+    Ok(AccountSharedData::from(account))
+}
+
+/// Migrate a native program to an upgradeable BPF program using a BPF version
+/// of the program deployed at some arbitrary address.
+#[allow(dead_code)] // Code is off the hot path until a migration is due
+pub(crate) fn migrate_native_program_to_bpf_upgradeable(
+    bank: &Bank,
+    target_program: NativeProgram,
+    source_program_address: &Pubkey,
+    datapoint_name: &'static str,
+) -> Result<(), MigrateNativeProgramError> {
+    datapoint_info!(datapoint_name, ("slot", bank.slot, i64));
+
+    let target = NativeProgramConfig::new_checked(bank, target_program)?;
+    let source = BpfUpgradeableProgramConfig::new_checked(bank, source_program_address)?;
+
+    // Attempt serialization first before touching the bank
+    let new_target_program_account = create_new_target_program_account(&target, &source)?;
+
+    // Burn lamports from the target program account
+    bank.capitalization
+        .fetch_sub(target.program_account.lamports, Relaxed);
+
+    // Replace the native program account with the created to point to the new data
+    // account and clear the source program account
+    bank.store_account(&target.program_address, &new_target_program_account);
+    bank.store_account(&source.program_address, &AccountSharedData::default());
+
+    // Copy the upgradeable BPF program's data account into the native
+    // program's data address, which is checked to be empty, then clear the
+    // upgradeable BPF program's data account.
+    bank.store_account(&target.program_data_address, &source.program_data_account);
+    bank.store_account(&source.program_data_address, &AccountSharedData::default());
+
+    // Update the account data size delta.
+    bank.calculate_and_update_accounts_data_size_delta_off_chain(
+        target.total_data_size,
+        source.total_data_size,
+    );
+
+    // Unload the programs from the bank's cache
+    bank.loaded_programs_cache
+        .write()
+        .unwrap()
+        .remove_programs([source.program_address, target.program_address].into_iter());
 
     Ok(())
 }
