@@ -19,14 +19,19 @@ use {
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
     },
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::{
+        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
+    },
     solana_runtime::{
+        accounts::validate_fee_payer,
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
-        feature_set, saturating_add_assign,
+        feature_set,
+        message::SanitizedMessage,
+        saturating_add_assign,
         timing::timestamp,
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
@@ -394,9 +399,24 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
-        // No filtering before QoS - transactions should have been sanitized immediately prior to this call
-        let pre_results = std::iter::repeat(Ok(()));
-        self.process_and_record_transactions_with_pre_results(bank, txs, chunk_offset, pre_results)
+        let mut error_counters = TransactionErrorMetrics::default();
+        let pre_results = vec![Ok(()); txs.len()];
+        let check_results =
+            bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
+        let check_results = check_results.into_iter().map(|(result, _nonce)| result);
+        let mut output = self.process_and_record_transactions_with_pre_results(
+            bank,
+            txs,
+            chunk_offset,
+            check_results,
+        );
+
+        // Accumulate error counters from the initial checks into final results
+        output
+            .execute_and_commit_transactions_output
+            .error_counters
+            .accumulate(&error_counters);
+        output
     }
 
     pub fn process_and_record_aged_transactions(
@@ -682,6 +702,39 @@ impl Consumer {
             execute_and_commit_timings,
             error_counters,
         }
+    }
+
+    pub fn check_fee_payer_unlocked(
+        bank: &Bank,
+        message: &SanitizedMessage,
+        error_counters: &mut TransactionErrorMetrics,
+    ) -> Result<(), TransactionError> {
+        let fee_payer = message.fee_payer();
+        let budget_limits =
+            process_compute_budget_instructions(message.program_instructions_iter())?.into();
+        let fee = bank.fee_structure.calculate_fee(
+            message,
+            bank.get_lamports_per_signature(),
+            &budget_limits,
+            bank.feature_set.is_active(
+                &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
+            ),
+        );
+        let (mut fee_payer_account, _slot) = bank
+            .rc
+            .accounts
+            .accounts_db
+            .load_with_fixed_root(&bank.ancestors, fee_payer)
+            .ok_or(TransactionError::AccountNotFound)?;
+
+        validate_fee_payer(
+            fee_payer,
+            &mut fee_payer_account,
+            0,
+            error_counters,
+            bank.rent_collector(),
+            fee,
+        )
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
