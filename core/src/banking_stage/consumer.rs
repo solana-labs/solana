@@ -2349,12 +2349,8 @@ mod tests {
             let keypair_c = Keypair::new();
             let keypair_d = Keypair::new();
             for keypair in &[&keypair_a, &keypair_b, &keypair_c, &keypair_d] {
-                bank.transfer(
-                    100_000,
-                    &genesis_config_info.mint_keypair,
-                    &keypair.pubkey(),
-                )
-                .unwrap();
+                bank.transfer(5_000, &genesis_config_info.mint_keypair, &keypair.pubkey())
+                    .unwrap();
             }
 
             let make_prioritized_transfer =
