@@ -104,15 +104,16 @@ impl DuplicateShredHandler {
             return;
         }
         self.last_root = last_root;
+        self.enable_gossip_duplicate_proof_ingestion_epoch = {
+            let root_bank = self.bank_forks.read().unwrap().root_bank();
+            root_bank
+                .feature_set
+                .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                .map(|slot| self.epoch_schedule.get_epoch(slot))
+        };
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
             let epoch_info = root_bank.get_epoch_info();
-            if self.enable_gossip_duplicate_proof_ingestion_epoch.is_none() {
-                self.enable_gossip_duplicate_proof_ingestion_epoch = root_bank
-                    .feature_set
-                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                    .map(|slot| self.epoch_schedule.get_epoch(slot));
-            }
             if self.cached_staked_nodes.is_empty() || self.cached_on_epoch < epoch_info.epoch {
                 self.cached_on_epoch = epoch_info.epoch;
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
