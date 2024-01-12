@@ -74,7 +74,6 @@ impl SchedulerController {
     }
 
     pub fn run(mut self) -> Result<(), SchedulerError> {
-        let mut prio_fee_stat = SchedulerPrioritizationFeeStats::default();
         loop {
             // BufferedPacketsDecision is shared with legacy BankingStage, which will forward
             // packets. Initially, not renaming these decision variants but the actions taken
@@ -98,9 +97,9 @@ impl SchedulerController {
             // Report metrics only if there is data.
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
-            prio_fee_stat.update(self.container.get_min_max_prioritization_fees());
             self.count_metrics
-                .maybe_report_and_reset(should_report, &mut prio_fee_stat);
+                .update_prioritization_stats(self.container.get_min_max_prioritization_fees());
+            self.count_metrics.maybe_report_and_reset(should_report);
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
                 .iter()
@@ -408,25 +407,24 @@ struct SchedulerCountMetrics {
     num_dropped_on_age_and_status: usize,
     /// Number of transactions that were dropped due to exceeded capacity.
     num_dropped_on_capacity: usize,
+    /// Min prioritization fees in the transaction container
+    min_prioritization_fees: u64,
+    // Max prioritization fees in the transaction container
+    max_prioritization_fees: u64,
 }
 
 impl SchedulerCountMetrics {
-    fn maybe_report_and_reset(
-        &mut self,
-        should_report: bool,
-        prio_fee_stats: &mut SchedulerPrioritizationFeeStats,
-    ) {
+    fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report(prio_fee_stats);
+                self.report();
             }
             self.reset();
-            prio_fee_stats.reset();
         }
     }
 
-    fn report(&self, prio_fee_stats: &SchedulerPrioritizationFeeStats) {
+    fn report(&self) {
         datapoint_info!(
             "banking_stage_scheduler_counts",
             ("num_received", self.num_received, i64),
@@ -463,8 +461,16 @@ impl SchedulerCountMetrics {
                 i64
             ),
             ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
-            ("min_prioritization_fees", prio_fee_stats.get_min(), i64),
-            ("max_prioritization_fees", prio_fee_stats.get_max(), i64)
+            (
+                "min_prioritization_fees",
+                self.get_min_prioritization_fees(),
+                i64
+            ),
+            (
+                "max_prioritization_fees",
+                self.get_max_prioritization_fees(),
+                i64
+            )
         );
     }
 
@@ -500,25 +506,11 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_age_and_status = 0;
         self.num_dropped_on_capacity = 0;
+        self.min_prioritization_fees = u64::MAX;
+        self.max_prioritization_fees = 0;
     }
-}
 
-struct SchedulerPrioritizationFeeStats {
-    min_prioritization_fees: u64,
-    max_prioritization_fees: u64,
-}
-
-impl Default for SchedulerPrioritizationFeeStats {
-    fn default() -> Self {
-        Self {
-            min_prioritization_fees: u64::MAX,
-            max_prioritization_fees: 0,
-        }
-    }
-}
-
-impl SchedulerPrioritizationFeeStats {
-    pub fn update(&mut self, min_max_fees: MinMaxResult<u64>) {
+    pub fn update_prioritization_stats(&mut self, min_max_fees: MinMaxResult<u64>) {
         // update min/max priotization fees
         match min_max_fees {
             itertools::MinMaxResult::NoElements => {
@@ -535,12 +527,7 @@ impl SchedulerPrioritizationFeeStats {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.min_prioritization_fees = u64::MAX;
-        self.max_prioritization_fees = 0;
-    }
-
-    pub fn get_min(&self) -> u64 {
+    pub fn get_min_prioritization_fees(&self) -> u64 {
         // to avoid getting u64::max recorded by metrics / in case of edge cases
         if self.min_prioritization_fees != u64::MAX {
             self.min_prioritization_fees
@@ -549,7 +536,7 @@ impl SchedulerPrioritizationFeeStats {
         }
     }
 
-    pub fn get_max(&self) -> u64 {
+    pub fn get_max_prioritization_fees(&self) -> u64 {
         self.max_prioritization_fees
     }
 }
