@@ -32,7 +32,7 @@ pub const VERIFY_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 6_40
 pub const VERIFY_BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 13_000;
 pub const VERIFY_FEE_SIGMA_COMPUTE_UNITS: u64 = 6_500;
 
-const PROOF_OFFSET_LENGTH: usize = 5;
+const INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT: usize = 5;
 
 fn process_verify_proof<T, U>(invoke_context: &mut InvokeContext) -> Result<(), InstructionError>
 where
