@@ -28,6 +28,8 @@ pub struct StoredExtendedReward {
     reward_type: Option<RewardType>,
     #[serde(deserialize_with = "default_on_eof")]
     commission: Option<u8>,
+    #[serde(deserialize_with = "default_on_eof")]
+    num_partitions: Option<usize>,
 }
 
 impl From<StoredExtendedReward> for Reward {
@@ -38,6 +40,7 @@ impl From<StoredExtendedReward> for Reward {
             post_balance,
             reward_type,
             commission,
+            num_partitions,
         } = value;
         Self {
             pubkey,
@@ -45,6 +48,7 @@ impl From<StoredExtendedReward> for Reward {
             post_balance,
             reward_type,
             commission,
+            num_partitions,
         }
     }
 }
@@ -57,6 +61,7 @@ impl From<Reward> for StoredExtendedReward {
             post_balance,
             reward_type,
             commission,
+            num_partitions,
         } = value;
         Self {
             pubkey,
@@ -64,6 +69,7 @@ impl From<Reward> for StoredExtendedReward {
             post_balance,
             reward_type,
             commission,
+            num_partitions,
         }
     }
 }

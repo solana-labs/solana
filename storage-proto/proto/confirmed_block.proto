@@ -127,6 +127,7 @@ message Reward {
     uint64 post_balance = 3;
     RewardType reward_type = 4;
     string commission = 5;
+    optional uint32 num_partitions = 6;
 }
 
 message Rewards {
