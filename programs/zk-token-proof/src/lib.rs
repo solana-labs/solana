@@ -48,6 +48,13 @@ where
 
     // if instruction data is exactly 5 bytes, then read proof from an account
     let context_data = if instruction_data.len() == INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT {
+        if !invoke_context
+            .feature_set
+            .is_active(&feature_set::enable_zk_from_account::id())
+        {
+            return Err(InstructionError::InvalidInstructionData);
+        }
+
         let proof_data_account = instruction_context
             .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
         accessed_accounts = accessed_accounts.checked_add(1).unwrap();
