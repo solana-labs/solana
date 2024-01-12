@@ -30,6 +30,7 @@ use {
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
+        error::Error as _,
         fmt,
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         num::NonZeroUsize,
@@ -413,7 +414,7 @@ pub enum AddBankSnapshotError {
     #[error("bank snapshot dir already exists: {0}")]
     SnapshotDirAlreadyExists(PathBuf),
 
-    #[error("failed to create snapshot dir: {0}")]
+    #[error("failed to create snapshot dir: {0}: {}", .0.source().unwrap())]
     CreateSnapshotDir(#[source] std::io::Error),
 
     #[error("failed to hard link storages: {0}")]
@@ -425,17 +426,17 @@ pub enum AddBankSnapshotError {
     #[error("failed to serialize status cache: {0}")]
     SerializeStatusCache(#[source] Box<SnapshotError>),
 
-    #[error("failed to write snapshot version file: {0}")]
+    #[error("failed to write snapshot version file: {0}: {}", .0.source().unwrap())]
     WriteSnapshotVersionFile(#[source] std::io::Error),
 
-    #[error("failed to mark snapshot as 'complete': {0}")]
+    #[error("failed to mark snapshot as 'complete': {0}: {}", .0.source().unwrap())]
     CreateStateCompleteFile(#[source] std::io::Error),
 }
 
 /// Errors that can happen in `hard_link_storages_to_snapshot()`
 #[derive(Error, Debug)]
 pub enum HardLinkStoragesToSnapshotError {
-    #[error("failed to create accounts hard links dir: {0}")]
+    #[error("failed to create accounts hard links dir: {0}: {}", .0.source().unwrap())]
     CreateAccountsHardLinksDir(#[source] std::io::Error),
 
     #[error("failed to flush storage: {0}")]
@@ -444,7 +445,7 @@ pub enum HardLinkStoragesToSnapshotError {
     #[error("failed to get the snapshot's accounts hard link dir: {0}")]
     GetSnapshotHardLinksDir(#[from] GetSnapshotAccountsHardLinkDirError),
 
-    #[error("failed to hard link storage: {0}")]
+    #[error("failed to hard link storage: {0}: {}", .0.source().unwrap())]
     HardLinkStorage(#[source] std::io::Error),
 }
 
@@ -454,7 +455,7 @@ pub enum GetSnapshotAccountsHardLinkDirError {
     #[error("invalid account storage path: {0}")]
     GetAccountPath(PathBuf),
 
-    #[error("failed to create the snapshot hard link dir: {0}")]
+    #[error("failed to create the snapshot hard link dir: {0}: {}", .0.source().unwrap())]
     CreateSnapshotHardLinkDir(#[source] std::io::Error),
 
     #[error("failed to symlink snapshot hard link dir {link} to {original}: {source}")]
