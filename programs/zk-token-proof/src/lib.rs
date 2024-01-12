@@ -261,6 +261,11 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
             )
         }
         ProofInstruction::VerifyBatchedRangeProofU256 => {
+            // transfer with fee related proofs are not enabled
+            if !enable_zk_transfer_with_fee {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
