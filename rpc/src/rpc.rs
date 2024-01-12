@@ -527,88 +527,99 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block().await;
+        let slot_context = RpcContextConfig {
+            commitment: config.commitment,
+            min_context_slot: config.min_context_slot,
+        };
         let epoch = match config.epoch {
             Some(epoch) => epoch,
             None => epoch_schedule
-                .get_epoch(self.get_slot(RpcContextConfig {
-                    commitment: config.commitment,
-                    min_context_slot: config.min_context_slot,
-                })?)
+                .get_epoch(self.get_slot(slot_context)?)
                 .saturating_sub(1),
         };
 
-        // Rewards for this epoch are found in the first confirmed block of the next epoch
-        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
-        if first_slot_in_epoch < first_available_block {
-            if self.bigtable_ledger_storage.is_some() {
-                return Err(RpcCustomError::LongTermStorageSlotSkipped {
-                    slot: first_slot_in_epoch,
+        let bank = self.get_bank_with_config(slot_context)?;
+
+        if bank
+            .feature_set
+            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
+        {
+            Ok(vec![])
+        } else {
+            // Rewards for this epoch are found in the first confirmed block of the next epoch
+            let first_slot_in_epoch =
+                epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
+            if first_slot_in_epoch < first_available_block {
+                if self.bigtable_ledger_storage.is_some() {
+                    return Err(RpcCustomError::LongTermStorageSlotSkipped {
+                        slot: first_slot_in_epoch,
+                    }
+                    .into());
+                } else {
+                    return Err(RpcCustomError::BlockCleanedUp {
+                        slot: first_slot_in_epoch,
+                        first_available_block,
+                    }
+                    .into());
                 }
-                .into());
-            } else {
-                return Err(RpcCustomError::BlockCleanedUp {
-                    slot: first_slot_in_epoch,
-                    first_available_block,
-                }
-                .into());
             }
+
+            let first_confirmed_block_in_epoch = *self
+                .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
+                .await?
+                .first()
+                .ok_or(RpcCustomError::BlockNotAvailable {
+                    slot: first_slot_in_epoch,
+                })?;
+
+            let Ok(Some(first_confirmed_block)) = self
+                .get_block(
+                    first_confirmed_block_in_epoch,
+                    Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+                )
+                .await
+            else {
+                return Err(RpcCustomError::BlockNotAvailable {
+                    slot: first_confirmed_block_in_epoch,
+                }
+                .into());
+            };
+
+            let addresses: Vec<String> = addresses
+                .into_iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect();
+
+            let reward_hash: HashMap<String, Reward> = first_confirmed_block
+                .rewards
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|reward| match reward.reward_type? {
+                    RewardType::Staking | RewardType::Voting => addresses
+                        .contains(&reward.pubkey)
+                        .then(|| (reward.clone().pubkey, reward)),
+                    _ => None,
+                })
+                .collect();
+
+            let rewards = addresses
+                .iter()
+                .map(|address| {
+                    if let Some(reward) = reward_hash.get(address) {
+                        return Some(RpcInflationReward {
+                            epoch,
+                            effective_slot: first_confirmed_block_in_epoch,
+                            amount: reward.lamports.unsigned_abs(),
+                            post_balance: reward.post_balance,
+                            commission: reward.commission,
+                        });
+                    }
+                    None
+                })
+                .collect();
+
+            Ok(rewards)
         }
-
-        let first_confirmed_block_in_epoch = *self
-            .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
-            .await?
-            .first()
-            .ok_or(RpcCustomError::BlockNotAvailable {
-                slot: first_slot_in_epoch,
-            })?;
-
-        let Ok(Some(first_confirmed_block)) = self
-            .get_block(
-                first_confirmed_block_in_epoch,
-                Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
-            )
-            .await
-        else {
-            return Err(RpcCustomError::BlockNotAvailable {
-                slot: first_confirmed_block_in_epoch,
-            }
-            .into());
-        };
-
-        let addresses: Vec<String> = addresses
-            .into_iter()
-            .map(|pubkey| pubkey.to_string())
-            .collect();
-
-        let reward_hash: HashMap<String, Reward> = first_confirmed_block
-            .rewards
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|reward| match reward.reward_type? {
-                RewardType::Staking | RewardType::Voting => addresses
-                    .contains(&reward.pubkey)
-                    .then(|| (reward.clone().pubkey, reward)),
-                _ => None,
-            })
-            .collect();
-
-        let rewards = addresses
-            .iter()
-            .map(|address| {
-                if let Some(reward) = reward_hash.get(address) {
-                    return Some(RpcInflationReward {
-                        epoch,
-                        effective_slot: first_confirmed_block_in_epoch,
-                        amount: reward.lamports.unsigned_abs(),
-                        post_balance: reward.post_balance,
-                        commission: reward.commission,
-                    });
-                }
-                None
-            })
-            .collect();
-
-        Ok(rewards)
     }
 
     pub fn get_inflation_governor(
