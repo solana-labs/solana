@@ -296,6 +296,8 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 - Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
 
-## TODO:
-- Big one here is that we rely on the local solana-cli on your host machine to create genesis currently. as a result, the local cli needs to be compatible
-with the validator version you are deploying in monogon. This will be fixed in the future
+## Tear down network (and start a new one)
+```
+kubectl delete ns <namespace>
+```
+This will delete all services, secrets, replicasets, pods, etc. You can then deploy a new cluster as you want

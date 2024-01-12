@@ -1,7 +1,5 @@
 #!/bin/bash
 
-mkdir -p /home/solana/logs
-
 # Start Validator
 # shellcheck disable=SC1091
 source /home/solana/k8s-cluster-scripts/common.sh
@@ -240,7 +238,7 @@ fi
 default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
-default_arg --log logs/solana-validator.log
+default_arg --log -
 default_arg --full-rpc-api
 default_arg --no-incremental-snapshots
 default_arg --allow-private-addr
@@ -361,12 +359,6 @@ if [ "$vote_account_already_exists" != true ]; then
     exit 1
   fi
 fi
-
-# sleep 3600
-
-# $program "${args[@]}" &
-
-# sleep 3600
 
 echo "All commands succeeded. Running solana-validator next..."
 

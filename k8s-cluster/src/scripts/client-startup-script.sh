@@ -1,7 +1,4 @@
 #!/bin/bash
-# set -e
-
-mkdir -p /home/solana/logs
 
 clientToRun="$1"
 benchTpsExtraArgs="$2"
@@ -13,8 +10,7 @@ runtime_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
     if [[ $1 = --target-node ]]; then
-      echo "--target-node not supported yet...not included" >> logs/client.log 2>&1
-      # runtime_args+=("$1" "$2")
+      echo "WARNING: --target-node not supported yet...not included"
       shift 2
     elif [[ $1 = --duration ]]; then
       runtime_args+=("$1" "$2")
