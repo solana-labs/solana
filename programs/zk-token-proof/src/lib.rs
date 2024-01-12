@@ -50,7 +50,7 @@ where
     let context_data = if instruction_data.len() == INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT {
         if !invoke_context
             .feature_set
-            .is_active(&feature_set::enable_zk_from_account::id())
+            .is_active(&feature_set::enable_zk_proof_from_account::id())
         {
             return Err(InstructionError::InvalidInstructionData);
         }
