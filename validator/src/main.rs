@@ -793,6 +793,24 @@ pub fn main() {
             });
             return;
         }
+        ("repair-shred-from-peer", Some(subcommand_matches)) => {
+            let pubkey = value_t_or_exit!(subcommand_matches, "pubkey", Pubkey);
+            let slot = value_t_or_exit!(subcommand_matches, "slot", u64);
+            let shred_index = value_t_or_exit!(subcommand_matches, "shred", u64);
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .repair_shred_from_peer(pubkey, slot, shred_index)
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("repair shred from peer failed: {err}");
+                    exit(1);
+                });
+            return;
+        }
         ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
             match repair_whitelist_subcommand_matches.subcommand() {
                 ("get", Some(subcommand_matches)) => {
@@ -1691,20 +1709,6 @@ pub fn main() {
         } else {
             (None, None)
         };
-    admin_rpc_service::run(
-        &ledger_path,
-        admin_rpc_service::AdminRpcRequestMetadata {
-            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
-            start_time: std::time::SystemTime::now(),
-            validator_exit: validator_config.validator_exit.clone(),
-            start_progress: start_progress.clone(),
-            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            post_init: admin_service_post_init.clone(),
-            tower_storage: validator_config.tower_storage.clone(),
-            staked_nodes_overrides,
-            rpc_to_plugin_manager_sender,
-        },
-    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
@@ -1786,6 +1790,24 @@ pub fn main() {
         bind_address,
         public_tpu_addr,
         public_tpu_forwards_addr,
+    );
+
+    let repair_socket: Arc<std::net::UdpSocket> =
+        Arc::new(node.sockets.repair.try_clone().unwrap());
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
+            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            post_init: admin_service_post_init.clone(),
+            tower_storage: validator_config.tower_storage.clone(),
+            staked_nodes_overrides,
+            rpc_to_plugin_manager_sender,
+            repair_socket,
+        },
     );
 
     if restricted_repair_only_mode {

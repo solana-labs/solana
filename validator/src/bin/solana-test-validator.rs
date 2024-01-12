@@ -405,6 +405,7 @@ fn main() {
             post_init: admin_service_post_init,
             tower_storage: tower_storage.clone(),
             rpc_to_plugin_manager_sender,
+            repair_socket: Arc::new(std::net::UdpSocket::bind("0.0.0.0:0").unwrap()),
         },
     );
     let dashboard = if output == Output::Dashboard {
