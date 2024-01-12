@@ -28,7 +28,8 @@ use {
         signature::{Keypair, Signer},
     },
     solana_streamer::{
-        nonblocking::quic::compute_max_allowed_uni_streams, streamer::StakedNodes,
+        nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
+        streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
@@ -132,17 +133,21 @@ impl QuicConfig {
     }
 
     fn compute_max_parallel_streams(&self) -> usize {
-        let (stake, total_stake) = self.maybe_client_pubkey.map_or((0, 0), |pubkey| {
-            self.maybe_staked_nodes.as_ref().map_or((0, 0), |stakes| {
-                let rstakes = stakes.read().unwrap();
-                rstakes
-                    .get_node_stake(&pubkey)
-                    .map_or((0, rstakes.total_stake()), |stake| {
-                        (stake, rstakes.total_stake())
-                    })
-            })
-        });
-        compute_max_allowed_uni_streams(stake, total_stake)
+        let (client_type, total_stake) =
+            self.maybe_client_pubkey
+                .map_or((ConnectionPeerType::Unstaked, 0), |pubkey| {
+                    self.maybe_staked_nodes.as_ref().map_or(
+                        (ConnectionPeerType::Unstaked, 0),
+                        |stakes| {
+                            let rstakes = stakes.read().unwrap();
+                            rstakes.get_node_stake(&pubkey).map_or(
+                                (ConnectionPeerType::Unstaked, rstakes.total_stake()),
+                                |stake| (ConnectionPeerType::Staked(stake), rstakes.total_stake()),
+                            )
+                        },
+                    )
+                });
+        compute_max_allowed_uni_streams(client_type, total_stake)
     }
 
     pub fn update_client_certificate(
