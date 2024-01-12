@@ -62,6 +62,7 @@ use {
         clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
         commitment_config::{CommitmentConfig, CommitmentLevel},
         epoch_info::EpochInfo,
+        epoch_rewards_hasher::EpochRewardsHasher,
         epoch_rewards_partition_data::{
             get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion,
         },
@@ -576,9 +577,21 @@ impl JsonRpcRequestProcessor {
                         ),
                         data: None,
                     })?;
-            let EpochRewardsPartitionDataVersion::V0(_partition_data) =
+            let EpochRewardsPartitionDataVersion::V0(partition_data) =
                 bincode::deserialize(partition_data_account.data())
                     .map_err(|_| Error::internal_error())?;
+            let hasher = EpochRewardsHasher::new(
+                partition_data.num_partitions,
+                &partition_data.parent_blockhash,
+            );
+            let mut partition_index_addresses: HashMap<usize, Vec<String>> = HashMap::new();
+            for address in addresses.iter() {
+                let partition_index = hasher.clone().hash_address_to_partition(address);
+                partition_index_addresses
+                    .entry(partition_index)
+                    .and_modify(|list| list.push(address.to_string()))
+                    .or_insert(vec![address.to_string()]);
+            }
 
             Ok(vec![])
         } else {
