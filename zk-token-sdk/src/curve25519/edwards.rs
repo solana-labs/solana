@@ -21,6 +21,9 @@ mod target_arch {
         },
     };
 
+    /// maximum vector lengths in a multiscalar multiplication
+    const MAX_EDWARDS_MULTISCALAR_MUL: usize = 512;
+
     pub fn validate_edwards(point: &PodEdwardsPoint) -> bool {
         point.validate_point()
     }
@@ -114,6 +117,12 @@ mod target_arch {
         type Point = Self;
 
         fn multiscalar_multiply(scalars: &[PodScalar], points: &[Self]) -> Option<Self> {
+            if scalars.len() > MAX_EDWARDS_MULTISCALAR_MUL
+                || points.len() > MAX_EDWARDS_MULTISCALAR_MUL
+            {
+                return None;
+            }
+
             let scalars = scalars
                 .iter()
                 .map(|scalar| Scalar::try_from(scalar).ok())
