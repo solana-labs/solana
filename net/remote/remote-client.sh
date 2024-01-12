@@ -12,6 +12,7 @@ fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
 clientType="${7:-thin-client}"
+maybeUseUnstakedConnection="$8"
 
 missing() {
   echo "Error: $1 not specified"
@@ -83,6 +84,11 @@ solana-bench-tps)
     args+=(--entrypoint "$entrypointIp:8001")
   fi
 
+  if [[ -z "$maybeUseUnstakedConnection" ]]; then
+    args+=(--bind-address "$entrypointIp")
+    args+=(--client-node-id ./validator-identity.json)
+  fi
+
   clientCommand="\
     solana-bench-tps \
       --duration 7500 \
@@ -90,8 +96,6 @@ solana-bench-tps)
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
-      --bind-address $entrypointIp \
-      --client-node-id ./validator-identity.json \
       ${args[*]} \
   "
   ;;
