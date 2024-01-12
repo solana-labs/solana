@@ -43,11 +43,11 @@ pub struct DuplicateShredHandler {
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
+    epoch_schedule: EpochSchedule,
     // Cache information from root bank so we could function correctly without reading roots.
     cached_on_epoch: Epoch,
     cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
     cached_slots_in_epoch: u64,
-    cached_epoch_schedule: Option<EpochSchedule>,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
     // The Epoch to enable gossip duplicate proof ingestion and send to state machine.
@@ -73,6 +73,12 @@ impl DuplicateShredHandler {
         bank_forks: Arc<RwLock<BankForks>>,
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
+        let epoch_schedule = bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .epoch_schedule()
+            .clone();
         Self {
             buffer: HashMap::<(Slot, Pubkey), BufferEntry>::default(),
             consumed: HashMap::<Slot, bool>::default(),
@@ -80,7 +86,7 @@ impl DuplicateShredHandler {
             cached_on_epoch: 0,
             cached_staked_nodes: Arc::new(HashMap::new()),
             cached_slots_in_epoch: 0,
-            cached_epoch_schedule: None,
+            epoch_schedule,
             blockstore,
             leader_schedule_cache,
             bank_forks,
@@ -97,12 +103,13 @@ impl DuplicateShredHandler {
         self.last_root = last_root;
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
-            self.cached_epoch_schedule = Some(root_bank.epoch_schedule().clone());
             let epoch_info = root_bank.get_epoch_info();
-            self.enable_gossip_duplicate_proof_ingestion_epoch = root_bank
-                .feature_set
-                .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                .map(|slot| root_bank.epoch_schedule().get_epoch(slot));
+            if self.enable_gossip_duplicate_proof_ingestion_epoch.is_none() {
+                self.enable_gossip_duplicate_proof_ingestion_epoch = root_bank
+                    .feature_set
+                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                    .map(|slot| self.epoch_schedule.get_epoch(slot));
+            }
             if self.cached_staked_nodes.is_empty() || self.cached_on_epoch < epoch_info.epoch {
                 self.cached_on_epoch = epoch_info.epoch;
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
@@ -148,17 +155,17 @@ impl DuplicateShredHandler {
                     shred1.into_payload(),
                     shred2.into_payload(),
                 )?;
-                if let Some(epoch_schedule) = self.cached_epoch_schedule {
-                    // feature_epoch could only be 0 in tests and new cluster setup.
-                    if self
-                        .enable_gossip_duplicate_proof_ingestion_epoch
-                        .is_some_and(|feature_epoch| epoch_schedule.get_epoch(slot) > feature_epoch)
-                    {
-                        // Notify duplicate consensus state machine
-                        self.duplicate_slots_sender
-                            .send(slot)
-                            .map_err(|_| Error::DuplicateSlotSenderFailure)?;
-                    }
+                // feature_epoch could only be 0 in tests and new cluster setup.
+                if self
+                    .enable_gossip_duplicate_proof_ingestion_epoch
+                    .is_some_and(|feature_epoch| {
+                        self.epoch_schedule.get_epoch(slot) > feature_epoch || feature_epoch == 0
+                    })
+                {
+                    // Notify duplicate consensus state machine
+                    self.duplicate_slots_sender
+                        .send(slot)
+                        .map_err(|_| Error::DuplicateSlotSenderFailure)?;
                 }
             }
             self.consumed.insert(slot, true);
