@@ -135,14 +135,14 @@ fn bench_execute_batch(
             }
         })
         .collect();
-    let mut batches_iter = batches.into_iter();
+    let mut batches_iter = batches.iter();
 
     let mut timing = ExecuteTimings::default();
     bencher.iter(|| {
         for _ in 0..batches_per_iteration {
             let batch = batches_iter.next().unwrap();
             let _ = execute_batch(
-                &batch,
+                batch,
                 &bank,
                 None,
                 None,
@@ -152,6 +152,8 @@ fn bench_execute_batch(
             );
         }
     });
+    // drop batches here so dropping is not included in the benchmark
+    drop(batches);
 }
 
 #[bench]
