@@ -561,7 +561,8 @@ where
 }
 
 // return true for success, i.e ge unpacks and !ge.is_small_order()
-pub fn check_packed_ge_small_order(ge: &[u8; 32]) -> bool {
+#[cfg(test)]
+fn check_packed_ge_small_order(ge: &[u8; 32]) -> bool {
     if let Some(api) = perf_libs::api() {
         unsafe {
             // Returns 1 == fail, 0 == success
@@ -573,7 +574,8 @@ pub fn check_packed_ge_small_order(ge: &[u8; 32]) -> bool {
     false
 }
 
-pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
+#[cfg(test)]
+fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
     let mut out = [0u8; 32];
     if let Some(api) = perf_libs::api() {
         unsafe {
