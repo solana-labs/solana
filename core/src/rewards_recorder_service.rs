@@ -65,6 +65,7 @@ impl RewardsRecorderService {
                         post_balance: reward_info.post_balance,
                         reward_type: Some(reward_info.reward_type),
                         commission: reward_info.commission,
+                        num_partitions: reward_info.num_partitions,
                     })
                     .collect();
 
