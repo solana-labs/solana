@@ -47,7 +47,7 @@ where
     let mut accessed_accounts = 0_u16;
 
     // if instruction data is exactly 5 bytes, then read proof from an account
-    let proof_data = if instruction_data.len() == PROOF_OFFSET_LENGTH {
+    let context_data = if instruction_data.len() == PROOF_OFFSET_LENGTH {
         let proof_data_account = instruction_context
             .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
         accessed_accounts = accessed_accounts.checked_add(1).unwrap();
@@ -64,26 +64,34 @@ where
         let proof_data_end = proof_data_start
             .checked_add(std::mem::size_of::<T>())
             .ok_or(InstructionError::InvalidInstructionData)?;
-        let proof_data = proof_data_account
+        let proof_data_raw = proof_data_account
             .get_data()
             .get(proof_data_start..proof_data_end)
             .ok_or(InstructionError::InvalidAccountData)?;
 
-        *bytemuck::try_from_bytes::<T>(proof_data).map_err(|_| {
+        let proof_data = bytemuck::try_from_bytes::<T>(proof_data_raw).map_err(|_| {
             ic_msg!(invoke_context, "invalid proof data");
             InstructionError::InvalidInstructionData
-        })?
-    } else {
-        *ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
-            ic_msg!(invoke_context, "invalid proof data");
+        })?;
+        proof_data.verify_proof().map_err(|err| {
+            ic_msg!(invoke_context, "proof verification failed: {:?}", err);
             InstructionError::InvalidInstructionData
-        })?
-    };
+        })?;
 
-    proof_data.verify_proof().map_err(|err| {
-        ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
-        InstructionError::InvalidInstructionData
-    })?;
+        *proof_data.context_data()
+    } else {
+        let proof_data =
+            ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
+                ic_msg!(invoke_context, "invalid proof data");
+                InstructionError::InvalidInstructionData
+            })?;
+        proof_data.verify_proof().map_err(|err| {
+            ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
+            InstructionError::InvalidInstructionData
+        })?;
+
+        *proof_data.context_data()
+    };
 
     // create context state if additional accounts are provided with the instruction
     if instruction_context.get_number_of_instruction_accounts() > accessed_accounts {
@@ -108,11 +116,8 @@ where
             return Err(InstructionError::AccountAlreadyInitialized);
         }
 
-        let context_state_data = ProofContextState::encode(
-            &context_state_authority,
-            T::PROOF_TYPE,
-            proof_data.context_data(),
-        );
+        let context_state_data =
+            ProofContextState::encode(&context_state_authority, T::PROOF_TYPE, &context_data);
 
         if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);
