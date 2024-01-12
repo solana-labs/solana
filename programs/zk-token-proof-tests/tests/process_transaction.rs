@@ -1,9 +1,11 @@
 use {
-    bytemuck::Pod,
+    bytemuck::{bytes_of, Pod},
     curve25519_dalek::scalar::Scalar,
     solana_program_test::*,
     solana_sdk::{
+        account::Account,
         instruction::InstructionError,
+        pubkey::Pubkey,
         signature::Signer,
         signer::keypair::Keypair,
         system_instruction,
@@ -55,6 +57,14 @@ async fn test_zero_balance() {
 
     test_verify_proof_without_context(
         ProofInstruction::VerifyZeroBalance,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyZeroBalance,
+        size_of::<ProofContextState<ZeroBalanceProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -128,6 +138,13 @@ async fn test_ciphertext_ciphertext_equality() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyCiphertextCiphertextEquality,
+        size_of::<ProofContextState<CiphertextCiphertextEqualityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
     test_close_context_state(
         ProofInstruction::VerifyCiphertextCiphertextEquality,
         size_of::<ProofContextState<CiphertextCiphertextEqualityProofContext>>(),
@@ -179,6 +196,14 @@ async fn test_transfer() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyTransfer,
+        size_of::<ProofContextState<TransferProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyTransfer,
         size_of::<ProofContextState<TransferProofContext>>(),
         &success_proof_data,
@@ -256,6 +281,14 @@ async fn test_transfer_with_fee() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyTransferWithFee,
+        size_of::<ProofContextState<TransferWithFeeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyTransferWithFee,
         size_of::<ProofContextState<TransferWithFeeProofContext>>(),
@@ -307,6 +340,14 @@ async fn test_withdraw() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyWithdraw,
+        size_of::<ProofContextState<WithdrawProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyWithdraw,
         size_of::<ProofContextState<WithdrawProofContext>>(),
@@ -342,6 +383,14 @@ async fn test_pubkey_validity() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyPubkeyValidity,
+        size_of::<ProofContextState<PubkeyValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
@@ -368,6 +417,14 @@ async fn test_range_proof_u64() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyRangeProofU64,
+        size_of::<ProofContextState<RangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyRangeProofU64,
         size_of::<ProofContextState<RangeProofContext>>(),
         &success_proof_data,
@@ -423,6 +480,14 @@ async fn test_batched_range_proof_u64() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU64,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyBatchedRangeProofU64,
         size_of::<ProofContextState<BatchedRangeProofContext>>(),
@@ -464,6 +529,14 @@ async fn test_batched_range_proof_u128() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU128,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyBatchedRangeProofU128,
         size_of::<ProofContextState<BatchedRangeProofContext>>(),
         &success_proof_data,
@@ -523,6 +596,14 @@ async fn test_batched_range_proof_u256() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU256,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyBatchedRangeProofU256,
         size_of::<ProofContextState<BatchedRangeProofContext>>(),
@@ -568,6 +649,14 @@ async fn test_ciphertext_commitment_equality() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyCiphertextCommitmentEquality,
         size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
         &success_proof_data,
@@ -623,6 +712,14 @@ async fn test_grouped_ciphertext_2_handles_validity() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<GroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyGroupedCiphertext2HandlesValidity,
         size_of::<ProofContextState<GroupedCiphertext2HandlesValidityProofContext>>(),
         &success_proof_data,
@@ -690,6 +787,14 @@ async fn test_batched_grouped_ciphertext_2_handles_validity() {
     .await;
 
     test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
+        size_of::<ProofContextState<BatchedGroupedCiphertext2HandlesValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_from_account_with_context(
         ProofInstruction::VerifyBatchedGroupedCiphertext2HandlesValidity,
         size_of::<ProofContextState<BatchedGroupedCiphertext2HandlesValidityProofContext>>(),
         &success_proof_data,
@@ -766,6 +871,14 @@ async fn test_fee_sigma() {
     )
     .await;
 
+    test_verify_proof_from_account_with_context(
+        ProofInstruction::VerifyFeeSigma,
+        size_of::<ProofContextState<FeeSigmaProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
     test_close_context_state(
         ProofInstruction::VerifyFeeSigma,
         size_of::<ProofContextState<FeeSigmaProofContext>>(),
@@ -782,7 +895,28 @@ async fn test_verify_proof_without_context<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut context = ProgramTest::default().start_with_context().await;
+    let mut program_test = ProgramTest::default();
+    let success_proof_account = Pubkey::new_unique();
+    program_test.add_account(
+        success_proof_account,
+        Account {
+            lamports: 1_000_000_000,
+            data: bytes_of(success_proof_data).to_vec(),
+            owner: Pubkey::new_unique(),
+            ..Account::default()
+        },
+    );
+    let fail_proof_account = Pubkey::new_unique();
+    program_test.add_account(
+        fail_proof_account,
+        Account {
+            lamports: 1_000_000_000,
+            data: bytes_of(fail_proof_data).to_vec(),
+            owner: Pubkey::new_unique(),
+            ..Account::default()
+        },
+    );
+    let mut context = program_test.start_with_context().await;
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -840,6 +974,36 @@ async fn test_verify_proof_without_context<T, U>(
             TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
         );
     }
+
+    // verify a valid proof from an account
+    let instruction =
+        vec![proof_instruction.encode_verify_proof_from_account(None, &success_proof_account, 0)];
+    let transaction = Transaction::new_signed_with_payer(
+        &instruction,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+
+    // try to verify an invalid proof from an account
+    let instruction =
+        vec![proof_instruction.encode_verify_proof_from_account(None, &fail_proof_account, 0)];
+    let transaction = Transaction::new_signed_with_payer(
+        &instruction,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+    )
 }
 
 async fn test_verify_proof_with_context<T, U>(
@@ -1038,6 +1202,157 @@ async fn test_verify_proof_with_context<T, U>(
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions.with_max_compute_unit_limit(),
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account_and_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+}
+
+async fn test_verify_proof_from_account_with_context<T, U>(
+    instruction_type: ProofInstruction,
+    space: usize,
+    success_proof_data: &T,
+    fail_proof_data: &T,
+) where
+    T: Pod + ZkProofData<U>,
+    U: Pod,
+{
+    let mut program_test = ProgramTest::default();
+    let success_proof_account = Pubkey::new_unique();
+    program_test.add_account(
+        success_proof_account,
+        Account {
+            lamports: 1_000_000_000,
+            data: bytes_of(success_proof_data).to_vec(),
+            owner: Pubkey::new_unique(),
+            ..Account::default()
+        },
+    );
+    let fail_proof_account = Pubkey::new_unique();
+    program_test.add_account(
+        fail_proof_account,
+        Account {
+            lamports: 1_000_000_000,
+            data: bytes_of(fail_proof_data).to_vec(),
+            owner: Pubkey::new_unique(),
+            ..Account::default()
+        },
+    );
+    let mut context = program_test.start_with_context().await;
+    let rent = context.banks_client.get_rent().await.unwrap();
+
+    let client = &mut context.banks_client;
+    let payer = &context.payer;
+    let recent_blockhash = context.last_blockhash;
+
+    let context_state_account = Keypair::new();
+    let context_state_authority = Keypair::new();
+
+    let context_state_info = ContextStateInfo {
+        context_state_account: &context_state_account.pubkey(),
+        context_state_authority: &context_state_authority.pubkey(),
+    };
+
+    // try to create proof context state with an invalid proof
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        instruction_type.encode_verify_proof_from_account(
+            Some(context_state_info),
+            &fail_proof_account,
+            0,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
+    );
+
+    // successfully create a proof context state
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        instruction_type.encode_verify_proof_from_account(
+            Some(context_state_info),
+            &success_proof_account,
+            0,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+
+    // try overwriting the context state
+    let instructions = vec![instruction_type.encode_verify_proof_from_account(
+        Some(context_state_info),
+        &success_proof_account,
+        0,
+    )];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::AccountAlreadyInitialized)
+    );
+
+    // self-owned context state account
+    let context_state_account_and_authority = Keypair::new();
+    let context_state_info = ContextStateInfo {
+        context_state_account: &context_state_account_and_authority.pubkey(),
+        context_state_authority: &context_state_account_and_authority.pubkey(),
+    };
+
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account_and_authority.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        instruction_type.encode_verify_proof_from_account(
+            Some(context_state_info),
+            &success_proof_account,
+            0,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
         recent_blockhash,
