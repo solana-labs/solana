@@ -24,15 +24,15 @@ use {
 };
 
 lazy_static! {
-    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = address_lookup_table::program::id();
-    static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id();
-    static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
-    static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
-    static ref MEMO_V1_PROGRAM_ID: Pubkey = spl_memo_id_v1();
-    static ref MEMO_V3_PROGRAM_ID: Pubkey = spl_memo_id_v3();
-    static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
-    static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
-    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id();
+    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = address_lookup_table::program::id();AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref MEMO_V1_PROGRAM_ID: Pubkey = spl_memo_id_v1(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref MEMO_V3_PROGRAM_ID: Pubkey = spl_memo_id_v3(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id(); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(
@@ -53,9 +53,9 @@ lazy_static! {
             *BPF_UPGRADEABLE_LOADER_PROGRAM_ID,
             ParsableProgram::BpfUpgradeableLoader,
         );
-        m.insert(*STAKE_PROGRAM_ID, ParsableProgram::Stake);
-        m.insert(*SYSTEM_PROGRAM_ID, ParsableProgram::System);
-        m.insert(*VOTE_PROGRAM_ID, ParsableProgram::Vote);
+        m.insert(*STAKE_PROGRAM_ID, ParsableProgram::Stake); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+        m.insert(*SYSTEM_PROGRAM_ID, ParsableProgram::System); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
+        m.insert(*VOTE_PROGRAM_ID, ParsableProgram::Vote); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
         m
     };
 }
@@ -173,13 +173,13 @@ mod test {
 
     #[test]
     fn test_parse() {
-        let no_keys = AccountKeys::new(&[], None);
+        let no_keys = AccountKeys::new(&[], None); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
         let memo_instruction = CompiledInstruction {
             program_id_index: 0,
             accounts: vec![],
             data: vec![240, 159, 166, 150],
         };
-        assert_eq!(
+        assert_eq!( AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
             parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &no_keys, None).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
@@ -198,7 +198,7 @@ mod test {
             }
         );
 
-        let non_parsable_program_id = Pubkey::from([1; 32]);
+        let non_parsable_program_id = Pubkey::from([1; 32]); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
         assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys, None).is_err());
     }
 
@@ -222,6 +222,6 @@ mod test {
             data: bad_memo,
             accounts: vec![],
         })
-        .is_err(),);
+        .is_err(),); AJFjwFnJ3R3HykZAMULcaxMj5DWdx6GwDzCigioNTCKG
     }
 }
