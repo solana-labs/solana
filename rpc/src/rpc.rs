@@ -562,7 +562,7 @@ impl JsonRpcRequestProcessor {
 
         let bank = self.get_bank_with_config(slot_context)?;
 
-        if bank
+        let reward_map = if bank
             .feature_set
             .is_active(&feature_set::enable_partitioned_epoch_reward::id())
         {
@@ -601,7 +601,7 @@ impl JsonRpcRequestProcessor {
                 )
                 .await?;
 
-            let mut reward_map: HashMap<String, Reward> = HashMap::new();
+            let mut reward_map: HashMap<String, (Reward, Slot)> = HashMap::new();
             for (partition_index, addresses) in partition_index_addresses.iter() {
                 let slot = *block_list
                     .get(partition_index.saturating_add(1))
@@ -615,21 +615,20 @@ impl JsonRpcRequestProcessor {
                 else {
                     return Err(RpcCustomError::BlockNotAvailable { slot }.into());
                 };
-                let index_reward_map: HashMap<String, Reward> = block
+                let index_reward_map: HashMap<String, (Reward, Slot)> = block
                     .rewards
                     .unwrap_or_default()
                     .into_iter()
                     .filter_map(|reward| match reward.reward_type? {
                         RewardType::Staking | RewardType::Voting => addresses
                             .contains(&reward.pubkey)
-                            .then(|| (reward.clone().pubkey, reward)),
+                            .then(|| (reward.clone().pubkey, (reward, slot))),
                         _ => None,
                     })
                     .collect();
                 reward_map.extend(index_reward_map);
             }
-
-            Ok(vec![])
+            reward_map
         } else {
             let first_confirmed_block_in_epoch = *self
                 .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
@@ -652,41 +651,42 @@ impl JsonRpcRequestProcessor {
                 .into());
             };
 
-            let addresses: Vec<String> = addresses
-                .into_iter()
-                .map(|pubkey| pubkey.to_string())
-                .collect();
+            let addresses: Vec<String> =
+                addresses.iter().map(|pubkey| pubkey.to_string()).collect();
 
-            let reward_hash: HashMap<String, Reward> = first_confirmed_block
+            first_confirmed_block
                 .rewards
                 .unwrap_or_default()
                 .into_iter()
                 .filter_map(|reward| match reward.reward_type? {
-                    RewardType::Staking | RewardType::Voting => addresses
-                        .contains(&reward.pubkey)
-                        .then(|| (reward.clone().pubkey, reward)),
+                    RewardType::Staking | RewardType::Voting => {
+                        addresses.contains(&reward.pubkey).then(|| {
+                            (
+                                reward.clone().pubkey,
+                                (reward, first_confirmed_block_in_epoch),
+                            )
+                        })
+                    }
                     _ => None,
                 })
-                .collect();
-
-            let rewards = addresses
-                .iter()
-                .map(|address| {
-                    if let Some(reward) = reward_hash.get(address) {
-                        return Some(RpcInflationReward {
-                            epoch,
-                            effective_slot: first_confirmed_block_in_epoch,
-                            amount: reward.lamports.unsigned_abs(),
-                            post_balance: reward.post_balance,
-                            commission: reward.commission,
-                        });
-                    }
-                    None
-                })
-                .collect();
-
-            Ok(rewards)
-        }
+                .collect()
+        };
+        let rewards = addresses
+            .iter()
+            .map(|address| {
+                if let Some((reward, slot)) = reward_map.get(&address.to_string()) {
+                    return Some(RpcInflationReward {
+                        epoch,
+                        effective_slot: *slot,
+                        amount: reward.lamports.unsigned_abs(),
+                        post_balance: reward.post_balance,
+                        commission: reward.commission,
+                    });
+                }
+                None
+            })
+            .collect();
+        Ok(rewards)
     }
 
     pub fn get_inflation_governor(
