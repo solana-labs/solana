@@ -540,6 +540,21 @@ impl JsonRpcRequestProcessor {
         // Rewards for this epoch are found in the first confirmed block of the next epoch
         let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
 
+        if first_slot_in_epoch < first_available_block {
+            if self.bigtable_ledger_storage.is_some() {
+                return Err(RpcCustomError::LongTermStorageSlotSkipped {
+                    slot: first_slot_in_epoch,
+                }
+                .into());
+            } else {
+                return Err(RpcCustomError::BlockCleanedUp {
+                    slot: first_slot_in_epoch,
+                    first_available_block,
+                }
+                .into());
+            }
+        }
+
         let bank = self.get_bank_with_config(slot_context)?;
 
         if bank
@@ -548,21 +563,6 @@ impl JsonRpcRequestProcessor {
         {
             Ok(vec![])
         } else {
-            if first_slot_in_epoch < first_available_block {
-                if self.bigtable_ledger_storage.is_some() {
-                    return Err(RpcCustomError::LongTermStorageSlotSkipped {
-                        slot: first_slot_in_epoch,
-                    }
-                    .into());
-                } else {
-                    return Err(RpcCustomError::BlockCleanedUp {
-                        slot: first_slot_in_epoch,
-                        first_available_block,
-                    }
-                    .into());
-                }
-            }
-
             let first_confirmed_block_in_epoch = *self
                 .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
                 .await?
