@@ -3214,6 +3214,12 @@ impl AccountsDb {
                         self.accounts_index.scan(
                             pubkeys.iter(),
                             |pubkey, slots_refs, _entry| {
+
+                                // need to probably tune this
+                                if thread_rng().gen_range(0, 10000) == 0 {
+                                    sleep(Duration::from_millis(10));
+                                }
+
                                 let mut useless = true;
                                 if let Some((slot_list, ref_count)) = slots_refs {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
@@ -3323,6 +3329,11 @@ impl AccountsDb {
         // Then purge if we can
         let mut store_counts: HashMap<Slot, (usize, HashSet<Pubkey>)> = HashMap::new();
         for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
+            // need to probably tune this
+            if thread_rng().gen_range(0, 10000) == 0 {
+                sleep(Duration::from_millis(10));
+            }
+
             if purged_account_slots.contains_key(key) {
                 *ref_count = self.accounts_index.ref_count_from_storage(key);
             }
