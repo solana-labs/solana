@@ -1,8 +1,5 @@
 use {
-    crate::{
-        nonblocking::quic::ConnectionPeerType,
-        quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS},
-    },
+    crate::quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS},
     percentage::Percentage,
     std::{
         cmp,
@@ -156,12 +153,11 @@ impl StakedStreamLoadEMA {
 }
 
 pub(crate) fn max_streams_for_connection_in_throttling_duration(
-    connection_type: ConnectionPeerType,
     stake: u64,
     total_stake: u64,
     ema_load: Arc<StakedStreamLoadEMA>,
 ) -> u64 {
-    if matches!(connection_type, ConnectionPeerType::Unstaked) || stake == 0 {
+    if stake == 0 {
         let max_num_connections = u64::try_from(MAX_UNSTAKED_CONNECTIONS).unwrap_or_else(|_| {
             error!(
                 "Failed to convert maximum number of unstaked connections {} to u64.",
@@ -213,13 +209,10 @@ pub mod test {
     use {
         super::*,
         crate::{
-            nonblocking::{
-                quic::ConnectionPeerType,
-                stream_throttle::{
-                    max_streams_for_connection_in_throttling_duration,
-                    MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION,
-                    STREAM_LOAD_EMA_INTERVAL_MS,
-                },
+            nonblocking::stream_throttle::{
+                max_streams_for_connection_in_throttling_duration,
+                MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION,
+                STREAM_LOAD_EMA_INTERVAL_MS,
             },
             quic::StreamStats,
         },
@@ -234,35 +227,14 @@ pub mod test {
         let load_ema = Arc::new(StakedStreamLoadEMA::new(Arc::new(StreamStats::default())));
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Unstaked,
-                0,
-                10000,
-                load_ema.clone(),
-            ),
-            10
-        );
-
-        // 25K packets per ms * 20% / 500 max unstaked connections
-        assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Unstaked,
-                10,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(0, 10000, load_ema.clone(),),
             10
         );
 
         // If stake is 0, same limits as unstaked connections will apply.
         // 25K packets per ms * 20% / 500 max unstaked connections
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                0,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(0, 10000, load_ema.clone(),),
             10
         );
     }
@@ -282,24 +254,14 @@ pub mod test {
         // ema_load = 10K, stake = 15, total_stake = 10K
         // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 10K) * 15 / 10K  = 30
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                15,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(15, 10000, load_ema.clone(),),
             30
         );
 
         // ema_load = 10K, stake = 1K, total_stake = 10K
         // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 10K) * 1K / 10K  = 2K
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                1000,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(1000, 10000, load_ema.clone(),),
             2000
         );
 
@@ -307,24 +269,14 @@ pub mod test {
         // ema_load = 2.5K, stake = 15, total_stake = 10K
         // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 2.5K) * 15 / 10K  = 120
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                15,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(15, 10000, load_ema.clone(),),
             120
         );
 
         // ema_load = 2.5K, stake = 1K, total_stake = 10K
         // max_streams in 100ms (throttling window) = 2 * ((10K * 10K) / 2.5K) * 1K / 10K  = 8000
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                1000,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(1000, 10000, load_ema.clone(),),
             8000
         );
 
@@ -333,35 +285,20 @@ pub mod test {
         load_ema.current_load_ema.store(2000, Ordering::Relaxed);
         // function = ((10K * 10K) / 25% of 10K) * stake / total_stake
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                15,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(15, 10000, load_ema.clone(),),
             120
         );
 
         // function = ((10K * 10K) / 25% of 10K) * stake / total_stake
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                1000,
-                10000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(1000, 10000, load_ema.clone(),),
             8000
         );
 
         // At 1/40000 stake weight, and minimum load, it should still allow
         // MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION of streams.
         assert_eq!(
-            max_streams_for_connection_in_throttling_duration(
-                ConnectionPeerType::Staked,
-                1,
-                40000,
-                load_ema.clone(),
-            ),
+            max_streams_for_connection_in_throttling_duration(1, 40000, load_ema.clone(),),
             MIN_STREAMS_PER_THROTTLING_INTERVAL_FOR_STAKED_CONNECTION
         );
     }
