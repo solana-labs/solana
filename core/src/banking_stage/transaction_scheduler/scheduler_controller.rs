@@ -419,15 +419,14 @@ impl SchedulerCountMetrics {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report();
-                prio_fee_stats.report();
+                self.report(prio_fee_stats);
             }
             self.reset();
             prio_fee_stats.reset();
         }
     }
 
-    fn report(&self) {
+    fn report(&self, prio_fee_stats: &SchedulerPrioritizationFeeStats) {
         datapoint_info!(
             "banking_stage_scheduler_counts",
             ("num_received", self.num_received, i64),
@@ -463,7 +462,9 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_age_and_status,
                 i64
             ),
-            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
+            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
+            ("min_prioritization_fees", prio_fee_stats.get_min(), i64),
+            ("max_prioritization_fees", prio_fee_stats.get_max(), i64)
         );
     }
 
@@ -539,18 +540,17 @@ impl SchedulerPrioritizationFeeStats {
         self.max_prioritization_fees = 0;
     }
 
-    pub fn report(&self) {
+    pub fn get_min(&self) -> u64 {
         // to avoid getting u64::max recorded by metrics / in case of edge cases
-        let min_prioritization_fees = if self.min_prioritization_fees != u64::MAX {
+        if self.min_prioritization_fees != u64::MAX {
             self.min_prioritization_fees
         } else {
             0
-        };
-        datapoint_info!(
-            "banking_stage_scheduler_prioritization_fee_stats",
-            ("min_prioritization_fees", min_prioritization_fees, i64),
-            ("max_prioritization_fees", self.max_prioritization_fees, i64)
-        );
+        }
+    }
+
+    pub fn get_max(&self) -> u64 {
+        self.max_prioritization_fees
     }
 }
 
