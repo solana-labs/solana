@@ -1986,6 +1986,7 @@ where
                     lamports: 0,
                     post_balance: bank1.get_balance(&vote_id),
                     commission: Some(0),
+                    num_partitions: None,
                 }
             ),
             (
@@ -1995,6 +1996,7 @@ where
                     lamports: validator_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
+                    num_partitions: None,
                 }
             )
         ]
@@ -2589,6 +2591,7 @@ fn test_bank_tx_fee() {
                 lamports: expected_fee_collected as i64,
                 post_balance: initial_balance + expected_fee_collected,
                 commission: None,
+                num_partitions: None,
             }
         )]
     );
@@ -2624,6 +2627,7 @@ fn test_bank_tx_fee() {
                 lamports: expected_fee_collected as i64,
                 post_balance: initial_balance + 2 * expected_fee_collected,
                 commission: None,
+                num_partitions: None,
             }
         )]
     );
@@ -2699,6 +2703,7 @@ fn test_bank_tx_compute_unit_fee() {
                 lamports: expected_fee_collected as i64,
                 post_balance: initial_balance + expected_fee_collected,
                 commission: None,
+                num_partitions: None,
             }
         )]
     );
@@ -2734,6 +2739,7 @@ fn test_bank_tx_compute_unit_fee() {
                 lamports: expected_fee_collected as i64,
                 post_balance: initial_balance + 2 * expected_fee_collected,
                 commission: None,
+                num_partitions: None,
             }
         )]
     );
@@ -12967,6 +12973,7 @@ fn test_store_vote_accounts_partitioned() {
                 lamports: p.1.vote_rewards as i64,
                 post_balance: p.1.vote_rewards,
                 commission: Some(p.1.commission),
+                num_partitions: None,
             };
             vote_rewards_account.rewards.push((p.0, info));
             vote_rewards_account
@@ -13320,6 +13327,7 @@ fn test_calc_vote_accounts_to_store_normal() {
                         lamports: vote_rewards as i64,
                         post_balance: vote_account.lamports(),
                         commission: Some(commission),
+                        num_partitions: None,
                     }
                 );
                 assert_eq!(rewards.0, pubkey);
@@ -13511,6 +13519,7 @@ fn test_calculate_stake_vote_rewards() {
             lamports: vote_rewards as i64,
             post_balance: vote_account.lamports(),
             commission: Some(commision),
+            num_partitions: None,
         }
     );
     assert_eq!(&rewards.0, vote_pubkey);
@@ -13530,6 +13539,7 @@ fn test_calculate_stake_vote_rewards() {
         lamports: rewards,
         post_balance: original_stake_lamport + rewards as u64,
         commission: Some(commision),
+        num_partitions: None,
     };
     assert_eq!(
         stake_reward_calculation.stake_rewards[0].stake_reward_info,

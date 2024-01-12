@@ -67,6 +67,7 @@ impl Bank {
                                 lamports: deposit as i64,
                                 post_balance,
                                 commission: None,
+                                num_partitions: None,
                             },
                         ));
                     }
@@ -227,6 +228,7 @@ impl Bank {
                                     lamports: rent_to_be_paid as i64,
                                     post_balance,
                                     commission: None,
+                                    num_partitions: None,
                                 },
                             ));
                         }

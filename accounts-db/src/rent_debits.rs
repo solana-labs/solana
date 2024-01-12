@@ -19,7 +19,8 @@ impl RentDebit {
             reward_type: RewardType::Rent,
             lamports: rent_debit,
             post_balance: self.post_balance,
-            commission: None, // Not applicable
+            commission: None,     // Not applicable
+            num_partitions: None, // Not applicable
         })
     }
 }

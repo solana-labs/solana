@@ -3156,6 +3156,7 @@ impl Bank {
                                 lamports: i64::try_from(stakers_reward).unwrap(),
                                 post_balance,
                                 commission: Some(vote_state.commission),
+                                num_partitions: None,
                             },
                             stake_account,
                         });
@@ -3263,6 +3264,7 @@ impl Bank {
                                 lamports: i64::try_from(stakers_reward).unwrap(),
                                 post_balance,
                                 commission: Some(vote_state.commission),
+                                num_partitions: None,
                             },
                             stake_account,
                         });
@@ -3398,6 +3400,7 @@ impl Bank {
                             lamports: vote_rewards as i64,
                             post_balance: vote_account.lamports(),
                             commission: Some(commission),
+                            num_partitions: None,
                         },
                     ))
                 },
@@ -3448,6 +3451,7 @@ impl Bank {
                         lamports: vote_rewards as i64,
                         post_balance: vote_account.lamports(),
                         commission: Some(commission),
+                        num_partitions: None,
                     },
                 ));
                 result
@@ -3616,6 +3620,19 @@ impl Bank {
         )
         .unwrap();
         self.store_account_and_update_capitalization(&address, &new_account);
+
+        let mut rewards = self.rewards.write().unwrap();
+        rewards.reserve(1);
+        rewards.push((
+            address,
+            RewardInfo {
+                reward_type: RewardType::PartitionData,
+                lamports: 0,
+                post_balance: 0,
+                commission: None,
+                num_partitions: Some(num_partitions),
+            },
+        ));
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {

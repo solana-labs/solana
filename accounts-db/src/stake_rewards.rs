@@ -16,6 +16,8 @@ pub struct RewardInfo {
     pub post_balance: u64,
     /// Vote account commission when the reward was credited, only present for voting and staking rewards
     pub commission: Option<u8>,
+    /// Number of partitions calculated for epoch rewards, only present for RewardType::PartitionData
+    pub num_partitions: Option<usize>,
 }
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -96,8 +98,9 @@ impl StakeReward {
             stake_reward_info: RewardInfo {
                 reward_type: RewardType::Staking,
                 lamports: rng.gen_range(1..200),
-                post_balance: 0,  /* unused atm */
-                commission: None, /* unused atm */
+                post_balance: 0,      /* unused atm */
+                commission: None,     /* unused atm */
+                num_partitions: None, // Not relevant
             },
 
             stake_account: validator_stake_account,
