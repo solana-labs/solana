@@ -13,13 +13,13 @@
 //! pre-written to an account. The program determines whether the proof is provided as instruction
 //! data or pre-written to an account by inspecting the length of the data. If the instruction data
 //! is exactly 4 bytes, then the program assumes that the first account provided with the
-//! instruction contains the zero-knowledge and verifies the account data at the offset specified
-//! in the instruction data. Otherwise, the program assumes that the zero-knowledge proof is
+//! instruction contains the zero-knowledge proof and verifies the account data at the offset specified
+//! in the instruction data as an unsigned 32-bit integer. Otherwise, the program assumes that the zero-knowledge proof is
 //! provided as part of the instruction data.
 //!
 //! In step 2, the program determines whether to create a context-state account by inspecting the
 //! number of accounts provided with the instruction. If two additional accounts are provided with
-//! the instruction after verifying the zero-knowledge, then the program writes the context data to
+//! the instruction after verifying the zero-knowledge proof, then the program writes the context data to
 //! the specified context-state account.
 //!
 //! NOTE: A context-state account must be pre-allocated to the exact size of the context data that
@@ -195,7 +195,7 @@ pub enum ProofInstruction {
     ///   2. `[]` (Optional) The proof context account owner
     ///
     /// The instruction expects either:
-    ///   i. `BatchedRangeProof64Data` if proof is provided as instruction data
+    ///   i. `BatchedRangeProofU64Data` if proof is provided as instruction data
     ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU64,
@@ -213,7 +213,7 @@ pub enum ProofInstruction {
     ///   2. `[]` (Optional) The proof context account owner
     ///
     /// The instruction expects either:
-    ///   i. `BatchedRangeProof128Data` if proof is provided as instruction data
+    ///   i. `BatchedRangeProofU128Data` if proof is provided as instruction data
     ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU128,
@@ -231,7 +231,7 @@ pub enum ProofInstruction {
     ///   2. `[]` (Optional) The proof context account owner
     ///
     /// The instruction expects either:
-    ///   i. `BatchedRangeProof256Data` if proof is provided as instruction data
+    ///   i. `BatchedRangeProofU256Data` if proof is provided as instruction data
     ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU256,
@@ -266,7 +266,7 @@ pub enum ProofInstruction {
     ///   2. `[]` (Optional) The proof context account owner
     ///
     /// The instruction expects either:
-    ///   i. `GroupedCiphertextValidityProofContext` if proof is provided as instruction data
+    ///   i. `GroupedCiphertext2HandlesValidityProofData` if proof is provided as instruction data
     ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyGroupedCiphertext2HandlesValidity,
@@ -285,7 +285,7 @@ pub enum ProofInstruction {
     ///   2. `[]` (Optional) The proof context account owner
     ///
     /// The instruction expects either:
-    ///   i. `BatchedGroupedCiphertextValidityProofContext` if proof is provided as instruction data
+    ///   i. `BatchedGroupedCiphertext2HandlesValidityProofData` if proof is provided as instruction data
     ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedGroupedCiphertext2HandlesValidity,
