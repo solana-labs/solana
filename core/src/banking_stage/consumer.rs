@@ -403,12 +403,7 @@ impl Consumer {
         let pre_results = vec![Ok(()); txs.len()];
         let check_results =
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
-
-        let check_results = check_results
-            .into_iter()
-            .zip(txs)
-            .map(|((result, _nonce), _tx)| result);
-
+        let check_results = check_results.into_iter().map(|(result, _nonce)| result);
         let mut output = self.process_and_record_transactions_with_pre_results(
             bank,
             txs,
