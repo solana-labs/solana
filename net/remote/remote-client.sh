@@ -76,10 +76,8 @@ solana-bench-tps)
 
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
-    args+=(--url "http://$entrypointIp:8899")
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
-    args+=(--url "http://$entrypointIp:8899")
   else
     args+=(--entrypoint "$entrypointIp:8001")
   fi
@@ -96,6 +94,7 @@ solana-bench-tps)
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
+      --url "http://$entrypointIp:8899" \
       ${args[*]} \
   "
   ;;
