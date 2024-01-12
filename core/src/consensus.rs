@@ -544,7 +544,7 @@ impl Tower {
         self.last_vote_tx_blockhash = BlockhashStatus::Blockhash(new_vote_tx_blockhash);
     }
 
-    pub(crate) fn last_vote_tx_blockhash_failed(&mut self) {
+    pub(crate) fn mark_last_vote_tx_blockhash_failed(&mut self) {
         self.last_vote_tx_blockhash = BlockhashStatus::Failed;
     }
 

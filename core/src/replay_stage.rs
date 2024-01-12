@@ -2458,7 +2458,9 @@ impl ReplayStage {
         // If we are a non voting validator or have an incorrect setup preventing us from
         // generating vote txs, no need to refresh
         let last_vote_tx_blockhash = match tower.last_vote_tx_blockhash() {
-            BlockhashStatus::Failed => return, // Do not refresh a failed vote
+            // Since the checks in vote generation are deterministic there is no need
+            // to refresh a failed vote
+            BlockhashStatus::Failed => return,
             BlockhashStatus::Uninitialized => None, // Have not voted after restart, eligible for refresh
             BlockhashStatus::Blockhash(blockhash) => Some(blockhash),
         };
@@ -2517,7 +2519,7 @@ impl ReplayStage {
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
             last_vote_refresh_time.last_refresh_time = Instant::now();
         } else {
-            tower.last_vote_tx_blockhash_failed();
+            tower.mark_last_vote_tx_blockhash_failed();
         }
     }
 
@@ -2566,7 +2568,7 @@ impl ReplayStage {
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
         } else {
-            tower.last_vote_tx_blockhash_failed();
+            tower.mark_last_vote_tx_blockhash_failed();
         }
     }
 
