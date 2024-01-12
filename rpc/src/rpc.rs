@@ -593,6 +593,42 @@ impl JsonRpcRequestProcessor {
                     .or_insert(vec![address.to_string()]);
             }
 
+            let block_list = self
+                .get_blocks_with_limit(
+                    first_slot_in_epoch,
+                    partition_data.num_partitions + 1,
+                    config.commitment,
+                )
+                .await?;
+
+            let mut reward_map: HashMap<String, Reward> = HashMap::new();
+            for (partition_index, addresses) in partition_index_addresses.iter() {
+                let slot = *block_list
+                    .get(partition_index.saturating_add(1))
+                    .ok_or_else(Error::internal_error)?;
+                let Ok(Some(block)) = self
+                    .get_block(
+                        slot,
+                        Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+                    )
+                    .await
+                else {
+                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+                };
+                let index_reward_map: HashMap<String, Reward> = block
+                    .rewards
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|reward| match reward.reward_type? {
+                        RewardType::Staking | RewardType::Voting => addresses
+                            .contains(&reward.pubkey)
+                            .then(|| (reward.clone().pubkey, reward)),
+                        _ => None,
+                    })
+                    .collect();
+                reward_map.extend(index_reward_map);
+            }
+
             Ok(vec![])
         } else {
             let first_confirmed_block_in_epoch = *self
