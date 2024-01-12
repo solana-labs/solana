@@ -949,7 +949,7 @@ lazy_static! {
         (merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for merkle root conflicts #34270"),
         (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
         (deprecate_executable_meta_update_in_bpf_loader::id(), "deprecate executable meta flag update in bpf loader #34194"),
-        (enable_zk_from_account::id(), "Enable zk token proof program to read proof from accounts instead of instruction data"),
+        (enable_zk_from_account::id(), "Enable zk token proof program to read proof from accounts instead of instruction data #34750"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
