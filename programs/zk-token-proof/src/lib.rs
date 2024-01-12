@@ -46,13 +46,14 @@ where
     // number of accessed accounts so far
     let mut accessed_accounts = 0_u16;
 
-    // if instruction data is exactly 4 bytes, then read proof from an account
+    // if instruction data is exactly 5 bytes, then read proof from an account
     let proof_data = if instruction_data.len() == PROOF_OFFSET_LENGTH {
         let proof_data_account = instruction_context
             .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
         accessed_accounts = accessed_accounts.checked_add(1).unwrap();
 
         let proof_data_offset = u32::from_le_bytes(
+            // the first byte is the instruction discriminator
             instruction_data[1..PROOF_OFFSET_LENGTH]
                 .try_into()
                 .map_err(|_| InstructionError::InvalidInstructionData)?,
