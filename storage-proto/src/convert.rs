@@ -1233,6 +1233,7 @@ mod test {
             post_balance: 321,
             reward_type: None,
             commission: None,
+            num_partitions: None,
         };
         let gen_reward: generated::Reward = reward.clone().into();
         assert_eq!(reward, gen_reward.into());

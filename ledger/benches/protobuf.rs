@@ -24,6 +24,7 @@ fn create_rewards() -> Rewards {
             post_balance: std::u64::MAX,
             reward_type: Some(RewardType::Fee),
             commission: None,
+            num_partitions: None,
         })
         .collect()
 }
