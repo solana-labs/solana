@@ -12,10 +12,10 @@
 //! In step 1, the zero-knowledge proof can be included directly as the instruction data or
 //! pre-written to an account. The program determines whether the proof is provided as instruction
 //! data or pre-written to an account by inspecting the length of the data. If the instruction data
-//! is exactly 4 bytes, then the program assumes that the first account provided with the
-//! instruction contains the zero-knowledge proof and verifies the account data at the offset specified
-//! in the instruction data as an unsigned 32-bit integer. Otherwise, the program assumes that the zero-knowledge proof is
-//! provided as part of the instruction data.
+//! is exactly 5 bytes (instruction disciminator + unsigned 32-bit integer), then the program
+//! assumes that the first account provided with the instruction contains the zero-knowledge proof
+//! and verifies the account data at the offset specified in the instruction data. Otherwise, the
+//! program assumes that the zero-knowledge proof is provided as part of the instruction data.
 //!
 //! In step 2, the program determines whether to create a context-state account by inspecting the
 //! number of accounts provided with the instruction. If two additional accounts are provided with
