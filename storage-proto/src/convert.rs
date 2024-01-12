@@ -99,6 +99,7 @@ impl From<Reward> for generated::Reward {
                 Some(RewardType::Rent) => generated::RewardType::Rent,
                 Some(RewardType::Staking) => generated::RewardType::Staking,
                 Some(RewardType::Voting) => generated::RewardType::Voting,
+                Some(RewardType::PartitionData) => generated::RewardType::PartitionData,
             } as i32,
             commission: reward.commission.map(|c| c.to_string()).unwrap_or_default(),
         }
@@ -117,6 +118,7 @@ impl From<generated::Reward> for Reward {
                 2 => Some(RewardType::Rent),
                 3 => Some(RewardType::Staking),
                 4 => Some(RewardType::Voting),
+                5 => Some(RewardType::PartitionData),
                 _ => None,
             },
             commission: reward.commission.parse::<u8>().ok(),
