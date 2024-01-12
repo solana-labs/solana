@@ -509,10 +509,11 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
 
             // Now, this is the main loop for the scheduler thread, which is a special beast.
             //
-            // That's because it's the most notable bottleneck of throughput. Unified scheduler's
-            // overall throughput is largely dependant on its ultra-low latency characteristic,
-            // which is the most important design goal of the scheduler in order to reduce the
-            // transaction confirmation latency for end users.
+            // That's because it could be the most notable bottleneck of throughput in the future
+            // when there are ~100 handler threads. Unified scheduler's overall throughput is
+            // largely dependant on its ultra-low latency characteristic, which is the most
+            // important design goal of the scheduler in order to reduce the transaction
+            // confirmation latency for end users.
             //
             // Firstly, the scheduler thread must handle incoming messages from thread(s) owned by
             // the replay stage or the banking stage. It also must handle incoming messages from
@@ -528,6 +529,11 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             // concurrency density for throughput as the second design goal. This design goal
             // relies on the assumption that there's no considerable penalty arising from the
             // unbatched manner of processing.
+            //
+            // Note that this assumption isn't true as of writing.  The current code path
+            // underneath execute_batch() isn't optimized for unified scheduler's load pattern (ie.
+            // batches just with a single transaction) at all. This will be addressed in the
+            // future.
             //
             // These two key elements of the design philosophy lead to the rather unforgiving
             // implementation burden: Degraded performance would acutely manifest from an even tiny
