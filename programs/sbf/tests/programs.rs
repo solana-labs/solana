@@ -2523,11 +2523,6 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             ..
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        // disable native_programs_consume_cu feature to allow test program
-        // not consume units.
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::native_programs_consume_cu::id());
-        bank.feature_set = Arc::new(feature_set);
         bank.deactivate_feature(
             &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
         );
