@@ -47,7 +47,6 @@ pub struct DuplicateShredHandler {
     // Cache information from root bank so we could function correctly without reading roots.
     cached_on_epoch: Epoch,
     cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
-    cached_slots_in_epoch: u64,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
     // The Epoch to enable gossip duplicate proof ingestion and send to state machine.
@@ -73,25 +72,29 @@ impl DuplicateShredHandler {
         bank_forks: Arc<RwLock<BankForks>>,
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
-        let epoch_schedule = bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .epoch_schedule()
-            .clone();
+        let (enable_gossip_duplicate_proof_ingestion_epoch, epoch_schedule) = {
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            let epoch_schedule = root_bank.epoch_schedule().clone();
+            (
+                root_bank
+                    .feature_set
+                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                    .map(|slot| epoch_schedule.get_epoch(slot)),
+                epoch_schedule,
+            )
+        };
         Self {
             buffer: HashMap::<(Slot, Pubkey), BufferEntry>::default(),
             consumed: HashMap::<Slot, bool>::default(),
             last_root: 0,
             cached_on_epoch: 0,
             cached_staked_nodes: Arc::new(HashMap::new()),
-            cached_slots_in_epoch: 0,
             epoch_schedule,
             blockstore,
             leader_schedule_cache,
             bank_forks,
             duplicate_slots_sender,
-            enable_gossip_duplicate_proof_ingestion_epoch: None,
+            enable_gossip_duplicate_proof_ingestion_epoch,
         }
     }
 
@@ -115,7 +118,6 @@ impl DuplicateShredHandler {
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
                     self.cached_staked_nodes = cached_staked_nodes;
                 }
-                self.cached_slots_in_epoch = epoch_info.slots_in_epoch;
             }
         }
     }
@@ -175,7 +177,10 @@ impl DuplicateShredHandler {
 
     fn should_consume_slot(&mut self, slot: Slot) -> bool {
         slot > self.last_root
-            && slot < self.last_root.saturating_add(self.cached_slots_in_epoch)
+            && slot
+                < self
+                    .last_root
+                    .saturating_add(self.epoch_schedule.slots_per_epoch)
             && should_consume_slot(slot, &self.blockstore, &mut self.consumed)
     }
 
@@ -438,8 +443,9 @@ mod tests {
         assert!(receiver.is_empty());
 
         // This proof will be rejected because the slot is too far away in the future.
-        let future_slot =
-            blockstore.max_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
+        let future_slot = blockstore.max_root()
+            + duplicate_shred_handler.epoch_schedule.slots_per_epoch
+            + start_slot;
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
