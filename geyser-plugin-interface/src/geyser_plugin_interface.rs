@@ -8,7 +8,7 @@ use {
         signature::Signature,
         transaction::SanitizedTransaction,
     },
-    solana_transaction_status::{Reward, TransactionStatusMeta},
+    solana_transaction_status::{Reward, RewardType, TransactionStatusMeta},
     std::{any::Any, error, io},
     thiserror::Error,
 };
@@ -217,7 +217,7 @@ pub enum ReplicaEntryInfoVersions<'a> {
 pub struct ReplicaBlockInfo<'a> {
     pub slot: Slot,
     pub blockhash: &'a str,
-    pub rewards: &'a [Reward],
+    pub rewards: &'a [DeprecatedReward],
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
@@ -230,7 +230,7 @@ pub struct ReplicaBlockInfoV2<'a> {
     pub parent_blockhash: &'a str,
     pub slot: Slot,
     pub blockhash: &'a str,
-    pub rewards: &'a [Reward],
+    pub rewards: &'a [DeprecatedReward],
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     pub executed_transaction_count: u64,
@@ -240,6 +240,31 @@ pub struct ReplicaBlockInfoV2<'a> {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct ReplicaBlockInfoV3<'a> {
+    pub parent_slot: Slot,
+    pub parent_blockhash: &'a str,
+    pub slot: Slot,
+    pub blockhash: &'a str,
+    pub rewards: &'a [DeprecatedReward],
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+    pub executed_transaction_count: u64,
+    pub entry_count: u64,
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct DeprecatedReward {
+    pub pubkey: String,
+    pub lamports: i64,
+    pub post_balance: u64,
+    pub reward_type: Option<RewardType>,
+    pub commission: Option<u8>,
+}
+
+/// Adding num_partitions field to each Reward.
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct ReplicaBlockInfoV4<'a> {
     pub parent_slot: Slot,
     pub parent_blockhash: &'a str,
     pub slot: Slot,
@@ -256,6 +281,7 @@ pub enum ReplicaBlockInfoVersions<'a> {
     V0_0_1(&'a ReplicaBlockInfo<'a>),
     V0_0_2(&'a ReplicaBlockInfoV2<'a>),
     V0_0_3(&'a ReplicaBlockInfoV3<'a>),
+    V0_0_4(&'a ReplicaBlockInfoV4<'a>),
 }
 
 /// Errors returned by plugin calls
