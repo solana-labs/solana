@@ -1622,7 +1622,10 @@ impl Bank {
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
-        self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
+        self.create_epoch_rewards_partition_data_account_and_record_reward(
+            num_partitions,
+            parent_blockhash,
+        );
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -3599,7 +3602,8 @@ impl Bank {
     }
 
     /// Create the persistent PDA containing the epoch-rewards data
-    fn create_epoch_rewards_partition_data_account(
+    /// Also record a RewardType::PartitionData reward to store num_partitions in historical ledger
+    fn create_epoch_rewards_partition_data_account_and_record_reward(
         &self,
         num_partitions: usize,
         parent_blockhash: Hash,
