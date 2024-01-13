@@ -90,7 +90,7 @@ pub enum ConnectionPeerType {
 }
 
 impl ConnectionPeerType {
-    fn staked(&self) -> bool {
+    fn is_staked(&self) -> bool {
         matches!(self, ConnectionPeerType::Staked(_))
     }
 }
@@ -741,7 +741,7 @@ async fn handle_connection(
                         let _ = stream.stop(VarInt::from_u32(STREAM_STOP_CODE_THROTTLING));
                         continue;
                     }
-                    if params.peer_type.staked() {
+                    if params.peer_type.is_staked() {
                         stream_load_ema.increment_load();
                     }
                     stream_counter.stream_count.fetch_add(1, Ordering::Relaxed);
@@ -792,7 +792,7 @@ async fn handle_connection(
                             }
                         }
                         stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        if params.peer_type.staked() {
+                        if params.peer_type.is_staked() {
                             stream_load_ema.update_ema_if_needed();
                         }
                     });
@@ -877,7 +877,7 @@ async fn handle_chunk(
                     accum.meta.size = std::cmp::max(accum.meta.size, end_of_chunk);
                 }
 
-                if peer_type.staked() {
+                if peer_type.is_staked() {
                     stats
                         .total_staked_chunks_received
                         .fetch_add(1, Ordering::Relaxed);
@@ -1079,7 +1079,7 @@ impl ConnectionTable {
         if has_connection_capacity {
             let exit = Arc::new(AtomicBool::new(false));
             let last_update = Arc::new(AtomicU64::new(last_update));
-            let stream_counter = if peer_type.staked() {
+            let stream_counter = if peer_type.is_staked() {
                 connection_entry
                     .first()
                     .map(|entry| entry.stream_counter.clone())
