@@ -530,7 +530,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             // relies on the assumption that there's no considerable penalty arising from the
             // unbatched manner of processing.
             //
-            // Note that this assumption isn't true as of writing.  The current code path
+            // Note that this assumption isn't true as of writing. The current code path
             // underneath execute_batch() isn't optimized for unified scheduler's load pattern (ie.
             // batches just with a single transaction) at all. This will be addressed in the
             // future.
