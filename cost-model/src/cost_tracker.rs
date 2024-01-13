@@ -184,8 +184,6 @@ impl CostTracker {
             return Err(CostTrackerError::WouldExceedAccountMaxLimit);
         }
 
-        // NOTE: Check if the total accounts data size is exceeded *before* the block accounts data
-        // size.  This way, transactions are not unnecessarily retried.
         let account_data_size = self
             .account_data_size
             .saturating_add(tx_cost.account_data_size());
