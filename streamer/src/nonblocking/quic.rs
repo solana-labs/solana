@@ -482,10 +482,15 @@ async fn setup_connection(
                         stats.clone(),
                     ),
                     |(pubkey, stake, total_stake, max_stake, min_stake)| {
+                        let peer_type = if stake > 0 {
+                            ConnectionPeerType::Staked(stake)
+                        } else {
+                            ConnectionPeerType::Unstaked
+                        };
                         NewConnectionHandlerParams {
                             packet_sender,
                             remote_pubkey: Some(pubkey),
-                            peer_type: ConnectionPeerType::Staked(stake),
+                            peer_type,
                             total_stake,
                             max_connections_per_peer,
                             stats: stats.clone(),
