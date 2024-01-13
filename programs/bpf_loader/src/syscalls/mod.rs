@@ -1139,6 +1139,14 @@ declare_builtin_function!(
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
+
+        let restrict_msm_length = invoke_context
+            .feature_set
+            .is_active(&feature_set::curve25519_restrict_msm_length::id());
+        if restrict_msm_length && points_len > 512 {
+            return Err(Box::new(SyscallError::InvalidLength));
+        }
+
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
