@@ -896,6 +896,8 @@ async fn test_verify_proof_without_context<T, U>(
     U: Pod,
 {
     let mut program_test = ProgramTest::default();
+    // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
+    program_test.set_compute_max_units(500_000);
     let success_proof_account = Pubkey::new_unique();
     program_test.add_account(
         success_proof_account,
@@ -1015,7 +1017,10 @@ async fn test_verify_proof_with_context<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut context = ProgramTest::default().start_with_context().await;
+    let mut program_test = ProgramTest::default();
+    // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
+    program_test.set_compute_max_units(500_000);
+    let mut context = program_test.start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
     let client = &mut context.banks_client;
@@ -1219,6 +1224,8 @@ async fn test_verify_proof_from_account_with_context<T, U>(
     U: Pod,
 {
     let mut program_test = ProgramTest::default();
+    // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
+    program_test.set_compute_max_units(500_000);
     let success_proof_account = Pubkey::new_unique();
     program_test.add_account(
         success_proof_account,
@@ -1368,7 +1375,10 @@ async fn test_close_context_state<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut context = ProgramTest::default().start_with_context().await;
+    let mut program_test = ProgramTest::default();
+    // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
+    program_test.set_compute_max_units(500_000);
+    let mut context = program_test.start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
     let client = &mut context.banks_client;
