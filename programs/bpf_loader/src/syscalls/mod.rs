@@ -3227,9 +3227,12 @@ mod tests {
             513, // above maximum vector length
             result_point_va,
             &mut memory_mapping,
-        );
+        )
+        .unwrap_err()
+        .downcast::<SyscallError>()
+        .unwrap();
 
-        assert_eq!(1, result.unwrap());
+        assert_eq!(*result, SyscallError::InvalidLength);
 
         // test Ristretto
         invoke_context.mock_set_remaining(500_000);
@@ -3259,10 +3262,12 @@ mod tests {
             513, // above maximum vector length
             result_point_va,
             &mut memory_mapping,
-        );
+        )
+        .unwrap_err()
+        .downcast::<SyscallError>()
+        .unwrap();
 
-        assert_eq!(1, result.unwrap());
-        assert_eq!(expected_product, result_point);
+        assert_eq!(*result, SyscallError::InvalidLength);
     }
 
     fn create_filled_type<T: Default>(zero_init: bool) -> T {
