@@ -691,7 +691,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     /// Assign the program `entry` to the given `key` in the cache.
     /// This is typically called when a deployed program is managed (un-/re-/deployed) via
-    /// loader instructions. Because of the cooldown, entires can not have the same
+    /// loader instructions. Because of the cooldown, entries can not have the same
     /// deployment_slot and effective_slot.
     pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> Arc<LoadedProgram> {
         let (was_occupied, entry) = self.replenish(key, entry);
