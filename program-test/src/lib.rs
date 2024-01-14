@@ -1149,7 +1149,7 @@ impl ProgramTestContext {
             bank
         } else {
             bank_forks
-                .insert(Bank::warp_from_parent(
+                .insert_from_ledger(Bank::warp_from_parent(
                     bank,
                     &Pubkey::default(),
                     pre_warp_slot,
@@ -1235,7 +1235,7 @@ impl ProgramTestContext {
         let mut warp_bank = Bank::new_from_parent(bank, &Pubkey::default(), warp_slot);
 
         warp_bank.force_reward_interval_end_for_tests();
-        bank_forks.insert(warp_bank);
+        bank_forks.insert_from_ledger(warp_bank);
 
         // Update block commitment cache, otherwise banks server will poll at
         // the wrong slot
