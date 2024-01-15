@@ -7,7 +7,7 @@ use {
     crate::instructions::*,
     solana_program::{
         account_info::AccountInfo,
-        bpf_loader,
+        bpf_loader_upgradeable,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
         log::sol_log_64,
         msg,
@@ -70,7 +70,10 @@ fn process_instruction(
             assert!(!accounts[INVOKED_ARGUMENT_INDEX].executable);
 
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].key, program_id);
-            assert_eq!(accounts[INVOKED_PROGRAM_INDEX].owner, &bpf_loader::id());
+            assert_eq!(
+                accounts[INVOKED_PROGRAM_INDEX].owner,
+                &bpf_loader_upgradeable::id()
+            );
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_signer);
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_writable);
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].rent_epoch, u64::MAX);
