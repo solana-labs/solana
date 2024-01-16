@@ -139,6 +139,19 @@ impl Metrics {
     }
 }
 
+// default for metrics, initialize it to empty strings
+impl Default for Metrics {
+    fn default() -> Self {
+        Metrics {
+            host: Default::default(),
+            port: Default::default(),
+            database: Default::default(),
+            username: Default::default(),
+            password: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NodeAffinityType {
     Equinix,

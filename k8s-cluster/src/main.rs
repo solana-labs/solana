@@ -429,6 +429,15 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("Metrics Config. Optional: Specify metrics password"),
         )
+        .arg(
+            Arg::with_name("metrics")
+                .long("metrics")
+                .help("Flag for multiple validator deployments in same cluster. Use metrics flags above
+                for initial deployment (with bootstrap validator). Then you can pass in this flag by itself
+                along with the --no-bootstrap flag for all the other validator deployments in the same cluster.
+                All the new validator deployments will use the \"SOLANA_METRICS_CONFIG\" environment variable
+                created on the first deployment with the bootstrap."),
+        )
         //RPC config
         .arg(
             Arg::with_name("number_of_non_voting_validators")
@@ -707,6 +716,8 @@ async fn main() {
             matches.value_of("metrics_username").unwrap().to_string(),
             matches.value_of("metrics_password").unwrap().to_string(),
         ))
+    } else if matches.is_present("metrics") {
+        Some(Metrics::default())
     } else {
         None
     };

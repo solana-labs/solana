@@ -178,6 +178,7 @@ cargo run --bin solana-k8s --
     --no-bootstrap
 ```
 
+
 ## Deploying multiple clusters with a client
 - For a client `bench-tps` test, the client accounts used for loading the validators must be included in the genesis
 - Therefore, we need to deploy our first cluster as above BUT also need to generate client accounts without actually running the client
@@ -243,6 +244,10 @@ cargo run --bin solana-k8s --
     --run-client # actually deploy and run the client
 ```
 ^ note this is not an ideal setup since we have to pass in `--bench-tps-args` for first and last deployment. But `solana-bench-tps` uses `tx-count` to calculate the number of client accounts
+
+## Deploying multiple clusters with a client and metrics
+- You only need to pass in all 5 the metrics flags (`--metrics-host`, `--metrics-port`, etc...) on the first deployment where you also deploy the bootstrap validator. Metrics secret is only created once.
+- For subsequent deployments, replace these 5 flags with the `--metrics` flag. This will ensure metrics is enabled for subsequent deployments in your cluster.
 
 ## Pod name format
 ```
