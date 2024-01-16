@@ -8170,7 +8170,12 @@ impl Bank {
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        Self::new_for_tests_with_config(genesis_config, BankTestConfig::default())
+        let mut bank = Self::new_for_tests_with_config(genesis_config, BankTestConfig::default());
+        // bank created for tests should have same lamports_per_signature as
+        // configured in GenesisConfig
+        bank.fee_structure.lamports_per_signature =
+            genesis_config.fee_rate_governor.lamports_per_signature;
+        bank
     }
 
     pub fn new_with_mockup_builtin_for_tests(
