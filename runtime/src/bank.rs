@@ -1077,6 +1077,11 @@ impl Bank {
             debug_do_not_add_builtins,
         );
 
+        // new bank's fee_structure.lamports_per_signature be inline with 
+        // what's configured in GenesisConfig
+        bank.fee_structure.lamports_per_signature =
+            genesis_config.fee_rate_governor.target_lamports_per_signature;
+
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
@@ -8170,12 +8175,7 @@ impl Bank {
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        let mut bank = Self::new_for_tests_with_config(genesis_config, BankTestConfig::default());
-        // bank created for tests should have same lamports_per_signature as
-        // configured in GenesisConfig
-        bank.fee_structure.lamports_per_signature =
-            genesis_config.fee_rate_governor.lamports_per_signature;
-        bank
+        Self::new_for_tests_with_config(genesis_config, BankTestConfig::default())
     }
 
     pub fn new_with_mockup_builtin_for_tests(
