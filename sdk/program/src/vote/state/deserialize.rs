@@ -4,8 +4,9 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         vote::state::{
-            vote_state_0_23_5::CircBuf as LegacyCircBuf, BlockTimestamp, CircBuf as CurrentCircBuf,
-            LandedVote, Lockout, VoteState, MAX_ITEMS as CURRENT_MAX_ITEMS,
+            vote_state_0_23_5::CircBuf as LegacyCircBuf, vote_state_versions::VoteStateVersions,
+            BlockTimestamp, CircBuf as CurrentCircBuf, LandedVote, Lockout, VoteState,
+            MAX_ITEMS as CURRENT_MAX_ITEMS,
         },
     },
     bincode::serialized_size,
@@ -14,7 +15,28 @@ use {
 
 // XXX TODO FIXME i cant import this from vote_state_0_23_5 because its a sibling module
 // either i need to move this back into super (ugly) or expose the variable to the crate (ugly)
+// or just ignore it because its 32 in both places but ugh
+// XXX UPDATE ok i need to move this into super because i now import like every sibling
 const LEGACY_MAX_ITEMS: usize = 32;
+
+// this is an internal-use-only enum for parser branching, for clarity over ad hoc booleans
+// the From instance is only to ensure both enums advance in lockstep, we dont use it
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum InputVersion {
+    V0_23_5 = 0,
+    V1_14_11,
+    Current,
+}
+impl From<VoteStateVersions> for InputVersion {
+    fn from(version: VoteStateVersions) -> Self {
+        match version {
+            VoteStateVersions::V0_23_5(_) => InputVersion::V0_23_5,
+            VoteStateVersions::V1_14_11(_) => InputVersion::V1_14_11,
+            VoteStateVersions::Current(_) => InputVersion::Current,
+        }
+    }
+}
 
 // XXX TODO HANA next i want to...
 // X move to a pub(super) file
@@ -31,69 +53,39 @@ pub(super) fn deserialize_vote_state_into(
 
     let variant = deser_u32(&mut cursor)?;
     match variant {
-        2 => deserialize_current_vote_state_into(input, vote_state, &mut cursor),
+        //0 => unimplemented!(),
+        //1 => deserialize_vote_state_1_14_11_into(input, &mut cursor, vote_state),
+        x if x == InputVersion::Current as u32 => {
+            deserialize_current_vote_state_into(input, &mut cursor, vote_state)
+        }
         _ => Err(InstructionError::InvalidAccountData),
     }
 }
 
 fn deserialize_current_vote_state_into(
     input: &[u8],
-    vote_state: &mut VoteState,
     cursor: &mut Cursor<&[u8]>,
+    vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     vote_state.node_pubkey = deser_pubkey(cursor)?;
     vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
     vote_state.commission = deser_u8(cursor)?;
-
-    let vote_count = deser_u64(cursor)?;
-    for _ in 0..vote_count {
-        let latency = deser_u8(cursor)?;
-        let slot = deser_u64(cursor)?;
-        let confirmation_count = deser_u32(cursor)?;
-        let lockout = Lockout::new_with_confirmation_count(slot, confirmation_count);
-
-        vote_state.votes.push_back(LandedVote { latency, lockout });
-    }
-
+    deser_votes_into(cursor, vote_state, InputVersion::Current)?;
     vote_state.root_slot = deser_maybe_u64(cursor)?;
-
-    let authorized_voter_count = deser_u64(cursor)?;
-    for _ in 0..authorized_voter_count {
-        let epoch = deser_u64(cursor)?;
-        let authorized_voter = deser_pubkey(cursor)?;
-
-        vote_state.authorized_voters.insert(epoch, authorized_voter);
-    }
+    deser_authorized_voters_into(cursor, vote_state)?;
 
     let position_after_circbuf = cursor.position()
         + serialized_size(&vote_state.prior_voters)
             .map_err(|_| InstructionError::InvalidAccountData)?;
 
-    println!("HANA position before: {}", cursor.position());
     match input[position_after_circbuf as usize - 1] {
-        0 => deser_current_circbuf_into(cursor, &mut vote_state.prior_voters)?,
+        0 => deser_prior_voters_into(cursor, vote_state, InputVersion::Current)?,
         1 => cursor.set_position(position_after_circbuf),
         _ => return Err(InstructionError::InvalidAccountData),
     }
-    println!("HANA position after: {}", cursor.position());
 
-    let epoch_credit_count = deser_u64(cursor)?;
-    for _ in 0..epoch_credit_count {
-        let epoch = deser_u64(cursor)?;
-        let credits = deser_u64(cursor)?;
-        let prev_credits = deser_u64(cursor)?;
-
-        vote_state
-            .epoch_credits
-            .push((epoch, credits, prev_credits));
-    }
-
-    {
-        let slot = deser_u64(cursor)?;
-        let timestamp = deser_i64(cursor)?;
-
-        vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
-    }
+    deser_epoch_credits_into(cursor, vote_state)?;
+    deser_last_timestamp_into(cursor, vote_state)?;
 
     Ok(())
 }
@@ -155,14 +147,70 @@ fn deser_pubkey(cursor: &mut Cursor<&[u8]>) -> Result<Pubkey, InstructionError> 
     Ok(Pubkey::from(buf))
 }
 
-fn deser_current_circbuf_into(
+// pre-1.14: vec of lockouts
+// post-1.14: vec of landed votes (lockout plus latency)
+fn deser_votes_into(
     cursor: &mut Cursor<&[u8]>,
-    prior_voters: &mut CurrentCircBuf<(Pubkey, Epoch, Epoch)>,
+    vote_state: &mut VoteState,
+    input_version: InputVersion,
 ) -> Result<(), InstructionError> {
-    for _ in 0..CURRENT_MAX_ITEMS {
+    let vote_count = deser_u64(cursor)?;
+
+    for _ in 0..vote_count {
+        let latency = if input_version > InputVersion::V1_14_11 {
+            deser_u8(cursor)?
+        } else {
+            0
+        };
+
+        let slot = deser_u64(cursor)?;
+        let confirmation_count = deser_u32(cursor)?;
+        let lockout = Lockout::new_with_confirmation_count(slot, confirmation_count);
+
+        vote_state.votes.push_back(LandedVote { latency, lockout });
+    }
+
+    Ok(())
+}
+
+fn deser_authorized_voters_into(
+    cursor: &mut Cursor<&[u8]>,
+    vote_state: &mut VoteState,
+) -> Result<(), InstructionError> {
+    let authorized_voter_count = deser_u64(cursor)?;
+
+    for _ in 0..authorized_voter_count {
+        let epoch = deser_u64(cursor)?;
+        let authorized_voter = deser_pubkey(cursor)?;
+
+        vote_state.authorized_voters.insert(epoch, authorized_voter);
+    }
+
+    Ok(())
+}
+
+// pre-0.23: four-tuple item, no bool
+// post-0.23: three-tuple item, is_empty bool
+fn deser_prior_voters_into(
+    cursor: &mut Cursor<&[u8]>,
+    vote_state: &mut VoteState,
+    input_version: InputVersion,
+) -> Result<(), InstructionError> {
+    let max_items = if input_version == InputVersion::V0_23_5 {
+        LEGACY_MAX_ITEMS
+    } else {
+        CURRENT_MAX_ITEMS
+    };
+
+    for _ in 0..max_items {
         let prior_voter = deser_pubkey(cursor)?;
         let from_epoch = deser_u64(cursor)?;
         let until_epoch = deser_u64(cursor)?;
+
+        if input_version == InputVersion::V0_23_5 {
+            let _slot = deser_u64(cursor)?;
+        }
+
         let item = (prior_voter, from_epoch, until_epoch);
 
         // XXX im ~90% sure this is correct in all cases but others should check
@@ -170,37 +218,46 @@ fn deser_current_circbuf_into(
         // ...then again i just realized this struct is in our module so i guess we can ignore encapsulation lol
         match item {
             (_, 0, 0) => (),
-            _ => prior_voters.append(item),
+            _ => vote_state.prior_voters.append(item),
         }
     }
 
     // XXX can check that these are right to be cute
     let _idx = deser_u64(cursor)?;
-    let _is_empty = deser_u8(cursor)?;
+    if input_version > InputVersion::V0_23_5 {
+        let _is_empty = deser_u8(cursor)?;
+    }
 
     Ok(())
 }
 
-fn deser_legacy_circbuf_into(
+fn deser_epoch_credits_into(
     cursor: &mut Cursor<&[u8]>,
-    prior_voters: &mut LegacyCircBuf<(Pubkey, Epoch, Epoch, Slot)>,
+    vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
-    for _ in 0..LEGACY_MAX_ITEMS {
-        let prior_voter = deser_pubkey(cursor)?;
-        let from_epoch = deser_u64(cursor)?;
-        let until_epoch = deser_u64(cursor)?;
-        let slot = deser_u64(cursor)?;
-        let item = (prior_voter, from_epoch, until_epoch, slot);
+    let epoch_credit_count = deser_u64(cursor)?;
 
-        // XXX note above
-        match item {
-            (_, 0, 0, 0) => (),
-            _ => prior_voters.append(item),
-        }
+    for _ in 0..epoch_credit_count {
+        let epoch = deser_u64(cursor)?;
+        let credits = deser_u64(cursor)?;
+        let prev_credits = deser_u64(cursor)?;
+
+        vote_state
+            .epoch_credits
+            .push((epoch, credits, prev_credits));
     }
 
-    // XXX note above
-    let _idx = deser_u64(cursor)?;
+    Ok(())
+}
+
+fn deser_last_timestamp_into(
+    cursor: &mut Cursor<&[u8]>,
+    vote_state: &mut VoteState,
+) -> Result<(), InstructionError> {
+    let slot = deser_u64(cursor)?;
+    let timestamp = deser_i64(cursor)?;
+
+    vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
 
     Ok(())
 }
