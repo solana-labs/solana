@@ -2,8 +2,6 @@
 
 #[cfg(test)]
 use crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET;
-#[cfg(not(target_os = "solana"))]
-use bincode::deserialize;
 use {
     crate::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -22,6 +20,8 @@ use {
 mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
+mod deserialize;
+use deserialize::deserialize_vote_state;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
@@ -347,16 +347,8 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    #[allow(clippy::used_underscore_binding)]
-    pub fn deserialize(_input: &[u8]) -> Result<Self, InstructionError> {
-        #[cfg(not(target_os = "solana"))]
-        {
-            deserialize::<VoteStateVersions>(_input)
-                .map(|versioned| versioned.convert_to_current())
-                .map_err(|_| InstructionError::InvalidAccountData)
-        }
-        #[cfg(target_os = "solana")]
-        unimplemented!();
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        deserialize_vote_state(input)
     }
 
     pub fn serialize(
