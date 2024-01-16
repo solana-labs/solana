@@ -2307,19 +2307,17 @@ pub mod test {
             ancestors.insert(i as u64, (0..i as u64).collect());
         }
         let root = Lockout::new_with_confirmation_count(0, MAX_LOCKOUT_HISTORY as u32);
-        let root_weight = root.lockout() as u128;
-        let vote_account_expected_weight = tower
-            .vote_state
-            .votes
-            .iter()
-            .map(|v| v.lockout.lockout() as u128)
-            .sum::<u128>()
-            + root_weight;
-        let expected_bank_weight = 2 * vote_account_expected_weight;
+        let root_stake = 2;
+        let expected_bank_stake =
+            tower.vote_state.votes.iter().map(|_v| 2).sum::<u64>() + root_stake;
         assert_eq!(tower.vote_state.root_slot, Some(0));
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
-        let ComputedBankState { voted_stakes, .. } = Tower::collect_vote_lockouts(
+        let ComputedBankState {
+            voted_stakes,
+            bank_stake,
+            ..
+        } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
             MAX_LOCKOUT_HISTORY as u64,
             &accounts,
@@ -2331,8 +2329,8 @@ pub mod test {
             assert_eq!(voted_stakes[&(i as u64)], 2);
         }
 
-        // should be the sum of all the weights for root
-        assert_eq!(bank_weight, expected_bank_weight);
+        // should be the sum of all voted stake for root
+        assert_eq!(bank_stake, expected_bank_stake);
         let mut new_votes =
             latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root.slot());
         new_votes.sort();
