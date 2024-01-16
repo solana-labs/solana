@@ -21,7 +21,7 @@ mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
 mod deserialize;
-use deserialize::deserialize_vote_state;
+use deserialize::deserialize_vote_state_into;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
@@ -348,7 +348,10 @@ impl VoteState {
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        deserialize_vote_state(input)
+        let mut vote_state = VoteState::default();
+        deserialize_vote_state_into(input, &mut vote_state)?;
+
+        Ok(vote_state)
     }
 
     pub fn serialize(
