@@ -10,6 +10,8 @@ use {
         },
     },
     bincode::serialized_size,
+    num_derive::FromPrimitive,
+    num_traits::FromPrimitive,
     std::io::{Cursor, Read},
 };
 
@@ -21,8 +23,7 @@ const LEGACY_MAX_ITEMS: usize = 32;
 
 // this is an internal-use-only enum for parser branching, for clarity over ad hoc booleans
 // the From instance is only to ensure both enums advance in lockstep, we dont use it
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 enum InputVersion {
     V0_23_5 = 0,
     V1_14_11,
@@ -52,25 +53,25 @@ pub(super) fn deserialize_vote_state_into(
     let mut cursor = Cursor::new(input);
 
     let variant = deser_u32(&mut cursor)?;
-    match variant {
-        //0 => unimplemented!(),
-        //1 => deserialize_vote_state_1_14_11_into(input, &mut cursor, vote_state),
-        x if x == InputVersion::Current as u32 => {
-            deserialize_current_vote_state_into(input, &mut cursor, vote_state)
+    match InputVersion::from_u32(variant) {
+        Some(version) if version == InputVersion::Current || version == InputVersion::V1_14_11 => {
+            deserialize_modern_vote_state_into(input, &mut cursor, vote_state, version)
         }
+        Some(InputVersion::V0_23_5) => deserialize_vote_state_0_23_5_into(&mut cursor, vote_state),
         _ => Err(InstructionError::InvalidAccountData),
     }
 }
 
-fn deserialize_current_vote_state_into(
+fn deserialize_modern_vote_state_into(
     input: &[u8],
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
+    version: InputVersion,
 ) -> Result<(), InstructionError> {
     vote_state.node_pubkey = deser_pubkey(cursor)?;
     vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
     vote_state.commission = deser_u8(cursor)?;
-    deser_votes_into(cursor, vote_state, InputVersion::Current)?;
+    deser_votes_into(cursor, vote_state, version)?;
     vote_state.root_slot = deser_maybe_u64(cursor)?;
     deser_authorized_voters_into(cursor, vote_state)?;
 
@@ -79,11 +80,37 @@ fn deserialize_current_vote_state_into(
             .map_err(|_| InstructionError::InvalidAccountData)?;
 
     match input[position_after_circbuf as usize - 1] {
-        0 => deser_prior_voters_into(cursor, vote_state, InputVersion::Current)?,
+        0 => deser_prior_voters_into(cursor, vote_state, version)?,
         1 => cursor.set_position(position_after_circbuf),
         _ => return Err(InstructionError::InvalidAccountData),
     }
 
+    deser_epoch_credits_into(cursor, vote_state)?;
+    deser_last_timestamp_into(cursor, vote_state)?;
+
+    Ok(())
+}
+
+fn deserialize_vote_state_0_23_5_into(
+    cursor: &mut Cursor<&[u8]>,
+    vote_state: &mut VoteState,
+) -> Result<(), InstructionError> {
+    let version = InputVersion::V0_23_5;
+
+    // XXX oops this is the right deser order but im not filling out the same struct!
+    // XXX also i notice convert to current just throws away 0.23 prior voters...
+    vote_state.node_pubkey = deser_pubkey(cursor)?;
+
+    let authorized_voter = deser_pubkey(cursor)?;
+    let authorized_voter_epoch = deser_u64(cursor)?;
+    vote_state
+        .authorized_voters
+        .insert(authorized_voter_epoch, authorized_voter);
+
+    deser_prior_voters_into(cursor, vote_state, version)?;
+    vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
+    vote_state.commission = deser_u8(cursor)?;
+    vote_state.root_slot = deser_maybe_u64(cursor)?;
     deser_epoch_credits_into(cursor, vote_state)?;
     deser_last_timestamp_into(cursor, vote_state)?;
 
