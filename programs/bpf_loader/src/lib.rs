@@ -36,8 +36,8 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, deprecate_executable_meta_update_in_bpf_loader,
             disable_bpf_loader_instructions, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, remove_bpf_loader_incorrect_program_id,
+            FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -474,29 +474,18 @@ pub fn process_instruction_inner(
     let program_account =
         instruction_context.try_borrow_last_program_account(transaction_context)?;
 
-    // Consume compute units if feature `native_programs_consume_cu` is activated
-    let native_programs_consume_cu = invoke_context
-        .feature_set
-        .is_active(&native_programs_consume_cu::id());
-
     // Program Management Instruction
     if native_loader::check_id(program_account.get_owner()) {
         drop(program_account);
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
-            if native_programs_consume_cu {
-                invoke_context.consume_checked(UPGRADEABLE_LOADER_COMPUTE_UNITS)?;
-            }
+            invoke_context.consume_checked(UPGRADEABLE_LOADER_COMPUTE_UNITS)?;
             process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
-            if native_programs_consume_cu {
-                invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
-            }
+            invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
-            if native_programs_consume_cu {
-                invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
-            }
+            invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
         } else {

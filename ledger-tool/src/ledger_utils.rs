@@ -21,6 +21,7 @@ use {
         blockstore_processor::{
             self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
         },
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure,
     solana_rpc::transaction_status_service::TransactionStatusService,
@@ -563,4 +564,13 @@ pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubke
         .instructions()
         .iter()
         .map(|ix| ix.program_id(account_keys))
+}
+
+/// Get the AccessType required, based on `process_options`
+pub(crate) fn get_access_type(process_options: &ProcessOptions) -> AccessType {
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
+        UseSnapshotArchivesAtStartup::WhenNewest => AccessType::PrimaryForMaintenance,
+    }
 }

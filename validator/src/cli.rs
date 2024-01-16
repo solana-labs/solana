@@ -879,6 +879,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Bigtable application profile id to use in requests")
         )
         .arg(
+            Arg::with_name("rpc_bigtable_max_message_size")
+                .long("rpc-bigtable-max-message-size")
+                .value_name("BYTES")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .default_value(&default_args.rpc_bigtable_max_message_size)
+                .help("Max encoding and decoding message size used in Bigtable Grpc client"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
                 .long("rpc-pubsub-worker-threads")
                 .takes_value(true)
@@ -1925,6 +1934,7 @@ pub struct DefaultArgs {
     pub rpc_bigtable_timeout: String,
     pub rpc_bigtable_instance_name: String,
     pub rpc_bigtable_app_profile_id: String,
+    pub rpc_bigtable_max_message_size: String,
     pub rpc_max_request_body_size: String,
     pub rpc_pubsub_worker_threads: String,
 
@@ -2009,6 +2019,8 @@ impl DefaultArgs {
             rpc_bigtable_timeout: "30".to_string(),
             rpc_bigtable_instance_name: solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string(),
             rpc_bigtable_app_profile_id: solana_storage_bigtable::DEFAULT_APP_PROFILE_ID
+                .to_string(),
+            rpc_bigtable_max_message_size: solana_storage_bigtable::DEFAULT_MAX_MESSAGE_SIZE
                 .to_string(),
             rpc_pubsub_worker_threads: "4".to_string(),
             accountsdb_repl_threads: num_cpus::get().to_string(),
