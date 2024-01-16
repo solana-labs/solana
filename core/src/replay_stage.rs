@@ -3315,14 +3315,14 @@ impl ReplayStage {
                         "bank_weight",
                         ("slot", bank_slot, i64),
                         ("fork_stake", stats.fork_stake, i64),
-                        ("fork_weight", stats.fork_weight(), i64),
+                        ("fork_weight", stats.fork_weight(), f64),
                     );
 
                     info!(
-                        "{} slot_weight: {} {:2}% {}%",
+                        "{} slot_weight: {} {:.1}% {}",
                         my_vote_pubkey,
                         bank_slot,
-                        stats.fork_weight(), // percentage fork_stake in total_stake
+                        100.0 * stats.fork_weight(), // percentage fork_stake in total_stake
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                 }

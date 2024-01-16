@@ -310,9 +310,9 @@ pub struct ForkStats {
 }
 
 impl ForkStats {
-    /// Return the percentage of bank_stake over total_stake.
-    pub fn fork_weight(&self) -> u64 {
-        100 * self.fork_stake / self.total_stake
+    /// Return fork_weight, i.e. bank_stake over total_stake.
+    pub fn fork_weight(&self) -> f64 {
+        self.fork_stake as f64 / self.total_stake as f64
     }
 }
 
