@@ -106,7 +106,7 @@ pub struct ClientConfig {
     pub run_client: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Metrics {
     pub host: String,
     pub port: String,
@@ -136,19 +136,6 @@ impl Metrics {
             "host={}:{},db={},u={},p={}",
             self.host, self.port, self.database, self.username, self.password
         )
-    }
-}
-
-// default for metrics, initialize it to empty strings
-impl Default for Metrics {
-    fn default() -> Self {
-        Metrics {
-            host: Default::default(),
-            port: Default::default(),
-            database: Default::default(),
-            username: Default::default(),
-            password: Default::default(),
-        }
     }
 }
 
