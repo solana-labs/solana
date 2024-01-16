@@ -567,9 +567,9 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
-version = "0.21.6"
+version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c79fed4cdb43e993fcdadc7e58a09fd0e3e649c4436fa11da71c9f1f3ee7feb9"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64ct"
@@ -4522,7 +4522,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b1ae8d9ac08420c66222fb9096fc5de435c3c48542bc5336c51892cffafb41"
 dependencies = [
  "async-compression",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -5234,7 +5234,7 @@ version = "1.18.0"
 dependencies = [
  "Inflector",
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bs58",
  "bv",
@@ -5765,7 +5765,7 @@ name = "solana-cli-output"
 version = "1.18.0"
 dependencies = [
  "Inflector",
- "base64 0.21.6",
+ "base64 0.21.7",
  "chrono",
  "clap 2.33.3",
  "console",
@@ -5898,7 +5898,7 @@ name = "solana-core"
 version = "1.18.0"
 dependencies = [
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bs58",
  "bytes",
@@ -6140,7 +6140,7 @@ dependencies = [
 name = "solana-genesis"
 version = "1.18.0"
 dependencies = [
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "clap 2.33.3",
  "itertools",
@@ -6678,7 +6678,7 @@ dependencies = [
  "ark-serialize",
  "array-bytes",
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bitflags 2.4.1",
  "blake3",
@@ -6730,7 +6730,7 @@ name = "solana-program-runtime"
 version = "1.18.0"
 dependencies = [
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "eager",
  "enum-iterator",
@@ -6760,7 +6760,7 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "chrono-humanize",
  "crossbeam-channel",
@@ -6866,7 +6866,7 @@ dependencies = [
 name = "solana-rpc"
 version = "1.18.0"
 dependencies = [
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bs58",
  "crossbeam-channel",
@@ -6927,7 +6927,7 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bs58",
  "crossbeam-channel",
@@ -6954,7 +6954,7 @@ dependencies = [
 name = "solana-rpc-client-api"
 version = "1.18.0"
 dependencies = [
- "base64 0.21.6",
+ "base64 0.21.7",
  "bs58",
  "jsonrpc-core",
  "reqwest",
@@ -7021,7 +7021,7 @@ dependencies = [
  "aquamarine",
  "arrayref",
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "blake3",
  "bv",
@@ -7119,7 +7119,7 @@ version = "1.18.0"
 dependencies = [
  "anyhow",
  "assert_matches",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bitflags 2.4.1",
  "borsh 1.2.1",
@@ -7346,7 +7346,7 @@ dependencies = [
 name = "solana-test-validator"
 version = "1.18.0"
 dependencies = [
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "crossbeam-channel",
  "log",
@@ -7473,7 +7473,7 @@ name = "solana-transaction-status"
 version = "1.18.0"
 dependencies = [
  "Inflector",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "borsh 0.10.3",
  "bs58",
@@ -7778,7 +7778,7 @@ name = "solana-zk-token-sdk"
 version = "1.18.0"
 dependencies = [
  "aes-gcm-siv",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bincode",
  "bytemuck",
  "byteorder",
@@ -8669,7 +8669,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
- "base64 0.21.6",
+ "base64 0.21.7",
  "bytes",
  "futures-core",
  "futures-util",
