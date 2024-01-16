@@ -106,7 +106,7 @@ pub struct ClientConfig {
     pub run_client: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Metrics {
     pub host: String,
     pub port: String,
