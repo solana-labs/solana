@@ -1,12 +1,11 @@
 use {
     crate::{
-        clock::{Epoch, Slot, UnixTimestamp},
+        clock::{Epoch, Slot},
         instruction::InstructionError,
         pubkey::Pubkey,
         vote::state::{
             vote_state_0_23_5::CircBuf as LegacyCircBuf, vote_state_versions::VoteStateVersions,
-            BlockTimestamp, CircBuf as CurrentCircBuf, LandedVote, Lockout, VoteState,
-            MAX_ITEMS as CURRENT_MAX_ITEMS,
+            BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS,
         },
     },
     bincode::serialized_size,
@@ -15,14 +14,12 @@ use {
     std::io::{Cursor, Read},
 };
 
-// XXX TODO FIXME i cant import this from vote_state_0_23_5 because its a sibling module
-// either i need to move this back into super (ugly) or expose the variable to the crate (ugly)
-// or just ignore it because its 32 in both places but ugh
-// XXX UPDATE ok i need to move this into super because i now import like every sibling
-const LEGACY_MAX_ITEMS: usize = 32;
+// XXX TODO look into arbitrary and rustfuzz for testing
+// XXX maybe i should to move this files contents back into super because i import several siblings
 
 // this is an internal-use-only enum for parser branching, for clarity over ad hoc booleans
 // the From instance is only to ensure both enums advance in lockstep, we dont use it
+// XXX i originally added this enum expecting to parse more things differently based on version... might remove
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 enum InputVersion {
     V0_23_5 = 0,
@@ -39,13 +36,6 @@ impl From<VoteStateVersions> for InputVersion {
     }
 }
 
-// XXX TODO HANA next i want to...
-// X move to a pub(super) file
-// X use byteorder
-// X deser circbuf
-// * handle the other variants (implicitly convert to current)
-// X split into deserialize_into
-// * look into arbitrary and rustfuzz
 pub(super) fn deserialize_vote_state_into(
     input: &[u8],
     vote_state: &mut VoteState,
@@ -75,12 +65,15 @@ fn deserialize_modern_vote_state_into(
     vote_state.root_slot = deser_maybe_u64(cursor)?;
     deser_authorized_voters_into(cursor, vote_state)?;
 
+    // `serialized_size()` *must* be used here because of alignment
+    // XXX check if this costs much compute tho and hardcode if so
+    // XXX checked add
     let position_after_circbuf = cursor.position()
         + serialized_size(&vote_state.prior_voters)
             .map_err(|_| InstructionError::InvalidAccountData)?;
 
     match input[position_after_circbuf as usize - 1] {
-        0 => deser_prior_voters_into(cursor, vote_state, version)?,
+        0 => deser_prior_voters_into(cursor, vote_state)?,
         1 => cursor.set_position(position_after_circbuf),
         _ => return Err(InstructionError::InvalidAccountData),
     }
@@ -95,10 +88,6 @@ fn deserialize_vote_state_0_23_5_into(
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
-    let version = InputVersion::V0_23_5;
-
-    // XXX oops this is the right deser order but im not filling out the same struct!
-    // XXX also i notice convert to current just throws away 0.23 prior voters...
     vote_state.node_pubkey = deser_pubkey(cursor)?;
 
     let authorized_voter = deser_pubkey(cursor)?;
@@ -107,7 +96,13 @@ fn deserialize_vote_state_0_23_5_into(
         .authorized_voters
         .insert(authorized_voter_epoch, authorized_voter);
 
-    deser_prior_voters_into(cursor, vote_state, version)?;
+    // skip `prior_voters` in keeping with the behavior of `convert_to_current()`
+    // `size_of()` is ok here because theres no bool, and we avoid an allocation
+    // XXX checked add
+    let position_after_circbuf = cursor.position()
+        + std::mem::size_of::<LegacyCircBuf<(Pubkey, Epoch, Epoch, Slot)>>() as u64;
+    cursor.set_position(position_after_circbuf);
+
     vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
     vote_state.commission = deser_u8(cursor)?;
     vote_state.root_slot = deser_maybe_u64(cursor)?;
@@ -216,28 +211,14 @@ fn deser_authorized_voters_into(
     Ok(())
 }
 
-// pre-0.23: four-tuple item, no bool
-// post-0.23: three-tuple item, is_empty bool
 fn deser_prior_voters_into(
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
-    input_version: InputVersion,
 ) -> Result<(), InstructionError> {
-    let max_items = if input_version == InputVersion::V0_23_5 {
-        LEGACY_MAX_ITEMS
-    } else {
-        CURRENT_MAX_ITEMS
-    };
-
-    for _ in 0..max_items {
+    for _ in 0..MAX_ITEMS {
         let prior_voter = deser_pubkey(cursor)?;
         let from_epoch = deser_u64(cursor)?;
         let until_epoch = deser_u64(cursor)?;
-
-        if input_version == InputVersion::V0_23_5 {
-            let _slot = deser_u64(cursor)?;
-        }
-
         let item = (prior_voter, from_epoch, until_epoch);
 
         // XXX im ~90% sure this is correct in all cases but others should check
@@ -251,9 +232,7 @@ fn deser_prior_voters_into(
 
     // XXX can check that these are right to be cute
     let _idx = deser_u64(cursor)?;
-    if input_version > InputVersion::V0_23_5 {
-        let _is_empty = deser_u8(cursor)?;
-    }
+    let _is_empty = deser_u8(cursor)?;
 
     Ok(())
 }
