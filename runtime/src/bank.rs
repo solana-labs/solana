@@ -1077,10 +1077,11 @@ impl Bank {
             debug_do_not_add_builtins,
         );
 
-        // new bank's fee_structure.lamports_per_signature be inline with 
+        // new bank's fee_structure.lamports_per_signature be inline with
         // what's configured in GenesisConfig
-        bank.fee_structure.lamports_per_signature =
-            genesis_config.fee_rate_governor.target_lamports_per_signature;
+        bank.fee_structure.lamports_per_signature = genesis_config
+            .fee_rate_governor
+            .target_lamports_per_signature;
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
