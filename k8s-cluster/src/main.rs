@@ -802,15 +802,6 @@ async fn main() {
                 }
             }
 
-            // creates genesis and writes to binary file
-            match genesis.generate(build_config.build_path()) {
-                Ok(_) => (),
-                Err(err) => {
-                    error!("generate genesis error! {}", err);
-                    return;
-                }
-            }
-
             // only create client accounts once
             if client_config.num_clients > 0 && client_config.client_to_run == "bench-tps" {
                 match genesis.create_client_accounts(
@@ -824,6 +815,15 @@ async fn main() {
                         error!("generate client accounts error! {}", err);
                         return;
                     }
+                }
+            }
+
+            // creates genesis and writes to binary file
+            match genesis.generate(build_config.build_path()) {
+                Ok(_) => (),
+                Err(err) => {
+                    error!("generate genesis error! {}", err);
+                    return;
                 }
             }
         }
@@ -965,7 +965,8 @@ async fn main() {
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
-    if kub_controller.metrics.is_some() {
+    // secret create once and use by all pods
+    if kub_controller.metrics.is_some() && !no_bootstrap {
         let metrics_secret = match kub_controller.create_metrics_secret() {
             Ok(secret) => secret,
             Err(err) => {

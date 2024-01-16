@@ -69,11 +69,9 @@ bench-tps)
 
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
-    # args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
     args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
-    # args+=(--url "$BOOTSTRAP_RPC_ADDRESS")
     args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
   else
     args+=(--entrypoint "$BOOTSTRAP_GOSSIP_ADDRESS")
