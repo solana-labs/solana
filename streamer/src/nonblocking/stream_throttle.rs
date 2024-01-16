@@ -28,7 +28,12 @@ pub(crate) struct StakedStreamLoadEMA {
     load_in_recent_interval: AtomicU64,
     last_update: RwLock<Instant>,
     stats: Arc<StreamStats>,
+    // Maximum number of streams for a staked connection in EMA window
+    // Note: EMA window can be different than stream throttling window. EMA is being calculated
+    //       specifically for staked connections. Unstaked connections have fixed limit on
+    //       stream load, which is tracked by `max_unstaked_load_in_throttling_window` field.
     max_staked_load_in_ema_window: u64,
+    // Maximum number of streams for an unstaked connection in stream throttling window
     max_unstaked_load_in_throttling_window: u64,
 }
 
@@ -173,6 +178,8 @@ impl StakedStreamLoadEMA {
                         .saturating_add(1)
                 });
 
+                // 1 is added to `max_unstaked_load_in_throttling_window` to guarantee that staked
+                // clients get at least 1 more number of streams than unstaked connections.
                 cmp::max(
                     calculated_capacity,
                     self.max_unstaked_load_in_throttling_window
