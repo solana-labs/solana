@@ -3296,7 +3296,6 @@ impl ReplayStage {
                         voted_stakes,
                         total_stake,
                         bank_stake,
-                        bank_weight,
                         lockout_intervals,
                         my_latest_landed_vote,
                         ..
@@ -3308,7 +3307,6 @@ impl ReplayStage {
                     stats.total_stake = total_stake;
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
-                    stats.fork_weight = bank_weight;
                     stats.block_height = bank.block_height();
                     stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
@@ -3317,17 +3315,14 @@ impl ReplayStage {
                         "bank_weight",
                         ("slot", bank_slot, i64),
                         ("bank_stake", stats.bank_stake, i64),
-                        // u128 too large for influx, convert to hex
-                        ("weight", format!("{:X}", stats.fork_weight), String),
+                        ("bank_weight", stats.bank_weight(), i64),
                     );
 
                     info!(
-                        "{} slot_weight: {} {:2}% {}% {:.2} {}",
+                        "{} slot_weight: {} {:2}% {}%",
                         my_vote_pubkey,
                         bank_slot,
-                        100 * stats.bank_stake / stats.total_stake, // percentage vote stake in total_stake
-                        100 * stats.fork_weight / stats.total_stake as u128,
-                        ((stats.fork_weight / stats.total_stake as u128) as f64).log2(), // average lockout depth for voted stake
+                        stats.bank_weight(), // percentage bank stake in total_stake
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                 }
@@ -3671,7 +3666,7 @@ impl ReplayStage {
                 vote_threshold,
                 propagated_stake,
                 is_leader_slot,
-                fork_weight,
+                bank_weight,
                 total_threshold_stake,
                 total_epoch_stake,
             ) = {
@@ -3684,7 +3679,7 @@ impl ReplayStage {
                     fork_stats.vote_threshold,
                     propagated_stats.propagated_validators_stake,
                     propagated_stats.is_leader_slot,
-                    fork_stats.fork_weight,
+                    fork_stats.bank_weight(),
                     fork_stats.total_stake,
                     propagated_stats.total_epoch_stake,
                 )
@@ -3719,7 +3714,7 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
-                info!("voting: {} {}", candidate_vote_bank.slot(), fork_weight);
+                info!("voting: {} {}", candidate_vote_bank.slot(), bank_weight);
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((candidate_vote_bank.clone(), switch_fork_decision)),
                     reset_bank: Some(candidate_vote_bank.clone()),
