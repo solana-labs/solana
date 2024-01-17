@@ -4,7 +4,7 @@ use {
     std::collections::HashMap,
 };
 
-pub(crate) fn get_account(
+pub(crate) fn get_account_from_overwrites_or_bank(
     pubkey: &Pubkey,
     bank: &Bank,
     overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
