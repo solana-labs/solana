@@ -562,74 +562,7 @@ impl JsonRpcRequestProcessor {
 
         let bank = self.get_bank_with_config(slot_context)?;
 
-        let reward_map = if bank
-            .feature_set
-            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
-        {
-            let partition_data_address = get_epoch_rewards_partition_data_address(rewards_epoch);
-            let partition_data_account =
-                bank.get_account(&partition_data_address)
-                    .ok_or_else(|| Error {
-                        code: ErrorCode::InternalError,
-                        message: format!(
-                            "Partition data account not found for epoch {:?} at {:?}",
-                            epoch, partition_data_address
-                        ),
-                        data: None,
-                    })?;
-            let EpochRewardsPartitionDataVersion::V0(partition_data) =
-                bincode::deserialize(partition_data_account.data())
-                    .map_err(|_| Error::internal_error())?;
-            let hasher = EpochRewardsHasher::new(
-                partition_data.num_partitions,
-                &partition_data.parent_blockhash,
-            );
-            let mut partition_index_addresses: HashMap<usize, Vec<String>> = HashMap::new();
-            for address in addresses.iter() {
-                let partition_index = hasher.clone().hash_address_to_partition(address);
-                partition_index_addresses
-                    .entry(partition_index)
-                    .and_modify(|list| list.push(address.to_string()))
-                    .or_insert(vec![address.to_string()]);
-            }
-
-            let block_list = self
-                .get_blocks_with_limit(
-                    first_slot_in_epoch,
-                    partition_data.num_partitions + 1,
-                    config.commitment,
-                )
-                .await?;
-
-            let mut reward_map: HashMap<String, (Reward, Slot)> = HashMap::new();
-            for (partition_index, addresses) in partition_index_addresses.iter() {
-                let slot = *block_list
-                    .get(partition_index.saturating_add(1))
-                    .ok_or_else(Error::internal_error)?;
-                let Ok(Some(block)) = self
-                    .get_block(
-                        slot,
-                        Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
-                    )
-                    .await
-                else {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                };
-                let index_reward_map: HashMap<String, (Reward, Slot)> = block
-                    .rewards
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|reward| match reward.reward_type? {
-                        RewardType::Staking | RewardType::Voting => addresses
-                            .contains(&reward.pubkey)
-                            .then(|| (reward.clone().pubkey, (reward, slot))),
-                        _ => None,
-                    })
-                    .collect();
-                reward_map.extend(index_reward_map);
-            }
-            reward_map
-        } else {
+        let mut reward_map: HashMap<String, (Reward, Slot)> = {
             let first_confirmed_block_in_epoch = *self
                 .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
                 .await?
@@ -671,6 +604,79 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect()
         };
+
+        if bank
+            .feature_set
+            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
+        {
+            let partition_data_address = get_epoch_rewards_partition_data_address(rewards_epoch);
+            let partition_data_account =
+                bank.get_account(&partition_data_address)
+                    .ok_or_else(|| Error {
+                        code: ErrorCode::InternalError,
+                        message: format!(
+                            "Partition data account not found for epoch {:?} at {:?}",
+                            epoch, partition_data_address
+                        ),
+                        data: None,
+                    })?;
+            let EpochRewardsPartitionDataVersion::V0(partition_data) =
+                bincode::deserialize(partition_data_account.data())
+                    .map_err(|_| Error::internal_error())?;
+            let hasher = EpochRewardsHasher::new(
+                partition_data.num_partitions,
+                &partition_data.parent_blockhash,
+            );
+            let mut partition_index_addresses: HashMap<usize, Vec<String>> = HashMap::new();
+            for address in addresses.iter() {
+                let address_string = address.to_string();
+                // Skip this address if (Voting) rewards were already found in
+                // the first block of the epoch
+                if !reward_map.contains_key(&address_string) {
+                    let partition_index = hasher.clone().hash_address_to_partition(address);
+                    partition_index_addresses
+                        .entry(partition_index)
+                        .and_modify(|list| list.push(address_string.clone()))
+                        .or_insert(vec![address_string]);
+                }
+            }
+
+            let block_list = self
+                .get_blocks_with_limit(
+                    first_slot_in_epoch,
+                    partition_data.num_partitions + 1,
+                    config.commitment,
+                )
+                .await?;
+
+            for (partition_index, addresses) in partition_index_addresses.iter() {
+                let slot = *block_list
+                    .get(partition_index.saturating_add(1))
+                    .ok_or_else(Error::internal_error)?;
+                let Ok(Some(block)) = self
+                    .get_block(
+                        slot,
+                        Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+                    )
+                    .await
+                else {
+                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+                };
+                let index_reward_map: HashMap<String, (Reward, Slot)> = block
+                    .rewards
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|reward| match reward.reward_type? {
+                        RewardType::Staking | RewardType::Voting => addresses
+                            .contains(&reward.pubkey)
+                            .then(|| (reward.clone().pubkey, (reward, slot))),
+                        _ => None,
+                    })
+                    .collect();
+                reward_map.extend(index_reward_map);
+            }
+        }
+
         let rewards = addresses
             .iter()
             .map(|address| {
