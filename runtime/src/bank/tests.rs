@@ -2667,8 +2667,10 @@ fn test_bank_tx_compute_unit_fee() {
         .fee_rate_governor
         .create_fee_calculator()
         .lamports_per_signature;
-    let mut fee_structure = FeeStructure::default();
-    fee_structure.lamports_per_signature = lamports_per_signature;
+    let fee_structure = FeeStructure {
+        lamports_per_signature,
+        ..FeeStructure::default()
+    };
     let expected_fee_paid = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
         lamports_per_signature,
