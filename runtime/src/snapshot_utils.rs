@@ -310,9 +310,6 @@ pub enum SnapshotError {
     #[error("source({1}) - I/O error: {0}")]
     IoWithSource(std::io::Error, &'static str),
 
-    #[error("source({1}) - I/O error: {0}, file: {2}")]
-    IoWithSourceAndFile(#[source] std::io::Error, &'static str, PathBuf),
-
     #[error("could not get file name from path: {0}")]
     PathToFileNameError(PathBuf),
 
