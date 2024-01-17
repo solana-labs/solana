@@ -44,7 +44,7 @@ impl BatchedRangeProofU256Data {
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
     ) -> Result<Self, ProofGenerationError> {
-        // the sum of the bit lengths must be 64
+        // the sum of the bit lengths must be 256
         let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
