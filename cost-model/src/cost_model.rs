@@ -330,6 +330,22 @@ mod tests {
     }
 
     #[test]
+    fn test_cost_model_demoted_write_lock() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        // Cannot write-lock the system program, it will be demoted when taking locks.
+        // However, the cost should be calculated as if it were taken.
+        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &system_program::id(), 2, start_hash),
+        );
+
+        // Cost should be fore 2 write-locks, but only 1 is actually writable.
+        let tx_cost = CostModel::calculate_cost(&simple_transaction, &FeatureSet::all_enabled());
+        assert_eq!(2 * WRITE_LOCK_UNITS, tx_cost.write_lock_cost());
+        assert_eq!(1, tx_cost.writable_accounts().len());
+    }
+
+    #[test]
     fn test_cost_model_compute_budget_transaction() {
         let (mint_keypair, start_hash) = test_setup();
 
