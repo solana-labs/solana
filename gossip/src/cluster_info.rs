@@ -658,6 +658,13 @@ impl ClusterInfo {
         self.keypair.read().unwrap().pubkey()
     }
 
+    /// On initialization the push active set will be empty until
+    /// peer discovery succeeds. This function is used to indicate
+    /// when it is safe to push new gossip messages
+    pub fn is_push_active_set_initialized(&self) -> bool {
+        self.gossip.push.is_push_active_set_initialized()
+    }
+
     pub fn keypair(&self) -> RwLockReadGuard<Arc<Keypair>> {
         self.keypair.read().unwrap()
     }

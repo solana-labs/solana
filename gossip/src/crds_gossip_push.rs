@@ -282,6 +282,10 @@ impl CrdsGossipPush {
             stakes,
         )
     }
+
+    pub(crate) fn is_push_active_set_initialized(&self) -> bool {
+        !self.active_set.read().unwrap().is_empty()
+    }
 }
 
 #[cfg(test)]

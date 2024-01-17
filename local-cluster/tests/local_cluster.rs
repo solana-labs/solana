@@ -3744,9 +3744,6 @@ fn test_kill_partition_switch_threshold_progress() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
-// This test does not work under the assumption that duplicate proofs are propagated through gossip
-// ignore for now.
-#[ignore]
 fn test_duplicate_shreds_broadcast_leader() {
     // Create 4 nodes:
     // 1) Bad leader sending different versions of shreds to both of the other nodes
