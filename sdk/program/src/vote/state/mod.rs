@@ -14,14 +14,14 @@ use {
     },
     bincode::{serialize_into, ErrorKind},
     serde_derive::{Deserialize, Serialize},
-    std::{collections::VecDeque, fmt::Debug},
+    std::{collections::VecDeque, fmt::Debug, io::Cursor},
 };
 
 mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
 mod deserialize;
-use deserialize::deserialize_into;
+use deserialize::{deserialize_vote_state_into, read_u32};
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
@@ -348,10 +348,28 @@ impl VoteState {
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        let mut vote_state = VoteState::default();
-        deserialize_into(input, &mut vote_state)?;
+        let mut vote_state = Self::default();
+        Self::deserialize_into(input, &mut vote_state)?;
 
         Ok(vote_state)
+    }
+
+    pub fn deserialize_into(
+        input: &[u8],
+        vote_state: &mut VoteState,
+    ) -> Result<(), InstructionError> {
+        let mut cursor = Cursor::new(input);
+
+        let variant = read_u32(&mut cursor)?;
+        match variant {
+            // V0_23_5. not supported; these should not exist on mainnet
+            0 => Err(InstructionError::InvalidAccountData),
+            // V1_14_11. substantially different layout and data
+            1 => deserialize_vote_state_into(input, &mut cursor, vote_state, false),
+            // Current. the only difference is the addition of a slot-latency to each vote
+            2 => deserialize_vote_state_into(input, &mut cursor, vote_state, true),
+            _ => Err(InstructionError::InvalidAccountData),
+        }
     }
 
     pub fn serialize(
