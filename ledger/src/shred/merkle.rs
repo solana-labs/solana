@@ -150,14 +150,21 @@ impl ShredData {
     }
 
     // Where the merkle proof starts in the shred binary.
-    fn proof_offset(proof_size: u8) -> Result<usize, Error> {
+    fn proof_offset(&self) -> Result<usize, Error> {
+        let ShredVariant::MerkleData(proof_size) = self.common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
+        };
+        Self::get_proof_offset(proof_size)
+    }
+
+    fn get_proof_offset(proof_size: u8) -> Result<usize, Error> {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size)?)
     }
 
     pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         let proof_size = self.proof_size()?;
         let index = self.erasure_shard_index()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let proof = get_merkle_proof(&self.payload, proof_offset, proof_size)?;
         let node = get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)?;
         get_merkle_root(index, node, proof)
@@ -165,13 +172,12 @@ impl ShredData {
 
     fn merkle_proof(&self) -> Result<impl Iterator<Item = &MerkleProofEntry>, Error> {
         let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         get_merkle_proof(&self.payload, proof_offset, proof_size)
     }
 
     fn merkle_node(&self) -> Result<Hash, Error> {
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)
     }
 
@@ -207,7 +213,7 @@ impl ShredData {
         if proof.len() != usize::from(proof_size) {
             return Err(Error::InvalidMerkleProof);
         }
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let mut cursor = Cursor::new(
             self.payload
                 .get_mut(proof_offset..)
@@ -234,7 +240,7 @@ impl ShredData {
                 .map(usize::try_from)?
                 .ok()?
         };
-        let proof_offset = Self::proof_offset(proof_size).ok()?;
+        let proof_offset = Self::get_proof_offset(proof_size).ok()?;
         let proof = get_merkle_proof(shred, proof_offset, proof_size).ok()?;
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
@@ -262,14 +268,21 @@ impl ShredCode {
     }
 
     // Where the merkle proof starts in the shred binary.
-    fn proof_offset(proof_size: u8) -> Result<usize, Error> {
+    fn proof_offset(&self) -> Result<usize, Error> {
+        let ShredVariant::MerkleCode(proof_size) = self.common_header.shred_variant else {
+            return Err(Error::InvalidShredVariant);
+        };
+        Self::get_proof_offset(proof_size)
+    }
+
+    fn get_proof_offset(proof_size: u8) -> Result<usize, Error> {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size)?)
     }
 
     pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         let proof_size = self.proof_size()?;
         let index = self.erasure_shard_index()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let proof = get_merkle_proof(&self.payload, proof_offset, proof_size)?;
         let node = get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)?;
         get_merkle_root(index, node, proof)
@@ -277,13 +290,12 @@ impl ShredCode {
 
     fn merkle_proof(&self) -> Result<impl Iterator<Item = &MerkleProofEntry>, Error> {
         let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         get_merkle_proof(&self.payload, proof_offset, proof_size)
     }
 
     fn merkle_node(&self) -> Result<Hash, Error> {
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)
     }
 
@@ -321,7 +333,7 @@ impl ShredCode {
         if proof.len() != usize::from(proof_size) {
             return Err(Error::InvalidMerkleProof);
         }
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let mut cursor = Cursor::new(
             self.payload
                 .get_mut(proof_offset..)
@@ -350,7 +362,7 @@ impl ShredCode {
                 .ok()?;
             num_data_shreds.checked_add(position)?
         };
-        let proof_offset = Self::proof_offset(proof_size).ok()?;
+        let proof_offset = Self::get_proof_offset(proof_size).ok()?;
         let proof = get_merkle_proof(shred, proof_offset, proof_size).ok()?;
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
@@ -402,8 +414,7 @@ impl<'a> ShredTrait<'a> for ShredData {
         if self.payload.len() != Self::SIZE_OF_PAYLOAD {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let mut shard = self.payload;
         shard.truncate(proof_offset);
         shard.drain(0..SIZE_OF_SIGNATURE);
@@ -414,8 +425,7 @@ impl<'a> ShredTrait<'a> for ShredData {
         if self.payload.len() != Self::SIZE_OF_PAYLOAD {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         self.payload
             .get(SIZE_OF_SIGNATURE..proof_offset)
             .ok_or(Error::InvalidPayloadSize(self.payload.len()))
@@ -474,8 +484,7 @@ impl<'a> ShredTrait<'a> for ShredCode {
         if self.payload.len() != Self::SIZE_OF_PAYLOAD {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         let mut shard = self.payload;
         shard.truncate(proof_offset);
         shard.drain(..Self::SIZE_OF_HEADERS);
@@ -486,8 +495,7 @@ impl<'a> ShredTrait<'a> for ShredCode {
         if self.payload.len() != Self::SIZE_OF_PAYLOAD {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
-        let proof_size = self.proof_size()?;
-        let proof_offset = Self::proof_offset(proof_size)?;
+        let proof_offset = self.proof_offset()?;
         self.payload
             .get(Self::SIZE_OF_HEADERS..proof_offset)
             .ok_or(Error::InvalidPayloadSize(self.payload.len()))
