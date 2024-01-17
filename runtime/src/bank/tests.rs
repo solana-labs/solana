@@ -172,11 +172,15 @@ fn new_bank_from_parent_with_bank_forks(
 
 fn create_genesis_config_no_fees(lamports: u64) -> (GenesisConfig, Keypair) {
     let genesis_config_info = solana_runtime::genesis_utils::create_genesis_config(lamports);
-    (genesis_config_info.genesis_config, genesis_config_info.mint_keypair)
+    (
+        genesis_config_info.genesis_config,
+        genesis_config_info.mint_keypair,
+    )
 }
 
 fn create_genesis_config_no_tx_fee(lamports: u64) -> (GenesisConfig, Keypair) {
-    let (mut genesis_config, mint_keypair) = solana_sdk::genesis_config::create_genesis_config(lamports);
+    let (mut genesis_config, mint_keypair) =
+        solana_sdk::genesis_config::create_genesis_config(lamports);
     genesis_config.fee_rate_governor = FeeRateGovernor::new(0, 0);
     (genesis_config, mint_keypair)
 }
@@ -2659,11 +2663,10 @@ fn test_bank_tx_compute_unit_fee() {
     } = create_genesis_config_with_leader(mint, &leader, 3);
     genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0); // something divisible by 2
 
-    let lamports_per_signature = 
-        genesis_config
-            .fee_rate_governor
-            .create_fee_calculator()
-            .lamports_per_signature;
+    let lamports_per_signature = genesis_config
+        .fee_rate_governor
+        .create_fee_calculator()
+        .lamports_per_signature;
     let mut fee_structure = FeeStructure::default();
     fee_structure.lamports_per_signature = lamports_per_signature;
     let expected_fee_paid = calculate_test_fee(
@@ -3332,7 +3335,6 @@ fn test_bank_parent_account_spend() {
     let key2 = Keypair::new();
     let (parent, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let amount = genesis_config.rent.minimum_balance(0);
-println!("==== amount {}", amount);
 
     let tx =
         system_transaction::transfer(&mint_keypair, &key1.pubkey(), amount, genesis_config.hash());

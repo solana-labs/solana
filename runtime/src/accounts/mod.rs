@@ -624,7 +624,7 @@ mod tests {
             &RentCollector::default(),
             error_counters,
             &all_features_except(exclude_features),
-            &FeeStructure::new(lamports_per_signature as f64, 0.0, vec![(1_400_000, 0.0)])
+            &FeeStructure::new(lamports_per_signature as f64, 0.0, vec![(1_400_000, 0.0)]),
         )
     }
 

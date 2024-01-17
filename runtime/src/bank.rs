@@ -1077,11 +1077,15 @@ impl Bank {
             debug_do_not_add_builtins,
         );
 
+        // There is a bug in accounts_db's open_genesis_config() that sets lamports_per_signature
+        // to zero right after loading it from ledger, after the first block with a transaction
+        // in it is completed, the correct value will be set to it. This is a hack to restore it
+        let derived_fee_rate_governor =
+            FeeRateGovernor::new_derived(&genesis_config.fee_rate_governor, 0);
         // new bank's fee_structure.lamports_per_signature be inline with
         // what's configured in GenesisConfig
-        bank.fee_structure.lamports_per_signature = genesis_config
-            .fee_rate_governor
-            .target_lamports_per_signature;
+        bank.fee_structure.lamports_per_signature =
+            derived_fee_rate_governor.lamports_per_signature;
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
