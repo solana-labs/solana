@@ -7933,7 +7933,7 @@ impl AccountsDb {
     pub fn calculate_accounts_delta_hash_internal(
         &self,
         slot: Slot,
-        ignore: Option<Pubkey>,
+        ignore: Option<&HashSet<Pubkey>>,
         mut skipped_rewrites: HashMap<Pubkey, AccountHash>,
     ) -> AccountsDeltaHash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
@@ -7949,7 +7949,7 @@ impl AccountsDb {
         info!("skipped rewrite hashes {} {}", slot, num_skipped_rewrites);
 
         if let Some(ignore) = ignore {
-            hashes.retain(|k| k.0 != ignore);
+            hashes.retain(|k| !ignore.contains(&k.0));
         }
 
         let accounts_delta_hash =

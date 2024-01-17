@@ -6936,6 +6936,18 @@ impl Bank {
         self.get_signature_status_slot(signature).is_some()
     }
 
+    fn get_epoch_reward_pda_and_sysvar_addresses(&self) -> HashSet<Pubkey> {
+        let mut addresses = HashSet::default();
+        addresses.insert(sysvar::epoch_rewards::id());
+
+        for epoch in 0..=self.epoch {
+            let pda = get_epoch_rewards_partition_data_address(epoch);
+            addresses.insert(pda);
+        }
+
+        addresses
+    }
+
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
@@ -6946,14 +6958,14 @@ impl Bank {
                 .test_enable_partitioned_rewards
                 && self.get_reward_calculation_num_blocks() == 0
                 && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX))
-            .then_some(sysvar::epoch_rewards::id());
+            .then(|| self.get_epoch_reward_pda_and_sysvar_addresses());
         let accounts_delta_hash = self
             .rc
             .accounts
             .accounts_db
             .calculate_accounts_delta_hash_internal(
                 slot,
-                ignore,
+                ignore.as_ref(),
                 self.skipped_rewrites.lock().unwrap().clone(),
             );
 
