@@ -523,6 +523,35 @@ impl JsonRpcRequestProcessor {
         })
     }
 
+    async fn get_reward_map(
+        &self,
+        slot: Slot,
+        addresses: &[String],
+        config: &RpcEpochConfig,
+    ) -> Result<HashMap<String, (Reward, Slot)>> {
+        let Ok(Some(block)) = self
+            .get_block(
+                slot,
+                Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+            )
+            .await
+        else {
+            return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+        };
+
+        Ok(block
+            .rewards
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|reward| match reward.reward_type? {
+                RewardType::Staking | RewardType::Voting => addresses
+                    .contains(&reward.pubkey)
+                    .then(|| (reward.clone().pubkey, (reward, slot))),
+                _ => None,
+            })
+            .collect())
+    }
+
     pub async fn get_inflation_reward(
         &self,
         addresses: Vec<Pubkey>,
@@ -571,38 +600,11 @@ impl JsonRpcRequestProcessor {
                     slot: first_slot_in_epoch,
                 })?;
 
-            let Ok(Some(first_confirmed_block)) = self
-                .get_block(
-                    first_confirmed_block_in_epoch,
-                    Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
-                )
-                .await
-            else {
-                return Err(RpcCustomError::BlockNotAvailable {
-                    slot: first_confirmed_block_in_epoch,
-                }
-                .into());
-            };
-
             let addresses: Vec<String> =
                 addresses.iter().map(|pubkey| pubkey.to_string()).collect();
 
-            first_confirmed_block
-                .rewards
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|reward| match reward.reward_type? {
-                    RewardType::Staking | RewardType::Voting => {
-                        addresses.contains(&reward.pubkey).then(|| {
-                            (
-                                reward.clone().pubkey,
-                                (reward, first_confirmed_block_in_epoch),
-                            )
-                        })
-                    }
-                    _ => None,
-                })
-                .collect()
+            self.get_reward_map(first_confirmed_block_in_epoch, &addresses, &config)
+                .await?
         };
 
         if bank
@@ -653,26 +655,8 @@ impl JsonRpcRequestProcessor {
                 let slot = *block_list
                     .get(partition_index.saturating_add(1))
                     .ok_or_else(Error::internal_error)?;
-                let Ok(Some(block)) = self
-                    .get_block(
-                        slot,
-                        Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
-                    )
-                    .await
-                else {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                };
-                let index_reward_map: HashMap<String, (Reward, Slot)> = block
-                    .rewards
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|reward| match reward.reward_type? {
-                        RewardType::Staking | RewardType::Voting => addresses
-                            .contains(&reward.pubkey)
-                            .then(|| (reward.clone().pubkey, (reward, slot))),
-                        _ => None,
-                    })
-                    .collect();
+
+                let index_reward_map = self.get_reward_map(slot, addresses, &config).await?;
                 reward_map.extend(index_reward_map);
             }
         }
