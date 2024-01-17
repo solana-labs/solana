@@ -146,9 +146,7 @@ fn read_prior_voters_into(
         let until_epoch = read_u64(cursor)?;
         let item = (prior_voter, from_epoch, until_epoch);
 
-        // XXX im ~90% sure this is correct in all cases but others should check
-        // we have to skip placeholder values, otherwise the index is thrown off
-        // ...then again i just realized this struct is in our module so i guess we can ignore encapsulation lol
+        // XXX someone from the core team should confirm this holds
         match item {
             (_, 0, 0) => (),
             _ => vote_state.prior_voters.append(item),
