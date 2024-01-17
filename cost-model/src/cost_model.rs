@@ -76,7 +76,7 @@ impl CostModel {
     fn get_write_lock_cost(tx_cost: &mut UsageCostDetails, transaction: &SanitizedTransaction) {
         tx_cost.writable_accounts = Self::get_writable_accounts(transaction);
         tx_cost.write_lock_cost =
-            WRITE_LOCK_UNITS.saturating_mul(tx_cost.writable_accounts.len() as u64);
+            WRITE_LOCK_UNITS.saturating_mul(transaction.message().num_write_locks());
     }
 
     fn get_transaction_cost(
