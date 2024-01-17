@@ -19,6 +19,7 @@ pub fn get_parsed_token_account(
     bank: &Bank,
     pubkey: &Pubkey,
     account: AccountSharedData,
+    // only used for simulation results
     overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(account.data())
