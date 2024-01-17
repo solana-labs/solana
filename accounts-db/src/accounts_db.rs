@@ -62,7 +62,10 @@ use {
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         in_mem_accounts_index::StartupStats,
-        partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
+        partitioned_rewards::{
+            PartitionRewardPDAAndSysvarAddresses, PartitionedEpochRewardsConfig,
+            TestPartitionedEpochRewards,
+        },
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -1558,6 +1561,10 @@ pub struct AccountsDb {
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
+
+    /// Contains the addresses of all partition reward PDA accounts and sysvar
+    /// account.
+    pub partition_reward_pda_and_sysvar_address: Mutex<PartitionRewardPDAAndSysvarAddresses>,
 }
 
 #[derive(Debug, Default)]
@@ -2540,6 +2547,9 @@ impl AccountsDb {
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
+            partition_reward_pda_and_sysvar_address: Mutex::new(
+                PartitionRewardPDAAndSysvarAddresses::default(),
+            ),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
             test_skip_rewrites_but_include_in_bank_hash: false,
         }

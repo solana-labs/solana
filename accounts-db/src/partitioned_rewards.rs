@@ -1,6 +1,12 @@
 //! Code related to partitioned rewards distribution
 //!
-use solana_sdk::clock::Slot;
+use {
+    solana_sdk::{
+        clock::Slot, epoch_rewards_partition_data::get_epoch_rewards_partition_data_address,
+        pubkey::Pubkey, stake_history::Epoch, sysvar,
+    },
+    std::collections::HashSet,
+};
 
 #[derive(Debug)]
 /// Configuration options for partitioned epoch rewards.
@@ -108,5 +114,68 @@ impl PartitionedEpochRewardsConfig {
             // irrelevant if we are not running old code path
             test_compare_partitioned_epoch_rewards: false,
         }
+    }
+}
+
+/// A struct that contains the addresses of all partition reward PDA accounts
+/// and sysvar account.
+#[derive(Debug, Default)]
+pub struct PartitionRewardPDAAndSysvarAddresses {
+    /// HashSet of the addresses of all partition reward PDA accounts and sysvar
+    /// account.
+    addresses: HashSet<Pubkey>,
+
+    /// Max epoch of the PDA accounts stored in the HashSet
+    max_epoch: Epoch,
+}
+
+impl PartitionRewardPDAAndSysvarAddresses {
+    /// Returns the addresses of all partition reward PDA accounts and sysvar
+    /// account up to `epoch`.
+    pub fn get_partition_reward_pda_and_sysvar_addresses(
+        &mut self,
+        epoch: Epoch,
+    ) -> HashSet<Pubkey> {
+        if self.addresses.is_empty() {
+            self.addresses.insert(sysvar::epoch_rewards::id());
+
+            for e in 0..=epoch {
+                let pda = get_epoch_rewards_partition_data_address(e);
+                self.addresses.insert(pda);
+            }
+            self.max_epoch = epoch;
+        } else if epoch > self.max_epoch {
+            for e in self.max_epoch + 1..=epoch {
+                let pda = get_epoch_rewards_partition_data_address(e);
+                self.addresses.insert(pda);
+            }
+            self.max_epoch = epoch;
+        }
+
+        self.addresses.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PartitionRewardPDAAndSysvarAddresses;
+
+    #[test]
+    fn test_partition_reward_pda_and_sysvar_addresses() {
+        let mut a = PartitionRewardPDAAndSysvarAddresses::default();
+        assert!(a.addresses.is_empty());
+        assert_eq!(a.max_epoch, 0);
+
+        let s = a.get_partition_reward_pda_and_sysvar_addresses(3);
+        assert_eq!(s.len(), 5);
+        assert_eq!(a.max_epoch, 3);
+
+        let s = a.get_partition_reward_pda_and_sysvar_addresses(2);
+        assert_eq!(s.len(), 5);
+        assert_eq!(a.max_epoch, 3);
+
+        let s = a.get_partition_reward_pda_and_sysvar_addresses(4);
+        assert_eq!(s.len(), 6);
+        assert_eq!(a.max_epoch, 4);
     }
 }

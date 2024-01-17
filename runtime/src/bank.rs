@@ -6936,16 +6936,14 @@ impl Bank {
         self.get_signature_status_slot(signature).is_some()
     }
 
-    fn get_epoch_reward_pda_and_sysvar_addresses(&self) -> HashSet<Pubkey> {
-        let mut addresses = HashSet::default();
-        addresses.insert(sysvar::epoch_rewards::id());
-
-        for epoch in 0..=self.epoch {
-            let pda = get_epoch_rewards_partition_data_address(epoch);
-            addresses.insert(pda);
-        }
-
-        addresses
+    fn get_partition_reward_pda_and_sysvar_addresses(&self) -> HashSet<Pubkey> {
+        self.rc
+            .accounts
+            .accounts_db
+            .partition_reward_pda_and_sysvar_address
+            .lock()
+            .unwrap()
+            .get_partition_reward_pda_and_sysvar_addresses(self.epoch)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -6958,7 +6956,7 @@ impl Bank {
                 .test_enable_partitioned_rewards
                 && self.get_reward_calculation_num_blocks() == 0
                 && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX))
-            .then(|| self.get_epoch_reward_pda_and_sysvar_addresses());
+            .then(|| self.get_partition_reward_pda_and_sysvar_addresses());
         let accounts_delta_hash = self
             .rc
             .accounts
