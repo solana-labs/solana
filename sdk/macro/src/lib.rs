@@ -309,7 +309,7 @@ fn parse_pubkey(
 }
 
 struct Pubkeys {
-    method: Ident,
+    name: Ident,
     num: usize,
     pubkeys: proc_macro2::TokenStream,
 }
@@ -319,7 +319,7 @@ impl Parse for Pubkeys {
             ::solana_sdk::pubkey::Pubkey
         };
 
-        let method = input.parse()?;
+        let name = input.parse()?;
         let _comma: Token![,] = input.parse()?;
         let (num, pubkeys) = if input.peek(syn::LitStr) {
             let id_literal: LitStr = input.parse()?;
@@ -339,36 +339,24 @@ impl Parse for Pubkeys {
             return Err(syn::Error::new_spanned(stream, "unexpected token"));
         };
 
-        Ok(Pubkeys {
-            method,
-            num,
-            pubkeys,
-        })
+        Ok(Pubkeys { name, num, pubkeys })
     }
 }
 
 impl ToTokens for Pubkeys {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let Pubkeys {
-            method,
-            num,
-            pubkeys,
-        } = self;
+        let Pubkeys { name, num, pubkeys } = self;
 
         let pubkey_type = quote! {
             ::solana_sdk::pubkey::Pubkey
         };
         if *num == 1 {
             tokens.extend(quote! {
-                pub fn #method() -> #pubkey_type {
-                    #pubkeys
-                }
+                pub const #name: #pubkey_type = #pubkeys;
             });
         } else {
             tokens.extend(quote! {
-                pub fn #method() -> ::std::vec::Vec<#pubkey_type> {
-                    vec![#pubkeys]
-                }
+                pub const #name: &[#pubkey_type] = &[#pubkeys];
             });
         }
     }

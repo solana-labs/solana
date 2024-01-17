@@ -4667,7 +4667,7 @@ pub mod tests {
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender, bank::BankTestConfig,
-            commitment::BlockCommitment, non_circulating_supply::non_circulating_accounts,
+            commitment::BlockCommitment, non_circulating_supply::NON_CIRCULATING_ACCOUNTS,
         },
         solana_sdk::{
             account::{Account, WritableAccount},
@@ -5299,7 +5299,7 @@ pub mod tests {
             result.value
         };
         let expected = {
-            let mut non_circulating_accounts: Vec<String> = non_circulating_accounts()
+            let mut non_circulating_accounts: Vec<String> = NON_CIRCULATING_ACCOUNTS
                 .iter()
                 .map(|pubkey| pubkey.to_string())
                 .collect();
@@ -5340,7 +5340,7 @@ pub mod tests {
         let rpc = RpcHandler::start();
 
         // make a non-circulating account one of the largest accounts
-        let non_circulating_key = &non_circulating_accounts()[0];
+        let non_circulating_key = &NON_CIRCULATING_ACCOUNTS[0];
         let bank = rpc.working_bank();
         bank.process_transaction(&system_transaction::transfer(
             &rpc.mint_keypair,

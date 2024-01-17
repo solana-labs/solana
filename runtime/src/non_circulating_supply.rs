@@ -20,10 +20,9 @@ pub fn calculate_non_circulating_supply(bank: &Bank) -> ScanResult<NonCirculatin
     debug!("Updating Bank supply, epoch: {}", bank.epoch());
     let mut non_circulating_accounts_set: HashSet<Pubkey> = HashSet::new();
 
-    for key in non_circulating_accounts() {
-        non_circulating_accounts_set.insert(key);
+    for key in NON_CIRCULATING_ACCOUNTS {
+        non_circulating_accounts_set.insert(*key);
     }
-    let withdraw_authority_list = withdraw_authority();
 
     let clock = bank.clock();
     let config = &ScanConfig::default();
@@ -53,14 +52,14 @@ pub fn calculate_non_circulating_supply(bank: &Bank) -> ScanResult<NonCirculatin
         match stake_account {
             StakeStateV2::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
-                    || withdraw_authority_list.contains(&meta.authorized.withdrawer)
+                    || WITHDRAW_AUTHORITY.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
             StakeStateV2::Stake(meta, _stake, _stake_flags) => {
                 if meta.lockup.is_in_force(&clock, None)
-                    || withdraw_authority_list.contains(&meta.authorized.withdrawer)
+                    || WITHDRAW_AUTHORITY.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
@@ -82,7 +81,7 @@ pub fn calculate_non_circulating_supply(bank: &Bank) -> ScanResult<NonCirculatin
 
 // Mainnet-beta accounts that should be considered non-circulating
 solana_sdk::pubkeys!(
-    non_circulating_accounts,
+    NON_CIRCULATING_ACCOUNTS,
     [
         "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
         "GK2zqSsXLA2rwVZk347RYhh6jJpRsCA69FjLW93ZGi3B",
@@ -199,7 +198,7 @@ solana_sdk::pubkeys!(
 
 // Withdraw authority for autostaked accounts on mainnet-beta
 solana_sdk::pubkeys!(
-    withdraw_authority,
+    WITHDRAW_AUTHORITY,
     [
         "8CUUMKYNGxdgYio5CLHRHyzMEhhVRMcqefgE6dLqnVRK",
         "3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB",
@@ -245,10 +244,9 @@ mod tests {
                 Account::new(balance, 0, &Pubkey::default()),
             );
         }
-        let non_circulating_accounts = non_circulating_accounts();
-        let num_non_circulating_accounts = non_circulating_accounts.len() as u64;
-        for key in non_circulating_accounts.clone() {
-            accounts.insert(key, Account::new(balance, 0, &Pubkey::default()));
+        let num_non_circulating_accounts = NON_CIRCULATING_ACCOUNTS.len() as u64;
+        for key in NON_CIRCULATING_ACCOUNTS {
+            accounts.insert(*key, Account::new(balance, 0, &Pubkey::default()));
         }
 
         let num_stake_accounts = 3;
@@ -298,9 +296,9 @@ mod tests {
 
         bank = Arc::new(new_from_parent(bank));
         let new_balance = 11;
-        for key in non_circulating_accounts {
+        for key in NON_CIRCULATING_ACCOUNTS {
             bank.store_account(
-                &key,
+                key,
                 &AccountSharedData::new(new_balance, 0, &Pubkey::default()),
             );
         }
