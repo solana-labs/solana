@@ -358,9 +358,6 @@ pub enum SnapshotError {
 
 #[derive(Error, Debug)]
 pub enum SnapshotNewFromDirError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
     #[error("invalid bank snapshot directory {0}")]
     InvalidBankSnapshotDir(PathBuf),
 
