@@ -20,8 +20,8 @@ use {
 mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
-mod deserialize;
-use deserialize::{deserialize_vote_state_into, read_u32};
+mod vote_state_deserialize;
+use vote_state_deserialize::{deserialize_vote_state_into, read_u32};
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
