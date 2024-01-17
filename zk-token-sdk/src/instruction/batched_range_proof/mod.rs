@@ -14,7 +14,7 @@
 //! the sum of all bit-lengths.
 //!
 //! The maximum number of commitments is fixed at 8. Each bit-length in `[n_1, ..., n_N]` must be a
-//! power-of-two positive integer less than 256.
+//! power-of-two positive integer less than 128.
 
 pub mod batched_range_proof_u128;
 pub mod batched_range_proof_u256;
@@ -37,6 +37,13 @@ use {
 };
 
 const MAX_COMMITMENTS: usize = 8;
+
+/// A bit length in a batched range proof must be at most 128.
+///
+/// A 256-bit range proof on a single Pedersen commitment is meaningless and hence enforce an upper
+/// bound as the largest power-of-two number less than 256.
+#[cfg(not(target_os = "solana"))]
+const MAX_SINGLE_BIT_LENGTH: usize = 128;
 
 /// The context data needed to verify a range-proof for a Pedersen committed value.
 ///
