@@ -15,11 +15,15 @@ use {
             outstanding_requests::OutstandingRequests,
             quic_endpoint::LocalRequest,
             repair_weight::RepairWeight,
-            serve_repair::{self, ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+            serve_repair::{
+                self, RepairProtocol, RepairRequestHeader, ServeRepair, ShredRepairType,
+                REPAIR_PEERS_CACHE_CAPACITY,
+            },
         },
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    solana_client::connection_cache::Protocol,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},
@@ -678,6 +682,70 @@ impl RepairService {
         }
     }
 
+    pub fn request_repair_for_shred_from_peer(
+        cluster_info: Arc<ClusterInfo>,
+        pubkey: Pubkey,
+        slot: u64,
+        shred_index: u64,
+        repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
+    ) {
+        let peer_repair_addr = cluster_info
+            .lookup_contact_info(&pubkey, |node| node.serve_repair(Protocol::UDP))
+            .unwrap()
+            .unwrap();
+        Self::request_repair_for_shred_from_address(
+            cluster_info,
+            pubkey,
+            peer_repair_addr,
+            slot,
+            shred_index,
+            repair_socket,
+            outstanding_repair_requests,
+        );
+    }
+
+    fn request_repair_for_shred_from_address(
+        cluster_info: Arc<ClusterInfo>,
+        pubkey: Pubkey,
+        address: SocketAddr,
+        slot: u64,
+        shred_index: u64,
+        repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
+    ) {
+        // Setup repair request
+        let identity_keypair = cluster_info.keypair();
+        let repair_request = ShredRepairType::Shred(slot, shred_index);
+        let nonce = outstanding_repair_requests
+            .write()
+            .unwrap()
+            .add_request(repair_request, timestamp());
+
+        // Create repair request
+        let header = RepairRequestHeader::new(cluster_info.id(), pubkey, timestamp(), nonce);
+        let request_proto = RepairProtocol::WindowIndex {
+            header,
+            slot,
+            shred_index,
+        };
+        let packet_buf =
+            ServeRepair::repair_proto_to_bytes(&request_proto, &identity_keypair).unwrap();
+
+        // Prepare packet batch to send
+        let reqs = vec![(packet_buf, address)];
+
+        // Send packet batch
+        match batch_send(repair_socket, &reqs[..]) {
+            Ok(()) => {
+                trace!("successfully sent repair request!");
+            }
+            Err(SendPktsError::IoError(err, _num_failed)) => {
+                error!("batch_send failed to send packet - error = {:?}", err);
+            }
+        }
+    }
+
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
     #[cfg(test)]
     pub fn generate_repairs_in_range(
@@ -859,6 +927,7 @@ pub(crate) fn sleep_shred_deferment_period() {
 mod test {
     use {
         super::*,
+        crate::repair::quic_endpoint::RemoteRequest,
         solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
         solana_ledger::{
             blockstore::{
@@ -881,6 +950,59 @@ mod test {
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
         ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+    }
+
+    #[test]
+    pub fn test_request_repair_for_shred_from_address() {
+        // Setup cluster and repair info
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let pubkey = cluster_info.id();
+        let slot = 100;
+        let shred_index = 50;
+        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let address = reader.local_addr().unwrap();
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let outstanding_repair_requests = Arc::new(RwLock::new(OutstandingShredRepairs::default()));
+
+        // Send a repair request
+        RepairService::request_repair_for_shred_from_address(
+            cluster_info.clone(),
+            pubkey,
+            address,
+            slot,
+            shred_index,
+            &sender,
+            outstanding_repair_requests,
+        );
+
+        // Receive and translate repair packet
+        let mut packets = vec![solana_sdk::packet::Packet::default(); 1];
+        let _recv_count = solana_streamer::recvmmsg::recv_mmsg(&reader, &mut packets[..]).unwrap();
+        let packet = &packets[0];
+        let Some(bytes) = packet.data(..).map(Vec::from) else {
+            panic!("packet data not found");
+        };
+        let remote_request = RemoteRequest {
+            remote_pubkey: None,
+            remote_address: packet.meta().socket_addr(),
+            bytes,
+            response_sender: None,
+        };
+
+        // Deserialize and check the request
+        let deserialized =
+            serve_repair::deserialize_request::<RepairProtocol>(&remote_request).unwrap();
+        match deserialized {
+            RepairProtocol::WindowIndex {
+                slot: deserialized_slot,
+                shred_index: deserialized_shred_index,
+                ..
+            } => {
+                assert_eq!(deserialized_slot, slot);
+                assert_eq!(deserialized_shred_index, shred_index);
+            }
+            _ => panic!("unexpected repair protocol"),
+        }
     }
 
     #[test]

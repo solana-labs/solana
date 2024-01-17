@@ -13,6 +13,7 @@ use {
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         consensus::{tower_storage::TowerStorage, Tower},
+        repair::repair_service,
         validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
@@ -206,6 +207,15 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
+
+    #[rpc(meta, name = "repairShredFromPeer")]
+    fn repair_shred_from_peer(
+        &self,
+        meta: Self::Metadata,
+        pubkey: Pubkey,
+        slot: u64,
+        shred_index: u64,
+    ) -> Result<()>;
 
     #[rpc(meta, name = "repairWhitelist")]
     fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist>;
@@ -485,6 +495,28 @@ impl AdminRpc for AdminRpcImpl {
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+
+    fn repair_shred_from_peer(
+        &self,
+        meta: Self::Metadata,
+        pubkey: Pubkey,
+        slot: u64,
+        shred_index: u64,
+    ) -> Result<()> {
+        debug!("repair_shred_from_peer request received");
+
+        meta.with_post_init(|post_init| {
+            repair_service::RepairService::request_repair_for_shred_from_peer(
+                post_init.cluster_info.clone(),
+                pubkey,
+                slot,
+                shred_index,
+                &post_init.repair_socket.clone(),
+                post_init.outstanding_repair_requests.clone(),
+            );
+            Ok(())
+        })
     }
 
     fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist> {
@@ -895,6 +927,10 @@ mod tests {
                     vote_account,
                     repair_whitelist,
                     notifies: Vec::new(),
+                    repair_socket: Arc::new(std::net::UdpSocket::bind("0.0.0.0:0").unwrap()),
+                    outstanding_repair_requests: Arc::<
+                        RwLock<repair_service::OutstandingShredRepairs>,
+                    >::default(),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,
