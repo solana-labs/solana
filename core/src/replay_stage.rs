@@ -3714,7 +3714,11 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
-                info!("voting: {} {}", candidate_vote_bank.slot(), fork_weight);
+                info!(
+                    "voting: {} {:.1}%",
+                    candidate_vote_bank.slot(),
+                    100.0 * fork_weight
+                );
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((candidate_vote_bank.clone(), switch_fork_decision)),
                     reset_bank: Some(candidate_vote_bank.clone()),
