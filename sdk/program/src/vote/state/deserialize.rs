@@ -17,60 +17,46 @@ use {
 // XXX TODO look into arbitrary and rustfuzz for testing
 // XXX maybe i should to move this files contents back into super because i import several siblings
 
-// this is an internal-use-only enum for parser branching, for clarity over ad hoc booleans
-// the From instance is only to ensure both enums advance in lockstep, we dont use it
-// XXX i originally added this enum expecting to parse more things differently based on version... might remove
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-enum InputVersion {
-    V0_23_5 = 0,
-    V1_14_11,
-    Current,
-}
-impl From<VoteStateVersions> for InputVersion {
-    fn from(version: VoteStateVersions) -> Self {
-        match version {
-            VoteStateVersions::V0_23_5(_) => InputVersion::V0_23_5,
-            VoteStateVersions::V1_14_11(_) => InputVersion::V1_14_11,
-            VoteStateVersions::Current(_) => InputVersion::Current,
-        }
-    }
-}
-
-pub(super) fn deserialize_vote_state_into(
+// XXX this becomes same fn in mod.rs
+pub(super) fn deserialize_into(
     input: &[u8],
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     let mut cursor = Cursor::new(input);
 
     let variant = deser_u32(&mut cursor)?;
-    match InputVersion::from_u32(variant) {
-        Some(version) if version == InputVersion::Current || version == InputVersion::V1_14_11 => {
-            deserialize_modern_vote_state_into(input, &mut cursor, vote_state, version)
-        }
-        Some(InputVersion::V0_23_5) => deserialize_vote_state_0_23_5_into(&mut cursor, vote_state),
+    match variant {
+        // 0_23_5. not supported; these should not exist on mainnet
+        0 => Err(InstructionError::InvalidAccountData),
+        // 1_14_11. substantially different layout and data
+        1 => deserialize_vote_state_into(input, &mut cursor, vote_state, false),
+        // Current. the only difference is the addition of a slot-latency to each vote
+        2 => deserialize_vote_state_into(input, &mut cursor, vote_state, true),
         _ => Err(InstructionError::InvalidAccountData),
     }
 }
 
-fn deserialize_modern_vote_state_into(
+fn deserialize_vote_state_into(
     input: &[u8],
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
-    version: InputVersion,
+    has_latency: bool,
 ) -> Result<(), InstructionError> {
     vote_state.node_pubkey = deser_pubkey(cursor)?;
     vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
     vote_state.commission = deser_u8(cursor)?;
-    deser_votes_into(cursor, vote_state, version)?;
+    deser_votes_into(cursor, vote_state, has_latency)?;
     vote_state.root_slot = deser_maybe_u64(cursor)?;
     deser_authorized_voters_into(cursor, vote_state)?;
 
     // `serialized_size()` *must* be used here because of alignment
-    // XXX check if this costs much compute tho and hardcode if so
-    // XXX checked add
-    let position_after_circbuf = cursor.position()
-        + serialized_size(&vote_state.prior_voters)
-            .map_err(|_| InstructionError::InvalidAccountData)?;
+    let position_after_circbuf = cursor
+        .position()
+        .checked_add(
+            serialized_size(&vote_state.prior_voters)
+                .map_err(|_| InstructionError::InvalidAccountData)?,
+        )
+        .ok_or(InstructionError::InvalidAccountData)?;
 
     match input[position_after_circbuf as usize - 1] {
         0 => deser_prior_voters_into(cursor, vote_state)?,
@@ -78,34 +64,6 @@ fn deserialize_modern_vote_state_into(
         _ => return Err(InstructionError::InvalidAccountData),
     }
 
-    deser_epoch_credits_into(cursor, vote_state)?;
-    deser_last_timestamp_into(cursor, vote_state)?;
-
-    Ok(())
-}
-
-fn deserialize_vote_state_0_23_5_into(
-    cursor: &mut Cursor<&[u8]>,
-    vote_state: &mut VoteState,
-) -> Result<(), InstructionError> {
-    vote_state.node_pubkey = deser_pubkey(cursor)?;
-
-    let authorized_voter = deser_pubkey(cursor)?;
-    let authorized_voter_epoch = deser_u64(cursor)?;
-    vote_state
-        .authorized_voters
-        .insert(authorized_voter_epoch, authorized_voter);
-
-    // skip `prior_voters` in keeping with the behavior of `convert_to_current()`
-    // `size_of()` is ok here because theres no bool, and we avoid an allocation
-    // XXX checked add
-    let position_after_circbuf = cursor.position()
-        + std::mem::size_of::<LegacyCircBuf<(Pubkey, Epoch, Epoch, Slot)>>() as u64;
-    cursor.set_position(position_after_circbuf);
-
-    vote_state.authorized_withdrawer = deser_pubkey(cursor)?;
-    vote_state.commission = deser_u8(cursor)?;
-    vote_state.root_slot = deser_maybe_u64(cursor)?;
     deser_epoch_credits_into(cursor, vote_state)?;
     deser_last_timestamp_into(cursor, vote_state)?;
 
@@ -174,16 +132,12 @@ fn deser_pubkey(cursor: &mut Cursor<&[u8]>) -> Result<Pubkey, InstructionError> 
 fn deser_votes_into(
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
-    input_version: InputVersion,
+    has_latency: bool,
 ) -> Result<(), InstructionError> {
     let vote_count = deser_u64(cursor)?;
 
     for _ in 0..vote_count {
-        let latency = if input_version > InputVersion::V1_14_11 {
-            deser_u8(cursor)?
-        } else {
-            0
-        };
+        let latency = if has_latency { deser_u8(cursor)? } else { 0 };
 
         let slot = deser_u64(cursor)?;
         let confirmation_count = deser_u32(cursor)?;
