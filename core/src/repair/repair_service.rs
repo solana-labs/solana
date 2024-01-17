@@ -14,7 +14,6 @@ use {
             duplicate_repair_status::AncestorDuplicateSlotToRepair,
             outstanding_requests::OutstandingRequests,
             quic_endpoint::LocalRequest,
-            repair_service::shred::Nonce,
             repair_weight::RepairWeight,
             serve_repair::{
                 self, RepairProtocol, RepairRequestHeader, ServeRepair, ShredRepairType,
@@ -24,7 +23,6 @@ use {
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
-    rand::{thread_rng, Rng},
     solana_client::connection_cache::Protocol,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -690,6 +688,7 @@ impl RepairService {
         slot: u64,
         shred_index: u64,
         repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) {
         let peer_repair_addr = cluster_info
             .lookup_contact_info(&pubkey, |node| node.serve_repair(Protocol::UDP))
@@ -702,6 +701,7 @@ impl RepairService {
             slot,
             shred_index,
             repair_socket,
+            outstanding_repair_requests,
         );
     }
 
@@ -712,10 +712,15 @@ impl RepairService {
         slot: u64,
         shred_index: u64,
         repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) {
         // Setup repair request
-        let nonce = thread_rng().gen_range(0..Nonce::MAX);
         let identity_keypair = cluster_info.keypair();
+        let repair_request = ShredRepairType::Shred(slot, shred_index);
+        let nonce = outstanding_repair_requests
+            .write()
+            .unwrap()
+            .add_request(repair_request, timestamp());
 
         // Create repair request
         let header = RepairRequestHeader::new(cluster_info.id(), pubkey, timestamp(), nonce);
@@ -957,6 +962,7 @@ mod test {
         let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let address = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let outstanding_repair_requests = Arc::new(RwLock::new(OutstandingShredRepairs::default()));
 
         // Send a repair request
         RepairService::request_repair_for_shred_from_address(
@@ -966,6 +972,7 @@ mod test {
             slot,
             shred_index,
             &sender,
+            outstanding_repair_requests,
         );
 
         // Receive and translate repair packet

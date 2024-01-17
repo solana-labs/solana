@@ -29,7 +29,7 @@ use {
         collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
-        net::{SocketAddr, UdpSocket},
+        net::SocketAddr,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::{self, Builder},
@@ -48,7 +48,6 @@ pub struct AdminRpcRequestMetadata {
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
-    pub repair_socket: Arc<UdpSocket>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -513,7 +512,8 @@ impl AdminRpc for AdminRpcImpl {
                 pubkey,
                 slot,
                 shred_index,
-                &meta.repair_socket.clone(),
+                &post_init.repair_socket.clone(),
+                post_init.outstanding_repair_requests.clone(),
             );
             Ok(())
         })
@@ -927,10 +927,13 @@ mod tests {
                     vote_account,
                     repair_whitelist,
                     notifies: Vec::new(),
+                    repair_socket: Arc::new(std::net::UdpSocket::bind("0.0.0.0:0").unwrap()),
+                    outstanding_repair_requests: Arc::<
+                        RwLock<repair_service::OutstandingShredRepairs>,
+                    >::default(),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,
-                repair_socket: Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap()),
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());

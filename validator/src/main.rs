@@ -1709,6 +1709,20 @@ pub fn main() {
         } else {
             (None, None)
         };
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
+            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            post_init: admin_service_post_init.clone(),
+            tower_storage: validator_config.tower_storage.clone(),
+            staked_nodes_overrides,
+            rpc_to_plugin_manager_sender,
+        },
+    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
@@ -1790,24 +1804,6 @@ pub fn main() {
         bind_address,
         public_tpu_addr,
         public_tpu_forwards_addr,
-    );
-
-    let repair_socket: Arc<std::net::UdpSocket> =
-        Arc::new(node.sockets.repair.try_clone().unwrap());
-    admin_rpc_service::run(
-        &ledger_path,
-        admin_rpc_service::AdminRpcRequestMetadata {
-            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
-            start_time: std::time::SystemTime::now(),
-            validator_exit: validator_config.validator_exit.clone(),
-            start_progress: start_progress.clone(),
-            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
-            post_init: admin_service_post_init.clone(),
-            tower_storage: validator_config.tower_storage.clone(),
-            staked_nodes_overrides,
-            rpc_to_plugin_manager_sender,
-            repair_socket,
-        },
     );
 
     if restricted_repair_only_mode {
