@@ -591,15 +591,15 @@ impl JsonRpcRequestProcessor {
 
         let bank = self.get_bank_with_config(slot_context)?;
 
-        let mut reward_map: HashMap<String, (Reward, Slot)> = {
-            let first_confirmed_block_in_epoch = *self
-                .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
-                .await?
-                .first()
-                .ok_or(RpcCustomError::BlockNotAvailable {
-                    slot: first_slot_in_epoch,
-                })?;
+        let first_confirmed_block_in_epoch = *self
+            .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
+            .await?
+            .first()
+            .ok_or(RpcCustomError::BlockNotAvailable {
+                slot: first_slot_in_epoch,
+            })?;
 
+        let mut reward_map: HashMap<String, (Reward, Slot)> = {
             let addresses: Vec<String> =
                 addresses.iter().map(|pubkey| pubkey.to_string()).collect();
 
@@ -645,15 +645,15 @@ impl JsonRpcRequestProcessor {
 
             let block_list = self
                 .get_blocks_with_limit(
-                    first_slot_in_epoch,
-                    partition_data.num_partitions + 1,
+                    first_confirmed_block_in_epoch + 1,
+                    partition_data.num_partitions,
                     config.commitment,
                 )
                 .await?;
 
             for (partition_index, addresses) in partition_index_addresses.iter() {
                 let slot = *block_list
-                    .get(partition_index.saturating_add(1))
+                    .get(*partition_index)
                     .ok_or_else(Error::internal_error)?;
 
                 let index_reward_map = self.get_reward_map(slot, addresses, &config).await?;
