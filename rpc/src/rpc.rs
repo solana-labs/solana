@@ -2291,7 +2291,7 @@ fn get_encoded_account(
     data_slice: Option<UiDataSliceConfig>,
     overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> Result<Option<UiAccount>> {
-    match account_resolver::get_account(pubkey, bank, overwrite_accounts) {
+    match account_resolver::get_account_from_overwrites_or_bank(pubkey, bank, overwrite_accounts) {
         Some(account) => {
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
