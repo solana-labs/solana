@@ -149,7 +149,6 @@ fn read_prior_voters_into(
 
         if item == (Pubkey::default(), 0, 0) {
             encountered_null_voter = true;
-            continue;
         } else if encountered_null_voter {
             // `prior_voters` should never be sparse
             return Err(InstructionError::InvalidAccountData);
