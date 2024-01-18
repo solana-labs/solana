@@ -2,9 +2,17 @@
 
 clientToRun="$1"
 benchTpsExtraArgs="$2"
-clientType="${3:-thin-client}"
+clientType=
 
-shift 3
+# check if benchTpsExtraArgs is set. if not then it will get set to client-type. Which then needs to get handled appropriately
+if [[ "$benchTpsExtraArgs" == "thin-client" || "$benchTpsExtraArgs" == "tpu-client" || "$benchTpsExtraArgs" == "rpc-client" ]]; then
+    clientType=$benchTpsExtraArgs
+    benchTpsExtraArgs=
+    shift 2
+else
+    clientType="${3:-thin-client}"
+    shift 3
+fi
 
 runtime_args=()
 while [[ -n $1 ]]; do
