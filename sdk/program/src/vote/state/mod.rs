@@ -2,6 +2,8 @@
 
 #[cfg(test)]
 use crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET;
+#[cfg(not(target_os = "solana"))]
+use bincode::deserialize;
 use {
     crate::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -12,7 +14,7 @@ use {
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
-    bincode::{deserialize, serialize_into, ErrorKind},
+    bincode::{serialize_into, ErrorKind},
     serde_derive::{Deserialize, Serialize},
     std::{collections::VecDeque, fmt::Debug, io::Cursor},
 };
