@@ -713,6 +713,7 @@ mod tests {
             .decision_maker
             .make_consume_or_forward_decision();
         assert!(matches!(decision, BufferedPacketsDecision::Consume(_)));
+        assert!(scheduler_controller.receive_completed().is_ok());
         assert!(scheduler_controller.receive_and_buffer_packets(&decision));
         assert!(scheduler_controller.process_transactions(&decision).is_ok());
     }
