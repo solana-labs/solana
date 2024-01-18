@@ -523,12 +523,16 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    async fn get_reward_map(
+    async fn get_reward_map<F>(
         &self,
         slot: Slot,
         addresses: &[String],
+        reward_type_filter: F,
         config: &RpcEpochConfig,
-    ) -> Result<HashMap<String, (Reward, Slot)>> {
+    ) -> Result<HashMap<String, (Reward, Slot)>>
+    where
+        F: Fn(RewardType) -> bool,
+    {
         let Ok(Some(block)) = self
             .get_block(
                 slot,
@@ -543,12 +547,11 @@ impl JsonRpcRequestProcessor {
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|reward| match reward.reward_type? {
-                RewardType::Staking | RewardType::Voting => addresses
-                    .contains(&reward.pubkey)
-                    .then(|| (reward.clone().pubkey, (reward, slot))),
-                _ => None,
+            .filter(|reward| {
+                reward.reward_type.is_some_and(reward_type_filter)
+                    && addresses.contains(&reward.pubkey)
             })
+            .map(|reward| (reward.clone().pubkey, (reward, slot)))
             .collect())
     }
 
@@ -590,6 +593,9 @@ impl JsonRpcRequestProcessor {
         }
 
         let bank = self.get_bank_with_config(slot_context)?;
+        let partitioned_epoch_reward_enabled = bank
+            .feature_set
+            .is_active(&feature_set::enable_partitioned_epoch_reward::id());
 
         let first_confirmed_block_in_epoch = *self
             .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
@@ -603,14 +609,19 @@ impl JsonRpcRequestProcessor {
             let addresses: Vec<String> =
                 addresses.iter().map(|pubkey| pubkey.to_string()).collect();
 
-            self.get_reward_map(first_confirmed_block_in_epoch, &addresses, &config)
-                .await?
+            self.get_reward_map(
+                first_confirmed_block_in_epoch,
+                &addresses,
+                |reward_type| -> bool {
+                    reward_type == RewardType::Voting
+                        || (!partitioned_epoch_reward_enabled && reward_type == RewardType::Staking)
+                },
+                &config,
+            )
+            .await?
         };
 
-        if bank
-            .feature_set
-            .is_active(&feature_set::enable_partitioned_epoch_reward::id())
-        {
+        if partitioned_epoch_reward_enabled {
             let partition_data_address = get_epoch_rewards_partition_data_address(rewards_epoch);
             let partition_data_account =
                 bank.get_account(&partition_data_address)
@@ -656,7 +667,14 @@ impl JsonRpcRequestProcessor {
                     .get(*partition_index)
                     .ok_or_else(Error::internal_error)?;
 
-                let index_reward_map = self.get_reward_map(slot, addresses, &config).await?;
+                let index_reward_map = self
+                    .get_reward_map(
+                        slot,
+                        addresses,
+                        |reward_type| -> bool { reward_type == RewardType::Staking },
+                        &config,
+                    )
+                    .await?;
                 reward_map.extend(index_reward_map);
             }
         }
