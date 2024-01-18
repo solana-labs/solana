@@ -653,14 +653,6 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     }
 }
 
-/// Write the snapshot version as a file into the bank snapshot directory
-pub fn write_snapshot_version_file(
-    version_file: impl AsRef<Path>,
-    version: SnapshotVersion,
-) -> std::io::Result<()> {
-    fs_err::write(version_file, version.as_str().as_bytes())
-}
-
 /// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
@@ -696,7 +688,6 @@ pub fn archive_snapshot_package(
 
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
-    let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
 
     // Create staging/accounts/
     fs_err::create_dir_all(&staging_accounts_dir)
@@ -725,6 +716,12 @@ pub fn archive_snapshot_package(
     symlink::symlink_file(src_status_cache, staging_status_cache)
         .map_err(|e| SnapshotError::IoWithSource(e, "create status cache symlink"))?;
 
+    // The bank snapshot has the version file, so symlink it to the correct staging path
+    let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
+    let src_version_file = src_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+    symlink::symlink_file(src_version_file, staging_version_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create version file symlink"))?;
+
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.snapshot_storages.iter() {
         storage.flush()?;
@@ -744,9 +741,6 @@ pub fn archive_snapshot_package(
             return Err(SnapshotError::StoragePathSymlinkInvalid(output_path));
         }
     }
-
-    write_snapshot_version_file(staging_version_file, snapshot_package.snapshot_version)
-        .map_err(|err| SnapshotError::IoWithSource(err, "write snapshot version file"))?;
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
@@ -2550,7 +2544,7 @@ mod tests {
             fs_err::File::create(status_cache_file).unwrap();
 
             let version_path = snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-            write_snapshot_version_file(version_path, SnapshotVersion::default()).unwrap();
+            fs_err::write(version_path, SnapshotVersion::default().as_str().as_bytes()).unwrap();
 
             // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
             let state_complete_path = snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);

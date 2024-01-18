@@ -20,9 +20,9 @@ use {
             get_storages_to_serialize, hard_link_storages_to_snapshot,
             rebuild_storages_from_snapshot_dir, serialize_snapshot_data_file,
             verify_and_unarchive_snapshots, verify_unpacked_snapshots_dir_and_version,
-            write_snapshot_version_file, AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo,
-            BankSnapshotType, SnapshotError, SnapshotRootPaths, SnapshotVersion,
-            StorageAndNextAppendVecId, UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
+            AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotType, SnapshotError,
+            SnapshotRootPaths, SnapshotVersion, StorageAndNextAppendVecId,
+            UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
         },
         status_cache,
     },
@@ -135,9 +135,11 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?);
 
         let version_path = bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_VERSION_FILENAME);
-        let (_, measure_write_version_file) =
-            measure!(write_snapshot_version_file(version_path, snapshot_version)
-                .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?);
+        let (_, measure_write_version_file) = measure!(fs_err::write(
+            version_path,
+            snapshot_version.as_str().as_bytes()
+        )
+        .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?);
 
         // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
         let state_complete_path =
