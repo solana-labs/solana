@@ -3295,6 +3295,7 @@ impl ReplayStage {
                     let ComputedBankState {
                         voted_stakes,
                         total_stake,
+                        fork_stake,
                         lockout_intervals,
                         my_latest_landed_vote,
                         ..
@@ -3302,6 +3303,7 @@ impl ReplayStage {
                     let stats = progress
                         .get_fork_stats_mut(bank_slot)
                         .expect("All frozen banks must exist in the Progress map");
+                    stats.fork_stake = fork_stake;
                     stats.total_stake = total_stake;
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
@@ -3312,15 +3314,15 @@ impl ReplayStage {
                     datapoint_info!(
                         "bank_weight",
                         ("slot", bank_slot, i64),
-                        // u128 too large for influx, convert to hex
-                        ("weight", format!("{:X}", stats.weight), String),
+                        ("fork_stake", stats.fork_stake, i64),
+                        ("fork_weight", stats.fork_weight(), f64),
                     );
+
                     info!(
-                        "{} slot_weight: {} {} {} {}",
+                        "{} slot_weight: {} {:.1}% {}",
                         my_vote_pubkey,
                         bank_slot,
-                        stats.weight,
-                        stats.fork_weight,
+                        100.0 * stats.fork_weight(), // percentage fork_stake in total_stake
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                 }
@@ -3677,7 +3679,7 @@ impl ReplayStage {
                     fork_stats.vote_threshold,
                     propagated_stats.propagated_validators_stake,
                     propagated_stats.is_leader_slot,
-                    fork_stats.weight,
+                    fork_stats.fork_weight(),
                     fork_stats.total_stake,
                     propagated_stats.total_epoch_stake,
                 )
@@ -3712,7 +3714,11 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
-                info!("voting: {} {}", candidate_vote_bank.slot(), fork_weight);
+                info!(
+                    "voting: {} {:.1}%",
+                    candidate_vote_bank.slot(),
+                    100.0 * fork_weight
+                );
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((candidate_vote_bank.clone(), switch_fork_decision)),
                     reset_bank: Some(candidate_vote_bank.clone()),
@@ -5427,12 +5433,12 @@ pub(crate) mod tests {
                 .progress
                 .get_fork_stats(pair[0].slot())
                 .unwrap()
-                .fork_weight;
+                .fork_weight();
             let second = vote_simulator
                 .progress
                 .get_fork_stats(pair[1].slot())
                 .unwrap()
-                .fork_weight;
+                .fork_weight();
             assert!(second >= first);
         }
         for bank in frozen_banks {

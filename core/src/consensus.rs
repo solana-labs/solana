@@ -156,8 +156,7 @@ pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
-    #[allow(dead_code)]
-    bank_weight: u128,
+    pub fork_stake: Stake,
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
@@ -319,7 +318,7 @@ impl Tower {
         let mut vote_slots = HashSet::new();
         let mut voted_stakes = HashMap::new();
         let mut total_stake = 0;
-        let mut bank_weight = 0;
+
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = LockoutIntervals::new();
@@ -390,7 +389,6 @@ impl Tower {
             process_slot_vote_unchecked(&mut vote_state, bank_slot);
 
             for vote in &vote_state.votes {
-                bank_weight += vote.lockout.lockout() as u128 * voted_stake as u128;
                 vote_slots.insert(vote.slot());
             }
 
@@ -399,13 +397,11 @@ impl Tower {
                     let vote =
                         Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
                     trace!("ROOT: {}", vote.slot());
-                    bank_weight += vote.lockout() as u128 * voted_stake as u128;
                     vote_slots.insert(vote.slot());
                 }
             }
             if let Some(root) = vote_state.root_slot {
                 let vote = Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
-                bank_weight += vote.lockout() as u128 * voted_stake as u128;
                 vote_slots.insert(vote.slot());
             }
 
@@ -437,10 +433,26 @@ impl Tower {
         // TODO: populate_ancestor_voted_stakes only adds zeros. Comment why
         // that is necessary (if so).
         Self::populate_ancestor_voted_stakes(&mut voted_stakes, vote_slots, ancestors);
+
+        // As commented above, since the votes at current bank_slot are
+        // simulated votes, the voted_stake for `bank_slot` is not populated.
+        // Therefore, we use the voted_stake for the parent of bank_slot as the
+        // `fork_stake` instead.
+        let fork_stake = ancestors
+            .get(&bank_slot)
+            .and_then(|ancestors| {
+                ancestors
+                    .iter()
+                    .max()
+                    .and_then(|parent| voted_stakes.get(parent))
+                    .copied()
+            })
+            .unwrap_or(0);
+
         ComputedBankState {
             voted_stakes,
             total_stake,
-            bank_weight,
+            fork_stake,
             lockout_intervals,
             my_latest_landed_vote,
         }
@@ -2271,7 +2283,6 @@ pub mod test {
         let ComputedBankState {
             voted_stakes,
             total_stake,
-            bank_weight,
             ..
         } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
@@ -2286,10 +2297,6 @@ pub mod test {
         let mut new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(0);
         new_votes.sort();
         assert_eq!(new_votes, account_latest_votes);
-
-        // Each account has 1 vote in it. After simulating a vote in collect_vote_lockouts,
-        // the account will have 2 votes, with lockout 2 + 4 = 6. So expected weight for
-        assert_eq!(bank_weight, 12)
     }
 
     #[test]
@@ -2314,21 +2321,15 @@ pub mod test {
             ancestors.insert(i as u64, (0..i as u64).collect());
         }
         let root = Lockout::new_with_confirmation_count(0, MAX_LOCKOUT_HISTORY as u32);
-        let root_weight = root.lockout() as u128;
-        let vote_account_expected_weight = tower
-            .vote_state
-            .votes
-            .iter()
-            .map(|v| v.lockout.lockout() as u128)
-            .sum::<u128>()
-            + root_weight;
-        let expected_bank_weight = 2 * vote_account_expected_weight;
+        let expected_bank_stake = 2;
+        let expected_total_stake = 2;
         assert_eq!(tower.vote_state.root_slot, Some(0));
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let ComputedBankState {
             voted_stakes,
-            bank_weight,
+            fork_stake,
+            total_stake,
             ..
         } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
@@ -2342,8 +2343,9 @@ pub mod test {
             assert_eq!(voted_stakes[&(i as u64)], 2);
         }
 
-        // should be the sum of all the weights for root
-        assert_eq!(bank_weight, expected_bank_weight);
+        // should be the sum of all voted stake for on the fork
+        assert_eq!(fork_stake, expected_bank_stake);
+        assert_eq!(total_stake, expected_total_stake);
         let mut new_votes =
             latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root.slot());
         new_votes.sort();
