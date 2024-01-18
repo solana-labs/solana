@@ -77,7 +77,7 @@ fn read_maybe_u64(cursor: &mut Cursor<&[u8]>) -> Result<Option<u64>, Instruction
     let variant = read_u8(cursor)?;
     match variant {
         0 => Ok(None),
-        1 => read_u64(cursor).map(|u| Some(u)),
+        1 => read_u64(cursor).map(Some),
         _ => Err(InstructionError::InvalidAccountData),
     }
 }
@@ -158,8 +158,13 @@ fn read_prior_voters_into(
         return Err(InstructionError::InvalidAccountData);
     }
 
-    let is_empty = read_u8(cursor)?;
-    if vote_state.prior_voters.is_empty != (is_empty != 0) {
+    let is_empty_byte = read_u8(cursor)?;
+    let is_empty = match is_empty_byte {
+        0 => false,
+        1 => true,
+        _ => return Err(InstructionError::InvalidAccountData),
+    };
+    if vote_state.prior_voters.is_empty != is_empty {
         return Err(InstructionError::InvalidAccountData);
     }
 
