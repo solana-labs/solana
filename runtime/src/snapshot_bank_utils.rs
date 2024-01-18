@@ -223,8 +223,9 @@ pub fn bank_fields_from_snapshot_archives(
     incremental_snapshot_archives_dir: impl AsRef<Path>,
 ) -> snapshot_utils::Result<BankFieldsToDeserialize> {
     let full_snapshot_archive_info =
-        get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
-            .ok_or(SnapshotError::NoSnapshotArchives)?;
+        get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir).ok_or_else(|| {
+            SnapshotError::NoSnapshotArchives(full_snapshot_archives_dir.as_ref().to_path_buf())
+        })?;
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
         &incremental_snapshot_archives_dir,
@@ -432,8 +433,9 @@ pub fn bank_from_latest_snapshot_archives(
     Option<IncrementalSnapshotArchiveInfo>,
 )> {
     let full_snapshot_archive_info =
-        get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
-            .ok_or(SnapshotError::NoSnapshotArchives)?;
+        get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir).ok_or_else(|| {
+            SnapshotError::NoSnapshotArchives(full_snapshot_archives_dir.as_ref().to_path_buf())
+        })?;
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
         &incremental_snapshot_archives_dir,

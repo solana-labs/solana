@@ -180,7 +180,7 @@ impl BankSnapshotInfo {
             SnapshotNewFromDirError::MissingVersionFile(version_path),
         ))?;
         let snapshot_version = SnapshotVersion::from_str(version_str.as_str())
-            .or(Err(SnapshotNewFromDirError::InvalidVersion))?;
+            .or(Err(SnapshotNewFromDirError::InvalidVersion(version_str)))?;
 
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
         let bank_snapshot_pre_path =
@@ -287,7 +287,7 @@ pub(crate) struct StorageAndNextAppendVecId {
 #[allow(clippy::large_enum_variant)]
 pub enum SnapshotError {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] IoError),
 
     #[error("AccountsFile error: {0}")]
     AccountsFileError(#[from] AccountsFileError),
@@ -301,31 +301,31 @@ pub enum SnapshotError {
     #[error("archive generation failure {0}")]
     ArchiveGenerationFailure(ExitStatus),
 
-    #[error("storage path symlink is invalid")]
-    StoragePathSymlinkInvalid,
+    #[error("storage path symlink is invalid '{0}'")]
+    StoragePathSymlinkInvalid(PathBuf),
 
     #[error("Unpack error: {0}")]
     UnpackError(#[from] UnpackError),
 
     #[error("source({1}) - I/O error: {0}")]
-    IoWithSource(std::io::Error, &'static str),
+    IoWithSource(IoError, &'static str),
 
-    #[error("could not get file name from path: {0}")]
+    #[error("could not get file name from path '{0}'")]
     PathToFileNameError(PathBuf),
 
-    #[error("could not get str from file name: {0}")]
+    #[error("could not get str from file name '{0}'")]
     FileNameToStrError(PathBuf),
 
-    #[error("could not parse snapshot archive's file name: {0}")]
+    #[error("could not parse snapshot archive's file name '{0}'")]
     ParseSnapshotArchiveFileNameError(String),
 
     #[error("snapshots are incompatible: full snapshot slot ({0}) and incremental snapshot base slot ({1}) do not match")]
     MismatchedBaseSlot(Slot, Slot),
 
-    #[error("no snapshot archives to load from")]
-    NoSnapshotArchives,
+    #[error("no snapshot archives to load from '{0}'")]
+    NoSnapshotArchives(PathBuf),
 
-    #[error("snapshot has mismatch: deserialized bank: {:?}, snapshot archive info: {:?}", .0, .1)]
+    #[error("snapshot has mismatch: deserialized bank: {0:?}, snapshot archive info: {1:?}")]
     MismatchedSlotHash((Slot, SnapshotHash), (Slot, SnapshotHash)),
 
     #[error("snapshot slot deltas are invalid: {0}")]
@@ -334,16 +334,16 @@ pub enum SnapshotError {
     #[error("bank_snapshot_info new_from_dir failed: {0}")]
     NewFromDir(#[from] SnapshotNewFromDirError),
 
-    #[error("invalid snapshot dir path: {0}")]
+    #[error("invalid snapshot dir path '{0}'")]
     InvalidSnapshotDirPath(PathBuf),
 
-    #[error("invalid AppendVec path: {0}")]
+    #[error("invalid AppendVec path '{0}'")]
     InvalidAppendVecPath(PathBuf),
 
-    #[error("invalid account path: {0}")]
+    #[error("invalid account path '{0}'")]
     InvalidAccountPath(PathBuf),
 
-    #[error("no valid snapshot dir found under {0}")]
+    #[error("no valid snapshot dir found under '{0}'")]
     NoSnapshotSlotDir(PathBuf),
 
     #[error("snapshot dir account paths mismatching")]
@@ -355,22 +355,22 @@ pub enum SnapshotError {
 
 #[derive(Error, Debug)]
 pub enum SnapshotNewFromDirError {
-    #[error("invalid bank snapshot directory {0}")]
+    #[error("invalid bank snapshot directory '{0}'")]
     InvalidBankSnapshotDir(PathBuf),
 
-    #[error("missing status cache file {0}")]
+    #[error("missing status cache file '{0}'")]
     MissingStatusCacheFile(PathBuf),
 
-    #[error("missing version file {0}")]
+    #[error("missing version file '{0}'")]
     MissingVersionFile(PathBuf),
 
-    #[error("invalid snapshot version")]
-    InvalidVersion,
+    #[error("invalid snapshot version '{0}'")]
+    InvalidVersion(String),
 
-    #[error("snapshot directory incomplete {0}")]
+    #[error("snapshot directory incomplete '{0}'")]
     IncompleteDir(PathBuf),
 
-    #[error("missing snapshot file {0}")]
+    #[error("missing snapshot file '{0}'")]
     MissingSnapshotFile(PathBuf),
 }
 
@@ -404,11 +404,11 @@ pub enum VerifySlotDeltasError {
 /// Errors that can happen in `add_bank_snapshot()`
 #[derive(Error, Debug)]
 pub enum AddBankSnapshotError {
-    #[error("bank snapshot dir already exists: {0}")]
+    #[error("bank snapshot dir already exists '{0}'")]
     SnapshotDirAlreadyExists(PathBuf),
 
     #[error("failed to create snapshot dir: {0}")]
-    CreateSnapshotDir(#[source] std::io::Error),
+    CreateSnapshotDir(#[source] IoError),
 
     #[error("failed to hard link storages: {0}")]
     HardLinkStorages(#[source] HardLinkStoragesToSnapshotError),
@@ -420,17 +420,17 @@ pub enum AddBankSnapshotError {
     SerializeStatusCache(#[source] Box<SnapshotError>),
 
     #[error("failed to write snapshot version file: {0}")]
-    WriteSnapshotVersionFile(#[source] std::io::Error),
+    WriteSnapshotVersionFile(#[source] IoError),
 
     #[error("failed to mark snapshot as 'complete': {0}")]
-    CreateStateCompleteFile(#[source] std::io::Error),
+    CreateStateCompleteFile(#[source] IoError),
 }
 
 /// Errors that can happen in `hard_link_storages_to_snapshot()`
 #[derive(Error, Debug)]
 pub enum HardLinkStoragesToSnapshotError {
     #[error("failed to create accounts hard links dir: {0}")]
-    CreateAccountsHardLinksDir(#[source] std::io::Error),
+    CreateAccountsHardLinksDir(#[source] IoError),
 
     #[error("failed to flush storage: {0}")]
     FlushStorage(#[source] AccountsFileError),
@@ -439,21 +439,21 @@ pub enum HardLinkStoragesToSnapshotError {
     GetSnapshotHardLinksDir(#[from] GetSnapshotAccountsHardLinkDirError),
 
     #[error("failed to hard link storage: {0}")]
-    HardLinkStorage(#[source] std::io::Error),
+    HardLinkStorage(#[source] IoError),
 }
 
 /// Errors that can happen in `get_snapshot_accounts_hardlink_dir()`
 #[derive(Error, Debug)]
 pub enum GetSnapshotAccountsHardLinkDirError {
-    #[error("invalid account storage path: {0}")]
+    #[error("invalid account storage path '{0}'")]
     GetAccountPath(PathBuf),
 
     #[error("failed to create the snapshot hard link dir: {0}")]
-    CreateSnapshotHardLinkDir(#[source] std::io::Error),
+    CreateSnapshotHardLinkDir(#[source] IoError),
 
-    #[error("failed to symlink snapshot hard link dir {link} to {original}: {source}")]
+    #[error("failed to symlink snapshot hard link dir '{link}' to '{original}': {source}")]
     SymlinkSnapshotHardLinkDir {
-        source: std::io::Error,
+        source: IoError,
         original: PathBuf,
         link: PathBuf,
     },
@@ -741,7 +741,7 @@ pub fn archive_snapshot_package(
         symlink::symlink_file(storage_path, &output_path)
             .map_err(|e| SnapshotError::IoWithSource(e, "create storage symlink"))?;
         if !output_path.is_file() {
-            return Err(SnapshotError::StoragePathSymlinkInvalid);
+            return Err(SnapshotError::StoragePathSymlinkInvalid(output_path));
         }
     }
 
