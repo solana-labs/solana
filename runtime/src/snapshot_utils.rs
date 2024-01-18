@@ -641,12 +641,15 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
             {
                 let path = entry.path();
                 let result = if path.is_dir() {
-                    fs_err::remove_dir_all(path)
+                    fs::remove_dir_all(&path)
                 } else {
-                    fs_err::remove_file(path)
+                    fs::remove_file(&path)
                 };
                 if let Err(err) = result {
-                    warn!("Failed to remove temporary snapshot archive: {err}");
+                    warn!(
+                        "Failed to remove temporary snapshot archive '{}': {err}",
+                        path.display(),
+                    );
                 }
             }
         }
