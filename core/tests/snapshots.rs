@@ -323,14 +323,11 @@ fn test_bank_forks_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clu
 
 fn goto_end_of_slot(bank: &Bank) {
     let mut tick_hash = bank.last_blockhash();
-    loop {
+    while !bank.is_complete() {
         tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
         bank.register_tick_for_test(&tick_hash);
-        if tick_hash == bank.last_blockhash() {
-            bank.freeze();
-            return;
-        }
     }
+    bank.freeze();
 }
 
 #[test_case(V1_2_0, Development)]
