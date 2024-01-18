@@ -706,7 +706,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "batch id 0 is not being tracked")]
     fn test_unexpected_batch_id() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             finished_consume_work_sender,
             ..
@@ -724,12 +724,12 @@ mod tests {
             })
             .unwrap();
 
-        central_scheduler_banking_stage.run().unwrap();
+        scheduler_controller.run().unwrap();
     }
 
     #[test]
     fn test_schedule_consume_single_threaded_no_conflicts() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
             mint_keypair,
@@ -743,7 +743,7 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
+        let scheduler_thread = std::thread::spawn(move || scheduler_controller.run());
 
         // Send packet batch to the scheduler - should do nothing until we become the leader.
         let tx1 = create_and_fund_prioritized_transfer(
@@ -790,7 +790,7 @@ mod tests {
 
     #[test]
     fn test_schedule_consume_single_threaded_conflict() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
             mint_keypair,
@@ -804,7 +804,7 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
+        let scheduler_thread = std::thread::spawn(move || scheduler_controller.run());
 
         let pk = Pubkey::new_unique();
         let tx1 = create_and_fund_prioritized_transfer(
@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn test_schedule_consume_single_threaded_multi_batch() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
             mint_keypair,
@@ -866,7 +866,7 @@ mod tests {
             ..
         } = &test_frame;
 
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
+        let scheduler_thread = std::thread::spawn(move || scheduler_controller.run());
         poh_recorder
             .write()
             .unwrap()
@@ -927,7 +927,7 @@ mod tests {
 
     #[test]
     fn test_schedule_consume_simple_thread_selection() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(2);
+        let (test_frame, scheduler_controller) = create_test_frame(2);
         let TestFrame {
             bank,
             mint_keypair,
@@ -941,7 +941,7 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
+        let scheduler_thread = std::thread::spawn(move || scheduler_controller.run());
 
         // Send 4 transactions w/o conflicts. 2 should be scheduled on each thread
         let txs = (0..4)
@@ -996,7 +996,7 @@ mod tests {
 
     #[test]
     fn test_schedule_consume_retryable() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
             mint_keypair,
@@ -1011,7 +1011,7 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
+        let scheduler_thread = std::thread::spawn(move || scheduler_controller.run());
 
         // Send packet batch to the scheduler - should do nothing until we become the leader.
         let tx1 = create_and_fund_prioritized_transfer(
