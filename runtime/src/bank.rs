@@ -8535,14 +8535,11 @@ pub mod test_utils {
 
     pub fn goto_end_of_slot_with_scheduler(bank: &BankWithScheduler) {
         let mut tick_hash = bank.last_blockhash();
-        loop {
+        while !bank.is_complete() {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
             bank.register_tick(&tick_hash);
-            if tick_hash == bank.last_blockhash() {
-                bank.freeze();
-                return;
-            }
         }
+        bank.freeze();
     }
 
     pub fn update_vote_account_timestamp(
