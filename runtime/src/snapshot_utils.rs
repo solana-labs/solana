@@ -30,7 +30,7 @@ use {
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
-        fmt,
+        fmt, fs,
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
@@ -429,8 +429,8 @@ pub enum AddBankSnapshotError {
 /// Errors that can happen in `hard_link_storages_to_snapshot()`
 #[derive(Error, Debug)]
 pub enum HardLinkStoragesToSnapshotError {
-    #[error("failed to create accounts hard links dir: {0}")]
-    CreateAccountsHardLinksDir(#[source] IoError),
+    #[error("failed to create accounts hard links dir '{1}': {0}")]
+    CreateAccountsHardLinksDir(#[source] IoError, PathBuf),
 
     #[error("failed to flush storage: {0}")]
     FlushStorage(#[source] AccountsFileError),
@@ -438,8 +438,8 @@ pub enum HardLinkStoragesToSnapshotError {
     #[error("failed to get the snapshot's accounts hard link dir: {0}")]
     GetSnapshotHardLinksDir(#[from] GetSnapshotAccountsHardLinkDirError),
 
-    #[error("failed to hard link storage: {0}")]
-    HardLinkStorage(#[source] IoError),
+    #[error("failed to hard link storage from '{1}' to '{2}': {0}")]
+    HardLinkStorage(#[source] IoError, PathBuf, PathBuf),
 }
 
 /// Errors that can happen in `get_snapshot_accounts_hardlink_dir()`
@@ -1163,8 +1163,12 @@ pub fn hard_link_storages_to_snapshot(
     snapshot_storages: &[Arc<AccountStorageEntry>],
 ) -> std::result::Result<(), HardLinkStoragesToSnapshotError> {
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join(SNAPSHOT_ACCOUNTS_HARDLINKS);
-    fs_err::create_dir_all(&accounts_hardlinks_dir)
-        .map_err(HardLinkStoragesToSnapshotError::CreateAccountsHardLinksDir)?;
+    fs::create_dir_all(&accounts_hardlinks_dir).map_err(|err| {
+        HardLinkStoragesToSnapshotError::CreateAccountsHardLinksDir(
+            err,
+            accounts_hardlinks_dir.clone(),
+        )
+    })?;
 
     let mut account_paths: HashSet<PathBuf> = HashSet::new();
     for storage in snapshot_storages {
@@ -1182,8 +1186,9 @@ pub fn hard_link_storages_to_snapshot(
         // Use the storage slot and id to compose a consistent file name for the hard-link file.
         let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
         let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
-        fs_err::hard_link(&storage_path, &hard_link_path)
-            .map_err(HardLinkStoragesToSnapshotError::HardLinkStorage)?;
+        fs::hard_link(&storage_path, &hard_link_path).map_err(|err| {
+            HardLinkStoragesToSnapshotError::HardLinkStorage(err, storage_path, hard_link_path)
+        })?;
     }
     Ok(())
 }
