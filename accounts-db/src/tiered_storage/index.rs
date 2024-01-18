@@ -54,13 +54,20 @@ pub enum IndexBlockFormat {
 // Ensure there are no implicit padding bytes
 const _: () = assert!(std::mem::size_of::<IndexBlockFormat>() == 2);
 
+const PADDING_BUFFER: [u8; 8] = [0u8; 8];
+
 impl IndexBlockFormat {
     /// Persists the specified index_entries to the specified file and returns
     /// the total number of bytes written.
+    ///
+    /// If a Some value is passed via [`alignment`] argument, then the resulting
+    /// index block will write additional padding bytes to satisfy the alignment
+    /// requirement.
     pub fn write_index_block(
         &self,
         file: &TieredStorageFile,
         index_entries: &[AccountIndexWriterEntry<impl AccountOffset>],
+        alignment: Option<usize>,
     ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressesThenOffsets => {
@@ -70,6 +77,11 @@ impl IndexBlockFormat {
                 }
                 for index_entry in index_entries {
                     bytes_written += file.write_pod(&index_entry.offset)?;
+                }
+                if let Some(alignment) = alignment {
+                    assert!(alignment <= 8);
+                    let padding = (alignment - (bytes_written % alignment)) % alignment;
+                    bytes_written += file.write_bytes(&PADDING_BUFFER[0..padding])?;
                 }
                 Ok(bytes_written)
             }
@@ -183,7 +195,9 @@ mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
             let indexer = IndexBlockFormat::AddressesThenOffsets;
-            let cursor = indexer.write_index_block(&file, &index_entries).unwrap();
+            let cursor = indexer
+                .write_index_block(&file, &index_entries, None)
+                .unwrap();
             footer.owners_block_offset = cursor as u64;
         }
 

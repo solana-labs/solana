@@ -784,7 +784,7 @@ pub mod tests {
 
             let cursor = footer
                 .index_block_format
-                .write_index_block(&file, &index_writer_entries)
+                .write_index_block(&file, &index_writer_entries, Some(HOT_ACCOUNT_ALIGNMENT))
                 .unwrap();
             footer.owners_block_offset = cursor as u64;
             footer.write_footer_block(&file).unwrap();
@@ -965,7 +965,9 @@ pub mod tests {
             .collect();
 
         // create account data
-        const NUM_ACCOUNTS: usize = 20;
+        // Intentionally use an odd number of accounts here to test the
+        // index block padding.
+        const NUM_ACCOUNTS: usize = 19;
         let account_datas: Vec<_> = (0..NUM_ACCOUNTS)
             .map(|i| vec![i as u8; rng.gen_range(0..4096)])
             .collect();
@@ -1017,13 +1019,15 @@ pub mod tests {
                 .collect();
 
             // write index blocks
+            assert_eq!(current_offset % HOT_ACCOUNT_ALIGNMENT, 0);
             footer.index_block_offset = current_offset as u64;
             current_offset += footer
                 .index_block_format
-                .write_index_block(&file, &index_writer_entries)
+                .write_index_block(&file, &index_writer_entries, Some(HOT_ACCOUNT_ALIGNMENT))
                 .unwrap();
 
             // write owners block
+            assert_eq!(current_offset % HOT_ACCOUNT_ALIGNMENT, 0);
             footer.owners_block_offset = current_offset as u64;
             OwnersBlock::write_owners_block(&file, &owners).unwrap();
 
