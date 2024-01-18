@@ -553,7 +553,11 @@ fn open_blockstore_with_temporary_primary_access(
 pub fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
-    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
+
+    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size).unwrap_or_else(|err| {
+        eprintln!("Exiting. Failed to open genesis config: {err}");
+        exit(1);
+    })
 }
 
 pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
