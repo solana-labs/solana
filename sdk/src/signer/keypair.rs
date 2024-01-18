@@ -44,6 +44,11 @@ impl Keypair {
 
     /// Recovers a `Keypair` from a byte array
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+        if bytes.len() < ed25519_dalek::KEYPAIR_LENGTH {
+            return Err(ed25519_dalek::SignatureError::from_source(String::from(
+                "candidate keypair byte array is too short",
+            )));
+        }
         let secret =
             ed25519_dalek::SecretKey::from_bytes(&bytes[..ed25519_dalek::SECRET_KEY_LENGTH])?;
         let public =
