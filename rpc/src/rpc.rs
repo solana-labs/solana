@@ -527,7 +527,7 @@ impl JsonRpcRequestProcessor {
         &self,
         slot: Slot,
         addresses: &[String],
-        reward_type_filter: F,
+        reward_type_filter: &F,
         config: &RpcEpochConfig,
     ) -> Result<HashMap<String, (Reward, Slot)>>
     where
@@ -612,7 +612,7 @@ impl JsonRpcRequestProcessor {
             self.get_reward_map(
                 first_confirmed_block_in_epoch,
                 &addresses,
-                |reward_type| -> bool {
+                &|reward_type| -> bool {
                     reward_type == RewardType::Voting
                         || (!partitioned_epoch_reward_enabled && reward_type == RewardType::Staking)
                 },
@@ -671,7 +671,7 @@ impl JsonRpcRequestProcessor {
                     .get_reward_map(
                         slot,
                         addresses,
-                        |reward_type| -> bool { reward_type == RewardType::Staking },
+                        &|reward_type| -> bool { reward_type == RewardType::Staking },
                         &config,
                     )
                     .await?;
