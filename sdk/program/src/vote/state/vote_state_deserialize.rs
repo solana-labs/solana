@@ -22,7 +22,7 @@ pub(super) fn deserialize_vote_state_into(
     read_authorized_voters_into(cursor, vote_state)?;
 
     // `serialized_size()` must be used over `mem::size_of()` because of alignment
-    let position_after_circbuf = cursor
+    let position_after_prior_voters = cursor
         .position()
         .checked_add(
             serialized_size(&vote_state.prior_voters)
@@ -30,13 +30,13 @@ pub(super) fn deserialize_vote_state_into(
         )
         .ok_or(InstructionError::InvalidAccountData)?;
 
-    let is_empty_idx = position_after_circbuf
+    let is_empty_idx = position_after_prior_voters
         .checked_sub(1)
         .ok_or(InstructionError::InvalidAccountData)?;
 
     match input[is_empty_idx as usize] {
         0 => read_prior_voters_into(cursor, vote_state)?,
-        1 => cursor.set_position(position_after_circbuf),
+        1 => cursor.set_position(position_after_prior_voters),
         _ => return Err(InstructionError::InvalidAccountData),
     }
 
@@ -140,23 +140,26 @@ fn read_prior_voters_into(
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
-    for _ in 0..MAX_ITEMS {
+    let mut encountered_null_voter = false;
+    for i in 0..MAX_ITEMS {
         let prior_voter = read_pubkey(cursor)?;
         let from_epoch = read_u64(cursor)?;
         let until_epoch = read_u64(cursor)?;
         let item = (prior_voter, from_epoch, until_epoch);
 
-        // HANA someone from the core team should confirm this holds
-        match item {
-            (_, 0, 0) => (),
-            _ => vote_state.prior_voters.append(item),
+        if item == (Pubkey::default(), 0, 0) {
+            encountered_null_voter = true;
+            continue;
+        } else if encountered_null_voter {
+            // `prior_voters` should never be sparse
+            return Err(InstructionError::InvalidAccountData);
+        } else {
+            vote_state.prior_voters.buf[i] = item;
         }
     }
 
-    let idx = read_u64(cursor)?;
-    if vote_state.prior_voters.idx != idx as usize {
-        return Err(InstructionError::InvalidAccountData);
-    }
+    let idx = read_u64(cursor)? as usize;
+    vote_state.prior_voters.idx = idx;
 
     let is_empty_byte = read_u8(cursor)?;
     let is_empty = match is_empty_byte {
@@ -164,9 +167,7 @@ fn read_prior_voters_into(
         1 => true,
         _ => return Err(InstructionError::InvalidAccountData),
     };
-    if vote_state.prior_voters.is_empty != is_empty {
-        return Err(InstructionError::InvalidAccountData);
-    }
+    vote_state.prior_voters.is_empty = is_empty;
 
     Ok(())
 }
