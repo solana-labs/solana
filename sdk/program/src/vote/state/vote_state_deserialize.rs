@@ -146,7 +146,7 @@ fn read_prior_voters_into(
         let until_epoch = read_u64(cursor)?;
         let item = (prior_voter, from_epoch, until_epoch);
 
-        // XXX someone from the core team should confirm this holds
+        // HANA someone from the core team should confirm this holds
         match item {
             (_, 0, 0) => (),
             _ => vote_state.prior_voters.append(item),

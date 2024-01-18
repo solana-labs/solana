@@ -349,7 +349,7 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    // XXX flagging two items for discussion
+    // HANA flagging two items for discussion
     //
     // 1) previously, this used bincode when compiled for x64 and threw `unimplemented!()` for bpf
     // need to decide whether to retain bincode. on the one hand, it its nice to use the same parser for both platforms
