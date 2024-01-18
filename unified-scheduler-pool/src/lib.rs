@@ -245,47 +245,22 @@ type ExecutedTaskPayload = SubchanneledPayload<Box<ExecutedTask>, ()>;
 // this switching can happen exactly once for each thread.
 //
 // Overall, this greatly simplifies the code, reduces CAS/syscall overhead per messaging to the
-// minimum at the cost of a single heap allocation per switching for the sake of Box-ing the Self
-// type to avoid infinite mem::size_of() due to the recursive type structure. Needless to say, such
-// an allocation can be amortized to be negligible.
+// minimum at the cost of a single channel recreation per switching. Needless to say, such an
+// allocation can be amortized to be negligible.
 mod chained_channel {
     use super::*;
 
     // hide variants by putting this inside newtype
     enum ChainedChannelPrivate<P, C> {
         Payload(P),
-        ContextAndChannel(Box<dyn WithContextAndPayload<P, C>>),
+        ContextAndChannel(C, Receiver<ChainedChannel<P, C>>),
     }
 
     pub(super) struct ChainedChannel<P, C>(ChainedChannelPrivate<P, C>);
 
-    trait WithContextAndPayload<P, C>: Send + Sync {
-        fn context_and_channel(self: Box<Self>) -> ContextAndChannelInner<P, C>;
-    }
-
-    type ContextAndChannelInner<P, C> = (C, Receiver<ChainedChannel<P, C>>);
-
-    struct ContextAndChannelWrapper<P, C>(ContextAndChannelInner<P, C>);
-
-    impl<P, C> WithContextAndPayload<P, C> for ContextAndChannelWrapper<P, C>
-    where
-        P: Send + Sync,
-        C: Send + Sync,
-    {
-        fn context_and_channel(self: Box<Self>) -> ContextAndChannelInner<P, C> {
-            self.0
-        }
-    }
-
-    impl<P, C> ChainedChannel<P, C>
-    where
-        P: Send + Sync + 'static,
-        C: Send + Sync + 'static,
-    {
+    impl<P, C> ChainedChannel<P, C> {
         fn chain_to_new_channel(context: C, receiver: Receiver<Self>) -> Self {
-            Self(ChainedChannelPrivate::ContextAndChannel(Box::new(
-                ContextAndChannelWrapper((context, receiver)),
-            )))
+            Self(ChainedChannelPrivate::ContextAndChannel(context, receiver))
         }
     }
 
@@ -293,11 +268,7 @@ mod chained_channel {
         sender: Sender<ChainedChannel<P, C>>,
     }
 
-    impl<P, C> ChainedChannelSender<P, C>
-    where
-        P: Send + Sync + 'static,
-        C: Send + Sync + 'static + Clone,
-    {
+    impl<P, C: Clone> ChainedChannelSender<P, C> {
         fn new(sender: Sender<ChainedChannel<P, C>>) -> Self {
             Self { sender }
         }
@@ -355,21 +326,18 @@ mod chained_channel {
         pub(super) fn after_select(&mut self, message: ChainedChannel<P, C>) -> Option<P> {
             match message.0 {
                 ChainedChannelPrivate::Payload(payload) => Some(payload),
-                ChainedChannelPrivate::ContextAndChannel(new_context_and_channel) => {
-                    (self.context, self.receiver) = new_context_and_channel.context_and_channel();
+                ChainedChannelPrivate::ContextAndChannel(context, channel) => {
+                    self.context = context;
+                    self.receiver = channel;
                     None
                 }
             }
         }
     }
 
-    pub(super) fn unbounded<P, C>(
+    pub(super) fn unbounded<P, C: Clone>(
         initial_context: C,
-    ) -> (ChainedChannelSender<P, C>, ChainedChannelReceiver<P, C>)
-    where
-        P: Send + Sync + 'static,
-        C: Send + Sync + 'static + Clone,
-    {
+    ) -> (ChainedChannelSender<P, C>, ChainedChannelReceiver<P, C>) {
         let (sender, receiver) = crossbeam_channel::unbounded();
         (
             ChainedChannelSender::new(sender),
