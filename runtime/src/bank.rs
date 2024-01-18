@@ -1077,16 +1077,6 @@ impl Bank {
             debug_do_not_add_builtins,
         );
 
-        // There is a bug in accounts_db's open_genesis_config() that sets lamports_per_signature
-        // to zero right after loading it from ledger, after the first block with a transaction
-        // in it is completed, the correct value will be set to it. This is a hack to restore it
-        let derived_fee_rate_governor =
-            FeeRateGovernor::new_derived(&genesis_config.fee_rate_governor, 0);
-        // new bank's fee_structure.lamports_per_signature be inline with
-        // what's configured in GenesisConfig
-        bank.fee_structure.lamports_per_signature =
-            derived_fee_rate_governor.lamports_per_signature;
-
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
@@ -1857,6 +1847,7 @@ impl Bank {
             additional_builtins,
             debug_do_not_add_builtins,
         );
+
         bank.fill_missing_sysvar_cache_entries();
         bank.rebuild_skipped_rewrites();
 
@@ -6671,6 +6662,17 @@ impl Bank {
                 &self.runtime_config.compute_budget.unwrap_or_default(),
                 false, /* debugging_features */
             ));
+
+        // genesis_config loaded by accounts_db::open_genesis_config() from ledger
+        // has it's lamports_per_signature set to zero; bank sets its value correctly
+        // after the first block with a transaction in it. This is a hack to mimic
+        // the process.
+        let derived_fee_rate_governor =
+            FeeRateGovernor::new_derived(&genesis_config.fee_rate_governor, 0);
+        // new bank's fee_structure.lamports_per_signature should be inline with
+        // what's configured in GenesisConfig
+        self.fee_structure.lamports_per_signature =
+            derived_fee_rate_governor.lamports_per_signature;
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
