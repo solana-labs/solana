@@ -11,7 +11,7 @@ use {
             Tower,
         },
         repair::cluster_slot_state_verifier::{
-            DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+            DuplicateConfirmedSlots, DuplicateSlotsTracker, EpochSlotsFrozenSlots,
         },
         replay_stage::{HeaviestForkFailures, ReplayStage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -58,12 +58,14 @@ impl VoteSimulator {
             validator_keypairs,
             node_pubkeys,
             vote_pubkeys,
-            bank_forks: Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             progress,
             heaviest_subtree_fork_choice,
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
         }
     }
+
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn fill_bank_forks(
         &mut self,
         forks: Tree<u64>,
@@ -84,6 +86,12 @@ impl VoteSimulator {
             let parent = *walk.get_parent().unwrap().data();
             let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
             let new_bank = Bank::new_from_parent(parent_bank.clone(), &Pubkey::default(), slot);
+            let new_bank = self
+                .bank_forks
+                .write()
+                .unwrap()
+                .insert(new_bank)
+                .clone_without_scheduler();
             self.progress
                 .entry(slot)
                 .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
@@ -131,7 +139,6 @@ impl VoteSimulator {
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),
                 );
             }
-            self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
         }
@@ -214,7 +221,7 @@ impl VoteSimulator {
             None,
             &mut self.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsTracker::default(),
-            &mut GossipDuplicateConfirmedSlots::default(),
+            &mut DuplicateConfirmedSlots::default(),
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),
@@ -297,13 +304,14 @@ impl VoteSimulator {
         false
     }
 
+    #[allow(clippy::type_complexity)]
     fn init_state(
         num_keypairs: usize,
     ) -> (
         HashMap<Pubkey, ValidatorVoteKeypairs>,
         Vec<Pubkey>,
         Vec<Pubkey>,
-        BankForks,
+        Arc<RwLock<BankForks>>,
         ProgressMap,
         HeaviestSubtreeForkChoice,
     ) {
@@ -339,7 +347,11 @@ impl VoteSimulator {
 pub fn initialize_state(
     validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
     stake: u64,
-) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
+) -> (
+    Arc<RwLock<BankForks>>,
+    ProgressMap,
+    HeaviestSubtreeForkChoice,
+) {
     let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
     let GenesisConfigInfo {
         mut genesis_config,
@@ -352,7 +364,7 @@ pub fn initialize_state(
     );
 
     genesis_config.poh_config.hashes_per_tick = Some(2);
-    let bank0 = Bank::new_for_tests(&genesis_config);
+    let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
@@ -367,7 +379,7 @@ pub fn initialize_state(
         0,
         ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
     );
-    let bank_forks = BankForks::new(bank0);
-    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
+    let heaviest_subtree_fork_choice =
+        HeaviestSubtreeForkChoice::new_from_bank_forks(bank_forks.clone());
     (bank_forks, progress, heaviest_subtree_fork_choice)
 }

@@ -90,7 +90,7 @@ code, but a single status bit to indicate the transaction's success.
 
 Currently, the Block-Merkle is not implemented, so to verify `E` was an entry
 in the block with bank hash `B`, we would need to provide all the entry hashes
-in the block. Ideally this Block-Merkle would be implmented, as the alternative
+in the block. Ideally this Block-Merkle would be implemented, as the alternative
 is very inefficient.
 
 #### Block Headers
@@ -138,7 +138,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
 Each vote is a signed transaction that includes the bank hash of the block the
 validator voted for, i.e. the `B` from the `Transaction Merkle` section above.
 Once a certain threshold `T` of the network has voted on a block, the block is
-considered optimistially confirmed. The votes made by this group of `T`
+considered optimistically confirmed. The votes made by this group of `T`
 validators is needed to show the block with bank hash `B` was optimistically
 confirmed.
 
@@ -150,11 +150,11 @@ vote, and vote account pubkey responsible for the vote.
 
 Together, the transaction merkle and optimistic confirmation proofs can be
 provided over RPC to subscribers by extending the existing signature
-subscrption logic. Clients who subscribe to the "Confirmed" confirmation
+subscription logic. Clients who subscribe to the "Confirmed" confirmation
 level are already notified when optimistic confirmation is detected, a flag
 can be provided to signal the two proofs above should also be returned.
 
-It is important to note that optimistcally confirming `B` also implies that all
+It is important to note that optimistically confirming `B` also implies that all
 ancestor blocks of `B` are also optimistically confirmed, and also that not
 all blocks will be optimistically confirmed.
 
@@ -164,7 +164,7 @@ B -> B'
 
 ```
 
-So in the example above if a block `B'` is optimisically confirmed, then so is
+So in the example above if a block `B'` is optimistically confirmed, then so is
 `B`. Thus if a transaction was in block `B`, the transaction merkle in the
 proof will be for block `B`, but the votes presented in the proof will be for
 block `B'`. This is why the headers in the `Block headers` section above are
@@ -174,10 +174,10 @@ important, the client will need to verify that `B` is indeed an ancestor of
 #### Proof of Stake Distribution
 
 Once presented with the transaction merkle and optimistic confirmation proofs
-above, a client can verify a transaction `T` was optimistially confirmed in a
+above, a client can verify a transaction `T` was optimistically confirmed in a
 block with bank hash `B`. The last missing piece is how to verify that the
 votes in the optimistic proofs above actually constitute the valid `T`
-percentage of the stake necessay to uphold the safety guarantees of
+percentage of the stake necessary to uphold the safety guarantees of
 "optimistic confirmation".
 
 One way to approach this might be for every epoch, when the stake set changes,
@@ -191,7 +191,7 @@ block `B` was optimistically confirmed/rooted.
 An account's state (balance or other data) can be verified by submitting a
 transaction with a **_TBD_** Instruction to the cluster. The client can then
 use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify
-whether the cluster agrees that the acount has reached the expected state.
+whether the cluster agrees that the account has reached the expected state.
 
 ### Validator Votes
 

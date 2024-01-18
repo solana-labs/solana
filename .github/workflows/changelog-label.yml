@@ -1,0 +1,20 @@
+name: Require changelog entry
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  check-changelog:
+    if: contains(github.event.pull_request.labels.*.name, 'changelog')
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Check if changes to CHANGELOG.md
+      shell: bash
+      env:
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: .github/scripts/check-changelog.sh

@@ -23,7 +23,7 @@ pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<Par
     let first_account = usize::from(*first_instruction.accounts.first()?);
     let key = message.account_keys().get(first_account)?;
     let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
-    let signature = tx.signatures().get(0).cloned().unwrap_or_default();
+    let signature = tx.signatures().first().cloned().unwrap_or_default();
     Some((*key, vote, switch_proof_hash, signature))
 }
 
@@ -40,7 +40,7 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     let first_account = usize::from(*first_instruction.accounts.first()?);
     let key = message.account_keys.get(first_account)?;
     let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
-    let signature = tx.signatures.get(0).cloned().unwrap_or_default();
+    let signature = tx.signatures.first().cloned().unwrap_or_default();
     Some((*key, vote, switch_proof_hash, signature))
 }
 

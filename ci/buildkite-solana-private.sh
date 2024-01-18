@@ -48,7 +48,7 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  # Assume everyting needs to be tested when any Dockerfile changes
+  # Assume everything needs to be tested when any Dockerfile changes
   for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
@@ -146,7 +146,7 @@ all_test_steps() {
              ^ci/rust-version.sh \
              ^ci/test-docs.sh \
       ; then
-    command_step doctest "ci/test-docs.sh" 15
+    command_step doctest ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-docs.sh" 15
   else
     annotate --style info --context test-docs \
       "Docs skipped as no .rs files were modified"
@@ -168,7 +168,7 @@ all_test_steps() {
              ^sdk/ \
       ; then
     cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-sbf.sh"
+  - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/test-stable-sbf.sh"
     name: "stable-sbf"
     timeout_in_minutes: 35
     artifact_paths: "sbf-dumps.tar.bz2"

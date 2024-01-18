@@ -4,6 +4,7 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
+    rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
         accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
@@ -15,7 +16,7 @@ use {
         },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        validator::ValidatorConfig,
+        validator::{BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_entry::entry::create_ticks,
@@ -239,10 +240,7 @@ fn test_local_cluster_signature_subscribe() {
     );
 
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
-        &format!(
-            "ws://{}",
-            &non_bootstrap_info.rpc_pubsub().unwrap().to_string()
-        ),
+        &format!("ws://{}", non_bootstrap_info.rpc_pubsub().unwrap()),
         &transaction.signatures[0],
         Some(RpcSignatureSubscribeConfig {
             commitment: Some(CommitmentConfig::processed()),
@@ -765,12 +763,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         accounts_hash_interval,
         num_account_paths,
     );
-    let validator_snapshot_test_config = SnapshotValidatorConfig::new(
+    let mut validator_snapshot_test_config = SnapshotValidatorConfig::new(
         full_snapshot_interval,
         incremental_snapshot_interval,
         accounts_hash_interval,
         num_account_paths,
     );
+    // The test has asserts that require the validator always boots from snapshot archives
+    validator_snapshot_test_config
+        .validator_config
+        .use_snapshot_archives_at_startup = UseSnapshotArchivesAtStartup::Always;
     let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
@@ -2381,7 +2383,7 @@ fn test_hard_fork_with_gap_in_roots() {
         .reversed_rooted_slot_iterator(common_root)
         .unwrap()
         .collect::<Vec<_>>();
-    // artifically restore the forcibly purged genesis only for the validator A just for the sake of
+    // artificially restore the forcibly purged genesis only for the validator A just for the sake of
     // the final assertions.
     slots_a.push(genesis_slot);
     roots_a.push(genesis_slot);
@@ -2559,33 +2561,40 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 #[test]
 #[serial]
 fn test_rpc_block_subscribe() {
-    let total_stake = 100 * DEFAULT_NODE_STAKE;
-    let leader_stake = total_stake;
-    let node_stakes = vec![leader_stake];
+    let leader_stake = 100 * DEFAULT_NODE_STAKE;
+    let rpc_stake = DEFAULT_NODE_STAKE;
+    let total_stake = leader_stake + rpc_stake;
+    let node_stakes = vec![leader_stake, rpc_stake];
     let mut validator_config = ValidatorConfig::default_for_test();
     validator_config.enable_default_rpc_block_subscribe();
 
     let validator_keys = [
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
     ]
     .iter()
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .take(node_stakes.len())
     .collect::<Vec<_>>();
+    let rpc_node_pubkey = &validator_keys[1].0.pubkey();
 
     let mut config = ClusterConfig {
         cluster_lamports: total_stake,
         node_stakes,
-        validator_configs: vec![validator_config],
+        validator_configs: make_identical_validator_configs(&validator_config, 2),
         validator_keys: Some(validator_keys),
         skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let rpc_node_contact_info = cluster.get_contact_info(rpc_node_pubkey).unwrap();
     let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
         &format!(
             "ws://{}",
-            &cluster.entry_point_info.rpc_pubsub().unwrap().to_string()
+            // It is important that we subscribe to a non leader node as there
+            // is a race condition which can cause leader nodes to not send
+            // BlockUpdate notifications properly. See https://github.com/solana-labs/solana/pull/34421
+            &rpc_node_contact_info.rpc_pubsub().unwrap().to_string()
         ),
         RpcBlockSubscribeFilter::All,
         Some(RpcBlockSubscribeConfig {
@@ -2917,24 +2926,26 @@ fn setup_transfer_scan_threads(
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap();
                 for i in 0..starting_keypairs_.len() {
-                    client
-                        .async_transfer(
-                            1,
-                            &starting_keypairs_[i],
-                            &target_keypairs_[i].pubkey(),
-                            blockhash,
-                        )
-                        .unwrap();
+                    let result = client.async_transfer(
+                        1,
+                        &starting_keypairs_[i],
+                        &target_keypairs_[i].pubkey(),
+                        blockhash,
+                    );
+                    if result.is_err() {
+                        debug!("Failed in transfer for starting keypair: {:?}", result);
+                    }
                 }
                 for i in 0..starting_keypairs_.len() {
-                    client
-                        .async_transfer(
-                            1,
-                            &target_keypairs_[i],
-                            &starting_keypairs_[i].pubkey(),
-                            blockhash,
-                        )
-                        .unwrap();
+                    let result = client.async_transfer(
+                        1,
+                        &target_keypairs_[i],
+                        &starting_keypairs_[i].pubkey(),
+                        blockhash,
+                    );
+                    if result.is_err() {
+                        debug!("Failed in transfer for starting keypair: {:?}", result);
+                    }
                 }
             }
         })
@@ -3281,7 +3292,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         // Now we copy these blocks to A
         let b_blockstore = open_blockstore(&val_b_ledger_path);
         let a_blockstore = open_blockstore(&val_a_ledger_path);
-        copy_blocks(b_last_vote, &b_blockstore, &a_blockstore);
+        copy_blocks(b_last_vote, &b_blockstore, &a_blockstore, false);
 
         // Purge uneccessary slots
         purge_slots_with_count(&a_blockstore, next_slot_on_a + 1, truncated_slots);
@@ -3534,6 +3545,7 @@ fn test_fork_choice_refresh_old_votes() {
                 first_slot_in_lighter_partition,
                 &lighter_fork_blockstore,
                 &smallest_blockstore,
+                false,
             );
 
             // Restart the smallest validator that we killed earlier in `on_partition_start()`
@@ -4270,56 +4282,13 @@ fn test_leader_failure_4() {
     );
 }
 
-#[test]
-#[serial]
-fn test_ledger_cleanup_service() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    error!("test_ledger_cleanup_service");
-    let num_nodes = 3;
-    let validator_config = ValidatorConfig {
-        max_ledger_shreds: Some(100),
-        ..ValidatorConfig::default_for_test()
-    };
-    let mut config = ClusterConfig {
-        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
-        poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
-        node_stakes: vec![DEFAULT_NODE_STAKE; num_nodes],
-        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-    // 200ms/per * 100 = 20 seconds, so sleep a little longer than that.
-    sleep(Duration::from_secs(60));
-
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
-        &cluster.connection_cache,
-    );
-    cluster.close_preserve_ledgers();
-    //check everyone's ledgers and make sure only ~100 slots are stored
-    for info in cluster.validators.values() {
-        let mut slots = 0;
-        let blockstore = Blockstore::open(&info.info.ledger_path).unwrap();
-        blockstore
-            .slot_meta_iterator(0)
-            .unwrap()
-            .for_each(|_| slots += 1);
-        // with 3 nodes up to 3 slots can be in progress and not complete so max slots in blockstore should be up to 103
-        assert!(slots <= 103, "got {slots}");
-    }
-}
-
 // This test verifies that even if votes from a validator end up taking too long to land, and thus
 // some of the referenced slots are slots are no longer present in the slot hashes sysvar,
 // consensus can still be attained.
 //
 // Validator A (60%)
 // Validator B (40%)
-//                                  / --- 10 --- [..] --- 16 (B is voting, due to network issues is initally not able to see the other fork at all)
+//                                  / --- 10 --- [..] --- 16 (B is voting, due to network issues is initially not able to see the other fork at all)
 //                                 /
 // 1 - 2 - 3 - 4 - 5 - 6 - 7 - 8 - 9 (A votes 1 - 9 votes are landing normally. B does the same however votes are not landing)
 //                                 \
@@ -4498,7 +4467,7 @@ fn test_slot_hash_expiry() {
         // Here we let B know about the missing blocks that A had produced on its partition
         let a_blockstore = open_blockstore(&a_ledger_path);
         let b_blockstore = open_blockstore(&b_ledger_path);
-        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore);
+        copy_blocks(last_vote_on_a, &a_blockstore, &b_blockstore, false);
     }
 
     // Now restart A and B and see if B is able to eventually switch onto the majority fork
@@ -4515,7 +4484,7 @@ fn test_slot_hash_expiry() {
     );
 }
 
-// This test simulates a case where a leader sends a duplicate block with different ancestory. One
+// This test simulates a case where a leader sends a duplicate block with different ancestry. One
 // version builds off of the rooted path, however the other version builds off a pruned branch. The
 // validators that receive the pruned version will need to repair in order to continue, which
 // requires an ancestor hashes repair.
@@ -4544,7 +4513,7 @@ fn test_slot_hash_expiry() {
 //    reached as minority cannot pass threshold otherwise).
 // 4) Let minority produce forks on pruned forks until out of leader slots then kill.
 // 5) Truncate majority ledger past fork slot so it starts building off of fork slot.
-// 6) Restart majority and wait untill it starts producing blocks on main fork and roots something
+// 6) Restart majority and wait until it starts producing blocks on main fork and roots something
 //    past the fork slot.
 // 7) Construct our ledger by copying majority ledger and copying blocks from minority for the pruned path.
 // 8) In our node's ledger, change the parent of the latest slot in majority fork to be the latest
@@ -4753,11 +4722,17 @@ fn test_duplicate_with_pruned_ancestor() {
             remove_tower(&our_node_ledger_path, &majority_pubkey);
         }
 
-        // Copy minority fork. Rewind our root so that we can copy over the purged bank
+        // Copy minority fork to our blockstore
+        // Set trusted=true in blockstore copy to skip the parent slot >= latest root check;
+        // this check would otherwise prevent the pruned fork from being inserted
         let minority_blockstore = open_blockstore(&minority_validator_info.info.ledger_path);
-        let mut our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
-        our_blockstore.set_last_root(fork_slot - 1);
-        copy_blocks(last_minority_vote, &minority_blockstore, &our_blockstore);
+        let our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
+        copy_blocks(
+            last_minority_vote,
+            &minority_blockstore,
+            &our_blockstore,
+            true,
+        );
 
         // Change last block parent to chain off of (purged) minority fork
         info!("For our node, changing parent of {last_majority_vote} to {last_minority_vote}");
@@ -4776,9 +4751,6 @@ fn test_duplicate_with_pruned_ancestor() {
             true, // merkle_variant
         );
         our_blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        // Update the root to set minority fork back as pruned
-        our_blockstore.set_last_root(fork_slot + fork_length);
     }
 
     // Actual test, `our_node` will replay the minority fork, then the majority fork which will
@@ -5062,6 +5034,7 @@ fn test_boot_from_local_state() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
+#[ignore]
 fn test_duplicate_shreds_switch_failure() {
     fn wait_for_duplicate_fork_frozen(ledger_path: &Path, dup_slot: Slot) -> Hash {
         // Ensure all the slots <= dup_slot are also full so we know we can replay up to dup_slot
@@ -5359,7 +5332,7 @@ fn test_duplicate_shreds_switch_failure() {
     {
         let blockstore1 = open_blockstore(&duplicate_leader_ledger_path);
         let blockstore2 = open_blockstore(&target_switch_fork_validator_ledger_path);
-        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2, false);
     }
     clear_ledger_and_tower(
         &target_switch_fork_validator_ledger_path,
@@ -5392,7 +5365,7 @@ fn test_duplicate_shreds_switch_failure() {
     {
         let blockstore1 = open_blockstore(&duplicate_fork_validator1_ledger_path);
         let blockstore2 = open_blockstore(&duplicate_fork_validator2_ledger_path);
-        copy_blocks(dup_slot, &blockstore1, &blockstore2);
+        copy_blocks(dup_slot, &blockstore1, &blockstore2, false);
     }
 
     // Set entrypoint to `target_switch_fork_validator_pubkey` so we can run discovery in gossip even without the
@@ -5480,6 +5453,44 @@ fn test_duplicate_shreds_switch_failure() {
         16,
         "test_duplicate_shreds_switch_failure",
         SocketAddrSpace::Unspecified,
+    );
+}
+
+#[test]
+#[serial]
+fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
+    // tailored logging just to see two block verification methods are working correctly
+    solana_logger::setup_with_default(
+        "solana_metrics::metrics=warn,\
+         solana_core=warn,\
+         solana_runtime::installed_scheduler_pool=trace,\
+         solana_ledger::blockstore_processor=debug,\
+         info",
+    );
+
+    let num_nodes = 2;
+    let mut config = ClusterConfig::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+    );
+
+    // Randomly switch to use unified scheduler
+    config
+        .validator_configs
+        .iter_mut()
+        .choose(&mut rand::thread_rng())
+        .unwrap()
+        .block_verification_method = BlockVerificationMethod::UnifiedScheduler;
+
+    let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    cluster_tests::spend_and_verify_all_nodes(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+        SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 

@@ -89,7 +89,7 @@ fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transact
     }
     for _ in 0..1_000_000_000_u64 {
         if bank
-            .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+            .get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
             .is_some()
         {
             break;
@@ -97,13 +97,13 @@ fn async_bencher(bank: &Bank, bank_client: &BankClient, transactions: &[Transact
         sleep(Duration::from_nanos(1));
     }
     if bank
-        .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+        .get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
         .unwrap()
         .is_err()
     {
         error!(
             "transaction failed: {:?}",
-            bank.get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
+            bank.get_signature_status(transactions.last().unwrap().signatures.first().unwrap())
                 .unwrap()
         );
         panic!();
@@ -125,13 +125,13 @@ fn do_bench_transactions(
     // freeze bank so that slot hashes is populated
     bank.freeze();
 
-    declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+    declare_process_instruction!(MockBuiltin, 1, |_invoke_context| {
         // Do nothing
         Ok(())
     });
 
     let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), 1);
-    bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), process_instruction);
+    bank.add_mockup_builtin(Pubkey::from(BUILTIN_PROGRAM_ID), MockBuiltin::vm);
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(bank.clone());

@@ -21,29 +21,25 @@ use {
 
 pub const DEFAULT_COMPUTE_UNITS: u64 = 750;
 
-declare_process_instruction!(
-    process_instruction,
-    DEFAULT_COMPUTE_UNITS,
-    |invoke_context| {
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let instruction_data = instruction_context.get_instruction_data();
-        match limited_deserialize(instruction_data)? {
-            ProgramInstruction::CreateLookupTable {
-                recent_slot,
-                bump_seed,
-            } => Processor::create_lookup_table(invoke_context, recent_slot, bump_seed),
-            ProgramInstruction::FreezeLookupTable => Processor::freeze_lookup_table(invoke_context),
-            ProgramInstruction::ExtendLookupTable { new_addresses } => {
-                Processor::extend_lookup_table(invoke_context, new_addresses)
-            }
-            ProgramInstruction::DeactivateLookupTable => {
-                Processor::deactivate_lookup_table(invoke_context)
-            }
-            ProgramInstruction::CloseLookupTable => Processor::close_lookup_table(invoke_context),
+declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context| {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
+    match limited_deserialize(instruction_data)? {
+        ProgramInstruction::CreateLookupTable {
+            recent_slot,
+            bump_seed,
+        } => Processor::create_lookup_table(invoke_context, recent_slot, bump_seed),
+        ProgramInstruction::FreezeLookupTable => Processor::freeze_lookup_table(invoke_context),
+        ProgramInstruction::ExtendLookupTable { new_addresses } => {
+            Processor::extend_lookup_table(invoke_context, new_addresses)
         }
+        ProgramInstruction::DeactivateLookupTable => {
+            Processor::deactivate_lookup_table(invoke_context)
+        }
+        ProgramInstruction::CloseLookupTable => Processor::close_lookup_table(invoke_context),
     }
-);
+});
 
 fn checked_add(a: usize, b: usize) -> Result<usize, InstructionError> {
     a.checked_add(b).ok_or(InstructionError::ArithmeticOverflow)
@@ -166,9 +162,10 @@ impl Processor {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        lookup_table_account.set_state(&ProgramState::LookupTable(LookupTableMeta::new(
-            authority_key,
-        )))?;
+        lookup_table_account.set_state(
+            &ProgramState::LookupTable(LookupTableMeta::new(authority_key)),
+            &invoke_context.feature_set,
+        )?;
 
         Ok(())
     }
@@ -217,7 +214,7 @@ impl Processor {
         let mut lookup_table_meta = lookup_table.meta;
         lookup_table_meta.authority = None;
         AddressLookupTable::overwrite_meta_data(
-            lookup_table_account.get_data_mut()?,
+            lookup_table_account.get_data_mut(&invoke_context.feature_set)?,
             lookup_table_meta,
         )?;
 
@@ -309,11 +306,12 @@ impl Processor {
         )?;
         {
             AddressLookupTable::overwrite_meta_data(
-                lookup_table_account.get_data_mut()?,
+                lookup_table_account.get_data_mut(&invoke_context.feature_set)?,
                 lookup_table_meta,
             )?;
             for new_address in new_addresses {
-                lookup_table_account.extend_from_slice(new_address.as_ref())?;
+                lookup_table_account
+                    .extend_from_slice(new_address.as_ref(), &invoke_context.feature_set)?;
             }
         }
         drop(lookup_table_account);
@@ -385,7 +383,7 @@ impl Processor {
         lookup_table_meta.deactivation_slot = clock.slot;
 
         AddressLookupTable::overwrite_meta_data(
-            lookup_table_account.get_data_mut()?,
+            lookup_table_account.get_data_mut(&invoke_context.feature_set)?,
             lookup_table_meta,
         )?;
 
@@ -460,13 +458,13 @@ impl Processor {
 
         let mut recipient_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-        recipient_account.checked_add_lamports(withdrawn_lamports)?;
+        recipient_account.checked_add_lamports(withdrawn_lamports, &invoke_context.feature_set)?;
         drop(recipient_account);
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        lookup_table_account.set_data_length(0)?;
-        lookup_table_account.set_lamports(0)?;
+        lookup_table_account.set_data_length(0, &invoke_context.feature_set)?;
+        lookup_table_account.set_lamports(0, &invoke_context.feature_set)?;
 
         Ok(())
     }

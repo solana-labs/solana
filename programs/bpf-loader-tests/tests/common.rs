@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use {
-    solana_bpf_loader_program::process_instruction,
     solana_program_test::*,
     solana_sdk::{
         account::AccountSharedData,
@@ -15,7 +14,7 @@ use {
 };
 
 pub async fn setup_test_context() -> ProgramTestContext {
-    let program_test = ProgramTest::new("", id(), Some(process_instruction));
+    let program_test = ProgramTest::new("", id(), Some(solana_bpf_loader_program::Entrypoint::vm));
     program_test.start_with_context().await
 }
 

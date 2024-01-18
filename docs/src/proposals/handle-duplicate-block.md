@@ -18,14 +18,14 @@ potential forks that the cluster has to resolve.
 ## Protocol
 1. When WindowStage detects a duplicate slot proof `P`, it checks the new `gossip_root` to see if `<= 1/3` of the nodes have rooted a slot `S >= P`. If so, it pushes a proof to `gossip_duplicate_slots` to gossip. WindowStage then signals ReplayStage about this duplicate slot `S`. These proofs can be purged from gossip once the validator sees > 2/3 of people gossiping roots `R > S`.
 
-2. When ReplayStage receives the signal for a duplicate slot `S` from `1)` above, the validator monitors gossip and replay waiting for`>= DUPLICATE_THRESHOLD` votes for the same hash which implies the same version of the slot. If this conditon is met for some version with hash `H` of slot `S`, this is then known as the `duplicate_confirmed` version of the slot.
+2. When ReplayStage receives the signal for a duplicate slot `S` from `1)` above, the validator monitors gossip and replay waiting for`>= DUPLICATE_THRESHOLD` votes for the same hash which implies the same version of the slot. If this condition is met for some version with hash `H` of slot `S`, this is then known as the `duplicate_confirmed` version of the slot.
 
 Before a duplicate slot `S` is `duplicate_confirmed`, it's first excluded from the vote candidate set in the fork choice rules. In addition, ReplayStage also resets PoH to the *latest* ancestor of the *earliest* `non-duplicate/confirmed_duplicate_slot`, so that block generation can start happening on the earliest known *safe* block.
 
 Some notes about the `DUPLICATE_THRESHOLD`. In the cases below, assume `DUPLICATE_THRESHOLD = 52`:
 
 a) If less than `2 * DUPLICATE_THRESHOLD - 1` percentage of the network is malicious, then there can only be one such `duplicate_confirmed` version of the slot. With `DUPLICATE_THRESHOLD = 52`, this is
-a malcious tolerance of `4%`
+a malicious tolerance of `4%`
 
 b) The liveness of the network is at most `1 - DUPLICATE_THRESHOLD - SWITCH_THRESHOLD`. This is because if you need at least `SWITCH_THRESHOLD` percentage of the stake voting on a different fork in order to switch off of a duplicate fork that has `< DUPLICATE_THRESHOLD` stake voting on it, and is *not* `duplicate_confirmed`. For `DUPLICATE_THRESHOLD = 52` and `DUPLICATE_THRESHOLD = 38`, this implies a liveness tolerance of `10%`.
 
@@ -38,7 +38,7 @@ For example in the situation below, validators that voted on `2` can't vote any 
 
 ```
 
-3. Switching proofs need to be extended to allow including vote hashes from different versions of the same same slot (detected through 1). Right now this is not supported since switching proofs can
+3. Switching proofs need to be extended to allow including vote hashes from different versions of the same slot (detected through 1). Right now this is not supported since switching proofs can
 only be built using votes from banks in BankForks, and two different versions of the same slot cannot
 simultaneously exist in BankForks. For instance:
 
@@ -73,7 +73,7 @@ This problem we need to solve is modeled simply by the below scenario:
 ```
 Assume the following:
 
-1. Due to gossiping duplciate proofs, we assume everyone will eventually see duplicate proofs for 2 and 4, so everyone agrees to remove them from fork choice until they are `duplicate_confirmed`.
+1. Due to gossiping duplicate proofs, we assume everyone will eventually see duplicate proofs for 2 and 4, so everyone agrees to remove them from fork choice until they are `duplicate_confirmed`.
 
 2. Due to lockouts, `> DUPLICATE_THRESHOLD` of the stake votes on 4, but not 2. This means at least `DUPLICATE_THRESHOLD` of people have the "correct" version of both slots 2 and 4.
 

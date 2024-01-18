@@ -965,7 +965,7 @@ impl ServeRepair {
                 stats.dropped_requests_outbound_bandwidth += 1;
                 continue;
             }
-            // Bypass ping/pong check for requests comming from QUIC endpoint.
+            // Bypass ping/pong check for requests coming from QUIC endpoint.
             if !matches!(&request, RepairProtocol::Pong(_)) && response_sender.is_none() {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
@@ -1221,15 +1221,16 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
-            if let Err(SendPktsError::IoError(err, num_failed)) =
-                batch_send(repair_socket, &pending_pongs)
-            {
-                warn!(
-                    "batch_send failed to send {}/{} packets. First error: {:?}",
-                    num_failed,
-                    pending_pongs.len(),
-                    err
-                );
+            match batch_send(repair_socket, &pending_pongs) {
+                Ok(()) => (),
+                Err(SendPktsError::IoError(err, num_failed)) => {
+                    warn!(
+                        "batch_send failed to send {}/{} packets. First error: {:?}",
+                        num_failed,
+                        pending_pongs.len(),
+                        err
+                    );
+                }
             }
         }
     }
@@ -1383,7 +1384,9 @@ pub(crate) fn get_repair_protocol(_: ClusterType) -> Protocol {
     Protocol::UDP
 }
 
-fn deserialize_request<T>(request: &RemoteRequest) -> std::result::Result<T, bincode::Error>
+pub(crate) fn deserialize_request<T>(
+    request: &RemoteRequest,
+) -> std::result::Result<T, bincode::Error>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -1423,7 +1426,7 @@ mod tests {
             blockstore::make_many_slot_entries,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::{max_ticks_per_n_shreds, Shred, ShredFlags},
         },
         solana_perf::packet::{deserialize_from_with_limit, Packet},
@@ -1561,7 +1564,7 @@ mod tests {
     fn test_serialize_deserialize_signed_request() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
@@ -1611,7 +1614,7 @@ mod tests {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let serve_repair = ServeRepair::new(
             cluster_info,
             bank_forks,
@@ -1647,7 +1650,7 @@ mod tests {
     fn test_map_requests_signed() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
@@ -1853,64 +1856,60 @@ mod tests {
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
         let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let rv = ServeRepair::run_highest_window_request(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                0,
-                0,
-                nonce,
-            );
-            assert!(rv.is_none());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let rv = ServeRepair::run_highest_window_request(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            0,
+            0,
+            nonce,
+        );
+        assert!(rv.is_none());
 
-            let _ = fill_blockstore_slot_with_ticks(
-                &blockstore,
-                max_ticks_per_n_shreds(1, None) + 1,
-                slot,
-                slot - num_slots + 1,
-                Hash::default(),
-            );
+        let _ = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            max_ticks_per_n_shreds(1, None) + 1,
+            slot,
+            slot - num_slots + 1,
+            Hash::default(),
+        );
 
-            let index = 1;
-            let rv = ServeRepair::run_highest_window_request(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot,
-                index,
-                nonce,
-            )
-            .expect("packets");
-            let request = ShredRepairType::HighestShred(slot, index);
-            verify_responses(&request, rv.iter());
+        let index = 1;
+        let rv = ServeRepair::run_highest_window_request(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot,
+            index,
+            nonce,
+        )
+        .expect("packets");
+        let request = ShredRepairType::HighestShred(slot, index);
+        verify_responses(&request, rv.iter());
 
-            let rv: Vec<Shred> = rv
-                .into_iter()
-                .filter_map(|p| {
-                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(p.data(..).unwrap().to_vec()).ok()
-                })
-                .collect();
-            assert!(!rv.is_empty());
-            let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
-            assert_eq!(rv[0].index(), index as u32);
-            assert_eq!(rv[0].slot(), slot);
+        let rv: Vec<Shred> = rv
+            .into_iter()
+            .filter_map(|p| {
+                assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                Shred::new_from_serialized_shred(p.data(..).unwrap().to_vec()).ok()
+            })
+            .collect();
+        assert!(!rv.is_empty());
+        let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
+        assert_eq!(rv[0].index(), index as u32);
+        assert_eq!(rv[0].slot(), slot);
 
-            let rv = ServeRepair::run_highest_window_request(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot,
-                index + 1,
-                nonce,
-            );
-            assert!(rv.is_none());
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        let rv = ServeRepair::run_highest_window_request(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot,
+            index + 1,
+            nonce,
+        );
+        assert!(rv.is_none());
     }
 
     #[test]
@@ -1922,48 +1921,44 @@ mod tests {
     fn run_window_request(slot: Slot, nonce: Nonce) {
         let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let rv = ServeRepair::run_window_request(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot,
-                0,
-                nonce,
-            );
-            assert!(rv.is_none());
-            let shred = Shred::new_from_data(slot, 1, 1, &[], ShredFlags::empty(), 0, 2, 0);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let rv = ServeRepair::run_window_request(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot,
+            0,
+            nonce,
+        );
+        assert!(rv.is_none());
+        let shred = Shred::new_from_data(slot, 1, 1, &[], ShredFlags::empty(), 0, 2, 0);
 
-            blockstore
-                .insert_shreds(vec![shred], None, false)
-                .expect("Expect successful ledger write");
+        blockstore
+            .insert_shreds(vec![shred], None, false)
+            .expect("Expect successful ledger write");
 
-            let index = 1;
-            let rv = ServeRepair::run_window_request(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot,
-                index,
-                nonce,
-            )
-            .expect("packets");
-            let request = ShredRepairType::Shred(slot, index);
-            verify_responses(&request, rv.iter());
-            let rv: Vec<Shred> = rv
-                .into_iter()
-                .filter_map(|p| {
-                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(p.data(..).unwrap().to_vec()).ok()
-                })
-                .collect();
-            assert_eq!(rv[0].index(), 1);
-            assert_eq!(rv[0].slot(), slot);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        let index = 1;
+        let rv = ServeRepair::run_window_request(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot,
+            index,
+            nonce,
+        )
+        .expect("packets");
+        let request = ShredRepairType::Shred(slot, index);
+        verify_responses(&request, rv.iter());
+        let rv: Vec<Shred> = rv
+            .into_iter()
+            .filter_map(|p| {
+                assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                Shred::new_from_serialized_shred(p.data(..).unwrap().to_vec()).ok()
+            })
+            .collect();
+        assert_eq!(rv[0].index(), 1);
+        assert_eq!(rv[0].slot(), slot);
     }
 
     fn new_test_cluster_info() -> ClusterInfo {
@@ -1976,7 +1971,7 @@ mod tests {
     fn window_index_request() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
@@ -2095,122 +2090,114 @@ mod tests {
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let rv =
-                ServeRepair::run_orphan(&recycler, &socketaddr_any!(), &blockstore, slot, 0, nonce);
-            assert!(rv.is_none());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let rv =
+            ServeRepair::run_orphan(&recycler, &socketaddr_any!(), &blockstore, slot, 0, nonce);
+        assert!(rv.is_none());
 
-            // Create slots [slot, slot + num_slots) with 5 shreds apiece
-            let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
+        // Create slots [slot, slot + num_slots) with 5 shreds apiece
+        let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
 
-            blockstore
-                .insert_shreds(shreds, None, false)
-                .expect("Expect successful ledger write");
+        blockstore
+            .insert_shreds(shreds, None, false)
+            .expect("Expect successful ledger write");
 
-            // We don't have slot `slot + num_slots`, so we don't know how to service this request
-            let rv = ServeRepair::run_orphan(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot + num_slots,
-                5,
-                nonce,
-            );
-            assert!(rv.is_none());
+        // We don't have slot `slot + num_slots`, so we don't know how to service this request
+        let rv = ServeRepair::run_orphan(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot + num_slots,
+            5,
+            nonce,
+        );
+        assert!(rv.is_none());
 
-            // For a orphan request for `slot + num_slots - 1`, we should return the highest shreds
-            // from slots in the range [slot, slot + num_slots - 1]
-            let rv: Vec<_> = ServeRepair::run_orphan(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot + num_slots - 1,
-                5,
-                nonce,
-            )
-            .expect("run_orphan packets")
-            .iter()
-            .cloned()
+        // For a orphan request for `slot + num_slots - 1`, we should return the highest shreds
+        // from slots in the range [slot, slot + num_slots - 1]
+        let rv: Vec<_> = ServeRepair::run_orphan(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot + num_slots - 1,
+            5,
+            nonce,
+        )
+        .expect("run_orphan packets")
+        .iter()
+        .cloned()
+        .collect();
+
+        // Verify responses
+        let request = ShredRepairType::Orphan(slot);
+        verify_responses(&request, rv.iter());
+
+        let expected: Vec<_> = (slot..slot + num_slots)
+            .rev()
+            .filter_map(|slot| {
+                let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
+                repair_response::repair_response_packet(
+                    &blockstore,
+                    slot,
+                    index,
+                    &socketaddr_any!(),
+                    nonce,
+                )
+            })
             .collect();
-
-            // Verify responses
-            let request = ShredRepairType::Orphan(slot);
-            verify_responses(&request, rv.iter());
-
-            let expected: Vec<_> = (slot..slot + num_slots)
-                .rev()
-                .filter_map(|slot| {
-                    let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
-                    repair_response::repair_response_packet(
-                        &blockstore,
-                        slot,
-                        index,
-                        &socketaddr_any!(),
-                        nonce,
-                    )
-                })
-                .collect();
-            assert_eq!(rv, expected);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        assert_eq!(rv, expected);
     }
 
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            // Create slots [1, 2] with 1 shred apiece
-            let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        // Create slots [1, 2] with 1 shred apiece
+        let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
 
-            assert_eq!(shreds[0].slot(), 1);
-            assert_eq!(shreds[0].index(), 0);
-            // TODO: The test previously relied on corrupting shred payload
-            // size which we no longer want to expose. Current test no longer
-            // covers packet size check in repair_response_packet_from_bytes.
-            shreds.remove(0);
-            blockstore
-                .insert_shreds(shreds, None, false)
-                .expect("Expect successful ledger write");
-            let nonce = 42;
-            // Make sure repair response is corrupted
-            assert!(repair_response::repair_response_packet(
-                &blockstore,
-                1,
-                0,
-                &socketaddr_any!(),
-                nonce,
-            )
-            .is_none());
+        assert_eq!(shreds[0].slot(), 1);
+        assert_eq!(shreds[0].index(), 0);
+        // TODO: The test previously relied on corrupting shred payload
+        // size which we no longer want to expose. Current test no longer
+        // covers packet size check in repair_response_packet_from_bytes.
+        shreds.remove(0);
+        blockstore
+            .insert_shreds(shreds, None, false)
+            .expect("Expect successful ledger write");
+        let nonce = 42;
+        // Make sure repair response is corrupted
+        assert!(repair_response::repair_response_packet(
+            &blockstore,
+            1,
+            0,
+            &socketaddr_any!(),
+            nonce,
+        )
+        .is_none());
 
-            // Orphan request for slot 2 should only return slot 1 since
-            // calling `repair_response_packet` on slot 1's shred will
-            // be corrupted
-            let rv: Vec<_> =
-                ServeRepair::run_orphan(&recycler, &socketaddr_any!(), &blockstore, 2, 5, nonce)
-                    .expect("run_orphan packets")
-                    .iter()
-                    .cloned()
-                    .collect();
+        // Orphan request for slot 2 should only return slot 1 since
+        // calling `repair_response_packet` on slot 1's shred will
+        // be corrupted
+        let rv: Vec<_> =
+            ServeRepair::run_orphan(&recycler, &socketaddr_any!(), &blockstore, 2, 5, nonce)
+                .expect("run_orphan packets")
+                .iter()
+                .cloned()
+                .collect();
 
-            // Verify responses
-            let expected = vec![repair_response::repair_response_packet(
-                &blockstore,
-                2,
-                0,
-                &socketaddr_any!(),
-                nonce,
-            )
-            .unwrap()];
-            assert_eq!(rv, expected);
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        // Verify responses
+        let expected = vec![repair_response::repair_response_packet(
+            &blockstore,
+            2,
+            0,
+            &socketaddr_any!(),
+            nonce,
+        )
+        .unwrap()];
+        assert_eq!(rv, expected);
     }
 
     #[test]
@@ -2223,102 +2210,99 @@ mod tests {
 
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let slot = 0;
-            let num_slots = MAX_ANCESTOR_RESPONSES as u64;
-            let nonce = 10;
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let slot = 0;
+        let num_slots = MAX_ANCESTOR_RESPONSES as u64;
+        let nonce = 10;
 
-            // Create slots [slot, slot + num_slots) with 5 shreds apiece
-            let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
 
-            blockstore
-                .insert_shreds(shreds, None, false)
-                .expect("Expect successful ledger write");
+        // Create slots [slot, slot + num_slots) with 5 shreds apiece
+        let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
 
-            // We don't have slot `slot + num_slots`, so we return empty
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot + num_slots,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets");
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            match ancestor_hashes_response {
-                AncestorHashesResponse::Hashes(hashes) => {
-                    assert!(hashes.is_empty());
-                }
-                _ => {
-                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
-                }
+        blockstore
+            .insert_shreds(shreds, None, false)
+            .expect("Expect successful ledger write");
+
+        // We don't have slot `slot + num_slots`, so we return empty
+        let rv = ServeRepair::run_ancestor_hashes(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot + num_slots,
+            nonce,
+        )
+        .expect("run_ancestor_hashes packets");
+        assert_eq!(rv.len(), 1);
+        let packet = &rv[0];
+        let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
+        match ancestor_hashes_response {
+            AncestorHashesResponse::Hashes(hashes) => {
+                assert!(hashes.is_empty());
             }
-
-            // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
-            // empty
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot + num_slots - 1,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets");
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            match ancestor_hashes_response {
-                AncestorHashesResponse::Hashes(hashes) => {
-                    assert!(hashes.is_empty());
-                }
-                _ => {
-                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
-                }
-            }
-
-            // Set duplicate confirmed
-            let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
-            expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
-            for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
-                let frozen_hash = Hash::new_unique();
-                expected_ancestors[num_slots as usize - i - 1] =
-                    (duplicate_confirmed_slot, frozen_hash);
-                blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
-            }
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                &blockstore,
-                slot + num_slots - 1,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets");
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            match ancestor_hashes_response {
-                AncestorHashesResponse::Hashes(hashes) => {
-                    assert_eq!(hashes, expected_ancestors);
-                }
-                _ => {
-                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
-                }
+            _ => {
+                panic!("unexpected response: {:?}", &ancestor_hashes_response);
             }
         }
 
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
+        // empty
+        let rv = ServeRepair::run_ancestor_hashes(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot + num_slots - 1,
+            nonce,
+        )
+        .expect("run_ancestor_hashes packets");
+        assert_eq!(rv.len(), 1);
+        let packet = &rv[0];
+        let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
+        match ancestor_hashes_response {
+            AncestorHashesResponse::Hashes(hashes) => {
+                assert!(hashes.is_empty());
+            }
+            _ => {
+                panic!("unexpected response: {:?}", &ancestor_hashes_response);
+            }
+        }
+
+        // Set duplicate confirmed
+        let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
+        expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
+        for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
+            let frozen_hash = Hash::new_unique();
+            expected_ancestors[num_slots as usize - i - 1] =
+                (duplicate_confirmed_slot, frozen_hash);
+            blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
+        }
+        let rv = ServeRepair::run_ancestor_hashes(
+            &recycler,
+            &socketaddr_any!(),
+            &blockstore,
+            slot + num_slots - 1,
+            nonce,
+        )
+        .expect("run_ancestor_hashes packets");
+        assert_eq!(rv.len(), 1);
+        let packet = &rv[0];
+        let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
+        match ancestor_hashes_response {
+            AncestorHashesResponse::Hashes(hashes) => {
+                assert_eq!(hashes, expected_ancestors);
+            }
+            _ => {
+                panic!("unexpected response: {:?}", &ancestor_hashes_response);
+            }
+        }
     }
 
     #[test]
     fn test_repair_with_repair_validators() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let me = cluster_info.my_contact_info();

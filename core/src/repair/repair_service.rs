@@ -15,11 +15,15 @@ use {
             outstanding_requests::OutstandingRequests,
             quic_endpoint::LocalRequest,
             repair_weight::RepairWeight,
-            serve_repair::{self, ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+            serve_repair::{
+                self, RepairProtocol, RepairRequestHeader, ServeRepair, ShredRepairType,
+                REPAIR_PEERS_CACHE_CAPACITY,
+            },
         },
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    solana_client::connection_cache::Protocol,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},
@@ -457,16 +461,17 @@ impl RepairService {
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
-                if let Err(SendPktsError::IoError(err, num_failed)) =
-                    batch_send(repair_socket, &batch)
-                {
-                    error!(
-                        "{} batch_send failed to send {}/{} packets first error {:?}",
-                        id,
-                        num_failed,
-                        batch.len(),
-                        err
-                    );
+                match batch_send(repair_socket, &batch) {
+                    Ok(()) => (),
+                    Err(SendPktsError::IoError(err, num_failed)) => {
+                        error!(
+                            "{} batch_send failed to send {}/{} packets first error {:?}",
+                            id,
+                            num_failed,
+                            batch.len(),
+                            err
+                        );
+                    }
                 }
             }
             batch_send_repairs_elapsed.stop();
@@ -677,6 +682,70 @@ impl RepairService {
         }
     }
 
+    pub fn request_repair_for_shred_from_peer(
+        cluster_info: Arc<ClusterInfo>,
+        pubkey: Pubkey,
+        slot: u64,
+        shred_index: u64,
+        repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
+    ) {
+        let peer_repair_addr = cluster_info
+            .lookup_contact_info(&pubkey, |node| node.serve_repair(Protocol::UDP))
+            .unwrap()
+            .unwrap();
+        Self::request_repair_for_shred_from_address(
+            cluster_info,
+            pubkey,
+            peer_repair_addr,
+            slot,
+            shred_index,
+            repair_socket,
+            outstanding_repair_requests,
+        );
+    }
+
+    fn request_repair_for_shred_from_address(
+        cluster_info: Arc<ClusterInfo>,
+        pubkey: Pubkey,
+        address: SocketAddr,
+        slot: u64,
+        shred_index: u64,
+        repair_socket: &UdpSocket,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
+    ) {
+        // Setup repair request
+        let identity_keypair = cluster_info.keypair();
+        let repair_request = ShredRepairType::Shred(slot, shred_index);
+        let nonce = outstanding_repair_requests
+            .write()
+            .unwrap()
+            .add_request(repair_request, timestamp());
+
+        // Create repair request
+        let header = RepairRequestHeader::new(cluster_info.id(), pubkey, timestamp(), nonce);
+        let request_proto = RepairProtocol::WindowIndex {
+            header,
+            slot,
+            shred_index,
+        };
+        let packet_buf =
+            ServeRepair::repair_proto_to_bytes(&request_proto, &identity_keypair).unwrap();
+
+        // Prepare packet batch to send
+        let reqs = vec![(packet_buf, address)];
+
+        // Send packet batch
+        match batch_send(repair_socket, &reqs[..]) {
+            Ok(()) => {
+                trace!("successfully sent repair request!");
+            }
+            Err(SendPktsError::IoError(err, _num_failed)) => {
+                error!("batch_send failed to send packet - error = {:?}", err);
+            }
+        }
+    }
+
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
     #[cfg(test)]
     pub fn generate_repairs_in_range(
@@ -858,13 +927,14 @@ pub(crate) fn sleep_shred_deferment_period() {
 mod test {
     use {
         super::*,
+        crate::repair::quic_endpoint::RemoteRequest,
         solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
         solana_ledger::{
             blockstore::{
                 make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
             },
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
@@ -883,290 +953,324 @@ mod test {
     }
 
     #[test]
-    pub fn test_repair_orphan() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+    pub fn test_request_repair_for_shred_from_address() {
+        // Setup cluster and repair info
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let pubkey = cluster_info.id();
+        let slot = 100;
+        let shred_index = 50;
+        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let address = reader.local_addr().unwrap();
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let outstanding_repair_requests = Arc::new(RwLock::new(OutstandingShredRepairs::default()));
 
-            // Create some orphan slots
-            let (mut shreds, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
-            let (shreds2, _) = make_slot_entries(5, 2, 1, /*merkle_variant:*/ true);
-            shreds.extend(shreds2);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let mut repair_weight = RepairWeight::new(0);
-            assert_eq!(
-                repair_weight.get_best_weighted_repairs(
-                    &blockstore,
-                    &HashMap::new(),
-                    &EpochSchedule::default(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut RepairTiming::default(),
-                    &mut BestRepairsStats::default(),
-                ),
-                vec![
-                    ShredRepairType::Orphan(2),
-                    ShredRepairType::HighestShred(0, 0)
-                ]
-            );
+        // Send a repair request
+        RepairService::request_repair_for_shred_from_address(
+            cluster_info.clone(),
+            pubkey,
+            address,
+            slot,
+            shred_index,
+            &sender,
+            outstanding_repair_requests,
+        );
+
+        // Receive and translate repair packet
+        let mut packets = vec![solana_sdk::packet::Packet::default(); 1];
+        let _recv_count = solana_streamer::recvmmsg::recv_mmsg(&reader, &mut packets[..]).unwrap();
+        let packet = &packets[0];
+        let Some(bytes) = packet.data(..).map(Vec::from) else {
+            panic!("packet data not found");
+        };
+        let remote_request = RemoteRequest {
+            remote_pubkey: None,
+            remote_address: packet.meta().socket_addr(),
+            bytes,
+            response_sender: None,
+        };
+
+        // Deserialize and check the request
+        let deserialized =
+            serve_repair::deserialize_request::<RepairProtocol>(&remote_request).unwrap();
+        match deserialized {
+            RepairProtocol::WindowIndex {
+                slot: deserialized_slot,
+                shred_index: deserialized_shred_index,
+                ..
+            } => {
+                assert_eq!(deserialized_slot, slot);
+                assert_eq!(deserialized_shred_index, shred_index);
+            }
+            _ => panic!("unexpected repair protocol"),
         }
+    }
 
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    #[test]
+    pub fn test_repair_orphan() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Create some orphan slots
+        let (mut shreds, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
+        let (shreds2, _) = make_slot_entries(5, 2, 1, /*merkle_variant:*/ true);
+        shreds.extend(shreds2);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let mut repair_weight = RepairWeight::new(0);
+        assert_eq!(
+            repair_weight.get_best_weighted_repairs(
+                &blockstore,
+                &HashMap::new(),
+                &EpochSchedule::default(),
+                MAX_ORPHANS,
+                MAX_REPAIR_LENGTH,
+                MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                MAX_CLOSEST_COMPLETION_REPAIRS,
+                &mut RepairTiming::default(),
+                &mut BestRepairsStats::default(),
+            ),
+            vec![
+                ShredRepairType::Orphan(2),
+                ShredRepairType::HighestShred(0, 0)
+            ]
+        );
     }
 
     #[test]
     pub fn test_repair_empty_slot() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(2, 0, 1, /*merkle_variant:*/ true);
+        let (shreds, _) = make_slot_entries(2, 0, 1, /*merkle_variant:*/ true);
 
-            // Write this shred to slot 2, should chain to slot 0, which we haven't received
-            // any shreds for
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let mut repair_weight = RepairWeight::new(0);
+        // Write this shred to slot 2, should chain to slot 0, which we haven't received
+        // any shreds for
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let mut repair_weight = RepairWeight::new(0);
 
-            // Check that repair tries to patch the empty slot
-            assert_eq!(
-                repair_weight.get_best_weighted_repairs(
-                    &blockstore,
-                    &HashMap::new(),
-                    &EpochSchedule::default(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut RepairTiming::default(),
-                    &mut BestRepairsStats::default(),
-                ),
-                vec![ShredRepairType::HighestShred(0, 0)]
-            );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        // Check that repair tries to patch the empty slot
+        assert_eq!(
+            repair_weight.get_best_weighted_repairs(
+                &blockstore,
+                &HashMap::new(),
+                &EpochSchedule::default(),
+                MAX_ORPHANS,
+                MAX_REPAIR_LENGTH,
+                MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                MAX_CLOSEST_COMPLETION_REPAIRS,
+                &mut RepairTiming::default(),
+                &mut BestRepairsStats::default(),
+            ),
+            vec![ShredRepairType::HighestShred(0, 0)]
+        );
     }
 
     #[test]
     pub fn test_generate_repairs() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let nth = 3;
-            let num_slots = 2;
+        let nth = 3;
+        let num_slots = 2;
 
-            // Create some shreds
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots, 150);
-            let num_shreds = shreds.len() as u64;
-            let num_shreds_per_slot = num_shreds / num_slots;
+        // Create some shreds
+        let (mut shreds, _) = make_many_slot_entries(0, num_slots, 150);
+        let num_shreds = shreds.len() as u64;
+        let num_shreds_per_slot = num_shreds / num_slots;
 
-            // write every nth shred
-            let mut shreds_to_write = vec![];
-            let mut missing_indexes_per_slot = vec![];
-            for i in (0..num_shreds).rev() {
-                let index = i % num_shreds_per_slot;
-                // get_best_repair_shreds only returns missing shreds in
-                // between shreds received; So this should either insert the
-                // last shred in each slot, or exclude missing shreds after the
-                // last inserted shred from expected repairs.
-                if index % nth == 0 || index + 1 == num_shreds_per_slot {
-                    shreds_to_write.insert(0, shreds.remove(i as usize));
-                } else if i < num_shreds_per_slot {
-                    missing_indexes_per_slot.insert(0, index);
-                }
+        // write every nth shred
+        let mut shreds_to_write = vec![];
+        let mut missing_indexes_per_slot = vec![];
+        for i in (0..num_shreds).rev() {
+            let index = i % num_shreds_per_slot;
+            // get_best_repair_shreds only returns missing shreds in
+            // between shreds received; So this should either insert the
+            // last shred in each slot, or exclude missing shreds after the
+            // last inserted shred from expected repairs.
+            if index % nth == 0 || index + 1 == num_shreds_per_slot {
+                shreds_to_write.insert(0, shreds.remove(i as usize));
+            } else if i < num_shreds_per_slot {
+                missing_indexes_per_slot.insert(0, index);
             }
-            blockstore
-                .insert_shreds(shreds_to_write, None, false)
-                .unwrap();
-            let expected: Vec<ShredRepairType> = (0..num_slots)
-                .flat_map(|slot| {
-                    missing_indexes_per_slot
-                        .iter()
-                        .map(move |shred_index| ShredRepairType::Shred(slot, *shred_index))
-                })
-                .collect();
-
-            let mut repair_weight = RepairWeight::new(0);
-            sleep_shred_deferment_period();
-            assert_eq!(
-                repair_weight.get_best_weighted_repairs(
-                    &blockstore,
-                    &HashMap::new(),
-                    &EpochSchedule::default(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut RepairTiming::default(),
-                    &mut BestRepairsStats::default(),
-                ),
-                expected
-            );
-
-            assert_eq!(
-                repair_weight.get_best_weighted_repairs(
-                    &blockstore,
-                    &HashMap::new(),
-                    &EpochSchedule::default(),
-                    MAX_ORPHANS,
-                    expected.len() - 2,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut RepairTiming::default(),
-                    &mut BestRepairsStats::default(),
-                )[..],
-                expected[0..expected.len() - 2]
-            );
         }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        blockstore
+            .insert_shreds(shreds_to_write, None, false)
+            .unwrap();
+        let expected: Vec<ShredRepairType> = (0..num_slots)
+            .flat_map(|slot| {
+                missing_indexes_per_slot
+                    .iter()
+                    .map(move |shred_index| ShredRepairType::Shred(slot, *shred_index))
+            })
+            .collect();
+
+        let mut repair_weight = RepairWeight::new(0);
+        sleep_shred_deferment_period();
+        assert_eq!(
+            repair_weight.get_best_weighted_repairs(
+                &blockstore,
+                &HashMap::new(),
+                &EpochSchedule::default(),
+                MAX_ORPHANS,
+                MAX_REPAIR_LENGTH,
+                MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                MAX_CLOSEST_COMPLETION_REPAIRS,
+                &mut RepairTiming::default(),
+                &mut BestRepairsStats::default(),
+            ),
+            expected
+        );
+
+        assert_eq!(
+            repair_weight.get_best_weighted_repairs(
+                &blockstore,
+                &HashMap::new(),
+                &EpochSchedule::default(),
+                MAX_ORPHANS,
+                expected.len() - 2,
+                MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                MAX_CLOSEST_COMPLETION_REPAIRS,
+                &mut RepairTiming::default(),
+                &mut BestRepairsStats::default(),
+            )[..],
+            expected[0..expected.len() - 2]
+        );
     }
 
     #[test]
     pub fn test_generate_highest_repair() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let num_entries_per_slot = 100;
+        let num_entries_per_slot = 100;
 
-            // Create some shreds
-            let (mut shreds, _) = make_slot_entries(
-                0, // slot
-                0, // parent_slot
-                num_entries_per_slot as u64,
-                true, // merkle_variant
-            );
-            let num_shreds_per_slot = shreds.len() as u64;
+        // Create some shreds
+        let (mut shreds, _) = make_slot_entries(
+            0, // slot
+            0, // parent_slot
+            num_entries_per_slot as u64,
+            true, // merkle_variant
+        );
+        let num_shreds_per_slot = shreds.len() as u64;
 
-            // Remove last shred (which is also last in slot) so that slot is not complete
-            shreds.pop();
+        // Remove last shred (which is also last in slot) so that slot is not complete
+        shreds.pop();
 
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
-            // We didn't get the last shred for this slot, so ask for the highest shred for that slot
-            let expected: Vec<ShredRepairType> =
-                vec![ShredRepairType::HighestShred(0, num_shreds_per_slot - 1)];
+        // We didn't get the last shred for this slot, so ask for the highest shred for that slot
+        let expected: Vec<ShredRepairType> =
+            vec![ShredRepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
-            sleep_shred_deferment_period();
-            let mut repair_weight = RepairWeight::new(0);
-            assert_eq!(
-                repair_weight.get_best_weighted_repairs(
-                    &blockstore,
-                    &HashMap::new(),
-                    &EpochSchedule::default(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut RepairTiming::default(),
-                    &mut BestRepairsStats::default(),
-                ),
-                expected
-            );
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        sleep_shred_deferment_period();
+        let mut repair_weight = RepairWeight::new(0);
+        assert_eq!(
+            repair_weight.get_best_weighted_repairs(
+                &blockstore,
+                &HashMap::new(),
+                &EpochSchedule::default(),
+                MAX_ORPHANS,
+                MAX_REPAIR_LENGTH,
+                MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                MAX_CLOSEST_COMPLETION_REPAIRS,
+                &mut RepairTiming::default(),
+                &mut BestRepairsStats::default(),
+            ),
+            expected
+        );
     }
 
     #[test]
     pub fn test_repair_range() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
+        let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
-            let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
-            for (mut slot_shreds, _) in shreds.into_iter() {
-                slot_shreds.remove(0);
-                blockstore.insert_shreds(slot_shreds, None, false).unwrap();
-            }
+        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
+        for (mut slot_shreds, _) in shreds.into_iter() {
+            slot_shreds.remove(0);
+            blockstore.insert_shreds(slot_shreds, None, false).unwrap();
+        }
 
-            // Iterate through all possible combinations of start..end (inclusive on both
-            // sides of the range)
-            for start in 0..slots.len() {
-                for end in start..slots.len() {
-                    let repair_slot_range = RepairSlotRange {
-                        start: slots[start],
-                        end: slots[end],
-                    };
-                    let expected: Vec<ShredRepairType> = (repair_slot_range.start
-                        ..=repair_slot_range.end)
-                        .map(|slot_index| {
-                            if slots.contains(&slot_index) {
-                                ShredRepairType::Shred(slot_index, 0)
-                            } else {
-                                ShredRepairType::HighestShred(slot_index, 0)
-                            }
-                        })
-                        .collect();
+        // Iterate through all possible combinations of start..end (inclusive on both
+        // sides of the range)
+        for start in 0..slots.len() {
+            for end in start..slots.len() {
+                let repair_slot_range = RepairSlotRange {
+                    start: slots[start],
+                    end: slots[end],
+                };
+                let expected: Vec<ShredRepairType> = (repair_slot_range.start
+                    ..=repair_slot_range.end)
+                    .map(|slot_index| {
+                        if slots.contains(&slot_index) {
+                            ShredRepairType::Shred(slot_index, 0)
+                        } else {
+                            ShredRepairType::HighestShred(slot_index, 0)
+                        }
+                    })
+                    .collect();
 
-                    sleep_shred_deferment_period();
-                    assert_eq!(
-                        RepairService::generate_repairs_in_range(
-                            &blockstore,
-                            std::usize::MAX,
-                            &repair_slot_range,
-                        ),
-                        expected
-                    );
-                }
+                sleep_shred_deferment_period();
+                assert_eq!(
+                    RepairService::generate_repairs_in_range(
+                        &blockstore,
+                        std::usize::MAX,
+                        &repair_slot_range,
+                    ),
+                    expected
+                );
             }
         }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_repair_range_highest() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let num_entries_per_slot = 10;
+        let num_entries_per_slot = 10;
 
-            let num_slots = 1;
-            let start = 5;
+        let num_slots = 1;
+        let start = 5;
 
-            // Create some shreds in slots 0..num_slots
-            for i in start..start + num_slots {
-                let parent = if i > 0 { i - 1 } else { 0 };
-                let (shreds, _) = make_slot_entries(
-                    i, // slot
-                    parent,
-                    num_entries_per_slot as u64,
-                    true, // merkle_variant
-                );
-
-                blockstore.insert_shreds(shreds, None, false).unwrap();
-            }
-
-            let end = 4;
-            let expected: Vec<ShredRepairType> = vec![
-                ShredRepairType::HighestShred(end - 2, 0),
-                ShredRepairType::HighestShred(end - 1, 0),
-                ShredRepairType::HighestShred(end, 0),
-            ];
-
-            let repair_slot_range = RepairSlotRange { start: 2, end };
-
-            assert_eq!(
-                RepairService::generate_repairs_in_range(
-                    &blockstore,
-                    std::usize::MAX,
-                    &repair_slot_range,
-                ),
-                expected
+        // Create some shreds in slots 0..num_slots
+        for i in start..start + num_slots {
+            let parent = if i > 0 { i - 1 } else { 0 };
+            let (shreds, _) = make_slot_entries(
+                i, // slot
+                parent,
+                num_entries_per_slot as u64,
+                true, // merkle_variant
             );
+
+            blockstore.insert_shreds(shreds, None, false).unwrap();
         }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+
+        let end = 4;
+        let expected: Vec<ShredRepairType> = vec![
+            ShredRepairType::HighestShred(end - 2, 0),
+            ShredRepairType::HighestShred(end - 1, 0),
+            ShredRepairType::HighestShred(end, 0),
+        ];
+
+        let repair_slot_range = RepairSlotRange { start: 2, end };
+
+        assert_eq!(
+            RepairService::generate_repairs_in_range(
+                &blockstore,
+                std::usize::MAX,
+                &repair_slot_range,
+            ),
+            expected
+        );
     }
 
     #[test]
     pub fn test_generate_duplicate_repairs_for_slot() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let dead_slot = 9;
 
         // SlotMeta doesn't exist, should make no repairs
@@ -1202,9 +1306,9 @@ mod test {
     pub fn test_generate_and_send_duplicate_repairs() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let identity_keypair = cluster_info.keypair().clone();
@@ -1301,7 +1405,7 @@ mod test {
     pub fn test_update_duplicate_slot_repair_addr() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let dummy_addr = Some((
             Pubkey::default(),
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),

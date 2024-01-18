@@ -50,6 +50,7 @@ use {
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
+        installed_scheduler_pool::BankWithScheduler,
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
@@ -86,10 +87,10 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
-        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
-        UiConfirmedBlock, UiTransactionEncoding,
+        map_inner_instructions, BlockEncodingOptions, ConfirmedBlock,
+        ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta,
+        EncodedConfirmedTransactionWithStatusMeta, Reward, RewardType, TransactionBinaryEncoding,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token_2022::{
@@ -169,6 +170,7 @@ pub struct RpcBigtableConfig {
     pub bigtable_instance_name: String,
     pub bigtable_app_profile_id: String,
     pub timeout: Option<Duration>,
+    pub max_message_size: usize,
 }
 
 impl Default for RpcBigtableConfig {
@@ -180,6 +182,7 @@ impl Default for RpcBigtableConfig {
             bigtable_instance_name,
             bigtable_app_profile_id,
             timeout: None,
+            max_message_size: solana_storage_bigtable::DEFAULT_MAX_MESSAGE_SIZE,
         }
     }
 }
@@ -341,15 +344,13 @@ impl JsonRpcRequestProcessor {
 
     // Useful for unit testing
     pub fn new_from_bank(
-        bank: Arc<Bank>,
+        bank: Bank,
         socket_addr_space: SocketAddrSpace,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         let genesis_hash = bank.hash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[bank.clone()],
-            bank.slot(),
-        )));
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let bank = bank_forks.read().unwrap().root_bank();
         let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info = Arc::new({
@@ -633,7 +634,7 @@ impl JsonRpcRequestProcessor {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
         let bank = self.bank(Some(CommitmentConfig::finalized()));
-        *bank.epoch_schedule()
+        bank.epoch_schedule().clone()
     }
 
     pub fn get_balance(
@@ -1323,9 +1324,9 @@ impl JsonRpcRequestProcessor {
                 .unwrap()
                 .highest_super_majority_root()
         {
-            let result = self.blockstore.get_block_time(slot);
+            let result = self.blockstore.get_rooted_block_time(slot);
             self.check_blockstore_root(&result, slot)?;
-            if result.is_err() || matches!(result, Ok(None)) {
+            if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = bigtable_ledger_storage.get_confirmed_block(slot).await;
                     self.check_bigtable_result(&bigtable_result)?;
@@ -1335,7 +1336,7 @@ impl JsonRpcRequestProcessor {
                 }
             }
             self.check_slot_cleaned_up(&result, slot)?;
-            Ok(result.ok().unwrap_or(None))
+            Ok(result.ok())
         } else {
             let r_bank_forks = self.bank_forks.read().unwrap();
             if let Some(bank) = r_bank_forks.get(slot) {
@@ -1771,7 +1772,7 @@ impl JsonRpcRequestProcessor {
             deactivating,
         } = delegation.stake_activating_and_deactivating(
             epoch,
-            Some(&stake_history),
+            &stake_history,
             new_rate_activation_epoch,
         );
         let stake_activation_state = if deactivating > 0 {
@@ -3267,6 +3268,7 @@ pub mod rpc_full {
     use {
         super::*,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
+        solana_transaction_status::UiInnerInstructions,
     };
     #[rpc]
     pub trait Full {
@@ -3677,7 +3679,8 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                    inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
+                } = preflight_bank.simulate_transaction(&transaction, false)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3695,6 +3698,7 @@ pub mod rpc_full {
                             accounts: None,
                             units_consumed: Some(units_consumed),
                             return_data: return_data.map(|return_data| return_data.into()),
+                            inner_instructions: None,
                         },
                     }
                     .into());
@@ -3725,6 +3729,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
+                inner_instructions: enable_cpi_recording,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
@@ -3754,7 +3759,6 @@ pub mod rpc_full {
             if sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
-            let number_of_accounts = transaction.message().account_keys().len();
 
             let TransactionSimulationResult {
                 result,
@@ -3762,7 +3766,11 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+                inner_instructions,
+            } = bank.simulate_transaction(&transaction, enable_cpi_recording);
+
+            let account_keys = transaction.message().account_keys();
+            let number_of_accounts = account_keys.len();
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -3805,6 +3813,12 @@ pub mod rpc_full {
                 None
             };
 
+            let inner_instructions = inner_instructions.map(|info| {
+                map_inner_instructions(info)
+                    .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
+                    .collect()
+            });
+
             Ok(new_response(
                 bank,
                 RpcSimulateTransactionResult {
@@ -3813,6 +3827,7 @@ pub mod rpc_full {
                     accounts,
                     units_consumed: Some(units_consumed),
                     return_data: return_data.map(|return_data| return_data.into()),
+                    inner_instructions,
                 },
             ))
         }
@@ -4602,7 +4617,7 @@ pub fn populate_blockstore_for_tests(
     // that they are matched properly by get_rooted_block
     assert_eq!(
         solana_ledger::blockstore_processor::process_entries_for_tests(
-            &bank,
+            &BankWithScheduler::new_without_scheduler(bank),
             entries,
             Some(
                 &solana_ledger::blockstore_processor::TransactionStatusSender {
@@ -4962,7 +4977,12 @@ pub mod tests {
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
-                parent_bank = self.bank_forks.write().unwrap().insert(new_bank);
+                parent_bank = self
+                    .bank_forks
+                    .write()
+                    .unwrap()
+                    .insert(new_bank)
+                    .clone_without_scheduler();
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(
                     &self.blockstore,
@@ -5004,7 +5024,8 @@ pub mod tests {
                 .bank_forks
                 .write()
                 .unwrap()
-                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot));
+                .insert(Bank::new_from_parent(parent_bank, &Pubkey::default(), slot))
+                .clone_without_scheduler();
 
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
@@ -5053,18 +5074,20 @@ pub mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(100);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
-            .unwrap();
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
-        let request_processor = JsonRpcRequestProcessor::new_from_bank(
+        let meta = JsonRpcRequestProcessor::new_from_bank(
             bank,
             SocketAddrSpace::Unspecified,
             connection_cache,
         );
+
+        let bank = meta.bank_forks.read().unwrap().root_bank();
+        bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+
         assert_eq!(
-            request_processor
-                .get_transaction_count(RpcContextConfig::default())
+            meta.get_transaction_count(RpcContextConfig::default())
                 .unwrap(),
             1
         );
@@ -5074,7 +5097,7 @@ pub mod tests {
     fn test_rpc_get_balance() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             bank,
@@ -5106,7 +5129,7 @@ pub mod tests {
     fn test_rpc_get_balance_via_client() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             bank,
@@ -5223,17 +5246,7 @@ pub mod tests {
     fn test_rpc_get_tx_count() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        // Add 4 transactions
-        bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
-            .unwrap();
-        bank.transfer(2, &genesis.mint_keypair, &bob_pubkey)
-            .unwrap();
-        bank.transfer(3, &genesis.mint_keypair, &bob_pubkey)
-            .unwrap();
-        bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
-            .unwrap();
-
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             bank,
@@ -5243,6 +5256,17 @@ pub mod tests {
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
+
+        // Add 4 transactions
+        let bank = meta.bank_forks.read().unwrap().root_bank();
+        bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(2, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(3, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}"#;
         let res = io.handle_request_sync(req, meta);
@@ -5905,6 +5929,7 @@ pub mod tests {
                         }
                     ],
                     "err":null,
+                    "innerInstructions": null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -5989,6 +6014,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6017,6 +6043,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6069,6 +6096,7 @@ pub mod tests {
                 "value":{
                     "err":"BlockhashNotFound",
                     "accounts":null,
+                    "innerInstructions":null,
                     "logs":[],
                     "returnData":null,
                     "unitsConsumed":0,
@@ -6095,6 +6123,7 @@ pub mod tests {
                 "value":{
                     "accounts":null,
                     "err":null,
+                    "innerInstructions":null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
@@ -6379,7 +6408,7 @@ pub mod tests {
     #[test]
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             bank,
@@ -6475,7 +6504,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","innerInstructions":null,"logs":[],"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
             )
         );
 
@@ -6627,7 +6656,7 @@ pub mod tests {
 
         let bank = Bank::new_for_tests_with_config(&genesis_config, config);
         (
-            Arc::new(RwLock::new(BankForks::new(bank))),
+            BankForks::new_rw_arc(bank),
             mint_keypair,
             Arc::new(voting_keypair),
         )
@@ -8310,7 +8339,7 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);

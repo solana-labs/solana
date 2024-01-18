@@ -22,6 +22,13 @@ pub(crate) fn success_response_str(value: &str) -> hyper::Response<hyper::Body> 
         .unwrap()
 }
 
+pub(crate) fn success_response_bytes(bytes: hyper::body::Bytes) -> hyper::Response<hyper::Body> {
+    hyper::Response::builder()
+        .status(hyper::StatusCode::OK)
+        .body(hyper::Body::from(bytes))
+        .unwrap()
+}
+
 pub(crate) fn success_response() -> hyper::Response<hyper::Body> {
     success_response_str("")
 }

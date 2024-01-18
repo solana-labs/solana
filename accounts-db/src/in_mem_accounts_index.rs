@@ -4,7 +4,7 @@ use {
             AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, DiskIndexValue, IndexValue,
             PreAllocatedAccountMapEntry, RefCount, SlotList, UpsertReclaim, ZeroLamport,
         },
-        bucket_map_holder::{Age, BucketMapHolder},
+        bucket_map_holder::{Age, AtomicAge, BucketMapHolder},
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
@@ -17,7 +17,7 @@ use {
         fmt::Debug,
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
     },
@@ -89,7 +89,7 @@ impl<T: IndexValue> PossibleEvictions<T> {
 
 // one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
-    last_age_flushed: AtomicU8,
+    last_age_flushed: AtomicAge,
 
     // backing store
     map_internal: RwLock<InMemMap<T>>,
@@ -115,7 +115,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
 
     /// how many more ages to skip before this bucket is flushed (as opposed to being skipped).
     /// When this reaches 0, this bucket is flushed.
-    remaining_ages_to_skip_flushing: AtomicU8,
+    remaining_ages_to_skip_flushing: AtomicAge,
 
     /// an individual bucket will evict its entries and write to disk every 1/NUM_AGES_TO_DISTRIBUTE_FLUSHES ages
     /// Higher numbers mean we flush less buckets/s
@@ -181,12 +181,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             stop_evictions: AtomicU64::default(),
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
-            last_age_flushed: AtomicU8::new(Age::MAX),
+            last_age_flushed: AtomicAge::new(Age::MAX),
             startup_info: StartupInfo::default(),
             possible_evictions: RwLock::new(PossibleEvictions::new(1)),
             // Spread out the scanning across all ages within the window.
             // This causes us to scan 1/N of the bins each 'Age'
-            remaining_ages_to_skip_flushing: AtomicU8::new(
+            remaining_ages_to_skip_flushing: AtomicAge::new(
                 thread_rng().gen_range(0..num_ages_to_distribute_flushes),
             ),
             num_ages_to_distribute_flushes,

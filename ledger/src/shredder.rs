@@ -207,7 +207,13 @@ impl Shredder {
                     .iter()
                     .scan(next_code_index, |next_code_index, chunk| {
                         let num_data_shreds = chunk.len();
-                        let erasure_batch_size = get_erasure_batch_size(num_data_shreds);
+                        let is_last_in_slot = chunk
+                            .last()
+                            .copied()
+                            .map(Shred::last_in_slot)
+                            .unwrap_or(true);
+                        let erasure_batch_size =
+                            get_erasure_batch_size(num_data_shreds, is_last_in_slot);
                         *next_code_index += (erasure_batch_size - num_data_shreds) as u32;
                         Some(*next_code_index)
                     }),
@@ -276,7 +282,12 @@ impl Shredder {
                 && shred.version() == version
                 && shred.fec_set_index() == fec_set_index));
         let num_data = data.len();
-        let num_coding = get_erasure_batch_size(num_data)
+        let is_last_in_slot = data
+            .last()
+            .map(Borrow::borrow)
+            .map(Shred::last_in_slot)
+            .unwrap_or(true);
+        let num_coding = get_erasure_batch_size(num_data, is_last_in_slot)
             .checked_sub(num_data)
             .unwrap();
         assert!(num_coding > 0);
@@ -434,11 +445,16 @@ impl Default for ReedSolomonCache {
 }
 
 /// Maps number of data shreds in each batch to the erasure batch size.
-pub(crate) fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
-    ERASURE_BATCH_SIZE
+pub(crate) fn get_erasure_batch_size(num_data_shreds: usize, is_last_in_slot: bool) -> usize {
+    let erasure_batch_size = ERASURE_BATCH_SIZE
         .get(num_data_shreds)
         .copied()
-        .unwrap_or(2 * num_data_shreds)
+        .unwrap_or(2 * num_data_shreds);
+    if is_last_in_slot {
+        erasure_batch_size.max(2 * DATA_SHREDS_PER_FEC_BLOCK)
+    } else {
+        erasure_batch_size
+    }
 }
 
 // Returns offsets to fec_set_index when spliting shreds into erasure batches.
@@ -518,17 +534,19 @@ mod tests {
             })
             .collect();
 
+        let is_last_in_slot = true;
         let size = serialized_size(&entries).unwrap() as usize;
         // Integer division to ensure we have enough shreds to fit all the data
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
         let num_expected_data_shreds = (size + data_buffer_size - 1) / data_buffer_size;
         let num_expected_coding_shreds =
-            get_erasure_batch_size(num_expected_data_shreds) - num_expected_data_shreds;
+            get_erasure_batch_size(num_expected_data_shreds, is_last_in_slot)
+                - num_expected_data_shreds;
         let start_index = 0;
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,
             &entries,
-            true,        // is_last_in_slot
+            is_last_in_slot,
             start_index, // next_shred_index
             start_index, // next_code_index
             true,        // merkle_variant
@@ -792,7 +810,7 @@ mod tests {
         assert_eq!(data_shreds.len(), num_data_shreds);
         assert_eq!(
             num_coding_shreds,
-            get_erasure_batch_size(num_data_shreds) - num_data_shreds
+            get_erasure_batch_size(num_data_shreds, is_last_in_slot) - num_data_shreds
         );
 
         let all_shreds = data_shreds
@@ -1189,7 +1207,10 @@ mod tests {
                 .iter()
                 .group_by(|shred| shred.fec_set_index())
                 .into_iter()
-                .map(|(_, chunk)| get_erasure_batch_size(chunk.count()))
+                .map(|(_, chunk)| {
+                    let chunk: Vec<_> = chunk.collect();
+                    get_erasure_batch_size(chunk.len(), chunk.last().unwrap().last_in_slot())
+                })
                 .sum();
             assert_eq!(coding_shreds.len(), num_shreds - data_shreds.len());
         }
@@ -1232,9 +1253,10 @@ mod tests {
     #[test]
     fn test_max_shreds_per_slot() {
         for num_data_shreds in 32..128 {
-            let num_coding_shreds = get_erasure_batch_size(num_data_shreds)
-                .checked_sub(num_data_shreds)
-                .unwrap();
+            let num_coding_shreds =
+                get_erasure_batch_size(num_data_shreds, /*is_last_in_slot:*/ false)
+                    .checked_sub(num_data_shreds)
+                    .unwrap();
             assert!(
                 MAX_DATA_SHREDS_PER_SLOT * num_coding_shreds
                     <= MAX_CODE_SHREDS_PER_SLOT * num_data_shreds

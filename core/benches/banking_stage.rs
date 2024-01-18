@@ -29,7 +29,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::process_entries_for_tests,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
     },
     solana_perf::{
         packet::{to_packet_batches, Packet},
@@ -55,7 +55,7 @@ use {
     },
     std::{
         iter::repeat_with,
-        sync::{atomic::Ordering, Arc, RwLock},
+        sync::{atomic::Ordering, Arc},
         time::{Duration, Instant},
     },
     test::Bencher,
@@ -81,50 +81,49 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
 #[bench]
 fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-    let bank = Arc::new(Bank::new_for_benches(&genesis_config));
-    let ledger_path = get_tmp_ledger_path!();
-    {
-        let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+    let bank = Bank::new_for_benches(&genesis_config)
+        .wrap_with_bank_forks_for_tests()
+        .0;
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    let blockstore = Arc::new(
+        Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
+    );
+    let (exit, poh_recorder, poh_service, _signal_receiver) =
+        create_test_recorder(bank, blockstore, None, None);
+
+    let recorder = poh_recorder.read().unwrap().new_recorder();
+    let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
+
+    let tx = test_tx();
+    let transactions = vec![tx; 4194304];
+    let batches = transactions
+        .iter()
+        .filter_map(|transaction| {
+            let packet = Packet::from_data(None, transaction).ok().unwrap();
+            DeserializedPacket::new(packet).ok()
+        })
+        .collect::<Vec<_>>();
+    let batches_len = batches.len();
+    let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
+        UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
+        ThreadType::Transactions,
+    );
+    let (s, _r) = unbounded();
+    let committer = Committer::new(None, s, Arc::new(PrioritizationFeeCache::new(0u64)));
+    let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
+    // This tests the performance of buffering packets.
+    // If the packet buffers are copied, performance will be poor.
+    bencher.iter(move || {
+        consumer.consume_buffered_packets(
+            &bank_start,
+            &mut transaction_buffer,
+            &BankingStageStats::default(),
+            &mut LeaderSlotMetricsTracker::new(0),
         );
-        let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(bank, blockstore, None, None);
+    });
 
-        let recorder = poh_recorder.read().unwrap().new_recorder();
-        let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
-
-        let tx = test_tx();
-        let transactions = vec![tx; 4194304];
-        let batches = transactions
-            .iter()
-            .filter_map(|transaction| {
-                let packet = Packet::from_data(None, transaction).ok().unwrap();
-                DeserializedPacket::new(packet).ok()
-            })
-            .collect::<Vec<_>>();
-        let batches_len = batches.len();
-        let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(batches, 2 * batches_len),
-            ThreadType::Transactions,
-        );
-        let (s, _r) = unbounded();
-        let committer = Committer::new(None, s, Arc::new(PrioritizationFeeCache::new(0u64)));
-        let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
-        // This tests the performance of buffering packets.
-        // If the packet buffers are copied, performance will be poor.
-        bencher.iter(move || {
-            consumer.consume_buffered_packets(
-                &bank_start,
-                &mut transaction_buffer,
-                &BankingStageStats::default(),
-                &mut LeaderSlotMetricsTracker::new(0),
-            );
-        });
-
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
-    }
-    let _unused = Blockstore::destroy(&ledger_path);
+    exit.store(true, Ordering::Relaxed);
+    poh_service.join().unwrap();
 }
 
 fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Transaction> {
@@ -219,7 +218,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank_forks = BankForks::new_rw_arc(bank);
     let bank = bank_forks.read().unwrap().get(0).unwrap();
 
     // set cost tracker limits to MAX so it will not filter out TXs
@@ -278,95 +277,92 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         packet_batches
     });
 
-    let ledger_path = get_tmp_ledger_path!();
-    {
-        let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
-        );
-        let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(bank.clone(), blockstore, None, None);
-        let cluster_info = {
-            let keypair = Arc::new(Keypair::new());
-            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
-        };
-        let cluster_info = Arc::new(cluster_info);
-        let (s, _r) = unbounded();
-        let _banking_stage = BankingStage::new(
-            BlockProductionMethod::ThreadLocalMultiIterator,
-            &cluster_info,
-            &poh_recorder,
-            non_vote_receiver,
-            tpu_vote_receiver,
-            gossip_vote_receiver,
-            None,
-            s,
-            None,
-            Arc::new(ConnectionCache::new("connection_cache_test")),
-            bank_forks,
-            &Arc::new(PrioritizationFeeCache::new(0u64)),
-        );
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    let blockstore = Arc::new(
+        Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
+    );
+    let (exit, poh_recorder, poh_service, signal_receiver) =
+        create_test_recorder(bank.clone(), blockstore, None, None);
+    let cluster_info = {
+        let keypair = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+        ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+    };
+    let cluster_info = Arc::new(cluster_info);
+    let (s, _r) = unbounded();
+    let _banking_stage = BankingStage::new(
+        BlockProductionMethod::ThreadLocalMultiIterator,
+        &cluster_info,
+        &poh_recorder,
+        non_vote_receiver,
+        tpu_vote_receiver,
+        gossip_vote_receiver,
+        None,
+        s,
+        None,
+        Arc::new(ConnectionCache::new("connection_cache_test")),
+        bank_forks,
+        &Arc::new(PrioritizationFeeCache::new(0u64)),
+    );
 
-        let chunk_len = verified.len() / CHUNKS;
-        let mut start = 0;
+    let chunk_len = verified.len() / CHUNKS;
+    let mut start = 0;
 
-        // This is so that the signal_receiver does not go out of scope after the closure.
-        // If it is dropped before poh_service, then poh_service will error when
-        // calling send() on the channel.
-        let signal_receiver = Arc::new(signal_receiver);
-        let signal_receiver2 = signal_receiver;
-        bencher.iter(move || {
-            let now = Instant::now();
-            let mut sent = 0;
-            if let Some(vote_packets) = &vote_packets {
-                tpu_vote_sender
-                    .send(BankingPacketBatch::new((
-                        vote_packets[start..start + chunk_len].to_vec(),
-                        None,
-                    )))
-                    .unwrap();
-                gossip_vote_sender
-                    .send(BankingPacketBatch::new((
-                        vote_packets[start..start + chunk_len].to_vec(),
-                        None,
-                    )))
-                    .unwrap();
-            }
-            for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
-                debug!(
-                    "sending... {}..{} {} v.len: {}",
-                    start,
-                    start + chunk_len,
-                    timestamp(),
-                    v.len(),
-                );
-                for xv in v {
-                    sent += xv.len();
-                }
-                non_vote_sender
-                    .send(BankingPacketBatch::new((v.to_vec(), None)))
-                    .unwrap();
-            }
-
-            check_txs(&signal_receiver2, txes / CHUNKS);
-
-            // This signature clear may not actually clear the signatures
-            // in this chunk, but since we rotate between CHUNKS then
-            // we should clear them by the time we come around again to re-use that chunk.
-            bank.clear_signatures();
-            trace!(
-                "time: {} checked: {} sent: {}",
-                duration_as_us(&now.elapsed()),
-                txes / CHUNKS,
-                sent,
+    // This is so that the signal_receiver does not go out of scope after the closure.
+    // If it is dropped before poh_service, then poh_service will error when
+    // calling send() on the channel.
+    let signal_receiver = Arc::new(signal_receiver);
+    let signal_receiver2 = signal_receiver;
+    bencher.iter(move || {
+        let now = Instant::now();
+        let mut sent = 0;
+        if let Some(vote_packets) = &vote_packets {
+            tpu_vote_sender
+                .send(BankingPacketBatch::new((
+                    vote_packets[start..start + chunk_len].to_vec(),
+                    None,
+                )))
+                .unwrap();
+            gossip_vote_sender
+                .send(BankingPacketBatch::new((
+                    vote_packets[start..start + chunk_len].to_vec(),
+                    None,
+                )))
+                .unwrap();
+        }
+        for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
+            debug!(
+                "sending... {}..{} {} v.len: {}",
+                start,
+                start + chunk_len,
+                timestamp(),
+                v.len(),
             );
-            start += chunk_len;
-            start %= verified.len();
-        });
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
-    }
-    let _unused = Blockstore::destroy(&ledger_path);
+            for xv in v {
+                sent += xv.len();
+            }
+            non_vote_sender
+                .send(BankingPacketBatch::new((v.to_vec(), None)))
+                .unwrap();
+        }
+
+        check_txs(&signal_receiver2, txes / CHUNKS);
+
+        // This signature clear may not actually clear the signatures
+        // in this chunk, but since we rotate between CHUNKS then
+        // we should clear them by the time we come around again to re-use that chunk.
+        bank.clear_signatures();
+        trace!(
+            "time: {} checked: {} sent: {}",
+            duration_as_us(&now.elapsed()),
+            txes / CHUNKS,
+            sent,
+        );
+        start += chunk_len;
+        start %= verified.len();
+    });
+    exit.store(true, Ordering::Relaxed);
+    poh_service.join().unwrap();
 }
 
 #[bench]
@@ -397,7 +393,15 @@ fn simulate_process_entries(
     initial_lamports: u64,
     num_accounts: usize,
 ) {
-    let bank = Arc::new(Bank::new_for_benches(genesis_config));
+    let bank = Bank::new_for_benches(genesis_config);
+    let slot = bank.slot();
+    let bank_fork = BankForks::new_rw_arc(bank);
+    let bank = bank_fork.read().unwrap().get_with_scheduler(slot).unwrap();
+    bank.clone_without_scheduler()
+        .loaded_programs_cache
+        .write()
+        .unwrap()
+        .set_fork_graph(bank_fork.clone());
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())

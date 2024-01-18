@@ -29,6 +29,7 @@ source ci/rust-version.sh nightly
 # reason to bend dev-context-only-utils's original intention and that listed
 # package isn't part of released binaries.
 declare tainted_packages=(
+  solana-accounts-bench
   solana-banking-bench
   solana-ledger-tool
 )
@@ -146,6 +147,7 @@ fi
 # 2. Check implicit usage of `dev-context-only-utils`-gated code in dev (=
 # test/benches) code by building in isolation from other crates, which might
 # happen to enable `dev-context-only-utils`
+export RUSTFLAGS="-Z threads=8 $RUSTFLAGS"
 if [[ $mode = "check-bins" || $mode = "full" ]]; then
   _ cargo "+${rust_nightly}" hack check --bins
 fi

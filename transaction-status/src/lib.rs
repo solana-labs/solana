@@ -12,6 +12,7 @@ use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::CompiledInstruction,
         message::{
             v0::{self, LoadedAddresses, LoadedMessage, MessageAddressTableLookup},
@@ -229,6 +230,27 @@ pub struct InnerInstruction {
     pub stack_height: Option<u32>,
 }
 
+/// Maps a list of inner instructions from `solana_sdk` into a list of this
+/// crate's representation of inner instructions (with instruction indices).
+pub fn map_inner_instructions(
+    inner_instructions: solana_sdk::inner_instruction::InnerInstructionsList,
+) -> impl Iterator<Item = InnerInstructions> {
+    inner_instructions
+        .into_iter()
+        .enumerate()
+        .map(|(index, instructions)| InnerInstructions {
+            index: index as u8,
+            instructions: instructions
+                .into_iter()
+                .map(|info| InnerInstruction {
+                    stack_height: Some(u32::from(info.stack_height)),
+                    instruction: info.instruction,
+                })
+                .collect(),
+        })
+        .filter(|i| !i.instructions.is_empty())
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiInnerInstructions {
@@ -239,7 +261,7 @@ pub struct UiInnerInstructions {
 }
 
 impl UiInnerInstructions {
-    fn parse(inner_instructions: InnerInstructions, account_keys: &AccountKeys) -> Self {
+    pub fn parse(inner_instructions: InnerInstructions, account_keys: &AccountKeys) -> Self {
         Self {
             index: inner_instructions.index,
             instructions: inner_instructions
@@ -791,6 +813,23 @@ pub struct UiConfirmedBlock {
     pub rewards: Option<Rewards>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
+}
+
+// Confirmed block with type guarantees that transaction metadata is always
+// present, as well as a list of the entry data needed to cryptographically
+// verify the block. Used for uploading to BigTable.
+pub struct VersionedConfirmedBlockWithEntries {
+    pub block: VersionedConfirmedBlock,
+    pub entries: Vec<EntrySummary>,
+}
+
+// Data needed to reconstruct an Entry, given an ordered list of transactions in
+// a block. Used for uploading to BigTable.
+pub struct EntrySummary {
+    pub num_hashes: u64,
+    pub hash: Hash,
+    pub num_transactions: u64,
+    pub starting_transaction_index: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]

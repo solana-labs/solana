@@ -406,6 +406,7 @@ impl JsonRpcService {
                 ref bigtable_instance_name,
                 ref bigtable_app_profile_id,
                 timeout,
+                max_message_size,
             }) = config.rpc_bigtable_config
             {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
@@ -414,6 +415,7 @@ impl JsonRpcService {
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                     app_profile_id: bigtable_app_profile_id.clone(),
+                    max_message_size,
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
@@ -586,7 +588,7 @@ mod tests {
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
         },
         solana_rpc_client_api::config::RpcContextConfig,
         solana_runtime::bank::Bank,
@@ -617,9 +619,9 @@ mod tests {
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -674,7 +676,7 @@ mod tests {
         } = create_genesis_config(10_000);
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Bank::new_for_tests(&genesis_config);
-        Arc::new(RwLock::new(BankForks::new(bank)))
+        BankForks::new_rw_arc(bank)
     }
 
     #[test]
@@ -719,8 +721,8 @@ mod tests {
 
     #[test]
     fn test_is_file_get_path() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let bank_forks = create_bank_forks();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -728,13 +730,13 @@ mod tests {
 
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
-            ledger_path.clone(),
+            ledger_path.path().to_path_buf(),
             None,
             bank_forks.clone(),
             health.clone(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
-            ledger_path.clone(),
+            ledger_path.path().to_path_buf(),
             Some(SnapshotConfig::default()),
             bank_forks,
             health,
@@ -829,15 +831,14 @@ mod tests {
     fn test_process_file_get() {
         let runtime = Runtime::new().unwrap();
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let genesis_path = ledger_path.path().join(DEFAULT_GENESIS_ARCHIVE);
         let bank_forks = create_bank_forks();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-
         let rrm = RpcRequestMiddleware::new(
-            ledger_path.clone(),
+            ledger_path.path().to_path_buf(),
             None,
             bank_forks,
             RpcHealth::stub(optimistically_confirmed_bank, blockstore),
@@ -872,7 +873,7 @@ mod tests {
         {
             std::fs::remove_file(&genesis_path).unwrap();
             {
-                let mut file = std::fs::File::create(ledger_path.join("wrong")).unwrap();
+                let mut file = std::fs::File::create(ledger_path.path().join("wrong")).unwrap();
                 file.write_all(b"wrong file").unwrap();
             }
             symlink::symlink_file("wrong", &genesis_path).unwrap();

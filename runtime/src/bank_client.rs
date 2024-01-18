@@ -4,7 +4,6 @@ use {
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -27,6 +26,8 @@ use {
         time::{Duration, Instant},
     },
 };
+#[cfg(feature = "dev-context-only-utils")]
+use {crate::bank_forks::BankForks, solana_sdk::clock, std::sync::RwLock};
 
 pub struct BankClient {
     bank: Arc<Bank>,
@@ -44,7 +45,7 @@ impl AsyncClient for BankClient {
         &self,
         transaction: VersionedTransaction,
     ) -> Result<Signature> {
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = transaction.signatures.first().cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
         Ok(signature)
@@ -60,7 +61,7 @@ impl SyncClient for BankClient {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
-        Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
+        Ok(transaction.signatures.first().cloned().unwrap_or_default())
     }
 
     /// Create and process a transaction from a single instruction.
@@ -330,12 +331,24 @@ impl BankClient {
         self.bank.set_sysvar_for_tests(sysvar);
     }
 
-    pub fn advance_slot(&mut self, by: u64, collector_id: &Pubkey) -> Option<Arc<Bank>> {
-        self.bank = Arc::new(Bank::new_from_parent(
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn advance_slot(
+        &mut self,
+        by: u64,
+        bank_forks: &RwLock<BankForks>,
+        collector_id: &Pubkey,
+    ) -> Option<Arc<Bank>> {
+        let new_bank = Bank::new_from_parent(
             self.bank.clone(),
             collector_id,
             self.bank.slot().checked_add(by)?,
-        ));
+        );
+        self.bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(new_bank)
+            .clone_without_scheduler();
+
         self.set_sysvar_for_tests(&clock::Clock {
             slot: self.bank.slot(),
             ..clock::Clock::default()
@@ -361,8 +374,8 @@ mod tests {
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
+        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let bank_client = BankClient::new_shared(bank);
         let amount = genesis_config.rent.minimum_balance(0);
 
         // Create 2-2 Multisig Transfer instruction.

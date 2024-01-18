@@ -8,12 +8,15 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
-    solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
+    solana_accounts_db::{
+        accounts_db::AccountShrinkThreshold, accounts_index::AccountSecondaryIndexes,
+        epoch_accounts_hash::EpochAccountsHash,
+    },
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
+        compute_budget::ComputeBudget, ic_msg, invoke_context::BuiltinFunctionWithContext,
         loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
@@ -27,7 +30,7 @@ use {
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},
         account_info::AccountInfo,
-        clock::Slot,
+        clock::{Epoch, Slot},
         entrypoint::{deserialize, ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
@@ -66,6 +69,10 @@ pub use {
     solana_banks_client::{BanksClient, BanksClientError},
     solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
+    solana_rbpf::{
+        error::EbpfError,
+        vm::{get_runtime_environment_key, EbpfVm},
+    },
     solana_sdk::transaction_context::IndexOfAccount,
 };
 
@@ -94,16 +101,19 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
     unsafe { transmute::<usize, &mut InvokeContext>(ptr) }
 }
 
-pub fn builtin_process_instruction(
-    process_instruction: solana_sdk::entrypoint::ProcessInstruction,
+pub fn invoke_builtin_function(
+    builtin_function: solana_sdk::entrypoint::ProcessInstruction,
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
+
+    // mock builtin program must consume units
+    invoke_context.consume_checked(1)?;
 
     let log_collector = invoke_context.get_log_collector();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
@@ -122,8 +132,8 @@ pub fn builtin_process_instruction(
         invoke_context
             .transaction_context
             .get_current_instruction_context()?,
-        true, // should_cap_ix_accounts
         true, // copy_account_data // There is no VM so direct mapping can not be implemented here
+        &invoke_context.feature_set,
     )?;
 
     // Deserialize data back into instruction params
@@ -131,9 +141,10 @@ pub fn builtin_process_instruction(
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
-    process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
-        let err: Box<dyn std::error::Error> = Box::new(InstructionError::from(u64::from(err)));
-        stable_log::program_failure(&log_collector, program_id, err.as_ref());
+    builtin_function(program_id, &account_infos, instruction_data).map_err(|err| {
+        let err = InstructionError::from(u64::from(err));
+        stable_log::program_failure(&log_collector, program_id, &err);
+        let err: Box<dyn std::error::Error> = Box::new(err);
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
@@ -153,38 +164,48 @@ pub fn builtin_process_instruction(
         if borrowed_account.is_writable() {
             if let Some(account_info) = account_info_map.get(borrowed_account.get_key()) {
                 if borrowed_account.get_lamports() != account_info.lamports() {
-                    borrowed_account.set_lamports(account_info.lamports())?;
+                    borrowed_account
+                        .set_lamports(account_info.lamports(), &invoke_context.feature_set)?;
                 }
 
                 if borrowed_account
                     .can_data_be_resized(account_info.data_len())
                     .is_ok()
-                    && borrowed_account.can_data_be_changed().is_ok()
+                    && borrowed_account
+                        .can_data_be_changed(&invoke_context.feature_set)
+                        .is_ok()
                 {
-                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
+                    borrowed_account.set_data_from_slice(
+                        &account_info.data.borrow(),
+                        &invoke_context.feature_set,
+                    )?;
                 }
                 if borrowed_account.get_owner() != account_info.owner {
-                    borrowed_account.set_owner(account_info.owner.as_ref())?;
+                    borrowed_account
+                        .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)?;
                 }
             }
         }
     }
 
-    Ok(())
+    Ok(0)
 }
 
 /// Converts a `solana-program`-style entrypoint into the runtime's entrypoint style, for
 /// use with `ProgramTest::add_program`
 #[macro_export]
 macro_rules! processor {
-    ($process_instruction:expr) => {
-        Some(
-            |invoke_context, _arg0, _arg1, _arg2, _arg3, _arg4, _memory_mapping, result| {
-                *result = $crate::builtin_process_instruction($process_instruction, invoke_context)
-                    .map(|_| 0)
+    ($builtin_function:expr) => {
+        Some(|vm, _arg0, _arg1, _arg2, _arg3, _arg4| {
+            let vm = unsafe {
+                &mut *((vm as *mut u64).offset(-($crate::get_runtime_environment_key() as isize))
+                    as *mut $crate::EbpfVm<$crate::InvokeContext>)
+            };
+            vm.program_result =
+                $crate::invoke_builtin_function($builtin_function, vm.context_object_pointer)
+                    .map_err(|err| $crate::EbpfError::SyscallError(err))
                     .into();
-            },
-        )
+        })
     };
 }
 
@@ -272,17 +293,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .unwrap();
             if borrowed_account.get_lamports() != account_info.lamports() {
                 borrowed_account
-                    .set_lamports(account_info.lamports())
+                    .set_lamports(account_info.lamports(), &invoke_context.feature_set)
                     .unwrap();
             }
             let account_info_data = account_info.try_borrow_data().unwrap();
             // The redundant check helps to avoid the expensive data comparison if we can
             match borrowed_account
                 .can_data_be_resized(account_info_data.len())
-                .and_then(|_| borrowed_account.can_data_be_changed())
+                .and_then(|_| borrowed_account.can_data_be_changed(&invoke_context.feature_set))
             {
                 Ok(()) => borrowed_account
-                    .set_data_from_slice(&account_info_data)
+                    .set_data_from_slice(&account_info_data, &invoke_context.feature_set)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
                     panic!("{err:?}");
@@ -292,7 +313,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             // Change the owner at the end so that we are allowed to change the lamports and data before
             if borrowed_account.get_owner() != account_info.owner {
                 borrowed_account
-                    .set_owner(account_info.owner.as_ref())
+                    .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)
                     .unwrap();
             }
             if instruction_account.is_writable {
@@ -480,17 +501,12 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
-        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
-        // programs that do not consume units.
-        let deactivate_feature_set =
-            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
-
         Self {
             accounts: vec![],
             builtin_programs: vec![],
             compute_max_units: None,
             prefer_bpf,
-            deactivate_feature_set,
+            deactivate_feature_set: HashSet::default(),
             transaction_account_lock_limit: None,
         }
     }
@@ -507,10 +523,10 @@ impl ProgramTest {
     pub fn new(
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: Option<ProcessInstructionWithContext>,
+        builtin_function: Option<BuiltinFunctionWithContext>,
     ) -> Self {
         let mut me = Self::default();
-        me.add_program(program_name, program_id, process_instruction);
+        me.add_program(program_name, program_id, builtin_function);
         me
     }
 
@@ -601,13 +617,13 @@ impl ProgramTest {
     /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
     /// directory.
     ///
-    /// If `process_instruction` is provided, the natively built-program may be used instead of the
+    /// If `builtin_function` is provided, the natively built-program may be used instead of the
     /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: Option<ProcessInstructionWithContext>,
+        builtin_function: Option<BuiltinFunctionWithContext>,
     ) {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
@@ -681,7 +697,7 @@ impl ProgramTest {
         };
 
         let program_file = find_file(&format!("{program_name}.so"));
-        match (self.prefer_bpf, program_file, process_instruction) {
+        match (self.prefer_bpf, program_file, builtin_function) {
             // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
             (true, Some(file), _) => add_bpf(self, file),
@@ -690,8 +706,8 @@ impl ProgramTest {
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
-            (false, _, Some(process)) => {
-                self.add_builtin_program(program_name, program_id, process)
+            (false, _, Some(builtin_function)) => {
+                self.add_builtin_program(program_name, program_id, builtin_function)
             }
 
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
@@ -714,13 +730,13 @@ impl ProgramTest {
         &mut self,
         program_name: &str,
         program_id: Pubkey,
-        process_instruction: ProcessInstructionWithContext,
+        builtin_function: BuiltinFunctionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
         self.builtin_programs.push((
             program_id,
             program_name.to_string(),
-            LoadedProgram::new_builtin(0, program_name.len(), process_instruction),
+            LoadedProgram::new_builtin(0, program_name.len(), builtin_function),
         ));
     }
 
@@ -798,7 +814,7 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_with_runtime_config_for_tests(
+        let mut bank = Bank::new_with_paths(
             &genesis_config,
             Arc::new(RuntimeConfig {
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
@@ -808,6 +824,16 @@ impl ProgramTest {
                 transaction_account_lock_limit: self.transaction_account_lock_limit,
                 ..RuntimeConfig::default()
             }),
+            Vec::default(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            None,
+            None,
+            None,
+            Arc::default(),
         );
 
         // Add commonly-used SPL programs as a convenience to the user
@@ -839,7 +865,7 @@ impl ProgramTest {
         };
         let slot = bank.slot();
         let last_blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
@@ -881,7 +907,7 @@ impl ProgramTest {
                     .read()
                     .unwrap()
                     .working_bank()
-                    .register_recent_blockhash(&Hash::new_unique());
+                    .register_unique_recent_blockhash_for_test();
             }
         });
 
@@ -1033,7 +1059,7 @@ impl ProgramTestContext {
                         .read()
                         .unwrap()
                         .working_bank()
-                        .register_recent_blockhash(&Hash::new_unique());
+                        .register_unique_recent_blockhash_for_test();
                 }
             }),
         );
@@ -1122,13 +1148,15 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
-                bank,
-                &Pubkey::default(),
-                pre_warp_slot,
-                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
-            ))
+            bank_forks
+                .insert(Bank::warp_from_parent(
+                    bank,
+                    &Pubkey::default(),
+                    pre_warp_slot,
+                    // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                    solana_accounts_db::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                ))
+                .clone_without_scheduler()
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
@@ -1176,6 +1204,14 @@ impl ProgramTestContext {
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
+    }
+
+    pub fn warp_to_epoch(&mut self, warp_epoch: Epoch) -> Result<(), ProgramTestError> {
+        let warp_slot = self
+            .genesis_config
+            .epoch_schedule
+            .get_first_slot_in_epoch(warp_epoch);
+        self.warp_to_slot(warp_slot)
     }
 
     /// warp forward one more slot and force reward interval end

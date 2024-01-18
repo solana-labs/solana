@@ -32,6 +32,7 @@ name = "solana_cost_model"
 
 [dev-dependencies]
 solana-logger = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 test-case = { workspace = true }
 

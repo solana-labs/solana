@@ -14,6 +14,10 @@ Provide a helpful title, detailed description of the vulnerability and an exploi
 proof-of-concept. Speculative submissions without proof-of-concept will be closed
 with no further consideration.
 
+Please refer to the
+[Solana Program Library (SPL) security policy](https://github.com/solana-labs/solana-program-library/security/policy)
+for vulnerabilities regarding SPL programs such as SPL Token.
+
 If you haven't done so already, please **enable two-factor auth** in your GitHub account.
 
 Expect a response as fast as possible in the advisory, typically within 72 hours.
@@ -50,7 +54,7 @@ comment as such and then close the report.
 
 ### 2. Triage
 Within the draft security advisory, discuss and determine the severity of the issue. If necessary, members of the solana-labs/security-incident-response group may add other github users to the advisory to assist.
-If it is determined that this not a critical network issue then the advisory should be closed and if more follow-up is required a normal Solana public github issue should be created.
+If it is determined that this is not a critical network issue then the advisory should be closed and if more follow-up is required a normal Solana public github issue should be created.
 
 ### 3. Prepare Fixes
 For the affected branches, typically all three (edge, beta and stable), prepare a fix for the issue and push them to the corresponding branch in the private repository associated with the draft security advisory.
@@ -95,33 +99,55 @@ At its sole discretion, the Solana Foundation may offer a bounty for
 for more details. The submitter is not required to provide a
 mitigation to qualify.
 
+#### IMPORTANT | PLEASE NOTE
+_Beginning February 1st 2024, the Security bounty program payouts will be updated in the following ways:_
+- _Bug Bounty rewards will be denominated in SOL tokens, rather than USD value._
+_This change is to better reflect for changing value of the Solana network._
+- _Categories will now have a discretionary range to distinguish the varying severity_
+_and impact of bugs reported within each broader category._
+
+_Note: Payments will continue to be paid out in 12-month locked SOL._
+
+
 #### Loss of Funds:
-$2,000,000 USD in locked SOL tokens (locked for 12 months)
+Current: $2,000,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 25,000 SOL tokens. Min: 6,250 SOL tokens_
+
 * Theft of funds without users signature from any account
-* Theft of funds without users interaction in system, token, stake, vote programs
+* Theft of funds without users interaction in system, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 #### Consensus/Safety Violations:
-$1,000,000 USD in locked SOL tokens (locked for 12 months)
+Current: $1,000,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 12,500 SOL tokens. Min: 3,125 SOL tokens_
+
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
 #### Liveness / Loss of Availability:
-$400,000 USD in locked SOL tokens (locked for 12 months)
+Current: $400,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 5,000 SOL tokens. Min: 1,250 SOL tokens_
+
 * Whereby consensus halts and requires human intervention
 * Eclipse attacks,
 * Remote attacks that partition the network,
 
 #### DoS Attacks:
-$100,000 USD in locked SOL tokens (locked for 12 months)
-* Remote resource exaustion via Non-RPC protocols
+Current: $100,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
+
+* Remote resource exhaustion via Non-RPC protocols
 
 #### Supply Chain Attacks:
-$100,000 USD in locked SOL tokens (locked for 12 months)
+Current: $100,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
+
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 
 #### RPC DoS/Crashes:
-$5,000 USD in locked SOL tokens (locked for 12 months)
+Current: $5,000 USD in locked SOL tokens (locked for 12 months)<br/>
+_**As of 2/1/24:** Max: 65 SOL tokens. Min: 20 SOL tokens_
+
 * RPC attacks
 
 ### Out of Scope:
@@ -133,6 +159,8 @@ The following components are out of scope for the bounty program
 * Any undeveloped automated tooling (scanners, etc) results. (OK with developed PoC)
 * Any asset whose source code does not exist in this repository (including, but not limited
 to, any and all web properties not explicitly listed on this page)
+* Programs in the Solana Program Library, such as SPL Token. Please refer to the
+[SPL security policy](https://github.com/solana-labs/solana-program-library/security/policy).
 
 ### Eligibility:
 * Submissions _MUST_ include an exploit proof-of-concept to be considered eligible

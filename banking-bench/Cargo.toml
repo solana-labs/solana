@@ -22,7 +22,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-perf = { workspace = true }
 solana-poh = { workspace = true, features = ["dev-context-only-utils"] }
-solana-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }

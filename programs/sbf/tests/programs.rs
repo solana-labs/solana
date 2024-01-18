@@ -20,7 +20,10 @@ use {
         TransactionResults,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget,
+        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
+    },
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::TransactionBalancesSet,
@@ -40,7 +43,7 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::{self, remove_deprecated_request_unit_ix, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -51,7 +54,7 @@ use {
         transaction::VersionedTransaction,
     },
     solana_transaction_status::{
-        ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
+        map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
     std::collections::HashMap,
@@ -61,6 +64,7 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
+        bank_forks::BankForks,
         genesis_utils::{
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
@@ -82,7 +86,12 @@ use {
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::{cell::RefCell, str::FromStr, sync::Arc, time::Duration},
+    std::{
+        cell::RefCell,
+        str::FromStr,
+        sync::{Arc, RwLock},
+        time::Duration,
+    },
 };
 
 #[cfg(feature = "sbf_rust")]
@@ -94,7 +103,7 @@ fn process_transaction_and_record_inner(
     Vec<Vec<InnerInstruction>>,
     Vec<String>,
 ) {
-    let signature = tx.signatures.get(0).unwrap().clone();
+    let signature = tx.signatures.first().unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch_for_tests(txs);
     let mut results = bank
@@ -203,21 +212,7 @@ fn execute_transactions(
                     );
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
-                        inner_instructions
-                            .into_iter()
-                            .enumerate()
-                            .map(|(index, instructions)| InnerInstructions {
-                                index: index as u8,
-                                instructions: instructions
-                                    .into_iter()
-                                    .map(|ix| solana_transaction_status::InnerInstruction {
-                                        instruction: ix.instruction,
-                                        stack_height: Some(u32::from(ix.stack_height)),
-                                    })
-                                    .collect(),
-                            })
-                            .filter(|i| !i.instructions.is_empty())
-                            .collect()
+                        map_inner_instructions(inner_instructions).collect()
                     });
 
                     let tx_status_meta = TransactionStatusMeta {
@@ -255,6 +250,7 @@ fn execute_transactions(
 
 fn load_program_and_advance_slot(
     bank_client: &mut BankClient,
+    bank_forks: &RwLock<BankForks>,
     loader_id: &Pubkey,
     payer_keypair: &Keypair,
     name: &str,
@@ -262,10 +258,52 @@ fn load_program_and_advance_slot(
     let pubkey = load_program(bank_client, loader_id, payer_keypair, name);
     (
         bank_client
-            .advance_slot(1, &Pubkey::default())
+            .advance_slot(1, bank_forks, &Pubkey::default())
             .expect("Failed to advance the slot"),
         pubkey,
     )
+}
+
+fn load_upgradeable_program_wrapper(
+    bank_client: &BankClient,
+    mint_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    load_upgradeable_program(
+        bank_client,
+        mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        authority_keypair,
+        name,
+    );
+    program_keypair.pubkey()
+}
+
+fn load_upgradeable_program_and_advance_slot(
+    bank_client: &mut BankClient,
+    bank_forks: &RwLock<BankForks>,
+    mint_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> (Arc<Bank>, Pubkey) {
+    let program_id =
+        load_upgradeable_program_wrapper(bank_client, mint_keypair, authority_keypair, name);
+
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    let bank = bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    (bank, program_id)
 }
 
 #[test]
@@ -332,16 +370,19 @@ fn test_program_sbf_sanity() {
             ..
         } = create_genesis_config(50);
 
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank_client = BankClient::new(bank);
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
 
         // Call user program
-        let (_, program_id) = load_program_and_advance_slot(
+        let (_, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             program.0,
         );
+
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
@@ -383,12 +424,12 @@ fn test_program_sbf_loader_deprecated() {
             .accounts
             .remove(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id())
             .unwrap();
-        let bank = Bank::new_for_tests(&genesis_config);
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let program_id = create_program(&bank, &bpf_loader_deprecated::id(), program);
 
-        let mut bank_client = BankClient::new(bank);
+        let mut bank_client = BankClient::new_shared(bank);
         bank_client
-            .advance_slot(1, &Pubkey::default())
+            .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
             .expect("Failed to advance the slot");
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
         let instruction = Instruction::new_with_bytes(program_id, &[255], account_metas);
@@ -397,6 +438,12 @@ fn test_program_sbf_loader_deprecated() {
     }
 }
 
+/// This test is written with bpf_loader v2 specific instructions, which will be
+/// deprecated when `disable_bpf_loader_instructions` feature is activated.
+///
+/// The same test has been migrated to
+/// `test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader`  with a new version
+/// of bpf_upgradeable_loader!
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_sol_alloc_free_no_longer_deployable() {
@@ -406,13 +453,23 @@ fn test_sol_alloc_free_no_longer_deployable() {
     let program_address = program_keypair.pubkey();
 
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let mut bank = Bank::new_for_tests(&genesis_config);
 
-    // Populate loader account with elf that depends on _sol_alloc_free syscall
+    // deactivate `disable_bpf_loader_instructions` feature so that the program
+    // can be loaded, finalized and tested.
+    genesis_config
+        .accounts
+        .remove(&feature_set::disable_bpf_loader_instructions::id());
+
+    genesis_config
+        .accounts
+        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
+
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+
     let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
     let mut program_account = AccountSharedData::new(1, elf.len(), &bpf_loader::id());
     program_account
@@ -434,50 +491,51 @@ fn test_sol_alloc_free_no_longer_deployable() {
         bank.last_blockhash(),
     );
 
-    let invoke_tx = Transaction::new(
-        &[&mint_keypair],
-        Message::new(
-            &[Instruction::new_with_bytes(
-                program_address,
-                &[255],
-                vec![AccountMeta::new(mint_keypair.pubkey(), true)],
-            )],
-            Some(&mint_keypair.pubkey()),
-        ),
-        bank.last_blockhash(),
-    );
-
     // Try and deploy a program that depends on _sol_alloc_free
     assert_eq!(
         bank.process_transaction(&finalize_tx).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
     );
+}
 
-    // Enable _sol_alloc_free syscall
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
-    bank.clear_program_cache();
+#[test]
+#[cfg(feature = "sbf_rust")]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: TransactionError(InstructionError(1, InvalidAccountData))"
+)]
+fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
+    solana_logger::setup();
 
-    // Try and finalize the program now that sol_alloc_free is re-enabled
-    assert!(bank.process_transaction(&finalize_tx).is_ok());
-    let new_slot = bank.slot() + 1;
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), new_slot);
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
 
-    // invoke the program
-    assert!(bank.process_transaction(&invoke_tx).is_ok());
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
 
-    // disable _sol_alloc_free
-    bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
+    // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
+    // depends on `sol_alloc_free_` syscall. This can be verified with
+    // $ elfdump solana_sbf_rust_deprecated_loader.so
+    // : 0000000000001ab8  000000070000000a R_BPF_64_32            0000000000000000 sol_alloc_free_
+    // In the symbol table, there is `sol_alloc_free_`.
+    // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
+    // AccountInfo::realloc() in the program code.
 
-    // invoke should still succeed because cached
-    assert!(bank.process_transaction(&invoke_tx).is_ok());
-
-    bank.clear_signatures();
-    bank.clear_program_cache();
-
-    // invoke should still succeed on execute because the program is already deployed
-    assert!(bank.process_transaction(&invoke_tx).is_ok());
+    // Expect that deployment to fail. B/C during deployment, there is an elf
+    // verification step, which uses the runtime to look up relocatable symbols
+    // in elf inside syscall table. In this case, `sol_alloc_free_` can't be
+    // found in syscall table. Hence, the verification fails and the deployment
+    // fails.
+    let (_bank, _program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_deprecated_loader",
+    );
 }
 
 #[test]
@@ -503,13 +561,16 @@ fn test_program_sbf_duplicate_accounts() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
+
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
-        let (bank, program_id) = load_program_and_advance_slot(
+        let authority_keypair = Keypair::new();
+
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             program,
         );
         let payee_account = AccountSharedData::new(10, 1, &program_id);
@@ -607,14 +668,19 @@ fn test_program_sbf_error_handling() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank_client = BankClient::new(bank);
-        let (_, program_id) = load_program_and_advance_slot(
+
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
+
+        let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             program,
         );
+
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
 
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
@@ -712,14 +778,16 @@ fn test_return_data_and_log_data_syscall() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(bank.clone());
 
-        let (bank, program_id) = load_program_and_advance_slot(
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        let mut bank_client = BankClient::new_shared(bank.clone());
+        let authority_keypair = Keypair::new();
+
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             program,
         );
 
@@ -734,7 +802,7 @@ fn test_return_data_and_log_data_syscall() {
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
 
-        let result = bank.simulate_transaction(sanitized_tx);
+        let result = bank.simulate_transaction(&sanitized_tx, false);
 
         assert!(result.result.is_ok());
 
@@ -780,18 +848,30 @@ fn test_program_sbf_invoke_sanity() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(bank.clone());
 
-        let invoke_program_id =
-            load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
-        let invoked_program_id =
-            load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.2);
-        let (bank, noop_program_id) = load_program_and_advance_slot(
-            &mut bank_client,
-            &bpf_loader::id(),
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        let mut bank_client = BankClient::new_shared(bank.clone());
+        let authority_keypair = Keypair::new();
+
+        let invoke_program_id = load_upgradeable_program_wrapper(
+            &bank_client,
             &mint_keypair,
+            &authority_keypair,
+            program.1,
+        );
+
+        let invoked_program_id = load_upgradeable_program_wrapper(
+            &bank_client,
+            &mint_keypair,
+            &authority_keypair,
+            program.2,
+        );
+
+        let (bank, noop_program_id) = load_upgradeable_program_and_advance_slot(
+            &mut bank_client,
+            bank_forks.as_ref(),
+            &mint_keypair,
+            &authority_keypair,
             program.3,
         );
 
@@ -1177,20 +1257,23 @@ fn test_program_sbf_program_id_spoofing() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let malicious_swap_pubkey = load_program(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let malicious_swap_pubkey = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_spoof1",
     );
-    let (bank, malicious_system_pubkey) = load_program_and_advance_slot(
+
+    let (bank, malicious_system_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_spoof1_system",
     );
 
@@ -1228,22 +1311,26 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let caller_pubkey = load_program(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let caller_pubkey = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
-    let (_, caller2_pubkey) = load_program_and_advance_slot(
+
+    let (_bank, caller2_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_caller_access",
     );
+
     let account_metas = vec![
         AccountMeta::new_readonly(caller_pubkey, false),
         AccountMeta::new_readonly(caller2_pubkey, false),
@@ -1266,14 +1353,16 @@ fn test_program_sbf_ro_modify() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (bank, program_pubkey) = load_program_and_advance_slot(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let (bank, program_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_ro_modify",
     );
 
@@ -1321,12 +1410,16 @@ fn test_program_sbf_call_depth() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let (_, program_id) = load_program_and_advance_slot(
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_call_depth",
     );
 
@@ -1354,12 +1447,16 @@ fn test_program_sbf_compute_budget() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let (_, program_id) = load_program_and_advance_slot(
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_noop",
     );
     let message = Message::new(
@@ -1403,17 +1500,17 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_sbf_rust_128bit", 1218),
-            ("solana_sbf_rust_alloc", 5067),
+            ("solana_sbf_rust_alloc", 5077),
             ("solana_sbf_rust_custom_heap", 398),
             ("solana_sbf_rust_dep_crate", 2),
-            ("solana_sbf_rust_iter", 1013),
+            ("solana_sbf_rust_iter", 1514),
             ("solana_sbf_rust_many_args", 1289),
             ("solana_sbf_rust_mem", 2067),
             ("solana_sbf_rust_membuiltins", 1539),
             ("solana_sbf_rust_noop", 275),
             ("solana_sbf_rust_param_passing", 146),
             ("solana_sbf_rust_rand", 378),
-            ("solana_sbf_rust_sanity", 51931),
+            ("solana_sbf_rust_sanity", 51953),
             ("solana_sbf_rust_secp256k1_recover", 91185),
             ("solana_sbf_rust_sha", 24059),
         ]);
@@ -1449,7 +1546,7 @@ fn assert_instruction_count() {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
-            solana_bpf_loader_program::process_instruction,
+            solana_bpf_loader_program::Entrypoint::vm,
             |invoke_context| {
                 *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
                 solana_bpf_loader_program::test_utils::load_all_invoked_programs(invoke_context);
@@ -1465,7 +1562,7 @@ fn assert_instruction_count() {
                     diff,
                     100.0_f64 * consumption as f64 / *expected_consumption as f64 - 100.0_f64,
                 );
-                assert_eq!(consumption, *expected_consumption);
+                assert!(consumption <= *expected_consumption);
             },
         );
     }
@@ -1481,14 +1578,16 @@ fn test_program_sbf_instruction_introspection() {
         mint_keypair,
         ..
     } = create_genesis_config(50_000);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (bank, program_id) = load_program_and_advance_slot(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_instruction_introspection",
     );
 
@@ -1529,18 +1628,31 @@ fn test_program_sbf_instruction_introspection() {
     assert!(bank.get_account(&sysvar::instructions::id()).is_none());
 }
 
+/// This test is to test bpf_loader v2 `Finalize` instruction with different
+/// programs. It is going to be deprecated once we activate
+/// `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_test_use_latest_executor() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
+
+    // deactivate `disable_bpf_loader_instructions` feature so that the program
+    // can be loaded, finalized and tested.
+    genesis_config
+        .accounts
+        .remove(&feature_set::disable_bpf_loader_instructions::id());
+    genesis_config
+        .accounts
+        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
     let panic_id = load_program(
         &bank_client,
         &bpf_loader::id(),
@@ -1567,8 +1679,9 @@ fn test_program_sbf_test_use_latest_executor() {
     );
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
+
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
         .is_err());
@@ -1582,7 +1695,7 @@ fn test_program_sbf_test_use_latest_executor() {
         "solana_sbf_rust_noop",
     );
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     bank_client
@@ -1599,7 +1712,7 @@ fn test_program_sbf_test_use_latest_executor() {
         Some(&mint_keypair.pubkey()),
     );
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -1616,8 +1729,8 @@ fn test_program_sbf_upgrade() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
 
     // Deploy upgrade program
     let buffer_keypair = Keypair::new();
@@ -1633,7 +1746,7 @@ fn test_program_sbf_upgrade() {
         "solana_sbf_rust_upgradeable",
     );
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     let mut instruction =
@@ -1661,7 +1774,7 @@ fn test_program_sbf_upgrade() {
         ..clock::Clock::default()
     });
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     // Call upgraded program
@@ -1694,7 +1807,7 @@ fn test_program_sbf_upgrade() {
     );
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     // Call original program
@@ -1929,8 +2042,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
@@ -1986,7 +2098,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
     .unwrap();
 
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Deployment is invisible to both top-level-instructions and CPI instructions
@@ -2027,8 +2139,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
@@ -2079,10 +2190,13 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
-    // after 2 slots. So we need to advance the bank client by 2 slots here.
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
+        .unwrap();
     let bank = bank_client
-        .advance_slot(2, &Pubkey::default())
-        .expect("Failed to advance slot");
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
+        .unwrap();
 
     // Prepare redeployment
     let buffer_keypair = Keypair::new();
@@ -2135,8 +2249,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     // Deploy upgradeable program
@@ -2176,10 +2289,13 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     );
 
     // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
-    // after 2 slots. So we need to advance the bank client by 2 slots here.
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
+        .unwrap();
     let bank = bank_client
-        .advance_slot(2, &Pubkey::default())
-        .expect("Failed to advance slot");
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
+        .unwrap();
 
     // Prepare undeployment
     let (programdata_address, _) = Pubkey::find_program_address(
@@ -2228,31 +2344,33 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let invoke_and_return = load_program(
-        &bank_client,
-        &bpf_loader::id(),
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
-    let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
-    load_upgradeable_program(
+    let program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance slot");
 
     let mut instruction = Instruction::new_with_bytes(
@@ -2283,11 +2401,11 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         "solana_sbf_rust_upgraded",
     );
     bank_client.set_sysvar_for_tests(&clock::Clock {
-        slot: 2,
+        slot: 3,
         ..clock::Clock::default()
     });
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Call the upgraded program
@@ -2320,7 +2438,7 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     );
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Call original program
@@ -2353,19 +2471,22 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
-
         let mut bank = Bank::new_for_tests(&genesis_config);
-        // disable native_programs_consume_cu feature to allow test program
-        // not consume units.
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&solana_sdk::feature_set::native_programs_consume_cu::id());
-        bank.feature_set = Arc::new(feature_set);
         bank.deactivate_feature(
             &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
         );
-        let bank_client = BankClient::new(bank);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
 
-        let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
+        let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
+            &mut bank_client,
+            bank_forks.as_ref(),
+            &mint_keypair,
+            &authority_keypair,
+            program,
+        );
+
         let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
         let instruction = Instruction::new_with_bytes(bpf_loader::id(), &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
@@ -2386,13 +2507,16 @@ fn test_program_reads_from_program_account() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
 
-    let (_, program_id) = load_program_and_advance_slot(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "read_program",
     );
     let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
@@ -2412,16 +2536,22 @@ fn test_program_sbf_c_dup() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
     let account_address = Pubkey::new_unique();
     let account = AccountSharedData::new_data(42, &[1_u8, 2, 3], &system_program::id()).unwrap();
     bank.store_account(&account_address, &account);
 
-    let mut bank_client = BankClient::new(bank);
-
-    let (_, program_id) =
-        load_program_and_advance_slot(&mut bank_client, &bpf_loader::id(), &mint_keypair, "ser");
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+    let (_, program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &authority_keypair,
+        "ser",
+    );
     let account_metas = vec![
         AccountMeta::new_readonly(account_address, false),
         AccountMeta::new_readonly(account_address, false),
@@ -2442,12 +2572,16 @@ fn test_program_sbf_upgrade_via_cpi() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let invoke_and_return = load_program(
-        &bank_client,
-        &bpf_loader::id(),
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
@@ -2465,7 +2599,7 @@ fn test_program_sbf_upgrade_via_cpi() {
         "solana_sbf_rust_upgradeable",
     );
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
     let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
     let Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
@@ -2523,7 +2657,7 @@ fn test_program_sbf_upgrade_via_cpi() {
         .unwrap();
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     // Call the upgraded program
@@ -2552,33 +2686,29 @@ fn test_program_sbf_set_upgrade_authority_via_cpi() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
 
     // Deploy CPI invoker program
-    let invoke_and_return = load_program(
+    let invoke_and_return = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
-    let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
-    load_upgradeable_program(
+    let program_id = load_upgradeable_program_wrapper(
         &bank_client,
         &mint_keypair,
-        &buffer_keypair,
-        &program_keypair,
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     // Set program upgrade authority instruction to invoke via CPI
@@ -2645,8 +2775,7 @@ fn test_program_upgradeable_locks() {
             mint_keypair,
             ..
         } = create_genesis_config(2_000_000_000);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank.clone());
 
         load_upgradeable_program(
@@ -2668,7 +2797,7 @@ fn test_program_upgradeable_locks() {
         );
 
         let bank = bank_client
-            .advance_slot(1, &Pubkey::default())
+            .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
             .expect("Failed to advance the slot");
 
         bank_client
@@ -2758,22 +2887,35 @@ fn test_program_upgradeable_locks() {
     assert_eq!(results2[1], Err(TransactionError::AccountInUse));
 }
 
+/// This test is to test bpf_loader v2 `Finalize` instruction. It is going to be
+/// deprecated once we activate `disable_bpf_loader_instructions`.
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_finalize() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
+
+    // deactivate `disable_bpf_loader_instructions` feature so that the program
+    // can be loaded, finalized and tested.
+    genesis_config
+        .accounts
+        .remove(&feature_set::disable_bpf_loader_instructions::id());
+
+    genesis_config
+        .accounts
+        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
+
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
 
     let (_, program_pubkey) = load_program_and_advance_slot(
         &mut bank_client,
+        bank_forks.as_ref(),
         &bpf_loader::id(),
         &mint_keypair,
         "solana_sbf_rust_finalize",
@@ -2789,7 +2931,7 @@ fn test_program_sbf_finalize() {
     );
 
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
 
     let account_metas = vec![
@@ -2816,14 +2958,16 @@ fn test_program_sbf_ro_account_modify() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (bank, program_id) = load_program_and_advance_slot(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_ro_account_modify",
     );
 
@@ -2878,6 +3022,7 @@ fn test_program_sbf_realloc() {
         mint_keypair,
         ..
     } = create_genesis_config(1_000_000_000_000);
+
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
     for direct_mapping in [false, true] {
@@ -2888,13 +3033,15 @@ fn test_program_sbf_realloc() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-        let bank = Arc::new(bank);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank.clone());
+        let authority_keypair = Keypair::new();
 
-        let (bank, program_id) = load_program_and_advance_slot(
+        let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_realloc",
         );
 
@@ -3212,24 +3359,26 @@ fn test_program_sbf_realloc_invoke() {
         ..
     } = create_genesis_config(1_000_000_000_000);
     genesis_config.rent = Rent::default();
+
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
 
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
 
-    let realloc_program_id = load_program(
+    let realloc_program_id = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_realloc",
     );
 
-    let (bank, realloc_invoke_program_id) = load_program_and_advance_slot(
+    let (bank, realloc_invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_realloc_invoke",
     );
 
@@ -3684,7 +3833,7 @@ fn test_program_sbf_realloc_invoke() {
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
 
-    // Realloc rescursively and fill data
+    // Realloc recursively and fill data
     let invoke_keypair = Keypair::new();
     let invoke_pubkey = invoke_keypair.pubkey().clone();
     let invoke_account = AccountSharedData::new(START_BALANCE, 0, &realloc_invoke_program_id);
@@ -3731,32 +3880,34 @@ fn test_program_sbf_processed_inner_instruction() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let sibling_program_id = load_program(
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let sibling_program_id = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_sibling_instructions",
     );
-    let sibling_inner_program_id = load_program(
+    let sibling_inner_program_id = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_sibling_inner_instructions",
     );
-    let noop_program_id = load_program(
+    let noop_program_id = load_upgradeable_program_wrapper(
         &bank_client,
-        &bpf_loader::id(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_noop",
     );
-    let (_, invoke_and_return_program_id) = load_program_and_advance_slot(
+    let (_, invoke_and_return_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
     );
 
@@ -3807,18 +3958,21 @@ fn test_program_fees() {
         mint_keypair,
         ..
     } = create_genesis_config(500_000_000);
+
     genesis_config.fee_rate_governor = FeeRateGovernor::new(congestion_multiplier, 0);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let fee_structure =
         FeeStructure::new(0.000005, 0.0, vec![(200, 0.0000005), (1400000, 0.000005)]);
     bank.fee_structure = fee_structure.clone();
-    bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    let mut bank_client = BankClient::new(bank);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
 
-    let (_, program_id) = load_program_and_advance_slot(
+    let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_noop",
     );
 
@@ -3828,18 +3982,13 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
-    let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
-
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &ComputeBudget::fee_budget_limits(
-            sanitized_message.program_instructions_iter(),
-            &feature_set,
-        ),
-        true,
+        &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
+            .unwrap_or_default()
+            .into(),
         false,
     );
     bank_client
@@ -3857,16 +4006,12 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let mut feature_set = FeatureSet::all_enabled();
-    feature_set.deactivate(&remove_deprecated_request_unit_ix::id());
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
-        &ComputeBudget::fee_budget_limits(
-            sanitized_message.program_instructions_iter(),
-            &feature_set,
-        ),
-        true,
+        &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
+            .unwrap_or_default()
+            .into(),
         false,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
@@ -3886,15 +4031,17 @@ fn test_get_minimum_delegation() {
         mint_keypair,
         ..
     } = create_genesis_config(100_123_456_789);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    let bank = Arc::new(bank);
-    let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let (_, program_id) = load_program_and_advance_slot(
+    let bank = Bank::new_for_tests(&genesis_config);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let mut bank_client = BankClient::new_shared(bank.clone());
+    let authority_keypair = Keypair::new();
+
+    let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_get_minimum_delegation",
     );
 
@@ -3914,7 +4061,7 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let bank = Bank::new_for_tests(&genesis_config);
+    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let noop = create_program(&bank, &bpf_loader_deprecated::id(), "solana_sbf_rust_noop");
     let inner_instruction_alignment_check = create_program(
         &bank,
@@ -3924,9 +4071,9 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
 
     // invoke unaligned program, which will call aligned program twice,
     // unaligned should be allowed once invoke completes
-    let mut bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new_shared(bank);
     bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
         .expect("Failed to advance the slot");
     let mut instruction = Instruction::new_with_bytes(
         inner_instruction_alignment_check,
@@ -3953,33 +4100,37 @@ fn test_cpi_account_ownership_writability() {
             mint_keypair,
             ..
         } = create_genesis_config(100_123_456_789);
+
         let mut bank = Bank::new_for_tests(&genesis_config);
         let mut feature_set = FeatureSet::all_enabled();
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-        bank.feature_set = Arc::new(feature_set);
-        let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(bank);
 
-        let invoke_program_id = load_program(
+        bank.feature_set = Arc::new(feature_set);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
+
+        let invoke_program_id = load_upgradeable_program_wrapper(
             &bank_client,
-            &bpf_loader::id(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_invoke",
         );
 
-        let invoked_program_id = load_program(
+        let invoked_program_id = load_upgradeable_program_wrapper(
             &bank_client,
-            &bpf_loader::id(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_invoked",
         );
 
-        let (bank, realloc_program_id) = load_program_and_advance_slot(
+        let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_realloc",
         );
 
@@ -4006,7 +4157,7 @@ fn test_cpi_account_ownership_writability() {
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLEE,
                 TEST_FORBID_WRITE_AFTER_OWNERSHIP_CHANGE_IN_CALLER,
             ] {
-                bank.register_recent_blockhash(&Hash::new_unique());
+                bank.register_unique_recent_blockhash_for_test();
                 let account = AccountSharedData::new(42, account_size, &invoke_program_id);
                 bank.store_account(&account_keypair.pubkey(), &account);
 
@@ -4139,21 +4290,24 @@ fn test_cpi_account_data_updates() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-        bank.feature_set = Arc::new(feature_set);
-        let bank = Arc::new(bank);
-        let mut bank_client = BankClient::new_shared(bank);
 
-        let invoke_program_id = load_program(
+        bank.feature_set = Arc::new(feature_set);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
+
+        let invoke_program_id = load_upgradeable_program_wrapper(
             &bank_client,
-            &bpf_loader::id(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_invoke",
         );
 
-        let (bank, realloc_program_id) = load_program_and_advance_slot(
+        let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_realloc",
         );
 
@@ -4281,13 +4435,15 @@ fn test_cpi_deprecated_loader_realloc() {
             mint_keypair,
             ..
         } = create_genesis_config(100_123_456_789);
+
         let mut bank = Bank::new_for_tests(&genesis_config);
         let mut feature_set = FeatureSet::all_enabled();
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
+
         bank.feature_set = Arc::new(feature_set);
-        let bank = Arc::new(bank);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
 
         let deprecated_program_id = create_program(
             &bank,
@@ -4296,11 +4452,13 @@ fn test_cpi_deprecated_loader_realloc() {
         );
 
         let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
 
-        let (bank, invoke_program_id) = load_program_and_advance_slot(
+        let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_invoke",
         );
 
@@ -4393,11 +4551,10 @@ fn test_cpi_change_account_data_memory_allocation() {
         mint_keypair,
         ..
     } = create_genesis_config(100_123_456_789);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    let feature_set = FeatureSet::all_enabled();
-    bank.feature_set = Arc::new(feature_set);
 
-    declare_process_instruction!(process_instruction, 42, |invoke_context| {
+    let mut bank = Bank::new_for_tests(&genesis_config);
+
+    declare_process_instruction!(MockBuiltin, 42, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -4413,12 +4570,18 @@ fn test_cpi_change_account_data_memory_allocation() {
 
         // Test changing the account data both in place and by changing the
         // underlying vector. CPI will have to detect the vector change and
-        // update the corresponding memory region. In both cases CPI will have
+        // update the corresponding memory region. In all cases CPI will have
         // to zero the spare bytes correctly.
-        if instruction_data[0] == 0xFE {
-            account.set_data(instruction_data.to_vec());
-        } else {
-            account.set_data_from_slice(instruction_data);
+        match instruction_data[0] {
+            0xFE => account.set_data(instruction_data.to_vec()),
+            0xFD => account.set_data_from_slice(instruction_data),
+            0xFC => {
+                // Exercise the update_caller_account capacity check where account len != capacity.
+                let mut data = instruction_data.to_vec();
+                data.reserve_exact(1);
+                account.set_data(data)
+            }
+            _ => panic!(),
         }
 
         Ok(())
@@ -4428,16 +4591,18 @@ fn test_cpi_change_account_data_memory_allocation() {
     bank.add_builtin(
         builtin_program_id,
         "test_cpi_change_account_data_memory_allocation_builtin".to_string(),
-        LoadedProgram::new_builtin(0, 42, process_instruction),
+        LoadedProgram::new_builtin(0, 42, MockBuiltin::vm),
     );
 
-    let bank = Arc::new(bank);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
 
-    let (bank, invoke_program_id) = load_program_and_advance_slot(
+    let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke",
     );
 
@@ -4472,19 +4637,20 @@ fn test_cpi_invalid_account_info_pointers() {
         mint_keypair,
         ..
     } = create_genesis_config(100_123_456_789);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    let feature_set = FeatureSet::all_enabled();
-    bank.feature_set = Arc::new(feature_set);
-    let bank = Arc::new(bank);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
 
     let c_invoke_program_id =
-        load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "invoke");
+        load_upgradeable_program_wrapper(&bank_client, &mint_keypair, &authority_keypair, "invoke");
 
-    let (bank, invoke_program_id) = load_program_and_advance_slot(
+    let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-        &bpf_loader::id(),
+        bank_forks.as_ref(),
         &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_invoke",
     );
 
@@ -4543,13 +4709,15 @@ fn test_deny_executable_write() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-        let bank = Arc::new(bank);
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
+        let authority_keypair = Keypair::new();
 
-        let (_bank, invoke_program_id) = load_program_and_advance_slot(
+        let (_bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-            &bpf_loader::id(),
+            bank_forks.as_ref(),
             &mint_keypair,
+            &authority_keypair,
             "solana_sbf_rust_invoke",
         );
 

@@ -9,7 +9,7 @@ If you only care about the health of one specific validator, the
 notifications to issues only affecting that validator.
 
 If you do not want duplicate notifications, for example if you have elected to
-recieve notifications by SMS the
+receive notifications by SMS the
 `--no-duplicate-notifications` command-line argument will suppress identical
 failure notifications.
 

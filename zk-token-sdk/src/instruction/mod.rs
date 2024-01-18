@@ -1,11 +1,12 @@
 //! The instruction data types for the [`ZK Token proof`] instruction.
 //!
-//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+//! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
 pub mod batched_grouped_ciphertext_validity;
 pub mod batched_range_proof;
 pub mod ciphertext_ciphertext_equality;
 pub mod ciphertext_commitment_equality;
+pub mod errors;
 pub mod fee_sigma;
 pub mod grouped_ciphertext_validity;
 pub mod pubkey_validity;
@@ -15,7 +16,7 @@ pub mod withdraw;
 pub mod zero_balance;
 
 #[cfg(not(target_os = "solana"))]
-use crate::errors::ProofError;
+use crate::errors::ProofVerificationError;
 use num_derive::{FromPrimitive, ToPrimitive};
 pub use {
     batched_grouped_ciphertext_validity::{
@@ -75,5 +76,5 @@ pub trait ZkProofData<T: Pod> {
     fn context_data(&self) -> &T;
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError>;
+    fn verify_proof(&self) -> Result<(), ProofVerificationError>;
 }

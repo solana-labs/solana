@@ -38,7 +38,7 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .validator(is_url_or_moniker)
                 .help(
                     "URL for Solana's JSON RPC or moniker (or their first letter): \
-                       [mainnet-beta, testnet, devnet, localhost]",
+                    [mainnet-beta, testnet, devnet, localhost]",
                 ),
         )
         .arg(
@@ -67,16 +67,19 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                     "processed",
                     "confirmed",
                     "finalized",
-                    "recent", // Deprecated as of v1.5.5
-                    "single", // Deprecated as of v1.5.5
+                    "recent",       // Deprecated as of v1.5.5
+                    "single",       // Deprecated as of v1.5.5
                     "singleGossip", // Deprecated as of v1.5.5
-                    "root", // Deprecated as of v1.5.5
-                    "max", // Deprecated as of v1.5.5
+                    "root",         // Deprecated as of v1.5.5
+                    "max",          // Deprecated as of v1.5.5
                 ])
                 .value_name("COMMITMENT_LEVEL")
                 .hide_possible_values(true)
                 .global(true)
-                .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
+                .help(
+                    "Return information at the selected commitment level \
+                    [possible values: processed, confirmed, finalized]",
+                ),
         )
         .arg(
             Arg::with_name("verbose")
@@ -207,14 +210,14 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
         )
         .subcommand(
             SubCommand::with_name("completion")
-            .about("Generate completion scripts for various shells")
-            .arg(
-                Arg::with_name("shell")
-                .long("shell")
-                .short("s")
-                .takes_value(true)
-                .possible_values(&["bash", "fish", "zsh", "powershell", "elvish"])
-                .default_value("bash")
-            )
+                .about("Generate completion scripts for various shells")
+                .arg(
+                    Arg::with_name("shell")
+                        .long("shell")
+                        .short("s")
+                        .takes_value(true)
+                        .possible_values(&["bash", "fish", "zsh", "powershell", "elvish"])
+                        .default_value("bash"),
+                ),
         )
 }

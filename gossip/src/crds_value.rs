@@ -1,11 +1,12 @@
 use {
     crate::{
-        cluster_info::{MAX_ACCOUNTS_HASHES, MAX_CRDS_OBJECT_SIZE},
+        cluster_info::MAX_ACCOUNTS_HASHES,
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
-        epoch_slots::{CompressedSlots, EpochSlots, MAX_SLOTS_PER_ENTRY},
+        epoch_slots::EpochSlots,
         legacy_contact_info::LegacyContactInfo,
+        restart_crds_values::RestartLastVotedForkSlots,
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
@@ -487,87 +488,6 @@ impl Sanitize for NodeInstance {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
         self.from.sanitize()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample, Debug)]
-pub struct RestartLastVotedForkSlots {
-    pub from: Pubkey,
-    pub wallclock: u64,
-    pub slots: Vec<CompressedSlots>,
-    pub last_voted_hash: Hash,
-    pub shred_version: u16,
-}
-
-impl Sanitize for RestartLastVotedForkSlots {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.slots.is_empty() {
-            return Err(SanitizeError::InvalidValue);
-        }
-        self.slots.sanitize()?;
-        self.last_voted_hash.sanitize()
-    }
-}
-
-impl RestartLastVotedForkSlots {
-    pub fn new(from: Pubkey, now: u64, last_voted_hash: Hash, shred_version: u16) -> Self {
-        Self {
-            from,
-            wallclock: now,
-            slots: Vec::new(),
-            last_voted_hash,
-            shred_version,
-        }
-    }
-
-    /// New random Version for tests and benchmarks.
-    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        let mut result =
-            RestartLastVotedForkSlots::new(pubkey, new_rand_timestamp(rng), Hash::new_unique(), 1);
-        let num_slots = rng.gen_range(2..20);
-        let mut slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
-            .take(num_slots)
-            .collect::<Vec<Slot>>();
-        slots.sort();
-        result.fill(&slots);
-        result
-    }
-
-    pub fn fill(&mut self, slots: &[Slot]) -> usize {
-        let slots = &slots[slots.len().saturating_sub(MAX_SLOTS_PER_ENTRY)..];
-        let mut num = 0;
-        let space = self.max_compressed_slot_size();
-        if space == 0 {
-            return 0;
-        }
-        while num < slots.len() {
-            let mut cslot = CompressedSlots::new(space as usize);
-            num += cslot.add(&slots[num..]);
-            self.slots.push(cslot);
-        }
-        num
-    }
-
-    pub fn deflate(&mut self) {
-        for s in self.slots.iter_mut() {
-            let _ = s.deflate();
-        }
-    }
-
-    pub fn max_compressed_slot_size(&self) -> isize {
-        let len_header = serialized_size(self).unwrap();
-        let len_slot = serialized_size(&CompressedSlots::default()).unwrap();
-        MAX_CRDS_OBJECT_SIZE as isize - (len_header + len_slot) as isize
-    }
-
-    pub fn to_slots(&self, min_slot: Slot) -> Vec<Slot> {
-        self.slots
-            .iter()
-            .filter(|s| min_slot < s.first_slot() + s.num_slots() as u64)
-            .filter_map(|s| s.to_slots(min_slot).ok())
-            .flatten()
-            .collect()
     }
 }
 
@@ -1146,7 +1066,7 @@ mod test {
         assert!(!other.check_duplicate(&node_crds));
         assert_eq!(node.overrides(&other_crds), None);
         assert_eq!(other.overrides(&node_crds), None);
-        // Differnt crds value is not a duplicate.
+        // Different crds value is not a duplicate.
         let other = LegacyContactInfo::new_rand(&mut rng, Some(pubkey));
         let other = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(other));
         assert!(!node.check_duplicate(&other));
@@ -1168,59 +1088,5 @@ mod test {
         )));
         assert!(node.should_force_push(&pubkey));
         assert!(!node.should_force_push(&Pubkey::new_unique()));
-    }
-
-    #[test]
-    fn test_restart_last_voted_fork_slots() {
-        let keypair = Keypair::new();
-        let slot = 53;
-        let slot_parent = slot - 5;
-        let shred_version = 21;
-        let mut slots = RestartLastVotedForkSlots::new(
-            keypair.pubkey(),
-            timestamp(),
-            Hash::default(),
-            shred_version,
-        );
-        let original_slots_vec = [slot_parent, slot];
-        slots.fill(&original_slots_vec);
-        let value =
-            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
-        assert_eq!(value.sanitize(), Ok(()));
-        let label = value.label();
-        assert_eq!(
-            label,
-            CrdsValueLabel::RestartLastVotedForkSlots(keypair.pubkey())
-        );
-        assert_eq!(label.pubkey(), keypair.pubkey());
-        assert_eq!(value.wallclock(), slots.wallclock);
-        let retrived_slots = slots.to_slots(0);
-        assert_eq!(retrived_slots.len(), 2);
-        assert_eq!(retrived_slots[0], slot_parent);
-        assert_eq!(retrived_slots[1], slot);
-
-        let empty_slots = RestartLastVotedForkSlots::new(
-            keypair.pubkey(),
-            timestamp(),
-            Hash::default(),
-            shred_version,
-        );
-        let bad_value =
-            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(empty_slots), &keypair);
-        assert_eq!(bad_value.sanitize(), Err(SanitizeError::InvalidValue));
-
-        let last_slot: Slot = (MAX_SLOTS_PER_ENTRY + 10).try_into().unwrap();
-        let mut large_slots = RestartLastVotedForkSlots::new(
-            keypair.pubkey(),
-            timestamp(),
-            Hash::default(),
-            shred_version,
-        );
-        let large_slots_vec: Vec<Slot> = (0..last_slot + 1).collect();
-        large_slots.fill(&large_slots_vec);
-        let retrived_slots = large_slots.to_slots(0);
-        assert_eq!(retrived_slots.len(), MAX_SLOTS_PER_ENTRY);
-        assert_eq!(retrived_slots.first(), Some(&11));
-        assert_eq!(retrived_slots.last(), Some(&last_slot));
     }
 }

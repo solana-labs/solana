@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod accounts;
 pub mod accounts_background_service;
 pub mod bank;
 pub mod bank_client;
@@ -14,8 +15,8 @@ pub mod commitment;
 mod epoch_rewards_hasher;
 pub mod epoch_stakes;
 pub mod genesis_utils;
-pub mod inline_feature_gate_program;
 pub mod inline_spl_associated_token_account;
+pub mod installed_scheduler_pool;
 pub mod loader_utils;
 pub mod non_circulating_supply;
 pub mod prioritization_fee;

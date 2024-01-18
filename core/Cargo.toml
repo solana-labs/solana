@@ -31,6 +31,7 @@ log = { workspace = true }
 lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
+prio-graph = { workspace = true }
 quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
@@ -68,6 +69,7 @@ solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-turbine = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true }
 solana-version = { workspace = true }
 solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }

@@ -8,10 +8,7 @@ use {
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     solana_accounts_db::{
-        accounts_db::{
-            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
-            FillerAccountsConfig,
-        },
+        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
@@ -22,7 +19,6 @@ use {
     solana_core::{
         banking_trace::DISABLED_BAKING_TRACE_DIR,
         consensus::tower_storage,
-        ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
@@ -32,6 +28,7 @@ use {
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::{
+        blockstore_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         blockstore_options::{
             BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
@@ -244,7 +241,7 @@ fn wait_for_restart_window(
                     Err("Current epoch is almost complete".to_string())
                 } else {
                     while leader_schedule
-                        .get(0)
+                        .front()
                         .map(|slot| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {
@@ -258,7 +255,7 @@ fn wait_for_restart_window(
                         upcoming_idle_windows.pop();
                     }
 
-                    match leader_schedule.get(0) {
+                    match leader_schedule.front() {
                         None => {
                             Ok(()) // Validator has no leader slots
                         }
@@ -796,6 +793,24 @@ pub fn main() {
             });
             return;
         }
+        ("repair-shred-from-peer", Some(subcommand_matches)) => {
+            let pubkey = value_t_or_exit!(subcommand_matches, "pubkey", Pubkey);
+            let slot = value_t_or_exit!(subcommand_matches, "slot", u64);
+            let shred_index = value_t_or_exit!(subcommand_matches, "shred", u64);
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .repair_shred_from_peer(pubkey, slot, shred_index)
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("repair shred from peer failed: {err}");
+                    exit(1);
+                });
+            return;
+        }
         ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
             match repair_whitelist_subcommand_matches.subcommand() {
                 ("get", Some(subcommand_matches)) => {
@@ -1186,16 +1201,10 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
-    let filler_accounts_config = FillerAccountsConfig {
-        count: value_t_or_exit!(matches, "accounts_filler_count", usize),
-        size: value_t_or_exit!(matches, "accounts_filler_size", usize),
-    };
-
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_path.clone()),
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
-        filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
@@ -1206,6 +1215,8 @@ pub fn main() {
             .then_some(CreateAncientStorage::Pack)
             .unwrap_or_default(),
         test_partitioned_epoch_rewards,
+        test_skip_rewrites_but_include_in_bank_hash: matches
+            .is_present("accounts_db_test_skip_rewrites"),
         ..AccountsDbConfig::default()
     };
 
@@ -1237,6 +1248,7 @@ pub fn main() {
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
+            max_message_size: value_t_or_exit!(matches, "rpc_bigtable_max_message_size", usize),
         })
     } else {
         None
@@ -1680,7 +1692,7 @@ pub fn main() {
         if SystemMonitorService::check_os_network_limits() {
             info!("OS network limits test passed.");
         } else {
-            eprintln!("OS network limit test failed. See: https://docs.solana.com/running-validator/validator-start#system-tuning");
+            eprintln!("OS network limit test failed. See: https://docs.solanalabs.com/operations/guides/validator-start#system-tuning");
             exit(1);
         }
     }

@@ -6,31 +6,35 @@ use {
     log::error,
     quinn::{
         ClientConfig, ConnectError, Connecting, Connection, ConnectionError, Endpoint,
-        EndpointConfig, ReadToEndError, RecvStream, SendStream, ServerConfig, TokioRuntime,
-        TransportConfig, VarInt, WriteError,
+        EndpointConfig, IdleTimeout, ReadError, ReadToEndError, RecvStream, SendStream,
+        ServerConfig, TokioRuntime, TransportConfig, VarInt, WriteError,
     },
     rcgen::RcgenError,
     rustls::{Certificate, PrivateKey},
     serde_bytes::ByteBuf,
     solana_quic_client::nonblocking::quic_client::SkipServerVerification,
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::SkipClientVerification, tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
+        cmp::Reverse,
         collections::{hash_map::Entry, HashMap},
         io::{Cursor, Error as IoError},
         net::{IpAddr, SocketAddr, UdpSocket},
-        ops::Deref,
-        sync::Arc,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, RwLock,
+        },
         time::Duration,
     },
     thiserror::Error,
     tokio::{
         sync::{
-            mpsc::{Receiver as AsyncReceiver, Sender as AsyncSender},
+            mpsc::{error::TrySendError, Receiver as AsyncReceiver, Sender as AsyncSender},
             oneshot::Sender as OneShotSender,
-            RwLock,
+            Mutex, RwLock as AsyncRwLock,
         },
         task::JoinHandle,
     },
@@ -39,22 +43,30 @@ use {
 const ALPN_REPAIR_PROTOCOL_ID: &[u8] = b"solana-repair";
 const CONNECT_SERVER_NAME: &str = "solana-repair";
 
-const CLIENT_CHANNEL_CAPACITY: usize = 1 << 14;
-const CONNECTION_CACHE_CAPACITY: usize = 4096;
+const CLIENT_CHANNEL_BUFFER: usize = 1 << 14;
+const ROUTER_CHANNEL_BUFFER: usize = 64;
+const CONNECTION_CACHE_CAPACITY: usize = 3072;
+
+// Transport config.
+// Repair randomly samples peers, uses bi-directional streams and generally has
+// low to moderate load and so is configured separately from other protocols.
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(4);
 const MAX_CONCURRENT_BIDI_STREAMS: VarInt = VarInt::from_u32(512);
+const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 const CONNECTION_CLOSE_ERROR_CODE_SHUTDOWN: VarInt = VarInt::from_u32(1);
 const CONNECTION_CLOSE_ERROR_CODE_DROPPED: VarInt = VarInt::from_u32(2);
 const CONNECTION_CLOSE_ERROR_CODE_INVALID_IDENTITY: VarInt = VarInt::from_u32(3);
 const CONNECTION_CLOSE_ERROR_CODE_REPLACED: VarInt = VarInt::from_u32(4);
+const CONNECTION_CLOSE_ERROR_CODE_PRUNED: VarInt = VarInt::from_u32(5);
 
 const CONNECTION_CLOSE_REASON_SHUTDOWN: &[u8] = b"SHUTDOWN";
 const CONNECTION_CLOSE_REASON_DROPPED: &[u8] = b"DROPPED";
 const CONNECTION_CLOSE_REASON_INVALID_IDENTITY: &[u8] = b"INVALID_IDENTITY";
 const CONNECTION_CLOSE_REASON_REPLACED: &[u8] = b"REPLACED";
+const CONNECTION_CLOSE_REASON_PRUNED: &[u8] = b"PRUNED";
 
 pub(crate) type AsyncTryJoinHandle = TryJoin<JoinHandle<()>, JoinHandle<()>>;
-type ConnectionCache = HashMap<(SocketAddr, Option<Pubkey>), Arc<RwLock<Option<Connection>>>>;
 
 // Outgoing local requests.
 pub struct LocalRequest {
@@ -77,15 +89,13 @@ pub struct RemoteRequest {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Error {
     #[error(transparent)]
-    BincodeError(#[from] bincode::Error),
-    #[error(transparent)]
     CertificateError(#[from] RcgenError),
+    #[error("Channel Send Error")]
+    ChannelSendError,
     #[error(transparent)]
     ConnectError(#[from] ConnectError),
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
-    #[error("Channel Send Error")]
-    ChannelSendError,
     #[error("Invalid Identity: {0:?}")]
     InvalidIdentity(SocketAddr),
     #[error(transparent)]
@@ -97,9 +107,15 @@ pub(crate) enum Error {
     #[error("read_to_end Timeout")]
     ReadToEndTimeout,
     #[error(transparent)]
-    WriteError(#[from] WriteError),
-    #[error(transparent)]
     TlsError(#[from] rustls::Error),
+    #[error(transparent)]
+    WriteError(#[from] WriteError),
+}
+
+macro_rules! add_metric {
+    ($metric: expr) => {{
+        $metric.fetch_add(1, Ordering::Relaxed);
+    }};
 }
 
 #[allow(clippy::type_complexity)]
@@ -109,6 +125,7 @@ pub(crate) fn new_quic_endpoint(
     socket: UdpSocket,
     address: IpAddr,
     remote_request_sender: Sender<RemoteRequest>,
+    bank_forks: Arc<RwLock<BankForks>>,
 ) -> Result<(Endpoint, AsyncSender<LocalRequest>, AsyncTryJoinHandle), Error> {
     let (cert, key) = new_self_signed_tls_certificate(keypair, address)?;
     let server_config = new_server_config(cert.clone(), key.clone())?;
@@ -125,17 +142,25 @@ pub(crate) fn new_quic_endpoint(
         )?
     };
     endpoint.set_default_client_config(client_config);
-    let cache = Arc::<RwLock<ConnectionCache>>::default();
-    let (client_sender, client_receiver) = tokio::sync::mpsc::channel(CLIENT_CHANNEL_CAPACITY);
+    let prune_cache_pending = Arc::<AtomicBool>::default();
+    let cache = Arc::<Mutex<HashMap<Pubkey, Connection>>>::default();
+    let (client_sender, client_receiver) = tokio::sync::mpsc::channel(CLIENT_CHANNEL_BUFFER);
+    let router = Arc::<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>::default();
     let server_task = runtime.spawn(run_server(
         endpoint.clone(),
         remote_request_sender.clone(),
+        bank_forks.clone(),
+        prune_cache_pending.clone(),
+        router.clone(),
         cache.clone(),
     ));
     let client_task = runtime.spawn(run_client(
         endpoint.clone(),
         client_receiver,
         remote_request_sender,
+        bank_forks,
+        prune_cache_pending,
+        router,
         cache,
     ));
     let task = futures::future::try_join(server_task, client_task);
@@ -176,54 +201,135 @@ fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig,
 }
 
 fn new_transport_config() -> TransportConfig {
+    let max_idle_timeout = IdleTimeout::try_from(MAX_IDLE_TIMEOUT).unwrap();
     let mut config = TransportConfig::default();
+    // Disable datagrams and uni streams.
     config
+        .datagram_receive_buffer_size(None)
+        .keep_alive_interval(Some(KEEP_ALIVE_INTERVAL))
         .max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS)
         .max_concurrent_uni_streams(VarInt::from(0u8))
-        .datagram_receive_buffer_size(None);
+        .max_idle_timeout(Some(max_idle_timeout));
     config
 }
 
 async fn run_server(
     endpoint: Endpoint,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<RepairQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_server", stats.clone()));
     while let Some(connecting) = endpoint.accept().await {
-        tokio::task::spawn(handle_connecting_error(
+        tokio::task::spawn(handle_connecting_task(
             endpoint.clone(),
             connecting,
             remote_request_sender.clone(),
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
+            router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
+    report_metrics_task.abort();
 }
 
 async fn run_client(
     endpoint: Endpoint,
     mut receiver: AsyncReceiver<LocalRequest>,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
+    let stats = Arc::<RepairQuicStats>::default();
+    let report_metrics_task =
+        tokio::task::spawn(report_metrics_task("repair_quic_client", stats.clone()));
     while let Some(request) = receiver.recv().await {
-        tokio::task::spawn(send_request_task(
+        let Some(request) = try_route_request(request, &*router.read().await, &stats) else {
+            continue;
+        };
+        let remote_address = request.remote_address;
+        let receiver = {
+            let mut router = router.write().await;
+            let Some(request) = try_route_request(request, &router, &stats) else {
+                continue;
+            };
+            let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
+            sender.try_send(request).unwrap();
+            router.insert(remote_address, sender);
+            receiver
+        };
+        tokio::task::spawn(make_connection_task(
             endpoint.clone(),
-            request,
+            remote_address,
             remote_request_sender.clone(),
+            receiver,
+            bank_forks.clone(),
+            prune_cache_pending.clone(),
+            router.clone(),
             cache.clone(),
+            stats.clone(),
         ));
     }
     close_quic_endpoint(&endpoint);
+    // Drop sender channels to unblock threads waiting on the receiving end.
+    router.write().await.clear();
+    report_metrics_task.abort();
 }
 
-async fn handle_connecting_error(
+// Routes the local request to respective channel. Drops the request if the
+// channel is full. Bounces the request back if the channel is closed or does
+// not exist.
+fn try_route_request(
+    request: LocalRequest,
+    router: &HashMap<SocketAddr, AsyncSender<LocalRequest>>,
+    stats: &RepairQuicStats,
+) -> Option<LocalRequest> {
+    match router.get(&request.remote_address) {
+        None => Some(request),
+        Some(sender) => match sender.try_send(request) {
+            Ok(()) => None,
+            Err(TrySendError::Full(request)) => {
+                debug!("TrySendError::Full {}", request.remote_address);
+                add_metric!(stats.router_try_send_error_full);
+                None
+            }
+            Err(TrySendError::Closed(request)) => Some(request),
+        },
+    }
+}
+
+async fn handle_connecting_task(
     endpoint: Endpoint,
     connecting: Connecting,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<RepairQuicStats>,
 ) {
-    if let Err(err) = handle_connecting(endpoint, connecting, remote_request_sender, cache).await {
-        error!("handle_connecting: {err:?}");
+    if let Err(err) = handle_connecting(
+        endpoint,
+        connecting,
+        remote_request_sender,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+        stats.clone(),
+    )
+    .await
+    {
+        debug!("handle_connecting: {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -231,52 +337,103 @@ async fn handle_connecting(
     endpoint: Endpoint,
     connecting: Connecting,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<RepairQuicStats>,
 ) -> Result<(), Error> {
     let connection = connecting.await?;
     let remote_address = connection.remote_address();
     let remote_pubkey = get_remote_pubkey(&connection)?;
-    handle_connection_error(
+    let receiver = {
+        let (sender, receiver) = tokio::sync::mpsc::channel(ROUTER_CHANNEL_BUFFER);
+        router.write().await.insert(remote_address, sender);
+        receiver
+    };
+    handle_connection(
         endpoint,
         remote_address,
         remote_pubkey,
         connection,
         remote_request_sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
         cache,
+        stats,
     )
     .await;
     Ok(())
 }
 
-async fn handle_connection_error(
+#[allow(clippy::too_many_arguments)]
+async fn handle_connection(
     endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: Connection,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    receiver: AsyncReceiver<LocalRequest>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<RepairQuicStats>,
 ) {
-    cache_connection(remote_address, remote_pubkey, connection.clone(), &cache).await;
-    if let Err(err) = handle_connection(
-        &endpoint,
+    cache_connection(
+        remote_pubkey,
+        connection.clone(),
+        bank_forks,
+        prune_cache_pending,
+        router.clone(),
+        cache.clone(),
+    )
+    .await;
+    let send_requests_task = tokio::task::spawn(send_requests_task(
+        endpoint.clone(),
+        remote_address,
+        connection.clone(),
+        receiver,
+        stats.clone(),
+    ));
+    let recv_requests_task = tokio::task::spawn(recv_requests_task(
+        endpoint,
         remote_address,
         remote_pubkey,
-        &connection,
-        &remote_request_sender,
-    )
-    .await
-    {
-        drop_connection(remote_address, remote_pubkey, &connection, &cache).await;
-        error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}");
+        connection.clone(),
+        remote_request_sender,
+        stats.clone(),
+    ));
+    match futures::future::try_join(send_requests_task, recv_requests_task).await {
+        Err(err) => error!("handle_connection: {remote_pubkey}, {remote_address}, {err:?}"),
+        Ok(out) => {
+            if let (Err(ref err), _) = out {
+                debug!("send_requests_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
+            }
+            if let (_, Err(ref err)) = out {
+                debug!("recv_requests_task: {remote_pubkey}, {remote_address}, {err:?}");
+                record_error(err, &stats);
+            }
+        }
+    }
+    drop_connection(remote_pubkey, &connection, &cache).await;
+    if let Entry::Occupied(entry) = router.write().await.entry(remote_address) {
+        if entry.get().is_closed() {
+            entry.remove();
+        }
     }
 }
 
-async fn handle_connection(
-    endpoint: &Endpoint,
+async fn recv_requests_task(
+    endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_pubkey: Pubkey,
-    connection: &Connection,
-    remote_request_sender: &Sender<RemoteRequest>,
+    connection: Connection,
+    remote_request_sender: Sender<RemoteRequest>,
+    stats: Arc<RepairQuicStats>,
 ) -> Result<(), Error> {
     loop {
         let (send_stream, recv_stream) = connection.accept_bi().await?;
@@ -287,6 +444,7 @@ async fn handle_connection(
             send_stream,
             recv_stream,
             remote_request_sender.clone(),
+            stats.clone(),
         ));
     }
 }
@@ -298,6 +456,7 @@ async fn handle_streams_task(
     send_stream: SendStream,
     recv_stream: RecvStream,
     remote_request_sender: Sender<RemoteRequest>,
+    stats: Arc<RepairQuicStats>,
 ) {
     if let Err(err) = handle_streams(
         &endpoint,
@@ -309,7 +468,8 @@ async fn handle_streams_task(
     )
     .await
     {
-        error!("handle_stream: {remote_address}, {remote_pubkey}, {err:?}");
+        debug!("handle_stream: {remote_address}, {remote_pubkey}, {err:?}");
+        record_error(&err, &stats);
     }
 }
 
@@ -352,32 +512,62 @@ async fn handle_streams(
     send_stream.finish().await.map_err(Error::from)
 }
 
+async fn send_requests_task(
+    endpoint: Endpoint,
+    remote_address: SocketAddr,
+    connection: Connection,
+    mut receiver: AsyncReceiver<LocalRequest>,
+    stats: Arc<RepairQuicStats>,
+) -> Result<(), Error> {
+    tokio::pin! {
+        let connection_closed = connection.closed();
+    }
+    loop {
+        tokio::select! {
+            biased;
+            request = receiver.recv() => {
+                match request {
+                    None => return Ok(()),
+                    Some(request) => tokio::task::spawn(send_request_task(
+                        endpoint.clone(),
+                        remote_address,
+                        connection.clone(),
+                        request,
+                        stats.clone(),
+                    )),
+                };
+            }
+            err = &mut connection_closed => return Err(Error::from(err)),
+        }
+    }
+}
+
 async fn send_request_task(
     endpoint: Endpoint,
+    remote_address: SocketAddr,
+    connection: Connection,
     request: LocalRequest,
-    remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
+    stats: Arc<RepairQuicStats>,
 ) {
-    if let Err(err) = send_request(&endpoint, request, remote_request_sender, cache).await {
-        error!("send_request_task: {err:?}");
+    if let Err(err) = send_request(endpoint, connection, request).await {
+        debug!("send_request: {remote_address}, {err:?}");
+        record_error(&err, &stats);
     }
 }
 
 async fn send_request(
-    endpoint: &Endpoint,
+    endpoint: Endpoint,
+    connection: Connection,
     LocalRequest {
-        remote_address,
+        remote_address: _,
         bytes,
         num_expected_responses,
         response_sender,
     }: LocalRequest,
-    remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
 ) -> Result<(), Error> {
     // Assert that send won't block.
     debug_assert_eq!(response_sender.capacity(), None);
     const READ_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
-    let connection = get_connection(endpoint, remote_address, remote_request_sender, cache).await?;
     let (mut send_stream, mut recv_stream) = connection.open_bi().await?;
     send_stream.write_all(&bytes).await?;
     send_stream.finish().await?;
@@ -405,50 +595,70 @@ async fn send_request(
         response_sender
             .send((remote_address, chunk))
             .map_err(|err| {
-                close_quic_endpoint(endpoint);
+                close_quic_endpoint(&endpoint);
                 Error::from(err)
             })
     })
 }
 
-async fn get_connection(
-    endpoint: &Endpoint,
+async fn make_connection_task(
+    endpoint: Endpoint,
     remote_address: SocketAddr,
     remote_request_sender: Sender<RemoteRequest>,
-    cache: Arc<RwLock<ConnectionCache>>,
-) -> Result<Connection, Error> {
-    let entry = get_cache_entry(remote_address, &cache).await;
+    receiver: AsyncReceiver<LocalRequest>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<RepairQuicStats>,
+) {
+    if let Err(err) = make_connection(
+        endpoint,
+        remote_address,
+        remote_request_sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
+        cache,
+        stats.clone(),
+    )
+    .await
     {
-        let connection: Option<Connection> = entry.read().await.clone();
-        if let Some(connection) = connection {
-            if connection.close_reason().is_none() {
-                return Ok(connection);
-            }
-        }
+        debug!("make_connection: {remote_address}, {err:?}");
+        record_error(&err, &stats);
     }
-    let connection = {
-        // Need to write lock here so that only one task initiates
-        // a new connection to the same remote_address.
-        let mut entry = entry.write().await;
-        if let Some(connection) = entry.deref() {
-            if connection.close_reason().is_none() {
-                return Ok(connection.clone());
-            }
-        }
-        let connection = endpoint
-            .connect(remote_address, CONNECT_SERVER_NAME)?
-            .await?;
-        entry.insert(connection).clone()
-    };
-    tokio::task::spawn(handle_connection_error(
-        endpoint.clone(),
+}
+
+async fn make_connection(
+    endpoint: Endpoint,
+    remote_address: SocketAddr,
+    remote_request_sender: Sender<RemoteRequest>,
+    receiver: AsyncReceiver<LocalRequest>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+    stats: Arc<RepairQuicStats>,
+) -> Result<(), Error> {
+    let connection = endpoint
+        .connect(remote_address, CONNECT_SERVER_NAME)?
+        .await?;
+    handle_connection(
+        endpoint,
         connection.remote_address(),
         get_remote_pubkey(&connection)?,
-        connection.clone(),
+        connection,
         remote_request_sender,
+        receiver,
+        bank_forks,
+        prune_cache_pending,
+        router,
         cache,
-    ));
-    Ok(connection)
+        stats,
+    )
+    .await;
+    Ok(())
 }
 
 fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
@@ -464,71 +674,95 @@ fn get_remote_pubkey(connection: &Connection) -> Result<Pubkey, Error> {
     }
 }
 
-async fn get_cache_entry(
-    remote_address: SocketAddr,
-    cache: &RwLock<ConnectionCache>,
-) -> Arc<RwLock<Option<Connection>>> {
-    let key = (remote_address, /*remote_pubkey:*/ None);
-    if let Some(entry) = cache.read().await.get(&key) {
-        return entry.clone();
-    }
-    cache.write().await.entry(key).or_default().clone()
-}
-
 async fn cache_connection(
-    remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: Connection,
-    cache: &RwLock<ConnectionCache>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
 ) {
-    // The 2nd cache entry with remote_pubkey == None allows to lookup an entry
-    // only by SocketAddr when establishing outgoing connections.
-    let entries: [Arc<RwLock<Option<Connection>>>; 2] = {
-        let mut cache = cache.write().await;
-        if cache.len() >= CONNECTION_CACHE_CAPACITY {
-            connection.close(
-                CONNECTION_CLOSE_ERROR_CODE_DROPPED,
-                CONNECTION_CLOSE_REASON_DROPPED,
-            );
-            return;
-        }
-        [Some(remote_pubkey), None].map(|remote_pubkey| {
-            let key = (remote_address, remote_pubkey);
-            cache.entry(key).or_default().clone()
-        })
+    let (old, should_prune_cache) = {
+        let mut cache = cache.lock().await;
+        (
+            cache.insert(remote_pubkey, connection),
+            cache.len() >= CONNECTION_CACHE_CAPACITY.saturating_mul(2),
+        )
     };
-    let mut entry = entries[0].write().await;
-    *entries[1].write().await = Some(connection.clone());
-    if let Some(old) = entry.replace(connection) {
-        drop(entry);
+    if let Some(old) = old {
         old.close(
             CONNECTION_CLOSE_ERROR_CODE_REPLACED,
             CONNECTION_CLOSE_REASON_REPLACED,
         );
     }
+    if should_prune_cache && !prune_cache_pending.swap(true, Ordering::Relaxed) {
+        tokio::task::spawn(prune_connection_cache(
+            bank_forks,
+            prune_cache_pending,
+            router,
+            cache,
+        ));
+    }
 }
 
 async fn drop_connection(
-    remote_address: SocketAddr,
     remote_pubkey: Pubkey,
     connection: &Connection,
-    cache: &RwLock<ConnectionCache>,
+    cache: &Mutex<HashMap<Pubkey, Connection>>,
 ) {
-    if connection.close_reason().is_none() {
-        connection.close(
-            CONNECTION_CLOSE_ERROR_CODE_DROPPED,
-            CONNECTION_CLOSE_REASON_DROPPED,
-        );
-    }
-    let key = (remote_address, Some(remote_pubkey));
-    if let Entry::Occupied(entry) = cache.write().await.entry(key) {
-        if matches!(entry.get().read().await.deref(),
-                    Some(entry) if entry.stable_id() == connection.stable_id())
-        {
+    connection.close(
+        CONNECTION_CLOSE_ERROR_CODE_DROPPED,
+        CONNECTION_CLOSE_REASON_DROPPED,
+    );
+    if let Entry::Occupied(entry) = cache.lock().await.entry(remote_pubkey) {
+        if entry.get().stable_id() == connection.stable_id() {
             entry.remove();
         }
     }
-    // Cache entry for (remote_address, None) will be lazily evicted.
+}
+
+async fn prune_connection_cache(
+    bank_forks: Arc<RwLock<BankForks>>,
+    prune_cache_pending: Arc<AtomicBool>,
+    router: Arc<AsyncRwLock<HashMap<SocketAddr, AsyncSender<LocalRequest>>>>,
+    cache: Arc<Mutex<HashMap<Pubkey, Connection>>>,
+) {
+    debug_assert!(prune_cache_pending.load(Ordering::Relaxed));
+    let staked_nodes = {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        root_bank.staked_nodes()
+    };
+    {
+        let mut cache = cache.lock().await;
+        if cache.len() < CONNECTION_CACHE_CAPACITY.saturating_mul(2) {
+            prune_cache_pending.store(false, Ordering::Relaxed);
+            return;
+        }
+        let mut connections: Vec<_> = cache
+            .drain()
+            .filter(|(_, connection)| connection.close_reason().is_none())
+            .map(|entry @ (pubkey, _)| {
+                let stake = staked_nodes.get(&pubkey).copied().unwrap_or_default();
+                (stake, entry)
+            })
+            .collect();
+        connections
+            .select_nth_unstable_by_key(CONNECTION_CACHE_CAPACITY, |&(stake, _)| Reverse(stake));
+        for (_, (_, connection)) in &connections[CONNECTION_CACHE_CAPACITY..] {
+            connection.close(
+                CONNECTION_CLOSE_ERROR_CODE_PRUNED,
+                CONNECTION_CLOSE_REASON_PRUNED,
+            );
+        }
+        cache.extend(
+            connections
+                .into_iter()
+                .take(CONNECTION_CACHE_CAPACITY)
+                .map(|(_, entry)| entry),
+        );
+        prune_cache_pending.store(false, Ordering::Relaxed);
+    }
+    router.write().await.retain(|_, sender| !sender.is_closed());
 }
 
 impl<T> From<crossbeam_channel::SendError<T>> for Error {
@@ -537,11 +771,257 @@ impl<T> From<crossbeam_channel::SendError<T>> for Error {
     }
 }
 
+#[derive(Default)]
+struct RepairQuicStats {
+    connect_error_invalid_remote_address: AtomicU64,
+    connect_error_other: AtomicU64,
+    connect_error_too_many_connections: AtomicU64,
+    connection_error_application_closed: AtomicU64,
+    connection_error_connection_closed: AtomicU64,
+    connection_error_locally_closed: AtomicU64,
+    connection_error_reset: AtomicU64,
+    connection_error_timed_out: AtomicU64,
+    connection_error_transport_error: AtomicU64,
+    connection_error_version_mismatch: AtomicU64,
+    invalid_identity: AtomicU64,
+    no_response_received: AtomicU64,
+    read_to_end_error_connection_lost: AtomicU64,
+    read_to_end_error_illegal_ordered_read: AtomicU64,
+    read_to_end_error_reset: AtomicU64,
+    read_to_end_error_too_long: AtomicU64,
+    read_to_end_error_unknown_stream: AtomicU64,
+    read_to_end_error_zero_rtt_rejected: AtomicU64,
+    read_to_end_timeout: AtomicU64,
+    router_try_send_error_full: AtomicU64,
+    write_error_connection_lost: AtomicU64,
+    write_error_stopped: AtomicU64,
+    write_error_unknown_stream: AtomicU64,
+    write_error_zero_rtt_rejected: AtomicU64,
+}
+
+async fn report_metrics_task(name: &'static str, stats: Arc<RepairQuicStats>) {
+    const METRICS_SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+    loop {
+        tokio::time::sleep(METRICS_SUBMIT_CADENCE).await;
+        report_metrics(name, &stats);
+    }
+}
+
+fn record_error(err: &Error, stats: &RepairQuicStats) {
+    match err {
+        Error::CertificateError(_) => (),
+        Error::ChannelSendError => (),
+        Error::ConnectError(ConnectError::EndpointStopping) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::TooManyConnections) => {
+            add_metric!(stats.connect_error_too_many_connections)
+        }
+        Error::ConnectError(ConnectError::InvalidDnsName(_)) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::InvalidRemoteAddress(_)) => {
+            add_metric!(stats.connect_error_invalid_remote_address)
+        }
+        Error::ConnectError(ConnectError::NoDefaultClientConfig) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectError(ConnectError::UnsupportedVersion) => {
+            add_metric!(stats.connect_error_other)
+        }
+        Error::ConnectionError(ConnectionError::VersionMismatch) => {
+            add_metric!(stats.connection_error_version_mismatch)
+        }
+        Error::ConnectionError(ConnectionError::TransportError(_)) => {
+            add_metric!(stats.connection_error_transport_error)
+        }
+        Error::ConnectionError(ConnectionError::ConnectionClosed(_)) => {
+            add_metric!(stats.connection_error_connection_closed)
+        }
+        Error::ConnectionError(ConnectionError::ApplicationClosed(_)) => {
+            add_metric!(stats.connection_error_application_closed)
+        }
+        Error::ConnectionError(ConnectionError::Reset) => add_metric!(stats.connection_error_reset),
+        Error::ConnectionError(ConnectionError::TimedOut) => {
+            add_metric!(stats.connection_error_timed_out)
+        }
+        Error::ConnectionError(ConnectionError::LocallyClosed) => {
+            add_metric!(stats.connection_error_locally_closed)
+        }
+        Error::InvalidIdentity(_) => add_metric!(stats.invalid_identity),
+        Error::IoError(_) => (),
+        Error::NoResponseReceived => add_metric!(stats.no_response_received),
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::Reset(_))) => {
+            add_metric!(stats.read_to_end_error_reset)
+        }
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::ConnectionLost(_))) => {
+            add_metric!(stats.read_to_end_error_connection_lost)
+        }
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::UnknownStream)) => {
+            add_metric!(stats.read_to_end_error_unknown_stream)
+        }
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::IllegalOrderedRead)) => {
+            add_metric!(stats.read_to_end_error_illegal_ordered_read)
+        }
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::ZeroRttRejected)) => {
+            add_metric!(stats.read_to_end_error_zero_rtt_rejected)
+        }
+        Error::ReadToEndError(ReadToEndError::TooLong) => {
+            add_metric!(stats.read_to_end_error_too_long)
+        }
+        Error::ReadToEndTimeout => add_metric!(stats.read_to_end_timeout),
+        Error::TlsError(_) => (),
+        Error::WriteError(WriteError::Stopped(_)) => add_metric!(stats.write_error_stopped),
+        Error::WriteError(WriteError::ConnectionLost(_)) => {
+            add_metric!(stats.write_error_connection_lost)
+        }
+        Error::WriteError(WriteError::UnknownStream) => {
+            add_metric!(stats.write_error_unknown_stream)
+        }
+        Error::WriteError(WriteError::ZeroRttRejected) => {
+            add_metric!(stats.write_error_zero_rtt_rejected)
+        }
+    }
+}
+
+fn report_metrics(name: &'static str, stats: &RepairQuicStats) {
+    macro_rules! reset_metric {
+        ($metric: expr) => {
+            $metric.swap(0, Ordering::Relaxed)
+        };
+    }
+    datapoint_info!(
+        name,
+        (
+            "connect_error_invalid_remote_address",
+            reset_metric!(stats.connect_error_invalid_remote_address),
+            i64
+        ),
+        (
+            "connect_error_other",
+            reset_metric!(stats.connect_error_other),
+            i64
+        ),
+        (
+            "connect_error_too_many_connections",
+            reset_metric!(stats.connect_error_too_many_connections),
+            i64
+        ),
+        (
+            "connection_error_application_closed",
+            reset_metric!(stats.connection_error_application_closed),
+            i64
+        ),
+        (
+            "connection_error_connection_closed",
+            reset_metric!(stats.connection_error_connection_closed),
+            i64
+        ),
+        (
+            "connection_error_locally_closed",
+            reset_metric!(stats.connection_error_locally_closed),
+            i64
+        ),
+        (
+            "connection_error_reset",
+            reset_metric!(stats.connection_error_reset),
+            i64
+        ),
+        (
+            "connection_error_timed_out",
+            reset_metric!(stats.connection_error_timed_out),
+            i64
+        ),
+        (
+            "connection_error_transport_error",
+            reset_metric!(stats.connection_error_transport_error),
+            i64
+        ),
+        (
+            "connection_error_version_mismatch",
+            reset_metric!(stats.connection_error_version_mismatch),
+            i64
+        ),
+        (
+            "invalid_identity",
+            reset_metric!(stats.invalid_identity),
+            i64
+        ),
+        (
+            "no_response_received",
+            reset_metric!(stats.no_response_received),
+            i64
+        ),
+        (
+            "read_to_end_error_connection_lost",
+            reset_metric!(stats.read_to_end_error_connection_lost),
+            i64
+        ),
+        (
+            "read_to_end_error_illegal_ordered_read",
+            reset_metric!(stats.read_to_end_error_illegal_ordered_read),
+            i64
+        ),
+        (
+            "read_to_end_error_reset",
+            reset_metric!(stats.read_to_end_error_reset),
+            i64
+        ),
+        (
+            "read_to_end_error_too_long",
+            reset_metric!(stats.read_to_end_error_too_long),
+            i64
+        ),
+        (
+            "read_to_end_error_unknown_stream",
+            reset_metric!(stats.read_to_end_error_unknown_stream),
+            i64
+        ),
+        (
+            "read_to_end_error_zero_rtt_rejected",
+            reset_metric!(stats.read_to_end_error_zero_rtt_rejected),
+            i64
+        ),
+        (
+            "read_to_end_timeout",
+            reset_metric!(stats.read_to_end_timeout),
+            i64
+        ),
+        (
+            "router_try_send_error_full",
+            reset_metric!(stats.router_try_send_error_full),
+            i64
+        ),
+        (
+            "write_error_connection_lost",
+            reset_metric!(stats.write_error_connection_lost),
+            i64
+        ),
+        (
+            "write_error_stopped",
+            reset_metric!(stats.write_error_stopped),
+            i64
+        ),
+        (
+            "write_error_unknown_stream",
+            reset_metric!(stats.write_error_unknown_stream),
+            i64
+        ),
+        (
+            "write_error_zero_rtt_rejected",
+            reset_metric!(stats.write_error_zero_rtt_rejected),
+            i64
+        ),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         itertools::{izip, multiunzip},
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::bank::Bank,
         solana_sdk::signature::Signer,
         std::{iter::repeat_with, net::Ipv4Addr, time::Duration},
     };
@@ -569,6 +1049,12 @@ mod tests {
             repeat_with(crossbeam_channel::unbounded::<RemoteRequest>)
                 .take(NUM_ENDPOINTS)
                 .unzip();
+        let bank_forks = {
+            let GenesisConfigInfo { genesis_config, .. } =
+                create_genesis_config(/*mint_lamports:*/ 100_000);
+            let bank = Bank::new_for_tests(&genesis_config);
+            BankForks::new_rw_arc(bank)
+        };
         let (endpoints, senders, tasks): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
             keypairs
                 .iter()
@@ -581,6 +1067,7 @@ mod tests {
                         socket,
                         IpAddr::V4(Ipv4Addr::LOCALHOST),
                         remote_request_sender,
+                        bank_forks.clone(),
                     )
                     .unwrap()
                 }),

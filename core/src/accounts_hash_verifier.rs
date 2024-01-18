@@ -104,12 +104,21 @@ impl AccountsHashVerifier {
                     ));
 
                     if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
-                        let num_storages = snapshot_storages_for_fastboot.len();
+                        // Get the number of storages that are being kept alive for fastboot.
+                        // Looking at the storage Arc's strong reference count, we know that one
+                        // ref is for fastboot, and one ref is for snapshot packaging.  If there
+                        // are no others, then the storage will be kept alive because of fastboot.
+                        let num_storages_kept_alive = snapshot_storages_for_fastboot
+                            .iter()
+                            .filter(|storage| Arc::strong_count(storage) == 2)
+                            .count();
+                        let num_storages_total = snapshot_storages_for_fastboot.len();
                         fastboot_storages = Some(snapshot_storages_for_fastboot);
                         datapoint_info!(
                             "fastboot",
                             ("slot", slot, i64),
-                            ("num_storages", num_storages, i64),
+                            ("num_storages_total", num_storages_total, i64),
+                            ("num_storages_kept_alive", num_storages_kept_alive, i64),
                         );
                     }
 
@@ -400,7 +409,6 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
-            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
         let slot = accounts_package.slot;
@@ -480,7 +488,6 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
-            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
         let (incremental_accounts_hash, measure_hash_us) = measure_us!(

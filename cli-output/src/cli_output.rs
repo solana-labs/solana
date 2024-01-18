@@ -2316,6 +2316,26 @@ impl fmt::Display for CliUpgradeableProgramClosed {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliUpgradeableProgramExtended {
+    pub program_id: String,
+    pub additional_bytes: u32,
+}
+impl QuietDisplay for CliUpgradeableProgramExtended {}
+impl VerboseDisplay for CliUpgradeableProgramExtended {}
+impl fmt::Display for CliUpgradeableProgramExtended {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "Extended Program Id {} by {} bytes",
+            &self.program_id, self.additional_bytes,
+        )?;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableBuffer {

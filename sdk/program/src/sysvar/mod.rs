@@ -79,7 +79,7 @@
 //!
 //! For more details see the Solana [documentation on sysvars][sysvardoc].
 //!
-//! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
+//! [sysvardoc]: https://docs.solanalabs.com/runtime/sysvars
 
 use {
     crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
@@ -100,6 +100,7 @@ pub mod slot_history;
 pub mod stake_history;
 
 lazy_static! {
+    // This will be deprecated and so this list shouldn't be modified
     pub static ref ALL_IDS: Vec<Pubkey> = vec![
         clock::id(),
         epoch_schedule::id(),
@@ -113,8 +114,6 @@ lazy_static! {
         slot_history::id(),
         stake_history::id(),
         instructions::id(),
-        epoch_rewards::id(),
-        last_restart_slot::id(),
     ];
 }
 
@@ -138,12 +137,6 @@ macro_rules! declare_sysvar_id(
                 check_id(pubkey)
             }
         }
-
-        #[cfg(test)]
-        #[test]
-        fn test_sysvar_id() {
-            assert!($crate::sysvar::is_sysvar_id(&id()), "sysvar::is_sysvar_id() doesn't know about {}", $name);
-        }
     )
 );
 
@@ -163,12 +156,6 @@ macro_rules! declare_deprecated_sysvar_id(
                 #[allow(deprecated)]
                 check_id(pubkey)
             }
-        }
-
-        #[cfg(test)]
-        #[test]
-        fn test_sysvar_id() {
-            assert!($crate::sysvar::is_sysvar_id(&id()), "sysvar::is_sysvar_id() doesn't know about {}", $name);
         }
     )
 );

@@ -238,7 +238,7 @@ where
         // Move on to next chunk
         self.chunk_index = (self.chunk_index + 1) % self.account_chunks.source.len();
 
-        // Switch directions after transfering for each "chunk"
+        // Switch directions after transferring for each "chunk"
         if self.chunk_index == 0 {
             self.reclaim_lamports_back_to_source_account =
                 !self.reclaim_lamports_back_to_source_account;
@@ -1160,17 +1160,17 @@ mod tests {
         },
     };
 
-    fn bank_with_all_features(genesis_config: &GenesisConfig) -> Bank {
+    fn bank_with_all_features(genesis_config: &GenesisConfig) -> Arc<Bank> {
         let mut bank = Bank::new_for_tests(genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
-        bank
+        bank.wrap_with_bank_forks_for_tests().0
     }
 
     #[test]
     fn test_bench_tps_bank_client() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = bank_with_all_features(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));
+        let client = Arc::new(BankClient::new_shared(bank));
 
         let config = Config {
             id,
@@ -1191,7 +1191,7 @@ mod tests {
     fn test_bench_tps_fund_keys() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = bank_with_all_features(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));
+        let client = Arc::new(BankClient::new_shared(bank));
         let keypair_count = 20;
         let lamports = 20;
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
@@ -1216,7 +1216,7 @@ mod tests {
         let fee_rate_governor = FeeRateGovernor::new(11, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = bank_with_all_features(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));
+        let client = Arc::new(BankClient::new_shared(bank));
         let keypair_count = 20;
         let lamports = 20;
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
@@ -1234,7 +1234,7 @@ mod tests {
     fn test_bench_tps_create_durable_nonce() {
         let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = bank_with_all_features(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));
+        let client = Arc::new(BankClient::new_shared(bank));
         let keypair_count = 10;
         let lamports = 10_000_000;
 

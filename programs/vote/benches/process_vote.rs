@@ -108,7 +108,7 @@ fn bench_process_vote_instruction(
             transaction_accounts.clone(),
             instruction_account_metas.clone(),
             Ok(()),
-            solana_vote_program::vote_processor::process_instruction,
+            solana_vote_program::vote_processor::Entrypoint::vm,
             |_invoke_context| {},
             |_invoke_context| {},
         );

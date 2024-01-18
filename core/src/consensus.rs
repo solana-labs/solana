@@ -1,3 +1,5 @@
+use crate::replay_stage::DUPLICATE_THRESHOLD;
+
 pub mod fork_choice;
 pub mod heaviest_subtree_fork_choice;
 pub(crate) mod latest_validator_votes_for_frozen_banks;
@@ -52,7 +54,7 @@ use {
 pub enum ThresholdDecision {
     #[default]
     PassedThreshold,
-    FailedThreshold(/* Observed stake */ u64),
+    FailedThreshold(/* vote depth */ u64, /* Observed stake */ u64),
 }
 
 impl ThresholdDecision {
@@ -141,6 +143,7 @@ impl SwitchForkDecision {
     }
 }
 
+const VOTE_THRESHOLD_DEPTH_SHALLOW: usize = 4;
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
 
@@ -443,7 +446,7 @@ impl Tower {
         }
     }
 
-    pub fn is_slot_confirmed(
+    pub(crate) fn is_slot_confirmed(
         &self,
         slot: Slot,
         voted_stakes: &VotedStakes,
@@ -452,6 +455,18 @@ impl Tower {
         voted_stakes
             .get(&slot)
             .map(|stake| (*stake as f64 / total_stake as f64) > self.threshold_size)
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn is_slot_duplicate_confirmed(
+        &self,
+        slot: Slot,
+        voted_stakes: &VotedStakes,
+        total_stake: Stake,
+    ) -> bool {
+        voted_stakes
+            .get(&slot)
+            .map(|stake| (*stake as f64 / total_stake as f64) > DUPLICATE_THRESHOLD)
             .unwrap_or(false)
     }
 
@@ -1042,46 +1057,88 @@ impl Tower {
         self.last_switch_threshold_check.is_none()
     }
 
-    /// Performs threshold check for `slot`
-    ///
-    /// If it passes the check returns None, otherwise returns Some(fork_stake)
-    pub fn check_vote_stake_threshold(
+    /// Checks a single vote threshold for `slot`
+    fn check_vote_stake_threshold(
+        threshold_vote: Option<&Lockout>,
+        vote_state_before_applying_vote: &VoteState,
+        threshold_depth: usize,
+        threshold_size: f64,
+        slot: Slot,
+        voted_stakes: &HashMap<Slot, u64>,
+        total_stake: u64,
+    ) -> ThresholdDecision {
+        let Some(threshold_vote) = threshold_vote else {
+            // Tower isn't that deep.
+            return ThresholdDecision::PassedThreshold;
+        };
+        let Some(fork_stake) = voted_stakes.get(&threshold_vote.slot()) else {
+            // We haven't seen any votes on this fork yet, so no stake
+            return ThresholdDecision::FailedThreshold(threshold_depth as u64, 0);
+        };
+
+        let lockout = *fork_stake as f64 / total_stake as f64;
+        trace!(
+            "fork_stake slot: {}, threshold_vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
+            slot,
+            threshold_vote.slot(),
+            lockout,
+            fork_stake,
+            total_stake
+        );
+        if threshold_vote.confirmation_count() as usize > threshold_depth {
+            for old_vote in &vote_state_before_applying_vote.votes {
+                if old_vote.slot() == threshold_vote.slot()
+                    && old_vote.confirmation_count() == threshold_vote.confirmation_count()
+                {
+                    // If you bounce back to voting on the main fork after not
+                    // voting for a while, your latest vote N on the main fork
+                    // might pop off a lot of the stake of votes in the tower.
+                    // This stake would have rolled up to earlier votes in the
+                    // tower, so skip the stake check.
+                    return ThresholdDecision::PassedThreshold;
+                }
+            }
+        }
+        if lockout > threshold_size {
+            return ThresholdDecision::PassedThreshold;
+        }
+        ThresholdDecision::FailedThreshold(threshold_depth as u64, *fork_stake)
+    }
+
+    /// Performs vote threshold checks for `slot`
+    pub fn check_vote_stake_thresholds(
         &self,
         slot: Slot,
         voted_stakes: &VotedStakes,
         total_stake: Stake,
     ) -> ThresholdDecision {
+        // Generate the vote state assuming this vote is included.
         let mut vote_state = self.vote_state.clone();
         process_slot_vote_unchecked(&mut vote_state, slot);
-        let lockout = vote_state.nth_recent_lockout(self.threshold_depth);
-        if let Some(lockout) = lockout {
-            if let Some(fork_stake) = voted_stakes.get(&lockout.slot()) {
-                let lockout_stake = *fork_stake as f64 / total_stake as f64;
-                trace!(
-                    "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
-                    slot, lockout.slot(), lockout_stake, fork_stake, total_stake
-                );
-                if lockout.confirmation_count() as usize > self.threshold_depth {
-                    for old_vote in &self.vote_state.votes {
-                        if old_vote.slot() == lockout.slot()
-                            && old_vote.confirmation_count() == lockout.confirmation_count()
-                        {
-                            return ThresholdDecision::PassedThreshold;
-                        }
-                    }
-                }
 
-                if lockout_stake > self.threshold_size {
-                    return ThresholdDecision::PassedThreshold;
-                }
-                ThresholdDecision::FailedThreshold(*fork_stake)
-            } else {
-                // We haven't seen any votes on this fork yet, so no stake
-                ThresholdDecision::FailedThreshold(0)
+        // Assemble all the vote thresholds and depths to check.
+        let vote_thresholds_and_depths = vec![
+            (VOTE_THRESHOLD_DEPTH_SHALLOW, SWITCH_FORK_THRESHOLD),
+            (self.threshold_depth, self.threshold_size),
+        ];
+
+        // Check one by one. If any threshold fails, return failure.
+        for (threshold_depth, threshold_size) in vote_thresholds_and_depths {
+            if let ThresholdDecision::FailedThreshold(vote_depth, stake) =
+                Self::check_vote_stake_threshold(
+                    vote_state.nth_recent_lockout(threshold_depth),
+                    &self.vote_state,
+                    threshold_depth,
+                    threshold_size,
+                    slot,
+                    voted_stakes,
+                    total_stake,
+                )
+            {
+                return ThresholdDecision::FailedThreshold(vote_depth, stake);
             }
-        } else {
-            ThresholdDecision::PassedThreshold
         }
+        ThresholdDecision::PassedThreshold
     }
 
     /// Update lockouts for all the ancestors
@@ -1452,7 +1509,7 @@ impl ExternalRootSource {
 pub fn reconcile_blockstore_roots_with_external_source(
     external_source: ExternalRootSource,
     blockstore: &Blockstore,
-    // blockstore.last_root() might have been updated already.
+    // blockstore.max_root() might have been updated already.
     // so take a &mut param both to input (and output iff we update root)
     last_blockstore_root: &mut Slot,
 ) -> blockstore_db::Result<()> {
@@ -1489,7 +1546,7 @@ pub fn reconcile_blockstore_roots_with_external_source(
             // Update the caller-managed state of last root in blockstore.
             // Repeated calls of this function should result in a no-op for
             // the range of `new_roots`.
-            *last_blockstore_root = blockstore.last_root();
+            *last_blockstore_root = blockstore.max_root();
         } else {
             // This indicates we're in bad state; but still don't panic here.
             // That's because we might have a chance of recovering properly with
@@ -1518,7 +1575,7 @@ pub mod test {
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
-        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::Bank,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -2297,7 +2354,7 @@ pub mod test {
     fn test_check_vote_threshold_without_votes() {
         let tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
-        assert!(tower.check_vote_stake_threshold(0, &stakes, 2).passed());
+        assert!(tower.check_vote_stake_thresholds(0, &stakes, 2).passed());
     }
 
     #[test]
@@ -2310,7 +2367,7 @@ pub mod test {
             tower.record_vote(i, Hash::default());
         }
         assert!(!tower
-            .check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2,)
+            .check_vote_stake_thresholds(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2)
             .passed());
     }
 
@@ -2333,6 +2390,27 @@ pub mod test {
         let tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 2)].into_iter().collect();
         assert!(tower.is_slot_confirmed(0, &stakes, 2));
+    }
+
+    #[test]
+    fn test_is_slot_duplicate_confirmed_not_enough_stake_failure() {
+        let tower = Tower::new_for_tests(1, 0.67);
+        let stakes = vec![(0, 52)].into_iter().collect();
+        assert!(!tower.is_slot_duplicate_confirmed(0, &stakes, 100));
+    }
+
+    #[test]
+    fn test_is_slot_duplicate_confirmed_unknown_slot() {
+        let tower = Tower::new_for_tests(1, 0.67);
+        let stakes = HashMap::new();
+        assert!(!tower.is_slot_duplicate_confirmed(0, &stakes, 100));
+    }
+
+    #[test]
+    fn test_is_slot_duplicate_confirmed_pass() {
+        let tower = Tower::new_for_tests(1, 0.67);
+        let stakes = vec![(0, 53)].into_iter().collect();
+        assert!(tower.is_slot_duplicate_confirmed(0, &stakes, 100));
     }
 
     #[test]
@@ -2426,14 +2504,56 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2).passed());
+        assert!(!tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(tower.check_vote_stake_threshold(1, &stakes, 2).passed());
+        assert!(tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
+    }
+
+    #[test]
+    fn test_check_vote_thresholds_above_thresholds() {
+        let mut tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, 0.67);
+        let stakes = vec![(0, 3), (VOTE_THRESHOLD_DEPTH_SHALLOW as u64, 2)]
+            .into_iter()
+            .collect();
+        for slot in 0..VOTE_THRESHOLD_DEPTH {
+            tower.record_vote(slot as Slot, Hash::default());
+        }
+        assert!(tower
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 4)
+            .passed());
+    }
+
+    #[test]
+    fn test_check_vote_threshold_deep_below_threshold() {
+        let mut tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, 0.67);
+        let stakes = vec![(0, 6), (VOTE_THRESHOLD_DEPTH_SHALLOW as u64, 4)]
+            .into_iter()
+            .collect();
+        for slot in 0..VOTE_THRESHOLD_DEPTH {
+            tower.record_vote(slot as Slot, Hash::default());
+        }
+        assert!(!tower
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 10)
+            .passed());
+    }
+
+    #[test]
+    fn test_check_vote_threshold_shallow_below_threshold() {
+        let mut tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, 0.67);
+        let stakes = vec![(0, 7), (VOTE_THRESHOLD_DEPTH_SHALLOW as u64, 1)]
+            .into_iter()
+            .collect();
+        for slot in 0..VOTE_THRESHOLD_DEPTH {
+            tower.record_vote(slot as Slot, Hash::default());
+        }
+        assert!(!tower
+            .check_vote_stake_thresholds(VOTE_THRESHOLD_DEPTH.try_into().unwrap(), &stakes, 10)
+            .passed());
     }
 
     #[test]
@@ -2443,7 +2563,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2).passed());
+        assert!(tower.check_vote_stake_thresholds(6, &stakes, 2).passed());
     }
 
     #[test]
@@ -2451,7 +2571,7 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = HashMap::new();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2).passed());
+        assert!(!tower.check_vote_stake_thresholds(1, &stakes, 2).passed());
     }
 
     #[test]
@@ -2462,7 +2582,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2,).passed());
+        assert!(tower.check_vote_stake_thresholds(6, &stakes, 2).passed());
     }
 
     #[test]
@@ -2526,7 +2646,7 @@ pub mod test {
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(tower
-            .check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,)
+            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake)
             .passed());
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
@@ -2546,7 +2666,7 @@ pub mod test {
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(!tower
-            .check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,)
+            .check_vote_stake_thresholds(vote_to_evaluate, &voted_stakes, total_stake)
             .passed());
     }
 
@@ -2928,36 +3048,33 @@ pub mod test {
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_normal() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
-            assert!(!blockstore.is_root(4));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
+        assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
 
-            assert!(!blockstore.is_root(0));
-            assert!(blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
-            assert!(blockstore.is_root(4));
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        assert!(!blockstore.is_root(0));
+        assert!(blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
+        assert!(blockstore.is_root(4));
     }
 
     #[test]
@@ -2966,61 +3083,55 @@ pub mod test {
                                external root (Tower(4))!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            blockstore.set_roots(std::iter::once(&3)).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(blockstore.is_root(3));
-            assert!(!blockstore.is_root(4));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore.set_roots(std::iter::once(&3)).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(blockstore.is_root(3));
+        assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_nop_no_parent() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(!blockstore.is_root(0));
-            assert!(!blockstore.is_root(1));
-            assert!(!blockstore.is_root(3));
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert!(!blockstore.is_root(0));
+        assert!(!blockstore.is_root(1));
+        assert!(!blockstore.is_root(3));
 
-            let mut tower = Tower::default();
-            tower.vote_state.root_slot = Some(4);
-            assert_eq!(blockstore.last_root(), 0);
-            reconcile_blockstore_roots_with_external_source(
-                ExternalRootSource::Tower(tower.root()),
-                &blockstore,
-                &mut blockstore.last_root(),
-            )
-            .unwrap();
-            assert_eq!(blockstore.last_root(), 0);
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        let mut tower = Tower::default();
+        tower.vote_state.root_slot = Some(4);
+        assert_eq!(blockstore.max_root(), 0);
+        reconcile_blockstore_roots_with_external_source(
+            ExternalRootSource::Tower(tower.root()),
+            &blockstore,
+            &mut blockstore.max_root(),
+        )
+        .unwrap();
+        assert_eq!(blockstore.max_root(), 0);
     }
 
     #[test]

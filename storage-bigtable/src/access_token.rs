@@ -34,12 +34,24 @@ fn load_stringified_credentials(credential: String) -> Result<Credentials, Strin
     Credentials::from_str(&credential).map_err(|err| format!("{err}"))
 }
 
-#[derive(Clone)]
-pub struct AccessToken {
+pub struct AccessTokenInner {
     credentials: Credentials,
     scope: Scope,
-    refresh_active: Arc<AtomicBool>,
-    token: Arc<RwLock<(Token, Instant)>>,
+    token: RwLock<(Token, Instant)>,
+    refresh_active: AtomicBool,
+}
+
+#[derive(Clone)]
+pub struct AccessToken {
+    inner: Arc<AccessTokenInner>,
+}
+
+impl std::ops::Deref for AccessToken {
+    type Target = AccessTokenInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl AccessToken {
@@ -52,12 +64,14 @@ impl AccessToken {
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {err}"))
         } else {
-            let token = Arc::new(RwLock::new(Self::get_token(&credentials, &scope).await?));
+            let token = RwLock::new(Self::get_token(&credentials, &scope).await?);
             let access_token = Self {
-                credentials,
-                scope,
-                token,
-                refresh_active: Arc::new(AtomicBool::new(false)),
+                inner: Arc::new(AccessTokenInner {
+                    credentials,
+                    scope,
+                    token,
+                    refresh_active: AtomicBool::new(false),
+                }),
             };
             Ok(access_token)
         }
@@ -91,41 +105,46 @@ impl AccessToken {
     }
 
     /// Call this function regularly to ensure the access token does not expire
-    pub async fn refresh(&self) {
+    pub fn refresh(&self) {
         // Check if it's time to try a token refresh
-        {
-            let token_r = self.token.read().unwrap();
-            if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
-                return;
-            }
+        let token_r = self.token.read().unwrap();
+        if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
+            debug!("Token is not expired yet");
+            return;
+        }
+        drop(token_r);
 
-            #[allow(deprecated)]
-            if self
-                .refresh_active
-                .compare_and_swap(false, true, Ordering::Relaxed)
+        // Refresh already is progress
+        let refresh_progress =
+            self.refresh_active
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
+        if refresh_progress.is_err() {
+            debug!("Token update is already in progress");
+            return;
+        }
+
+        let this = self.clone();
+        tokio::spawn(async move {
+            match time::timeout(
+                time::Duration::from_secs(5),
+                Self::get_token(&this.credentials, &this.scope),
+            )
+            .await
             {
-                // Refresh already pending
-                return;
+                Ok(new_token) => match new_token {
+                    Ok(new_token) => {
+                        let mut token_w = this.token.write().unwrap();
+                        *token_w = new_token;
+                    }
+                    Err(err) => error!("Failed to fetch new token: {}", err),
+                },
+                Err(_timeout) => {
+                    warn!("Token refresh timeout")
+                }
             }
-        }
-
-        info!("Refreshing token");
-        match time::timeout(
-            time::Duration::from_secs(5),
-            Self::get_token(&self.credentials, &self.scope),
-        )
-        .await
-        {
-            Ok(new_token) => match (new_token, self.token.write()) {
-                (Ok(new_token), Ok(mut token_w)) => *token_w = new_token,
-                (Ok(_new_token), Err(err)) => warn!("{}", err),
-                (Err(err), _) => warn!("{}", err),
-            },
-            Err(_) => {
-                warn!("Token refresh timeout")
-            }
-        }
-        self.refresh_active.store(false, Ordering::Relaxed);
+            this.refresh_active.store(false, Ordering::Relaxed);
+            info!("Token refreshed");
+        });
     }
 
     /// Return an access token suitable for use in an HTTP authorization header

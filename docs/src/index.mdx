@@ -9,56 +9,49 @@ description: "Solana is a high performance network that is utilized for a range
 # displayed_sidebar: introductionSidebar
 ---
 
-# Solana Documentation
+# Solana Validator Documentation
 
 Solana is a blockchain built for mass adoption. It's a high performance network
 that is utilized for a range of use cases, including finance, NFTs, payments,
 and gaming. Solana operates as a single global state machine, and is open,
 interoperable and decentralized.
 
-## Getting started
+## Command Line Interface and Tool Suite
 
-Dive right into Solana to start building or setup your tooling.
+To get started using the Solana Command Line (CLI) tools:
 
-- [Setup local environment](/cli) - Install the Solana CLI to get your local
-  development environment setup
-- [Hello World in your browser](getstarted/hello-world) - Build and deploy your
-  first on-chain Solana program, directly in your browser using Solana
-  Playground
+- [Install the Solana CLI Tool Suite](./cli/install.md) - Quickly get setup
+  locally with the CLI, optionally build from source
+- [Introduction to the CLI conventions](./cli/intro.md) - Understand the common
+  conventions used within the CLI tool suite
+- [Choose a cluster](./cli/examples/choose-a-cluster.md) - Select a Solana
+  network cluster to connect (e.g. `devnet`, `testnet`, `mainnet-beta`)
+- [Create a wallet](./cli/wallets/index.md) - Create a command line wallet for
+  use within the CLI and beyond
 
-## Start learning
-
-Build a strong understanding of the core concepts that make Solana different
-from other blockchains.
-
-- [Transactions](./developing/programming-model/transactions) - Collection of
-  instructions for the blockchain to execute
-- [Accounts](./developing/programming-model/accounts) - Data and state storage
-  mechanism for Solana
-- [Programs](./developing/intro/programs) - The executable code used to perform
-  actions on the blockchain
-- [Cross-Program Invocation](./developing/programming-model/calling-between-programs) -
-  Core of the "composability" of Solana, this is how programs can "call" each
-  other.
-
-## Understanding the architecture
+## Understanding the Architecture
 
 Get to know the underlying architecture of how the proof-of-stake blockchain
-works.
+works:
 
-- [Validators](./validator/anatomy) - the individual nodes that are the backbone
-  of the network
-- [Clusters](./cluster/overview) - a collection of validators that work together
-  for consensus
+- [Clusters](./clusters/index.md) - a collection of validators that work
+  together for consensus
+- [Validators](./validator/anatomy.md) - the individual nodes that are the
+  backbone of the network
+- [Runtime](./runtime/programs.md) - the native programs that are core to the
+  validator and the blockchain
 
-## Running a validator
+## Running a Validator
 
 Explore what it takes to operate a Solana validator and help secure the network.
 
-- [System requirements](./running-validator/validator-reqs) - Recommended
-  hardware requirements and expected SOL needed to operate a validator
-- [Quick start guide](./validator/get-started/setup-a-validator) - Setup a
-  validator and get connected to a cluster for the first time
+- [Validator vs RPC node](./operations/validator-or-rpc-node.md) - Understand
+  the important differences between voting and non-voting validators on the
+  network
+- [System requirements](./operations/requirements.md) - Recommended hardware
+  requirements and expected SOL needed to operate a validator
+- [Quick start guide](./operations/setup-a-validator.md) - Setup a validator and
+  get connected to a cluster for the first time
 
 ## Learn more
 

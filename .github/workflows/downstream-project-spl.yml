@@ -26,6 +26,10 @@ on:
         type: string
         default: "master"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   SHELL: /bin/bash
   SCCACHE_GHA_ENABLED: "true"
@@ -43,6 +47,8 @@ jobs:
           .github/scripts/purge-ubuntu-runner.sh
 
       - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
 
       - shell: bash
         run: |
@@ -90,6 +96,8 @@ jobs:
           .github/scripts/purge-ubuntu-runner.sh
 
       - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
 
       - shell: bash
         run: |
@@ -139,6 +147,8 @@ jobs:
           .github/scripts/purge-ubuntu-runner.sh
 
       - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
 
       - shell: bash
         run: |

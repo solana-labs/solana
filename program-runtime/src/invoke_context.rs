@@ -1,6 +1,5 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
         ic_msg,
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
@@ -12,14 +11,15 @@ use {
     solana_measure::measure::Measure,
     solana_rbpf::{
         ebpf::MM_HEAP_START,
-        elf::SBPFVersion,
+        error::{EbpfError, ProgramResult},
         memory_region::MemoryMapping,
-        vm::{BuiltinFunction, Config, ContextObject, ProgramResult},
+        program::{BuiltinFunction, SBPFVersion},
+        vm::{Config, ContextObject, EbpfVm},
     },
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader_deprecated,
-        feature_set::{check_slice_translation_size, native_programs_consume_cu, FeatureSet},
+        feature_set::FeatureSet,
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -39,44 +39,43 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext = BuiltinFunction<InvokeContext<'static>>;
+pub type BuiltinFunctionWithContext = BuiltinFunction<InvokeContext<'static>>;
 
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
 macro_rules! declare_process_instruction {
     ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
-        pub fn $process_instruction(
-            invoke_context: &mut $crate::invoke_context::InvokeContext,
-            _arg0: u64,
-            _arg1: u64,
-            _arg2: u64,
-            _arg3: u64,
-            _arg4: u64,
-            _memory_mapping: &mut $crate::solana_rbpf::memory_region::MemoryMapping,
-            result: &mut $crate::solana_rbpf::vm::ProgramResult,
-        ) {
-            fn process_instruction_inner(
-                $invoke_context: &mut $crate::invoke_context::InvokeContext,
-            ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
-                $inner
+        $crate::solana_rbpf::declare_builtin_function!(
+            $process_instruction,
+            fn rust(
+                invoke_context: &mut $crate::invoke_context::InvokeContext,
+                _arg0: u64,
+                _arg1: u64,
+                _arg2: u64,
+                _arg3: u64,
+                _arg4: u64,
+                _memory_mapping: &mut $crate::solana_rbpf::memory_region::MemoryMapping,
+            ) -> std::result::Result<u64, Box<dyn std::error::Error>> {
+                fn process_instruction_inner(
+                    $invoke_context: &mut $crate::invoke_context::InvokeContext,
+                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError>
+                    $inner
+
+                let consumption_result = if $cu_to_consume > 0
+                {
+                    invoke_context.consume_checked($cu_to_consume)
+                } else {
+                    Ok(())
+                };
+                consumption_result
+                    .and_then(|_| {
+                        process_instruction_inner(invoke_context)
+                            .map(|_| 0)
+                            .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                    })
+                    .into()
             }
-            let consumption_result = if $cu_to_consume > 0
-                && invoke_context
-                    .feature_set
-                    .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
-            {
-                invoke_context.consume_checked($cu_to_consume)
-            } else {
-                Ok(())
-            };
-            *result = consumption_result
-                .and_then(|_| {
-                    process_instruction_inner(invoke_context)
-                        .map(|_| 0)
-                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
-                })
-                .into();
-        }
+        );
     };
 }
 
@@ -161,10 +160,8 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
-    accounts_data_meter: AccountsDataMeter,
     pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
     pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
-    pub programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -182,11 +179,9 @@ impl<'a> InvokeContext<'a> {
         compute_budget: ComputeBudget,
         programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
         programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
-        programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -195,10 +190,8 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
-            accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             programs_loaded_for_tx_batch,
             programs_modified_by_tx,
-            programs_updated_only_for_global_cache,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -410,7 +403,7 @@ impl<'a> InvokeContext<'a> {
             })?;
         let borrowed_program_account = instruction_context
             .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
-        if !borrowed_program_account.is_executable() {
+        if !borrowed_program_account.is_executable(&self.feature_set) {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
@@ -468,11 +461,11 @@ impl<'a> InvokeContext<'a> {
             .programs_loaded_for_tx_batch
             .find(&builtin_id)
             .ok_or(InstructionError::UnsupportedProgramId)?;
-        let process_instruction = match &entry.program {
+        let function = match &entry.program {
             LoadedProgramType::Builtin(program) => program
                 .get_function_registry()
                 .lookup_by_key(ENTRYPOINT_KEY)
-                .map(|(_name, process_instruction)| process_instruction),
+                .map(|(_name, function)| function),
             _ => None,
         }
         .ok_or(InstructionError::UnsupportedProgramId)?;
@@ -484,31 +477,41 @@ impl<'a> InvokeContext<'a> {
         let logger = self.get_log_collector();
         stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
         let pre_remaining_units = self.get_remaining();
+        // In program-runtime v2 we will create this VM instance only once per transaction.
+        // `program_runtime_environment_v2.get_config()` will be used instead of `mock_config`.
+        // For now, only built-ins are invoked from here, so the VM and its Config are irrelevant.
         let mock_config = Config::default();
-        let mut mock_memory_mapping =
-            MemoryMapping::new(Vec::new(), &mock_config, &SBPFVersion::V2).unwrap();
-        let mut result = ProgramResult::Ok(0);
-        process_instruction(
+        let empty_memory_mapping =
+            MemoryMapping::new(Vec::new(), &mock_config, &SBPFVersion::V1).unwrap();
+        let mut vm = EbpfVm::new(
+            self.programs_loaded_for_tx_batch
+                .environments
+                .program_runtime_v2
+                .clone(),
+            &SBPFVersion::V1,
             // Removes lifetime tracking
             unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
+            empty_memory_mapping,
             0,
-            0,
-            0,
-            0,
-            0,
-            &mut mock_memory_mapping,
-            &mut result,
         );
-        let result = match result {
+        vm.invoke_function(function);
+        let result = match vm.program_result {
             ProgramResult::Ok(_) => {
                 stable_log::program_success(&logger, &program_id);
                 Ok(())
             }
-            ProgramResult::Err(err) => {
-                stable_log::program_failure(&logger, &program_id, err.as_ref());
-                if let Some(err) = err.downcast_ref::<InstructionError>() {
-                    Err(err.clone())
+            ProgramResult::Err(ref err) => {
+                if let EbpfError::SyscallError(syscall_error) = err {
+                    if let Some(instruction_err) = syscall_error.downcast_ref::<InstructionError>()
+                    {
+                        stable_log::program_failure(&logger, &program_id, instruction_err);
+                        Err(instruction_err.clone())
+                    } else {
+                        stable_log::program_failure(&logger, &program_id, syscall_error);
+                        Err(InstructionError::ProgramFailedToComplete)
+                    }
                 } else {
+                    stable_log::program_failure(&logger, &program_id, err);
                     Err(InstructionError::ProgramFailedToComplete)
                 }
             }
@@ -516,13 +519,7 @@ impl<'a> InvokeContext<'a> {
         let post_remaining_units = self.get_remaining();
         *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-        if builtin_id == program_id
-            && result.is_ok()
-            && *compute_units_consumed == 0
-            && self
-                .feature_set
-                .is_active(&native_programs_consume_cu::id())
-        {
+        if builtin_id == program_id && result.is_ok() && *compute_units_consumed == 0 {
             return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 
@@ -560,11 +557,6 @@ impl<'a> InvokeContext<'a> {
         *self.compute_meter.borrow_mut() = remaining;
     }
 
-    /// Get this invocation's AccountsDataMeter
-    pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
-        &self.accounts_data_meter
-    }
-
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
@@ -589,12 +581,6 @@ impl<'a> InvokeContext<'a> {
             .unwrap_or(true)
     }
 
-    // Set should type size be checked during user pointer translation
-    pub fn get_check_size(&self) -> bool {
-        self.feature_set
-            .is_active(&check_slice_translation_size::id())
-    }
-
     // Set this instruction syscall context
     pub fn set_syscall_context(
         &mut self,
@@ -611,7 +597,7 @@ impl<'a> InvokeContext<'a> {
     pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|syscall_context| syscall_context.as_ref())
+            .and_then(std::option::Option::as_ref)
             .ok_or(InstructionError::CallDepth)
     }
 
@@ -655,7 +641,6 @@ macro_rules! with_mock_invoke_context {
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
-        $transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
             for index in 0..$transaction_context.get_number_of_accounts() {
@@ -676,7 +661,6 @@ macro_rules! with_mock_invoke_context {
         });
         let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
-        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             &sysvar_cache,
@@ -684,10 +668,8 @@ macro_rules! with_mock_invoke_context {
             compute_budget,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
-            0,
             0,
         );
     };
@@ -700,7 +682,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     mut transaction_accounts: Vec<TransactionAccount>,
     instruction_account_metas: Vec<AccountMeta>,
     expected_result: Result<(), InstructionError>,
-    process_instruction: ProcessInstructionWithContext,
+    builtin_function: BuiltinFunctionWithContext,
     mut pre_adjustments: F,
     mut post_adjustments: G,
 ) -> Vec<AccountSharedData> {
@@ -735,7 +717,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
     programs_loaded_for_tx_batch.replenish(
         *loader_id,
-        Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+        Arc::new(LoadedProgram::new_builtin(0, 0, builtin_function)),
     );
     invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
     pre_adjustments(&mut invoke_context);
@@ -757,7 +739,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
 mod tests {
     use {
         super::*,
-        crate::compute_budget,
+        crate::compute_budget_processor,
         serde::{Deserialize, Serialize},
         solana_sdk::{account::WritableAccount, instruction::Instruction, rent::Rent},
     };
@@ -783,7 +765,7 @@ mod tests {
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
 
     declare_process_instruction!(
-        process_instruction,
+        MockBuiltin,
         MOCK_BUILTIN_COMPUTE_UNIT_COST,
         |invoke_context| {
             let transaction_context = &invoke_context.transaction_context;
@@ -820,17 +802,17 @@ mod tests {
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyNotOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::ModifyReadonly => instruction_context
                         .try_borrow_instruction_account(transaction_context, 2)?
-                        .set_data_from_slice(&[1])?,
+                        .set_data_from_slice(&[1], &invoke_context.feature_set)?,
                     MockInstruction::UnbalancedPush => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
-                            .checked_add_lamports(1)?;
+                            .checked_add_lamports(1, &invoke_context.feature_set)?;
                         let program_id = *transaction_context.get_key_of_account_at_index(3)?;
                         let metas = vec![
                             AccountMeta::new_readonly(
@@ -861,7 +843,7 @@ mod tests {
                     }
                     MockInstruction::UnbalancedPop => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(1)?,
+                        .checked_add_lamports(1, &invoke_context.feature_set)?,
                     MockInstruction::ConsumeComputeUnits {
                         compute_units_to_consume,
                         desired_result,
@@ -873,7 +855,7 @@ mod tests {
                     }
                     MockInstruction::Resize { new_len } => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data(vec![0; new_len as usize])?,
+                        .set_data(vec![0; new_len as usize], &invoke_context.feature_set)?,
                 }
             } else {
                 return Err(InstructionError::InvalidInstructionData);
@@ -961,8 +943,8 @@ mod tests {
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
-        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
-        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        let loader_account = AccountSharedData::new(0, 1, &native_loader::id());
+        let mut program_account = AccountSharedData::new(1, 1, &native_loader::id());
         program_account.set_executable(true);
         let transaction_accounts = vec![
             (solana_sdk::pubkey::new_rand(), owned_account),
@@ -972,7 +954,7 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), loader_account),
         ];
         let metas = vec![
-            AccountMeta::new(transaction_accounts.get(0).unwrap().0, false),
+            AccountMeta::new(transaction_accounts.first().unwrap().0, false),
             AccountMeta::new(transaction_accounts.get(1).unwrap().0, false),
             AccountMeta::new_readonly(transaction_accounts.get(2).unwrap().0, false),
         ];
@@ -989,7 +971,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             callee_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+            Arc::new(LoadedProgram::new_builtin(0, 1, MockBuiltin::vm)),
         );
         invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
@@ -1085,8 +1067,9 @@ mod tests {
             vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        invoke_context.compute_budget =
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
+        invoke_context.compute_budget = ComputeBudget::new(
+            compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+        );
 
         invoke_context
             .transaction_context
@@ -1096,7 +1079,9 @@ mod tests {
         invoke_context.push().unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
+            ComputeBudget::new(
+                compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64
+            )
         );
         invoke_context.pop().unwrap();
     }
@@ -1135,7 +1120,7 @@ mod tests {
         let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             program_key,
-            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
+            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
         );
         invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 

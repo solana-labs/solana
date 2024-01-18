@@ -26,7 +26,7 @@
 //! [`solana-client`]: https://docs.rs/solana-client
 //! [`solana-cli-config`]: https://docs.rs/solana-cli-config
 //! [`solana-clap-utils`]: https://docs.rs/solana-clap-utils
-//! [json]: https://docs.solana.com/developing/clients/jsonrpc-api
+//! [json]: https://solana.com/docs/rpc
 //! [`clap`]: https://docs.rs/clap
 
 #![allow(incomplete_features)]
@@ -46,15 +46,16 @@ pub use solana_program::address_lookup_table_account;
 pub use solana_program::program_stubs;
 pub use solana_program::{
     account_info, address_lookup_table, alt_bn128, big_mod_exp, blake3, borsh, borsh0_10, borsh0_9,
-    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
-    custom_panic_default, debug_account_data, declare_deprecated_sysvar_id, declare_sysvar_id,
-    decode_error, ed25519_program, epoch_rewards, epoch_schedule, fee_calculator, impl_sysvar_get,
-    incinerator, instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction,
-    loader_v4, loader_v4_instruction, message, msg, native_token, nonce, poseidon, program,
-    program_error, program_memory, program_option, program_pack, rent, sanitize, sdk_ids,
-    secp256k1_program, secp256k1_recover, serde_varint, serialize_utils, short_vec, slot_hashes,
-    slot_history, stable_layout, stake, stake_history, syscalls, system_instruction,
-    system_program, sysvar, unchecked_div_by_const, vote, wasm_bindgen,
+    borsh1, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock, config,
+    custom_heap_default, custom_panic_default, debug_account_data, declare_deprecated_sysvar_id,
+    declare_sysvar_id, decode_error, ed25519_program, epoch_rewards, epoch_rewards_partition_data,
+    epoch_schedule, fee_calculator, impl_sysvar_get, incinerator, instruction, keccak, lamports,
+    loader_instruction, loader_upgradeable_instruction, loader_v4, loader_v4_instruction, message,
+    msg, native_token, nonce, poseidon, program, program_error, program_memory, program_option,
+    program_pack, rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serde_varint,
+    serialize_utils, short_vec, slot_hashes, slot_history, stable_layout, stake, stake_history,
+    syscalls, system_instruction, system_program, sysvar, unchecked_div_by_const, vote,
+    wasm_bindgen,
 };
 
 pub mod account;
@@ -77,6 +78,7 @@ pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
 pub mod inflation;
+pub mod inner_instruction;
 pub mod log;
 pub mod native_loader;
 pub mod net;
@@ -95,6 +97,7 @@ pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;
 pub mod signer;
+pub mod simple_vote_transaction_checker;
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;

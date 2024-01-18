@@ -11,6 +11,7 @@ use {
     solana_sdk::{
         bpf_loader_deprecated,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, NON_DUP_MARKER},
+        feature_set::FeatureSet,
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -93,6 +94,7 @@ impl Serializer {
     fn write_account(
         &mut self,
         account: &mut BorrowedAccount<'_>,
+        feature_set: &FeatureSet,
     ) -> Result<u64, InstructionError> {
         let vm_data_addr = if self.copy_account_data {
             let vm_data_addr = self.vaddr.saturating_add(self.buffer.len() as u64);
@@ -101,7 +103,7 @@ impl Serializer {
         } else {
             self.push_region(true);
             let vaddr = self.vaddr;
-            self.push_account_data_region(account)?;
+            self.push_account_data_region(account, feature_set)?;
             vaddr
         };
 
@@ -121,7 +123,7 @@ impl Serializer {
                     .map_err(|_| InstructionError::InvalidArgument)?;
                 self.region_start += BPF_ALIGN_OF_U128.saturating_sub(align_offset);
                 // put the realloc padding in its own region
-                self.push_region(account.can_data_be_changed().is_ok());
+                self.push_region(account.can_data_be_changed(feature_set).is_ok());
             }
         }
 
@@ -131,12 +133,13 @@ impl Serializer {
     fn push_account_data_region(
         &mut self,
         account: &mut BorrowedAccount<'_>,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError> {
         if !account.get_data().is_empty() {
-            let region = match account_data_region_memory_state(account) {
+            let region = match account_data_region_memory_state(account, feature_set) {
                 MemoryState::Readable => MemoryRegion::new_readonly(account.get_data(), self.vaddr),
                 MemoryState::Writable => {
-                    MemoryRegion::new_writable(account.get_data_mut()?, self.vaddr)
+                    MemoryRegion::new_writable(account.get_data_mut(feature_set)?, self.vaddr)
                 }
                 MemoryState::Cow(index_in_transaction) => {
                     MemoryRegion::new_cow(account.get_data(), self.vaddr, index_in_transaction)
@@ -190,8 +193,8 @@ impl Serializer {
 pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    should_cap_ix_accounts: bool,
     copy_account_data: bool,
+    feature_set: &FeatureSet,
 ) -> Result<
     (
         AlignedMemory<HOST_ALIGN>,
@@ -201,7 +204,7 @@ pub fn serialize_parameters(
     InstructionError,
 > {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
-    if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
+    if num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
 
@@ -240,6 +243,7 @@ pub fn serialize_parameters(
             instruction_context.get_instruction_data(),
             &program_id,
             copy_account_data,
+            feature_set,
         )
     } else {
         serialize_parameters_aligned(
@@ -247,6 +251,7 @@ pub fn serialize_parameters(
             instruction_context.get_instruction_data(),
             &program_id,
             copy_account_data,
+            feature_set,
         )
     }
 }
@@ -257,6 +262,7 @@ pub fn deserialize_parameters(
     copy_account_data: bool,
     buffer: &[u8],
     accounts_metadata: &[SerializedAccountMetadata],
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let is_loader_deprecated = *instruction_context
         .try_borrow_last_program_account(transaction_context)?
@@ -270,6 +276,7 @@ pub fn deserialize_parameters(
             copy_account_data,
             buffer,
             account_lengths,
+            feature_set,
         )
     } else {
         deserialize_parameters_aligned(
@@ -278,6 +285,7 @@ pub fn deserialize_parameters(
             copy_account_data,
             buffer,
             account_lengths,
+            feature_set,
         )
     }
 }
@@ -287,6 +295,7 @@ fn serialize_parameters_unaligned(
     instruction_data: &[u8],
     program_id: &Pubkey,
     copy_account_data: bool,
+    feature_set: &FeatureSet,
 ) -> Result<
     (
         AlignedMemory<HOST_ALIGN>,
@@ -337,9 +346,9 @@ fn serialize_parameters_unaligned(
                 let vm_key_addr = s.write_all(account.get_key().as_ref());
                 let vm_lamports_addr = s.write::<u64>(account.get_lamports().to_le());
                 s.write::<u64>((account.get_data().len() as u64).to_le());
-                let vm_data_addr = s.write_account(&mut account)?;
+                let vm_data_addr = s.write_account(&mut account, feature_set)?;
                 let vm_owner_addr = s.write_all(account.get_owner().as_ref());
-                s.write::<u8>(account.is_executable() as u8);
+                s.write::<u8>(account.is_executable(feature_set) as u8);
                 s.write::<u64>((account.get_rent_epoch()).to_le());
                 accounts_metadata.push(SerializedAccountMetadata {
                     original_data_len: account.get_data().len(),
@@ -365,6 +374,7 @@ pub fn deserialize_parameters_unaligned<I: IntoIterator<Item = usize>>(
     copy_account_data: bool,
     buffer: &[u8],
     account_lengths: I,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (instruction_account_index, pre_len) in (0..instruction_context
@@ -386,7 +396,7 @@ pub fn deserialize_parameters_unaligned<I: IntoIterator<Item = usize>>(
                     .ok_or(InstructionError::InvalidArgument)?,
             );
             if borrowed_account.get_lamports() != lamports {
-                borrowed_account.set_lamports(lamports)?;
+                borrowed_account.set_lamports(lamports, feature_set)?;
             }
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
@@ -397,9 +407,9 @@ pub fn deserialize_parameters_unaligned<I: IntoIterator<Item = usize>>(
                 // The redundant check helps to avoid the expensive data comparison if we can
                 match borrowed_account
                     .can_data_be_resized(data.len())
-                    .and_then(|_| borrowed_account.can_data_be_changed())
+                    .and_then(|_| borrowed_account.can_data_be_changed(feature_set))
                 {
-                    Ok(()) => borrowed_account.set_data_from_slice(data)?,
+                    Ok(()) => borrowed_account.set_data_from_slice(data, feature_set)?,
                     Err(err) if borrowed_account.get_data() != data => return Err(err),
                     _ => {}
                 }
@@ -418,6 +428,7 @@ fn serialize_parameters_aligned(
     instruction_data: &[u8],
     program_id: &Pubkey,
     copy_account_data: bool,
+    feature_set: &FeatureSet,
 ) -> Result<
     (
         AlignedMemory<HOST_ALIGN>,
@@ -467,13 +478,13 @@ fn serialize_parameters_aligned(
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(borrowed_account.is_signer() as u8);
                 s.write::<u8>(borrowed_account.is_writable() as u8);
-                s.write::<u8>(borrowed_account.is_executable() as u8);
+                s.write::<u8>(borrowed_account.is_executable(feature_set) as u8);
                 s.write_all(&[0u8, 0, 0, 0]);
                 let vm_key_addr = s.write_all(borrowed_account.get_key().as_ref());
                 let vm_owner_addr = s.write_all(borrowed_account.get_owner().as_ref());
                 let vm_lamports_addr = s.write::<u64>(borrowed_account.get_lamports().to_le());
                 s.write::<u64>((borrowed_account.get_data().len() as u64).to_le());
-                let vm_data_addr = s.write_account(&mut borrowed_account)?;
+                let vm_data_addr = s.write_account(&mut borrowed_account, feature_set)?;
                 s.write::<u64>((borrowed_account.get_rent_epoch()).to_le());
                 accounts_metadata.push(SerializedAccountMetadata {
                     original_data_len: borrowed_account.get_data().len(),
@@ -504,6 +515,7 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
     copy_account_data: bool,
     buffer: &[u8],
     account_lengths: I,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (instruction_account_index, pre_len) in (0..instruction_context
@@ -533,7 +545,7 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
                     .ok_or(InstructionError::InvalidArgument)?,
             );
             if borrowed_account.get_lamports() != lamports {
-                borrowed_account.set_lamports(lamports)?;
+                borrowed_account.set_lamports(lamports, feature_set)?;
             }
             start += size_of::<u64>(); // lamports
             let post_len = LittleEndian::read_u64(
@@ -555,9 +567,9 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
                     .ok_or(InstructionError::InvalidArgument)?;
                 match borrowed_account
                     .can_data_be_resized(post_len)
-                    .and_then(|_| borrowed_account.can_data_be_changed())
+                    .and_then(|_| borrowed_account.can_data_be_changed(feature_set))
                 {
-                    Ok(()) => borrowed_account.set_data_from_slice(data)?,
+                    Ok(()) => borrowed_account.set_data_from_slice(data, feature_set)?,
                     Err(err) if borrowed_account.get_data() != data => return Err(err),
                     _ => {}
                 }
@@ -571,14 +583,14 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
                     .ok_or(InstructionError::InvalidArgument)?;
                 match borrowed_account
                     .can_data_be_resized(post_len)
-                    .and_then(|_| borrowed_account.can_data_be_changed())
+                    .and_then(|_| borrowed_account.can_data_be_changed(feature_set))
                 {
                     Ok(()) => {
-                        borrowed_account.set_data_length(post_len)?;
+                        borrowed_account.set_data_length(post_len, feature_set)?;
                         let allocated_bytes = post_len.saturating_sub(pre_len);
                         if allocated_bytes > 0 {
                             borrowed_account
-                                .get_data_mut()?
+                                .get_data_mut(feature_set)?
                                 .get_mut(pre_len..pre_len.saturating_add(allocated_bytes))
                                 .ok_or(InstructionError::InvalidArgument)?
                                 .copy_from_slice(
@@ -596,15 +608,18 @@ pub fn deserialize_parameters_aligned<I: IntoIterator<Item = usize>>(
             start += size_of::<u64>(); // rent_epoch
             if borrowed_account.get_owner().to_bytes() != owner {
                 // Change the owner at the end so that we are allowed to change the lamports and data before
-                borrowed_account.set_owner(owner)?;
+                borrowed_account.set_owner(owner, feature_set)?;
             }
         }
     }
     Ok(())
 }
 
-pub(crate) fn account_data_region_memory_state(account: &BorrowedAccount<'_>) -> MemoryState {
-    if account.can_data_be_changed().is_ok() {
+pub(crate) fn account_data_region_memory_state(
+    account: &BorrowedAccount<'_>,
+    feature_set: &FeatureSet,
+) -> MemoryState {
+    if account.can_data_be_changed(feature_set).is_ok() {
         if account.is_shared() {
             MemoryState::Cow(account.get_index_in_transaction() as u64)
         } else {
@@ -641,7 +656,6 @@ mod tests {
         struct TestCase {
             num_ix_accounts: usize,
             append_dup_account: bool,
-            should_cap_ix_accounts: bool,
             expected_err: Option<InstructionError>,
             name: &'static str,
         }
@@ -650,55 +664,27 @@ mod tests {
             for TestCase {
                 num_ix_accounts,
                 append_dup_account,
-                should_cap_ix_accounts,
                 expected_err,
                 name,
             } in [
                 TestCase {
-                    name: "serialize max accounts without cap",
-                    num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: false,
-                    append_dup_account: false,
-                    expected_err: None,
-                },
-                TestCase {
-                    name: "serialize max accounts and append dup without cap",
-                    num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: false,
-                    append_dup_account: true,
-                    expected_err: None,
-                },
-                TestCase {
                     name: "serialize max accounts with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: true,
                     append_dup_account: false,
                     expected_err: None,
                 },
                 TestCase {
                     name: "serialize too many accounts with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
-                    should_cap_ix_accounts: true,
                     append_dup_account: false,
                     expected_err: Some(InstructionError::MaxAccountsExceeded),
                 },
                 TestCase {
                     name: "serialize too many accounts and append dup with cap",
                     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
-                    should_cap_ix_accounts: true,
                     append_dup_account: true,
                     expected_err: Some(InstructionError::MaxAccountsExceeded),
                 },
-                // This test case breaks parameter deserialization and can be cleaned up
-                // when should_cap_ix_accounts is enabled.
-                //
-                // TestCase {
-                //     name: "serialize too many accounts and append dup without cap",
-                //     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
-                //     should_cap_ix_accounts: false,
-                //     append_dup_account: true,
-                //     expected_err: None,
-                // },
             ] {
                 let program_id = solana_sdk::pubkey::new_rand();
                 let mut transaction_accounts = vec![(
@@ -757,8 +743,8 @@ mod tests {
                 let serialization_result = serialize_parameters(
                     invoke_context.transaction_context,
                     instruction_context,
-                    should_cap_ix_accounts,
                     copy_account_data,
+                    &invoke_context.feature_set,
                 );
                 assert_eq!(
                     serialization_result.as_ref().err(),
@@ -912,8 +898,8 @@ mod tests {
             let (mut serialized, regions, accounts_metadata) = serialize_parameters(
                 invoke_context.transaction_context,
                 instruction_context,
-                true,
                 copy_account_data,
+                &invoke_context.feature_set,
             )
             .unwrap();
 
@@ -952,7 +938,7 @@ mod tests {
                 assert_eq!(account.lamports(), account_info.lamports());
                 assert_eq!(account.data(), &account_info.data.borrow()[..]);
                 assert_eq!(account.owner(), account_info.owner);
-                assert_eq!(account.executable(), account_info.executable);
+                assert!(account_info.executable);
                 assert_eq!(account.rent_epoch(), account_info.rent_epoch);
 
                 assert_eq!(
@@ -975,6 +961,7 @@ mod tests {
                 copy_account_data,
                 serialized.as_slice(),
                 &accounts_metadata,
+                &invoke_context.feature_set,
             )
             .unwrap();
             for (index_in_transaction, (_key, original_account)) in
@@ -1004,8 +991,8 @@ mod tests {
             let (mut serialized, regions, account_lengths) = serialize_parameters(
                 invoke_context.transaction_context,
                 instruction_context,
-                true,
                 copy_account_data,
+                &invoke_context.feature_set,
             )
             .unwrap();
             let mut serialized_regions = concat_regions(&regions);
@@ -1036,7 +1023,7 @@ mod tests {
                 assert_eq!(account.lamports(), account_info.lamports());
                 assert_eq!(account.data(), &account_info.data.borrow()[..]);
                 assert_eq!(account.owner(), account_info.owner);
-                assert_eq!(account.executable(), account_info.executable);
+                assert!(account_info.executable);
                 assert_eq!(account.rent_epoch(), account_info.rent_epoch);
             }
 
@@ -1046,6 +1033,7 @@ mod tests {
                 copy_account_data,
                 serialized.as_slice(),
                 &account_lengths,
+                &invoke_context.feature_set,
             )
             .unwrap();
             for (index_in_transaction, (_key, original_account)) in

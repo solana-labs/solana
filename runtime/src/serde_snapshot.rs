@@ -620,7 +620,7 @@ where
         bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
-    let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let bank_rc = BankRc::new(Accounts::new(Arc::new(accounts_db)), bank_fields.slot);
     let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
@@ -940,8 +940,6 @@ where
         .rent_paying_accounts_by_partition
         .set(rent_paying_accounts_by_partition)
         .unwrap();
-
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
 
     handle.join().unwrap();
     measure_notify.stop();

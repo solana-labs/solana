@@ -284,7 +284,7 @@ mod tests {
             &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,
         );
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-        let bank_forks = RwLock::new(BankForks::new(bank));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let batch_size = 2;
         let mut batch = PacketBatch::with_capacity(batch_size);
         batch.resize(batch_size, Packet::default());

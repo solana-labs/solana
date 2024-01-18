@@ -7,7 +7,7 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_db::{columns as cf, LedgerColumn},
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
     },
     solana_runtime::bank::RewardType,
     solana_sdk::{clock::Slot, pubkey},
@@ -86,22 +86,22 @@ fn bench_read_rewards<F, G>(
 
 #[bench]
 fn bench_serialize_write_bincode(bencher: &mut Bencher) {
-    let ledger_path = get_tmp_ledger_path!();
-    bench_write_rewards(bencher, &ledger_path, write_bincode_rewards);
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    bench_write_rewards(bencher, ledger_path.path(), write_bincode_rewards);
 }
 
 #[bench]
 fn bench_serialize_write_protobuf(bencher: &mut Bencher) {
-    let ledger_path = get_tmp_ledger_path!();
-    bench_write_rewards(bencher, &ledger_path, write_protobuf_rewards);
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    bench_write_rewards(bencher, ledger_path.path(), write_protobuf_rewards);
 }
 
 #[bench]
 fn bench_read_bincode(bencher: &mut Bencher) {
-    let ledger_path = get_tmp_ledger_path!();
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
     bench_read_rewards(
         bencher,
-        &ledger_path,
+        ledger_path.path(),
         write_bincode_rewards,
         read_bincode_rewards,
     );
@@ -109,10 +109,10 @@ fn bench_read_bincode(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_read_protobuf(bencher: &mut Bencher) {
-    let ledger_path = get_tmp_ledger_path!();
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
     bench_read_rewards(
         bencher,
-        &ledger_path,
+        ledger_path.path(),
         write_protobuf_rewards,
         read_protobuf_rewards,
     );

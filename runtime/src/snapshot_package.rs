@@ -8,7 +8,7 @@ use {
     log::*,
     solana_accounts_db::{
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
+        accounts_db::{AccountStorageEntry, AccountsDb},
         accounts_hash::{AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -36,7 +36,6 @@ pub struct AccountsPackage {
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
     pub is_incremental_accounts_hash_feature_enabled: bool,
-    pub include_slot_in_hash: IncludeSlotInHash,
 
     /// Supplemental information needed for snapshots
     pub snapshot_info: Option<SupplementalSnapshotInfo>,
@@ -149,10 +148,9 @@ impl AccountsPackage {
             expected_capitalization: bank.capitalization(),
             accounts_hash_for_testing,
             accounts: bank.accounts(),
-            epoch_schedule: *bank.epoch_schedule(),
+            epoch_schedule: bank.epoch_schedule().clone(),
             rent_collector: bank.rent_collector().clone(),
             is_incremental_accounts_hash_feature_enabled,
-            include_slot_in_hash: bank.include_slot_in_hash(),
             snapshot_info,
             enqueued: Instant::now(),
         }
@@ -161,6 +159,8 @@ impl AccountsPackage {
     /// Create a new Accounts Package where basically every field is defaulted.
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
+        let accounts_db = AccountsDb::default_for_tests();
+        let accounts = Accounts::new(Arc::new(accounts_db));
         Self {
             package_kind: AccountsPackageKind::AccountsHashVerifier,
             slot: Slot::default(),
@@ -168,11 +168,10 @@ impl AccountsPackage {
             snapshot_storages: Vec::default(),
             expected_capitalization: u64::default(),
             accounts_hash_for_testing: Option::default(),
-            accounts: Arc::new(Accounts::default_for_tests()),
+            accounts: Arc::new(accounts),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),
-            include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
             snapshot_info: Some(SupplementalSnapshotInfo {
                 bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,

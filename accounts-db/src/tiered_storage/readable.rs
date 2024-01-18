@@ -1,11 +1,14 @@
 use {
-    crate::tiered_storage::{
-        footer::{AccountMetaFormat, TieredStorageFooter},
-        hot::HotStorageReader,
-        meta::TieredAccountMeta,
-        TieredStorageResult,
+    crate::{
+        accounts_hash::AccountHash,
+        tiered_storage::{
+            footer::{AccountMetaFormat, TieredStorageFooter},
+            hot::HotStorageReader,
+            meta::TieredAccountMeta,
+            TieredStorageResult,
+        },
     },
-    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
     std::path::Path,
 };
 
@@ -32,7 +35,7 @@ impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file,
     }
 
     /// Returns the hash of this account.
-    pub fn hash(&self) -> Option<&'accounts_file Hash> {
+    pub fn hash(&self) -> Option<&'accounts_file AccountHash> {
         self.meta.account_hash(self.account_block)
     }
 

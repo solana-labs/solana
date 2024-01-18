@@ -78,7 +78,7 @@ impl DuplicateShredHandler {
     }
 
     fn cache_root_info(&mut self) {
-        let last_root = self.blockstore.last_root();
+        let last_root = self.blockstore.max_root();
         if last_root == self.last_root && !self.cached_staked_nodes.is_empty() {
             return;
         }
@@ -271,15 +271,12 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.working_bank(),
+            &bank_forks.read().unwrap().working_bank(),
         ));
-        let mut duplicate_shred_handler = DuplicateShredHandler::new(
-            blockstore.clone(),
-            leader_schedule_cache,
-            Arc::new(RwLock::new(bank_forks)),
-        );
+        let mut duplicate_shred_handler =
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks);
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
@@ -340,13 +337,12 @@ mod tests {
         let my_pubkey = my_keypair.pubkey();
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
-        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks.working_bank(),
+            &bank_forks.read().unwrap().working_bank(),
         ));
-        let bank_forks_ptr = Arc::new(RwLock::new(bank_forks));
         let mut duplicate_shred_handler =
-            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks_ptr);
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks);
         let start_slot: Slot = 1;
 
         // This proof will not be accepted because num_chunks is too large.
@@ -365,7 +361,7 @@ mod tests {
 
         // This proof will be rejected because the slot is too far away in the future.
         let future_slot =
-            blockstore.last_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
+            blockstore.max_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,

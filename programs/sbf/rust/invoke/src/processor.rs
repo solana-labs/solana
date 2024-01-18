@@ -1131,10 +1131,11 @@ fn process_instruction(
             #[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
             fn overwrite_account_key(account: &AccountInfo, key: *const Pubkey) {
                 unsafe {
-                    *mem::transmute::<_, *mut *const Pubkey>(&account.key) = key;
+                    let ptr = mem::transmute::<_, *mut *const Pubkey>(&account.key);
+                    std::ptr::write_volatile(ptr, key);
                 }
             }
-            overwrite_account_key(account, key as *const Pubkey);
+            overwrite_account_key(&accounts[ARGUMENT_INDEX], key as *const Pubkey);
             let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
 
             invoke(
@@ -1181,7 +1182,8 @@ fn process_instruction(
             #[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
             fn overwrite_account_owner(account: &AccountInfo, owner: *const Pubkey) {
                 unsafe {
-                    *mem::transmute::<_, *mut *const Pubkey>(&account.owner) = owner;
+                    let ptr = mem::transmute::<_, *mut *const Pubkey>(&account.owner);
+                    std::ptr::write_volatile(ptr, owner);
                 }
             }
             overwrite_account_owner(account, owner as *const Pubkey);
@@ -1286,6 +1288,61 @@ fn process_instruction(
                 },
                 &vec![0; original_data_len - new_len]
             );
+
+            // Realloc to [0xFC; 2]
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFC; 2],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [2..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFC; 2]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
+
+            // Realloc to [0xFC; 2]. Here we keep the same length, but realloc the underlying
+            // vector. CPI must zero even if the length is unchanged.
+            invoke(
+                &create_instruction(
+                    *callee_program_id,
+                    &[
+                        (accounts[ARGUMENT_INDEX].key, true, false),
+                        (callee_program_id, false, false),
+                    ],
+                    vec![0xFC; 2],
+                ),
+                accounts,
+            )
+            .unwrap();
+
+            // Check that [2..20] is zeroed
+            let new_len = account.data_len();
+            assert_eq!(&*account.data.borrow(), &[0xFC; 2]);
+            assert_eq!(
+                unsafe {
+                    slice::from_raw_parts(
+                        account.data.borrow().as_ptr().add(new_len),
+                        original_data_len - new_len,
+                    )
+                },
+                &vec![0; original_data_len - new_len]
+            );
         }
         TEST_WRITE_ACCOUNT => {
             msg!("TEST_WRITE_ACCOUNT");
@@ -1309,7 +1366,7 @@ struct RcBox<T> {
 
 #[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
 unsafe fn overwrite_account_data(account: &AccountInfo, data: Rc<RefCell<&mut [u8]>>) {
-    std::ptr::write(
+    std::ptr::write_volatile(
         &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,
         data,
     );
