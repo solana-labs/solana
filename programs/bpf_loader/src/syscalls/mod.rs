@@ -39,8 +39,7 @@ use {
             enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            reject_callx_r10, remaining_compute_units_syscall_enabled,
-            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
+            reject_callx_r10, remaining_compute_units_syscall_enabled, switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
         instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
@@ -563,22 +562,12 @@ fn translate_string_and_do(
     addr: u64,
     len: u64,
     check_aligned: bool,
-    stop_truncating_strings_in_syscalls: bool,
     work: &mut dyn FnMut(&str) -> Result<u64, Error>,
 ) -> Result<u64, Error> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned)?;
-    let msg = if stop_truncating_strings_in_syscalls {
-        buf
-    } else {
-        let i = match buf.iter().position(|byte| *byte == 0) {
-            Some(i) => i,
-            None => len as usize,
-        };
-        buf.get(..i).ok_or(SyscallError::InvalidLength)?
-    };
-    match from_utf8(msg) {
+    match from_utf8(buf) {
         Ok(message) => work(message),
-        Err(err) => Err(SyscallError::InvalidString(err, msg.to_vec()).into()),
+        Err(err) => Err(SyscallError::InvalidString(err, buf.to_vec()).into()),
     }
 }
 
@@ -621,9 +610,6 @@ declare_builtin_function!(
             file,
             len,
             invoke_context.get_check_aligned(),
-            invoke_context
-                .feature_set
-                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         )
     }
@@ -2158,7 +2144,6 @@ mod tests {
                 &memory_mapping,
                 0x100000000,
                 string.len() as u64,
-                true,
                 true,
                 &mut |string: &str| {
                     assert_eq!(string, "Gaggablaghblagh!");
