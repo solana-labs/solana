@@ -1945,6 +1945,7 @@ pub mod tests {
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
         solana_runtime::{
+            bank::test_utils::goto_end_of_slot,
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
@@ -3490,9 +3491,7 @@ pub mod tests {
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let blockhash = bank.last_blockhash();
-        while blockhash == bank.last_blockhash() {
-            bank.register_default_tick_for_test();
-        }
+        goto_end_of_slot(bank.clone());
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
         let tx = system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, blockhash);
