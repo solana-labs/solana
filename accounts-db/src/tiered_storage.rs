@@ -19,8 +19,9 @@ use {
         storable_accounts::StorableAccounts,
     },
     error::TieredStorageError,
-    footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
+    footer::{AccountBlockFormat, AccountMetaFormat},
     index::IndexBlockFormat,
+    owners::OwnersBlockFormat,
     readable::TieredStorageReader,
     solana_sdk::account::ReadableAccount,
     std::{

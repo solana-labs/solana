@@ -8,13 +8,11 @@ use {
         tiered_storage::{
             byte_block,
             file::TieredStorageFile,
-            footer::{
-                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
-            },
+            footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter},
             index::{AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
-            owners::{OwnerOffset, OwnersBlock},
+            owners::{OwnerOffset, OwnersBlockFormat},
             readable::TieredReadableAccount,
             TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
@@ -29,7 +27,7 @@ use {
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
-    owners_block_format: OwnersBlockFormat::LocalIndex,
+    owners_block_format: OwnersBlockFormat::AddressesOnly,
     index_block_format: IndexBlockFormat::AddressesThenOffsets,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
@@ -331,7 +329,9 @@ impl HotStorageReader {
     /// Returns the address of the account owner given the specified
     /// owner_offset.
     fn get_owner_address(&self, owner_offset: OwnerOffset) -> TieredStorageResult<&Pubkey> {
-        OwnersBlock::get_owner_address(&self.mmap, &self.footer, owner_offset)
+        self.footer
+            .owners_block_format
+            .get_owner_address(&self.mmap, &self.footer, owner_offset)
     }
 
     /// Returns Ok(index_of_matching_owner) if the account owner at
@@ -466,13 +466,11 @@ pub mod tests {
         crate::tiered_storage::{
             byte_block::ByteBlockWriter,
             file::TieredStorageFile,
-            footer::{
-                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
-                FOOTER_SIZE,
-            },
+            footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter, FOOTER_SIZE},
             hot::{HotAccountMeta, HotStorageReader},
             index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            owners::OwnersBlockFormat,
         },
         assert_matches::assert_matches,
         memoffset::offset_of,
@@ -638,7 +636,7 @@ pub mod tests {
         let path = temp_dir.path().join("test_hot_storage_footer");
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
-            owners_block_format: OwnersBlockFormat::LocalIndex,
+            owners_block_format: OwnersBlockFormat::AddressesOnly,
             index_block_format: IndexBlockFormat::AddressesThenOffsets,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
@@ -825,7 +823,10 @@ pub mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
-            OwnersBlock::write_owners_block(&file, &addresses).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &addresses)
+                .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
@@ -892,7 +893,10 @@ pub mod tests {
             // the owners_block_offset set to the end of the accounts blocks.
             footer.owners_block_offset = footer.index_block_offset;
 
-            OwnersBlock::write_owners_block(&file, &owner_addresses).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &owner_addresses)
+                .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
@@ -1025,7 +1029,10 @@ pub mod tests {
 
             // write owners block
             footer.owners_block_offset = current_offset as u64;
-            OwnersBlock::write_owners_block(&file, &owners).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &owners)
+                .unwrap();
 
             footer.write_footer_block(&file).unwrap();
         }
