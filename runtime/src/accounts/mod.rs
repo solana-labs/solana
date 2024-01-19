@@ -582,7 +582,10 @@ mod tests {
             &RentCollector::default(),
             error_counters,
             &all_features_except(exclude_features),
-            &FeeStructure::default(),
+            &FeeStructure {
+                lamports_per_signature,
+                ..FeeStructure::default()
+            },
         )
     }
 
