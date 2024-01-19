@@ -121,6 +121,7 @@ pub struct BigTableConnection {
     table_prefix: String,
     app_profile_id: String,
     timeout: Option<Duration>,
+    max_message_size: usize,
 }
 
 impl BigTableConnection {
@@ -141,11 +142,18 @@ impl BigTableConnection {
         read_only: bool,
         timeout: Option<Duration>,
         credential_type: CredentialType,
+        max_message_size: usize,
     ) -> Result<Self> {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
                 info!("Connecting to bigtable emulator at {}", endpoint);
-                Self::new_for_emulator(instance_name, app_profile_id, &endpoint, timeout)
+                Self::new_for_emulator(
+                    instance_name,
+                    app_profile_id,
+                    &endpoint,
+                    timeout,
+                    max_message_size,
+                )
             }
 
             Err(_) => {
@@ -210,6 +218,7 @@ impl BigTableConnection {
                     table_prefix,
                     app_profile_id: app_profile_id.to_string(),
                     timeout,
+                    max_message_size,
                 })
             }
         }
@@ -220,6 +229,7 @@ impl BigTableConnection {
         app_profile_id: &str,
         endpoint: &str,
         timeout: Option<Duration>,
+        max_message_size: usize,
     ) -> Result<Self> {
         Ok(Self {
             access_token: None,
@@ -229,6 +239,7 @@ impl BigTableConnection {
             table_prefix: format!("projects/emulator/instances/{instance_name}/tables/"),
             app_profile_id: app_profile_id.to_string(),
             timeout,
+            max_message_size,
         })
     }
 
@@ -254,7 +265,9 @@ impl BigTableConnection {
                 }
                 Ok(req)
             },
-        );
+        )
+        .max_decoding_message_size(self.max_message_size)
+        .max_encoding_message_size(self.max_message_size);
         BigTable {
             access_token: self.access_token.clone(),
             client,
@@ -469,6 +482,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                         ],
                     })),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -494,6 +509,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                 filter: Some(RowFilter {
                     filter: Some(row_filter::Filter::StripValueTransformer(true)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -545,6 +562,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -577,6 +596,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();
@@ -610,6 +631,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
+                request_stats_view: 0,
+                reversed: false,
             })
             .await?
             .into_inner();

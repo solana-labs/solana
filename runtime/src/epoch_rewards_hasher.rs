@@ -42,11 +42,11 @@ fn hash_to_partition(hash: u64, partitions: usize) -> usize {
 
 pub(crate) fn hash_rewards_into_partitions(
     stake_rewards: StakeRewards,
-    parent_block_hash: &Hash,
+    parent_blockhash: &Hash,
     num_partitions: usize,
 ) -> Vec<StakeRewards> {
-    let hasher = EpochRewardsHasher::new(num_partitions, parent_block_hash);
-    let mut result = vec![vec![]; num_partitions];
+    let hasher = EpochRewardsHasher::new(num_partitions, parent_blockhash);
+    let mut rewards = vec![vec![]; num_partitions];
 
     for reward in stake_rewards {
         // clone here so the hasher's state is re-used on each call to `hash_address_to_partition`.
@@ -55,9 +55,9 @@ pub(crate) fn hash_rewards_into_partitions(
         let partition_index = hasher
             .clone()
             .hash_address_to_partition(&reward.stake_pubkey);
-        result[partition_index].push(reward);
+        rewards[partition_index].push(reward);
     }
-    result
+    rewards
 }
 
 #[cfg(test)]

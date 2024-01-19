@@ -7,13 +7,12 @@ use {
         accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
-            footer::{
-                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
-            },
+            file::TieredStorageFile,
+            footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter},
             index::{AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
-            owners::{OwnerOffset, OwnersBlock},
+            owners::{OwnerOffset, OwnersBlockFormat},
             readable::TieredReadableAccount,
             TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
@@ -28,10 +27,23 @@ use {
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
     meta_entry_size: std::mem::size_of::<HotAccountMeta>(),
     account_meta_format: AccountMetaFormat::Hot,
-    owners_block_format: OwnersBlockFormat::LocalIndex,
-    index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+    owners_block_format: OwnersBlockFormat::AddressesOnly,
+    index_block_format: IndexBlockFormat::AddressesThenOffsets,
     account_block_format: AccountBlockFormat::AlignedRaw,
 };
+
+/// An helper function that creates a new default footer for hot
+/// accounts storage.
+fn new_hot_footer() -> TieredStorageFooter {
+    TieredStorageFooter {
+        account_meta_format: HOT_FORMAT.account_meta_format,
+        account_meta_entry_size: HOT_FORMAT.meta_entry_size as u32,
+        account_block_format: HOT_FORMAT.account_block_format,
+        index_block_format: HOT_FORMAT.index_block_format,
+        owners_block_format: HOT_FORMAT.owners_block_format,
+        ..TieredStorageFooter::default()
+    }
+}
 
 /// The maximum number of padding bytes used in a hot account entry.
 const MAX_HOT_PADDING: u8 = 7;
@@ -317,7 +329,9 @@ impl HotStorageReader {
     /// Returns the address of the account owner given the specified
     /// owner_offset.
     fn get_owner_address(&self, owner_offset: OwnerOffset) -> TieredStorageResult<&Pubkey> {
-        OwnersBlock::get_owner_address(&self.mmap, &self.footer, owner_offset)
+        self.footer
+            .owners_block_format
+            .get_owner_address(&self.mmap, &self.footer, owner_offset)
     }
 
     /// Returns Ok(index_of_matching_owner) if the account owner at
@@ -430,6 +444,21 @@ impl HotStorageReader {
     }
 }
 
+/// The writer that creates a hot accounts file.
+#[derive(Debug)]
+pub struct HotStorageWriter {
+    storage: TieredStorageFile,
+}
+
+impl HotStorageWriter {
+    /// Create a new HotStorageWriter with the specified path.
+    pub fn new(file_path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        Ok(Self {
+            storage: TieredStorageFile::new_writable(file_path)?,
+        })
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
@@ -437,13 +466,11 @@ pub mod tests {
         crate::tiered_storage::{
             byte_block::ByteBlockWriter,
             file::TieredStorageFile,
-            footer::{
-                AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat, TieredStorageFooter,
-                FOOTER_SIZE,
-            },
+            footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter, FOOTER_SIZE},
             hot::{HotAccountMeta, HotStorageReader},
             index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            owners::OwnersBlockFormat,
         },
         assert_matches::assert_matches,
         memoffset::offset_of,
@@ -609,8 +636,8 @@ pub mod tests {
         let path = temp_dir.path().join("test_hot_storage_footer");
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
-            owners_block_format: OwnersBlockFormat::LocalIndex,
-            index_block_format: IndexBlockFormat::AddressAndBlockOffsetOnly,
+            owners_block_format: OwnersBlockFormat::AddressesOnly,
+            index_block_format: IndexBlockFormat::AddressesThenOffsets,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 16,
@@ -796,7 +823,10 @@ pub mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
-            OwnersBlock::write_owners_block(&file, &addresses).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &addresses)
+                .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
@@ -863,7 +893,10 @@ pub mod tests {
             // the owners_block_offset set to the end of the accounts blocks.
             footer.owners_block_offset = footer.index_block_offset;
 
-            OwnersBlock::write_owners_block(&file, &owner_addresses).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &owner_addresses)
+                .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
@@ -996,7 +1029,10 @@ pub mod tests {
 
             // write owners block
             footer.owners_block_offset = current_offset as u64;
-            OwnersBlock::write_owners_block(&file, &owners).unwrap();
+            footer
+                .owners_block_format
+                .write_owners_block(&file, &owners)
+                .unwrap();
 
             footer.write_footer_block(&file).unwrap();
         }
@@ -1025,5 +1061,19 @@ pub mod tests {
             hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
         );
+    }
+
+    #[test]
+    fn test_hot_storage_writer_twice_on_same_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir
+            .path()
+            .join("test_hot_storage_writer_twice_on_same_path");
+
+        // Expect the first returns Ok
+        assert_matches!(HotStorageWriter::new(&path), Ok(_));
+        // Expect the second call on the same path returns Err, as the
+        // HotStorageWriter only writes once.
+        assert_matches!(HotStorageWriter::new(&path), Err(_));
     }
 }

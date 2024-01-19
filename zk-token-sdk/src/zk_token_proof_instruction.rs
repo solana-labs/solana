@@ -6,11 +6,21 @@
 //! Each proof verification instruction verifies a certain type of zero-knowledge proof. These
 //! instructions are processed by the program in two steps:
 //!   1. The program verifies the zero-knowledge proof.
-//!   2. The program optionally stores the context component of the instruction data to a
+//!   2. The program optionally stores the context component of the zero-knowledge proof to a
 //!      dedicated [`context-state`] account.
-//! If no accounts are provided with the instruction, the program simply verifies the proofs. If
-//! accounts are provided with the instruction, then the program writes the context data to the
-//! specified context-state account.
+//!
+//! In step 1, the zero-knowledge proof can be included directly as the instruction data or
+//! pre-written to an account. The program determines whether the proof is provided as instruction
+//! data or pre-written to an account by inspecting the length of the data. If the instruction data
+//! is exactly 5 bytes (instruction disciminator + unsigned 32-bit integer), then the program
+//! assumes that the first account provided with the instruction contains the zero-knowledge proof
+//! and verifies the account data at the offset specified in the instruction data. Otherwise, the
+//! program assumes that the zero-knowledge proof is provided as part of the instruction data.
+//!
+//! In step 2, the program determines whether to create a context-state account by inspecting the
+//! number of accounts provided with the instruction. If two additional accounts are provided with
+//! the instruction after verifying the zero-knowledge proof, then the program writes the context data to
+//! the specified context-state account.
 //!
 //! NOTE: A context-state account must be pre-allocated to the exact size of the context data that
 //! is expected for a proof type before it is included in a proof verification instruction.
@@ -54,15 +64,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `ZeroBalanceProofData`
+    /// The instruction expects either:
+    ///   i. `ZeroBalanceProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyZeroBalance,
 
@@ -73,15 +81,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `WithdrawData`
+    /// The instruction expects either:
+    ///   i. `WithdrawData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyWithdraw,
 
@@ -92,15 +98,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `CiphertextCiphertextEqualityProofData`
+    /// The instruction expects either:
+    ///   i. `CiphertextCiphertextEqualityProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyCiphertextCiphertextEquality,
 
@@ -111,15 +115,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `TransferData`
+    /// The instruction expects either:
+    ///   i. `TransferData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyTransfer,
 
@@ -130,15 +132,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `TransferWithFeeData`
+    /// The instruction expects either:
+    ///   i. `TransferWithFeeData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyTransferWithFee,
 
@@ -149,15 +149,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `PubkeyValidityData`
+    /// The instruction expects either:
+    ///   i. `PubkeyValidityData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyPubkeyValidity,
 
@@ -168,15 +166,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `RangeProofU64Data`
+    /// The instruction expects either:
+    ///   i. `RangeProofU64Data` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyRangeProofU64,
 
@@ -194,15 +190,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `BatchedRangeProof64Data`
+    /// The instruction expects either:
+    ///   i. `BatchedRangeProofU64Data` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU64,
 
@@ -214,15 +208,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `BatchedRangeProof128Data`
+    /// The instruction expects either:
+    ///   i. `BatchedRangeProofU128Data` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU128,
 
@@ -234,15 +226,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `BatchedRangeProof256Data`
+    /// The instruction expects either:
+    ///   i. `BatchedRangeProofU256Data` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedRangeProofU256,
 
@@ -253,15 +243,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `CiphertextCommitmentEqualityProofData`
+    /// The instruction expects either:
+    ///   i. `CiphertextCommitmentEqualityProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyCiphertextCommitmentEquality,
 
@@ -273,15 +261,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `GroupedCiphertextValidityProofContext`
+    /// The instruction expects either:
+    ///   i. `GroupedCiphertext2HandlesValidityProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyGroupedCiphertext2HandlesValidity,
 
@@ -294,15 +280,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `BatchedGroupedCiphertextValidityProofContext`
+    /// The instruction expects either:
+    ///   i. `BatchedGroupedCiphertext2HandlesValidityProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyBatchedGroupedCiphertext2HandlesValidity,
 
@@ -313,15 +297,13 @@ pub enum ProofInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account owner
+    ///   0. `[]` (Optional) Account to read the proof from
+    ///   1. `[writable]` (Optional) The proof context account
+    ///   2. `[]` (Optional) The proof context account owner
     ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `FeeSigmaProofData`
+    /// The instruction expects either:
+    ///   i. `FeeSigmaProofData` if proof is provided as instruction data
+    ///   ii. `u32` byte offset if proof is provided as an account
     ///
     VerifyFeeSigma,
 }
@@ -466,6 +448,32 @@ impl ProofInstruction {
 
         let mut data = vec![ToPrimitive::to_u8(self).unwrap()];
         data.extend_from_slice(bytes_of(proof_data));
+
+        Instruction {
+            program_id: crate::zk_token_proof_program::id(),
+            accounts,
+            data,
+        }
+    }
+
+    pub fn encode_verify_proof_from_account(
+        &self,
+        context_state_info: Option<ContextStateInfo>,
+        proof_account: &Pubkey,
+        offset: u32,
+    ) -> Instruction {
+        let accounts = if let Some(context_state_info) = context_state_info {
+            vec![
+                AccountMeta::new(*proof_account, false),
+                AccountMeta::new(*context_state_info.context_state_account, false),
+                AccountMeta::new_readonly(*context_state_info.context_state_authority, false),
+            ]
+        } else {
+            vec![AccountMeta::new(*proof_account, false)]
+        };
+
+        let mut data = vec![ToPrimitive::to_u8(self).unwrap()];
+        data.extend_from_slice(&offset.to_le_bytes());
 
         Instruction {
             program_id: crate::zk_token_proof_program::id(),

@@ -793,6 +793,24 @@ pub fn main() {
             });
             return;
         }
+        ("repair-shred-from-peer", Some(subcommand_matches)) => {
+            let pubkey = value_t!(subcommand_matches, "pubkey", Pubkey).ok();
+            let slot = value_t_or_exit!(subcommand_matches, "slot", u64);
+            let shred_index = value_t_or_exit!(subcommand_matches, "shred", u64);
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .repair_shred_from_peer(pubkey, slot, shred_index)
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("repair shred from peer failed: {err}");
+                    exit(1);
+                });
+            return;
+        }
         ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
             match repair_whitelist_subcommand_matches.subcommand() {
                 ("get", Some(subcommand_matches)) => {
@@ -1230,6 +1248,7 @@ pub fn main() {
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
+            max_message_size: value_t_or_exit!(matches, "rpc_bigtable_max_message_size", usize),
         })
     } else {
         None

@@ -1036,10 +1036,9 @@ fn test_rent_exempt_executable_account() {
         transfer_lamports,
         genesis_config.hash(),
     );
-
-    assert_eq!(
+    assert_matches!(
         bank.process_transaction(&tx),
-        Err(TransactionError::InvalidWritableAccount)
+        Err(TransactionError::InstructionError(0, _))
     );
     assert_eq!(bank.get_balance(&account_pubkey), account_balance);
 }
@@ -9035,6 +9034,7 @@ where
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        None,
         Arc::default(),
     ));
     let vote_and_stake_accounts =
@@ -10223,9 +10223,8 @@ fn test_transaction_log_collector_get_logs_for_address() {
 #[test]
 fn test_accounts_data_size_with_good_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000.));
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
     let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &mint_keypair,
@@ -10265,8 +10264,9 @@ fn test_accounts_data_size_with_good_transaction() {
 #[test]
 fn test_accounts_data_size_with_bad_transaction() {
     const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-    let mut bank = create_simple_test_bank(1_000_000_000_000);
-    bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = bank.wrap_with_bank_forks_for_tests().0;
     let transaction = system_transaction::create_account(
         &Keypair::new(),
         &Keypair::new(),
@@ -10275,8 +10275,6 @@ fn test_accounts_data_size_with_bad_transaction() {
         ACCOUNT_SIZE,
         &solana_sdk::system_program::id(),
     );
-
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let accounts_data_size_before = bank.load_accounts_data_size();
     let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
@@ -12666,6 +12664,7 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
         false,
         Some(accounts_db_config),
         None,
+        None,
         Arc::default(),
     );
 
@@ -13385,6 +13384,7 @@ fn test_get_reward_distribution_num_blocks_cap() {
         false,
         Some(accounts_db_config),
         None,
+        Some(Pubkey::new_unique()),
         Arc::default(),
     );
 
@@ -13852,6 +13852,7 @@ fn test_rehash_with_skipped_rewrites() {
         false,
         Some(accounts_db_config),
         None,
+        Some(Pubkey::new_unique()),
         Arc::new(AtomicBool::new(false)),
     ));
     // This test is only meaningful while the bank hash contains rewrites.
@@ -13912,6 +13913,7 @@ fn test_rebuild_skipped_rewrites() {
         false,
         Some(accounts_db_config.clone()),
         None,
+        Some(Pubkey::new_unique()),
         Arc::new(AtomicBool::new(false)),
     ));
     // This test is only meaningful while the bank hash contains rewrites.
@@ -14012,7 +14014,9 @@ fn test_failed_simulation_compute_units() {
         Bank::new_with_mockup_builtin_for_tests(&genesis_config, program_id, MockBuiltin::vm).0;
 
     const TEST_UNITS: u64 = 10_000;
-    declare_process_instruction!(MockBuiltin, 1, |invoke_context| {
+    const MOCK_BUILTIN_UNITS: u64 = 1;
+    let expected_consumed_units = TEST_UNITS + MOCK_BUILTIN_UNITS;
+    declare_process_instruction!(MockBuiltin, MOCK_BUILTIN_UNITS, |invoke_context| {
         invoke_context.consume_checked(TEST_UNITS).unwrap();
         Err(InstructionError::InvalidInstructionData)
     });
@@ -14026,5 +14030,5 @@ fn test_failed_simulation_compute_units() {
     bank.freeze();
     let sanitized = SanitizedTransaction::from_transaction_for_tests(transaction);
     let simulation = bank.simulate_transaction(&sanitized, false);
-    assert_eq!(TEST_UNITS, simulation.units_consumed);
+    assert_eq!(expected_consumed_units, simulation.units_consumed);
 }

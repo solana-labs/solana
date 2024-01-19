@@ -71,14 +71,18 @@ impl SnapshotPackagerService {
                         // Archiving the snapshot package is not allowed to fail.
                         // AccountsBackgroundService calls `clean_accounts()` with a value for
                         // last_full_snapshot_slot that requires this archive call to succeed.
-                        snapshot_utils::archive_snapshot_package(
+                        let result = snapshot_utils::archive_snapshot_package(
                             &snapshot_package,
                             &snapshot_config.full_snapshot_archives_dir,
                             &snapshot_config.incremental_snapshot_archives_dir,
                             snapshot_config.maximum_full_snapshot_archives_to_retain,
                             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-                        )
-                        .expect("failed to archive snapshot package");
+                        );
+                        if let Err(err) = result {
+                            error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
+                            exit.store(true, Ordering::Relaxed);
+                            break;
+                        }
 
                         if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                             snapshot_gossip_manager.push_snapshot_hash(

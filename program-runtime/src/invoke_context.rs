@@ -1,6 +1,5 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
         ic_msg,
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
@@ -20,7 +19,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader_deprecated,
-        feature_set::{native_programs_consume_cu, FeatureSet},
+        feature_set::FeatureSet,
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -59,13 +58,10 @@ macro_rules! declare_process_instruction {
             ) -> std::result::Result<u64, Box<dyn std::error::Error>> {
                 fn process_instruction_inner(
                     $invoke_context: &mut $crate::invoke_context::InvokeContext,
-                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+                ) -> std::result::Result<(), solana_sdk::instruction::InstructionError>
                     $inner
-                }
+
                 let consumption_result = if $cu_to_consume > 0
-                    && invoke_context
-                        .feature_set
-                        .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
                 {
                     invoke_context.consume_checked($cu_to_consume)
                 } else {
@@ -164,7 +160,6 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
-    accounts_data_meter: AccountsDataMeter,
     pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
     pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
@@ -187,7 +182,6 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -196,7 +190,6 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
-            accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             programs_loaded_for_tx_batch,
             programs_modified_by_tx,
             feature_set,
@@ -526,13 +519,7 @@ impl<'a> InvokeContext<'a> {
         let post_remaining_units = self.get_remaining();
         *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-        if builtin_id == program_id
-            && result.is_ok()
-            && *compute_units_consumed == 0
-            && self
-                .feature_set
-                .is_active(&native_programs_consume_cu::id())
-        {
+        if builtin_id == program_id && result.is_ok() && *compute_units_consumed == 0 {
             return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 
@@ -568,11 +555,6 @@ impl<'a> InvokeContext<'a> {
     /// Only use for tests and benchmarks
     pub fn mock_set_remaining(&self, remaining: u64) {
         *self.compute_meter.borrow_mut() = remaining;
-    }
-
-    /// Get this invocation's AccountsDataMeter
-    pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
-        &self.accounts_data_meter
     }
 
     /// Get this invocation's compute budget
@@ -688,7 +670,6 @@ macro_rules! with_mock_invoke_context {
             &mut programs_modified_by_tx,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
-            0,
             0,
         );
     };
