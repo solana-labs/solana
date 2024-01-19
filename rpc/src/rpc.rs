@@ -6246,7 +6246,6 @@ pub mod tests {
                         },
                     ],
                     "err": null,
-                    "innerInstructions": null,
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
