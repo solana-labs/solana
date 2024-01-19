@@ -4,6 +4,7 @@ use {
         file::TieredStorageFile,
         index::IndexBlockFormat,
         mmap_utils::{get_pod, get_type},
+        owners::OwnersBlockFormat,
         TieredStorageResult,
     },
     bytemuck::{Pod, Zeroable},
@@ -76,23 +77,6 @@ pub enum AccountBlockFormat {
     #[default]
     AlignedRaw = 0,
     Lz4 = 1,
-}
-
-#[repr(u16)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Eq,
-    Hash,
-    PartialEq,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-)]
-pub enum OwnersBlockFormat {
-    #[default]
-    LocalIndex = 0,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -353,7 +337,7 @@ mod tests {
         let path = get_append_vec_path("test_file_footer");
         let expected_footer = TieredStorageFooter {
             account_meta_format: AccountMetaFormat::Hot,
-            owners_block_format: OwnersBlockFormat::LocalIndex,
+            owners_block_format: OwnersBlockFormat::AddressesOnly,
             index_block_format: IndexBlockFormat::AddressesThenOffsets,
             account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
