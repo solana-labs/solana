@@ -1033,7 +1033,7 @@ mod tests {
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn id(&self) -> SchedulerId {
-            todo!();
+            unimplemented!();
         }
 
         fn context(&self) -> &SchedulingContext {
@@ -1102,11 +1102,11 @@ mod tests {
         type Inner = Self;
 
         fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
-            todo!();
+            unimplemented!();
         }
 
         fn from_inner(_inner: Self::Inner, _context: SchedulingContext) -> Self {
-            todo!();
+            unimplemented!();
         }
 
         fn spawn(
