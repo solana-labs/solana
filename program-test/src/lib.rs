@@ -897,30 +897,7 @@ impl ProgramTest {
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
-        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
-        // are required when sending multiple otherwise identical transactions in series from a
-        // test
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(target_slot_duration).await;
-                let working_bank = bank_forks.read().unwrap().working_bank();
-                let working_slot = working_bank.slot();
-                let slot = working_slot + 1;
-                // Register a new blockhash for the next slot
-                working_bank.register_unique_recent_blockhash_for_test();
-
-                // Cannot have new from parent be called while bank forks are locked, otherwise
-                // cooperative loading will dead-lock.
-                let bank = Bank::new_from_parent(working_bank, &Pubkey::default(), slot);
-                bank_forks.write().unwrap().insert(bank);
-
-                // Mark the previous slot as confirmed & rooted
-                block_commitment_cache
-                    .write()
-                    .unwrap()
-                    .set_all_slots(working_slot, working_slot);
-            }
-        });
+        SimulatedPoh::run(target_slot_duration, bank_forks, block_commitment_cache);
 
         (banks_client, gci.mint_keypair, last_blockhash)
     }
@@ -1029,6 +1006,63 @@ impl<T> Drop for DroppableTask<T> {
     }
 }
 
+struct SimulatedPoh;
+impl SimulatedPoh {
+    pub fn run(
+        target_slot_duration: Duration,
+        bank_forks: Arc<RwLock<BankForks>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    ) {
+        tokio::spawn(async move {
+            loop {
+                Self::simulate_slot(target_slot_duration, &bank_forks, &block_commitment_cache)
+                    .await;
+            }
+        });
+    }
+
+    pub fn run_as_droppable(
+        target_slot_duration: Duration,
+        bank_forks: Arc<RwLock<BankForks>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    ) -> DroppableTask<()> {
+        let exit = Arc::new(AtomicBool::new(false));
+        DroppableTask(
+            exit.clone(),
+            tokio::spawn(async move {
+                while !exit.load(Ordering::Relaxed) {
+                    Self::simulate_slot(target_slot_duration, &bank_forks, &block_commitment_cache)
+                        .await;
+                }
+            }),
+        )
+    }
+
+    async fn simulate_slot(
+        target_slot_duration: Duration,
+        bank_forks: &RwLock<BankForks>,
+        block_commitment_cache: &RwLock<BlockCommitmentCache>,
+    ) {
+        tokio::time::sleep(target_slot_duration).await;
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_slot = working_bank.slot();
+        let slot = working_slot + 1;
+        // Register a new blockhash for the next slot
+        working_bank.register_unique_recent_blockhash_for_test();
+
+        // Cannot have new from parent be called while bank forks are locked, otherwise
+        // cooperative loading will dead-lock.
+        let bank = Bank::new_from_parent(working_bank, &Pubkey::default(), slot);
+        bank_forks.write().unwrap().insert(bank);
+
+        // Mark the previous slot as confirmed & rooted
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_all_slots(working_slot, working_slot);
+    }
+}
+
 pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub last_blockhash: Hash,
@@ -1050,34 +1084,16 @@ impl ProgramTestContext {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
-        let running_bank_forks = bank_forks.clone();
         let target_tick_duration = genesis_config_info
             .genesis_config
             .poh_config
             .target_tick_duration;
         let target_slot_duration =
             target_tick_duration * genesis_config_info.genesis_config.ticks_per_slot as u32;
-        let exit = Arc::new(AtomicBool::new(false));
-        let bank_task = DroppableTask(
-            exit.clone(),
-            tokio::spawn(async move {
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    tokio::time::sleep(target_slot_duration).await;
-                    let mut bank_forks = running_bank_forks.write().unwrap();
-                    let working_bank = bank_forks.working_bank();
-                    let slot = working_bank.slot() + 1;
-                    // Register a new blockhash for the next slot
-                    working_bank.register_unique_recent_blockhash_for_test();
-                    bank_forks.insert(Bank::new_from_parent(
-                        working_bank,
-                        &Pubkey::default(),
-                        slot,
-                    ));
-                }
-            }),
+        let bank_task = SimulatedPoh::run_as_droppable(
+            target_slot_duration,
+            bank_forks.clone(),
+            block_commitment_cache.clone(),
         );
 
         Self {
