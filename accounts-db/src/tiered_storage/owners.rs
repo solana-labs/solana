@@ -97,6 +97,16 @@ impl<'a> OwnersTable<'a> {
 
         OwnerOffset(offset as u32)
     }
+
+    /// Returns the number of unique owner addresses in the table.
+    pub fn len(&self) -> usize {
+        self.owners_set.len()
+    }
+
+    /// Returns true if the OwnersTable is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]
