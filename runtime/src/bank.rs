@@ -3616,6 +3616,9 @@ impl Bank {
         )
         .unwrap();
         self.store_account_and_update_capitalization(&address, &new_account);
+        info!(
+            "create epoch_reward partition data account {address} {epoch_rewards_partition_data:#?}"
+        );
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
