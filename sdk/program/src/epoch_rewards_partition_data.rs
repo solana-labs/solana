@@ -32,7 +32,7 @@ pub struct PartitionData {
 
 pub fn get_epoch_rewards_partition_data_address(epoch: u64) -> Pubkey {
     let (address, _bump_seed) = Pubkey::find_program_address(
-        &[b"EpochRewardsPartitionData", &epoch.to_le_bytes()],
+        &[b"EpochRewards", b"PartitionData", &epoch.to_le_bytes()],
         &crate::sysvar::id(),
     );
     address
