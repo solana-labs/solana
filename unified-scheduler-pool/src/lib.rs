@@ -1012,6 +1012,7 @@ where
                     })
                     .unwrap();
                 let (do_now, dont_now) = (&disconnected::<()>(), &never::<()>());
+                log_scheduler!("S+T:started");
 
                 while !thread_suspending {
                     let mut is_finished = false;
@@ -1050,7 +1051,7 @@ where
                                         executed_task_sender
                                             .send(ExecutedTaskPayload::OpenSubchannel(()))
                                             .unwrap();
-                                        "S+T:started"
+                                        "S:started"
                                     }
                                     Ok(NewTaskPayload::CloseSubchannel) => {
                                         session_ending = true;
