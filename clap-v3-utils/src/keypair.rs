@@ -807,9 +807,7 @@ pub fn signer_from_path_with_config(
             }
         }
         SignerSourceKind::Pubkey(pubkey) => {
-            let presigner = try_pubkeys_sigs_of(matches, SIGNER_ARG.name)
-                .ok()
-                .flatten()
+            let presigner = try_pubkeys_sigs_of(matches, SIGNER_ARG.name)?
                 .as_ref()
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {
