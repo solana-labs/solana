@@ -407,8 +407,8 @@ pub enum AddBankSnapshotError {
     #[error("bank snapshot dir already exists '{0}'")]
     SnapshotDirAlreadyExists(PathBuf),
 
-    #[error("failed to create snapshot dir: {0}")]
-    CreateSnapshotDir(#[source] IoError),
+    #[error("failed to create snapshot dir '{1}': {0}")]
+    CreateSnapshotDir(#[source] IoError, PathBuf),
 
     #[error("failed to hard link storages: {0}")]
     HardLinkStorages(#[source] HardLinkStoragesToSnapshotError),
@@ -419,11 +419,11 @@ pub enum AddBankSnapshotError {
     #[error("failed to serialize status cache: {0}")]
     SerializeStatusCache(#[source] Box<SnapshotError>),
 
-    #[error("failed to write snapshot version file: {0}")]
-    WriteSnapshotVersionFile(#[source] IoError),
+    #[error("failed to write snapshot version file '{1}': {0}")]
+    WriteSnapshotVersionFile(#[source] IoError, PathBuf),
 
-    #[error("failed to mark snapshot as 'complete': {0}")]
-    CreateStateCompleteFile(#[source] IoError),
+    #[error("failed to mark snapshot as 'complete': failed to create file '{1}': {0}")]
+    CreateStateCompleteFile(#[source] IoError, PathBuf),
 }
 
 /// Errors that can happen in `archive_snapshot_package()`
@@ -515,8 +515,8 @@ pub enum GetSnapshotAccountsHardLinkDirError {
     #[error("invalid account storage path '{0}'")]
     GetAccountPath(PathBuf),
 
-    #[error("failed to create the snapshot hard link dir: {0}")]
-    CreateSnapshotHardLinkDir(#[source] IoError),
+    #[error("failed to create the snapshot hard link dir '{1}': {0}")]
+    CreateSnapshotHardLinkDir(#[source] IoError, PathBuf),
 
     #[error("failed to symlink snapshot hard link dir '{link}' to '{original}': {source}")]
     SymlinkSnapshotHardLinkDir {
@@ -1220,8 +1220,12 @@ fn get_snapshot_accounts_hardlink_dir(
             appendvec_path.display(),
             snapshot_hardlink_dir.display()
         );
-        fs_err::create_dir_all(&snapshot_hardlink_dir)
-            .map_err(GetSnapshotAccountsHardLinkDirError::CreateSnapshotHardLinkDir)?;
+        fs::create_dir_all(&snapshot_hardlink_dir).map_err(|err| {
+            GetSnapshotAccountsHardLinkDirError::CreateSnapshotHardLinkDir(
+                err,
+                snapshot_hardlink_dir.clone(),
+            )
+        })?;
         let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
         symlink::symlink_dir(&snapshot_hardlink_dir, &symlink_path).map_err(|err| {
             GetSnapshotAccountsHardLinkDirError::SymlinkSnapshotHardLinkDir {

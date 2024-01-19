@@ -27,7 +27,6 @@ use {
         status_cache,
     },
     bincode::{config::Options, serialize_into},
-    fs_err,
     log::*,
     solana_accounts_db::{
         accounts_db::{
@@ -49,6 +48,7 @@ use {
     },
     std::{
         collections::HashSet,
+        fs,
         io::{BufWriter, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
@@ -85,8 +85,9 @@ pub fn add_bank_snapshot(
                 bank_snapshot_dir,
             ));
         }
-        fs_err::create_dir_all(&bank_snapshot_dir)
-            .map_err(AddBankSnapshotError::CreateSnapshotDir)?;
+        fs::create_dir_all(&bank_snapshot_dir).map_err(|err| {
+            AddBankSnapshotError::CreateSnapshotDir(err, bank_snapshot_dir.clone())
+        })?;
 
         // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
         let bank_snapshot_path = bank_snapshot_dir
@@ -135,18 +136,19 @@ pub fn add_bank_snapshot(
                 .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?);
 
         let version_path = bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_VERSION_FILENAME);
-        let (_, measure_write_version_file) = measure!(fs_err::write(
-            version_path,
-            snapshot_version.as_str().as_bytes()
+        let (_, measure_write_version_file) = measure!(fs::write(
+            &version_path,
+            snapshot_version.as_str().as_bytes(),
         )
-        .map_err(AddBankSnapshotError::WriteSnapshotVersionFile)?);
+        .map_err(|err| AddBankSnapshotError::WriteSnapshotVersionFile(err, version_path))?);
 
         // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
         let state_complete_path =
             bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATE_COMPLETE_FILENAME);
         let (_, measure_write_state_complete_file) =
-            measure!(fs_err::File::create(state_complete_path)
-                .map_err(AddBankSnapshotError::CreateStateCompleteFile)?);
+            measure!(fs::File::create(&state_complete_path).map_err(|err| {
+                AddBankSnapshotError::CreateStateCompleteFile(err, state_complete_path)
+            })?);
 
         measure_everything.stop();
 
