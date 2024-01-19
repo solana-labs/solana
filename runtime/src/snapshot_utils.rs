@@ -1067,7 +1067,8 @@ where
     let consumed_size = data_file_stream.stream_position()?;
     if consumed_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
+            "too large snapshot data file to serialize: '{}' has {consumed_size} bytes",
+            data_file_path.display(),
         );
         return Err(IoError::other(error_message).into());
     }
@@ -1133,7 +1134,7 @@ fn create_snapshot_data_file_stream(
 
     if snapshot_file_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to deserialize: {} has {} bytes (max size is {} bytes)",
+            "too large snapshot data file to deserialize: '{}' has {} bytes (max size is {} bytes)",
             snapshot_root_file_path.as_ref().display(),
             snapshot_file_size,
             maximum_file_size,
@@ -1158,7 +1159,7 @@ fn check_deserialize_file_consumed(
 
     if consumed_size != file_size {
         let error_message = format!(
-            "invalid snapshot data file: {} has {} bytes, however consumed {} bytes to deserialize",
+            "invalid snapshot data file: '{}' has {} bytes, however consumed {} bytes to deserialize",
             file_path.as_ref().display(),
             file_size,
             consumed_size,
@@ -1601,7 +1602,7 @@ fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
     let file_size = fs_err::metadata(&path)?.len();
     if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
         let error_message = format!(
-            "snapshot version file too large: {} has {} bytes (max size is {} bytes)",
+            "snapshot version file too large: '{}' has {} bytes (max size is {} bytes)",
             path.as_ref().display(),
             file_size,
             MAX_SNAPSHOT_VERSION_FILE_SIZE,
@@ -2024,11 +2025,20 @@ pub fn verify_unpacked_snapshots_dir_and_version(
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {
-        return Err(IoError::other("invalid snapshot format").into());
+        return Err(IoError::other(format!(
+            "invalid snapshot format: only one snapshot allowed, but found {}",
+            bank_snapshots.len(),
+        ))
+        .into());
     }
-    let root_paths = bank_snapshots
-        .pop()
-        .ok_or_else(|| IoError::other("No snapshots found in snapshots directory"))?;
+    let root_paths = bank_snapshots.pop().ok_or_else(|| {
+        IoError::other(format!(
+            "no snapshots found in snapshots directory '{}'",
+            unpacked_snapshots_dir_and_version
+                .unpacked_snapshots_dir
+                .display(),
+        ))
+    })?;
     Ok((snapshot_version, root_paths))
 }
 
