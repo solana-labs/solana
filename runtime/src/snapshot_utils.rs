@@ -731,205 +731,198 @@ pub fn archive_snapshot_package(
     maximum_full_snapshot_archives_to_retain: NonZeroUsize,
     maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<()> {
-    // this lambda function is to facilitate converting between
-    // the ArchiveSnapshotPackageError and SnapshotError types
-    let do_archive_snapshot_package = || {
-        use ArchiveSnapshotPackageError as E;
-        const SNAPSHOTS_DIR: &str = "snapshots";
-        const ACCOUNTS_DIR: &str = "accounts";
-        info!(
-            "Generating snapshot archive for slot {}",
-            snapshot_package.slot()
-        );
+    use ArchiveSnapshotPackageError as E;
+    const SNAPSHOTS_DIR: &str = "snapshots";
+    const ACCOUNTS_DIR: &str = "accounts";
+    info!(
+        "Generating snapshot archive for slot {}",
+        snapshot_package.slot()
+    );
 
-        let mut timer = Measure::start("snapshot_package-package_snapshots");
-        let tar_dir = snapshot_package
-            .path()
-            .parent()
-            .expect("Tar output path is invalid");
+    let mut timer = Measure::start("snapshot_package-package_snapshots");
+    let tar_dir = snapshot_package
+        .path()
+        .parent()
+        .expect("Tar output path is invalid");
 
-        fs::create_dir_all(tar_dir)
-            .map_err(|err| E::CreateArchiveDir(err, tar_dir.to_path_buf()))?;
+    fs::create_dir_all(tar_dir).map_err(|err| E::CreateArchiveDir(err, tar_dir.to_path_buf()))?;
 
-        // Create the staging directories
-        let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
-        let staging_dir = tempfile::Builder::new()
-            .prefix(&format!(
-                "{}{}-",
-                staging_dir_prefix,
-                snapshot_package.slot()
-            ))
-            .tempdir_in(tar_dir)
-            .map_err(|err| E::CreateStagingDir(err, tar_dir.to_path_buf()))?;
-
-        let staging_snapshots_dir = staging_dir.path().join(SNAPSHOTS_DIR);
-        let staging_accounts_dir = staging_dir.path().join(ACCOUNTS_DIR);
-
-        // Create staging/accounts/
-        fs::create_dir_all(&staging_accounts_dir)
-            .map_err(|err| E::CreateAccountsStagingDir(err, staging_accounts_dir.clone()))?;
-
-        let slot_str = snapshot_package.slot().to_string();
-        let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
-        // Creates staging snapshots/<slot>/
-        fs::create_dir_all(&staging_snapshot_dir)
-            .map_err(|err| E::CreateSnapshotStagingDir(err, staging_snapshot_dir.clone()))?;
-
-        let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
-        // To be a source for symlinking and archiving, the path need to be an absolute path
-        let src_snapshot_dir = src_snapshot_dir
-            .canonicalize()
-            .map_err(|err| E::CanonicalizeSnapshotSourceDir(err, src_snapshot_dir.clone()))?;
-        let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
-        let src_snapshot_file = src_snapshot_dir.join(slot_str);
-        symlink::symlink_file(&src_snapshot_file, &staging_snapshot_file)
-            .map_err(|err| E::SymlinkSnapshot(err, src_snapshot_file, staging_snapshot_file))?;
-
-        // Following the existing archive format, the status cache is under snapshots/, not under <slot>/
-        // like in the snapshot dir.
-        let staging_status_cache = staging_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        let src_status_cache = src_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        symlink::symlink_file(&src_status_cache, &staging_status_cache)
-            .map_err(|err| E::SymlinkStatusCache(err, src_status_cache, staging_status_cache))?;
-
-        // The bank snapshot has the version file, so symlink it to the correct staging path
-        let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
-        let src_version_file = src_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-        symlink::symlink_file(&src_version_file, &staging_version_file).map_err(|err| {
-            E::SymlinkVersionFile(err, src_version_file, staging_version_file.clone())
-        })?;
-
-        // Add the AppendVecs into the compressible list
-        for storage in snapshot_package.snapshot_storages.iter() {
-            let storage_path = storage.get_path();
-            storage
-                .flush()
-                .map_err(|err| E::FlushAccountStorageFile(err, storage_path.clone()))?;
-            let staging_storage_path = staging_accounts_dir.join(AppendVec::file_name(
-                storage.slot(),
-                storage.append_vec_id(),
-            ));
-
-            // `src_storage_path` - The file path where the AppendVec itself is located
-            // `staging_storage_path` - The file path where the AppendVec will be placed in the staging directory.
-            let src_storage_path = fs::canonicalize(&storage_path)
-                .map_err(|err| E::CanonicalizeAccountStorageFile(err, storage_path))?;
-            symlink::symlink_file(&src_storage_path, &staging_storage_path).map_err(|err| {
-                E::SymlinkAccountStorageFile(err, src_storage_path, staging_storage_path.clone())
-            })?;
-            if !staging_storage_path.is_file() {
-                return Err(E::InvalidAccountStorageStagingFile(staging_storage_path));
-            }
-        }
-
-        // Tar the staging directory into the archive at `archive_path`
-        let archive_path = tar_dir.join(format!(
-            "{}{}.{}",
+    // Create the staging directories
+    let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
+    let staging_dir = tempfile::Builder::new()
+        .prefix(&format!(
+            "{}{}-",
             staging_dir_prefix,
-            snapshot_package.slot(),
-            snapshot_package.archive_format().extension(),
+            snapshot_package.slot()
+        ))
+        .tempdir_in(tar_dir)
+        .map_err(|err| E::CreateStagingDir(err, tar_dir.to_path_buf()))?;
+
+    let staging_snapshots_dir = staging_dir.path().join(SNAPSHOTS_DIR);
+    let staging_accounts_dir = staging_dir.path().join(ACCOUNTS_DIR);
+
+    // Create staging/accounts/
+    fs::create_dir_all(&staging_accounts_dir)
+        .map_err(|err| E::CreateAccountsStagingDir(err, staging_accounts_dir.clone()))?;
+
+    let slot_str = snapshot_package.slot().to_string();
+    let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
+    // Creates staging snapshots/<slot>/
+    fs::create_dir_all(&staging_snapshot_dir)
+        .map_err(|err| E::CreateSnapshotStagingDir(err, staging_snapshot_dir.clone()))?;
+
+    let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
+    // To be a source for symlinking and archiving, the path need to be an absolute path
+    let src_snapshot_dir = src_snapshot_dir
+        .canonicalize()
+        .map_err(|err| E::CanonicalizeSnapshotSourceDir(err, src_snapshot_dir.clone()))?;
+    let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
+    let src_snapshot_file = src_snapshot_dir.join(slot_str);
+    symlink::symlink_file(&src_snapshot_file, &staging_snapshot_file)
+        .map_err(|err| E::SymlinkSnapshot(err, src_snapshot_file, staging_snapshot_file))?;
+
+    // Following the existing archive format, the status cache is under snapshots/, not under <slot>/
+    // like in the snapshot dir.
+    let staging_status_cache = staging_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    let src_status_cache = src_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    symlink::symlink_file(&src_status_cache, &staging_status_cache)
+        .map_err(|err| E::SymlinkStatusCache(err, src_status_cache, staging_status_cache))?;
+
+    // The bank snapshot has the version file, so symlink it to the correct staging path
+    let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
+    let src_version_file = src_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+    symlink::symlink_file(&src_version_file, &staging_version_file).map_err(|err| {
+        E::SymlinkVersionFile(err, src_version_file, staging_version_file.clone())
+    })?;
+
+    // Add the AppendVecs into the compressible list
+    for storage in snapshot_package.snapshot_storages.iter() {
+        let storage_path = storage.get_path();
+        storage
+            .flush()
+            .map_err(|err| E::FlushAccountStorageFile(err, storage_path.clone()))?;
+        let staging_storage_path = staging_accounts_dir.join(AppendVec::file_name(
+            storage.slot(),
+            storage.append_vec_id(),
         ));
 
-        {
-            let mut archive_file = fs::File::create(&archive_path)
-                .map_err(|err| E::CreateArchiveFile(err, archive_path.clone()))?;
-
-            let do_archive_files = |encoder: &mut dyn Write| -> std::result::Result<(), E> {
-                let mut archive = tar::Builder::new(encoder);
-                // Serialize the version and snapshots files before accounts so we can quickly determine the version
-                // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
-                archive
-                    .append_path_with_name(&staging_version_file, SNAPSHOT_VERSION_FILENAME)
-                    .map_err(E::ArchiveVersionFile)?;
-                archive
-                    .append_dir_all(SNAPSHOTS_DIR, &staging_snapshots_dir)
-                    .map_err(E::ArchiveSnapshotsDir)?;
-                archive
-                    .append_dir_all(ACCOUNTS_DIR, &staging_accounts_dir)
-                    .map_err(E::ArchiveAccountsDir)?;
-                archive.into_inner().map_err(E::FinishArchive)?;
-                Ok(())
-            };
-
-            match snapshot_package.archive_format() {
-                ArchiveFormat::TarBzip2 => {
-                    let mut encoder =
-                        bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
-                    do_archive_files(&mut encoder)?;
-                    encoder.finish().map_err(E::FinishEncoder)?;
-                }
-                ArchiveFormat::TarGzip => {
-                    let mut encoder =
-                        flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
-                    do_archive_files(&mut encoder)?;
-                    encoder.finish().map_err(E::FinishEncoder)?;
-                }
-                ArchiveFormat::TarZstd => {
-                    let mut encoder =
-                        zstd::stream::Encoder::new(archive_file, 0).map_err(E::CreateEncoder)?;
-                    do_archive_files(&mut encoder)?;
-                    encoder.finish().map_err(E::FinishEncoder)?;
-                }
-                ArchiveFormat::TarLz4 => {
-                    let mut encoder = lz4::EncoderBuilder::new()
-                        .level(1)
-                        .build(archive_file)
-                        .map_err(E::CreateEncoder)?;
-                    do_archive_files(&mut encoder)?;
-                    let (_output, result) = encoder.finish();
-                    result.map_err(E::FinishEncoder)?;
-                }
-                ArchiveFormat::Tar => {
-                    do_archive_files(&mut archive_file)?;
-                }
-            };
+        // `src_storage_path` - The file path where the AppendVec itself is located
+        // `staging_storage_path` - The file path where the AppendVec will be placed in the staging directory.
+        let src_storage_path = fs::canonicalize(&storage_path)
+            .map_err(|err| E::CanonicalizeAccountStorageFile(err, storage_path))?;
+        symlink::symlink_file(&src_storage_path, &staging_storage_path).map_err(|err| {
+            E::SymlinkAccountStorageFile(err, src_storage_path, staging_storage_path.clone())
+        })?;
+        if !staging_storage_path.is_file() {
+            return Err(E::InvalidAccountStorageStagingFile(staging_storage_path).into());
         }
+    }
 
-        // Atomically move the archive into position for other validators to find
-        let metadata = fs::metadata(&archive_path)
-            .map_err(|err| E::QueryArchiveMetadata(err, archive_path.clone()))?;
-        fs::rename(&archive_path, snapshot_package.path())
-            .map_err(|err| E::MoveArchive(err, archive_path, snapshot_package.path().clone()))?;
+    // Tar the staging directory into the archive at `archive_path`
+    let archive_path = tar_dir.join(format!(
+        "{}{}.{}",
+        staging_dir_prefix,
+        snapshot_package.slot(),
+        snapshot_package.archive_format().extension(),
+    ));
 
-        purge_old_snapshot_archives(
-            full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
-            maximum_full_snapshot_archives_to_retain,
-            maximum_incremental_snapshot_archives_to_retain,
-        );
+    {
+        let mut archive_file = fs::File::create(&archive_path)
+            .map_err(|err| E::CreateArchiveFile(err, archive_path.clone()))?;
 
-        timer.stop();
-        info!(
-            "Successfully created {}. slot: {}, elapsed ms: {}, size: {}",
-            snapshot_package.path().display(),
-            snapshot_package.slot(),
-            timer.as_ms(),
-            metadata.len()
-        );
+        let do_archive_files = |encoder: &mut dyn Write| -> std::result::Result<(), E> {
+            let mut archive = tar::Builder::new(encoder);
+            // Serialize the version and snapshots files before accounts so we can quickly determine the version
+            // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
+            archive
+                .append_path_with_name(&staging_version_file, SNAPSHOT_VERSION_FILENAME)
+                .map_err(E::ArchiveVersionFile)?;
+            archive
+                .append_dir_all(SNAPSHOTS_DIR, &staging_snapshots_dir)
+                .map_err(E::ArchiveSnapshotsDir)?;
+            archive
+                .append_dir_all(ACCOUNTS_DIR, &staging_accounts_dir)
+                .map_err(E::ArchiveAccountsDir)?;
+            archive.into_inner().map_err(E::FinishArchive)?;
+            Ok(())
+        };
 
-        datapoint_info!(
-            "archive-snapshot-package",
-            ("slot", snapshot_package.slot(), i64),
-            (
-                "archive_format",
-                snapshot_package.archive_format().to_string(),
-                String
-            ),
-            ("duration_ms", timer.as_ms(), i64),
-            (
-                if snapshot_package.snapshot_kind.is_full_snapshot() {
-                    "full-snapshot-archive-size"
-                } else {
-                    "incremental-snapshot-archive-size"
-                },
-                metadata.len(),
-                i64
-            ),
-        );
-        Ok(())
-    };
+        match snapshot_package.archive_format() {
+            ArchiveFormat::TarBzip2 => {
+                let mut encoder =
+                    bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
+                do_archive_files(&mut encoder)?;
+                encoder.finish().map_err(E::FinishEncoder)?;
+            }
+            ArchiveFormat::TarGzip => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
+                do_archive_files(&mut encoder)?;
+                encoder.finish().map_err(E::FinishEncoder)?;
+            }
+            ArchiveFormat::TarZstd => {
+                let mut encoder =
+                    zstd::stream::Encoder::new(archive_file, 0).map_err(E::CreateEncoder)?;
+                do_archive_files(&mut encoder)?;
+                encoder.finish().map_err(E::FinishEncoder)?;
+            }
+            ArchiveFormat::TarLz4 => {
+                let mut encoder = lz4::EncoderBuilder::new()
+                    .level(1)
+                    .build(archive_file)
+                    .map_err(E::CreateEncoder)?;
+                do_archive_files(&mut encoder)?;
+                let (_output, result) = encoder.finish();
+                result.map_err(E::FinishEncoder)?;
+            }
+            ArchiveFormat::Tar => {
+                do_archive_files(&mut archive_file)?;
+            }
+        };
+    }
 
-    do_archive_snapshot_package().map_err(SnapshotError::ArchiveSnapshotPackage)
+    // Atomically move the archive into position for other validators to find
+    let metadata = fs::metadata(&archive_path)
+        .map_err(|err| E::QueryArchiveMetadata(err, archive_path.clone()))?;
+    fs::rename(&archive_path, snapshot_package.path())
+        .map_err(|err| E::MoveArchive(err, archive_path, snapshot_package.path().clone()))?;
+
+    purge_old_snapshot_archives(
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
+        maximum_full_snapshot_archives_to_retain,
+        maximum_incremental_snapshot_archives_to_retain,
+    );
+
+    timer.stop();
+    info!(
+        "Successfully created {}. slot: {}, elapsed ms: {}, size: {}",
+        snapshot_package.path().display(),
+        snapshot_package.slot(),
+        timer.as_ms(),
+        metadata.len()
+    );
+
+    datapoint_info!(
+        "archive-snapshot-package",
+        ("slot", snapshot_package.slot(), i64),
+        (
+            "archive_format",
+            snapshot_package.archive_format().to_string(),
+            String
+        ),
+        ("duration_ms", timer.as_ms(), i64),
+        (
+            if snapshot_package.snapshot_kind.is_full_snapshot() {
+                "full-snapshot-archive-size"
+            } else {
+                "incremental-snapshot-archive-size"
+            },
+            metadata.len(),
+            i64
+        ),
+    );
+    Ok(())
 }
 
 /// Get the bank snapshots in a directory
