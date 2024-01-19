@@ -978,12 +978,12 @@ where
             // like syscalls, VDSO, and even memory (de)allocation should be avoided at all costs
             // by design or by means of offloading at the last resort.
             move || {
+                const BITS_PER_HEX_DIGIT: usize = 4;
                 let mut state_machine = SchedulingStateMachine::default();
                 let mut log_interval = LogInterval::default();
                 // hint compiler about inline[never] and unlikely?
                 macro_rules! log_scheduler {
                     ($prefix:tt) => {
-                        const BITS_PER_HEX_DIGIT: usize = 4;
                         info!(
                             "[sch_{:0width$x}]: slot: {}[{:12}]({}{}): state_machine(({}(+{})=>{})/{}|{}/{}) channels(<{} >{}+{} <{}+{})",
                             scheduler_id, slot,
