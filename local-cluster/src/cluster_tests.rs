@@ -503,13 +503,6 @@ pub fn start_gossip_voter(
         SocketAddrSpace::Unspecified,
     );
 
-    // When push_active_set() is first called, gossip doesn't have correct shred_version set, nor
-    // does it have any ping responses from peers. At this point votes and other messages will not
-    // be fail to be pushed to gossip. Wait until gossip is ready before starting the voting thread.
-    while !cluster_info.is_push_active_set_initialized() {
-        sleep(Duration::from_millis(sleep_ms));
-    }
-
     let t_voter = {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();

@@ -102,10 +102,6 @@ impl PushActiveSet {
     fn get_entry(&self, stake: Option<&u64>) -> &PushActiveSetEntry {
         &self.0[get_stake_bucket(stake)]
     }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.iter().any(|bucket| bucket.0.is_empty())
-    }
 }
 
 impl PushActiveSetEntry {
