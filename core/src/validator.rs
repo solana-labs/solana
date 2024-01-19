@@ -1257,6 +1257,8 @@ impl Validator {
 
         let outstanding_repair_requests =
             Arc::<RwLock<repair::repair_service::OutstandingShredRepairs>>::default();
+        let cluster_slots =
+            Arc::new(crate::cluster_slots_service::cluster_slots::ClusterSlots::default());
 
         let tvu = Tvu::new(
             vote_account,
@@ -1311,6 +1313,7 @@ impl Validator {
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
             outstanding_repair_requests.clone(),
+            cluster_slots.clone(),
         )?;
 
         if in_wen_restart {
@@ -1389,6 +1392,7 @@ impl Validator {
             notifies: key_notifies,
             repair_socket: Arc::new(node.sockets.repair),
             outstanding_repair_requests,
+            cluster_slots,
         });
 
         Ok(Self {

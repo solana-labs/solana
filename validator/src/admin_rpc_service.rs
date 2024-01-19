@@ -212,7 +212,7 @@ pub trait AdminRpc {
     fn repair_shred_from_peer(
         &self,
         meta: Self::Metadata,
-        pubkey: Pubkey,
+        pubkey: Option<Pubkey>,
         slot: u64,
         shred_index: u64,
     ) -> Result<()>;
@@ -500,7 +500,7 @@ impl AdminRpc for AdminRpcImpl {
     fn repair_shred_from_peer(
         &self,
         meta: Self::Metadata,
-        pubkey: Pubkey,
+        pubkey: Option<Pubkey>,
         slot: u64,
         shred_index: u64,
     ) -> Result<()> {
@@ -509,6 +509,7 @@ impl AdminRpc for AdminRpcImpl {
         meta.with_post_init(|post_init| {
             repair_service::RepairService::request_repair_for_shred_from_peer(
                 post_init.cluster_info.clone(),
+                post_init.cluster_slots.clone(),
                 pubkey,
                 slot,
                 shred_index,
@@ -931,6 +932,9 @@ mod tests {
                     outstanding_repair_requests: Arc::<
                         RwLock<repair_service::OutstandingShredRepairs>,
                     >::default(),
+                    cluster_slots: Arc::new(
+                        solana_core::cluster_slots_service::cluster_slots::ClusterSlots::default(),
+                    ),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,

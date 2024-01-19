@@ -794,7 +794,7 @@ pub fn main() {
             return;
         }
         ("repair-shred-from-peer", Some(subcommand_matches)) => {
-            let pubkey = value_t_or_exit!(subcommand_matches, "pubkey", Pubkey);
+            let pubkey = value_t!(subcommand_matches, "pubkey", Pubkey).ok();
             let slot = value_t_or_exit!(subcommand_matches, "slot", u64);
             let shred_index = value_t_or_exit!(subcommand_matches, "shred", u64);
             let admin_client = admin_rpc_service::connect(&ledger_path);

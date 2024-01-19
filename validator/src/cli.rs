@@ -1503,6 +1503,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     Arg::with_name("pubkey")
                         .long("pubkey")
                         .value_name("PUBKEY")
+                        .required(false)
                         .takes_value(true)
                         .validator(is_pubkey)
                         .help("Identity pubkey of the validator to repair from")
