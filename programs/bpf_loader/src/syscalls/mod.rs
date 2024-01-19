@@ -40,14 +40,10 @@ use {
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
             reject_callx_r10, remaining_compute_units_syscall_enabled,
-            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
-        instruction::{
-            AccountMeta, InstructionError, ProcessedSiblingInstruction,
-            TRANSACTION_LEVEL_STACK_HEIGHT,
-        },
+        instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
         keccak, native_loader, poseidon,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -1361,9 +1357,6 @@ declare_builtin_function!(
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
-        let stop_sibling_instruction_search_at_parent = invoke_context
-            .feature_set
-            .is_active(&stop_sibling_instruction_search_at_parent::id());
 
         // Reverse iterate through the instruction trace,
         // ignoring anything except instructions on the same level
@@ -1377,10 +1370,7 @@ declare_builtin_function!(
             let instruction_context = invoke_context
                 .transaction_context
                 .get_instruction_context_at_index_in_trace(index_in_trace)?;
-            if (stop_sibling_instruction_search_at_parent
-                || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
-                && instruction_context.get_stack_height() < stack_height
-            {
+            if instruction_context.get_stack_height() < stack_height {
                 break;
             }
             if instruction_context.get_stack_height() == stack_height {
