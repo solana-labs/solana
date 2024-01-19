@@ -4,17 +4,26 @@ sidebar_label: Setup a Validator
 sidebar_position: 5
 ---
 
-This is a guide for getting your validator setup on the Solana testnet cluster for the first time. Testnet is a Solana cluster that is used for performance testing of the software before the software is used on mainnet. Since testnet is stress tested daily, it is a good cluster to practice validator operations.
+This is a guide for getting your validator setup on the Solana testnet cluster
+for the first time. Testnet is a Solana cluster that is used for performance
+testing of the software before the software is used on mainnet. Since testnet is
+stress tested daily, it is a good cluster to practice validator operations.
 
-Once you have a working validator on testnet, you will want to learn about [operational best practices](./best-practices/general.md) in the next section. Although the guide is specific to testnet, it can be adapted to mainnet or devnet as well.
+Once you have a working validator on testnet, you will want to learn about
+[operational best practices](./best-practices/general.md) in the next section.
+Although the guide is specific to testnet, it can be adapted to mainnet or
+devnet as well.
 
-> Refer to the [Available Clusters](../clusters/available.md) section of the documentation to see example commands for each cluster.
+> Refer to the [Available Clusters](../clusters/available.md) section of the
+> documentation to see example commands for each cluster.
 
 Now let's get started.
 
 ## Open The Terminal Program
 
-To start this guide, you will be running commands on your trusted computer, not on the remote machine that you plan to use for validator operations. First, locate the terminal program on your _trusted computer_.
+To start this guide, you will be running commands on your trusted computer, not
+on the remote machine that you plan to use for validator operations. First,
+locate the terminal program on your _trusted computer_.
 
 - on Mac, you can search for the word _terminal_ in spotlight.
 - on Ubuntu, you can type `CTRL + Alt + T`.
@@ -22,25 +31,33 @@ To start this guide, you will be running commands on your trusted computer, not 
 
 ## Install The Solana CLI Locally
 
-To create your validator vote account, you need to install the [Solana command line interface](../cli/index.md) on your local computer.
+To create your validator vote account, you need to install the
+[Solana command line interface](../cli/index.md) on your local computer.
 
-You can either use [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) section from the within these docs to install the CLI, or alternatively, you can also [build from source](../cli/install.md#build-from-source).
+You can either use
+[Solana's Install Tool](../cli/install.md#use-solanas-install-tool) section from
+the within these docs to install the CLI, or alternatively, you can also
+[build from source](../cli/install.md#build-from-source).
 
-> Building from source is a great option for those that want a more secure and potentially more performant executable.
+> Building from source is a great option for those that want a more secure and
+> potentially more performant executable.
 
-Once the Solana CLI is installed, you can return to this document once you are able to run the following command and get an answer on your terminal:
+Once the Solana CLI is installed, you can return to this document once you are
+able to run the following command and get an answer on your terminal:
 
 ```
 solana --version
 ```
 
-You should see an output that looks similar to this (note your version number may be higher):
+You should see an output that looks similar to this (note your version number
+may be higher):
 
 ```
 solana-cli 1.14.17 (src:b29a37cf; feat:3488713414)
 ```
 
-Once you have successfully installed the cli, the next step is to change your config so that it is making requests to the `testnet` cluster:
+Once you have successfully installed the cli, the next step is to change your
+config so that it is making requests to the `testnet` cluster:
 
 ```
 solana config set --url https://api.testnet.solana.com
@@ -56,9 +73,12 @@ You should see a line that says: `RPC URL: https://api.testnet.solana.com`
 
 ## Create Keys
 
-On your local computer, create the 3 keypairs that you will need to run your validator ([docs for reference](./guides/validator-start.md#generate-identity)):
+On your local computer, create the 3 keypairs that you will need to run your
+validator ([docs for reference](./guides/validator-start.md#generate-identity)):
 
-> **NOTE** Some operators choose to make vanity keypairs for their identity and vote account using the `grind` sub command ([docs for reference](./guides/validator-start.md#vanity-keypair)).
+> **NOTE** Some operators choose to make vanity keypairs for their identity and
+> vote account using the `grind` sub command
+> ([docs for reference](./guides/validator-start.md#vanity-keypair)).
 
 ```
 solana-keygen new -o validator-keypair.json
@@ -72,13 +92,22 @@ solana-keygen new -o vote-account-keypair.json
 solana-keygen new -o authorized-withdrawer-keypair.json
 ```
 
-> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a multisig, hardware wallet, or paper wallet for the authorized withdrawer keypair.  A keypair is created on disk in this example for simplicity. Additionally, the withdrawer keypair should always be stored safely. The authorized withdrawer keypair should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator security best practices](./best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
+> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered
+> very sensitive information. Many operators choose to use a multisig, hardware
+> wallet, or paper wallet for the authorized withdrawer keypair. A keypair is
+> created on disk in this example for simplicity. Additionally, the withdrawer
+> keypair should always be stored safely. The authorized withdrawer keypair
+> should **never** be stored on the remote machine that the validator software
+> runs on. For more information, see
+> [validator security best practices](./best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
 
 ## Create a Vote Account
 
-Before you can create your vote account, you need to configure the Solana command line tool a bit more.
+Before you can create your vote account, you need to configure the Solana
+command line tool a bit more.
 
-The below command sets the default keypair that the Solana CLI uses to the `validator-keypair.json` file that you just created in the terminal:
+The below command sets the default keypair that the Solana CLI uses to the
+`validator-keypair.json` file that you just created in the terminal:
 
 ```
 solana config set --keypair ./validator-keypair.json
@@ -90,17 +119,23 @@ Now verify your account balance of `0`:
 solana balance
 ```
 
-Next, you need to deposit some SOL into that keypair account in order create a transaction (in this case, making your vote account):
+Next, you need to deposit some SOL into that keypair account in order create a
+transaction (in this case, making your vote account):
 
 ```
 solana airdrop 1
 ```
 
-> **NOTE** The `airdrop` sub command does not work on mainnet, so you will have to acquire SOL and transfer it into this keypair's account if you are setting up a mainnet validator.
+> **NOTE** The `airdrop` sub command does not work on mainnet, so you will have
+> to acquire SOL and transfer it into this keypair's account if you are setting
+> up a mainnet validator.
 
 Now, use the Solana cluster to create a vote account.
 
-As a reminder, all commands mentioned so far **should be done on your trusted computer** and **NOT** on a server where you intend to run your validator. It is especially important that the following command is done on a **trusted computer**:
+As a reminder, all commands mentioned so far **should be done on your trusted
+computer** and **NOT** on a server where you intend to run your validator. It is
+especially important that the following command is done on a **trusted
+computer**:
 
 ```
 solana create-vote-account -ut \
@@ -110,23 +145,34 @@ solana create-vote-account -ut \
     ./authorized-withdrawer-keypair.json
 ```
 
-> Note `-ut` tells the cli command that we would like to use the testnet cluster.  `--fee-payer` specifies the keypair that will be used to pay the transaction fees.  Both flags are not necessary if you configured the solana cli properly above but they are useful to ensure you're using the intended cluster and keypair.
+> Note `-ut` tells the cli command that we would like to use the testnet
+> cluster. `--fee-payer` specifies the keypair that will be used to pay the
+> transaction fees. Both flags are not necessary if you configured the solana
+> cli properly above but they are useful to ensure you're using the intended
+> cluster and keypair.
 
 ## Save the Withdrawer Keypair Securely
 
-Make sure your `authorized-withdrawer-keypair.json` is stored in a safe place.  If you have chosen to create a keypair on disk, you should first backup the keypair and then delete it from your local machine.
+Make sure your `authorized-withdrawer-keypair.json` is stored in a safe place.
+If you have chosen to create a keypair on disk, you should first backup the
+keypair and then delete it from your local machine.
 
-**IMPORTANT**: If you lose your withdrawer key pair, you will lose control of your vote account. You will not be able to withdraw tokens from the vote account or update the withdrawer. Make sure to store the `authorized-withdrawer-keypair.json` securely before you move on.
+**IMPORTANT**: If you lose your withdrawer key pair, you will lose control of
+your vote account. You will not be able to withdraw tokens from the vote account
+or update the withdrawer. Make sure to store the
+`authorized-withdrawer-keypair.json` securely before you move on.
 
 ## SSH To Your Validator
 
-Connect to your remote server. This is specific to your server but will look something like this:
+Connect to your remote server. This is specific to your server but will look
+something like this:
 
 ```
 ssh user@<server.hostname>
 ```
 
-You will have to check with your server provider to get the correct user account and hostname that you will ssh into.
+You will have to check with your server provider to get the correct user account
+and hostname that you will ssh into.
 
 ## Update Your Ubuntu Packages
 
@@ -145,31 +191,38 @@ Create a new Ubuntu user, named `sol`, for running the validator:
 sudo adduser sol
 ```
 
-It is a best practice to always run your validator as a non-root user, like the `sol` user we just created.
+It is a best practice to always run your validator as a non-root user, like the
+`sol` user we just created.
 
 ## Hard Drive Setup
 
-On your Ubuntu computer make sure that you have at least `2TB` of disk space mounted. You can check disk space using the `df` command:
+On your Ubuntu computer make sure that you have at least `2TB` of disk space
+mounted. You can check disk space using the `df` command:
 
 ```
 df -h
 ```
 
-> If you have a drive that is not mounted/formatted, you will have to set up the partition and mount the drive.
+> If you have a drive that is not mounted/formatted, you will have to set up the
+> partition and mount the drive.
 
-To see the hard disk devices that you have available, use the list block devices command:
+To see the hard disk devices that you have available, use the list block devices
+command:
 
 ```
 lsblk -f
 ```
 
-You may see some devices in the list that have a name but do not have a UUID. Any device without a UUID is unformatted.
+You may see some devices in the list that have a name but do not have a UUID.
+Any device without a UUID is unformatted.
 
 ### Drive Formatting: Ledger
 
-Assuming you have an nvme drive that is not formatted, you will have to format the drive and then mount it.
+Assuming you have an nvme drive that is not formatted, you will have to format
+the drive and then mount it.
 
-For example, if your computer has a device located at `/dev/nvme0n1`, then you can format the drive with the command:
+For example, if your computer has a device located at `/dev/nvme0n1`, then you
+can format the drive with the command:
 
 ```
 sudo mkfs -t ext4 /dev/nvme0n1
@@ -183,11 +236,14 @@ Next, check that you now have a UUID for that device:
 lsblk -f
 ```
 
-In the fourth column, next to your device name, you should see a string of letters and numbers that look like this: `6abd1aa5-8422-4b18-8058-11f821fd3967`. That is the UUID for the device.
+In the fourth column, next to your device name, you should see a string of
+letters and numbers that look like this: `6abd1aa5-8422-4b18-8058-11f821fd3967`.
+That is the UUID for the device.
 
 ### Mounting Your Drive: Ledger
 
-So far we have created a formatted drive, but you do not have access to it until you mount it. Make a directory for mounting your drive:
+So far we have created a formatted drive, but you do not have access to it until
+you mount it. Make a directory for mounting your drive:
 
 ```
 sudo mkdir -p /mnt/ledger
@@ -207,9 +263,11 @@ sudo mount /dev/nvme0n1 /mnt/ledger
 
 ### Formatting And Mounting Drive: AccountsDB
 
-You will also want to mount the accounts db on a separate hard drive. The process will be similar to the ledger example above.
+You will also want to mount the accounts db on a separate hard drive. The
+process will be similar to the ledger example above.
 
-Assuming you have device at `/dev/nvme1n1`, format the device and verify it exists:
+Assuming you have device at `/dev/nvme1n1`, format the device and verify it
+exists:
 
 ```
 sudo mkfs -t ext4 /dev/nvme1n1
@@ -243,7 +301,8 @@ sudo mount /dev/nvme1n1 /mnt/accounts
 
 ### Linux
 
-Your system will need to be tuned in order to run properly. Your validator may not start without the settings below.
+Your system will need to be tuned in order to run properly. Your validator may
+not start without the settings below.
 
 #### **Optimize sysctl knobs**
 
@@ -301,14 +360,18 @@ EOF"
 
 ## Copy Key Pairs
 
-On your personal computer, not on the validator, securely copy your `validator-keypair.json` file and your `vote-account-keypair.json` file to the validator server:
+On your personal computer, not on the validator, securely copy your
+`validator-keypair.json` file and your `vote-account-keypair.json` file to the
+validator server:
 
 ```
 scp validator-keypair.json sol@<server.hostname>:
 scp vote-account-keypair.json sol@<server.hostname>:
 ```
 
-> **Note**: The `vote-account-keypair.json` does not have any function other than identifying the vote account to potential delegators.  Only the public key of the vote account is important once the account is created.
+> **Note**: The `vote-account-keypair.json` does not have any function other
+> than identifying the vote account to potential delegators. Only the public key
+> of the vote account is important once the account is created.
 
 ## Switch to the sol User
 
@@ -320,11 +383,16 @@ su - sol
 
 ## Install The Solana CLI on Remote Machine
 
-Your remote machine will need the Solana cli installed to run the validator software.  Refer again to [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) or [build from source](../cli/install.md#build-from-source).  It is best for operators to build from source rather than using the pre built binaries.
+Your remote machine will need the Solana cli installed to run the validator
+software. Refer again to
+[Solana's Install Tool](../cli/install.md#use-solanas-install-tool) or
+[build from source](../cli/install.md#build-from-source). It is best for
+operators to build from source rather than using the pre built binaries.
 
 ## Create A Validator Startup Script
 
-In your sol home directory (e.g. `/home/sol/`), create a folder called `bin`. Inside that folder create a file called `validator.sh` and make it executable:
+In your sol home directory (e.g. `/home/sol/`), create a folder called `bin`.
+Inside that folder create a file called `validator.sh` and make it executable:
 
 ```
 mkdir -p /home/sol/bin
@@ -361,52 +429,68 @@ exec solana-validator \
     --limit-ledger-size
 ```
 
-Refer to `solana-validator --help` for more information on what each flag is doing in this script. Also refer to the section on [best practices for operating a validator](./best-practices/general.md).
+Refer to `solana-validator --help` for more information on what each flag is
+doing in this script. Also refer to the section on
+[best practices for operating a validator](./best-practices/general.md).
 
 ## Verifying Your Validator Is Working
 
-Test that your `validator.sh` file is running properly by executing the `validator.sh` script:
+Test that your `validator.sh` file is running properly by executing the
+`validator.sh` script:
 
 ```
 /home/sol/bin/validator.sh
 ```
 
-The script should execute the `solana-validator` process. In a new terminal window, shh into your server, then verify that the process is running:
+The script should execute the `solana-validator` process. In a new terminal
+window, shh into your server, then verify that the process is running:
 
 ```
 ps aux | grep solana-validator
 ```
 
-You should see a line in the output that includes `solana-validator` with all the flags that were added to your `validator.sh` script.
+You should see a line in the output that includes `solana-validator` with all
+the flags that were added to your `validator.sh` script.
 
 Next, we need to look at the logs to make sure everything is operating properly.
 
 ### Tailing The Logs
 
-As a spot check, you will want to make sure your validator is producing reasonable log output (**warning**, there will be a lot of log output).
+As a spot check, you will want to make sure your validator is producing
+reasonable log output (**warning**, there will be a lot of log output).
 
-In a new terminal window, ssh into your validator machine, switch users to the `sol` user and `tail` the logs:
+In a new terminal window, ssh into your validator machine, switch users to the
+`sol` user and `tail` the logs:
 
 ```
 su - sol
 tail -f solana-validator.log
 ```
 
-The `tail` command will continue to display the output of a file as the file changes. You should see a continuous stream of log output as your validator runs. Keep an eye out for any lines that say `_ERROR_`.
+The `tail` command will continue to display the output of a file as the file
+changes. You should see a continuous stream of log output as your validator
+runs. Keep an eye out for any lines that say `_ERROR_`.
 
 Assuming you do not see any error messages, exit out of the command.
 
 ### Gossip Protocol
 
-Gossip is a protocol used in the Solana clusters to communicate between validator nodes. For more information on gossip, see [Gossip Service](../validator/gossip.md).  To verify that your validator is running properly, make sure that the validator has registered itself with the gossip network.
+Gossip is a protocol used in the Solana clusters to communicate between
+validator nodes. For more information on gossip, see
+[Gossip Service](../validator/gossip.md). To verify that your validator is
+running properly, make sure that the validator has registered itself with the
+gossip network.
 
-In a new terminal window, connect to your server via ssh. Identify your validator's pubkey:
+In a new terminal window, connect to your server via ssh. Identify your
+validator's pubkey:
 
 ```
 solana-keygen pubkey ~/validator-keypair.json
 ```
 
-The command `solana gossip` lists all validators that have registered with the protocol. To check that the newly setup validator is in gossip, we will `grep` for our pubkey in the output:
+The command `solana gossip` lists all validators that have registered with the
+protocol. To check that the newly setup validator is in gossip, we will `grep`
+for our pubkey in the output:
 
 ```
 solana gossip | grep <pubkey>
@@ -418,11 +502,16 @@ After running the command, you should see a single line that looks like this:
 139.178.68.207  | 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on | 8001   | 8004  | 139.178.68.207:80     | 1.14.17 | 3488713414
 ```
 
-If you do not see any output after grep-ing the output of gossip, your validator may be having startup problems. If that is the case, start debugging by looking through the validator log output.
+If you do not see any output after grep-ing the output of gossip, your validator
+may be having startup problems. If that is the case, start debugging by looking
+through the validator log output.
 
 ### Solana Validators
 
-After you have verified that your validator is in gossip, you can verify that your validator has joined the network using the `solana validators` command. The command lists all validators in the network, but like before, we can `grep` the output for the validator we care about:
+After you have verified that your validator is in gossip, you can verify that
+your validator has joined the network using the `solana validators` command. The
+command lists all validators in the network, but like before, we can `grep` the
+output for the validator we care about:
 
 ```
 solana validators | grep <pubkey>
@@ -436,29 +525,46 @@ You should see a line of output that looks like this:
 
 ### Solana Catchup
 
-The `solana catchup` command is a useful tool for seeing how quickly your validator is processing blocks. The Solana network has the capability to produce many transactions per second. Since your validator is new to the network, it has to ask another validator (listed as a `--known-validator` in your startup script) for a recent snapshot of the ledger. By the time you receive the snapshot, you may already be behind the network. Many transactions may have been processed and finalized in that time. In order for your validator to participate in consensus, it must _catchup_ to the rest of the network by asking for the more recent transactions that it does not have.
+The `solana catchup` command is a useful tool for seeing how quickly your
+validator is processing blocks. The Solana network has the capability to produce
+many transactions per second. Since your validator is new to the network, it has
+to ask another validator (listed as a `--known-validator` in your startup
+script) for a recent snapshot of the ledger. By the time you receive the
+snapshot, you may already be behind the network. Many transactions may have been
+processed and finalized in that time. In order for your validator to participate
+in consensus, it must _catchup_ to the rest of the network by asking for the
+more recent transactions that it does not have.
 
-The `solana catchup` command is a tool that tells you how far behind the network your validator is and how quickly you are catching up:
+The `solana catchup` command is a tool that tells you how far behind the network
+your validator is and how quickly you are catching up:
 
 ```
 solana catchup <pubkey>
 ```
 
-If you see a message about trying to connect, your validator may not be part of the network yet. Make sure to check the logs and double check `solana gossip` and `solana validators` to make sure your validator is running properly.
+If you see a message about trying to connect, your validator may not be part of
+the network yet. Make sure to check the logs and double check `solana gossip`
+and `solana validators` to make sure your validator is running properly.
 
-Once you are happy that the validator can start up without errors, the next step is to create a system service to run the `validator.sh` file automatically. Stop the currently running validator by pressing `CTRL+C` in the window where `validator.sh` is running.
+Once you are happy that the validator can start up without errors, the next step
+is to create a system service to run the `validator.sh` file automatically. Stop
+the currently running validator by pressing `CTRL+C` in the window where
+`validator.sh` is running.
 
 ## Create a System Service
 
-Follow these instructions for [running the validator as a system service](./guides/validator-start.md#systemd-unit)
+Follow these instructions for
+[running the validator as a system service](./guides/validator-start.md#systemd-unit)
 
-Make sure to implement log rotate as well. Once you have the system service configured, start your validator using the newly configured service:
+Make sure to implement log rotate as well. Once you have the system service
+configured, start your validator using the newly configured service:
 
 ```
 sudo systemctl enable --now sol
 ```
 
-Now verify that the validator is running properly by tailing the logs and using the commands mentioned earlier to check gossip and Solana validators:
+Now verify that the validator is running properly by tailing the logs and using
+the commands mentioned earlier to check gossip and Solana validators:
 
 ```
 tail -f /home/sol/solana-validator*.log
@@ -466,7 +572,10 @@ tail -f /home/sol/solana-validator*.log
 
 ## Monitoring
 
-`solana-watchtower` is a command you can run on a separate machine to monitor your server. You can read more about handling [automatic restarts and monitoring](./best-practices/monitoring.md#solana-watchtower) using Solana Watchtower here in the docs.
+`solana-watchtower` is a command you can run on a separate machine to monitor
+your server. You can read more about handling
+[automatic restarts and monitoring](./best-practices/monitoring.md#solana-watchtower)
+using Solana Watchtower here in the docs.
 
 ## Common issues
 
@@ -476,4 +585,5 @@ Make sure your ledger is on drive with at least `2TB` of space.
 
 ### Validator not catching up
 
-This could be a networking/hardware issue, or you may need to get the latest snapshot from another validator node.
+This could be a networking/hardware issue, or you may need to get the latest
+snapshot from another validator node.
