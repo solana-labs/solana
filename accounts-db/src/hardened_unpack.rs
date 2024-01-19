@@ -446,28 +446,35 @@ fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool
     }
 }
 
+#[derive(Error, Debug)]
+pub enum OpenGenesisConfigError {
+    #[error("unpack error: {0}")]
+    Unpack(#[from] UnpackError),
+    #[error("Genesis load error: {0}")]
+    Load(#[from] std::io::Error),
+}
+
 pub fn open_genesis_config(
     ledger_path: &Path,
     max_genesis_archive_unpacked_size: u64,
-) -> GenesisConfig {
-    GenesisConfig::load(ledger_path).unwrap_or_else(|load_err| {
-        let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
-        unpack_genesis_archive(
-            &genesis_package,
-            ledger_path,
-            max_genesis_archive_unpacked_size,
-        )
-        .unwrap_or_else(|unpack_err| {
+) -> std::result::Result<GenesisConfig, OpenGenesisConfigError> {
+    match GenesisConfig::load(ledger_path) {
+        Ok(genesis_config) => Ok(genesis_config),
+        Err(load_err) => {
             warn!(
-                "Failed to open ledger genesis_config at {:?}: {}, {}",
-                ledger_path, load_err, unpack_err,
+                "Failed to load genesis_config at {ledger_path:?}: {load_err}. \
+                Will attempt to unpack genesis archive and then retry loading."
             );
-            std::process::exit(1);
-        });
 
-        // loading must succeed at this moment
-        GenesisConfig::load(ledger_path).unwrap()
-    })
+            let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+            unpack_genesis_archive(
+                &genesis_package,
+                ledger_path,
+                max_genesis_archive_unpacked_size,
+            )?;
+            GenesisConfig::load(ledger_path).map_err(OpenGenesisConfigError::Load)
+        }
+    }
 }
 
 pub fn unpack_genesis_archive(
