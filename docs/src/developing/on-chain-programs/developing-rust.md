@@ -17,7 +17,7 @@ layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
 ```
 
 Solana Rust programs may depend directly on each other in order to gain access
-to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations).
+to instruction helpers when making [cross-program invocations](https://solana.com/docs/core/cpi).
 When doing so it's important to not pull in the dependent program's entrypoint
 symbols because they may conflict with the program's own. To avoid this,
 programs should define an `no-entrypoint` feature in `Cargo.toml` and use
@@ -52,14 +52,14 @@ For example:
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
   included in the program itself. For more information refer to
-  [Stack](./faq.md#stack).
+  [Stack](https://docs.solana.com/developing/on-chain-programs/faq#stack).
 
 ## How to Build
 
 First setup the environment:
 
 - Install the latest Rust stable from https://rustup.rs/
-- Install the latest [Solana command-line tools](../../cli/install-solana-cli-tools.md)
+- Install the latest [Solana command-line tools](../../cli/install.md)
 
 The normal cargo build is available for building programs against your host
 machine which can be used for unit testing:
@@ -98,7 +98,7 @@ Programs export a known entrypoint symbol which the Solana runtime looks up and
 calls when invoking a program. Solana supports multiple versions of the BPF
 loader and the entrypoints may vary between them.
 Programs must be written for and deployed to the same loader. For more details
-see the [FAQ section on Loaders](./faq.md#loaders).
+see the [FAQ section on Loaders](https://docs.solana.com/developing/on-chain-programs/faq#loaders).
 
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/bpf_loader.rs#L17)
@@ -155,7 +155,7 @@ their own deserialization function they need to ensure that any modifications
 the program wishes to commit be written back into the input byte array.
 
 Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](./faq.md#input-parameter-serialization) docs.
+[Input Parameter Serialization](https://docs.solana.com/developing/on-chain-programs/faq#input-parameter-serialization) docs.
 
 ### Data Types
 
@@ -179,7 +179,7 @@ source and the second as the destination.
 
 The members of the `AccountInfo` structure are read-only except for `lamports`
 and `data`. Both may be modified by the program in accordance with the [runtime
-enforcement policy](developing/programming-model/accounts.md#policy). Both of
+enforcement policy](https://solana.com/docs/core/runtime#policy). Both of
 these members are protected by the Rust `RefCell` construct, so they must be
 borrowed to read or write to them. The reason for this is they both point back
 to the original input byte array, but there may be multiple entries in the
@@ -190,7 +190,7 @@ their own deserialization function care should be taken to handle duplicate
 accounts appropriately.
 
 The instruction data is the general purpose byte array from the [instruction's
-instruction data](developing/programming-model/transactions.md#instruction-data)
+instruction data](https://solana.com/docs/core/transactions#instruction-data)
 being processed.
 
 ## Heap
@@ -230,7 +230,7 @@ single-threaded environment, as well as being deterministic:
   should be used instead.
 - The runtime enforces a limit on the number of instructions a program can
   execute during the processing of one instruction. See
-  [computation budget](developing/programming-model/runtime.md#compute-budget) for more
+  [computation budget](https://solana.com/docs/core/runtime#compute-budget) for more
   information.
 
 ## Depending on Rand
@@ -291,13 +291,13 @@ can emulate `println!` by using `format!`:
 msg!("Some variable: {:?}", variable);
 ```
 
-The [debugging](debugging.md#logging) section has more information about working
+The [debugging](https://solana.com/docs/programs/debugging#logging) section has more information about working
 with program logs the [Rust examples](#examples) contains a logging example.
 
 ## Panicking
 
 Rust's `panic!`, `assert!`, and internal panic results are printed to the
-[program logs](debugging.md#logging) by default.
+[program logs](https://solana.com/docs/programs/debugging#logging) by default.
 
 ```
 INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
@@ -363,7 +363,7 @@ Use the system call
 to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
-See [compute budget](developing/programming-model/runtime.md#compute-budget)
+See [compute budget](https://solana.com/docs/core/runtime#compute-budget)
 for more information.
 
 ## ELF Dump
