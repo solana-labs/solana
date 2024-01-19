@@ -215,7 +215,7 @@ impl ExecutedTask {
 }
 
 // A very tiny generic message type to signal about opening and closing of subchannels, which are
-// logically segmented series of Payloads (P1) over a signle continuous time-span, potentially
+// logically segmented series of Payloads (P1) over a single continuous time-span, potentially
 // carrying some subchannel metadata (P2) upon opening a new subchannel.
 // Note that the above properties can be upheld only when this is used inside MPSC or SPSC channels
 // (i.e. the consumer side needs to be single threaded). For the multiple consumer cases,
