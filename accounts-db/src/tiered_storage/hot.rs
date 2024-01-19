@@ -1304,6 +1304,7 @@ pub mod tests {
             assert_eq!(stored_meta.lamports(), account.lamports());
             assert_eq!(stored_meta.data().len(), account.data().len());
             assert_eq!(stored_meta.data(), account.data());
+            assert_eq!(stored_meta.executable(), account.executable());
             assert_eq!(stored_meta.pubkey(), address);
             assert_eq!(stored_meta.hash(), hash);
 
