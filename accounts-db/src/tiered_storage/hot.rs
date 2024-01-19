@@ -56,6 +56,12 @@ const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 /// bytes in HotAccountOffset.
 pub(crate) const HOT_ACCOUNT_ALIGNMENT: usize = 8;
 
+/// The alignemnt for the blocks inside a hot accounts file.  A hot accounts
+/// file consists of accounts block, index block, owners block, and footer.
+/// This requirement allows the offset of each block properly aligned so
+/// that they can be readable under mmap.
+pub(crate) const HOT_BLOCK_ALIGNMENT: usize = 8;
+
 /// The maximum supported offset for hot accounts storage.
 const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_ALIGNMENT;
 
@@ -492,11 +498,11 @@ impl HotStorageWriter {
         rent_epoch: Epoch,
         account_data: &[u8],
         executable: bool,
-        hash: &AccountHash,
+        account_hash: &AccountHash,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
-            rent_epoch: (rent_epoch != u64::MAX).then_some(rent_epoch),
-            account_hash: (*hash != AccountHash(Hash::default())).then_some(*hash),
+            rent_epoch: (rent_epoch != Epoch::MAX).then_some(rent_epoch),
+            account_hash: (*account_hash != AccountHash(Hash::default())).then_some(*account_hash),
         };
 
         let mut flags = AccountMetaFlags::new_from(&optional_fields);
@@ -541,7 +547,7 @@ impl HotStorageWriter {
         // writing accounts blocks
         let len = accounts.accounts.len();
         for i in skip..len {
-            let (account, address, hash, _write_version) = accounts.get(i);
+            let (account, address, account_hash, _write_version) = accounts.get(i);
             let index_entry = AccountIndexWriterEntry {
                 address,
                 offset: HotAccountOffset::new(cursor)?,
@@ -552,25 +558,25 @@ impl HotStorageWriter {
                     account.rent_epoch(),
                     account.data(),
                     account.executable(),
-                    hash,
+                    account_hash,
                 )?;
+                footer.account_entry_count += 1;
             }
             index.push(index_entry);
         }
-        footer.account_entry_count = (len - skip) as u32;
 
         // writing index block
-        assert!(cursor % HOT_ACCOUNT_ALIGNMENT == 0);
+        assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.index_block_offset = cursor as u64;
         cursor += footer
             .index_block_format
             .write_index_block(&self.storage, &index)?;
-        if cursor % HOT_ACCOUNT_ALIGNMENT != 0 {
+        if cursor % HOT_BLOCK_ALIGNMENT != 0 {
             cursor += self.storage.write_pod(&0u32)?;
         }
 
         // TODO: owner block will be implemented in the follow-up PRs
-        assert!(cursor % HOT_ACCOUNT_ALIGNMENT == 0);
+        assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.owners_block_offset = cursor as u64;
         footer.owner_count = 0;
 
