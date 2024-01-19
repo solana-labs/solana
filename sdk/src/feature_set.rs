@@ -924,14 +924,7 @@ lazy_static! {
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
-<<<<<<< HEAD
-=======
-        (merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for merkle root conflicts #34270"),
-        (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
-        (deprecate_executable_meta_update_in_bpf_loader::id(), "deprecate executable meta flag update in bpf loader #34194"),
-        (enable_zk_proof_from_account::id(), "Enable zk token proof program to read proof from accounts instead of instruction data #34750"),
         (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
->>>>>>> 73218595c6 ([zk-token-sdk] Restrict Edwards and Ristretto multiscalar multiplication vector length to at most 512 (#34763))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
