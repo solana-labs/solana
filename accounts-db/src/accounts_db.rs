@@ -1215,11 +1215,11 @@ pub fn create_accounts_run_and_snapshot_dirs(
         // to this new version using run and snapshot directories.
         // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
         // across the process boot, and will be purged by the account_background_service.
-        if fs_err::remove_dir_all(&account_dir).is_err() {
+        if fs::remove_dir_all(&account_dir).is_err() {
             delete_contents_of_path(&account_dir);
         }
-        fs_err::create_dir_all(&run_path)?;
-        fs_err::create_dir_all(&snapshot_path)?;
+        fs::create_dir_all(&run_path)?;
+        fs::create_dir_all(&snapshot_path)?;
     }
 
     Ok((run_path, snapshot_path))
@@ -2470,8 +2470,7 @@ impl AccountsDb {
             let accounts_hash_cache_path =
                 base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
             if !accounts_hash_cache_path.exists() {
-                fs_err::create_dir(&accounts_hash_cache_path)
-                    .expect("create accounts hash cache dir");
+                fs::create_dir(&accounts_hash_cache_path).expect("create accounts hash cache dir");
             }
             accounts_hash_cache_path
         });
