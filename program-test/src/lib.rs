@@ -904,13 +904,21 @@ impl ProgramTest {
             loop {
                 tokio::time::sleep(target_slot_duration).await;
                 let working_bank = bank_forks.read().unwrap().working_bank();
-                let slot = working_bank.slot() + 1;
+                let working_slot = working_bank.slot();
+                let slot = working_slot + 1;
                 // Register a new blockhash for the next slot
                 working_bank.register_unique_recent_blockhash_for_test();
+
                 // Cannot have new from parent be called while bank forks are locked, otherwise
                 // cooperative loading will dead-lock.
                 let bank = Bank::new_from_parent(working_bank, &Pubkey::default(), slot);
                 bank_forks.write().unwrap().insert(bank);
+
+                // Mark the previous slot as confirmed & rooted
+                block_commitment_cache
+                    .write()
+                    .unwrap()
+                    .set_all_slots(working_slot, working_slot);
             }
         });
 
