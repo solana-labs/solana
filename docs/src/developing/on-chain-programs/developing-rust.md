@@ -52,7 +52,7 @@ For example:
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
   included in the program itself. For more information refer to
-  [Stack](https://docs.solana.com/developing/on-chain-programs/faq#stack).
+  [Stack](https://solana.com/docs/programs/faq#stack).
 
 ## How to Build
 
@@ -98,7 +98,7 @@ Programs export a known entrypoint symbol which the Solana runtime looks up and
 calls when invoking a program. Solana supports multiple versions of the BPF
 loader and the entrypoints may vary between them.
 Programs must be written for and deployed to the same loader. For more details
-see the [FAQ section on Loaders](https://docs.solana.com/developing/on-chain-programs/faq#loaders).
+see the [FAQ section on Loaders](https://solana.com/docs/programs/faq#loaders).
 
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/bpf_loader.rs#L17)
@@ -155,7 +155,7 @@ their own deserialization function they need to ensure that any modifications
 the program wishes to commit be written back into the input byte array.
 
 Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](https://docs.solana.com/developing/on-chain-programs/faq#input-parameter-serialization) docs.
+[Input Parameter Serialization](https://solana.com/docs/programs/faq#input-parameter-serialization) docs.
 
 ### Data Types
 
