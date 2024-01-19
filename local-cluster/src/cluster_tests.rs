@@ -41,7 +41,7 @@ use {
     solana_vote_program::vote_transaction,
     std::{
         borrow::Borrow,
-        collections::{HashMap, HashSet},
+        collections::{HashMap, HashSet, VecDeque},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
         path::Path,
         sync::{
@@ -489,6 +489,9 @@ pub fn start_gossip_voter(
         + std::marker::Send
         + 'static,
     sleep_ms: u64,
+    num_expected_peers: usize,
+    refresh_ms: u64,
+    max_votes_to_refresh: usize,
 ) -> GossipVoter {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, tcp_listener, cluster_info) = gossip_service::make_gossip_node(
@@ -503,6 +506,15 @@ pub fn start_gossip_voter(
         SocketAddrSpace::Unspecified,
     );
 
+    // Wait for peer discovery
+    while cluster_info.gossip_peers().len() < num_expected_peers {
+        sleep(Duration::from_millis(sleep_ms));
+    }
+
+    let mut latest_voted_slot = 0;
+    let mut refreshable_votes: VecDeque<(Transaction, VoteTransaction)> = VecDeque::new();
+    let mut latest_push_attempt = Instant::now();
+
     let t_voter = {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -514,6 +526,18 @@ pub fn start_gossip_voter(
                 }
 
                 let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+                if labels.is_empty() {
+                    if latest_push_attempt.elapsed() > Duration::from_millis(refresh_ms) {
+                        for (leader_vote_tx, parsed_vote) in refreshable_votes.iter().rev() {
+                            let vote_slot = parsed_vote.last_voted_slot().unwrap();
+                            info!("gossip voter refreshing vote {}", vote_slot);
+                            process_vote_tx(vote_slot, leader_vote_tx, parsed_vote, &cluster_info);
+                            latest_push_attempt = Instant::now();
+                        }
+                    }
+                    sleep(Duration::from_millis(sleep_ms));
+                    continue;
+                }
                 let mut parsed_vote_iter: Vec<_> = labels
                     .into_iter()
                     .zip(votes)
@@ -527,20 +551,18 @@ pub fn start_gossip_voter(
                 });
 
                 for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
-                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
-                        info!("received vote for {}", latest_vote_slot);
-                        process_vote_tx(
-                            latest_vote_slot,
-                            leader_vote_tx,
-                            parsed_vote,
-                            &cluster_info,
-                        )
+                    if let Some(vote_slot) = parsed_vote.last_voted_slot() {
+                        info!("received vote for {}", vote_slot);
+                        if vote_slot > latest_voted_slot {
+                            latest_voted_slot = vote_slot;
+                            refreshable_votes
+                                .push_front((leader_vote_tx.clone(), parsed_vote.clone()));
+                            refreshable_votes.truncate(max_votes_to_refresh);
+                        }
+                        process_vote_tx(vote_slot, leader_vote_tx, parsed_vote, &cluster_info);
+                        latest_push_attempt = Instant::now();
                     }
                     // Give vote some time to propagate
-                    sleep(Duration::from_millis(sleep_ms));
-                }
-
-                if parsed_vote_iter.is_empty() {
                     sleep(Duration::from_millis(sleep_ms));
                 }
             }
