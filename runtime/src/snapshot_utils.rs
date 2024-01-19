@@ -31,7 +31,7 @@ use {
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt, fs,
-        io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
+        io::{BufReader, BufWriter, Error as IoError, Read, Seek, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::ExitStatus,
@@ -1069,7 +1069,7 @@ where
         let error_message = format!(
             "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
     Ok(consumed_size)
 }
@@ -1138,7 +1138,7 @@ fn create_snapshot_data_file_stream(
             snapshot_file_size,
             maximum_file_size,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     let snapshot_data_file = fs_err::File::open(snapshot_root_file_path.as_ref())?;
@@ -1163,7 +1163,7 @@ fn check_deserialize_file_consumed(
             file_size,
             consumed_size,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     Ok(())
@@ -1606,7 +1606,7 @@ fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
             file_size,
             MAX_SNAPSHOT_VERSION_FILE_SIZE,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     // Read snapshot_version from file.
@@ -2024,11 +2024,11 @@ pub fn verify_unpacked_snapshots_dir_and_version(
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {
-        return Err(get_io_error("invalid snapshot format"));
+        return Err(IoError::other("invalid snapshot format").into());
     }
     let root_paths = bank_snapshots
         .pop()
-        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+        .ok_or_else(|| IoError::other("No snapshots found in snapshots directory"))?;
     Ok((snapshot_version, root_paths))
 }
 
@@ -2042,11 +2042,6 @@ pub fn get_bank_snapshot_dir(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) -
     bank_snapshots_dir
         .as_ref()
         .join(get_snapshot_file_name(slot))
-}
-
-fn get_io_error(error: &str) -> SnapshotError {
-    warn!("Snapshot Error: {:?}", error);
-    SnapshotError::Io(IoError::new(ErrorKind::Other, error))
 }
 
 #[derive(Debug, Copy, Clone)]
