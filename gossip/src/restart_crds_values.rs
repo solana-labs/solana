@@ -105,7 +105,7 @@ impl RestartLastVotedForkSlots {
     }
 
     /// New random Version for tests and benchmarks.
-    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let num_slots = rng.gen_range(2..20);
         let slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
@@ -141,34 +141,16 @@ impl Sanitize for RestartHeaviestFork {
 }
 
 impl RestartHeaviestFork {
-    pub fn new(
-        from: Pubkey,
-        now: u64,
-        last_slot: Slot,
-        last_slot_hash: Hash,
-        observed_stake: u64,
-        shred_version: u16,
-    ) -> Self {
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, from: Option<Pubkey>) -> Self {
+        let from = from.unwrap_or_else(solana_sdk::pubkey::new_rand);
         Self {
             from,
-            wallclock: now,
-            last_slot,
-            last_slot_hash,
-            observed_stake,
-            shred_version,
+            wallclock: new_rand_timestamp(rng),
+            last_slot: rng.gen_range(0..1000),
+            last_slot_hash: Hash::new_unique(),
+            observed_stake: rng.gen_range(1..u64::MAX),
+            shred_version: 1,
         }
-    }
-
-    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        Self::new(
-            pubkey,
-            new_rand_timestamp(rng),
-            rng.gen_range(0..1000),
-            Hash::new_unique(),
-            rng.gen_range(1..u64::MAX),
-            1,
-        )
     }
 }
 
@@ -372,14 +354,14 @@ mod test {
     fn test_restart_heaviest_fork() {
         let keypair = Keypair::new();
         let slot = 53;
-        let mut fork = RestartHeaviestFork::new(
-            keypair.pubkey(),
-            timestamp(),
-            slot,
-            Hash::default(),
-            800_000,
-            1,
-        );
+        let mut fork = RestartHeaviestFork {
+            from: keypair.pubkey(),
+            wallclock: timestamp(),
+            last_slot: slot,
+            last_slot_hash: Hash::default(),
+            observed_stake: 800_000,
+            shred_version: 1,
+        };
         assert_eq!(fork.sanitize(), Ok(()));
         assert_eq!(fork.observed_stake, 800_000);
         fork.wallclock = crate::crds_value::MAX_WALLCLOCK;
