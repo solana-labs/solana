@@ -1,5 +1,10 @@
 //! Plain Old Data types for the ElGamal encryption scheme.
 
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize,
+};
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::elgamal::{self as decoded, ElGamalError},
@@ -22,6 +27,8 @@ pub(crate) const DECRYPT_HANDLE_LEN: usize = RISTRETTO_POINT_LEN;
 
 /// Byte length of an ElGamal ciphertext
 const ELGAMAL_CIPHERTEXT_LEN: usize = PEDERSEN_COMMITMENT_LEN + DECRYPT_HANDLE_LEN;
+
+struct ElGamalCiphertextVisitor;
 
 /// The `ElGamalCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
@@ -46,6 +53,36 @@ impl Default for ElGamalCiphertext {
     }
 }
 
+impl<'de> Visitor<'de> for ElGamalCiphertextVisitor {
+    type Value = ElGamalCiphertext;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a byte array of length ELGAMAL_CIPHERTEXT_LEN")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        if v.len() == ELGAMAL_CIPHERTEXT_LEN {
+            let mut arr = [0u8; ELGAMAL_CIPHERTEXT_LEN];
+            arr.copy_from_slice(v);
+            Ok(ElGamalCiphertext(arr))
+        } else {
+            Err(E::invalid_length(v.len(), &self))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ElGamalCiphertext {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(ElGamalCiphertextVisitor)
+    }
+}
+
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::ElGamalCiphertext> for ElGamalCiphertext {
     fn from(decoded_ciphertext: decoded::ElGamalCiphertext) -> Self {
@@ -63,7 +100,7 @@ impl TryFrom<ElGamalCiphertext> for decoded::ElGamalCiphertext {
 }
 
 /// The `ElGamalPubkey` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; ELGAMAL_PUBKEY_LEN]);
 

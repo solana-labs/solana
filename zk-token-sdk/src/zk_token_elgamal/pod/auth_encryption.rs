@@ -1,5 +1,10 @@
 //! Plain Old Data types for the AES128-GCM-SIV authenticated encryption scheme.
 
+use serde::{
+    de::{self, SeqAccess, Visitor},
+    Deserialize, Deserializer,
+};
+
 #[cfg(not(target_os = "solana"))]
 use crate::encryption::auth_encryption::{self as decoded, AuthenticatedEncryptionError};
 use {
@@ -10,6 +15,8 @@ use {
 
 /// Byte length of an authenticated encryption ciphertext
 const AE_CIPHERTEXT_LEN: usize = 36;
+
+struct AeCiphertextVisitor;
 
 /// The `AeCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -37,6 +44,36 @@ impl fmt::Display for AeCiphertext {
 impl Default for AeCiphertext {
     fn default() -> Self {
         Self::zeroed()
+    }
+}
+
+impl<'de> Visitor<'de> for AeCiphertextVisitor {
+    type Value = AeCiphertext;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a byte array of length AE_CIPHERTEXT_LEN")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut arr = [0u8; AE_CIPHERTEXT_LEN];
+        for i in 0..AE_CIPHERTEXT_LEN {
+            arr[i] = seq
+                .next_element()?
+                .ok_or(de::Error::invalid_length(i, &self))?;
+        }
+        Ok(AeCiphertext(arr))
+    }
+}
+
+impl<'de> Deserialize<'de> for AeCiphertext {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_tuple(AE_CIPHERTEXT_LEN, AeCiphertextVisitor)
     }
 }
 
