@@ -8,7 +8,6 @@ pub enum EpochRewardsPartitionDataVersion {
     V0(PartitionData),
 }
 
-#[repr(u8)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HasherKind {
     Sip13,
