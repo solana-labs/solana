@@ -8,6 +8,14 @@ pub enum EpochRewardsPartitionDataVersion {
     V0(PartitionData),
 }
 
+impl EpochRewardsPartitionDataVersion {
+    pub fn get_hasher_kind(&self) -> HasherKind {
+        match self {
+            EpochRewardsPartitionDataVersion::V0(_) => HasherKind::Sip13,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HasherKind {
     Sip13,
@@ -20,8 +28,6 @@ pub struct PartitionData {
     pub num_partitions: usize,
     /// Blockhash of the last block of the previous epoch, used to create EpochRewardsHasher
     pub parent_blockhash: Hash,
-    /// Kind of hasher used to generate partitions
-    pub hasher_kind: HasherKind,
 }
 
 pub fn get_epoch_rewards_partition_data_address(epoch: u64) -> Pubkey {
