@@ -143,11 +143,7 @@ impl GeyserPluginManager {
             });
         }
 
-<<<<<<< HEAD
-=======
         setup_logger_for_plugin(&*new_plugin.plugin)?;
-
->>>>>>> c82fc6c98e (geyser: allow custom name in config file (#33550))
         // Call on_load and push plugin
         new_plugin
             .on_load(new_config_file)
@@ -218,8 +214,6 @@ impl GeyserPluginManager {
                 data: None,
             })?;
 
-<<<<<<< HEAD
-=======
         // Then see if a plugin with this name already exists. If so, abort
         if self
             .plugins
@@ -237,8 +231,6 @@ impl GeyserPluginManager {
         }
 
         setup_logger_for_plugin(&*new_plugin.plugin)?;
-
->>>>>>> c82fc6c98e (geyser: allow custom name in config file (#33550))
         // Attempt to on_load with new plugin
         match new_plugin.on_load(new_parsed_config_file) {
             // On success, push plugin and library

@@ -38,7 +38,7 @@ pub mod cli {
         If there is no state already on disk, startup will fail. \
         Note, this will use the latest state available, \
         which may be newer than the latest snapshot archive. \
-        Specifying \"when-newest\" will use snapshot-related state \
+        \nSpecifying \"when-newest\" will use snapshot-related state \
         already on disk unless there are snapshot archives newer than it. \
         This can happen if a new snapshot archive is downloaded \
         while the node is stopped.";

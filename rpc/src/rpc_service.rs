@@ -406,6 +406,7 @@ impl JsonRpcService {
                 ref bigtable_instance_name,
                 ref bigtable_app_profile_id,
                 timeout,
+                max_message_size,
             }) = config.rpc_bigtable_config
             {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
@@ -414,6 +415,7 @@ impl JsonRpcService {
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                     app_profile_id: bigtable_app_profile_id.clone(),
+                    max_message_size,
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
