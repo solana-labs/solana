@@ -866,7 +866,6 @@ impl RepairService {
                 error!("batch_send failed to send packet - error = {:?}", err);
             }
         }
-
     }
 
     /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end

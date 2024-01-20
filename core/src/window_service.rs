@@ -438,6 +438,7 @@ impl WindowService {
             completed_data_sets_sender,
             retransmit_sender,
             outstanding_repair_requests,
+            accept_repairs_only,
         );
 
         WindowService {
