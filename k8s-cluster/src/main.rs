@@ -106,6 +106,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("profile-build")
                 .help("Enable Profile Build flags"),
         )
+        //Docker config
         .arg(
             Arg::with_name("docker_build")
                 .long("docker-build")
@@ -116,30 +117,35 @@ fn parse_matches() -> ArgMatches<'static> {
             Arg::with_name("registry_name")
                 .long("registry")
                 .takes_value(true)
-                .required_if("docker_build", "true")
+                // .required_if("docker_build", "true")
+                .required(true)
                 .help("Registry to push docker image to"),
         )
         .arg(
             Arg::with_name("image_name")
                 .long("image-name")
                 .takes_value(true)
-                .default_value_if("docker_build", None, "k8s-cluster-image")
-                .requires("docker_build")
+                // .default_value_if("docker_build", None, "k8s-cluster-image")
+                .default_value("k8s-cluster-image")
+                .required(true)
                 .help("Docker image name. Will be prepended with validator_type (bootstrap or validator)"),
         )
         .arg(
             Arg::with_name("base_image")
                 .long("base-image")
                 .takes_value(true)
-                .default_value_if("docker_build", None, "ubuntu:20.04")
-                .requires("docker_build")
+                // .default_value_if("docker_build", None, "ubuntu:20.04")
+                .default_value("ubuntu:20.04")
+                .required(true)
                 .help("Docker base image"),
         )
         .arg(
             Arg::with_name("image_tag")
                 .long("tag")
                 .takes_value(true)
-                .default_value_if("docker_build", None, "latest")
+                // .default_value_if("docker_build", None, "latest")
+                .required(true)
+                .default_value("latest")
                 .help("Docker image tag."),
         )
         // Multiple Deployment Config
@@ -898,20 +904,16 @@ async fn main() {
         };
     }
 
-    // Download validator version and Build docker image
-    let docker_image_config = if build_config.docker_build() && !setup_config.skip_genesis_build {
-        Some(DockerImageConfig {
-            base_image: matches.value_of("base_image").unwrap_or_default(),
-            image_name: matches.value_of("image_name").unwrap(),
-            tag: matches.value_of("image_tag").unwrap_or_default(),
-            registry: matches.value_of("registry_name").unwrap(),
-        })
-    } else {
-        None
+    //unwraps are safe here. since their requirement is enforced by argmatches
+    let docker_image_config = DockerImageConfig {
+        base_image: matches.value_of("base_image").unwrap_or_default(),
+        image_name: matches.value_of("image_name").unwrap(),
+        tag: matches.value_of("image_tag").unwrap_or_default(),
+        registry: matches.value_of("registry_name").unwrap(),
     };
 
-    if let Some(config) = docker_image_config {
-        let docker = DockerConfig::new(config, build_config.deploy_method());
+    if build_config.docker_build() && !setup_config.skip_genesis_build {
+        let docker = DockerConfig::new(docker_image_config.clone(), build_config.deploy_method());
         let mut image_types = vec![];
         if !no_bootstrap {
             image_types.push(ValidatorType::Bootstrap);
@@ -925,7 +927,7 @@ async fn main() {
 
         for image_type in &image_types {
             match docker.build_image(image_type) {
-                Ok(_) => info!("Docker image built successfully"),
+                Ok(_) => info!("{} image built successfully", image_type),
                 Err(err) => {
                     error!("Exiting........ {}", err);
                     return;
@@ -935,8 +937,26 @@ async fn main() {
 
         // Need to push image to registry so Monogon nodes can pull image from registry to local
         for image_type in &image_types {
-            match docker.push_image(image_type) {
-                Ok(_) => info!("{} image built successfully", image_type),
+            match docker.push_validator_image(image_type) {
+                Ok(_) => info!("{} image pushed successfully", image_type),
+                Err(err) => {
+                    error!("Exiting........ {}", err);
+                    return;
+                }
+            }
+        }
+
+        if client_config.num_clients > 0 {
+            match docker.build_client_images(client_config.num_clients) {
+                Ok(_) => info!("Client image built successfully"),
+                Err(err) => {
+                    error!("Exiting........ {}", err);
+                    return;
+                }
+            }
+
+            match docker.push_client_images(client_config.num_clients) {
+                Ok(_) => info!("Client image pushed successfully"),
                 Err(err) => {
                     error!("Exiting........ {}", err);
                     return;
@@ -957,14 +977,6 @@ async fn main() {
         .value_of("validator_container_name")
         .unwrap_or_default();
     let validator_image_name = matches
-        .value_of("validator_image_name")
-        .expect("Validator image name is required");
-
-    // Just using validator container for client right now. they're all the same image
-    let client_container_name = matches
-        .value_of("validator_container_name")
-        .unwrap_or_default();
-    let client_image_name = matches
         .value_of("validator_image_name")
         .expect("Validator image name is required");
 
@@ -1357,6 +1369,12 @@ async fn main() {
     thread::sleep(Duration::from_secs(client_config.client_delay_start));
 
     for client_index in 0..client_config.num_clients {
+        let client_container_name = format!("client-container-{}", client_index);
+        let client_image_name = format!(
+            "{}/{}-{}:{}",
+            docker_image_config.registry, "client-image", client_index, docker_image_config.tag
+        );
+
         info!("deploying client: {}", client_index);
         let client_secret = match kub_controller.create_client_secret(client_index) {
             Ok(secret) => secret,
@@ -1379,9 +1397,9 @@ async fn main() {
         );
 
         let client_replica_set = match kub_controller.create_client_replica_set(
-            client_container_name,
+            &client_container_name,
             client_index,
-            client_image_name,
+            &client_image_name,
             client_secret.metadata.name.clone(),
             &label_selector,
         ) {

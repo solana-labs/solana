@@ -42,6 +42,7 @@ pub enum ValidatorType {
     Bootstrap,
     Standard,
     NonVoting,
+    Client,
 }
 
 impl std::fmt::Display for ValidatorType {
@@ -50,6 +51,7 @@ impl std::fmt::Display for ValidatorType {
             ValidatorType::Bootstrap => write!(f, "bootstrap"),
             ValidatorType::Standard => write!(f, "validator"),
             ValidatorType::NonVoting => write!(f, "non-voting"),
+            ValidatorType::Client => write!(f, "client"),
         }
     }
 }
@@ -71,6 +73,10 @@ macro_rules! boxed_error {
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
+static ROCKET: Emoji = Emoji("🚀 ", "");
+static WRITING: Emoji = Emoji("🖊️ ", "");
+static SUN: Emoji = Emoji("🌞 ", "");
+static BUILD: Emoji = Emoji("👷 ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 pub fn new_spinner_progress_bar() -> ProgressBar {
