@@ -146,6 +146,10 @@ pub mod curve25519_syscall_enabled {
     solana_sdk::declare_id!("7rcw5UtqgDTBBv2EcynNfYckgdAaH1MAsCjKgXMkN7Ri");
 }
 
+pub mod curve25519_restrict_msm_length {
+    solana_sdk::declare_id!("eca6zf6JJRjQsYYPkBHF3N32MTzur4n2WL4QiiacPCL");
+}
+
 pub mod versioned_tx_message_enabled {
     solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
 }
@@ -920,6 +924,7 @@ lazy_static! {
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
+        (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
