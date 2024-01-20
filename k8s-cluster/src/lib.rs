@@ -142,7 +142,6 @@ pub async fn download_to_temp(
         .build()?;
 
     let response = client.get(url.as_str()).send().await?;
-    // let file_name: PathBuf = SOLANA_ROOT.join("solana-release.tar.bz2");
     let file_name: PathBuf = SOLANA_ROOT.join(file_name);
     let mut out = File::create(file_name).expect("failed to create file");
     let mut content = Cursor::new(response.bytes().await?);

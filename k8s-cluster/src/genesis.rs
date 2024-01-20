@@ -51,7 +51,6 @@ fn generate_keypair() -> Result<Keypair, ThreadSafeError> {
     let mnemonic_type = MnemonicType::for_word_count(DEFAULT_WORD_COUNT).unwrap();
     let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
     let seed = Seed::new(&mnemonic, &passphrase);
-    // keypair_from_seed(seed.as_bytes())
     keypair_from_seed(seed.as_bytes()).map_err(ThreadSafeError::from)
 }
 
@@ -296,7 +295,6 @@ impl Genesis {
         Ok(())
     }
 
-    // TODO: only supports one client right now.
     pub fn create_client_accounts(
         &mut self,
         number_of_clients: i32,

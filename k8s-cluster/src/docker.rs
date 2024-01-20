@@ -241,7 +241,7 @@ WORKDIR /home/solana
             "{ROCKET}Pushing {} image to registry...",
             identifier
         ));
-        let command = format!("docker push '{}'", image); // | grep \"The push refers\"", image);
+        let command = format!("docker push '{}'", image);
         let output = Command::new("sh")
             .arg("-c")
             .arg(&command)
