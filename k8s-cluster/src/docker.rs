@@ -127,7 +127,7 @@ impl<'a> DockerConfig<'a> {
     }
 
     fn insert_client_accounts_if_present(&self, index: Option<i32>) -> String {
-        let return_string = match index {
+        match index {
             Some(i) => {
                 if SOLANA_ROOT
                     .join(format!("config-k8s/bench-tps-{}.yml", i))
@@ -140,7 +140,6 @@ impl<'a> DockerConfig<'a> {
                         i
                     )
                 } else {
-                    info!("bench-tps-{} does not exist!", i);
                     "".to_string()
                 }
             }
@@ -154,9 +153,7 @@ impl<'a> DockerConfig<'a> {
                     "".to_string()
                 }
             }
-        };
-
-        return_string
+        }
     }
 
     pub fn create_dockerfile(
