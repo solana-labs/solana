@@ -11,7 +11,7 @@
 
 use {
     crate::{
-        input_parsers::{pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
+        input_parsers::{signer::try_pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
@@ -371,7 +371,7 @@ impl DefaultSigner {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SignerSource {
     pub kind: SignerSourceKind,
     pub derivation_path: Option<DerivationPath>,
@@ -402,6 +402,7 @@ const SIGNER_SOURCE_USB: &str = "usb";
 const SIGNER_SOURCE_STDIN: &str = "stdin";
 const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
 
+#[derive(Clone)]
 pub(crate) enum SignerSourceKind {
     Prompt,
     Filepath(String),
@@ -439,6 +440,8 @@ pub(crate) enum SignerSourceError {
     DerivationPathError(#[from] DerivationPathError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error("unsupported source")]
+    UnsupportedSource,
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(
@@ -804,7 +807,7 @@ pub fn signer_from_path_with_config(
             }
         }
         SignerSourceKind::Pubkey(pubkey) => {
-            let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
+            let presigner = try_pubkeys_sigs_of(matches, SIGNER_ARG.name)?
                 .as_ref()
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {

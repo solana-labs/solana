@@ -26,6 +26,8 @@ usage() {
                                          -c bench-tps=2="--tx_count 25000"
                                      This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                      to the bench-tps client.
+--use-unstaked-connection          - Use unstaked connection. By default, staked connection with
+                                     bootstrap node credendials is used.
 EOM
 )
   cat <<EOF
@@ -444,7 +446,8 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType"
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType \
+      $maybeUseUnstakedConnection"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -832,6 +835,7 @@ extraPrimordialStakes=0
 disableQuic=false
 enableUdp=false
 clientType=thin-client
+maybeUseUnstakedConnection=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -976,6 +980,9 @@ while [[ -n $1 ]]; do
           ;;
       esac
       shift 2
+    elif [[ $1 = --use-unstaked-connection ]]; then
+      maybeUseUnstakedConnection="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi

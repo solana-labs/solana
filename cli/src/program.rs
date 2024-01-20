@@ -219,7 +219,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .required(false)
                                 .help(
                                     "Maximum length of the upgradeable program \
-                                    [default: twice the length of the original deployed program]",
+                                    [default: the length of the original deployed program]",
                                 ),
                         )
                         .arg(
@@ -300,7 +300,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .required(false)
                                 .help(
                                     "Maximum length of the upgradeable program \
-                                    [default: twice the length of the original deployed program]",
+                                    [default: the length of the original deployed program]",
                                 ),
                         ),
                 )
@@ -1171,10 +1171,8 @@ fn process_program_deploy(
             );
         }
         len
-    } else if is_final {
-        program_len
     } else {
-        program_len * 2
+        program_len
     };
 
     let min_rent_exempt_program_data_balance = rpc_client.get_minimum_balance_for_rent_exemption(

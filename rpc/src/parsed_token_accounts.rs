@@ -1,4 +1,5 @@
 use {
+    crate::rpc::account_resolver,
     jsonrpc_core::{Error, Result},
     solana_account_decoder::{
         parse_account_data::AccountAdditionalData, parse_token::get_token_account_mint, UiAccount,
@@ -18,11 +19,19 @@ pub fn get_parsed_token_account(
     bank: &Bank,
     pubkey: &Pubkey,
     account: AccountSharedData,
+    // only used for simulation results
+    overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(account.data())
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(bank, &mint_pubkey).ok())
-        .map(|(_, decimals)| AccountAdditionalData {
-            spl_token_decimals: Some(decimals),
+        .and_then(|mint_pubkey| {
+            account_resolver::get_account_from_overwrites_or_bank(
+                &mint_pubkey,
+                bank,
+                overwrite_accounts,
+            )
+        })
+        .map(|mint_account| AccountAdditionalData {
+            spl_token_decimals: get_mint_decimals(mint_account.data()).ok(),
         });
 
     UiAccount::encode(

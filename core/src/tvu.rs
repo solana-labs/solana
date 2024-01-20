@@ -14,7 +14,10 @@ use {
         consensus::{tower_storage::TowerStorage, Tower},
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
-        repair::{quic_endpoint::LocalRequest, repair_service::RepairInfo},
+        repair::{
+            quic_endpoint::LocalRequest,
+            repair_service::{OutstandingShredRepairs, RepairInfo},
+        },
         replay_stage::{ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
@@ -137,7 +140,9 @@ impl Tvu {
         banking_tracer: Arc<BankingTracer>,
         turbine_quic_endpoint_sender: AsyncSender<(SocketAddr, Bytes)>,
         turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
-        repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
+        repair_quic_endpoint_sender: AsyncSender<LocalRequest>,        
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
+        cluster_slots: Arc<ClusterSlots>,
         wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> Result<Self, String> {
         let TvuSockets {
@@ -189,7 +194,6 @@ impl Tvu {
             Some(rpc_subscriptions.clone()),
         );
 
-        let cluster_slots = Arc::new(ClusterSlots::default());
         let (ancestor_duplicate_slots_sender, ancestor_duplicate_slots_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
@@ -230,6 +234,7 @@ impl Tvu {
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
                 popular_pruned_forks_sender,
+                outstanding_repair_requests,
             )
         };
 
@@ -444,6 +449,8 @@ pub mod tests {
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let outstanding_repair_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
+        let cluster_slots = Arc::new(ClusterSlots::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -498,6 +505,8 @@ pub mod tests {
             turbine_quic_endpoint_sender,
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
+            outstanding_repair_requests,
+            cluster_slots,
             None,
         )
         .expect("assume success");

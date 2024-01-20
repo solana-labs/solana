@@ -430,6 +430,7 @@ fn main() {
                 String
             ),
             timeout: None,
+            ..RpcBigtableConfig::default()
         })
     } else {
         None

@@ -8,7 +8,7 @@ use {
         short_vec,
     },
     serde::{
-        de::{self, Deserializer, SeqAccess, Visitor},
+        de::{self, Deserializer, SeqAccess, Unexpected, Visitor},
         ser::{SerializeTuple, Serializer},
         Deserialize, Serialize,
     },
@@ -198,7 +198,16 @@ impl<'de> Deserialize<'de> for MessagePrefix {
                 formatter.write_str("message prefix byte")
             }
 
-            fn visit_u8<E>(self, byte: u8) -> Result<MessagePrefix, E> {
+            // Serde's integer visitors bubble up to u64 so check the prefix
+            // with this function instead of visit_u8. This approach is
+            // necessary because serde_json directly calls visit_u64 for
+            // unsigned integers.
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<MessagePrefix, E> {
+                if value > u8::MAX as u64 {
+                    Err(de::Error::invalid_type(Unexpected::Unsigned(value), &self))?;
+                }
+
+                let byte = value as u8;
                 if byte & MESSAGE_VERSION_PREFIX != 0 {
                     Ok(MessagePrefix::Versioned(byte & !MESSAGE_VERSION_PREFIX))
                 } else {
@@ -331,26 +340,32 @@ mod tests {
 
         let mut message = LegacyMessage::new(&instructions, Some(&id1));
         message.recent_blockhash = Hash::new_unique();
+        let wrapped_message = VersionedMessage::Legacy(message.clone());
 
-        let bytes1 = bincode::serialize(&message).unwrap();
-        let bytes2 = bincode::serialize(&VersionedMessage::Legacy(message.clone())).unwrap();
+        // bincode
+        {
+            let bytes = bincode::serialize(&message).unwrap();
+            assert_eq!(bytes, bincode::serialize(&wrapped_message).unwrap());
 
-        assert_eq!(bytes1, bytes2);
+            let message_from_bytes: LegacyMessage = bincode::deserialize(&bytes).unwrap();
+            let wrapped_message_from_bytes: VersionedMessage =
+                bincode::deserialize(&bytes).unwrap();
 
-        let message1: LegacyMessage = bincode::deserialize(&bytes1).unwrap();
-        let message2: VersionedMessage = bincode::deserialize(&bytes2).unwrap();
+            assert_eq!(message, message_from_bytes);
+            assert_eq!(wrapped_message, wrapped_message_from_bytes);
+        }
 
-        if let VersionedMessage::Legacy(message2) = message2 {
-            assert_eq!(message, message1);
-            assert_eq!(message1, message2);
-        } else {
-            panic!("should deserialize to legacy message");
+        // serde_json
+        {
+            let string = serde_json::to_string(&message).unwrap();
+            let message_from_string: LegacyMessage = serde_json::from_str(&string).unwrap();
+            assert_eq!(message, message_from_string);
         }
     }
 
     #[test]
     fn test_versioned_message_serialization() {
-        let message = v0::Message {
+        let message = VersionedMessage::V0(v0::Message {
             header: MessageHeader {
                 num_required_signatures: 1,
                 num_readonly_signed_accounts: 0,
@@ -375,15 +390,14 @@ mod tests {
                 accounts: vec![0, 2, 3, 4],
                 data: vec![],
             }],
-        };
+        });
 
-        let bytes = bincode::serialize(&VersionedMessage::V0(message.clone())).unwrap();
+        let bytes = bincode::serialize(&message).unwrap();
         let message_from_bytes: VersionedMessage = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(message, message_from_bytes);
 
-        if let VersionedMessage::V0(message_from_bytes) = message_from_bytes {
-            assert_eq!(message, message_from_bytes);
-        } else {
-            panic!("should deserialize to versioned message");
-        }
+        let string = serde_json::to_string(&message).unwrap();
+        let message_from_string: VersionedMessage = serde_json::from_str(&string).unwrap();
+        assert_eq!(message, message_from_string);
     }
 }

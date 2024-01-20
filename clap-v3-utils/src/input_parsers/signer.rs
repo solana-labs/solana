@@ -1,9 +1,12 @@
 use {
     crate::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
-        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path},
+        keypair::{
+            parse_signer_source, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+            SignerSource, SignerSourceError, SignerSourceKind,
+        },
     },
-    clap::ArgMatches,
+    clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         pubkey::Pubkey,
@@ -14,6 +17,77 @@ use {
 
 // Sentinel value used to indicate to write to screen instead of file
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
+
+#[derive(Debug, Default)]
+pub struct SignerSourceParserBuilder {
+    allow_prompt: bool,
+    allow_file_path: bool,
+    allow_usb: bool,
+    allow_stdin: bool,
+    allow_pubkey: bool,
+    allow_legacy: bool,
+}
+
+impl SignerSourceParserBuilder {
+    pub fn allow_all(mut self) -> Self {
+        self.allow_prompt = true;
+        self.allow_file_path = true;
+        self.allow_usb = true;
+        self.allow_stdin = true;
+        self.allow_pubkey = true;
+        self.allow_legacy = true;
+        self
+    }
+
+    pub fn allow_prompt(mut self) -> Self {
+        self.allow_prompt = true;
+        self
+    }
+
+    pub fn allow_file_path(mut self) -> Self {
+        self.allow_file_path = true;
+        self
+    }
+
+    pub fn allow_usb(mut self) -> Self {
+        self.allow_usb = true;
+        self
+    }
+
+    pub fn allow_stdin(mut self) -> Self {
+        self.allow_stdin = true;
+        self
+    }
+
+    pub fn allow_pubkey(mut self) -> Self {
+        self.allow_pubkey = true;
+        self
+    }
+
+    pub fn allow_legacy(mut self) -> Self {
+        self.allow_legacy = true;
+        self
+    }
+
+    pub fn build(self) -> ValueParser {
+        ValueParser::from(
+            move |arg: &str| -> Result<SignerSource, SignerSourceError> {
+                let signer_source = parse_signer_source(arg)?;
+                if !self.allow_legacy && signer_source.legacy {
+                    return Err(SignerSourceError::UnsupportedSource);
+                }
+                match signer_source.kind {
+                    SignerSourceKind::Prompt if self.allow_prompt => Ok(signer_source),
+                    SignerSourceKind::Filepath(_) if self.allow_file_path => Ok(signer_source),
+                    SignerSourceKind::Usb(_) if self.allow_usb => Ok(signer_source),
+                    SignerSourceKind::Stdin if self.allow_stdin => Ok(signer_source),
+                    SignerSourceKind::Pubkey(_) if self.allow_pubkey => Ok(signer_source),
+                    _ => Err(SignerSourceError::UnsupportedSource),
+                }
+            },
+        )
+    }
+}
 
 // Return the keypair for an argument with filename `name` or `None` if not present wrapped inside `Result`.
 pub fn try_keypair_of(
@@ -164,9 +238,11 @@ impl FromStr for PubkeySignature {
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         clap::{Arg, Command},
         solana_sdk::signature::write_keypair_file,
         std::fs,
+        tempfile::NamedTempFile,
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -298,6 +374,264 @@ mod tests {
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--pubkeysig", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_keypair_source() {
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_file_path()
+                        .build(),
+                ),
+        );
+
+        // success case
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        let path_str = path.to_str().unwrap();
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", path_str])
+            .unwrap();
+
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+
+        assert!(matches!(signer_source, SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == path_str));
+
+        // failure cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_keypair_or_ask_keyword_source() {
+        // allow `ASK` keyword
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_file_path()
+                        .allow_prompt()
+                        .allow_legacy()
+                        .build(),
+                ),
+        );
+
+        // success cases
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        let path_str = path.to_str().unwrap();
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", path_str])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert!(matches!(signer_source, SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == path_str));
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "ASK"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: true,
+            }
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "prompt:"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+
+        // failure cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        // disallow `ASK` keyword
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_file_path()
+                        .allow_prompt()
+                        .build(),
+                ),
+        );
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "ASK"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_prompt_signer_source() {
+        let command = Command::new("test").arg(
+            Arg::new("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_prompt()
+                        .allow_legacy()
+                        .build(),
+                ),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "ASK"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: true,
+            }
+        );
+
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "prompt:"])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("keypair").unwrap();
+        assert_matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Prompt,
+                derivation_path: None,
+                legacy: false,
+            }
+        );
+
+        // failure cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--keypair", "usb://ledger"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_parse_pubkey_or_keypair_signer_source() {
+        let command = Command::new("test").arg(
+            Arg::new("signer")
+                .long("signer")
+                .takes_value(true)
+                .value_parser(
+                    SignerSourceParserBuilder::default()
+                        .allow_pubkey()
+                        .allow_file_path()
+                        .build(),
+                ),
+        );
+
+        // success cases
+        let pubkey = Pubkey::new_unique();
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", &pubkey.to_string()])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("signer").unwrap();
+        assert!(matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Pubkey(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if *p == pubkey));
+
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        let path_str = path.to_str().unwrap();
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", path_str])
+            .unwrap();
+        let signer_source = matches.get_one::<SignerSource>("signer").unwrap();
+        assert!(matches!(
+            signer_source,
+            SignerSource {
+                kind: SignerSourceKind::Filepath(p),
+                derivation_path: None,
+                legacy: false,
+            }
+            if p == path_str));
+
+        // failure cases
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", "-"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--signer", "usb://ledger"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }

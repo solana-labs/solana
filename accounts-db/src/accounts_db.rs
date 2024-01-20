@@ -98,6 +98,7 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
+        fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::Result as IoResult,
         ops::{Range, RangeBounds},
@@ -1214,11 +1215,11 @@ pub fn create_accounts_run_and_snapshot_dirs(
         // to this new version using run and snapshot directories.
         // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
         // across the process boot, and will be purged by the account_background_service.
-        if fs_err::remove_dir_all(&account_dir).is_err() {
+        if fs::remove_dir_all(&account_dir).is_err() {
             delete_contents_of_path(&account_dir);
         }
-        fs_err::create_dir_all(&run_path)?;
-        fs_err::create_dir_all(&snapshot_path)?;
+        fs::create_dir_all(&run_path)?;
+        fs::create_dir_all(&snapshot_path)?;
     }
 
     Ok((run_path, snapshot_path))
@@ -1246,20 +1247,26 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
 pub fn delete_contents_of_path(path: impl AsRef<Path>) {
-    match fs_err::read_dir(path.as_ref()) {
+    match fs::read_dir(&path) {
         Err(err) => {
-            warn!("Failed to delete contents: {err}")
+            warn!(
+                "Failed to delete contents of '{}': could not read dir: {err}",
+                path.as_ref().display(),
+            )
         }
         Ok(dir_entries) => {
             for entry in dir_entries.flatten() {
                 let sub_path = entry.path();
                 let result = if sub_path.is_dir() {
-                    fs_err::remove_dir_all(&sub_path)
+                    fs::remove_dir_all(&sub_path)
                 } else {
-                    fs_err::remove_file(&sub_path)
+                    fs::remove_file(&sub_path)
                 };
                 if let Err(err) = result {
-                    warn!("Failed to delete contents: {err}");
+                    warn!(
+                        "Failed to delete contents of '{}': {err}",
+                        sub_path.display(),
+                    );
                 }
             }
         }
@@ -2463,8 +2470,7 @@ impl AccountsDb {
             let accounts_hash_cache_path =
                 base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
             if !accounts_hash_cache_path.exists() {
-                fs_err::create_dir(&accounts_hash_cache_path)
-                    .expect("create accounts hash cache dir");
+                fs::create_dir(&accounts_hash_cache_path).expect("create accounts hash cache dir");
             }
             accounts_hash_cache_path
         });

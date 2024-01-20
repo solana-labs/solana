@@ -186,18 +186,18 @@ fn check_update_vote_state_slots_are_valid(
         return Err(VoteError::EmptySlots);
     }
 
-    // If the vote state update is not new enough, return
-    if let Some(last_vote_slot) = vote_state.votes.back().map(|lockout| lockout.slot()) {
-        if vote_state_update.lockouts.back().unwrap().slot() <= last_vote_slot {
-            return Err(VoteError::VoteTooOld);
-        }
-    }
-
     let last_vote_state_update_slot = vote_state_update
         .lockouts
         .back()
         .expect("must be nonempty, checked above")
         .slot();
+
+    // If the vote state update is not new enough, return
+    if let Some(last_vote_slot) = vote_state.votes.back().map(|lockout| lockout.slot()) {
+        if last_vote_state_update_slot <= last_vote_slot {
+            return Err(VoteError::VoteTooOld);
+        }
+    }
 
     if slot_hashes.is_empty() {
         return Err(VoteError::SlotsMismatch);
@@ -211,28 +211,22 @@ fn check_update_vote_state_slots_are_valid(
         return Err(VoteError::VoteTooOld);
     }
 
-    // Check if the proposed root is too old
-    let original_proposed_root = vote_state_update.root;
-    if let Some(new_proposed_root) = original_proposed_root {
+    // Overwrite the proposed root if it is too old to be in the SlotHash history
+    if let Some(proposed_root) = vote_state_update.root {
         // If the new proposed root `R` is less than the earliest slot hash in the history
         // such that we cannot verify whether the slot was actually was on this fork, set
-        // the root to the latest vote in the current vote that's less than R.
-        if earliest_slot_hash_in_history > new_proposed_root {
+        // the root to the latest vote in the vote state that's less than R. If no
+        // votes from the vote state are less than R, use its root instead.
+        if proposed_root < earliest_slot_hash_in_history {
+            // First overwrite the proposed root with the vote state's root
             vote_state_update.root = vote_state.root_slot;
-            let mut prev_slot = Slot::MAX;
-            let current_root = vote_state_update.root;
+
+            // Then try to find the latest vote in vote state that's less than R
             for vote in vote_state.votes.iter().rev() {
-                let is_slot_bigger_than_root = current_root
-                    .map(|current_root| vote.slot() > current_root)
-                    .unwrap_or(true);
-                // Ensure we're iterating from biggest to smallest vote in the
-                // current vote state
-                assert!(vote.slot() < prev_slot && is_slot_bigger_than_root);
-                if vote.slot() <= new_proposed_root {
+                if vote.slot() <= proposed_root {
                     vote_state_update.root = Some(vote.slot());
                     break;
                 }
-                prev_slot = vote.slot();
             }
         }
     }

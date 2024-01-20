@@ -565,9 +565,10 @@ impl Validator {
                 "ledger directory does not exist or is not accessible: {ledger_path:?}"
             ));
         }
-
         let genesis_config =
-            open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
+            open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size)
+                .map_err(|err| format!("Failed to open genesis config: {err}"))?;
+
         metrics_config_sanity_check(genesis_config.cluster_type)?;
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -1260,13 +1261,18 @@ impl Validator {
         };
         let last_vote = tower.last_vote();
 
+        let outstanding_repair_requests =
+            Arc::<RwLock<repair::repair_service::OutstandingShredRepairs>>::default();
+        let cluster_slots =
+            Arc::new(crate::cluster_slots_service::cluster_slots::ClusterSlots::default());
+
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
             &bank_forks,
             &cluster_info,
             TvuSockets {
-                repair: node.sockets.repair,
+                repair: node.sockets.repair.try_clone().unwrap(),
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
                 ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
@@ -1312,6 +1318,8 @@ impl Validator {
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
             repair_quic_endpoint_sender,
+            outstanding_repair_requests.clone(),
+            cluster_slots.clone(),
             wen_restart_repair_slots.clone(),
         )?;
 
@@ -1393,6 +1401,9 @@ impl Validator {
             vote_account: *vote_account,
             repair_whitelist: config.repair_whitelist.clone(),
             notifies: key_notifies,
+            repair_socket: Arc::new(node.sockets.repair),
+            outstanding_repair_requests,
+            cluster_slots,
         });
 
         Ok(Self {
@@ -1764,7 +1775,8 @@ fn load_blockstore(
 > {
     info!("loading ledger from {:?}...", ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
-    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
+    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size)
+        .map_err(|err| format!("Failed to open genesis config: {err}"))?;
 
     // This needs to be limited otherwise the state in the VoteAccount data
     // grows too large
