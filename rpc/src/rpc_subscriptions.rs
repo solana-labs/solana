@@ -383,7 +383,7 @@ fn filter_account_result(
         if is_known_spl_token_id(account.owner())
             && params.encoding == UiAccountEncoding::JsonParsed
         {
-            get_parsed_token_account(&bank, &params.pubkey, account)
+            get_parsed_token_account(&bank, &params.pubkey, account, None)
         } else {
             UiAccount::encode(&params.pubkey, &account, params.encoding, None, None)
         }
