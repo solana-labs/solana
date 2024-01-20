@@ -56,7 +56,7 @@ macro_rules! impl_shred_common {
                     self.common_header.index = index;
                     bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
                 }
-                ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+                ShredVariant::MerkleCode(..) | ShredVariant::MerkleData(..) => {
                     panic!("Not Implemented!");
                 }
             }
@@ -69,7 +69,7 @@ macro_rules! impl_shred_common {
                     self.common_header.slot = slot;
                     bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
                 }
-                ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+                ShredVariant::MerkleCode(..) | ShredVariant::MerkleData(..) => {
                     panic!("Not Implemented!");
                 }
             }
