@@ -143,7 +143,6 @@ impl GeyserPluginManager {
             });
         }
 
-        setup_logger_for_plugin(&*new_plugin.plugin)?;
         // Call on_load and push plugin
         new_plugin
             .on_load(new_config_file)
@@ -230,7 +229,6 @@ impl GeyserPluginManager {
             });
         }
 
-        setup_logger_for_plugin(&*new_plugin.plugin)?;
         // Attempt to on_load with new plugin
         match new_plugin.on_load(new_parsed_config_file) {
             // On success, push plugin and library
