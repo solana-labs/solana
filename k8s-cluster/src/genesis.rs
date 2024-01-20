@@ -2,7 +2,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    crate::{add_tag_to_name, boxed_error, initialize_globals, ValidatorType, SOLANA_ROOT},
+    crate::{
+        add_tag_to_name, boxed_error, initialize_globals, new_spinner_progress_bar, ValidatorType,
+        SOLANA_ROOT, SUN, WRITING,
+    },
     base64::{engine::general_purpose, Engine as _},
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     log::*,
@@ -48,7 +51,6 @@ fn generate_keypair() -> Result<Keypair, ThreadSafeError> {
     let mnemonic_type = MnemonicType::for_word_count(DEFAULT_WORD_COUNT).unwrap();
     let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
     let seed = Seed::new(&mnemonic, &passphrase);
-    // keypair_from_seed(seed.as_bytes())
     keypair_from_seed(seed.as_bytes()).map_err(ThreadSafeError::from)
 }
 
@@ -247,6 +249,11 @@ impl Genesis {
             ValidatorType::Bootstrap => format!("{}-validator", validator_type),
             ValidatorType::Standard => "validator".to_string(),
             ValidatorType::NonVoting => format!("{}-validator", validator_type),
+            ValidatorType::Client => {
+                return Err(boxed_error!(
+                    "Client valdiator_type in generate_accounts not allowed"
+                ))
+            }
         };
 
         let mut filename_prefix_with_optional_tag = filename_prefix;
@@ -270,7 +277,24 @@ impl Genesis {
         Ok(())
     }
 
-    // TODO: only supports one client right now.
+    fn create_client_account(
+        args: &Vec<String>,
+        executable_path: &PathBuf,
+    ) -> Result<(), Box<dyn Error + Send>> {
+        let output = Command::new(executable_path)
+            .args(args)
+            .output()
+            .expect("Failed to execute solana-bench-tps");
+
+        if !output.status.success() {
+            return Err(boxed_error!(format!(
+                "Failed to create client accounts. err: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+        Ok(())
+    }
+
     pub fn create_client_accounts(
         &mut self,
         number_of_clients: i32,
@@ -279,7 +303,16 @@ impl Genesis {
         build_path: PathBuf,
     ) -> Result<(), Box<dyn Error>> {
         let client_accounts_file = SOLANA_ROOT.join("config-k8s/client-accounts.yml");
-        for i in 0..number_of_clients {
+        if bench_tps_args.is_some() {
+            let list_of_bench_tps_args = bench_tps_args.as_ref().unwrap();
+            for i in list_of_bench_tps_args.iter() {
+                info!("bench_tps_arg: {}", i);
+            }
+        }
+
+        info!("generating {} client accounts...", number_of_clients);
+        let _ = (0..number_of_clients).into_par_iter().try_for_each(|i| {
+            info!("client account: {}", i);
             let mut args = Vec::new();
             let account_path = SOLANA_ROOT.join(format!("config-k8s/bench-tps-{}.yml", i));
             args.push("--write-client-keys".to_string());
@@ -290,27 +323,20 @@ impl Genesis {
             if bench_tps_args.is_some() {
                 let list_of_bench_tps_args = bench_tps_args.as_ref().unwrap();
                 args.extend(list_of_bench_tps_args.clone()); //can unwrap since we checked is_some()
-                for i in list_of_bench_tps_args.iter() {
-                    info!("bench_tps_arg: {}", i);
-                }
             }
-
-            info!("generating client accounts...");
             let executable_path = build_path.join("solana-bench-tps");
-            let output = Command::new(executable_path)
-                .args(&args)
-                .output()
-                .expect("Failed to execute solana-bench-tps");
 
-            if !output.status.success() {
-                return Err(boxed_error!(format!(
-                    "Failed to create client accounts. err: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                )));
-            }
+            Self::create_client_account(&args, &executable_path)
+        });
 
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_message(format!("{WRITING}Writing client accounts..."));
+        for i in 0..number_of_clients {
+            let account_path = SOLANA_ROOT.join(format!("config-k8s/bench-tps-{}.yml", i));
             append_client_accounts_to_file(&account_path, &client_accounts_file)?;
         }
+        progress_bar.finish_and_clear();
+        info!("client-accounts.yml creation for genesis complete");
 
         // add client accounts file as a primordial account
         self.primordial_accounts_files.push(client_accounts_file);
@@ -335,6 +361,11 @@ impl Genesis {
                 ValidatorType::Bootstrap => format!("{}/{}.json", filename_prefix, account),
                 ValidatorType::Standard => format!("{}-{}-{}.json", filename_prefix, account, i),
                 ValidatorType::NonVoting => format!("{}-{}-{}.json", filename_prefix, account, i),
+                ValidatorType::Client => {
+                    return Err(boxed_error!(
+                        "Client valdiator_type in generate_account not allowed"
+                    ))
+                }
             };
 
             let outfile = self.config_dir.join(&filename);
@@ -450,11 +481,16 @@ impl Genesis {
             debug!("{}", arg);
         }
 
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_message(format!("{SUN}Building Genesis..."));
+
         let executable_path = build_path.join("solana-genesis");
         let output = Command::new(executable_path)
             .args(&args)
             .output()
             .expect("Failed to execute solana-genesis");
+
+        progress_bar.finish_and_clear();
 
         if !output.status.success() {
             return Err(boxed_error!(format!(
@@ -462,6 +498,8 @@ impl Genesis {
                 String::from_utf8_lossy(&output.stderr)
             )));
         }
+        info!("Genesis build complete");
+
         Ok(())
     }
 
