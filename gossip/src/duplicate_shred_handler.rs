@@ -49,8 +49,6 @@ pub struct DuplicateShredHandler {
     cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
-    // The Epoch to enable gossip duplicate proof ingestion and send to state machine.
-    enable_gossip_duplicate_proof_ingestion_epoch: Option<Epoch>,
 }
 
 impl DuplicateShredHandlerTrait for DuplicateShredHandler {
@@ -72,16 +70,9 @@ impl DuplicateShredHandler {
         bank_forks: Arc<RwLock<BankForks>>,
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
-        let (enable_gossip_duplicate_proof_ingestion_epoch, epoch_schedule) = {
+        let epoch_schedule = {
             let root_bank = bank_forks.read().unwrap().root_bank();
-            let epoch_schedule = root_bank.epoch_schedule().clone();
-            (
-                root_bank
-                    .feature_set
-                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                    .map(|slot| epoch_schedule.get_epoch(slot)),
-                epoch_schedule,
-            )
+            root_bank.epoch_schedule().clone()
         };
         Self {
             buffer: HashMap::<(Slot, Pubkey), BufferEntry>::default(),
@@ -94,7 +85,6 @@ impl DuplicateShredHandler {
             leader_schedule_cache,
             bank_forks,
             duplicate_slots_sender,
-            enable_gossip_duplicate_proof_ingestion_epoch,
         }
     }
 
@@ -104,15 +94,6 @@ impl DuplicateShredHandler {
             return;
         }
         self.last_root = last_root;
-        if self.enable_gossip_duplicate_proof_ingestion_epoch.is_none() {
-            self.enable_gossip_duplicate_proof_ingestion_epoch = {
-                let root_bank = self.bank_forks.read().unwrap().root_bank();
-                root_bank
-                    .feature_set
-                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                    .map(|slot| self.epoch_schedule.get_epoch(slot))
-            };
-        }
         if let Ok(bank_fork) = self.bank_forks.try_read() {
             let root_bank = bank_fork.root_bank();
             let epoch_info = root_bank.get_epoch_info();
@@ -162,7 +143,13 @@ impl DuplicateShredHandler {
                 )?;
                 // feature_epoch could only be 0 in tests and new cluster setup.
                 if self
-                    .enable_gossip_duplicate_proof_ingestion_epoch
+                    .bank_forks
+                    .read()
+                    .unwrap()
+                    .root_bank()
+                    .feature_set
+                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                    .map(|slot| self.epoch_schedule.get_epoch(slot))
                     .is_some_and(|feature_epoch| {
                         self.epoch_schedule.get_epoch(slot) > feature_epoch || feature_epoch == 0
                     })
