@@ -1,6 +1,6 @@
 #![allow(clippy::implicit_hasher)]
 use {
-    crate::shred,
+    crate::shred::{self, SIZE_OF_MERKLE_ROOT},
     itertools::{izip, Itertools},
     rayon::{prelude::*, ThreadPool},
     sha2::{Digest, Sha512},
@@ -18,13 +18,10 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    static_assertions::const_assert_eq,
     std::{collections::HashMap, iter::repeat, mem::size_of, ops::Range, sync::Arc},
 };
 
 const SIGN_SHRED_GPU_MIN: usize = 256;
-const_assert_eq!(SIZE_OF_MERKLE_ROOT, 32);
-const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<Hash>();
 
 #[must_use]
 pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<Slot, Pubkey>) -> bool {
