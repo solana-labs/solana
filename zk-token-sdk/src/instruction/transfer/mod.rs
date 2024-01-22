@@ -79,6 +79,29 @@ pub fn combine_lo_hi_u64(amount_lo: u64, amount_hi: u64, bit_length: usize) -> u
     }
 }
 
+/// Combine two numbers that are interpretted as the low and high bits of a target number. The
+/// `bit_length` parameter specifies the number of bits that `amount_hi` is to be shifted by.
+#[cfg(not(target_os = "solana"))]
+pub fn try_combine_lo_hi_u64(
+    amount_lo: u64,
+    amount_hi: u64,
+    bit_length: usize,
+) -> Result<u64, InstructionError> {
+    match bit_length {
+        0 => Ok(amount_hi),
+        1..=63 => {
+            // shifts are safe as long as `bit_length` < 64
+            let amount_hi = amount_hi.checked_shl(bit_length as u32).unwrap();
+            let combined = amount_lo
+                .checked_add(amount_hi)
+                .ok_or(InstructionError::IllegalAmountBitLength)?;
+            Ok(combined)
+        }
+        64 => Ok(amount_lo),
+        _ => Err(InstructionError::IllegalAmountBitLength),
+    }
+}
+
 #[cfg(not(target_os = "solana"))]
 fn combine_lo_hi_ciphertexts(
     ciphertext_lo: &ElGamalCiphertext,
@@ -164,5 +187,50 @@ mod test {
             InstructionError::IllegalAmountBitLength,
             try_split_u64(amount, 65).unwrap_err()
         );
+    }
+
+    fn test_split_and_combine(amount: u64, bit_length: usize) {
+        let (amount_lo, amount_hi) = try_split_u64(amount, bit_length).unwrap();
+        assert_eq!(
+            try_combine_lo_hi_u64(amount_lo, amount_hi, bit_length).unwrap(),
+            amount
+        );
+    }
+
+    #[test]
+    fn test_combine_lo_hi_u64() {
+        test_split_and_combine(0, 0);
+        test_split_and_combine(0, 1);
+        test_split_and_combine(0, 5);
+        test_split_and_combine(0, 63);
+        test_split_and_combine(0, 64);
+
+        test_split_and_combine(1, 0);
+        test_split_and_combine(1, 1);
+        test_split_and_combine(1, 5);
+        test_split_and_combine(1, 63);
+        test_split_and_combine(1, 64);
+
+        test_split_and_combine(33, 0);
+        test_split_and_combine(33, 1);
+        test_split_and_combine(33, 5);
+        test_split_and_combine(33, 63);
+        test_split_and_combine(33, 64);
+
+        test_split_and_combine(u64::MAX, 0);
+        test_split_and_combine(u64::MAX, 1);
+        test_split_and_combine(u64::MAX, 5);
+        test_split_and_combine(u64::MAX, 63);
+        test_split_and_combine(u64::MAX, 64);
+
+        // illegal amount bit
+        let err = try_combine_lo_hi_u64(0, 0, 65).unwrap_err();
+        assert_eq!(err, InstructionError::IllegalAmountBitLength);
+
+        // overflow
+        let amount_lo = u64::MAX;
+        let amount_hi = u64::MAX;
+        let err = try_combine_lo_hi_u64(amount_lo, amount_hi, 1).unwrap_err();
+        assert_eq!(err, InstructionError::IllegalAmountBitLength);
     }
 }

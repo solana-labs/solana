@@ -10,4 +10,6 @@ pub enum InstructionError {
     MissingCiphertext,
     #[error("illegal amount bit length")]
     IllegalAmountBitLength,
+    #[error("arithmetic overflow")]
+    Overflow,
 }
