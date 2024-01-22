@@ -11,10 +11,7 @@
 
 use {
     crate::{
-        input_parsers::{
-            pubkeys_sigs_of,
-            signer::{try_pubkeys_sigs_of, SignerSource, SignerSourceKind},
-        },
+        input_parsers::signer::{try_pubkeys_sigs_of, SignerSource, SignerSourceKind},
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
