@@ -69,6 +69,25 @@ impl PrioGraphScheduler {
     ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut batches = Batches::new(num_threads);
+
+        const MAX_OUTSTANDING_CUS_PER_THREAD: u64 = 12_000_000;
+        let mut schedulable_threads = ThreadSet::any(num_threads);
+        for thread_id in 0..num_threads {
+            if self.in_flight_tracker.cus_in_flight_per_thread()[thread_id]
+                >= MAX_OUTSTANDING_CUS_PER_THREAD
+            {
+                schedulable_threads.remove(thread_id);
+            }
+        }
+        if schedulable_threads.is_empty() {
+            return Ok(SchedulingSummary {
+                num_scheduled: 0,
+                num_unschedulable: 0,
+                num_filtered_out: 0,
+                filter_time_us: 0,
+            });
+        }
+
         // Some transactions may be unschedulable due to multi-thread conflicts.
         // These transactions cannot be scheduled until some conflicting work is completed.
         // However, the scheduler should not allow other transactions that conflict with
@@ -140,8 +159,11 @@ impl PrioGraphScheduler {
         let mut num_sent: usize = 0;
         let mut num_unschedulable: usize = 0;
         while num_scheduled < MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
-            // If nothing is in the main-queue of the `PrioGraph` then there's nothing left to schedule.
-            if prio_graph.is_empty() {
+            // If nothing is in the main-queue of the `PrioGraph` then there's
+            // nothing left to schedule.
+            // Or if there are no threads that can be scheduled to, due to
+            // queueing limits, then return early
+            if prio_graph.is_empty() || schedulable_threads.is_empty() {
                 break;
             }
 
@@ -177,8 +199,9 @@ impl PrioGraphScheduler {
                     |thread_set| {
                         Self::select_thread(
                             thread_set,
-                            &batches.transactions,
+                            &batches,
                             self.in_flight_tracker.num_in_flight_per_thread(),
+                            self.in_flight_tracker.cus_in_flight_per_thread(),
                         )
                     },
                 ) else {
@@ -202,6 +225,17 @@ impl PrioGraphScheduler {
                 batches.ids[thread_id].push(id.id);
                 batches.max_age_slots[thread_id].push(max_age_slot);
                 saturating_add_assign!(batches.total_cus[thread_id], cost);
+
+                // If thread has too many cus in flight, remove from schedulable threads, and
+                // send the batch immediately.
+                if batches.total_cus[thread_id] >= MAX_OUTSTANDING_CUS_PER_THREAD {
+                    schedulable_threads.remove(thread_id);
+                    saturating_add_assign!(num_sent, self.send_batch(&mut batches, thread_id)?);
+
+                    if schedulable_threads.is_empty() {
+                        break;
+                    }
+                }
 
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
@@ -383,27 +417,27 @@ impl PrioGraphScheduler {
 
     /// Given the schedulable `thread_set`, select the thread with the least amount
     /// of work queued up.
-    /// Currently, "work" is just defined as the number of transactions.
-    ///
-    /// If the `chain_thread` is available, this thread will be selected, regardless of
-    /// load-balancing.
+    /// Amount of work is determined by the TransactionCost in CUs, ties are broken by
+    /// the number of transactions.
     ///
     /// Panics if the `thread_set` is empty.
     fn select_thread(
         thread_set: ThreadSet,
-        batches_per_thread: &[Vec<SanitizedTransaction>],
-        in_flight_per_thread: &[usize],
+        batches: &Batches,
+        count_in_flight_per_thread: &[usize],
+        cus_in_flight_per_thread: &[u64],
     ) -> ThreadId {
         thread_set
             .contained_threads_iter()
             .map(|thread_id| {
                 (
                     thread_id,
-                    batches_per_thread[thread_id].len() + in_flight_per_thread[thread_id],
+                    batches.transactions[thread_id].len() + count_in_flight_per_thread[thread_id],
+                    batches.total_cus[thread_id] + cus_in_flight_per_thread[thread_id],
                 )
             })
-            .min_by(|a, b| a.1.cmp(&b.1))
-            .map(|(thread_id, _)| thread_id)
+            .min_by(|a, b| a.2.cmp(&b.2).then_with(|| a.1.cmp(&b.1)))
+            .map(|(thread_id, _, _)| thread_id)
             .unwrap()
     }
 
