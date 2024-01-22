@@ -1,9 +1,13 @@
 //! Vote state
 
 #[cfg(test)]
-use crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET;
 #[cfg(not(target_os = "solana"))]
 use bincode::deserialize;
+#[cfg(test)]
+use {
+    crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+    arbitrary::{Arbitrary, Unstructured},
+};
 use {
     crate::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -69,6 +73,7 @@ impl Vote {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Lockout {
     slot: Slot,
     confirmation_count: u32,
@@ -116,6 +121,7 @@ impl Lockout {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct LandedVote {
     // Latency is the difference in slot number between the slot that was voted on (lockout.slot) and the slot in
     // which the vote that added this Lockout landed.  For votes which were cast before versions of the validator
@@ -228,6 +234,7 @@ pub struct VoteAuthorizeCheckedWithSeedArgs {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct BlockTimestamp {
     pub slot: Slot,
     pub timestamp: UnixTimestamp,
@@ -243,7 +250,6 @@ pub struct CircBuf<I> {
     idx: usize,
     is_empty: bool,
 }
-
 impl<I: Default + Copy> Default for CircBuf<I> {
     fn default() -> Self {
         Self {
@@ -282,8 +288,26 @@ impl<I> CircBuf<I> {
     }
 }
 
+#[cfg(test)]
+impl<'a, I: Default + Copy> Arbitrary<'a> for CircBuf<I>
+where
+    I: Arbitrary<'a>,
+{
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut circbuf = Self::default();
+
+        let len = u.arbitrary_len::<I>()?;
+        for _ in 0..len {
+            circbuf.append(I::arbitrary(u)?);
+        }
+
+        Ok(circbuf)
+    }
+}
+
 #[frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ")]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -834,7 +858,12 @@ pub mod serde_compact_vote_state_update {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, itertools::Itertools, rand::Rng};
+    use {
+        super::*,
+        arbitrary::{Arbitrary, Unstructured},
+        itertools::Itertools,
+        rand::Rng,
+    };
 
     #[test]
     fn test_vote_serialize() {
@@ -851,6 +880,24 @@ mod tests {
             VoteState::deserialize(&buffer).unwrap(),
             versioned.convert_to_current()
         );
+    }
+
+    #[test]
+    fn test_vote_deserialize_into() {
+        for _ in 0..1000 {
+            let raw_data: Vec<u8> = (0..4096).map(|_| rand::random::<u8>()).collect();
+            let mut unstructured = Unstructured::new(&raw_data);
+
+            let target_vote_state_versions =
+                VoteStateVersions::arbitrary(&mut unstructured).unwrap();
+            let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
+            let target_vote_state = target_vote_state_versions.convert_to_current();
+
+            let mut test_vote_state = VoteState::default();
+            VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+
+            assert_eq!(target_vote_state, test_vote_state);
+        }
     }
 
     #[test]
