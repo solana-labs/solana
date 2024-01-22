@@ -21,7 +21,7 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -502,11 +502,11 @@ impl HotStorageWriter {
         rent_epoch: Epoch,
         account_data: &[u8],
         executable: bool,
-        account_hash: Option<&AccountHash>,
+        account_hash: &AccountHash,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: (rent_epoch != Epoch::MAX).then_some(rent_epoch),
-            account_hash: account_hash.map(|account_hash| *account_hash),
+            account_hash: (*account_hash != AccountHash(Hash::default())).then_some(*account_hash),
         };
 
         let mut flags = AccountMetaFlags::new_from(&optional_fields);
@@ -562,7 +562,7 @@ impl HotStorageWriter {
                     account.rent_epoch(),
                     account.data(),
                     account.executable(),
-                    Some(account_hash),
+                    &account_hash,
                 )?;
             } else {
                 // None happens when an account has zero lamports.  If such an
@@ -570,11 +570,11 @@ impl HotStorageWriter {
                 // means we want to persist it to reflect the fact that this
                 // account has turned into a zero-lamport account.
                 cursor += self.write_account(
-                    DEFAULT_ACCOUNT_META.lamports,
-                    DEFAULT_ACCOUNT_META.rent_epoch,
+                    0, // lamports
+                    0, // rent_epoch
                     &[],
-                    DEFAULT_ACCOUNT_META.executable,
-                    None,
+                    false, // executable
+                    &account_hash,
                 )?;
             }
             index.push(index_entry);
