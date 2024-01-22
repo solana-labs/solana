@@ -2626,21 +2626,21 @@ mod tests {
     ) {
         for slot in min_slot..max_slot {
             let snapshot_dir = get_bank_snapshot_dir(bank_snapshots_dir, slot);
-            fs_err::create_dir_all(&snapshot_dir).unwrap();
+            fs::create_dir_all(&snapshot_dir).unwrap();
 
             let snapshot_filename = get_snapshot_file_name(slot);
             let snapshot_path = snapshot_dir.join(snapshot_filename);
-            fs_err::File::create(snapshot_path).unwrap();
+            fs::File::create(snapshot_path).unwrap();
 
             let status_cache_file = snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-            fs_err::File::create(status_cache_file).unwrap();
+            fs::File::create(status_cache_file).unwrap();
 
             let version_path = snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-            fs_err::write(version_path, SnapshotVersion::default().as_str().as_bytes()).unwrap();
+            fs::write(version_path, SnapshotVersion::default().as_str().as_bytes()).unwrap();
 
             // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
             let state_complete_path = snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-            fs_err::File::create(state_complete_path).unwrap();
+            fs::File::create(state_complete_path).unwrap();
         }
     }
 
@@ -2680,8 +2680,8 @@ mod tests {
         min_incremental_snapshot_slot: Slot,
         max_incremental_snapshot_slot: Slot,
     ) {
-        fs_err::create_dir_all(full_snapshot_archives_dir).unwrap();
-        fs_err::create_dir_all(incremental_snapshot_archives_dir).unwrap();
+        fs::create_dir_all(full_snapshot_archives_dir).unwrap();
+        fs::create_dir_all(incremental_snapshot_archives_dir).unwrap();
         for full_snapshot_slot in min_full_snapshot_slot..max_full_snapshot_slot {
             for incremental_snapshot_slot in
                 min_incremental_snapshot_slot..max_incremental_snapshot_slot
@@ -2693,13 +2693,13 @@ mod tests {
                     Hash::default()
                 );
                 let snapshot_filepath = incremental_snapshot_archives_dir.join(snapshot_filename);
-                fs_err::File::create(snapshot_filepath).unwrap();
+                fs::File::create(snapshot_filepath).unwrap();
             }
 
             let snapshot_filename =
                 format!("snapshot-{}-{}.tar", full_snapshot_slot, Hash::default());
             let snapshot_filepath = full_snapshot_archives_dir.join(snapshot_filename);
-            fs_err::File::create(snapshot_filepath).unwrap();
+            fs::File::create(snapshot_filepath).unwrap();
 
             // Add in an incremental snapshot with a bad filename and high slot to ensure filename are filtered and sorted correctly
             let bad_filename = format!(
@@ -2708,14 +2708,14 @@ mod tests {
                 max_incremental_snapshot_slot + 1,
             );
             let bad_filepath = incremental_snapshot_archives_dir.join(bad_filename);
-            fs_err::File::create(bad_filepath).unwrap();
+            fs::File::create(bad_filepath).unwrap();
         }
 
         // Add in a snapshot with a bad filename and high slot to ensure filename are filtered and
         // sorted correctly
         let bad_filename = format!("snapshot-{}-bad!hash.tar", max_full_snapshot_slot + 1);
         let bad_filepath = full_snapshot_archives_dir.join(bad_filename);
-        fs_err::File::create(bad_filepath).unwrap();
+        fs::File::create(bad_filepath).unwrap();
     }
 
     #[test]
@@ -2887,7 +2887,7 @@ mod tests {
 
         for snap_name in snapshot_names {
             let snap_path = temp_snap_dir.path().join(snap_name);
-            let mut _snap_file = fs_err::File::create(snap_path);
+            let mut _snap_file = fs::File::create(snap_path);
         }
         purge_old_snapshot_archives(
             temp_snap_dir.path(),
@@ -2897,7 +2897,7 @@ mod tests {
         );
 
         let mut retained_snaps = HashSet::new();
-        for entry in fs_err::read_dir(temp_snap_dir.path()).unwrap() {
+        for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
             let entry_path_buf = entry.unwrap().path();
             let entry_path = entry_path_buf.as_path();
             let snapshot_name = entry_path
@@ -2969,7 +2969,7 @@ mod tests {
             let full_snapshot_archive_path = full_snapshot_archives_dir
                 .as_ref()
                 .join(full_snapshot_archive_file_name);
-            fs_err::File::create(full_snapshot_archive_path).unwrap();
+            fs::File::create(full_snapshot_archive_path).unwrap();
 
             // don't purge-and-check until enough snapshot archives have been created
             if slot < starting_slot + maximum_snapshots_to_retain.get() as Slot {
@@ -3030,7 +3030,7 @@ mod tests {
                 let snapshot_filename =
                     format!("snapshot-{}-{}.tar", full_snapshot_slot, Hash::default());
                 let snapshot_path = full_snapshot_archives_dir.path().join(&snapshot_filename);
-                fs_err::File::create(snapshot_path).unwrap();
+                fs::File::create(snapshot_path).unwrap();
                 snapshot_filenames.push(snapshot_filename);
 
                 (full_snapshot_slot..)
@@ -3047,7 +3047,7 @@ mod tests {
                         let snapshot_path = incremental_snapshot_archives_dir
                             .path()
                             .join(&snapshot_filename);
-                        fs_err::File::create(snapshot_path).unwrap();
+                        fs::File::create(snapshot_path).unwrap();
                         snapshot_filenames.push(snapshot_filename);
                     });
             });
@@ -3150,7 +3150,7 @@ mod tests {
             let snapshot_path = incremental_snapshot_archives_dir
                 .path()
                 .join(snapshot_filenames);
-            fs_err::File::create(snapshot_path).unwrap();
+            fs::File::create(snapshot_path).unwrap();
         }
 
         purge_old_snapshot_archives(
@@ -3174,7 +3174,7 @@ mod tests {
         let bank_snapshots_dir_tmp = tempfile::TempDir::new().unwrap();
         let bank_snapshot_dir = bank_snapshots_dir_tmp.path().join(slot.to_string());
         let accounts_hardlinks_dir = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
-        fs_err::create_dir_all(&accounts_hardlinks_dir).unwrap();
+        fs::create_dir_all(&accounts_hardlinks_dir).unwrap();
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let appendvec_filename = format!("{slot}.0");
