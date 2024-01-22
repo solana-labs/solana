@@ -191,9 +191,7 @@ impl PrioGraphScheduler {
                 saturating_add_assign!(num_scheduled, 1);
 
                 let sanitized_transaction_ttl = transaction_state.transition_to_pending();
-                let cu_limit = transaction_state
-                    .transaction_priority_details()
-                    .compute_unit_limit;
+                let cost = transaction_state.transaction_cost().sum();
 
                 let SanitizedTransactionTTL {
                     transaction,
@@ -203,7 +201,7 @@ impl PrioGraphScheduler {
                 batches.transactions[thread_id].push(transaction);
                 batches.ids[thread_id].push(id.id);
                 batches.max_age_slots[thread_id].push(max_age_slot);
-                saturating_add_assign!(batches.total_cus[thread_id], cu_limit);
+                saturating_add_assign!(batches.total_cus[thread_id], cost);
 
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
