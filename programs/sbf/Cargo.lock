@@ -4679,7 +4679,6 @@ dependencies = [
  "dashmap",
  "flate2",
  "fnv",
- "fs-err",
  "im",
  "index_list",
  "itertools",
