@@ -570,11 +570,12 @@ impl TransferWithFeeProof {
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
 
-        let combined_amount = combine_lo_hi_u64(
+        let combined_amount = try_combine_lo_hi_u64(
             transfer_amount_lo,
             transfer_amount_hi,
             TRANSFER_AMOUNT_LO_BITS,
-        );
+        )
+        .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
         let amount_sub_fee = combined_amount
             .checked_sub(combined_fee_amount)
             .ok_or(ProofGenerationError::FeeCalculation)?;
