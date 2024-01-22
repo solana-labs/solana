@@ -18,7 +18,7 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -44,7 +44,7 @@ impl CostModel {
             let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
             tx_cost.signature_cost = Self::get_signature_cost(transaction);
-            Self::get_write_lock_cost(&mut tx_cost, transaction);
+            Self::get_write_lock_cost(&mut tx_cost, transaction, feature_set);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
             tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
 
@@ -73,10 +73,19 @@ impl CostModel {
             .collect()
     }
 
-    fn get_write_lock_cost(tx_cost: &mut UsageCostDetails, transaction: &SanitizedTransaction) {
+    fn get_write_lock_cost(
+        tx_cost: &mut UsageCostDetails,
+        transaction: &SanitizedTransaction,
+        feature_set: &FeatureSet,
+    ) {
         tx_cost.writable_accounts = Self::get_writable_accounts(transaction);
-        tx_cost.write_lock_cost =
-            WRITE_LOCK_UNITS.saturating_mul(tx_cost.writable_accounts.len() as u64);
+        let num_write_locks =
+            if feature_set.is_active(&feature_set::cost_model_requested_write_lock_cost::id()) {
+                transaction.message().num_write_locks()
+            } else {
+                tx_cost.writable_accounts.len() as u64
+            };
+        tx_cost.write_lock_cost = WRITE_LOCK_UNITS.saturating_mul(num_write_locks);
     }
 
     fn get_transaction_cost(
@@ -327,6 +336,32 @@ mod tests {
         assert_eq!(0, tx_cost.builtins_execution_cost);
         assert_eq!(200_000, tx_cost.bpf_execution_cost);
         assert_eq!(0, tx_cost.data_bytes_cost);
+    }
+
+    #[test]
+    fn test_cost_model_demoted_write_lock() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        // Cannot write-lock the system program, it will be demoted when taking locks.
+        // However, the cost should be calculated as if it were taken.
+        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &system_program::id(), 2, start_hash),
+        );
+
+        // Feature not enabled - write lock is demoted and does not count towards cost
+        {
+            let tx_cost = CostModel::calculate_cost(&simple_transaction, &FeatureSet::default());
+            assert_eq!(WRITE_LOCK_UNITS, tx_cost.write_lock_cost());
+            assert_eq!(1, tx_cost.writable_accounts().len());
+        }
+
+        // Feature enabled - write lock is demoted but still counts towards cost
+        {
+            let tx_cost =
+                CostModel::calculate_cost(&simple_transaction, &FeatureSet::all_enabled());
+            assert_eq!(2 * WRITE_LOCK_UNITS, tx_cost.write_lock_cost());
+            assert_eq!(1, tx_cost.writable_accounts().len());
+        }
     }
 
     #[test]
