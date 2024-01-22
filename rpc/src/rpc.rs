@@ -6324,7 +6324,8 @@ pub mod tests {
             &[&rpc.mint_keypair],
             recent_blockhash,
         );
-        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        let tx_serialized_encoded =
+            base64::prelude::BASE64_STANDARD.encode(serialize(&tx).unwrap());
 
         // Simulation bank must be frozen
         bank.freeze();
@@ -6335,7 +6336,8 @@ pub mod tests {
                  "id":1,
                  "method":"simulateTransaction",
                  "params":[
-                   "{}"
+                   "{}",
+                   {{ "encoding": "base64" }}
                  ]
             }}"#,
             tx_serialized_encoded,
@@ -6378,7 +6380,7 @@ pub mod tests {
                  "method":"simulateTransaction",
                  "params":[
                    "{}",
-                   {{ "innerInstructions": false }}
+                   {{ "innerInstructions": false, "encoding": "base64" }}
                  ]
             }}"#,
             tx_serialized_encoded,
@@ -6421,7 +6423,7 @@ pub mod tests {
                  "method":"simulateTransaction",
                  "params":[
                    "{}",
-                   {{ "innerInstructions": true }}
+                   {{ "innerInstructions": true, "encoding": "base64" }}
                  ]
             }}"#,
             tx_serialized_encoded,
@@ -6441,9 +6443,9 @@ pub mod tests {
                             {
                             "parsed": {
                                 "info": {
-                                "destination": bs58::encode(lookup_table_address).into_string(),
+                                "destination": lookup_table_address.to_string(),
                                 "lamports": lookup_table_lamports,
-                                "source": bs58::encode(rpc.mint_keypair.pubkey()).into_string()
+                                "source": rpc.mint_keypair.pubkey().to_string()
                                 },
                                 "type": "transfer"
                             },
@@ -6454,7 +6456,7 @@ pub mod tests {
                             {
                             "parsed": {
                                 "info": {
-                                "account": bs58::encode(lookup_table_address).into_string(),
+                                "account": lookup_table_address.to_string(),
                                 "space": lookup_table_space
                                 },
                                 "type": "allocate"
@@ -6466,7 +6468,7 @@ pub mod tests {
                             {
                             "parsed": {
                                 "info": {
-                                "account": bs58::encode(lookup_table_address).into_string(),
+                                "account": lookup_table_address.to_string(),
                                 "owner": "AddressLookupTab1e1111111111111111111111111"
                                 },
                                 "type": "assign"
@@ -6527,14 +6529,16 @@ pub mod tests {
             &[&rpc.mint_keypair, &lookup_table_authority],
             recent_blockhash,
         );
-        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        let tx_serialized_encoded =
+            base64::prelude::BASE64_STANDARD.encode(serialize(&tx).unwrap());
+
         let req = format!(
             r#"{{"jsonrpc":"2.0",
                  "id":1,
                  "method":"simulateTransaction",
                  "params":[
                    "{}",
-                   {{ "innerInstructions": true }}
+                   {{ "innerInstructions": true, "encoding": "base64" }}
                  ]
             }}"#,
             tx_serialized_encoded,
@@ -6554,9 +6558,9 @@ pub mod tests {
                             {
                             "parsed": {
                                 "info": {
-                                "destination": bs58::encode(lookup_table_address).into_string(),
+                                "destination": lookup_table_address.to_string(),
                                 "lamports": transfer_lamports,
-                                "source": bs58::encode(rpc.mint_keypair.pubkey()).into_string()
+                                "source": rpc.mint_keypair.pubkey().to_string()
                                 },
                                 "type": "transfer"
                             },
