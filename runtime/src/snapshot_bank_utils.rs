@@ -2038,15 +2038,15 @@ mod tests {
 
         let accounts_hardlinks_dir = get_bank_snapshot_dir(&bank_snapshots_dir, bank.slot())
             .join(snapshot_utils::SNAPSHOT_ACCOUNTS_HARDLINKS);
-        assert!(fs_err::metadata(&accounts_hardlinks_dir).is_ok());
+        assert!(fs::metadata(&accounts_hardlinks_dir).is_ok());
 
         let mut hardlink_dirs: Vec<PathBuf> = Vec::new();
         // This directory contain symlinks to all accounts snapshot directories.
-        for entry in fs_err::read_dir(accounts_hardlinks_dir).unwrap() {
+        for entry in fs::read_dir(accounts_hardlinks_dir).unwrap() {
             let entry = entry.unwrap();
             let symlink = entry.path();
-            let dst_path = fs_err::read_link(symlink).unwrap();
-            assert!(fs_err::metadata(&dst_path).is_ok());
+            let dst_path = fs::read_link(symlink).unwrap();
+            assert!(fs::metadata(&dst_path).is_ok());
             hardlink_dirs.push(dst_path);
         }
 
@@ -2054,9 +2054,7 @@ mod tests {
         assert!(purge_bank_snapshot(bank_snapshot_dir).is_ok());
 
         // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
-        assert!(hardlink_dirs
-            .iter()
-            .all(|dir| fs_err::metadata(dir).is_err()));
+        assert!(hardlink_dirs.iter().all(|dir| fs::metadata(dir).is_err()));
     }
 
     #[test]
@@ -2071,7 +2069,7 @@ mod tests {
         let complete_flag_file = snapshot
             .snapshot_dir
             .join(snapshot_utils::SNAPSHOT_STATE_COMPLETE_FILENAME);
-        fs_err::remove_file(complete_flag_file).unwrap();
+        fs::remove_file(complete_flag_file).unwrap();
         // The incomplete snapshot dir should still exist
         let snapshot_dir_4 = snapshot.snapshot_dir;
         assert!(snapshot_dir_4.exists());
@@ -2081,14 +2079,14 @@ mod tests {
         let snapshot_version_file = snapshot
             .snapshot_dir
             .join(snapshot_utils::SNAPSHOT_VERSION_FILENAME);
-        fs_err::remove_file(snapshot_version_file).unwrap();
+        fs::remove_file(snapshot_version_file).unwrap();
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 2);
 
         let status_cache_file = snapshot
             .snapshot_dir
             .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME);
-        fs_err::remove_file(status_cache_file).unwrap();
+        fs::remove_file(status_cache_file).unwrap();
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
     }
@@ -2133,21 +2131,21 @@ mod tests {
 
         // the symlinks point to the account snapshot hardlink directories <account_path>/snapshot/<slot>/ for slot 2
         // get them via read_link
-        let hardlink_dirs_slot_2: Vec<PathBuf> = fs_err::read_dir(accounts_link_dir_slot_2)
+        let hardlink_dirs_slot_2: Vec<PathBuf> = fs::read_dir(accounts_link_dir_slot_2)
             .unwrap()
             .map(|entry| {
                 let symlink = entry.unwrap().path();
-                fs_err::read_link(symlink).unwrap()
+                fs::read_link(symlink).unwrap()
             })
             .collect();
 
         // remove the bank snapshot directory for slot 2, so the account snapshot slot 2 directories become orphaned
-        fs_err::remove_dir_all(snapshot_dir_slot_2).unwrap();
+        fs::remove_dir_all(snapshot_dir_slot_2).unwrap();
 
         // verify the orphaned account snapshot hardlink directories are still there
         assert!(hardlink_dirs_slot_2
             .iter()
-            .all(|dir| fs_err::metadata(dir).is_ok()));
+            .all(|dir| fs::metadata(dir).is_ok()));
 
         let account_snapshot_paths: Vec<PathBuf> = hardlink_dirs_slot_2
             .iter()
@@ -2159,7 +2157,7 @@ mod tests {
         // verify the hardlink directories are gone
         assert!(hardlink_dirs_slot_2
             .iter()
-            .all(|dir| fs_err::metadata(dir).is_err()));
+            .all(|dir| fs::metadata(dir).is_err()));
     }
 
     #[test]
@@ -2173,7 +2171,7 @@ mod tests {
             let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
             let state_complete_file =
                 bank_snapshot_dir.join(snapshot_utils::SNAPSHOT_STATE_COMPLETE_FILENAME);
-            fs_err::remove_file(state_complete_file).unwrap();
+            fs::remove_file(state_complete_file).unwrap();
         }
 
         purge_incomplete_bank_snapshots(&bank_snapshots_dir);
@@ -2393,7 +2391,7 @@ mod tests {
         // Verify that the next_append_vec_id tracking is correct
         let mut max_id = 0;
         for path in account_paths {
-            fs_err::read_dir(path).unwrap().for_each(|entry| {
+            fs::read_dir(path).unwrap().for_each(|entry| {
                 let path = entry.unwrap().path();
                 let filename = path.file_name().unwrap();
                 let (_slot, append_vec_id) = get_slot_and_append_vec_id(filename.to_str().unwrap());
