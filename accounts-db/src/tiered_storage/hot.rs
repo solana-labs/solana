@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        account_storage::meta::StoredAccountMeta,
+        account_storage::meta::{AccountMeta, StoredAccountMeta},
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
         tiered_storage::{
@@ -21,7 +21,7 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -132,6 +132,10 @@ impl HotAccountOffset {
     fn offset(&self) -> usize {
         self.0 as usize * HOT_ACCOUNT_ALIGNMENT
     }
+}
+
+lazy_static! {
+    static ref DEFAULT_ACCOUNT_META: AccountMeta = AccountMeta::default();
 }
 
 /// The storage and in-memory representation of the metadata entry for a
@@ -498,11 +502,11 @@ impl HotStorageWriter {
         rent_epoch: Epoch,
         account_data: &[u8],
         executable: bool,
-        account_hash: &AccountHash,
+        account_hash: Option<&AccountHash>,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: (rent_epoch != Epoch::MAX).then_some(rent_epoch),
-            account_hash: (*account_hash != AccountHash(Hash::default())).then_some(*account_hash),
+            account_hash: account_hash.map(|account_hash| *account_hash),
         };
 
         let mut flags = AccountMetaFlags::new_from(&optional_fields);
@@ -541,7 +545,7 @@ impl HotStorageWriter {
         skip: usize,
     ) -> TieredStorageResult<()> {
         let mut footer = new_hot_footer();
-        let mut index: Vec<AccountIndexWriterEntry<HotAccountOffset>> = vec![];
+        let mut index = vec![];
         let mut cursor = 0;
 
         // writing accounts blocks
@@ -558,12 +562,20 @@ impl HotStorageWriter {
                     account.rent_epoch(),
                     account.data(),
                     account.executable(),
-                    account_hash,
+                    Some(account_hash),
                 )?;
-                footer.account_entry_count += 1;
+            } else {
+                cursor += self.write_account(
+                    DEFAULT_ACCOUNT_META.lamports,
+                    DEFAULT_ACCOUNT_META.rent_epoch,
+                    &[],
+                    DEFAULT_ACCOUNT_META.executable,
+                    None,
+                )?;
             }
             index.push(index_entry);
         }
+        footer.account_entry_count = (len - skip) as u32;
 
         // writing index block
         assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
@@ -572,6 +584,10 @@ impl HotStorageWriter {
             .index_block_format
             .write_index_block(&self.storage, &index)?;
         if cursor % HOT_BLOCK_ALIGNMENT != 0 {
+            // In case it is not yet aligned, it is due to the fact that
+            // the index block has an odd number of entries.  In such case,
+            // we expect the amount off is equal to 4.
+            assert_eq!(cursor % HOT_BLOCK_ALIGNMENT, 4);
             cursor += self.storage.write_pod(&0u32)?;
         }
 
@@ -1249,7 +1265,7 @@ pub mod tests {
     #[test]
     fn test_write_account_and_index_blocks() {
         let account_data_sizes = &[
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
         ];
 
         let accounts: Vec<_> = account_data_sizes
