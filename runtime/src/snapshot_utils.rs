@@ -24,7 +24,7 @@ use {
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
-        utils::delete_contents_of_path,
+        utils::{delete_contents_of_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
     },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{clock::Slot, hash::Hash},
@@ -1175,7 +1175,7 @@ fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf
     let run_file_name = run_path.file_name()?;
     // All appendvec files should be under <account_path>/run/.
     // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
-    if run_file_name != "run" {
+    if run_file_name != ACCOUNTS_RUN_DIR {
         error!(
             "The account path {} does not have run/ as its immediate parent directory.",
             run_path.display()
@@ -1198,7 +1198,9 @@ fn get_snapshot_accounts_hardlink_dir(
         GetSnapshotAccountsHardLinkDirError::GetAccountPath(appendvec_path.to_path_buf())
     })?;
 
-    let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
+    let snapshot_hardlink_dir = account_path
+        .join(ACCOUNTS_SNAPSHOT_DIR)
+        .join(bank_slot.to_string());
 
     // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
     // and the symlink to it at the first time of seeing the account_path.
@@ -1539,7 +1541,7 @@ pub fn rebuild_storages_from_snapshot_dir(
             .ok_or_else(|| SnapshotError::InvalidAccountPath(account_snapshot_path.clone()))?
             .parent()
             .ok_or_else(|| SnapshotError::InvalidAccountPath(account_snapshot_path.clone()))?
-            .join("run");
+            .join(ACCOUNTS_RUN_DIR);
         if !account_run_paths.contains(&account_run_path) {
             // The appendvec from the bank snapshot storage does not match any of the provided account_paths set.
             // The accout paths have changed so the snapshot is no longer usable.
