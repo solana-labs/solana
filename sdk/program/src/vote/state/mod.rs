@@ -1,6 +1,5 @@
 //! Vote state
 
-#[cfg(test)]
 #[cfg(not(target_os = "solana"))]
 use bincode::deserialize;
 #[cfg(test)]
