@@ -578,6 +578,7 @@ impl HotStorageWriter {
         footer.account_entry_count = (len - skip) as u32;
 
         // writing index block
+        // expect the offset of each block aligned.
         assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.index_block_offset = cursor as u64;
         cursor += footer
@@ -592,6 +593,7 @@ impl HotStorageWriter {
         }
 
         // TODO: owner block will be implemented in the follow-up PRs
+        // expect the offset of each block aligned.
         assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.owners_block_offset = cursor as u64;
         footer.owner_count = 0;
