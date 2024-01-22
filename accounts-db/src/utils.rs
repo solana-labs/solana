@@ -85,6 +85,20 @@ pub fn delete_contents_of_path(path: impl AsRef<Path>) {
     }
 }
 
+/// Creates directories if they do not exist, and canonicalizes the paths.
+pub fn create_and_canonicalize_directories(
+    directories: impl IntoIterator<Item = impl AsRef<Path>>,
+) -> std::io::Result<Vec<PathBuf>> {
+    directories
+        .into_iter()
+        .map(|path| {
+            fs::create_dir_all(&path)?;
+            let path = fs::canonicalize(&path)?;
+            Ok(path)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, tempfile::TempDir};
