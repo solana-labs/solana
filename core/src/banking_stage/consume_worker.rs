@@ -397,13 +397,13 @@ struct ConsumeWorkerCountMetrics {
 impl Default for ConsumeWorkerCountMetrics {
     fn default() -> Self {
         Self {
-            min_prioritization_fees: AtomicU64::new(u64::MAX),
             transactions_attempted_execution_count: AtomicUsize::default(),
             executed_transactions_count: AtomicUsize::default(),
             executed_with_successful_result_count: AtomicUsize::default(),
             retryable_transaction_count: AtomicUsize::default(),
             retryable_expired_bank_count: AtomicUsize::default(),
             cost_model_throttled_transactions_count: AtomicUsize::default(),
+            min_prioritization_fees: AtomicU64::new(u64::MAX),
             max_prioritization_fees: AtomicU64::default(),
         }
     }
@@ -449,7 +449,8 @@ impl ConsumeWorkerCountMetrics {
             ),
             (
                 "min_prioritization_fees",
-                self.min_prioritization_fees.swap(0, Ordering::Relaxed),
+                self.min_prioritization_fees
+                    .swap(u64::MAX, Ordering::Relaxed),
                 i64
             ),
             (

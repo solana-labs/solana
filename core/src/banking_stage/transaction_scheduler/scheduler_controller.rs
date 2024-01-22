@@ -409,7 +409,7 @@ struct SchedulerCountMetrics {
     num_dropped_on_capacity: usize,
     /// Min prioritization fees in the transaction container
     min_prioritization_fees: u64,
-    // Max prioritization fees in the transaction container
+    /// Max prioritization fees in the transaction container
     max_prioritization_fees: u64,
 }
 
