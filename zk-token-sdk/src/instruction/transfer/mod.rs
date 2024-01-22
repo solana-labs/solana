@@ -113,6 +113,20 @@ fn combine_lo_hi_ciphertexts(
 }
 
 #[cfg(not(target_os = "solana"))]
+fn try_combine_lo_hi_ciphertexts(
+    ciphertext_lo: &ElGamalCiphertext,
+    ciphertext_hi: &ElGamalCiphertext,
+    bit_length: usize,
+) -> Result<ElGamalCiphertext, InstructionError> {
+    let two_power = if bit_length < u64::BITS as usize {
+        1_u64.checked_shl(bit_length as u32).unwrap()
+    } else {
+        return Err(InstructionError::IllegalAmountBitLength);
+    };
+    Ok(ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power)))
+}
+
+#[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_commitments(
     comm_lo: &PedersenCommitment,
     comm_hi: &PedersenCommitment,
@@ -123,6 +137,20 @@ pub fn combine_lo_hi_commitments(
 }
 
 #[cfg(not(target_os = "solana"))]
+pub fn try_combine_lo_hi_commitments(
+    comm_lo: &PedersenCommitment,
+    comm_hi: &PedersenCommitment,
+    bit_length: usize,
+) -> Result<PedersenCommitment, InstructionError> {
+    let two_power = if bit_length < u64::BITS as usize {
+        1_u64.checked_shl(bit_length as u32).unwrap()
+    } else {
+        return Err(InstructionError::IllegalAmountBitLength);
+    };
+    Ok(comm_lo + comm_hi * &Scalar::from(two_power))
+}
+
+#[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_openings(
     opening_lo: &PedersenOpening,
     opening_hi: &PedersenOpening,
@@ -130,6 +158,20 @@ pub fn combine_lo_hi_openings(
 ) -> PedersenOpening {
     let two_power = (1_u64) << bit_length;
     opening_lo + opening_hi * &Scalar::from(two_power)
+}
+
+#[cfg(not(target_os = "solana"))]
+pub fn try_combine_lo_hi_openings(
+    opening_lo: &PedersenOpening,
+    opening_hi: &PedersenOpening,
+    bit_length: usize,
+) -> Result<PedersenOpening, InstructionError> {
+    let two_power = if bit_length < u64::BITS as usize {
+        1_u64.checked_shl(bit_length as u32).unwrap()
+    } else {
+        return Err(InstructionError::IllegalAmountBitLength);
+    };
+    Ok(opening_lo + opening_hi * &Scalar::from(two_power))
 }
 
 #[derive(Clone, Copy)]
