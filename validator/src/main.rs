@@ -14,6 +14,7 @@ use {
             AccountsIndexConfig, IndexLimitMb,
         },
         partitioned_rewards::TestPartitionedEpochRewards,
+        utils::create_all_accounts_run_and_snapshot_dirs,
     },
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
@@ -48,8 +49,7 @@ use {
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories,
-            ArchiveFormat, SnapshotVersion,
+            self, create_and_canonicalize_directories, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{

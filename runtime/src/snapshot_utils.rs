@@ -19,11 +19,12 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{self, AccountStorageEntry, AtomicAppendVecId},
+        accounts_db::{AccountStorageEntry, AtomicAppendVecId},
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
+        utils::delete_contents_of_path,
     },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{clock::Slot, hash::Hash},
@@ -44,7 +45,10 @@ use {
     thiserror::Error,
 };
 #[cfg(feature = "dev-context-only-utils")]
-use {hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*};
+use {
+    hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*,
+    solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
+};
 
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
@@ -536,14 +540,6 @@ pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Ve
             Ok(path)
         })
         .collect()
-}
-
-/// Delete the files and subdirectories in a directory.
-/// This is useful if the process does not have permission
-/// to delete the top level directory it might be able to
-/// delete the contents of that directory.
-pub(crate) fn delete_contents_of_path(path: impl AsRef<Path>) {
-    accounts_db::delete_contents_of_path(path)
 }
 
 /// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
@@ -1171,17 +1167,6 @@ fn check_deserialize_file_consumed(
     }
 
     Ok(())
-}
-
-/// For all account_paths, create the run/ and snapshot/ sub directories.
-/// If an account_path directory does not exist, create it.
-/// It returns (account_run_paths, account_snapshot_paths) or error
-pub fn create_all_accounts_run_and_snapshot_dirs(
-    account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    accounts_db::create_all_accounts_run_and_snapshot_dirs(account_paths).map_err(|err| {
-        SnapshotError::IoWithSource(err, "Unable to create account run and snapshot directories")
-    })
 }
 
 /// Return account path from the appendvec path after checking its format.
@@ -2083,9 +2068,7 @@ pub fn verify_snapshot_archive(
 ) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let unpack_account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(unpack_dir)
-        .unwrap()
-        .0;
+    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2263,9 +2246,7 @@ pub fn should_take_incremental_snapshot(
 #[cfg(feature = "dev-context-only-utils")]
 pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(&tmp_dir)
-        .unwrap()
-        .0;
+    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
     (tmp_dir, account_dir)
 }
 
