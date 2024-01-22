@@ -928,9 +928,12 @@ pub fn archive_snapshot_package(
 /// Get the bank snapshots in a directory
 pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
     let mut bank_snapshots = Vec::default();
-    match fs_err::read_dir(bank_snapshots_dir.as_ref()) {
+    match fs::read_dir(&bank_snapshots_dir) {
         Err(err) => {
-            info!("Unable to read bank snapshots directory: {err}");
+            info!(
+                "Unable to read bank snapshots directory '{}': {err}",
+                bank_snapshots_dir.as_ref().display(),
+            );
         }
         Ok(paths) => paths
             .filter_map(|entry| {
@@ -1761,10 +1764,13 @@ where
     F: Fn(PathBuf) -> Result<T>,
 {
     let walk_dir = |dir: &Path| -> Vec<T> {
-        let entry_iter = fs_err::read_dir(dir);
+        let entry_iter = fs::read_dir(dir);
         match entry_iter {
             Err(err) => {
-                info!("Unable to read snapshot archives directory: {err}");
+                info!(
+                    "Unable to read snapshot archives directory '{}': {err}",
+                    dir.display(),
+                );
                 vec![]
             }
             Ok(entries) => entries
@@ -1892,9 +1898,12 @@ pub fn purge_old_snapshot_archives(
     fn remove_archives<T: SnapshotArchiveInfoGetter>(archives: &[T]) {
         for path in archives.iter().map(|a| a.path()) {
             trace!("Removing snapshot archive: {}", path.display());
-            let result = fs_err::remove_file(path);
+            let result = fs::remove_file(path);
             if let Err(err) = result {
-                info!("Failed to remove snapshot archive: {err}",);
+                info!(
+                    "Failed to remove snapshot archive '{}': {err}",
+                    path.display()
+                );
             }
         }
     }
