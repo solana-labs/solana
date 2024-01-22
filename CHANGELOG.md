@@ -29,6 +29,9 @@ Release channels have their own copy of this changelog:
   * Bigtable upload now includes entry summary data for each slot, stored in a
     new `entries` table
   * Forbid multiple values for the `--signer` CLI flag, forcing users to specify multiple occurrences of `--signer`, one for each signature
+  * New program deployments default to the exact size of a program, instead of
+    double the size. Program accounts must be extended with `solana program extend`
+    before an upgrade if they need to accommodate larger programs.
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.

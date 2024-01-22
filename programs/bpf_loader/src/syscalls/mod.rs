@@ -39,15 +39,10 @@ use {
             enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            reject_callx_r10, remaining_compute_units_syscall_enabled,
-            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            reject_callx_r10, remaining_compute_units_syscall_enabled, switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
-        instruction::{
-            AccountMeta, InstructionError, ProcessedSiblingInstruction,
-            TRANSACTION_LEVEL_STACK_HEIGHT,
-        },
+        instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
         keccak, native_loader, poseidon,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -567,22 +562,12 @@ fn translate_string_and_do(
     addr: u64,
     len: u64,
     check_aligned: bool,
-    stop_truncating_strings_in_syscalls: bool,
     work: &mut dyn FnMut(&str) -> Result<u64, Error>,
 ) -> Result<u64, Error> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned)?;
-    let msg = if stop_truncating_strings_in_syscalls {
-        buf
-    } else {
-        let i = match buf.iter().position(|byte| *byte == 0) {
-            Some(i) => i,
-            None => len as usize,
-        };
-        buf.get(..i).ok_or(SyscallError::InvalidLength)?
-    };
-    match from_utf8(msg) {
+    match from_utf8(buf) {
         Ok(message) => work(message),
-        Err(err) => Err(SyscallError::InvalidString(err, msg.to_vec()).into()),
+        Err(err) => Err(SyscallError::InvalidString(err, buf.to_vec()).into()),
     }
 }
 
@@ -625,9 +610,6 @@ declare_builtin_function!(
             file,
             len,
             invoke_context.get_check_aligned(),
-            invoke_context
-                .feature_set
-                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         )
     }
@@ -1139,6 +1121,17 @@ declare_builtin_function!(
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
+
+        let restrict_msm_length = invoke_context
+            .feature_set
+            .is_active(&feature_set::curve25519_restrict_msm_length::id());
+        #[allow(clippy::collapsible_if)]
+        if restrict_msm_length {
+            if points_len > 512 {
+                return Err(Box::new(SyscallError::InvalidLength));
+            }
+        }
+
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
@@ -1350,9 +1343,6 @@ declare_builtin_function!(
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
-        let stop_sibling_instruction_search_at_parent = invoke_context
-            .feature_set
-            .is_active(&stop_sibling_instruction_search_at_parent::id());
 
         // Reverse iterate through the instruction trace,
         // ignoring anything except instructions on the same level
@@ -1366,10 +1356,7 @@ declare_builtin_function!(
             let instruction_context = invoke_context
                 .transaction_context
                 .get_instruction_context_at_index_in_trace(index_in_trace)?;
-            if (stop_sibling_instruction_search_at_parent
-                || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
-                && instruction_context.get_stack_height() < stack_height
-            {
+            if instruction_context.get_stack_height() < stack_height {
                 break;
             }
             if instruction_context.get_stack_height() == stack_height {
@@ -2157,7 +2144,6 @@ mod tests {
                 &memory_mapping,
                 0x100000000,
                 string.len() as u64,
-                true,
                 true,
                 &mut |string: &str| {
                     assert_eq!(string, "Gaggablaghblagh!");
@@ -3144,6 +3130,122 @@ mod tests {
             94, 84, 118, 92, 140, 120, 81, 30, 246, 173, 140, 195, 86,
         ];
         assert_eq!(expected_product, result_point);
+    }
+
+    #[test]
+    fn test_syscall_multiscalar_multiplication_maximum_length_exceeded() {
+        use solana_zk_token_sdk::curve25519::curve_syscall_traits::{
+            CURVE25519_EDWARDS, CURVE25519_RISTRETTO,
+        };
+
+        let config = Config::default();
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
+
+        let scalar: [u8; 32] = [
+            254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
+            78, 137, 3, 107, 136, 237, 49, 126, 117, 223, 37, 191, 88, 6,
+        ];
+        let scalars = [scalar; 513];
+        let scalars_va = 0x100000000;
+
+        let edwards_point: [u8; 32] = [
+            252, 31, 230, 46, 173, 95, 144, 148, 158, 157, 63, 10, 8, 68, 58, 176, 142, 192, 168,
+            53, 61, 105, 194, 166, 43, 56, 246, 236, 28, 146, 114, 133,
+        ];
+        let edwards_points = [edwards_point; 513];
+        let edwards_points_va = 0x200000000;
+
+        let ristretto_point: [u8; 32] = [
+            130, 35, 97, 25, 18, 199, 33, 239, 85, 143, 119, 111, 49, 51, 224, 40, 167, 185, 240,
+            179, 25, 194, 213, 41, 14, 155, 104, 18, 181, 197, 15, 112,
+        ];
+        let ristretto_points = [ristretto_point; 513];
+        let ristretto_points_va = 0x300000000;
+
+        let mut result_point: [u8; 32] = [0; 32];
+        let result_point_va = 0x400000000;
+
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion::new_readonly(bytes_of_slice(&scalars), scalars_va),
+                MemoryRegion::new_readonly(bytes_of_slice(&edwards_points), edwards_points_va),
+                MemoryRegion::new_readonly(bytes_of_slice(&ristretto_points), ristretto_points_va),
+                MemoryRegion::new_writable(bytes_of_slice_mut(&mut result_point), result_point_va),
+            ],
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
+
+        // test Edwards
+        invoke_context.mock_set_remaining(500_000);
+        let result = SyscallCurveMultiscalarMultiplication::rust(
+            &mut invoke_context,
+            CURVE25519_EDWARDS,
+            scalars_va,
+            edwards_points_va,
+            512, // below maximum vector length
+            result_point_va,
+            &mut memory_mapping,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            20, 146, 226, 37, 22, 61, 86, 249, 208, 40, 38, 11, 126, 101, 10, 82, 81, 77, 88, 209,
+            15, 76, 82, 251, 180, 133, 84, 243, 162, 0, 11, 145,
+        ];
+        assert_eq!(expected_product, result_point);
+
+        invoke_context.mock_set_remaining(500_000);
+        let result = SyscallCurveMultiscalarMultiplication::rust(
+            &mut invoke_context,
+            CURVE25519_EDWARDS,
+            scalars_va,
+            edwards_points_va,
+            513, // above maximum vector length
+            result_point_va,
+            &mut memory_mapping,
+        )
+        .unwrap_err()
+        .downcast::<SyscallError>()
+        .unwrap();
+
+        assert_eq!(*result, SyscallError::InvalidLength);
+
+        // test Ristretto
+        invoke_context.mock_set_remaining(500_000);
+        let result = SyscallCurveMultiscalarMultiplication::rust(
+            &mut invoke_context,
+            CURVE25519_RISTRETTO,
+            scalars_va,
+            ristretto_points_va,
+            512, // below maximum vector length
+            result_point_va,
+            &mut memory_mapping,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            146, 224, 127, 193, 252, 64, 196, 181, 246, 104, 27, 116, 183, 52, 200, 239, 2, 108,
+            21, 27, 97, 44, 95, 65, 26, 218, 223, 39, 197, 132, 51, 49,
+        ];
+        assert_eq!(expected_product, result_point);
+
+        invoke_context.mock_set_remaining(500_000);
+        let result = SyscallCurveMultiscalarMultiplication::rust(
+            &mut invoke_context,
+            CURVE25519_RISTRETTO,
+            scalars_va,
+            ristretto_points_va,
+            513, // above maximum vector length
+            result_point_va,
+            &mut memory_mapping,
+        )
+        .unwrap_err()
+        .downcast::<SyscallError>()
+        .unwrap();
+
+        assert_eq!(*result, SyscallError::InvalidLength);
     }
 
     fn create_filled_type<T: Default>(zero_init: bool) -> T {

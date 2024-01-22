@@ -112,6 +112,9 @@ pub fn invoke_builtin_function(
     let instruction_data = instruction_context.get_instruction_data();
     let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
+    // mock builtin program must consume units
+    invoke_context.consume_checked(1)?;
+
     let log_collector = invoke_context.get_log_collector();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
     stable_log::program_invoke(
@@ -498,17 +501,12 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
-        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
-        // programs that do not consume units.
-        let deactivate_feature_set =
-            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
-
         Self {
             accounts: vec![],
             builtin_programs: vec![],
             compute_max_units: None,
             prefer_bpf,
-            deactivate_feature_set,
+            deactivate_feature_set: HashSet::default(),
             transaction_account_lock_limit: None,
         }
     }

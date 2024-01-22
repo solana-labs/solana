@@ -5,7 +5,7 @@ use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
         errors::{ProofGenerationError, ProofVerificationError},
-        instruction::batched_range_proof::MAX_COMMITMENTS,
+        instruction::batched_range_proof::{MAX_COMMITMENTS, MAX_SINGLE_BIT_LENGTH},
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -44,7 +44,15 @@ impl BatchedRangeProofU256Data {
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
     ) -> Result<Self, ProofGenerationError> {
-        // the sum of the bit lengths must be 64
+        // each bit length must be at most 128
+        if bit_lengths
+            .iter()
+            .any(|length| *length > MAX_SINGLE_BIT_LENGTH)
+        {
+            return Err(ProofGenerationError::IllegalCommitmentLength);
+        }
+
+        // the sum of the bit lengths must be 256
         let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
@@ -76,6 +84,13 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU256Data {
     fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let (commitments, bit_lengths) = self.context.try_into()?;
         let num_commitments = commitments.len();
+
+        if bit_lengths
+            .iter()
+            .any(|length| *length > MAX_SINGLE_BIT_LENGTH)
+        {
+            return Err(ProofVerificationError::IllegalCommitmentLength);
+        }
 
         if num_commitments > MAX_COMMITMENTS || num_commitments != bit_lengths.len() {
             return Err(ProofVerificationError::IllegalCommitmentLength);

@@ -63,37 +63,27 @@ for Cargo_toml in $Cargo_tomls; do
 
   (
     set -x
+
     crate=$(dirname "$Cargo_toml")
-    # The rocksdb package does not build with the stock rust docker image so use
-    # the solana rust docker image
     cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
-    ci/docker-run.sh "$rust_stable_docker_image" bash -exc "cd $crate; $cargoCommand"
-  ) || true # <-- Don't fail.  We want to be able to retry the job in cases when a publish fails halfway due to network/cloud issues
 
-  numRetries=30
-  for ((i = 1 ; i <= numRetries ; i++)); do
-    echo "Attempt ${i} of ${numRetries}"
-    if [[ $(is_crate_version_uploaded "$crate_name" "$expectedCrateVersion") = True ]] ; then
-      echo "Found ${crate_name} version ${expectedCrateVersion} on crates.io REST API"
-
-      really_uploaded=0
-      (
-        set -x
-        rm -rf crate-test
-        cargo init crate-test
-        cd crate-test/
-        echo "${crate_name} = \"=${expectedCrateVersion}\"" >> Cargo.toml
-        echo "[workspace]" >> Cargo.toml
-        cargo check
-      ) && really_uploaded=1
-      if ((really_uploaded)); then
-        break;
+    numRetries=10
+    for ((i = 1; i <= numRetries; i++)); do
+      echo "Attempt ${i} of ${numRetries}"
+      # The rocksdb package does not build with the stock rust docker image so use
+      # the solana rust docker image
+      if ci/docker-run.sh "$rust_stable_docker_image" bash -exc "cd $crate; $cargoCommand"; then
+        break
       fi
-      echo "${crate_name} not yet available for download from crates.io"
-    fi
-    echo "Did not find ${crate_name} version ${expectedCrateVersion} on crates.io.  Sleeping for 2 seconds."
-    sleep 2
-  done
+
+      if [ "$i" -lt "$numRetries" ]; then
+        sleep 3
+      else
+        echo "couldn't publish '$crate_name'"
+        exit 1
+      fi
+    done
+  )
 done
 
 exit 0

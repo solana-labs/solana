@@ -1,5 +1,6 @@
 use {
     super::{
+        consumer::Consumer,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
@@ -16,6 +17,7 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
+    solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_measure::{measure, measure_us},
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -136,6 +138,7 @@ pub struct ConsumeScannerPayload<'a> {
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
     pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket>,
+    pub error_counters: TransactionErrorMetrics,
 }
 
 fn consume_scan_should_process_packet(
@@ -177,6 +180,27 @@ fn consume_scan_should_process_packet(
             return ProcessingDecision::Never;
         }
 
+        // Only check fee-payer if we can actually take locks
+        // We do not immediately discard on check lock failures here,
+        // because the priority guard requires that we always take locks
+        // except in the cases of discarding transactions (i.e. `Never`).
+        if payload.account_locks.check_locks(message)
+            && Consumer::check_fee_payer_unlocked(bank, message, &mut payload.error_counters)
+                .is_err()
+        {
+            payload
+                .message_hash_to_transaction
+                .remove(packet.message_hash());
+            return ProcessingDecision::Never;
+        }
+
+        // NOTE:
+        //   This must be the last operation before adding the transaction to the
+        //   sanitized_transactions vector. Otherwise, a transaction could
+        //   be blocked by a transaction that did not take batch locks. This
+        //   will lead to some transactions never being processed, and a
+        //   mismatch in the priorty-queue and hash map sizes.
+        //
         // Always take locks during batch creation.
         // This prevents lower-priority transactions from taking locks
         // needed by higher-priority txs that were skipped by this check.
@@ -213,6 +237,7 @@ where
         sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
         slot_metrics_tracker,
         message_hash_to_transaction,
+        error_counters: TransactionErrorMetrics::default(),
     };
     MultiIteratorScanner::new(
         packets,

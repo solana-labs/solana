@@ -381,6 +381,7 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
 pub const DEFAULT_APP_PROFILE_ID: &str = "default";
+pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MB
 
 #[derive(Debug)]
 pub enum CredentialType {
@@ -395,6 +396,7 @@ pub struct LedgerStorageConfig {
     pub credential_type: CredentialType,
     pub instance_name: String,
     pub app_profile_id: String,
+    pub max_message_size: usize,
 }
 
 impl Default for LedgerStorageConfig {
@@ -405,6 +407,7 @@ impl Default for LedgerStorageConfig {
             credential_type: CredentialType::Filepath(None),
             instance_name: DEFAULT_INSTANCE_NAME.to_string(),
             app_profile_id: DEFAULT_APP_PROFILE_ID.to_string(),
+            max_message_size: DEFAULT_MAX_MESSAGE_SIZE,
         }
     }
 }
@@ -471,6 +474,7 @@ impl LedgerStorage {
                 app_profile_id,
                 endpoint,
                 timeout,
+                LedgerStorageConfig::default().max_message_size,
             )?,
             stats,
         })
@@ -484,6 +488,7 @@ impl LedgerStorage {
             instance_name,
             app_profile_id,
             credential_type,
+            max_message_size,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
@@ -491,6 +496,7 @@ impl LedgerStorage {
             read_only,
             timeout,
             credential_type,
+            max_message_size,
         )
         .await?;
         Ok(Self { stats, connection })

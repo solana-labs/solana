@@ -1036,10 +1036,9 @@ fn test_rent_exempt_executable_account() {
         transfer_lamports,
         genesis_config.hash(),
     );
-
-    assert_eq!(
+    assert_matches!(
         bank.process_transaction(&tx),
-        Err(TransactionError::InvalidWritableAccount)
+        Err(TransactionError::InstructionError(0, _))
     );
     assert_eq!(bank.get_balance(&account_pubkey), account_balance);
 }
@@ -14015,7 +14014,9 @@ fn test_failed_simulation_compute_units() {
         Bank::new_with_mockup_builtin_for_tests(&genesis_config, program_id, MockBuiltin::vm).0;
 
     const TEST_UNITS: u64 = 10_000;
-    declare_process_instruction!(MockBuiltin, 1, |invoke_context| {
+    const MOCK_BUILTIN_UNITS: u64 = 1;
+    let expected_consumed_units = TEST_UNITS + MOCK_BUILTIN_UNITS;
+    declare_process_instruction!(MockBuiltin, MOCK_BUILTIN_UNITS, |invoke_context| {
         invoke_context.consume_checked(TEST_UNITS).unwrap();
         Err(InstructionError::InvalidInstructionData)
     });
@@ -14029,5 +14030,5 @@ fn test_failed_simulation_compute_units() {
     bank.freeze();
     let sanitized = SanitizedTransaction::from_transaction_for_tests(transaction);
     let simulation = bank.simulate_transaction(&sanitized, false);
-    assert_eq!(TEST_UNITS, simulation.units_consumed);
+    assert_eq!(expected_consumed_units, simulation.units_consumed);
 }
