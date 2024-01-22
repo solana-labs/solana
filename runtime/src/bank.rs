@@ -3619,6 +3619,18 @@ impl Bank {
         info!(
             "create epoch_reward partition data account {} {address} {epoch_rewards_partition_data:#?}", self.slot
         );
+
+        // ignore reward PDA account lamport when we are testing partitioned rewards before the actual feature activation.
+        if !self.is_partitioned_rewards_feature_enabled()
+            && (self
+                .partitioned_epoch_rewards_config()
+                .test_enable_partitioned_rewards
+                && self.get_reward_calculation_num_blocks() == 0
+                && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX)
+        {
+            self.capitalization
+                .fetch_sub(new_account.lamports(), Relaxed);
+        }
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {

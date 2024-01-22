@@ -1335,6 +1335,7 @@ mod tests {
                 zero_lamport_accounts: ZeroLamportAccounts::Excluded,
                 dir_for_temp_cache_files,
                 active_stats: &ACTIVE_STATS,
+                ignore_keys: HashSet::default(),
             }
         }
     }
