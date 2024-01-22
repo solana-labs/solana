@@ -825,11 +825,11 @@ pub mod tests {
 
             let mut owners_table = OwnersTable::new();
             addresses.iter().for_each(|owner_address| {
-                owners_table.check_and_add(owner_address);
+                owners_table.insert(owner_address);
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, owners_table.owners().into_iter())
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -899,11 +899,11 @@ pub mod tests {
 
             let mut owners_table = OwnersTable::new();
             owner_addresses.iter().for_each(|owner_address| {
-                owners_table.check_and_add(owner_address);
+                owners_table.insert(owner_address);
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, owners_table.owners())
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -1039,11 +1039,11 @@ pub mod tests {
             footer.owners_block_offset = current_offset as u64;
             let mut owners_table = OwnersTable::new();
             owners.iter().for_each(|owner_address| {
-                owners_table.check_and_add(owner_address);
+                owners_table.insert(owner_address);
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, owners_table.owners())
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             footer.write_footer_block(&file).unwrap();

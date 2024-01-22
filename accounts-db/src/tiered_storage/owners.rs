@@ -44,12 +44,12 @@ impl OwnersBlockFormat {
     pub(crate) fn write_owners_block<'a>(
         &self,
         file: &TieredStorageFile,
-        owners: impl IntoIterator<Item = &'a &'a Pubkey>,
+        owners_table: &OwnersTable,
     ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressesOnly => {
                 let mut bytes_written = 0;
-                for address in owners {
+                for address in owners_table.owners_set.iter() {
                     bytes_written += file.write_pod(*address)?;
                 }
 
@@ -98,14 +98,10 @@ impl<'owner> OwnersTable<'owner> {
     /// Add the specified pubkey as the owner into the OwnersWriterTable
     /// if the specified pubkey has not existed in the OwnersWriterTable
     /// yet.  In any case, the function returns its OwnerOffset.
-    pub(crate) fn check_and_add(&mut self, pubkey: &'owner Pubkey) -> OwnerOffset {
+    pub(crate) fn insert(&mut self, pubkey: &'owner Pubkey) -> OwnerOffset {
         let (offset, _existed) = self.owners_set.insert_full(pubkey);
 
         OwnerOffset(offset as u32)
-    }
-
-    pub(crate) fn owners(&self) -> &IndexSet<&'owner Pubkey> {
-        &self.owners_set
     }
 }
 
@@ -139,11 +135,11 @@ mod tests {
 
             let mut owners_table = OwnersTable::new();
             addresses.iter().for_each(|owner_address| {
-                owners_table.check_and_add(owner_address);
+                owners_table.insert(owner_address);
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, owners_table.owners())
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -177,18 +173,18 @@ mod tests {
         // as we insert sequentially, we expect each entry has same OwnerOffset
         // as its index inside the Vector.
         for (i, address) in addresses.iter().enumerate() {
-            assert_eq!(owners_table.check_and_add(address), OwnerOffset(i as u32));
+            assert_eq!(owners_table.insert(address), OwnerOffset(i as u32));
         }
 
         let cloned_addresses = addresses.clone();
 
         // insert again and expect the same OwnerOffset
         for (i, address) in cloned_addresses.iter().enumerate() {
-            assert_eq!(owners_table.check_and_add(address), OwnerOffset(i as u32));
+            assert_eq!(owners_table.insert(address), OwnerOffset(i as u32));
         }
 
         // make sure the size of the resulting owner table is the same
         // as the input
-        assert_eq!(owners_table.owners().len(), addresses.len());
+        assert_eq!(owners_table.owners_set.len(), addresses.len());
     }
 }
