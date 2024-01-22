@@ -283,7 +283,7 @@ raptorq = "1.8.0"
 rayon = "1.8.1"
 rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
-regex = "1.10.2"
+regex = "1.10.3"
 reqwest = { version = "0.11.23", default-features = false }
 rolling-file = "0.2.0"
 rpassword = "7.3"
