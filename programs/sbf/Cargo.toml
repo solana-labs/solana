@@ -80,6 +80,7 @@ walkdir = "2"
 bincode = { workspace = true }
 byteorder = { workspace = true }
 elf = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 miow = { workspace = true }
