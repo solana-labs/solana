@@ -492,10 +492,12 @@ mod tests {
         crate::banking_stage::consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
+        solana_cost_model::cost_model::CostModel,
         solana_runtime::transaction_priority_details::TransactionPriorityDetails,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, pubkey::Pubkey,
-            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, hash::Hash,
+            message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
+            system_instruction, transaction::Transaction,
         },
         std::borrow::Borrow,
     };
@@ -568,6 +570,7 @@ mod tests {
             let id = TransactionId::new(index as u64);
             let transaction =
                 prioritized_tranfers(from_keypair.borrow(), to_pubkeys, lamports, priority);
+            let transaction_cost = CostModel::calculate_cost(&transaction, &FeatureSet::default());
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
                 max_age_slot: Slot::MAX,
@@ -579,6 +582,7 @@ mod tests {
                     priority,
                     compute_unit_limit: 1,
                 },
+                transaction_cost,
             );
         }
 

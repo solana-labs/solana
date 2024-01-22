@@ -5,6 +5,7 @@ use {
     },
     crate::banking_stage::scheduler_messages::TransactionId,
     min_max_heap::MinMaxHeap,
+    solana_cost_model::transaction_cost::TransactionCost,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     std::collections::HashMap,
 };
@@ -125,12 +126,17 @@ impl TransactionStateContainer {
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
+        transaction_cost: TransactionCost,
     ) -> bool {
         let priority_id =
             TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(transaction_ttl, transaction_priority_details),
+            TransactionState::new(
+                transaction_ttl,
+                transaction_priority_details,
+                transaction_cost,
+            ),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -176,8 +182,10 @@ impl TransactionStateContainer {
 mod tests {
     use {
         super::*,
+        solana_cost_model::cost_model::CostModel,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
+            feature_set::FeatureSet,
             hash::Hash,
             message::Message,
             signature::Keypair,
@@ -188,7 +196,13 @@ mod tests {
         },
     };
 
-    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, TransactionPriorityDetails) {
+    fn test_transaction(
+        priority: u64,
+    ) -> (
+        SanitizedTransactionTTL,
+        TransactionPriorityDetails,
+        TransactionCost,
+    ) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -199,10 +213,14 @@ mod tests {
             ComputeBudgetInstruction::set_compute_unit_price(priority),
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
-        let tx = Transaction::new(&[&from_keypair], message, Hash::default());
-
+        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+            &[&from_keypair],
+            message,
+            Hash::default(),
+        ));
+        let transaction_cost = CostModel::calculate_cost(&tx, &FeatureSet::default());
         let transaction_ttl = SanitizedTransactionTTL {
-            transaction: SanitizedTransaction::from_transaction_for_tests(tx),
+            transaction: tx,
             max_age_slot: Slot::MAX,
         };
         (
@@ -211,17 +229,20 @@ mod tests {
                 priority,
                 compute_unit_limit: 0,
             },
+            transaction_cost,
         )
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, transaction_priority_details) = test_transaction(priority);
+            let (transaction_ttl, transaction_priority_details, transaction_cost) =
+                test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
                 transaction_priority_details,
+                transaction_cost,
             );
         }
     }
