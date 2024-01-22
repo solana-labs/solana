@@ -19,6 +19,7 @@ use {
     },
     std::{
         borrow::Borrow,
+        collections::HashSet,
         convert::TryInto,
         io::{Seek, SeekFrom, Write},
         path::PathBuf,
@@ -473,6 +474,9 @@ pub struct AccountsHasher<'a> {
     /// The directory where temporary cache files are put
     pub dir_for_temp_cache_files: PathBuf,
     pub(crate) active_stats: &'a ActiveStats,
+
+    /// The set of pubkeys which are ignored for accounts hash calculation.
+    pub ignore_keys: HashSet<Pubkey>,
 }
 
 /// Pointer to a specific item in chunked accounts hash slices.
@@ -1157,20 +1161,22 @@ impl<'a> AccountsHasher<'a> {
                 &ItemLocation { key, pointer },
             );
 
-            // add lamports and get hash
-            if item.lamports != 0 {
-                overall_sum = Self::checked_cast_for_capitalization(
-                    item.lamports as u128 + overall_sum as u128,
-                );
-                hashes.write(&item.hash.0);
-            } else {
-                // if lamports == 0, check if they should be included
-                if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
-                    // For incremental accounts hash, the hash of a zero lamport account is
-                    // the hash of its pubkey
-                    let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
-                    let hash = Hash::new_from_array(hash.into());
-                    hashes.write(&hash);
+            if !self.ignore_keys.contains(&item.pubkey) {
+                // add lamports and get hash
+                if item.lamports != 0 {
+                    overall_sum = Self::checked_cast_for_capitalization(
+                        item.lamports as u128 + overall_sum as u128,
+                    );
+                    hashes.write(&item.hash.0);
+                } else {
+                    // if lamports == 0, check if they should be included
+                    if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
+                        // For incremental accounts hash, the hash of a zero lamport account is
+                        // the hash of its pubkey
+                        let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
+                        let hash = Hash::new_from_array(hash.into());
+                        hashes.write(&hash);
+                    }
                 }
             }
 

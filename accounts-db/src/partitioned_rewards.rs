@@ -154,6 +154,10 @@ impl PartitionRewardPDAAndSysvarAddresses {
 
         self.addresses.to_owned()
     }
+
+    pub fn copy_partition_reward_pda_and_sysvar_addresses(&self) -> HashSet<Pubkey> {
+        self.addresses.to_owned()
+    }
 }
 
 #[cfg(test)]

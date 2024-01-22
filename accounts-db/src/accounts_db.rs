@@ -7721,6 +7721,11 @@ impl AccountsDb {
                 zero_lamport_accounts: kind.zero_lamport_accounts(),
                 dir_for_temp_cache_files: transient_accounts_hash_cache_path,
                 active_stats: &self.active_stats,
+                ignore_keys: self
+                    .partition_reward_pda_and_sysvar_address
+                    .lock()
+                    .unwrap()
+                    .copy_partition_reward_pda_and_sysvar_addresses(),
             };
 
             // get raw data by scanning
