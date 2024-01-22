@@ -103,16 +103,6 @@ pub fn try_combine_lo_hi_u64(
 }
 
 #[cfg(not(target_os = "solana"))]
-fn combine_lo_hi_ciphertexts(
-    ciphertext_lo: &ElGamalCiphertext,
-    ciphertext_hi: &ElGamalCiphertext,
-    bit_length: usize,
-) -> ElGamalCiphertext {
-    let two_power = (1_u64) << bit_length;
-    ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power))
-}
-
-#[cfg(not(target_os = "solana"))]
 fn try_combine_lo_hi_ciphertexts(
     ciphertext_lo: &ElGamalCiphertext,
     ciphertext_hi: &ElGamalCiphertext,
