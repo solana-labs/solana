@@ -95,9 +95,15 @@ cargo run --bin solana-k8s --
     --client-delay-start <seconds-to-wait-after-deploying-validators-before-deploying-client>
     --client-type <client-type e.g. thin-client>
     --client-to-run <type-of-client e.g. bench-tps>
-    --bench-tps-args <bench-tps-args e.g. tx_count=25000>
+    --bench-tps-args <bench-tps-args e.g. tx-count=25000>
     --run-client # if not set, client accounts are created but no client is deployed
 ```
+
+## Client Helpful tips
+- You can pass in a bunch of different commands into a client. For help with client configuration and flags, see: [solana/bench-tps/src/cli.rs](https://github.com/solana-labs/solana/blob/master/bench-tps/src/cli.rs)
+- Do not try and use the default `bench-tps` configuration without adjusting `tx-count` when you are deploying a large number of clients (> ~10).
+    - This will result in a massive genesis file due to `solana/bench-tps/src/main.rs` and will fail out of the box as of now.
+    - This also fails if you tried to do this with the `net.sh` scripts in GCP
 
 ## Deploying wth multiple cluster versions (with different stake)
 - Use the `--deployment-tag <tag>` and `--no-bootstrap` flags.
@@ -294,6 +300,28 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 ```
 ^ if you ran the tar deployment, you should see the Stake by Version as well read `<release-channel>` in the `solana -ul validators` output.
 
+## Debugging Kubernetes helpful commands
+1) View running validators
+```
+kubectl get pods -n <namespace>
+```
+2) Get logs from a running validator # these are the actual validator logs
+```
+kubectl logs -n <namespace> <one of the pod name from (1)>
+```
+3) Get information about the network you just deployed
+    - exec into bootstrap container
+```
+BOOTSTRAP_POD=$(kubectl get pods -n <namespace> | grep bootstrap | awk '{print $1}')
+kubectl exec -it -n <namespace> $BOOTSTRAP_POD -- /bin/bash
+solana -ul validators # see state/stake of validators and if they are caught up (should only see bootstrap and voting validators appear here)
+solana -ul gossip # see if nodes have connected via gossip (bootstrap, clients, non-voting validators, regular validators should all appear here)
+```
+4) Getting a pod from a known validator identity
+```
+kubectl get pods -n <namespace> -l app.kubernetes.io/identity=<identity>
+```
+
 ## Trouble Shooting
 1) The default `solana-validator` command includes `--require-tower`, as a result if your pods restart for whatever reason after the validator was running for some time, the validator will not properly boot. Deploy your experiment with `--skip-require-tower`
 
@@ -301,7 +329,7 @@ solana -ul validators # should see `--num-validators`+1 current validators (incl
 - Have tested deployments of up to 1200 validators
 - Once again, we assume you are logged into docker and you are pulling from a public repo (Monogon hosts need to access)
 
-## Tear down network (and start a new one)
+## Tear down network
 ```
 kubectl delete ns <namespace>
 ```
