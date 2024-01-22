@@ -4,9 +4,12 @@ mod without_fee;
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::ElGamalCiphertext,
-        pedersen::{PedersenCommitment, PedersenOpening},
+    crate::{
+        encryption::{
+            elgamal::ElGamalCiphertext,
+            pedersen::{PedersenCommitment, PedersenOpening},
+        },
+        instruction::errors::InstructionError,
     },
     curve25519_dalek::scalar::Scalar,
 };
@@ -41,6 +44,29 @@ pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
         let lo = amount << (64 - bit_length) >> (64 - bit_length);
         let hi = amount >> bit_length;
         (lo, hi)
+    }
+}
+
+/// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
+/// - the `bit_length` low bits of `amount` interpretted as u64
+/// - the `(64 - bit_length)` high bits of `amount` interpretted as u64
+#[cfg(not(target_os = "solana"))]
+pub fn try_split_u64(amount: u64, bit_length: usize) -> Result<(u64, u64), InstructionError> {
+    match bit_length {
+        0 => Ok((0, amount)),
+        1..=63 => {
+            let bit_length_complement = u64::BITS.checked_sub(bit_length as u32).unwrap();
+            // shifts are safe as long as `bit_length` and `bit_length_complement` < 64
+            let lo = amount
+                .checked_shl(bit_length_complement) // clear out the high bits
+                .and_then(|amount| amount.checked_shr(bit_length_complement))
+                .unwrap(); // shift back
+            let hi = amount.checked_shr(bit_length as u32).unwrap();
+
+            Ok((lo, hi))
+        }
+        64 => Ok((amount, 0)),
+        _ => Err(InstructionError::IllegalAmountBitLength),
     }
 }
 
@@ -90,4 +116,53 @@ pub struct FeeParameters {
     pub fee_rate_basis_points: u16,
     /// Maximum fee assessed on transfers, expressed as an amount of tokens
     pub maximum_fee: u64,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_split_u64() {
+        assert_eq!((0, 0), try_split_u64(0, 0).unwrap());
+        assert_eq!((0, 0), try_split_u64(0, 1).unwrap());
+        assert_eq!((0, 0), try_split_u64(0, 5).unwrap());
+        assert_eq!((0, 0), try_split_u64(0, 63).unwrap());
+        assert_eq!((0, 0), try_split_u64(0, 64).unwrap());
+        assert_eq!(
+            InstructionError::IllegalAmountBitLength,
+            try_split_u64(0, 65).unwrap_err()
+        );
+
+        assert_eq!((0, 1), try_split_u64(1, 0).unwrap());
+        assert_eq!((1, 0), try_split_u64(1, 1).unwrap());
+        assert_eq!((1, 0), try_split_u64(1, 5).unwrap());
+        assert_eq!((1, 0), try_split_u64(1, 63).unwrap());
+        assert_eq!((1, 0), try_split_u64(1, 64).unwrap());
+        assert_eq!(
+            InstructionError::IllegalAmountBitLength,
+            try_split_u64(1, 65).unwrap_err()
+        );
+
+        assert_eq!((0, 33), try_split_u64(33, 0).unwrap());
+        assert_eq!((1, 16), try_split_u64(33, 1).unwrap());
+        assert_eq!((1, 1), try_split_u64(33, 5).unwrap());
+        assert_eq!((33, 0), try_split_u64(33, 63).unwrap());
+        assert_eq!((33, 0), try_split_u64(33, 64).unwrap());
+        assert_eq!(
+            InstructionError::IllegalAmountBitLength,
+            try_split_u64(33, 65).unwrap_err()
+        );
+
+        let amount = u64::MAX;
+        assert_eq!((0, amount), try_split_u64(amount, 0).unwrap());
+        assert_eq!((1, (1 << 63) - 1), try_split_u64(amount, 1).unwrap());
+        assert_eq!((31, (1 << 59) - 1), try_split_u64(amount, 5).unwrap());
+        assert_eq!(((1 << 63) - 1, 1), try_split_u64(amount, 63).unwrap());
+        assert_eq!((amount, 0), try_split_u64(amount, 64).unwrap());
+        assert_eq!(
+            InstructionError::IllegalAmountBitLength,
+            try_split_u64(amount, 65).unwrap_err()
+        );
+    }
 }

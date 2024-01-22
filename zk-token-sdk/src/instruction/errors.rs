@@ -8,4 +8,6 @@ pub enum InstructionError {
     Decryption,
     #[error("missing ciphertext")]
     MissingCiphertext,
+    #[error("illegal amount bit length")]
+    IllegalAmountBitLength,
 }
