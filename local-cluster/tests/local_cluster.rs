@@ -7,7 +7,7 @@ use {
     rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
-        accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
+        hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_client::thin_client::ThinClient,
     solana_core::{

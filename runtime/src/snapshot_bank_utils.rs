@@ -13,11 +13,10 @@ use {
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
-            self, archive_snapshot_package, delete_contents_of_path,
-            deserialize_snapshot_data_file, deserialize_snapshot_data_files, get_bank_snapshot_dir,
-            get_highest_bank_snapshot_post, get_highest_full_snapshot_archive_info,
-            get_highest_incremental_snapshot_archive_info, get_snapshot_file_name,
-            get_storages_to_serialize, hard_link_storages_to_snapshot,
+            self, archive_snapshot_package, deserialize_snapshot_data_file,
+            deserialize_snapshot_data_files, get_bank_snapshot_dir, get_highest_bank_snapshot_post,
+            get_highest_full_snapshot_archive_info, get_highest_incremental_snapshot_archive_info,
+            get_snapshot_file_name, get_storages_to_serialize, hard_link_storages_to_snapshot,
             rebuild_storages_from_snapshot_dir, serialize_snapshot_data_file,
             verify_and_unarchive_snapshots, verify_unpacked_snapshots_dir_and_version,
             AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotType, SnapshotError,
@@ -36,6 +35,7 @@ use {
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        utils::delete_contents_of_path,
     },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{
@@ -1259,9 +1259,9 @@ mod tests {
             bank_forks::BankForks,
             genesis_utils,
             snapshot_utils::{
-                clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
-                create_tmp_accounts_dir_for_tests, get_bank_snapshots, get_bank_snapshots_post,
-                get_bank_snapshots_pre, get_highest_bank_snapshot, purge_bank_snapshot,
+                clean_orphaned_account_snapshot_dirs, create_tmp_accounts_dir_for_tests,
+                get_bank_snapshots, get_bank_snapshots_post, get_bank_snapshots_pre,
+                get_highest_bank_snapshot, purge_bank_snapshot,
                 purge_bank_snapshots_older_than_slot, purge_incomplete_bank_snapshots,
                 purge_old_bank_snapshots, purge_old_bank_snapshots_at_startup,
                 snapshot_storage_rebuilder::get_slot_and_append_vec_id, ArchiveFormat,
@@ -2089,34 +2089,6 @@ mod tests {
         fs::remove_file(status_cache_file).unwrap();
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
-    }
-
-    #[test]
-    pub fn test_create_all_accounts_run_and_snapshot_dirs() {
-        let (_tmp_dirs, account_paths): (Vec<TempDir>, Vec<PathBuf>) = (0..4)
-            .map(|_| {
-                let tmp_dir = tempfile::TempDir::new().unwrap();
-                let account_path = tmp_dir.path().join("accounts");
-                (tmp_dir, account_path)
-            })
-            .unzip();
-
-        // create the `run/` and `snapshot/` dirs, and ensure they're there
-        let (account_run_paths, account_snapshot_paths) =
-            create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap();
-        account_run_paths.iter().all(|path| path.is_dir());
-        account_snapshot_paths.iter().all(|path| path.is_dir());
-
-        // delete a `run/` and `snapshot/` dir, then re-create it
-        let account_path_first = account_paths.first().unwrap();
-        delete_contents_of_path(account_path_first);
-        assert!(account_path_first.exists());
-        assert!(!account_path_first.join("run").exists());
-        assert!(!account_path_first.join("snapshot").exists());
-
-        _ = create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap();
-        account_run_paths.iter().all(|path| path.is_dir());
-        account_snapshot_paths.iter().all(|path| path.is_dir());
     }
 
     #[test]
