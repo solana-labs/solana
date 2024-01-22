@@ -36,6 +36,7 @@ pub enum Role {
 /// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
 ///  - the `bit_length` low bits of `amount` interpreted as u64
 ///  - the (64 - `bit_length`) high bits of `amount` interpreted as u64
+#[deprecated(since = "1.18.0", note = "please use `try_split_u64` instead")]
 #[cfg(not(target_os = "solana"))]
 pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
     if bit_length == 64 {
@@ -70,6 +71,7 @@ pub fn try_split_u64(amount: u64, bit_length: usize) -> Result<(u64, u64), Instr
     }
 }
 
+#[deprecated(since = "1.18.0", note = "please use `try_combine_lo_hi_u64` instead")]
 #[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_u64(amount_lo: u64, amount_hi: u64, bit_length: usize) -> u64 {
     if bit_length == 64 {
@@ -116,6 +118,10 @@ fn try_combine_lo_hi_ciphertexts(
     Ok(ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power)))
 }
 
+#[deprecated(
+    since = "1.18.0",
+    note = "please use `combine_lo_hi_commitments` instead"
+)]
 #[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_commitments(
     comm_lo: &PedersenCommitment,
@@ -140,6 +146,7 @@ pub fn try_combine_lo_hi_commitments(
     Ok(comm_lo + comm_hi * &Scalar::from(two_power))
 }
 
+#[deprecated(since = "1.18.0", note = "please use `combine_lo_hi_openings` instead")]
 #[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_openings(
     opening_lo: &PedersenOpening,
