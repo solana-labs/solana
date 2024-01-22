@@ -2102,7 +2102,7 @@ pub fn verify_snapshot_archive(
     // collect all the appendvecs in account_paths/<slot>/snapshot/ into one directory for later comparison.
     let storages_to_verify = unpack_dir.join("storages_to_verify");
     // Create the directory if it doesn't exist
-    fs_err::create_dir_all(&storages_to_verify).unwrap();
+    fs::create_dir_all(&storages_to_verify).unwrap();
 
     let slot = slot.to_string();
     let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
@@ -2112,8 +2112,8 @@ pub fn verify_snapshot_archive(
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
-        fs_err::remove_file(p1).unwrap();
-        fs_err::remove_file(p2).unwrap();
+        fs::remove_file(p1).unwrap();
+        fs::remove_file(p2).unwrap();
     }
 
     // The new the status_cache file is inside the slot directory together with the snapshot file.
@@ -2126,7 +2126,7 @@ pub fn verify_snapshot_archive(
     let new_unpacked_status_cache_file = unpacked_snapshots
         .join(&slot)
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    fs_err::rename(
+    fs::rename(
         existing_unpacked_status_cache_file,
         new_unpacked_status_cache_file,
     )
@@ -2135,26 +2135,26 @@ pub fn verify_snapshot_archive(
     let accounts_hardlinks_dir = snapshot_slot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
-        for entry in fs_err::read_dir(&accounts_hardlinks_dir).unwrap() {
-            let link_dst_path = fs_err::read_link(entry.unwrap().path()).unwrap();
+        for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
+            let link_dst_path = fs::read_link(entry.unwrap().path()).unwrap();
             // Copy all the files in dst_path into the storages_to_verify directory.
-            for entry in fs_err::read_dir(&link_dst_path).unwrap() {
+            for entry in fs::read_dir(&link_dst_path).unwrap() {
                 let src_path = entry.unwrap().path();
                 let dst_path = storages_to_verify.join(src_path.file_name().unwrap());
-                fs_err::copy(src_path, dst_path).unwrap();
+                fs::copy(src_path, dst_path).unwrap();
             }
         }
-        fs_err::remove_dir_all(accounts_hardlinks_dir).unwrap();
+        fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
     }
 
     let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
     if version_path.is_file() {
-        fs_err::remove_file(version_path).unwrap();
+        fs::remove_file(version_path).unwrap();
     }
 
     let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
     if state_complete_path.is_file() {
-        fs_err::remove_file(state_complete_path).unwrap();
+        fs::remove_file(state_complete_path).unwrap();
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
@@ -2164,7 +2164,7 @@ pub fn verify_snapshot_archive(
     // Remove the empty "accounts" directory for the directory comparison below.
     // In some test cases the directory to compare do not come from unarchiving.
     // Ignore the error when this directory does not exist.
-    _ = fs_err::remove_dir(unpack_account_dir.join("accounts"));
+    _ = fs::remove_dir(unpack_account_dir.join("accounts"));
     // Check the account entries are the same
     assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
 }
