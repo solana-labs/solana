@@ -23,6 +23,7 @@ flate2 = { workspace = true }
 fnv = { workspace = true }
 im = { workspace = true, features = ["rayon", "serde"] }
 index_list = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }

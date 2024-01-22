@@ -3,9 +3,9 @@ use {
         file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
+    indexmap::set::IndexSet,
     memmap2::Mmap,
     solana_sdk::pubkey::Pubkey,
-    std::collections::HashMap,
 };
 
 /// The offset to an owner entry in the owners block.
@@ -41,10 +41,10 @@ pub enum OwnersBlockFormat {
 
 impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
-    pub(crate) fn write_owners_block(
+    pub(crate) fn write_owners_block<'a>(
         &self,
         file: &TieredStorageFile,
-        owners: &[&Pubkey],
+        owners: impl IntoIterator<Item = &'a &'a Pubkey>,
     ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressesOnly => {
@@ -82,8 +82,7 @@ impl OwnersBlockFormat {
 /// It manages a set of unique addresses of account owners.
 #[derive(Debug)]
 pub(crate) struct OwnersTable<'owner> {
-    owners_vec: Vec<&'owner Pubkey>,
-    owners_map: HashMap<&'owner Pubkey, OwnerOffset>,
+    owners_set: IndexSet<&'owner Pubkey>,
 }
 
 /// OwnersBlock is persisted as a consecutive bytes of pubkeys without any
@@ -92,8 +91,7 @@ pub(crate) struct OwnersTable<'owner> {
 impl<'owner> OwnersTable<'owner> {
     pub(crate) fn new() -> Self {
         Self {
-            owners_vec: vec![],
-            owners_map: HashMap::new(),
+            owners_set: IndexSet::new(),
         }
     }
 
@@ -101,18 +99,13 @@ impl<'owner> OwnersTable<'owner> {
     /// if the specified pubkey has not existed in the OwnersWriterTable
     /// yet.  In any case, the function returns its OwnerOffset.
     pub(crate) fn check_and_add(&mut self, pubkey: &'owner Pubkey) -> OwnerOffset {
-        if let Some(offset) = self.owners_map.get(pubkey) {
-            return *offset;
-        }
-        let offset: u32 = self.owners_vec.len().try_into().unwrap();
-        self.owners_vec.push(pubkey);
-        self.owners_map.insert(pubkey, OwnerOffset(offset));
+        let (offset, _existed) = self.owners_set.insert_full(pubkey);
 
-        OwnerOffset(offset)
+        OwnerOffset(offset as u32)
     }
 
-    pub(crate) fn owners(&self) -> &[&'owner Pubkey] {
-        &self.owners_vec
+    pub(crate) fn owners(&self) -> &IndexSet<&'owner Pubkey> {
+        &self.owners_set
     }
 }
 

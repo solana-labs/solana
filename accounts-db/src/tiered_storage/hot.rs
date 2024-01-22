@@ -829,7 +829,7 @@ pub mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, owners_table.owners())
+                .write_owners_block(&file, owners_table.owners().into_iter())
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
