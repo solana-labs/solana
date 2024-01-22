@@ -565,6 +565,10 @@ impl HotStorageWriter {
                     Some(account_hash),
                 )?;
             } else {
+                // None happens when an account has zero lamports.  If such an
+                // account is included in the input to the write_accounts, it
+                // means we want to persist it to reflect the fact that this
+                // account has turned into a zero-lamport account.
                 cursor += self.write_account(
                     DEFAULT_ACCOUNT_META.lamports,
                     DEFAULT_ACCOUNT_META.rent_epoch,
