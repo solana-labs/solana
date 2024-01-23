@@ -1140,6 +1140,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         lock: &AccountMaps<'_, T, U>,
     ) -> Option<ReadAccountMapEntry<T>> {
         if self.valid.load(Ordering::Relaxed) == 0 {
+            // this is only called at startup
             panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
         }
         else {
@@ -1449,7 +1450,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ) -> AccountIndexGetResult<T> {
         let read_lock = self.get_bin(pubkey);
         if self.valid.load(Ordering::Relaxed) == 0 {
-            panic!("{}", line!());
+            panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
+        }
+        else {
+            self.count.fetch_add(1, Ordering::Relaxed);
         }
         let account = read_lock
             .get(pubkey)
