@@ -5199,7 +5199,6 @@ impl Bank {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     #[allow(clippy::too_many_arguments)]
     fn load_and_execute_sanitized_transactions(
         &self,
