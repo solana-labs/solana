@@ -1498,7 +1498,7 @@ fn streaming_snapshot_dir_files(
     file_sender.send(snapshot_version_path.into())?;
 
     for account_path in account_paths {
-        for file in fs_err::read_dir(account_path)? {
+        for file in fs::read_dir(account_path)? {
             file_sender.send(file?.path())?;
         }
     }
