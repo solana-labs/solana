@@ -38,7 +38,6 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-            SnapshotError,
         },
     },
     solana_sdk::{
@@ -67,7 +66,7 @@ const PROCESS_SLOTS_HELP_STRING: &str =
 #[derive(Error, Debug)]
 pub(crate) enum LoadAndProcessLedgerError {
     #[error("failed to clean orphaned account snapshot directories: {0}")]
-    CleanOrphanedAccountSnapshotDirectories(#[source] SnapshotError),
+    CleanOrphanedAccountSnapshotDirectories(#[source] std::io::Error),
 
     #[error("failed to create all run and snapshot directories: {0}")]
     CreateAllAccountsRunAndSnapshotDirectories(#[source] std::io::Error),
