@@ -557,13 +557,20 @@ impl HotStorageWriter {
                 offset: HotAccountOffset::new(cursor)?,
             };
 
-            cursor += self.write_account(
-                account.map(|acc| acc.lamports()).unwrap_or(0),
-                account.map(|acc| acc.rent_epoch()).unwrap_or(Epoch::MAX),
-                account.map(|acc| acc.data()).unwrap_or(&[]),
-                account.map(|acc| acc.executable()).unwrap_or(false),
-                account_hash,
-            )?;
+            // Obtain necessary fields from the account, or default fields
+            // for a zero-lamport account in the None case.
+            let (lamports, rent_epoch, data, executable) = account
+                .map(|acc| {
+                    (
+                        acc.lamports(),
+                        acc.rent_epoch(),
+                        acc.data(),
+                        acc.executable(),
+                    )
+                })
+                .unwrap_or((0, Epoch::MAX, &[], false));
+
+            cursor += self.write_account(lamports, rent_epoch, data, executable, account_hash)?;
             index.push(index_entry);
         }
         footer.account_entry_count = (len - skip) as u32;
