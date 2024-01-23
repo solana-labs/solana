@@ -5,13 +5,14 @@ use {
         accounts_db::{AccountsDb, AccountsDbConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
+        utils::create_and_canonicalize_directories,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_ledger::{
         blockstore_processor::ProcessOptions,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
-    solana_runtime::{runtime_config::RuntimeConfig, snapshot_utils},
+    solana_runtime::runtime_config::RuntimeConfig,
     solana_sdk::clock::Slot,
     std::{
         collections::HashSet,
@@ -116,14 +117,16 @@ pub fn get_accounts_db_config(
         .unwrap_or_else(|| {
             ledger_tool_ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR)
         });
-    let accounts_hash_cache_path =
-        snapshot_utils::create_and_canonicalize_directories(&[accounts_hash_cache_path])
-            .unwrap_or_else(|err| {
-                eprintln!("Unable to access accounts hash cache path: {err}");
-                std::process::exit(1);
-            })
-            .pop()
-            .unwrap();
+    let accounts_hash_cache_path = create_and_canonicalize_directories([&accounts_hash_cache_path])
+        .unwrap_or_else(|err| {
+            eprintln!(
+                "Unable to access accounts hash cache path '{}': {err}",
+                accounts_hash_cache_path.display(),
+            );
+            std::process::exit(1);
+        })
+        .pop()
+        .unwrap();
 
     AccountsDbConfig {
         index: Some(accounts_index_config),

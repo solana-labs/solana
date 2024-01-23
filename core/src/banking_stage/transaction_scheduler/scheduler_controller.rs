@@ -18,6 +18,7 @@ use {
     },
     crossbeam_channel::RecvTimeoutError,
     solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
+    solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
@@ -342,6 +343,8 @@ impl SchedulerController {
             {
                 saturating_add_assign!(post_transaction_check_count, 1);
                 let transaction_id = self.transaction_id_generator.next();
+
+                let transaction_cost = CostModel::calculate_cost(&transaction, &bank.feature_set);
                 let transaction_ttl = SanitizedTransactionTTL {
                     transaction,
                     max_age_slot: last_slot_in_epoch,
@@ -351,6 +354,7 @@ impl SchedulerController {
                     transaction_id,
                     transaction_ttl,
                     priority_details,
+                    transaction_cost,
                 ) {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
                 }
