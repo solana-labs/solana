@@ -46,7 +46,7 @@ pub(super) fn deserialize_vote_state_into(
     Ok(())
 }
 
-fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, InstructionError> {
+fn read_u8<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u8, InstructionError> {
     let mut buf = [0; 1];
     cursor
         .read_exact(&mut buf)
@@ -55,7 +55,7 @@ fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, InstructionError> {
     Ok(buf[0])
 }
 
-pub(super) fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, InstructionError> {
+pub(super) fn read_u32<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u32, InstructionError> {
     let mut buf = [0; 4];
     cursor
         .read_exact(&mut buf)
@@ -64,7 +64,7 @@ pub(super) fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, InstructionErr
     Ok(u32::from_le_bytes(buf))
 }
 
-fn read_u64(cursor: &mut Cursor<&[u8]>) -> Result<u64, InstructionError> {
+fn read_u64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u64, InstructionError> {
     let mut buf = [0; 8];
     cursor
         .read_exact(&mut buf)
@@ -73,7 +73,9 @@ fn read_u64(cursor: &mut Cursor<&[u8]>) -> Result<u64, InstructionError> {
     Ok(u64::from_le_bytes(buf))
 }
 
-fn read_option_u64(cursor: &mut Cursor<&[u8]>) -> Result<Option<u64>, InstructionError> {
+fn read_option_u64<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
+) -> Result<Option<u64>, InstructionError> {
     let variant = read_u8(cursor)?;
     match variant {
         0 => Ok(None),
@@ -82,7 +84,7 @@ fn read_option_u64(cursor: &mut Cursor<&[u8]>) -> Result<Option<u64>, Instructio
     }
 }
 
-fn read_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, InstructionError> {
+fn read_i64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<i64, InstructionError> {
     let mut buf = [0; 8];
     cursor
         .read_exact(&mut buf)
@@ -91,7 +93,7 @@ fn read_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, InstructionError> {
     Ok(i64::from_le_bytes(buf))
 }
 
-fn read_pubkey(cursor: &mut Cursor<&[u8]>) -> Result<Pubkey, InstructionError> {
+fn read_pubkey<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<Pubkey, InstructionError> {
     let mut buf = [0; 32];
     cursor
         .read_exact(&mut buf)
@@ -100,8 +102,8 @@ fn read_pubkey(cursor: &mut Cursor<&[u8]>) -> Result<Pubkey, InstructionError> {
     Ok(Pubkey::from(buf))
 }
 
-fn read_votes_into(
-    cursor: &mut Cursor<&[u8]>,
+fn read_votes_into<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
     vote_state: &mut VoteState,
     has_latency: bool,
 ) -> Result<(), InstructionError> {
@@ -120,8 +122,8 @@ fn read_votes_into(
     Ok(())
 }
 
-fn read_authorized_voters_into(
-    cursor: &mut Cursor<&[u8]>,
+fn read_authorized_voters_into<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     let authorized_voter_count = read_u64(cursor)?;
@@ -136,8 +138,8 @@ fn read_authorized_voters_into(
     Ok(())
 }
 
-fn read_prior_voters_into(
-    cursor: &mut Cursor<&[u8]>,
+fn read_prior_voters_into<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     let mut encountered_null_voter = false;
@@ -171,8 +173,8 @@ fn read_prior_voters_into(
     Ok(())
 }
 
-fn read_epoch_credits_into(
-    cursor: &mut Cursor<&[u8]>,
+fn read_epoch_credits_into<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     let epoch_credit_count = read_u64(cursor)?;
@@ -190,8 +192,8 @@ fn read_epoch_credits_into(
     Ok(())
 }
 
-fn read_last_timestamp_into(
-    cursor: &mut Cursor<&[u8]>,
+fn read_last_timestamp_into<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
     vote_state: &mut VoteState,
 ) -> Result<(), InstructionError> {
     let slot = read_u64(cursor)?;
