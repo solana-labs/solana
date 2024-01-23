@@ -2157,7 +2157,6 @@ fn main() {
                 ("accounts", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let include_sysvars = arg_matches.is_present("include_sysvars");
                     let blockstore = open_blockstore(
                         &ledger_path,
                         arg_matches,
@@ -2171,8 +2170,17 @@ fn main() {
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
                     );
-
                     let bank = bank_forks.read().unwrap().working_bank();
+
+                    let include_sysvars = arg_matches.is_present("include_sysvars");
+                    let include_account_contents = !arg_matches.is_present("no_account_contents");
+                    let include_account_data = !arg_matches.is_present("no_account_data");
+                    let data_encoding = parse_encoding_format(arg_matches);
+                    let cli_account_new_config = CliAccountNewConfig {
+                        data_encoding,
+                        ..CliAccountNewConfig::default()
+                    };
+
                     let mut serializer = serde_json::Serializer::new(stdout());
                     let (summarize, mut json_serializer) =
                         match OutputFormat::from_matches(arg_matches, "output_format", false) {
@@ -2183,13 +2191,7 @@ fn main() {
                         };
                     let mut total_accounts_stats = TotalAccountsStats::default();
                     let rent_collector = bank.rent_collector();
-                    let print_account_contents = !arg_matches.is_present("no_account_contents");
-                    let print_account_data = !arg_matches.is_present("no_account_data");
-                    let data_encoding = parse_encoding_format(arg_matches);
-                    let cli_account_new_config = CliAccountNewConfig {
-                        data_encoding,
-                        ..CliAccountNewConfig::default()
-                    };
+
                     let scan_func =
                         |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
                             if let Some((pubkey, account, slot)) = some_account_tuple
@@ -2205,7 +2207,7 @@ fn main() {
                                     rent_collector,
                                 );
 
-                                if print_account_contents {
+                                if include_account_contents {
                                     if let Some(json_serializer) = json_serializer.as_mut() {
                                         let cli_account = CliAccount::new_with_config(
                                             pubkey,
@@ -2218,7 +2220,7 @@ fn main() {
                                             pubkey,
                                             &account,
                                             Some(slot),
-                                            print_account_data,
+                                            include_account_data,
                                             data_encoding,
                                         );
                                     }
