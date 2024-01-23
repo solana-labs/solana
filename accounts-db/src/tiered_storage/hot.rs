@@ -823,7 +823,7 @@ pub mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
-            let mut owners_table = OwnersTable::new();
+            let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {
                 owners_table.insert(owner_address);
             });
@@ -897,7 +897,7 @@ pub mod tests {
             // the owners_block_offset set to the end of the accounts blocks.
             footer.owners_block_offset = footer.index_block_offset;
 
-            let mut owners_table = OwnersTable::new();
+            let mut owners_table = OwnersTable::default();
             owner_addresses.iter().for_each(|owner_address| {
                 owners_table.insert(owner_address);
             });
@@ -1037,7 +1037,7 @@ pub mod tests {
 
             // write owners block
             footer.owners_block_offset = current_offset as u64;
-            let mut owners_table = OwnersTable::new();
+            let mut owners_table = OwnersTable::default();
             owners.iter().for_each(|owner_address| {
                 owners_table.insert(owner_address);
             });

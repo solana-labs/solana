@@ -41,7 +41,7 @@ pub enum OwnersBlockFormat {
 
 impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
-    pub fn write_owners_block<'a>(
+    pub fn write_owners_block(
         &self,
         file: &TieredStorageFile,
         owners_table: &OwnersTable,
@@ -80,7 +80,7 @@ impl OwnersBlockFormat {
 
 /// The in-memory representation of owners block for write.
 /// It manages a set of unique addresses of account owners.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OwnersTable<'a> {
     owners_set: IndexSet<&'a Pubkey>,
 }
@@ -89,12 +89,6 @@ pub struct OwnersTable<'a> {
 /// meta-data.  For each account meta, it has a owner_offset field to
 /// access its owner's address in the OwnersBlock.
 impl<'a> OwnersTable<'a> {
-    pub fn new() -> Self {
-        Self {
-            owners_set: IndexSet::new(),
-        }
-    }
-
     /// Add the specified pubkey as the owner into the OwnersWriterTable
     /// if the specified pubkey has not existed in the OwnersWriterTable
     /// yet.  In any case, the function returns its OwnerOffset.
@@ -133,7 +127,7 @@ mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
-            let mut owners_table = OwnersTable::new();
+            let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {
                 owners_table.insert(owner_address);
             });
@@ -163,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_owners_table() {
-        let mut owners_table = OwnersTable::new();
+        let mut owners_table = OwnersTable::default();
         const NUM_OWNERS: usize = 99;
 
         let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
