@@ -32,7 +32,7 @@ use {
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt, fs,
-        io::{BufReader, BufWriter, Error as IoError, Read, Seek, Write},
+        io::{BufReader, BufWriter, Error as IoError, Read, Result as IoResult, Seek, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::ExitStatus,
@@ -616,7 +616,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
 pub fn clean_orphaned_account_snapshot_dirs(
     bank_snapshots_dir: impl AsRef<Path>,
     account_snapshot_paths: &[PathBuf],
-) -> Result<()> {
+) -> IoResult<()> {
     // Create the HashSet of the account snapshot hardlink directories referenced by the snapshot dirs.
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
     let mut account_snapshot_dirs_referenced = HashSet::new();
@@ -624,20 +624,37 @@ pub fn clean_orphaned_account_snapshot_dirs(
     for snapshot in snapshots {
         let account_hardlinks_dir = snapshot.snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
-        for entry in fs_err::read_dir(&account_hardlinks_dir)? {
+        let read_dir = fs::read_dir(&account_hardlinks_dir).map_err(|err| {
+            IoError::other(format!(
+                "failed to read account hardlinks dir '{}': {err}",
+                account_hardlinks_dir.display(),
+            ))
+        })?;
+        for entry in read_dir {
             let path = entry?.path();
-            let target = fs_err::read_link(&path)?;
+            let target = fs::read_link(&path).map_err(|err| {
+                IoError::other(format!(
+                    "failed to read symlink '{}': {err}",
+                    path.display(),
+                ))
+            })?;
             account_snapshot_dirs_referenced.insert(target);
         }
     }
 
     // loop through the account snapshot hardlink directories, if the directory is not in the account_snapshot_dirs_referenced set, delete it
     for account_snapshot_path in account_snapshot_paths {
-        for entry in fs_err::read_dir(account_snapshot_path)? {
+        let read_dir = fs::read_dir(account_snapshot_path).map_err(|err| {
+            IoError::other(format!(
+                "failed to read account snapshot dir '{}': {err}",
+                account_snapshot_path.display(),
+            ))
+        })?;
+        for entry in read_dir {
             let path = entry?.path();
             if !account_snapshot_dirs_referenced.contains(&path) {
                 info!(
-                    "Removing orphaned account snapshot hardlink directory: {}",
+                    "Removing orphaned account snapshot hardlink directory '{}'...",
                     path.display()
                 );
                 move_and_async_delete_path(&path);

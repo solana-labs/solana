@@ -607,7 +607,7 @@ impl Validator {
             &config.snapshot_config.bank_snapshots_dir,
             &config.account_snapshot_paths,
         )
-        .map_err(|err| format!("Failed to clean orphaned account snapshot directories: {err:?}"))?;
+        .map_err(|err| format!("failed to clean orphaned account snapshot directories: {err}"))?;
         timer.stop();
         info!("Cleaning orphaned account snapshot directories done. {timer}");
 
