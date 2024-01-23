@@ -81,14 +81,14 @@ impl OwnersBlockFormat {
 /// The in-memory representation of owners block for write.
 /// It manages a set of unique addresses of account owners.
 #[derive(Debug)]
-pub(crate) struct OwnersTable<'owner> {
-    owners_set: IndexSet<&'owner Pubkey>,
+pub(crate) struct OwnersTable<'a> {
+    owners_set: IndexSet<&'a Pubkey>,
 }
 
 /// OwnersBlock is persisted as a consecutive bytes of pubkeys without any
 /// meta-data.  For each account meta, it has a owner_offset field to
 /// access its owner's address in the OwnersBlock.
-impl<'owner> OwnersTable<'owner> {
+impl<'a> OwnersTable<'a> {
     pub(crate) fn new() -> Self {
         Self {
             owners_set: IndexSet::new(),
@@ -98,7 +98,7 @@ impl<'owner> OwnersTable<'owner> {
     /// Add the specified pubkey as the owner into the OwnersWriterTable
     /// if the specified pubkey has not existed in the OwnersWriterTable
     /// yet.  In any case, the function returns its OwnerOffset.
-    pub(crate) fn insert(&mut self, pubkey: &'owner Pubkey) -> OwnerOffset {
+    pub(crate) fn insert(&mut self, pubkey: &'a Pubkey) -> OwnerOffset {
         let (offset, _existed) = self.owners_set.insert_full(pubkey);
 
         OwnerOffset(offset as u32)
