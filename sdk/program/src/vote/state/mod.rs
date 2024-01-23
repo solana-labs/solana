@@ -894,7 +894,7 @@ mod tests {
         assert_eq!(target_vote_state, test_vote_state);
 
         // variant
-        for _ in 0..cycles {
+        for _ in 0..1000 {
             let size_hint = VoteStateVersions::size_hint(0).0 * 4;
             let raw_data: Vec<u8> = (0..size_hint).map(|_| rand::random::<u8>()).collect();
             let mut unstructured = Unstructured::new(&raw_data);
