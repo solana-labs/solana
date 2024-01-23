@@ -2189,10 +2189,8 @@ fn main() {
                         include_account_data,
                         data_encoding,
                     );
-                    let mut measure = Measure::start("scanning accounts");
-                    accounts_streamer.output();
-                    measure.stop();
-                    info!("{}", measure);
+                    let (_, scan_time) = measure!(accounts_streamer.output(), "accounts scan");
+                    info!("{scan_time}");
                 }
                 ("capitalization", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);
