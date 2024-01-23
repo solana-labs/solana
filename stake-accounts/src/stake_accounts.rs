@@ -296,7 +296,8 @@ mod tests {
     };
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, u64, u64) {
-        let (genesis_config, mint_keypair) = create_genesis_config(lamports);
+        let (mut genesis_config, mint_keypair) = create_genesis_config(lamports);
+        genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
         let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
         let stake_rent = bank.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of());
         let system_rent = bank.get_minimum_balance_for_rent_exemption(0);

@@ -891,7 +891,8 @@ mod test {
     fn process_transactions() {
         solana_logger::setup();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(4);
+        let (mut genesis_config, mint_keypair) = create_genesis_config(4);
+        genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
         let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
@@ -1166,7 +1167,8 @@ mod test {
     fn test_retry_durable_nonce_transactions() {
         solana_logger::setup();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(4);
+        let (mut genesis_config, mint_keypair) = create_genesis_config(4);
+        genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
         let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {

@@ -5,6 +5,7 @@ use {
     },
     crate::banking_stage::scheduler_messages::TransactionId,
     min_max_heap::MinMaxHeap,
+    solana_cost_model::transaction_cost::TransactionCost,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     std::collections::HashMap,
 };
@@ -62,33 +63,6 @@ impl TransactionStateContainer {
         self.priority_queue.pop_max()
     }
 
-    /// Get an iterator of the top `n` transaction ids in the priority queue.
-    /// This will remove the ids from the queue, but not drain the remainder
-    /// of the queue.
-    pub(crate) fn take_top_n(
-        &mut self,
-        n: usize,
-    ) -> impl Iterator<Item = TransactionPriorityId> + '_ {
-        (0..n).map_while(|_| self.pop())
-    }
-
-    /// Serialize entire priority queue. `hold` indicates whether the priority queue should
-    /// be drained or not.
-    /// If `hold` is true, these ids should not be removed from the map while processing.
-    pub(crate) fn priority_ordered_ids(&mut self, hold: bool) -> Vec<TransactionPriorityId> {
-        let priority_queue = if hold {
-            self.priority_queue.clone()
-        } else {
-            let capacity = self.priority_queue.capacity();
-            core::mem::replace(
-                &mut self.priority_queue,
-                MinMaxHeap::with_capacity(capacity),
-            )
-        };
-
-        priority_queue.into_vec_desc()
-    }
-
     /// Get mutable transaction state by id.
     pub(crate) fn get_mut_transaction_state(
         &mut self,
@@ -125,12 +99,17 @@ impl TransactionStateContainer {
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
+        transaction_cost: TransactionCost,
     ) -> bool {
         let priority_id =
             TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(transaction_ttl, transaction_priority_details),
+            TransactionState::new(
+                transaction_ttl,
+                transaction_priority_details,
+                transaction_cost,
+            ),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -176,8 +155,10 @@ impl TransactionStateContainer {
 mod tests {
     use {
         super::*,
+        solana_cost_model::cost_model::CostModel,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
+            feature_set::FeatureSet,
             hash::Hash,
             message::Message,
             signature::Keypair,
@@ -188,7 +169,13 @@ mod tests {
         },
     };
 
-    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, TransactionPriorityDetails) {
+    fn test_transaction(
+        priority: u64,
+    ) -> (
+        SanitizedTransactionTTL,
+        TransactionPriorityDetails,
+        TransactionCost,
+    ) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -199,10 +186,14 @@ mod tests {
             ComputeBudgetInstruction::set_compute_unit_price(priority),
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
-        let tx = Transaction::new(&[&from_keypair], message, Hash::default());
-
+        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+            &[&from_keypair],
+            message,
+            Hash::default(),
+        ));
+        let transaction_cost = CostModel::calculate_cost(&tx, &FeatureSet::default());
         let transaction_ttl = SanitizedTransactionTTL {
-            transaction: SanitizedTransaction::from_transaction_for_tests(tx),
+            transaction: tx,
             max_age_slot: Slot::MAX,
         };
         (
@@ -211,17 +202,20 @@ mod tests {
                 priority,
                 compute_unit_limit: 0,
             },
+            transaction_cost,
         )
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, transaction_priority_details) = test_transaction(priority);
+            let (transaction_ttl, transaction_priority_details, transaction_cost) =
+                test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
                 transaction_priority_details,
+                transaction_cost,
             );
         }
     }
@@ -251,57 +245,6 @@ mod tests {
                 .unwrap(),
             4
         );
-    }
-
-    #[test]
-    fn test_take_top_n() {
-        let mut container = TransactionStateContainer::with_capacity(5);
-        push_to_container(&mut container, 5);
-
-        let taken = container.take_top_n(3).collect::<Vec<_>>();
-        assert_eq!(
-            taken,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-            ]
-        );
-        // The remainder of the queue should not be empty
-        assert_eq!(container.priority_queue.len(), 2);
-    }
-
-    #[test]
-    fn test_priority_ordered_ids() {
-        let mut container = TransactionStateContainer::with_capacity(5);
-        push_to_container(&mut container, 5);
-
-        let ordered = container.priority_ordered_ids(false);
-        assert_eq!(
-            ordered,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
-            ]
-        );
-        assert!(container.priority_queue.is_empty());
-
-        push_to_container(&mut container, 5);
-        let ordered = container.priority_ordered_ids(true);
-        assert_eq!(
-            ordered,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
-            ]
-        );
-        assert_eq!(container.priority_queue.len(), 5);
     }
 
     #[test]

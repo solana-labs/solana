@@ -11,7 +11,7 @@
 
 use {
     crate::{
-        input_parsers::{pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
+        input_parsers::{signer::try_pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
@@ -807,7 +807,7 @@ pub fn signer_from_path_with_config(
             }
         }
         SignerSourceKind::Pubkey(pubkey) => {
-            let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
+            let presigner = try_pubkeys_sigs_of(matches, SIGNER_ARG.name)?
                 .as_ref()
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {

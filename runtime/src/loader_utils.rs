@@ -116,7 +116,7 @@ pub fn load_upgradeable_buffer<T: Client>(
     let program = load_program_from_file(name);
     let buffer_pubkey = buffer_keypair.pubkey();
     let buffer_authority_pubkey = buffer_authority_keypair.pubkey();
-    let program_buffer_bytes = UpgradeableLoaderState::size_of_programdata(program.len());
+    let program_buffer_bytes = UpgradeableLoaderState::size_of_buffer(program.len());
 
     bank_client
         .send_and_confirm_message(

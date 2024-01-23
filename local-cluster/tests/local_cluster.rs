@@ -7,7 +7,7 @@ use {
     rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
-        accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
+        hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_client::thin_client::ThinClient,
     solana_core::{
@@ -2196,7 +2196,7 @@ fn create_snapshot_to_hard_fork(
         ..ProcessOptions::default()
     };
     let ledger_path = blockstore.ledger_path();
-    let genesis_config = open_genesis_config(ledger_path, u64::max_value());
+    let genesis_config = open_genesis_config(ledger_path, u64::max_value()).unwrap();
     let snapshot_config = create_simple_snapshot_config(ledger_path);
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,

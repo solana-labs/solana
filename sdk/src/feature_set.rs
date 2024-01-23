@@ -146,6 +146,10 @@ pub mod curve25519_syscall_enabled {
     solana_sdk::declare_id!("7rcw5UtqgDTBBv2EcynNfYckgdAaH1MAsCjKgXMkN7Ri");
 }
 
+pub mod curve25519_restrict_msm_length {
+    solana_sdk::declare_id!("eca6zf6JJRjQsYYPkBHF3N32MTzur4n2WL4QiiacPCL");
+}
+
 pub mod versioned_tx_message_enabled {
     solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
 }
@@ -764,6 +768,10 @@ pub mod enable_zk_proof_from_account {
     solana_sdk::declare_id!("zkiTNuzBKxrCLMKehzuQeKZyLtX2yvFcEKMML8nExU8");
 }
 
+pub mod cost_model_requested_write_lock_cost {
+    solana_sdk::declare_id!("wLckV1a64ngtcKPRGU4S4grVTestXjmNjxBjaKZrAcn");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -950,6 +958,8 @@ lazy_static! {
         (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
         (deprecate_executable_meta_update_in_bpf_loader::id(), "deprecate executable meta flag update in bpf loader #34194"),
         (enable_zk_proof_from_account::id(), "Enable zk token proof program to read proof from accounts instead of instruction data #34750"),
+        (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
+        (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
