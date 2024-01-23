@@ -1,8 +1,13 @@
 //! The `logger` module configures `env_logger`
 
 use {
+    env_logger::fmt::Formatter,
     lazy_static::lazy_static,
-    std::sync::{Arc, RwLock},
+    log::Record,
+    std::{
+        io::Write,
+        sync::{Arc, RwLock},
+    },
 };
 
 lazy_static! {
@@ -36,7 +41,7 @@ fn replace_logger(logger: env_logger::Logger) {
 pub fn setup_with(filter: &str) {
     let logger =
         env_logger::Builder::from_env(env_logger::Env::new().filter_or("_RUST_LOG", filter))
-            .format_timestamp_nanos()
+            .format(format_with_thread_name)
             .build();
     replace_logger(logger);
 }
@@ -44,7 +49,7 @@ pub fn setup_with(filter: &str) {
 // Configures logging with a default filter if RUST_LOG is not set
 pub fn setup_with_default(filter: &str) {
     let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
-        .format_timestamp_nanos()
+        .format(format_with_thread_name)
         .build();
     replace_logger(logger);
 }
@@ -63,8 +68,24 @@ pub fn setup_file_with_default(logfile: &str, filter: &str) {
         .open(logfile)
         .unwrap();
     let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
-        .format_timestamp_nanos()
+        .format(format_with_thread_name)
         .target(env_logger::Target::Pipe(Box::new(file)))
         .build();
     replace_logger(logger);
+}
+
+fn format_with_thread_name(formatter: &mut Formatter, record: &Record) -> std::io::Result<()> {
+    let timestamp = formatter.timestamp_nanos();
+    let level = formatter.default_styled_level(record.level());
+    let target = record.target();
+    let args = record.args();
+
+    if let Some(thread_name) = std::thread::current().name() {
+        writeln!(
+            formatter,
+            "[{timestamp} {level} {target}] [{thread_name}] {args}"
+        )
+    } else {
+        writeln!(formatter, "[{timestamp} {level} {target}] {args}")
+    }
 }
