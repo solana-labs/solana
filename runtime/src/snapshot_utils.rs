@@ -1606,7 +1606,13 @@ pub fn rebuild_storages_from_snapshot_dir(
 /// threshold, it is not opened and an error is returned.
 fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
     // Check file size.
-    let file_size = fs_err::metadata(&path)?.len();
+    let file_metadata = fs::metadata(&path).map_err(|err| {
+        IoError::other(format!(
+            "failed to query snapshot version file metadata '{}': {err}",
+            path.as_ref().display(),
+        ))
+    })?;
+    let file_size = file_metadata.len();
     if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
         let error_message = format!(
             "snapshot version file too large: '{}' has {} bytes (max size is {} bytes)",
@@ -1619,7 +1625,19 @@ fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
 
     // Read snapshot_version from file.
     let mut snapshot_version = String::new();
-    fs_err::File::open(path.as_ref()).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+    let mut file = fs::File::open(&path).map_err(|err| {
+        IoError::other(format!(
+            "failed to open snapshot version file '{}': {err}",
+            path.as_ref().display()
+        ))
+    })?;
+    file.read_to_string(&mut snapshot_version).map_err(|err| {
+        IoError::other(format!(
+            "failed to read snapshot version from file '{}': {err}",
+            path.as_ref().display()
+        ))
+    })?;
+
     Ok(snapshot_version.trim().to_string())
 }
 
