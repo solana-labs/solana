@@ -1144,8 +1144,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         if self.valid.load(Ordering::Relaxed) == 0 {
             // this is only called at startup
             panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
-        }
-        else {
+        } else {
             self.count.fetch_add(1, Ordering::Relaxed);
         }
         lock.get(pubkey)
@@ -1453,8 +1452,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let read_lock = self.get_bin(pubkey);
         if self.valid.load(Ordering::Relaxed) == 0 {
             panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
-        }
-        else {
+        } else {
             self.count.fetch_add(1, Ordering::Relaxed);
         }
         let account = read_lock
@@ -1476,6 +1474,31 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub fn get_and_lock<R>(
+        &self,
+        pubkey: &Pubkey,
+        ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
+        callback: impl Fn((Slot, T)) -> R,
+    ) -> Option<R> {
+        let read_lock = self.get_bin(pubkey);
+        if self.valid.load(Ordering::Relaxed) == 0 {
+            panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
+        } else {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+        read_lock.get(pubkey).map(|account| {
+            let read = account.slot_list.read().unwrap();
+            let slot_list = &read;
+            self.latest_slot(ancestors, slot_list, max_root).map(|found_index|
+                callback(slot_list[found_index])
+            )
+        }
+        ).flatten()
+    }
+
+    /// Get an account
+    /// The latest account that appears in `ancestors` or `roots` is returned.
     pub fn get_internal(
         &self,
         pubkey: &Pubkey,
@@ -1483,15 +1506,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         max_root: Option<Slot>,
     ) -> Option<(Slot, T)> {
         let read_lock = self.get_bin(pubkey);
-        let account = read_lock
-            .get(pubkey);
+        // note this still gets the refcount on the entry. We don't need that.
+        let account = read_lock.get(pubkey);
 
         account.and_then(|locked_entry| {
             let slot_list = locked_entry.slot_list.read().unwrap();
             let found_index = self.latest_slot(ancestors, &slot_list, max_root);
-            found_index.map(|found_index|{
-                slot_list[found_index]
-            })
+            found_index.map(|found_index| slot_list[found_index])
         })
     }
 
