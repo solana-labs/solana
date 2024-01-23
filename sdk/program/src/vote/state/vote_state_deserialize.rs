@@ -18,7 +18,7 @@ pub(super) fn deserialize_vote_state_into(
     vote_state.authorized_withdrawer = read_pubkey(cursor)?;
     vote_state.commission = read_u8(cursor)?;
     read_votes_into(cursor, vote_state, has_latency)?;
-    vote_state.root_slot = read_maybe_u64(cursor)?;
+    vote_state.root_slot = read_option_u64(cursor)?;
     read_authorized_voters_into(cursor, vote_state)?;
 
     // `serialized_size()` must be used over `mem::size_of()` because of alignment
@@ -73,7 +73,7 @@ fn read_u64(cursor: &mut Cursor<&[u8]>) -> Result<u64, InstructionError> {
     Ok(u64::from_le_bytes(buf))
 }
 
-fn read_maybe_u64(cursor: &mut Cursor<&[u8]>) -> Result<Option<u64>, InstructionError> {
+fn read_option_u64(cursor: &mut Cursor<&[u8]>) -> Result<Option<u64>, InstructionError> {
     let variant = read_u8(cursor)?;
     match variant {
         0 => Ok(None),
