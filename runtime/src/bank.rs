@@ -6660,6 +6660,17 @@ impl Bank {
                 &self.runtime_config.compute_budget.unwrap_or_default(),
                 false, /* debugging_features */
             ));
+
+        // genesis_config loaded by accounts_db::open_genesis_config() from ledger
+        // has it's lamports_per_signature set to zero; bank sets its value correctly
+        // after the first block with a transaction in it. This is a hack to mimic
+        // the process.
+        let derived_fee_rate_governor =
+            FeeRateGovernor::new_derived(&genesis_config.fee_rate_governor, 0);
+        // new bank's fee_structure.lamports_per_signature should be inline with
+        // what's configured in GenesisConfig
+        self.fee_structure.lamports_per_signature =
+            derived_fee_rate_governor.lamports_per_signature;
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
