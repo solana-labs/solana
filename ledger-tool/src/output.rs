@@ -564,11 +564,13 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
 pub struct AccountsOutputStreamer {
     account_scanner: AccountsScanner,
     total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
+    output_format: OutputFormat,
 }
 
 impl AccountsOutputStreamer {
     pub fn new(
         bank: Arc<Bank>,
+        output_format: OutputFormat,
         include_sysvars: bool,
         include_account_contents: bool,
         include_account_data: bool,
@@ -586,10 +588,18 @@ impl AccountsOutputStreamer {
         Self {
             account_scanner,
             total_accounts_stats,
+            output_format,
         }
     }
 
     pub fn output(&self) {
+        match self.output_format {
+            OutputFormat::Json | OutputFormat::JsonCompact => self.output_json(),
+            _ => self.print(),
+        }
+    }
+
+    fn output_json(&self) {
         let mut serializer = serde_json::Serializer::new(stdout());
         let mut struct_serializer = serializer.serialize_struct("accountInfo", 2).unwrap();
         struct_serializer
@@ -600,6 +610,11 @@ impl AccountsOutputStreamer {
             .unwrap();
         SerializeStruct::end(struct_serializer).unwrap();
     }
+
+    fn print(&self) {
+        self.account_scanner.print();
+        println!("\n{:#?}", self.total_accounts_stats.borrow());
+    }
 }
 
 pub struct AccountsScanner {
@@ -609,6 +624,34 @@ pub struct AccountsScanner {
     include_account_contents: bool,
     include_account_data: bool,
     account_data_encoding: UiAccountEncoding,
+}
+
+impl AccountsScanner {
+    pub fn print(&self) {
+        let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
+        let rent_collector = self.bank.rent_collector();
+
+        let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+            if let Some((pubkey, account, slot)) = account_tuple.filter(|(_, account, _)| {
+                solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
+            }) {
+                if !self.include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
+                    return;
+                }
+                total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                if self.include_account_contents {
+                    output_account(
+                        pubkey,
+                        &account,
+                        Some(slot),
+                        self.include_account_data,
+                        self.account_data_encoding,
+                    );
+                }
+            }
+        };
+        self.bank.scan_all_accounts(scan_func).unwrap();
+    }
 }
 
 impl Serialize for AccountsScanner {

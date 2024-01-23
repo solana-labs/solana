@@ -30,6 +30,7 @@ use {
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
+    solana_cli_output::OutputFormat,
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
@@ -2176,10 +2177,13 @@ fn main() {
                     let include_sysvars = arg_matches.is_present("include_sysvars");
                     let include_account_contents = !arg_matches.is_present("no_account_contents");
                     let include_account_data = !arg_matches.is_present("no_account_data");
+                    let output_format =
+                        OutputFormat::from_matches(arg_matches, "output_format", false);
                     let data_encoding = parse_encoding_format(arg_matches);
 
                     let accounts_streamer = AccountsOutputStreamer::new(
                         bank,
+                        output_format,
                         include_sysvars,
                         include_account_contents,
                         include_account_data,
