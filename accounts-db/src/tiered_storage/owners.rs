@@ -3,6 +3,7 @@ use {
         file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
+    indexmap::set::IndexSet,
     memmap2::Mmap,
     solana_sdk::pubkey::Pubkey,
 };
@@ -43,13 +44,13 @@ impl OwnersBlockFormat {
     pub fn write_owners_block(
         &self,
         file: &TieredStorageFile,
-        addresses: &[Pubkey],
+        owners_table: &OwnersTable,
     ) -> TieredStorageResult<usize> {
         match self {
             Self::AddressesOnly => {
                 let mut bytes_written = 0;
-                for address in addresses {
-                    bytes_written += file.write_pod(address)?;
+                for address in &owners_table.owners_set {
+                    bytes_written += file.write_pod(*address)?;
                 }
 
                 Ok(bytes_written)
@@ -74,6 +75,27 @@ impl OwnersBlockFormat {
                 Ok(pubkey)
             }
         }
+    }
+}
+
+/// The in-memory representation of owners block for write.
+/// It manages a set of unique addresses of account owners.
+#[derive(Debug, Default)]
+pub struct OwnersTable<'a> {
+    owners_set: IndexSet<&'a Pubkey>,
+}
+
+/// OwnersBlock is persisted as a consecutive bytes of pubkeys without any
+/// meta-data.  For each account meta, it has a owner_offset field to
+/// access its owner's address in the OwnersBlock.
+impl<'a> OwnersTable<'a> {
+    /// Add the specified pubkey as the owner into the OwnersWriterTable
+    /// if the specified pubkey has not existed in the OwnersWriterTable
+    /// yet.  In any case, the function returns its OwnerOffset.
+    pub fn insert(&mut self, pubkey: &'a Pubkey) -> OwnerOffset {
+        let (offset, _existed) = self.owners_set.insert_full(pubkey);
+
+        OwnerOffset(offset as u32)
     }
 }
 
@@ -105,9 +127,13 @@ mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
+            let mut owners_table = OwnersTable::default();
+            addresses.iter().for_each(|owner_address| {
+                owners_table.insert(owner_address);
+            });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &addresses)
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -127,5 +153,32 @@ mod tests {
                 address
             );
         }
+    }
+
+    #[test]
+    fn test_owners_table() {
+        let mut owners_table = OwnersTable::default();
+        const NUM_OWNERS: usize = 99;
+
+        let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_OWNERS)
+            .collect();
+
+        // as we insert sequentially, we expect each entry has same OwnerOffset
+        // as its index inside the Vector.
+        for (i, address) in addresses.iter().enumerate() {
+            assert_eq!(owners_table.insert(address), OwnerOffset(i as u32));
+        }
+
+        let cloned_addresses = addresses.clone();
+
+        // insert again and expect the same OwnerOffset
+        for (i, address) in cloned_addresses.iter().enumerate() {
+            assert_eq!(owners_table.insert(address), OwnerOffset(i as u32));
+        }
+
+        // make sure the size of the resulting owner table is the same
+        // as the input
+        assert_eq!(owners_table.owners_set.len(), addresses.len());
     }
 }

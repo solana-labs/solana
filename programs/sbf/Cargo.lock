@@ -4672,6 +4672,7 @@ dependencies = [
  "fnv",
  "im",
  "index_list",
+ "indexmap 2.1.0",
  "itertools",
  "lazy_static",
  "log",

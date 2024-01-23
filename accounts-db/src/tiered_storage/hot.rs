@@ -470,7 +470,7 @@ pub mod tests {
             hot::{HotAccountMeta, HotStorageReader},
             index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            owners::OwnersBlockFormat,
+            owners::{OwnersBlockFormat, OwnersTable},
         },
         assert_matches::assert_matches,
         memoffset::offset_of,
@@ -823,9 +823,13 @@ pub mod tests {
         {
             let file = TieredStorageFile::new_writable(&path).unwrap();
 
+            let mut owners_table = OwnersTable::default();
+            addresses.iter().for_each(|owner_address| {
+                owners_table.insert(owner_address);
+            });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &addresses)
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -893,9 +897,13 @@ pub mod tests {
             // the owners_block_offset set to the end of the accounts blocks.
             footer.owners_block_offset = footer.index_block_offset;
 
+            let mut owners_table = OwnersTable::default();
+            owner_addresses.iter().for_each(|owner_address| {
+                owners_table.insert(owner_address);
+            });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owner_addresses)
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
@@ -1029,9 +1037,13 @@ pub mod tests {
 
             // write owners block
             footer.owners_block_offset = current_offset as u64;
+            let mut owners_table = OwnersTable::default();
+            owners.iter().for_each(|owner_address| {
+                owners_table.insert(owner_address);
+            });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners)
+                .write_owners_block(&file, &owners_table)
                 .unwrap();
 
             footer.write_footer_block(&file).unwrap();
