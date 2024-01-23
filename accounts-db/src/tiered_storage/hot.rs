@@ -562,7 +562,7 @@ impl HotStorageWriter {
                 account.map(|acc| acc.rent_epoch()).unwrap_or(Epoch::MAX),
                 account.map(|acc| acc.data()).unwrap_or(&[]),
                 account.map(|acc| acc.executable()).unwrap_or(false),
-                &account_hash,
+                account_hash,
             )?;
             index.push(index_entry);
         }
