@@ -134,10 +134,6 @@ impl HotAccountOffset {
     }
 }
 
-lazy_static! {
-    static ref DEFAULT_ACCOUNT_META: AccountMeta = AccountMeta::default();
-}
-
 /// The storage and in-memory representation of the metadata entry for a
 /// hot account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
