@@ -1413,16 +1413,16 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
         .path();
 
     let version_file = unpack_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
-    fs_err::hard_link(version_file, slot_dir.join(SNAPSHOT_VERSION_FILENAME))?;
+    fs::hard_link(version_file, slot_dir.join(SNAPSHOT_VERSION_FILENAME))?;
 
     let status_cache_file = snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    fs_err::hard_link(
+    fs::hard_link(
         status_cache_file,
         slot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
     )?;
 
     let state_complete_file = slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-    fs_err::File::create(state_complete_file)?;
+    fs::File::create(state_complete_file)?;
 
     Ok(())
 }
