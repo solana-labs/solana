@@ -139,6 +139,11 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+// Right now since we reuse the wait for supermajority code, the
+// following threshold should always greater than or equal to
+// WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT.
+const WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT: u64 =
+    WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -1332,7 +1337,7 @@ impl Validator {
                 cluster_info.clone(),
                 bank_forks.clone(),
                 wen_restart_repair_slots.clone(),
-                WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
+                WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT,
                 exit.clone(),
             ) {
                 Ok(()) => {
