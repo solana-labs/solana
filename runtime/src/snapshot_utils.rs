@@ -1525,11 +1525,22 @@ pub fn rebuild_storages_from_snapshot_dir(
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     let account_run_paths: HashSet<_> = HashSet::from_iter(account_paths);
 
-    for dir_entry in fs_err::read_dir(accounts_hardlinks)? {
+    let read_dir = fs::read_dir(&accounts_hardlinks).map_err(|err| {
+        IoError::other(format!(
+            "failed to read accounts hardlinks dir '{}': {err}",
+            accounts_hardlinks.display(),
+        ))
+    })?;
+    for dir_entry in read_dir {
         let symlink_path = dir_entry?.path();
         // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
         // The corresponding run path should be <account_path>/run/
-        let account_snapshot_path = fs_err::read_link(&symlink_path)?;
+        let account_snapshot_path = fs::read_link(&symlink_path).map_err(|err| {
+            IoError::other(format!(
+                "failed to read symlink '{}': {err}",
+                symlink_path.display(),
+            ))
+        })?;
         let account_run_path = account_snapshot_path
             .parent()
             .ok_or_else(|| SnapshotError::InvalidAccountPath(account_snapshot_path.clone()))?
@@ -1543,13 +1554,25 @@ pub fn rebuild_storages_from_snapshot_dir(
         }
         // Generate hard-links to make the account files available in the main accounts/, and let the new appendvec
         // paths be in accounts/
-        for file in fs_err::read_dir(&account_snapshot_path)? {
+        let read_dir = fs::read_dir(&account_snapshot_path).map_err(|err| {
+            IoError::other(format!(
+                "failed to read account snapshot dir '{}': {err}",
+                account_snapshot_path.display(),
+            ))
+        })?;
+        for file in read_dir {
             let file_path = file?.path();
             let file_name = file_path
                 .file_name()
                 .ok_or_else(|| SnapshotError::InvalidAppendVecPath(file_path.to_path_buf()))?;
             let dest_path = account_run_path.join(file_name);
-            fs_err::hard_link(&file_path, &dest_path)?;
+            fs::hard_link(&file_path, &dest_path).map_err(|err| {
+                IoError::other(format!(
+                    "failed to hard link from '{}' to '{}': {err}",
+                    file_path.display(),
+                    dest_path.display(),
+                ))
+            })?;
         }
     }
 
