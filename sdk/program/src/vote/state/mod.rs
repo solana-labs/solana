@@ -860,6 +860,7 @@ pub mod serde_compact_vote_state_update {
 mod tests {
     use {
         super::*,
+        crate::msg,
         arbitrary::{Arbitrary, Unstructured},
         itertools::Itertools,
         rand::{rngs::StdRng, Rng, SeedableRng},
@@ -921,7 +922,7 @@ mod tests {
 
         // variant
         let seed = rand::random::<u64>();
-        println!("test_vote_deserialize_into_nopanic seed: {}", seed);
+        msg!("test_vote_deserialize_into_nopanic seed: {}", seed);
         let mut r = StdRng::seed_from_u64(seed);
 
         for _ in 0..1000 {
