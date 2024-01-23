@@ -2215,16 +2215,34 @@ fn purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSna
 
 /// Remove the bank snapshot at this path
 pub fn purge_bank_snapshot(bank_snapshot_dir: impl AsRef<Path>) -> Result<()> {
+    const FN_ERR: &str = "failed to purge bank snapshot";
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all accounts snapshot directories.
         // They should all be removed.
-        for accounts_hardlink_dir in fs_err::read_dir(accounts_hardlinks_dir)? {
-            let accounts_hardlink_dir = fs_err::read_link(accounts_hardlink_dir?.path())?;
+        let read_dir = fs::read_dir(&accounts_hardlinks_dir).map_err(|err| {
+            IoError::other(format!(
+                "{FN_ERR}: failed to read accounts hardlinks dir '{}': {err}",
+                accounts_hardlinks_dir.display(),
+            ))
+        })?;
+        for entry in read_dir {
+            let accounts_hardlink_dir = entry?.path();
+            let accounts_hardlink_dir = fs::read_link(&accounts_hardlink_dir).map_err(|err| {
+                IoError::other(format!(
+                    "{FN_ERR}: failed to read symlink '{}': {err}",
+                    accounts_hardlink_dir.display(),
+                ))
+            })?;
             move_and_async_delete_path(&accounts_hardlink_dir);
         }
     }
-    fs_err::remove_dir_all(bank_snapshot_dir)?;
+    fs::remove_dir_all(&bank_snapshot_dir).map_err(|err| {
+        IoError::other(format!(
+            "{FN_ERR}: failed to remove dir '{}': {err}",
+            bank_snapshot_dir.as_ref().display(),
+        ))
+    })?;
     Ok(())
 }
 
