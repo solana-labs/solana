@@ -373,18 +373,7 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    // HANA flagging two items for discussion
-    //
-    // 1) previously, this used bincode when compiled for x64 and threw `unimplemented!()` for bpf
-    // need to decide whether to retain bincode. on the one hand, it its nice to use the same parser for both platforms
-    // however *this is a breaking change* because the handrolled parser doesnt support V0_23_5
-    // support could be (and, in a previous commit, was) added, but it was removed for adding unnecessary complexity
-    // ultimately i think we should to keep bincode for x64 because the validator failure case is catastrophic
-    // even if we are "almost certain" never to see a V0_23_5 struct in any context
-    // but if we are *certain* certain then we can remove it
-    //
-    // 2) we need to either silence the stack size warning to do this stack allocation for bpf
-    // or leave bpf unimplemented. im fine with either. in practice `deserialize_into` heap probably makes more sense
+    // we preserve the old deserialize on not(target_os = "solana") because the new does not support V0_23_5
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         #[cfg(not(target_os = "solana"))]
         {
