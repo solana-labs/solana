@@ -1,6 +1,9 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    crate::{args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, program::*},
+    crate::{
+        args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*,
+        output::output_account, program::*,
+    },
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
@@ -11,7 +14,7 @@ use {
         ser::{SerializeSeq, Serializer},
         Serialize,
     },
-    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_account_decoder::UiAccountEncoding,
     solana_accounts_db::{
         accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
@@ -99,44 +102,6 @@ fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
         Some("base64") => UiAccountEncoding::Base64,
         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
         _ => UiAccountEncoding::Base64,
-    }
-}
-
-fn output_account(
-    pubkey: &Pubkey,
-    account: &AccountSharedData,
-    modified_slot: Option<Slot>,
-    print_account_data: bool,
-    encoding: UiAccountEncoding,
-) {
-    println!("{pubkey}:");
-    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
-    println!("  owner: '{}'", account.owner());
-    println!("  executable: {}", account.executable());
-    if let Some(slot) = modified_slot {
-        println!("  slot: {slot}");
-    }
-    println!("  rent_epoch: {}", account.rent_epoch());
-    println!("  data_len: {}", account.data().len());
-    if print_account_data {
-        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-        match account_data {
-            UiAccountData::Binary(data, data_encoding) => {
-                println!("  data: '{data}'");
-                println!(
-                    "  encoding: {}",
-                    serde_json::to_string(&data_encoding).unwrap()
-                );
-            }
-            UiAccountData::Json(account_data) => {
-                println!(
-                    "  data: '{}'",
-                    serde_json::to_string(&account_data).unwrap()
-                );
-                println!("  encoding: \"jsonParsed\"");
-            }
-            UiAccountData::LegacyBinary(_) => {}
-        };
     }
 }
 

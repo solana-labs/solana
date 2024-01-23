@@ -2,10 +2,12 @@ use {
     crate::ledger_utils::get_program_ids,
     chrono::{Local, TimeZone},
     serde::{Deserialize, Serialize},
+    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_cli_output::{display::writeln_transaction, OutputFormat, QuietDisplay, VerboseDisplay},
     solana_entry::entry::Entry,
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
         clock::{Slot, UnixTimestamp},
         hash::Hash,
         native_token::lamports_to_sol,
@@ -546,5 +548,43 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
     program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
     for (program_id, count) in program_ids_array.iter() {
         println!("{:<44}: {}", program_id.to_string(), count);
+    }
+}
+
+pub fn output_account(
+    pubkey: &Pubkey,
+    account: &AccountSharedData,
+    modified_slot: Option<Slot>,
+    print_account_data: bool,
+    encoding: UiAccountEncoding,
+) {
+    println!("{pubkey}:");
+    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
+    println!("  owner: '{}'", account.owner());
+    println!("  executable: {}", account.executable());
+    if let Some(slot) = modified_slot {
+        println!("  slot: {slot}");
+    }
+    println!("  rent_epoch: {}", account.rent_epoch());
+    println!("  data_len: {}", account.data().len());
+    if print_account_data {
+        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        match account_data {
+            UiAccountData::Binary(data, data_encoding) => {
+                println!("  data: '{data}'");
+                println!(
+                    "  encoding: {}",
+                    serde_json::to_string(&data_encoding).unwrap()
+                );
+            }
+            UiAccountData::Json(account_data) => {
+                println!(
+                    "  data: '{}'",
+                    serde_json::to_string(&account_data).unwrap()
+                );
+                println!("  encoding: \"jsonParsed\"");
+            }
+            UiAccountData::LegacyBinary(_) => {}
+        };
     }
 }
