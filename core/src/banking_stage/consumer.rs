@@ -2513,8 +2513,62 @@ mod tests {
 
     #[test]
     fn test_process_and_record_transactions_with_pre_results() {
+        let test_would_fit_and_lock = TestLockingAndReserving {
+            would_fit: true,
+            could_lock: true,
+            expected_cost_model_throttled_transactions_count: 0,
+            expected_transactions_attempted_execution_count: 1,
+            expected_committed_transactions_count: 1,
+            expected_retryable_transaction_count: 0,
+        };
+        assert_process_transactions_with_locking_and_reserving(test_would_fit_and_lock);
+
+        let test_would_fit_could_not_lock = TestLockingAndReserving {
+            would_fit: true,
+            could_lock: false,
+            expected_cost_model_throttled_transactions_count: 0,
+            expected_transactions_attempted_execution_count: 1,
+            expected_committed_transactions_count: 0,
+            expected_retryable_transaction_count: 1,
+        };
+        assert_process_transactions_with_locking_and_reserving(test_would_fit_could_not_lock);
+
+        let test_would_not_fit_could_lock = TestLockingAndReserving {
+            would_fit: false,
+            could_lock: true,
+            expected_cost_model_throttled_transactions_count: 1,
+            expected_transactions_attempted_execution_count: 1,
+            expected_committed_transactions_count: 0,
+            expected_retryable_transaction_count: 1,
+        };
+        assert_process_transactions_with_locking_and_reserving(test_would_not_fit_could_lock);
+
+        let test_would_not_fit_could_not_lock = TestLockingAndReserving {
+            would_fit: false,
+            could_lock: false,
+            expected_cost_model_throttled_transactions_count: 1,
+            expected_transactions_attempted_execution_count: 1,
+            expected_committed_transactions_count: 0,
+            expected_retryable_transaction_count: 1,
+        };
+        assert_process_transactions_with_locking_and_reserving(test_would_not_fit_could_not_lock);
+    }
+
+    // test setup for combined scenarios of accounts locking and block space reserving
+    struct TestLockingAndReserving {
+        // input:
+        would_fit: bool,
+        could_lock: bool,
+        // expectations
+        expected_cost_model_throttled_transactions_count: usize,
+        expected_transactions_attempted_execution_count: usize,
+        expected_committed_transactions_count: usize,
+        expected_retryable_transaction_count: usize,
+    }
+
+    fn assert_process_transactions_with_locking_and_reserving(test: TestLockingAndReserving) {
         solana_logger::setup();
-        let  lamports = 100_000;
+        let lamports = 100_000;
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -2523,33 +2577,56 @@ mod tests {
 
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
         let test_txs = vec![system_transaction::transfer(
-                &mint_keypair, &Pubkey::new_unique(), 1, genesis_config.hash())];
-        // a tx would "block" test txs due to shared mint_keypair
-        let blocker_txs = sanitize_transactions(vec![system_transaction::transfer(
-                &mint_keypair, &Pubkey::new_unique(), 1, genesis_config.hash())]);
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            1,
+            genesis_config.hash(),
+        )];
 
-        // set cost tracker limits to simulate "would fit" condition 
+        // setup: if transcation should fail reserving space, set block_limit small.
+        let block_limit = if test.would_fit { std::u64::MAX } else { 1 };
         bank.write_cost_tracker()
             .unwrap()
-            .set_limits(10, std::u64::MAX, std::u64::MAX);
-        /* configure bank.accounts-lock
-        let blocker = bank.prepare_sanitized_batch(&blocker_txs);
-        info!("==== blocker: {:?} {}", blocker.lock_results(), blocker.needs_unlock());
-        // */
+            .set_limits(block_limit, std::u64::MAX, std::u64::MAX);
 
+        // setup: if transaction should fail locking, pre-lock mint_keypair with blocker_txs
+        let blocker_txs = sanitize_transactions(vec![system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            1,
+            genesis_config.hash(),
+        )]);
+        let _blocker = if test.could_lock {
+            None
+        } else {
+            Some(bank.prepare_sanitized_batch(&blocker_txs))
+        };
+
+        // execute:
         let ProcessTransactionsSummary {
-            cost_model_throttled_transactions_count, 
+            cost_model_throttled_transactions_count,
             transactions_attempted_execution_count,
             committed_transactions_count,
             retryable_transaction_indexes,
             ..
-        } = execute_transactions_with_dummy_poh_service(
-            bank.clone(), test_txs);
-        info!("==== result: {} {} {} {:?}",
-            cost_model_throttled_transactions_count, 
+        } = execute_transactions_with_dummy_poh_service(bank.clone(), test_txs);
+
+        // check results:
+        assert_eq!(
+            cost_model_throttled_transactions_count,
+            test.expected_cost_model_throttled_transactions_count
+        );
+        assert_eq!(
             transactions_attempted_execution_count,
+            test.expected_transactions_attempted_execution_count
+        );
+        assert_eq!(
             committed_transactions_count,
-            retryable_transaction_indexes,
-            );
+            test.expected_committed_transactions_count
+        );
+        assert_eq!(
+            retryable_transaction_indexes.len(),
+            test.expected_retryable_transaction_count
+        );
     }
 }
