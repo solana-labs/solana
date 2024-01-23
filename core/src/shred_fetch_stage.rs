@@ -104,8 +104,22 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
-            let should_drop_legacy_shreds =
-                |shred_slot| should_drop_legacy_shreds(shred_slot, &feature_set, &epoch_schedule);
+            let should_drop_legacy_shreds = |shred_slot| {
+                check_feature_activation(
+                    &feature_set::drop_legacy_shreds::id(),
+                    shred_slot,
+                    &feature_set,
+                    &epoch_schedule,
+                )
+            };
+            let enable_chained_merkle_shreds = |shred_slot| {
+                check_feature_activation(
+                    &feature_set::enable_chained_merkle_shreds::id(),
+                    shred_slot,
+                    &feature_set,
+                    &epoch_schedule,
+                )
+            };
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
@@ -115,6 +129,7 @@ impl ShredFetchStage {
                         max_slot,
                         shred_version,
                         should_drop_legacy_shreds,
+                        enable_chained_merkle_shreds,
                         &mut stats,
                     )
                 {
@@ -394,13 +409,15 @@ pub(crate) fn receive_repair_quic_packets(
     }
 }
 
+// Returns true if the feature is effective for the shred slot.
 #[must_use]
-fn should_drop_legacy_shreds(
+fn check_feature_activation(
+    feature: &Pubkey,
     shred_slot: Slot,
     feature_set: &FeatureSet,
     epoch_schedule: &EpochSchedule,
 ) -> bool {
-    match feature_set.activated_slot(&feature_set::drop_legacy_shreds::id()) {
+    match feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {
             let feature_epoch = epoch_schedule.get_epoch(feature_slot);
@@ -451,6 +468,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -465,6 +483,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
     }
@@ -487,6 +506,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -509,6 +529,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
@@ -519,6 +540,7 @@ mod tests {
             max_slot,
             345,       // shred_version
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
@@ -530,6 +552,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
 
@@ -552,6 +575,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
 
@@ -564,6 +588,7 @@ mod tests {
             max_slot,
             shred_version,
             |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
     }
