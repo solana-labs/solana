@@ -570,8 +570,12 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         path_delete.file_name().unwrap().to_str().unwrap(),
         "_to_be_deleted"
     ));
-    if let Err(err) = fs_err::rename(&path, &path_delete) {
-        warn!("Path renaming failed, falling back to rm_dir in sync mode: {err}");
+    if let Err(err) = fs::rename(&path, &path_delete) {
+        warn!(
+            "Cannot async delete, retrying in sync mode: failed to rename '{}' to '{}': {err}",
+            path.as_ref().display(),
+            path_delete.display(),
+        );
         // Although the delete here is synchronous, we want to prevent another thread
         // from moving & deleting this directory via `move_and_async_delete_path`.
         lock.insert(path.as_ref().to_path_buf());
@@ -588,8 +592,10 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         .name("solDeletePath".to_string())
         .spawn(move || {
             trace!("background deleting {}...", path_delete.display());
-            let (_, measure_delete) =
-                measure!(fs_err::remove_dir_all(&path_delete).expect("background delete"));
+            let (result, measure_delete) = measure!(fs::remove_dir_all(&path_delete));
+            if let Err(err) = result {
+                panic!("Failed to async delete '{}': {err}", path_delete.display());
+            }
             trace!(
                 "background deleting {}... Done, and{measure_delete}",
                 path_delete.display()
