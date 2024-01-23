@@ -1483,19 +1483,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         max_root: Option<Slot>,
     ) -> Option<(Slot, T)> {
         let read_lock = self.get_bin(pubkey);
-        if self.valid.load(Ordering::Relaxed) == 0 {
-            panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
-        }
-        else {
-            self.count.fetch_add(1, Ordering::Relaxed);
-        }
         let account = read_lock
-            .get(pubkey)
-            .map(ReadAccountMapEntry::from_account_map_entry);
+            .get(pubkey);
 
         account.and_then(|locked_entry| {
-            let slot_list = locked_entry.slot_list();
-            let found_index = self.latest_slot(ancestors, slot_list, max_root);
+            let slot_list = locked_entry.slot_list.read().unwrap();
+            let found_index = self.latest_slot(ancestors, &slot_list, max_root);
             found_index.map(|found_index|{
                 slot_list[found_index]
             })
