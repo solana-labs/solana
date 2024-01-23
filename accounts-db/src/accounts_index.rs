@@ -361,7 +361,6 @@ impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
 
 impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
-        panic!("{}", line!());
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
             slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
@@ -370,17 +369,14 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
-        panic!("{}", line!());
         self.borrow_slot_list_guard()
     }
 
     pub fn ref_count(&self) -> RefCount {
-        panic!("{}", line!());
         self.borrow_owned_entry().ref_count()
     }
 
     pub fn addref(&self) {
-        panic!("{}", line!());
         self.borrow_owned_entry().addref();
     }
 }
@@ -681,6 +677,8 @@ pub enum AccountsIndexScanResult {
 /// T: account info type to interact in in-memory items
 /// U: account info type to be persisted to disk
 pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
+    pub valid: AtomicUsize,
+
     pub account_maps: LockMapType<T, U>,
     pub bin_calculator: PubkeyBinCalculator24,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -729,6 +727,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .and_then(|config| config.scan_results_limit_bytes);
         let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config, exit);
         Self {
+            valid: AtomicUsize::default(),
             account_maps,
             bin_calculator,
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
@@ -1138,6 +1137,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         pubkey: &Pubkey,
         lock: &AccountMaps<'_, T, U>,
     ) -> Option<ReadAccountMapEntry<T>> {
+        if self.valid.load(Ordering::Relaxed) == 0 {
+            panic!("{}", line!());
+        }
         lock.get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
@@ -1441,6 +1443,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
         let read_lock = self.get_bin(pubkey);
+        if self.valid.load(Ordering::Relaxed) == 0 {
+            panic!("{}", line!());
+        }
         let account = read_lock
             .get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry);

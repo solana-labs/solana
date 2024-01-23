@@ -1758,6 +1758,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
     ) -> Self {
+        bank_rc.accounts.accounts_db.accounts_index.valid.fetch_add(1, Ordering::Relaxed);
         let now = Instant::now();
         let ancestors = Ancestors::from(&fields.ancestors);
         // For backward compatibility, we can only serialize and deserialize
@@ -1895,6 +1896,7 @@ impl Bank {
                 i64
             ),
         );
+        bank.rc.accounts.accounts_db.accounts_index.valid.fetch_sub(1, Ordering::Relaxed);
         bank
     }
 
