@@ -41,7 +41,7 @@ pub enum OwnersBlockFormat {
 
 impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
-    pub(crate) fn write_owners_block<'a>(
+    pub fn write_owners_block<'a>(
         &self,
         file: &TieredStorageFile,
         owners_table: &OwnersTable,
@@ -81,7 +81,7 @@ impl OwnersBlockFormat {
 /// The in-memory representation of owners block for write.
 /// It manages a set of unique addresses of account owners.
 #[derive(Debug)]
-pub(crate) struct OwnersTable<'a> {
+pub struct OwnersTable<'a> {
     owners_set: IndexSet<&'a Pubkey>,
 }
 
@@ -89,7 +89,7 @@ pub(crate) struct OwnersTable<'a> {
 /// meta-data.  For each account meta, it has a owner_offset field to
 /// access its owner's address in the OwnersBlock.
 impl<'a> OwnersTable<'a> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             owners_set: IndexSet::new(),
         }
@@ -98,7 +98,7 @@ impl<'a> OwnersTable<'a> {
     /// Add the specified pubkey as the owner into the OwnersWriterTable
     /// if the specified pubkey has not existed in the OwnersWriterTable
     /// yet.  In any case, the function returns its OwnerOffset.
-    pub(crate) fn insert(&mut self, pubkey: &'a Pubkey) -> OwnerOffset {
+    pub fn insert(&mut self, pubkey: &'a Pubkey) -> OwnerOffset {
         let (offset, _existed) = self.owners_set.insert_full(pubkey);
 
         OwnerOffset(offset as u32)
