@@ -1046,7 +1046,7 @@ fn serialize_snapshot_data_file_capped<F>(
 where
     F: FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
 {
-    let data_file = fs_err::File::create(data_file_path)?.into();
+    let data_file = fs::File::create(data_file_path)?;
     let mut data_file_stream = BufWriter::new(data_file);
     serializer(&mut data_file_stream)?;
     data_file_stream.flush()?;
