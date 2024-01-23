@@ -861,7 +861,7 @@ mod tests {
         super::*,
         arbitrary::{Arbitrary, Unstructured},
         itertools::Itertools,
-        rand::Rng,
+        rand::{rngs::StdRng, Rng, SeedableRng},
     };
 
     #[test]
@@ -883,8 +883,20 @@ mod tests {
 
     #[test]
     fn test_vote_deserialize_into() {
-        for _ in 0..1000 {
-            let raw_data: Vec<u8> = (0..4096).map(|_| rand::random::<u8>()).collect();
+        // base case
+        let target_vote_state = VoteState::default();
+        let vote_state_buf =
+            bincode::serialize(&VoteStateVersions::new_current(target_vote_state.clone())).unwrap();
+
+        let mut test_vote_state = VoteState::default();
+        VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+
+        assert_eq!(target_vote_state, test_vote_state);
+
+        // variant
+        for _ in 0..cycles {
+            let size_hint = VoteStateVersions::size_hint(0).0 * 4;
+            let raw_data: Vec<u8> = (0..size_hint).map(|_| rand::random::<u8>()).collect();
             let mut unstructured = Unstructured::new(&raw_data);
 
             let target_vote_state_versions =
@@ -896,6 +908,30 @@ mod tests {
             VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
 
             assert_eq!(target_vote_state, test_vote_state);
+        }
+    }
+
+    #[test]
+    fn test_vote_deserialize_into_nopanic() {
+        // base case
+        let mut test_vote_state = VoteState::default();
+        let e = VoteState::deserialize_into(&[], &mut test_vote_state).unwrap_err();
+        assert_eq!(e, InstructionError::InvalidAccountData);
+
+        // variant
+        let seed = rand::random::<u64>();
+        println!("test_vote_deserialize_into_nopanic seed: {}", seed);
+        let mut r = StdRng::seed_from_u64(seed);
+
+        for _ in 0..1000 {
+            let raw_data_length = r.gen_range(1..1024);
+            let mut raw_data: Vec<u8> = vec![0; raw_data_length];
+            r.fill(&mut raw_data[..]);
+
+            let mut test_vote_state = VoteState::default();
+            let e = VoteState::deserialize_into(&raw_data, &mut test_vote_state).unwrap_err();
+
+            assert_eq!(e, InstructionError::InvalidAccountData);
         }
     }
 
