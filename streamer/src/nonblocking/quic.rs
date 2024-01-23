@@ -695,9 +695,13 @@ fn max_streams_for_connection_in_100ms(
             .apply_to(MAX_STREAMS_PER_100MS)
             .saturating_div(MAX_UNSTAKED_CONNECTIONS as u64)
     } else {
+        const MIN_STAKED_STREAMS: u64 = 8;
         let max_total_staked_streams: u64 = MAX_STREAMS_PER_100MS
             - Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT).apply_to(MAX_STREAMS_PER_100MS);
-        ((max_total_staked_streams as f64 / total_stake as f64) * stake as f64) as u64
+        std::cmp::max(
+            MIN_STAKED_STREAMS,
+            ((max_total_staked_streams as f64 / total_stake as f64) * stake as f64) as u64,
+        )
     }
 }
 
@@ -2062,6 +2066,13 @@ pub mod test {
         assert_eq!(
             max_streams_for_connection_in_100ms(ConnectionPeerType::Staked, 1000, 10000),
             4000
+        );
+
+        // max staked streams = 50K packets per ms * 80% = 40K
+        // minimum staked streams.
+        assert_eq!(
+            max_streams_for_connection_in_100ms(ConnectionPeerType::Staked, 1, 50000),
+            8
         );
     }
 }
