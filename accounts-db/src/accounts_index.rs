@@ -1,3 +1,5 @@
+use crate::account_info::StorageLocation;
+
 use {
     crate::{
         accounts_index_storage::{AccountsIndexStorage, Startup},
@@ -1470,6 +1472,34 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             }
             None => AccountIndexGetResult::NotFound,
         }
+    }
+
+    /// Get an account
+    /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub fn get_internal(
+        &self,
+        pubkey: &Pubkey,
+        ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
+    ) -> Option<(Slot, T)> {
+        let read_lock = self.get_bin(pubkey);
+        if self.valid.load(Ordering::Relaxed) == 0 {
+            panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
+        }
+        else {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+        let account = read_lock
+            .get(pubkey)
+            .map(ReadAccountMapEntry::from_account_map_entry);
+
+        account.and_then(|locked_entry| {
+            let slot_list = locked_entry.slot_list();
+            let found_index = self.latest_slot(ancestors, slot_list, max_root);
+            found_index.map(|found_index|{
+                slot_list[found_index]
+            })
+        })
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
