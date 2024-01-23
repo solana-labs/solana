@@ -16,7 +16,7 @@ use {
         },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        validator::{BlockVerificationMethod, ValidatorConfig},
+        validator::{BlockProductionMethod, BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_entry::entry::create_ticks,
@@ -349,11 +349,16 @@ fn test_forwarding() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
+    // Only ThreadLocalMultiIterator banking stage forwards transactions,
+    // so must use that block-production-method.
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default_for_test(),
+            &ValidatorConfig {
+                block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+                ..ValidatorConfig::default_for_test()
+            },
             2,
         ),
         ..ClusterConfig::default()
@@ -4257,7 +4262,10 @@ fn test_leader_failure_4() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_leader_failure_4");
     let num_nodes = 4;
-    let validator_config = ValidatorConfig::default_for_test();
+    let validator_config = ValidatorConfig {
+        block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+        ..ValidatorConfig::default_for_test()
+    };
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         node_stakes: vec![DEFAULT_NODE_STAKE; 4],
