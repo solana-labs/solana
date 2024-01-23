@@ -1510,12 +1510,16 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ) -> Option<(Slot, T)> {
         let read_lock = self.get_bin(pubkey);
         // note this still gets the refcount on the entry. We don't need that.
-        let account = read_lock.get(pubkey);
-
-        account.and_then(|locked_entry| {
-            let slot_list = locked_entry.slot_list.read().unwrap();
-            let found_index = self.latest_slot(ancestors, &slot_list, max_root);
-            found_index.map(|found_index| slot_list[found_index])
+        read_lock.get_internal(pubkey, |account| {
+            account
+                .map(|account| {
+                    let slot_list = account.slot_list.read().unwrap();
+                    let found_index = self.latest_slot(ancestors, &slot_list, max_root);
+                    found_index.map(|found_index| slot_list[found_index])
+                })
+                .flatten()
+                .map(|r| (false, Some(r)))
+                .unwrap_or((false, None))
         })
     }
 
