@@ -627,18 +627,24 @@ pub struct AccountsScanner {
 }
 
 impl AccountsScanner {
+    /// Returns true if this account should be included in the output
+    fn should_process_account(&self, account: &AccountSharedData, pubkey: &Pubkey) -> bool {
+        solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
+            && (self.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
+    }
+}
+
+impl AccountsScanner {
     pub fn print(&self) {
         let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
         let rent_collector = self.bank.rent_collector();
 
         let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-            if let Some((pubkey, account, slot)) = account_tuple.filter(|(_, account, _)| {
-                solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
-            }) {
-                if !self.include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
-                    return;
-                }
+            if let Some((pubkey, account, slot)) = account_tuple
+                .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
+            {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
                 if self.include_account_contents {
                     output_account(
                         pubkey,
@@ -650,6 +656,7 @@ impl AccountsScanner {
                 }
             }
         };
+
         self.bank.scan_all_accounts(scan_func).unwrap();
     }
 }
@@ -669,13 +676,11 @@ impl Serialize for AccountsScanner {
 
         let mut seq_serializer = serializer.serialize_seq(None)?;
         let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-            if let Some((pubkey, account, _slot)) = account_tuple.filter(|(_, account, _)| {
-                solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
-            }) {
-                if !self.include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
-                    return;
-                }
+            if let Some((pubkey, account, _slot)) = account_tuple
+                .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
+            {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
                 if self.include_account_contents {
                     let cli_account =
                         CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
@@ -683,6 +688,7 @@ impl Serialize for AccountsScanner {
                 }
             }
         };
+
         self.bank
             .scan_all_accounts(scan_func)
             .map_err(ser::Error::custom)?;
