@@ -678,6 +678,7 @@ pub enum AccountsIndexScanResult {
 /// U: account info type to be persisted to disk
 pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub valid: AtomicUsize,
+    pub count: AtomicUsize,
 
     pub account_maps: LockMapType<T, U>,
     pub bin_calculator: PubkeyBinCalculator24,
@@ -728,6 +729,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config, exit);
         Self {
             valid: AtomicUsize::default(),
+            count: AtomicUsize::default(),
             account_maps,
             bin_calculator,
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
@@ -1138,7 +1140,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         lock: &AccountMaps<'_, T, U>,
     ) -> Option<ReadAccountMapEntry<T>> {
         if self.valid.load(Ordering::Relaxed) == 0 {
-            panic!("{}", line!());
+            panic!("{}, {}", line!(), self.count.load(Ordering::Relaxed));
+        }
+        else {
+            self.count.fetch_add(1, Ordering::Relaxed);
         }
         lock.get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry)
