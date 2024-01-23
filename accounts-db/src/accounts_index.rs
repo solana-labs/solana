@@ -1487,14 +1487,17 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         } else {
             self.count.fetch_add(1, Ordering::Relaxed);
         }
-        read_lock.get(pubkey).map(|account| {
-            let read = account.slot_list.read().unwrap();
-            let slot_list = &read;
-            self.latest_slot(ancestors, slot_list, max_root).map(|found_index|
-                callback(slot_list[found_index])
-            )
-        }
-        ).flatten()
+        read_lock.get_internal(pubkey, |account| {
+            account
+                .map(|account| {
+                    let read = account.slot_list.read().unwrap();
+                    let slot_list = &read;
+                    self.latest_slot(ancestors, slot_list, max_root)
+                        .map(|found_index| (false, Some(callback(slot_list[found_index]))))
+                })
+                .flatten()
+                .unwrap_or((false, None))
+        })
     }
 
     /// Get an account
