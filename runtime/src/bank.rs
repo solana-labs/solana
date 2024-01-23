@@ -1213,6 +1213,8 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         new_bank_options: NewBankOptions,
     ) -> Self {
+        parent.rc.accounts.accounts_db.accounts_index.valid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         let mut time = Measure::start("bank::new_from_parent");
         let NewBankOptions { vote_only_bank } = new_bank_options;
 
@@ -1473,6 +1475,8 @@ impl Bank {
             .submit(parent.slot());
 
         new.loaded_programs_cache.write().unwrap().stats.reset();
+        parent.rc.accounts.accounts_db.accounts_index.valid.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+
         new
     }
 
@@ -2171,6 +2175,8 @@ impl Bank {
     }
 
     fn update_slot_hashes(&self) {
+        self.rc.accounts.accounts_db.accounts_index.valid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
             let mut slot_hashes = account
                 .as_ref()
@@ -2182,6 +2188,7 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+        self.rc.accounts.accounts_db.accounts_index.valid.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
