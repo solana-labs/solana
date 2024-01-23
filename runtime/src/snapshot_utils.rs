@@ -13,7 +13,6 @@ use {
     bzip2::bufread::BzDecoder,
     crossbeam_channel::Sender,
     flate2::read::GzDecoder,
-    fs_err,
     lazy_static::lazy_static,
     log::*,
     regex::Regex,
@@ -1069,7 +1068,7 @@ fn serialize_snapshot_data_file_capped<F>(
 where
     F: FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
 {
-    let data_file = fs_err::File::create(data_file_path)?.into();
+    let data_file = fs::File::create(data_file_path)?;
     let mut data_file_stream = BufWriter::new(data_file);
     serializer(&mut data_file_stream)?;
     data_file_stream.flush()?;
@@ -1140,7 +1139,7 @@ fn create_snapshot_data_file_stream(
     snapshot_root_file_path: impl AsRef<Path>,
     maximum_file_size: u64,
 ) -> Result<(u64, BufReader<std::fs::File>)> {
-    let snapshot_file_size = fs_err::metadata(&snapshot_root_file_path)?.len();
+    let snapshot_file_size = fs::metadata(&snapshot_root_file_path)?.len();
 
     if snapshot_file_size > maximum_file_size {
         let error_message = format!(
@@ -1152,8 +1151,8 @@ fn create_snapshot_data_file_stream(
         return Err(IoError::other(error_message).into());
     }
 
-    let snapshot_data_file = fs_err::File::open(snapshot_root_file_path.as_ref())?;
-    let snapshot_data_file_stream = BufReader::new(snapshot_data_file.into());
+    let snapshot_data_file = fs::File::open(snapshot_root_file_path)?;
+    let snapshot_data_file_stream = BufReader::new(snapshot_data_file);
 
     Ok((snapshot_file_size, snapshot_data_file_stream))
 }
@@ -1436,16 +1435,16 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
         .path();
 
     let version_file = unpack_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
-    fs_err::hard_link(version_file, slot_dir.join(SNAPSHOT_VERSION_FILENAME))?;
+    fs::hard_link(version_file, slot_dir.join(SNAPSHOT_VERSION_FILENAME))?;
 
     let status_cache_file = snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    fs_err::hard_link(
+    fs::hard_link(
         status_cache_file,
         slot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
     )?;
 
     let state_complete_file = slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-    fs_err::File::create(state_complete_file)?;
+    fs::File::create(state_complete_file)?;
 
     Ok(())
 }
@@ -1521,7 +1520,7 @@ fn streaming_snapshot_dir_files(
     file_sender.send(snapshot_version_path.into())?;
 
     for account_path in account_paths {
-        for file in fs_err::read_dir(account_path)? {
+        for file in fs::read_dir(account_path)? {
             file_sender.send(file?.path())?;
         }
     }
