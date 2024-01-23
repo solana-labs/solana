@@ -593,9 +593,6 @@ impl JsonRpcRequestProcessor {
         }
 
         let bank = self.get_bank_with_config(slot_context)?;
-        let partitioned_epoch_reward_enabled = bank
-            .feature_set
-            .is_active(&feature_set::enable_partitioned_epoch_reward::id());
 
         let first_confirmed_block_in_epoch = *self
             .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
@@ -604,6 +601,12 @@ impl JsonRpcRequestProcessor {
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
             })?;
+        let partitioned_epoch_reward_enabled_slot = bank
+            .feature_set
+            .activated_slot(&feature_set::enable_partitioned_epoch_reward::id());
+        let partitioned_epoch_reward_enabled = partitioned_epoch_reward_enabled_slot
+            .map(|slot| slot <= first_confirmed_block_in_epoch)
+            .unwrap_or(false);
 
         let mut reward_map: HashMap<String, (Reward, Slot)> = {
             let addresses: Vec<String> =
