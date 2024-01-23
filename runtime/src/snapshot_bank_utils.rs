@@ -843,8 +843,13 @@ fn verify_slot_deltas(
     slot_deltas: &[BankSlotDelta],
     bank: &Bank,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
+    bank.rc.accounts.accounts_db.accounts_index.valid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    
     let info = verify_slot_deltas_structural(slot_deltas, bank.slot())?;
-    verify_slot_deltas_with_history(&info.slots, &bank.get_slot_history(), bank.slot())
+    let r = verify_slot_deltas_with_history(&info.slots, &bank.get_slot_history(), bank.slot());
+    bank.rc.accounts.accounts_db.accounts_index.valid.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+
+    r
 }
 
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
