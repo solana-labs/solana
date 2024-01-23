@@ -1476,6 +1476,8 @@ impl Bank {
 
         new.loaded_programs_cache.write().unwrap().stats.reset();
         parent.rc.accounts.accounts_db.accounts_index.valid.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        error!("jwash: {}, {}", line!(), parent.rc.accounts.accounts_db.accounts_index.count.swap(0, Ordering::Relaxed));
+
 
         new
     }

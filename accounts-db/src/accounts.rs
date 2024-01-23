@@ -131,13 +131,15 @@ impl Accounts {
         address_table_lookup: &MessageAddressTableLookup,
         slot_hashes: &SlotHashes,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
+        self.accounts_db.accounts_index.valid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         let table_account = self
             .accounts_db
             .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
-        if table_account.owner() == &address_lookup_table::program::id() {
+        let r = if table_account.owner() == &address_lookup_table::program::id() {
             let current_slot = ancestors.max_slot();
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
@@ -156,7 +158,9 @@ impl Accounts {
             })
         } else {
             Err(AddressLookupError::InvalidAccountOwner)
-        }
+        };
+        self.accounts_db.accounts_index.valid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        r
     }
 
     /// Slow because lock is held for 1 operation instead of many
