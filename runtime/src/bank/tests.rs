@@ -10989,7 +10989,7 @@ fn test_rent_state_list_len() {
         &bank.accounts().accounts_db,
         &bank.ancestors,
         &[sanitized_tx.clone()],
-        vec![(Ok(()), None)],
+        &[(Ok(()), None)],
         &bank.blockhash_queue.read().unwrap(),
         &mut error_counters,
         &bank.rent_collector,
