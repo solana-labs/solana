@@ -168,36 +168,33 @@ pub fn wait_for_wen_restart(
     wait_for_supermajority_threshold_percent: u64,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut progress = read_wen_restart_records(wen_restart_path)?;
-    if progress.state() == RestartState::Init {
-        send_restart_last_voted_fork_slots(
-            last_vote.clone(),
-            blockstore.clone(),
-            cluster_info.clone(),
-            &mut progress,
-        )?;
-        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
-    }
-    if progress.state() == RestartState::LastVotedForkSlots {
-        aggregate_restart_last_voted_fork_slots(
-            wen_restart_path,
-            wait_for_supermajority_threshold_percent,
-            cluster_info.clone(),
-            bank_forks.clone(),
-            wen_restart_repair_slots.clone().unwrap(),
-            exit,
-            &mut progress,
-        )?;
-        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
-    }
-    // Place holder to make the code compile and run for now.
-    if progress.state() == RestartState::HeaviestFork {
-        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?
-    }
-    if progress.state() == RestartState::Done {
-        Ok(())
-    } else {
-        panic!("Moving to unexpected state {:?}", progress.state())
+    let mut progress = initialize(wen_restart_path)?;
+    loop {
+        match progress.state() {
+            RestartState::Init => send_restart_last_voted_fork_slots(
+                last_vote.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                &mut progress,
+            )?,
+            RestartState::LastVotedForkSlots => aggregate_restart_last_voted_fork_slots(
+                wen_restart_path,
+                wait_for_supermajority_threshold_percent,
+                cluster_info.clone(),
+                bank_forks.clone(),
+                wen_restart_repair_slots.clone().unwrap(),
+                exit.clone(),
+                &mut progress,
+            )?,
+            RestartState::HeaviestFork => {
+                warn!("Not implemented yet, make it empty to complete test")
+            }
+            RestartState::FinishedSnapshot => return Err("Not implemented!".into()),
+            RestartState::GeneratingSnapshot => return Err("Not implemented!".into()),
+            RestartState::WaitingForSupermajority => return Err("Not implemented!".into()),
+            RestartState::Done => return Ok(()),
+        }
+        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?;
     }
 }
 
@@ -220,22 +217,39 @@ fn increment_and_write_wen_restart_records(
     write_wen_restart_records(records_path, new_progress)
 }
 
-fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress, Error> {
-    match read(records_path) {
-        Ok(buffer) => {
-            let progress = WenRestartProgress::decode(&mut Cursor::new(buffer))?;
-            info!("read record {:?}", progress);
+fn initialize(records_path: &PathBuf) -> Result<WenRestartProgress, Error> {
+    match read_wen_restart_records(records_path) {
+        Ok(mut progress) => {
+            if progress.state() == RestartState::Done {
+                progress.set_state(RestartState::Init);
+                write_wen_restart_records(records_path, &progress)?;
+            }
             Ok(progress)
         }
         Err(e) => {
-            warn!("cannot read record {:?}: {:?}", records_path, e);
-            Ok(WenRestartProgress {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(e);
+            }
+            info!(
+                "wen restart proto file not found at {:?}, write init state",
+                records_path
+            );
+            let progress = WenRestartProgress {
                 state: RestartState::Init.into(),
                 my_last_voted_fork_slots: None,
                 last_voted_fork_slots_aggregate: None,
-            })
+            };
+            write_wen_restart_records(records_path, &progress)?;
+            Ok(progress)
         }
     }
+}
+
+fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress, Error> {
+    let buffer = read(records_path)?;
+    let progress = WenRestartProgress::decode(&mut Cursor::new(buffer))?;
+    info!("read record {:?}", progress);
+    Ok(progress)
 }
 
 fn write_wen_restart_records(
@@ -272,10 +286,44 @@ mod tests {
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
         },
-        solana_sdk::{pubkey::Pubkey, signature::Signer, timing::timestamp},
+        solana_sdk::{
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
         solana_streamer::socket::SocketAddrSpace,
         std::{fs::read, sync::Arc, thread::Builder},
     };
+
+    fn push_restart_last_voted_fork_slots(
+        cluster_info: Arc<ClusterInfo>,
+        node: &LegacyContactInfo,
+        expected_slots_to_repair: &[Slot],
+        last_vote_hash: &Hash,
+        shred_version: u16,
+        node_keypair: &Keypair,
+    ) {
+        let slots = RestartLastVotedForkSlots::new(
+            *node.pubkey(),
+            timestamp(),
+            expected_slots_to_repair,
+            *last_vote_hash,
+            shred_version,
+        )
+        .unwrap();
+        let entries = vec![
+            CrdsValue::new_signed(CrdsData::LegacyContactInfo(node.clone()), node_keypair),
+            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots), node_keypair),
+        ];
+        {
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+            for entry in entries {
+                assert!(gossip_crds
+                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
+                    .is_ok());
+            }
+        }
+    }
 
     #[test]
     fn test_wen_restart_normal_flow() {
@@ -374,29 +422,14 @@ mod tests {
             let node_pubkey = keypairs.node_keypair.pubkey();
             let node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
             let last_vote_hash = Hash::new_unique();
-            let slots = RestartLastVotedForkSlots::new(
-                node_pubkey,
-                timestamp(),
+            push_restart_last_voted_fork_slots(
+                cluster_info.clone(),
+                &node,
                 &expected_slots_to_repair,
-                last_vote_hash,
+                &last_vote_hash,
                 shred_version,
-            )
-            .unwrap();
-            let entries = vec![
-                CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypairs.node_keypair),
-                CrdsValue::new_signed(
-                    CrdsData::RestartLastVotedForkSlots(slots),
-                    &keypairs.node_keypair,
-                ),
-            ];
-            {
-                let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
-                for entry in entries {
-                    assert!(gossip_crds
-                        .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
-                        .is_ok());
-                }
-            }
+                &keypairs.node_keypair,
+            );
             expected_messages.insert(
                 node_pubkey.to_string(),
                 LastVotedForkSlotsRecord {
