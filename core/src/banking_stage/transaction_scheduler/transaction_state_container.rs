@@ -63,33 +63,6 @@ impl TransactionStateContainer {
         self.priority_queue.pop_max()
     }
 
-    /// Get an iterator of the top `n` transaction ids in the priority queue.
-    /// This will remove the ids from the queue, but not drain the remainder
-    /// of the queue.
-    pub(crate) fn take_top_n(
-        &mut self,
-        n: usize,
-    ) -> impl Iterator<Item = TransactionPriorityId> + '_ {
-        (0..n).map_while(|_| self.pop())
-    }
-
-    /// Serialize entire priority queue. `hold` indicates whether the priority queue should
-    /// be drained or not.
-    /// If `hold` is true, these ids should not be removed from the map while processing.
-    pub(crate) fn priority_ordered_ids(&mut self, hold: bool) -> Vec<TransactionPriorityId> {
-        let priority_queue = if hold {
-            self.priority_queue.clone()
-        } else {
-            let capacity = self.priority_queue.capacity();
-            core::mem::replace(
-                &mut self.priority_queue,
-                MinMaxHeap::with_capacity(capacity),
-            )
-        };
-
-        priority_queue.into_vec_desc()
-    }
-
     /// Get mutable transaction state by id.
     pub(crate) fn get_mut_transaction_state(
         &mut self,
@@ -272,57 +245,6 @@ mod tests {
                 .unwrap(),
             4
         );
-    }
-
-    #[test]
-    fn test_take_top_n() {
-        let mut container = TransactionStateContainer::with_capacity(5);
-        push_to_container(&mut container, 5);
-
-        let taken = container.take_top_n(3).collect::<Vec<_>>();
-        assert_eq!(
-            taken,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-            ]
-        );
-        // The remainder of the queue should not be empty
-        assert_eq!(container.priority_queue.len(), 2);
-    }
-
-    #[test]
-    fn test_priority_ordered_ids() {
-        let mut container = TransactionStateContainer::with_capacity(5);
-        push_to_container(&mut container, 5);
-
-        let ordered = container.priority_ordered_ids(false);
-        assert_eq!(
-            ordered,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
-            ]
-        );
-        assert!(container.priority_queue.is_empty());
-
-        push_to_container(&mut container, 5);
-        let ordered = container.priority_ordered_ids(true);
-        assert_eq!(
-            ordered,
-            vec![
-                TransactionPriorityId::new(4, TransactionId::new(4)),
-                TransactionPriorityId::new(3, TransactionId::new(3)),
-                TransactionPriorityId::new(2, TransactionId::new(2)),
-                TransactionPriorityId::new(1, TransactionId::new(1)),
-                TransactionPriorityId::new(0, TransactionId::new(0)),
-            ]
-        );
-        assert_eq!(container.priority_queue.len(), 5);
     }
 
     #[test]
