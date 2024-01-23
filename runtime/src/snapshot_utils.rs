@@ -13,7 +13,6 @@ use {
     bzip2::bufread::BzDecoder,
     crossbeam_channel::Sender,
     flate2::read::GzDecoder,
-    fs_err,
     lazy_static::lazy_static,
     log::*,
     regex::Regex,
