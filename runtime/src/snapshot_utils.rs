@@ -19,11 +19,12 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{self, AccountStorageEntry, AtomicAppendVecId},
+        accounts_db::{AccountStorageEntry, AtomicAppendVecId},
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
+        utils::{delete_contents_of_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
     },
     solana_measure::{measure, measure::Measure},
     solana_sdk::{clock::Slot, hash::Hash},
@@ -31,7 +32,7 @@ use {
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt, fs,
-        io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
+        io::{BufReader, BufWriter, Error as IoError, Read, Seek, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::ExitStatus,
@@ -44,7 +45,10 @@ use {
     thiserror::Error,
 };
 #[cfg(feature = "dev-context-only-utils")]
-use {hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*};
+use {
+    hardened_unpack::UnpackedAppendVecMap, rayon::prelude::*,
+    solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
+};
 
 mod archive_format;
 pub mod snapshot_storage_rebuilder;
@@ -526,26 +530,6 @@ pub enum GetSnapshotAccountsHardLinkDirError {
     },
 }
 
-/// Creates directories if they do not exist, and canonicalizes the paths.
-pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    directories
-        .iter()
-        .map(|path| {
-            fs_err::create_dir_all(path)?;
-            let path = fs_err::canonicalize(path)?;
-            Ok(path)
-        })
-        .collect()
-}
-
-/// Delete the files and subdirectories in a directory.
-/// This is useful if the process does not have permission
-/// to delete the top level directory it might be able to
-/// delete the contents of that directory.
-pub(crate) fn delete_contents_of_path(path: impl AsRef<Path>) {
-    accounts_db::delete_contents_of_path(path)
-}
-
 /// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
 /// The directory is re-created after the move, and should now be empty.
 pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
@@ -586,8 +570,12 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         path_delete.file_name().unwrap().to_str().unwrap(),
         "_to_be_deleted"
     ));
-    if let Err(err) = fs_err::rename(&path, &path_delete) {
-        warn!("Path renaming failed, falling back to rm_dir in sync mode: {err}");
+    if let Err(err) = fs::rename(&path, &path_delete) {
+        warn!(
+            "Cannot async delete, retrying in sync mode: failed to rename '{}' to '{}': {err}",
+            path.as_ref().display(),
+            path_delete.display(),
+        );
         // Although the delete here is synchronous, we want to prevent another thread
         // from moving & deleting this directory via `move_and_async_delete_path`.
         lock.insert(path.as_ref().to_path_buf());
@@ -604,8 +592,10 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         .name("solDeletePath".to_string())
         .spawn(move || {
             trace!("background deleting {}...", path_delete.display());
-            let (_, measure_delete) =
-                measure!(fs_err::remove_dir_all(&path_delete).expect("background delete"));
+            let (result, measure_delete) = measure!(fs::remove_dir_all(&path_delete));
+            if let Err(err) = result {
+                panic!("Failed to async delete '{}': {err}", path_delete.display());
+            }
             trace!(
                 "background deleting {}... Done, and{measure_delete}",
                 path_delete.display()
@@ -928,9 +918,12 @@ pub fn archive_snapshot_package(
 /// Get the bank snapshots in a directory
 pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
     let mut bank_snapshots = Vec::default();
-    match fs_err::read_dir(bank_snapshots_dir.as_ref()) {
+    match fs::read_dir(&bank_snapshots_dir) {
         Err(err) => {
-            info!("Unable to read bank snapshots directory: {err}");
+            info!(
+                "Unable to read bank snapshots directory '{}': {err}",
+                bank_snapshots_dir.as_ref().display(),
+            );
         }
         Ok(paths) => paths
             .filter_map(|entry| {
@@ -1067,9 +1060,10 @@ where
     let consumed_size = data_file_stream.stream_position()?;
     if consumed_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
+            "too large snapshot data file to serialize: '{}' has {consumed_size} bytes",
+            data_file_path.display(),
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
     Ok(consumed_size)
 }
@@ -1133,12 +1127,12 @@ fn create_snapshot_data_file_stream(
 
     if snapshot_file_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to deserialize: {} has {} bytes (max size is {} bytes)",
+            "too large snapshot data file to deserialize: '{}' has {} bytes (max size is {} bytes)",
             snapshot_root_file_path.as_ref().display(),
             snapshot_file_size,
             maximum_file_size,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     let snapshot_data_file = fs_err::File::open(snapshot_root_file_path.as_ref())?;
@@ -1158,26 +1152,15 @@ fn check_deserialize_file_consumed(
 
     if consumed_size != file_size {
         let error_message = format!(
-            "invalid snapshot data file: {} has {} bytes, however consumed {} bytes to deserialize",
+            "invalid snapshot data file: '{}' has {} bytes, however consumed {} bytes to deserialize",
             file_path.as_ref().display(),
             file_size,
             consumed_size,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     Ok(())
-}
-
-/// For all account_paths, create the run/ and snapshot/ sub directories.
-/// If an account_path directory does not exist, create it.
-/// It returns (account_run_paths, account_snapshot_paths) or error
-pub fn create_all_accounts_run_and_snapshot_dirs(
-    account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    accounts_db::create_all_accounts_run_and_snapshot_dirs(account_paths).map_err(|err| {
-        SnapshotError::IoWithSource(err, "Unable to create account run and snapshot directories")
-    })
 }
 
 /// Return account path from the appendvec path after checking its format.
@@ -1186,7 +1169,7 @@ fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf
     let run_file_name = run_path.file_name()?;
     // All appendvec files should be under <account_path>/run/.
     // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
-    if run_file_name != "run" {
+    if run_file_name != ACCOUNTS_RUN_DIR {
         error!(
             "The account path {} does not have run/ as its immediate parent directory.",
             run_path.display()
@@ -1209,7 +1192,9 @@ fn get_snapshot_accounts_hardlink_dir(
         GetSnapshotAccountsHardLinkDirError::GetAccountPath(appendvec_path.to_path_buf())
     })?;
 
-    let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
+    let snapshot_hardlink_dir = account_path
+        .join(ACCOUNTS_SNAPSHOT_DIR)
+        .join(bank_slot.to_string());
 
     // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
     // and the symlink to it at the first time of seeing the account_path.
@@ -1550,7 +1535,7 @@ pub fn rebuild_storages_from_snapshot_dir(
             .ok_or_else(|| SnapshotError::InvalidAccountPath(account_snapshot_path.clone()))?
             .parent()
             .ok_or_else(|| SnapshotError::InvalidAccountPath(account_snapshot_path.clone()))?
-            .join("run");
+            .join(ACCOUNTS_RUN_DIR);
         if !account_run_paths.contains(&account_run_path) {
             // The appendvec from the bank snapshot storage does not match any of the provided account_paths set.
             // The accout paths have changed so the snapshot is no longer usable.
@@ -1601,12 +1586,12 @@ fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
     let file_size = fs_err::metadata(&path)?.len();
     if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
         let error_message = format!(
-            "snapshot version file too large: {} has {} bytes (max size is {} bytes)",
+            "snapshot version file too large: '{}' has {} bytes (max size is {} bytes)",
             path.as_ref().display(),
             file_size,
             MAX_SNAPSHOT_VERSION_FILE_SIZE,
         );
-        return Err(get_io_error(&error_message));
+        return Err(IoError::other(error_message).into());
     }
 
     // Read snapshot_version from file.
@@ -1760,10 +1745,13 @@ where
     F: Fn(PathBuf) -> Result<T>,
 {
     let walk_dir = |dir: &Path| -> Vec<T> {
-        let entry_iter = fs_err::read_dir(dir);
+        let entry_iter = fs::read_dir(dir);
         match entry_iter {
             Err(err) => {
-                info!("Unable to read snapshot archives directory: {err}");
+                info!(
+                    "Unable to read snapshot archives directory '{}': {err}",
+                    dir.display(),
+                );
                 vec![]
             }
             Ok(entries) => entries
@@ -1891,9 +1879,12 @@ pub fn purge_old_snapshot_archives(
     fn remove_archives<T: SnapshotArchiveInfoGetter>(archives: &[T]) {
         for path in archives.iter().map(|a| a.path()) {
             trace!("Removing snapshot archive: {}", path.display());
-            let result = fs_err::remove_file(path);
+            let result = fs::remove_file(path);
             if let Err(err) = result {
-                info!("Failed to remove snapshot archive: {err}",);
+                info!(
+                    "Failed to remove snapshot archive '{}': {err}",
+                    path.display()
+                );
             }
         }
     }
@@ -1986,7 +1977,16 @@ fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
 ) -> SharedBuffer {
-    let open_file = || fs_err::File::open(snapshot_tar).unwrap();
+    let open_file = || {
+        fs::File::open(snapshot_tar)
+            .map_err(|err| {
+                IoError::other(format!(
+                    "failed to open snapshot archive '{}': {err}",
+                    snapshot_tar.display(),
+                ))
+            })
+            .unwrap()
+    };
     match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
@@ -2024,11 +2024,20 @@ pub fn verify_unpacked_snapshots_dir_and_version(
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {
-        return Err(get_io_error("invalid snapshot format"));
+        return Err(IoError::other(format!(
+            "invalid snapshot format: only one snapshot allowed, but found {}",
+            bank_snapshots.len(),
+        ))
+        .into());
     }
-    let root_paths = bank_snapshots
-        .pop()
-        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+    let root_paths = bank_snapshots.pop().ok_or_else(|| {
+        IoError::other(format!(
+            "no snapshots found in snapshots directory '{}'",
+            unpacked_snapshots_dir_and_version
+                .unpacked_snapshots_dir
+                .display(),
+        ))
+    })?;
     Ok((snapshot_version, root_paths))
 }
 
@@ -2042,11 +2051,6 @@ pub fn get_bank_snapshot_dir(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) -
     bank_snapshots_dir
         .as_ref()
         .join(get_snapshot_file_name(slot))
-}
-
-fn get_io_error(error: &str) -> SnapshotError {
-    warn!("Snapshot Error: {:?}", error);
-    SnapshotError::Io(IoError::new(ErrorKind::Other, error))
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -2069,9 +2073,7 @@ pub fn verify_snapshot_archive(
 ) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let unpack_account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(unpack_dir)
-        .unwrap()
-        .0;
+    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2088,7 +2090,7 @@ pub fn verify_snapshot_archive(
     // collect all the appendvecs in account_paths/<slot>/snapshot/ into one directory for later comparison.
     let storages_to_verify = unpack_dir.join("storages_to_verify");
     // Create the directory if it doesn't exist
-    fs_err::create_dir_all(&storages_to_verify).unwrap();
+    fs::create_dir_all(&storages_to_verify).unwrap();
 
     let slot = slot.to_string();
     let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
@@ -2098,8 +2100,8 @@ pub fn verify_snapshot_archive(
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
-        fs_err::remove_file(p1).unwrap();
-        fs_err::remove_file(p2).unwrap();
+        fs::remove_file(p1).unwrap();
+        fs::remove_file(p2).unwrap();
     }
 
     // The new the status_cache file is inside the slot directory together with the snapshot file.
@@ -2112,7 +2114,7 @@ pub fn verify_snapshot_archive(
     let new_unpacked_status_cache_file = unpacked_snapshots
         .join(&slot)
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    fs_err::rename(
+    fs::rename(
         existing_unpacked_status_cache_file,
         new_unpacked_status_cache_file,
     )
@@ -2121,26 +2123,26 @@ pub fn verify_snapshot_archive(
     let accounts_hardlinks_dir = snapshot_slot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
-        for entry in fs_err::read_dir(&accounts_hardlinks_dir).unwrap() {
-            let link_dst_path = fs_err::read_link(entry.unwrap().path()).unwrap();
+        for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
+            let link_dst_path = fs::read_link(entry.unwrap().path()).unwrap();
             // Copy all the files in dst_path into the storages_to_verify directory.
-            for entry in fs_err::read_dir(&link_dst_path).unwrap() {
+            for entry in fs::read_dir(&link_dst_path).unwrap() {
                 let src_path = entry.unwrap().path();
                 let dst_path = storages_to_verify.join(src_path.file_name().unwrap());
-                fs_err::copy(src_path, dst_path).unwrap();
+                fs::copy(src_path, dst_path).unwrap();
             }
         }
-        fs_err::remove_dir_all(accounts_hardlinks_dir).unwrap();
+        fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
     }
 
     let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
     if version_path.is_file() {
-        fs_err::remove_file(version_path).unwrap();
+        fs::remove_file(version_path).unwrap();
     }
 
     let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
     if state_complete_path.is_file() {
-        fs_err::remove_file(state_complete_path).unwrap();
+        fs::remove_file(state_complete_path).unwrap();
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
@@ -2150,7 +2152,7 @@ pub fn verify_snapshot_archive(
     // Remove the empty "accounts" directory for the directory comparison below.
     // In some test cases the directory to compare do not come from unarchiving.
     // Ignore the error when this directory does not exist.
-    _ = fs_err::remove_dir(unpack_account_dir.join("accounts"));
+    _ = fs::remove_dir(unpack_account_dir.join("accounts"));
     // Check the account entries are the same
     assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
 }
@@ -2213,16 +2215,34 @@ fn purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSna
 
 /// Remove the bank snapshot at this path
 pub fn purge_bank_snapshot(bank_snapshot_dir: impl AsRef<Path>) -> Result<()> {
+    const FN_ERR: &str = "failed to purge bank snapshot";
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all accounts snapshot directories.
         // They should all be removed.
-        for accounts_hardlink_dir in fs_err::read_dir(accounts_hardlinks_dir)? {
-            let accounts_hardlink_dir = fs_err::read_link(accounts_hardlink_dir?.path())?;
+        let read_dir = fs::read_dir(&accounts_hardlinks_dir).map_err(|err| {
+            IoError::other(format!(
+                "{FN_ERR}: failed to read accounts hardlinks dir '{}': {err}",
+                accounts_hardlinks_dir.display(),
+            ))
+        })?;
+        for entry in read_dir {
+            let accounts_hardlink_dir = entry?.path();
+            let accounts_hardlink_dir = fs::read_link(&accounts_hardlink_dir).map_err(|err| {
+                IoError::other(format!(
+                    "{FN_ERR}: failed to read symlink '{}': {err}",
+                    accounts_hardlink_dir.display(),
+                ))
+            })?;
             move_and_async_delete_path(&accounts_hardlink_dir);
         }
     }
-    fs_err::remove_dir_all(bank_snapshot_dir)?;
+    fs::remove_dir_all(&bank_snapshot_dir).map_err(|err| {
+        IoError::other(format!(
+            "{FN_ERR}: failed to remove dir '{}': {err}",
+            bank_snapshot_dir.as_ref().display(),
+        ))
+    })?;
     Ok(())
 }
 
@@ -2249,9 +2269,7 @@ pub fn should_take_incremental_snapshot(
 #[cfg(feature = "dev-context-only-utils")]
 pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = accounts_db::create_accounts_run_and_snapshot_dirs(&tmp_dir)
-        .unwrap()
-        .0;
+    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
     (tmp_dir, account_dir)
 }
 

@@ -46,6 +46,7 @@ pub mod storable_accounts;
 pub mod tiered_storage;
 pub mod transaction_error_metrics;
 pub mod transaction_results;
+pub mod utils;
 mod verify_accounts_hash_in_background;
 pub mod waitable_condvar;
 

@@ -1,4 +1,5 @@
 use {
+    solana_cost_model::transaction_cost::TransactionCost,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
 };
@@ -34,11 +35,13 @@ pub(crate) enum TransactionState {
     Unprocessed {
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
+        transaction_cost: TransactionCost,
         forwarded: bool,
     },
     /// The transaction is currently scheduled or being processed.
     Pending {
         transaction_priority_details: TransactionPriorityDetails,
+        transaction_cost: TransactionCost,
         forwarded: bool,
     },
 }
@@ -48,10 +51,12 @@ impl TransactionState {
     pub(crate) fn new(
         transaction_ttl: SanitizedTransactionTTL,
         transaction_priority_details: TransactionPriorityDetails,
+        transaction_cost: TransactionCost,
     ) -> Self {
         Self::Unprocessed {
             transaction_ttl,
             transaction_priority_details,
+            transaction_cost,
             forwarded: false,
         }
     }
@@ -67,6 +72,18 @@ impl TransactionState {
                 transaction_priority_details,
                 ..
             } => transaction_priority_details,
+        }
+    }
+
+    /// Returns a reference to the transaction cost of the transaction.
+    pub(crate) fn transaction_cost(&self) -> &TransactionCost {
+        match self {
+            Self::Unprocessed {
+                transaction_cost, ..
+            } => transaction_cost,
+            Self::Pending {
+                transaction_cost, ..
+            } => transaction_cost,
         }
     }
 
@@ -103,10 +120,12 @@ impl TransactionState {
             TransactionState::Unprocessed {
                 transaction_ttl,
                 transaction_priority_details,
+                transaction_cost,
                 forwarded,
             } => {
                 *self = TransactionState::Pending {
                     transaction_priority_details,
+                    transaction_cost,
                     forwarded,
                 };
                 transaction_ttl
@@ -128,11 +147,13 @@ impl TransactionState {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
             TransactionState::Pending {
                 transaction_priority_details,
+                transaction_cost,
                 forwarded,
             } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
                     transaction_priority_details,
+                    transaction_cost,
                     forwarded,
                 }
             }
@@ -162,6 +183,9 @@ impl TransactionState {
                     priority: 0,
                     compute_unit_limit: 0,
                 },
+                transaction_cost: TransactionCost::SimpleVote {
+                    writable_accounts: vec![],
+                },
                 forwarded: false,
             },
         )
@@ -172,6 +196,7 @@ impl TransactionState {
 mod tests {
     use {
         super::*,
+        solana_cost_model::transaction_cost::UsageCostDetails,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
             signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
@@ -190,6 +215,10 @@ mod tests {
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[&from_keypair], message, Hash::default());
+        let transaction_cost = TransactionCost::Transaction(UsageCostDetails {
+            signature_cost: 5000,
+            ..UsageCostDetails::default()
+        });
 
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: SanitizedTransaction::from_transaction_for_tests(tx),
@@ -202,6 +231,7 @@ mod tests {
                 priority,
                 compute_unit_limit: 0,
             },
+            transaction_cost,
         )
     }
 

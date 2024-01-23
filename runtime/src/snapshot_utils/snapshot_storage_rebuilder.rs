@@ -1,9 +1,7 @@
 //! Provides interfaces for rebuilding snapshot storages
 
 use {
-    super::{
-        get_io_error, snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion,
-    },
+    super::{snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion},
     crate::serde_snapshot::{
         self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
         snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
@@ -25,7 +23,7 @@ use {
     std::{
         collections::HashMap,
         fs::File,
-        io::BufReader,
+        io::{BufReader, Error as IoError},
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -84,9 +82,9 @@ impl SnapshotStorageRebuilder {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
         let snapshot_version_str = snapshot_version_from_file(snapshot_version_path)?;
-        let snapshot_version = snapshot_version_str.parse().map_err(|_| {
-            get_io_error(&format!(
-                "unsupported snapshot version: {snapshot_version_str}",
+        let snapshot_version = snapshot_version_str.parse().map_err(|err| {
+            IoError::other(format!(
+                "unsupported snapshot version '{snapshot_version_str}': {err}",
             ))
         })?;
         let snapshot_storage_lengths =

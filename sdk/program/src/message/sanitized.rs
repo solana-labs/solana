@@ -360,6 +360,8 @@ impl SanitizedMessage {
         num_signatures
     }
 
+    /// Returns the number of requested write-locks in this message.
+    /// This does not consider if write-locks are demoted.
     pub fn num_write_locks(&self) -> u64 {
         self.account_keys()
             .len()
