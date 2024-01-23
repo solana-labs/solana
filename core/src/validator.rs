@@ -601,7 +601,7 @@ impl Validator {
             &config.snapshot_config.bank_snapshots_dir,
         );
 
-        info!("Cleaning orphaned account snapshot directories...");
+        info!("Cleaning orphaned account snapshot directories..");
         let mut timer = Measure::start("clean_orphaned_account_snapshot_dirs");
         clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
@@ -609,7 +609,7 @@ impl Validator {
         )
         .map_err(|err| format!("failed to clean orphaned account snapshot directories: {err}"))?;
         timer.stop();
-        info!("Cleaning orphaned account snapshot directories... Done, and{timer}");
+        info!("Cleaning orphaned account snapshot directories done. {timer}");
 
         // The accounts hash cache dir was renamed, so cleanup any old dirs that exist.
         let accounts_hash_cache_path = config
