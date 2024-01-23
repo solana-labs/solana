@@ -14,7 +14,7 @@ use {
             AccountsIndexConfig, IndexLimitMb,
         },
         partitioned_rewards::TestPartitionedEpochRewards,
-        utils::create_all_accounts_run_and_snapshot_dirs,
+        utils::{create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories},
     },
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
@@ -48,9 +48,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{
-            self, create_and_canonicalize_directories, ArchiveFormat, SnapshotVersion,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -991,9 +989,12 @@ pub fn main() {
         .map(BlockstoreRecoveryMode::from);
 
     // Canonicalize ledger path to avoid issues with symlink creation
-    let ledger_path = create_and_canonicalize_directories(&[ledger_path])
+    let ledger_path = create_and_canonicalize_directories([&ledger_path])
         .unwrap_or_else(|err| {
-            eprintln!("Unable to access ledger path: {err}");
+            eprintln!(
+                "Unable to access ledger path '{}': {err}",
+                ledger_path.display(),
+            );
             exit(1);
         })
         .pop()
@@ -1003,9 +1004,12 @@ pub fn main() {
         .value_of("accounts_hash_cache_path")
         .map(Into::into)
         .unwrap_or_else(|| ledger_path.join(AccountsDb::DEFAULT_ACCOUNTS_HASH_CACHE_DIR));
-    let accounts_hash_cache_path = create_and_canonicalize_directories(&[accounts_hash_cache_path])
+    let accounts_hash_cache_path = create_and_canonicalize_directories([&accounts_hash_cache_path])
         .unwrap_or_else(|err| {
-            eprintln!("Unable to access accounts hash cache path: {err}");
+            eprintln!(
+                "Unable to access accounts hash cache path '{}': {err}",
+                accounts_hash_cache_path.display(),
+            );
             exit(1);
         })
         .pop()
@@ -1443,11 +1447,10 @@ pub fn main() {
         } else {
             vec![ledger_path.join("accounts")]
         };
-    let account_paths = snapshot_utils::create_and_canonicalize_directories(&account_paths)
-        .unwrap_or_else(|err| {
-            eprintln!("Unable to access account path: {err}");
-            exit(1);
-        });
+    let account_paths = create_and_canonicalize_directories(account_paths).unwrap_or_else(|err| {
+        eprintln!("Unable to access account path: {err}");
+        exit(1);
+    });
 
     let account_shrink_paths: Option<Vec<PathBuf>> =
         values_t!(matches, "account_shrink_path", String)

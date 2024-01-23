@@ -530,18 +530,6 @@ pub enum GetSnapshotAccountsHardLinkDirError {
     },
 }
 
-/// Creates directories if they do not exist, and canonicalizes the paths.
-pub fn create_and_canonicalize_directories(directories: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    directories
-        .iter()
-        .map(|path| {
-            fs_err::create_dir_all(path)?;
-            let path = fs_err::canonicalize(path)?;
-            Ok(path)
-        })
-        .collect()
-}
-
 /// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
 /// The directory is re-created after the move, and should now be empty.
 pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
