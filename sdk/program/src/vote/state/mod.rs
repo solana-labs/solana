@@ -14,6 +14,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
+        serialize_utils::cursor::read_u32,
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
@@ -26,7 +27,7 @@ mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
 mod vote_state_deserialize;
-use vote_state_deserialize::{deserialize_vote_state_into, read_u32};
+use vote_state_deserialize::deserialize_vote_state_into;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 

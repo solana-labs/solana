@@ -2,10 +2,11 @@ use {
     crate::{
         instruction::InstructionError,
         pubkey::Pubkey,
+        serialize_utils::cursor::*,
         vote::state::{BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS},
     },
     bincode::serialized_size,
-    std::io::{Cursor, Read},
+    std::io::Cursor,
 };
 
 pub(super) fn deserialize_vote_state_into(
@@ -44,62 +45,6 @@ pub(super) fn deserialize_vote_state_into(
     read_last_timestamp_into(cursor, vote_state)?;
 
     Ok(())
-}
-
-fn read_u8<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u8, InstructionError> {
-    let mut buf = [0; 1];
-    cursor
-        .read_exact(&mut buf)
-        .map_err(|_| InstructionError::InvalidAccountData)?;
-
-    Ok(buf[0])
-}
-
-pub(super) fn read_u32<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u32, InstructionError> {
-    let mut buf = [0; 4];
-    cursor
-        .read_exact(&mut buf)
-        .map_err(|_| InstructionError::InvalidAccountData)?;
-
-    Ok(u32::from_le_bytes(buf))
-}
-
-fn read_u64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u64, InstructionError> {
-    let mut buf = [0; 8];
-    cursor
-        .read_exact(&mut buf)
-        .map_err(|_| InstructionError::InvalidAccountData)?;
-
-    Ok(u64::from_le_bytes(buf))
-}
-
-fn read_option_u64<T: AsRef<[u8]>>(
-    cursor: &mut Cursor<T>,
-) -> Result<Option<u64>, InstructionError> {
-    let variant = read_u8(cursor)?;
-    match variant {
-        0 => Ok(None),
-        1 => read_u64(cursor).map(Some),
-        _ => Err(InstructionError::InvalidAccountData),
-    }
-}
-
-fn read_i64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<i64, InstructionError> {
-    let mut buf = [0; 8];
-    cursor
-        .read_exact(&mut buf)
-        .map_err(|_| InstructionError::InvalidAccountData)?;
-
-    Ok(i64::from_le_bytes(buf))
-}
-
-fn read_pubkey<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<Pubkey, InstructionError> {
-    let mut buf = [0; 32];
-    cursor
-        .read_exact(&mut buf)
-        .map_err(|_| InstructionError::InvalidAccountData)?;
-
-    Ok(Pubkey::from(buf))
 }
 
 fn read_votes_into<T: AsRef<[u8]>>(
