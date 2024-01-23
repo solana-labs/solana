@@ -1117,7 +1117,7 @@ fn create_snapshot_data_file_stream(
     snapshot_root_file_path: impl AsRef<Path>,
     maximum_file_size: u64,
 ) -> Result<(u64, BufReader<std::fs::File>)> {
-    let snapshot_file_size = fs_err::metadata(&snapshot_root_file_path)?.len();
+    let snapshot_file_size = fs::metadata(&snapshot_root_file_path)?.len();
 
     if snapshot_file_size > maximum_file_size {
         let error_message = format!(
@@ -1129,8 +1129,8 @@ fn create_snapshot_data_file_stream(
         return Err(IoError::other(error_message).into());
     }
 
-    let snapshot_data_file = fs_err::File::open(snapshot_root_file_path.as_ref())?;
-    let snapshot_data_file_stream = BufReader::new(snapshot_data_file.into());
+    let snapshot_data_file = fs::File::open(snapshot_root_file_path)?;
+    let snapshot_data_file_stream = BufReader::new(snapshot_data_file);
 
     Ok((snapshot_file_size, snapshot_data_file_stream))
 }
