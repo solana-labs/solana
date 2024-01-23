@@ -250,6 +250,7 @@ pub struct CircBuf<I> {
     idx: usize,
     is_empty: bool,
 }
+
 impl<I: Default + Copy> Default for CircBuf<I> {
     fn default() -> Self {
         Self {
