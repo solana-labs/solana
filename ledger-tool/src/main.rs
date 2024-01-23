@@ -1,8 +1,13 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{
-        args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*,
-        output::output_account, program::*,
+        args::*,
+        bigtable::*,
+        blockstore::*,
+        ledger_path::*,
+        ledger_utils::*,
+        output::{output_account, AccountsOutputStreamer},
+        program::*,
     },
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -10,13 +15,10 @@ use {
     },
     dashmap::DashMap,
     log::*,
-    serde::{
-        ser::{SerializeSeq, Serializer},
-        Serialize,
-    },
+    serde::Serialize,
     solana_account_decoder::UiAccountEncoding,
     solana_accounts_db::{
-        accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
+        accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
     solana_clap_utils::{
@@ -28,7 +30,6 @@ use {
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
-    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
@@ -41,7 +42,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
+        bank::{bank_hash_details, Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
@@ -76,7 +77,7 @@ use {
         collections::{HashMap, HashSet},
         ffi::OsStr,
         fs::File,
-        io::{self, stdout, Write},
+        io::{self, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
@@ -2176,67 +2177,18 @@ fn main() {
                     let include_account_contents = !arg_matches.is_present("no_account_contents");
                     let include_account_data = !arg_matches.is_present("no_account_data");
                     let data_encoding = parse_encoding_format(arg_matches);
-                    let cli_account_new_config = CliAccountNewConfig {
+
+                    let accounts_streamer = AccountsOutputStreamer::new(
+                        bank,
+                        include_sysvars,
+                        include_account_contents,
+                        include_account_data,
                         data_encoding,
-                        ..CliAccountNewConfig::default()
-                    };
-
-                    let mut serializer = serde_json::Serializer::new(stdout());
-                    let (summarize, mut json_serializer) =
-                        match OutputFormat::from_matches(arg_matches, "output_format", false) {
-                            OutputFormat::Json | OutputFormat::JsonCompact => {
-                                (false, Some(serializer.serialize_seq(None).unwrap()))
-                            }
-                            _ => (true, None),
-                        };
-                    let mut total_accounts_stats = TotalAccountsStats::default();
-                    let rent_collector = bank.rent_collector();
-
-                    let scan_func =
-                        |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-                            if let Some((pubkey, account, slot)) = some_account_tuple
-                                .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
-                            {
-                                if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
-                                    return;
-                                }
-
-                                total_accounts_stats.accumulate_account(
-                                    pubkey,
-                                    &account,
-                                    rent_collector,
-                                );
-
-                                if include_account_contents {
-                                    if let Some(json_serializer) = json_serializer.as_mut() {
-                                        let cli_account = CliAccount::new_with_config(
-                                            pubkey,
-                                            &account,
-                                            &cli_account_new_config,
-                                        );
-                                        json_serializer.serialize_element(&cli_account).unwrap();
-                                    } else {
-                                        output_account(
-                                            pubkey,
-                                            &account,
-                                            Some(slot),
-                                            include_account_data,
-                                            data_encoding,
-                                        );
-                                    }
-                                }
-                            }
-                        };
+                    );
                     let mut measure = Measure::start("scanning accounts");
-                    bank.scan_all_accounts(scan_func).unwrap();
+                    accounts_streamer.output();
                     measure.stop();
                     info!("{}", measure);
-                    if let Some(json_serializer) = json_serializer {
-                        json_serializer.end().unwrap();
-                    }
-                    if summarize {
-                        println!("\n{total_accounts_stats:#?}");
-                    }
                 }
                 ("capitalization", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);

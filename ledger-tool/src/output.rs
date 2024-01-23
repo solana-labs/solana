@@ -1,11 +1,18 @@
 use {
     crate::ledger_utils::get_program_ids,
     chrono::{Local, TimeZone},
-    serde::{Deserialize, Serialize},
+    serde::{
+        ser::{self, SerializeSeq, SerializeStruct, Serializer},
+        Deserialize, Serialize,
+    },
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
-    solana_cli_output::{display::writeln_transaction, OutputFormat, QuietDisplay, VerboseDisplay},
+    solana_cli_output::{
+        display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
+        VerboseDisplay,
+    },
     solana_entry::entry::Entry,
     solana_ledger::blockstore::Blockstore,
+    solana_runtime::bank::{Bank, TotalAccountsStats},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Slot, UnixTimestamp},
@@ -17,10 +24,13 @@ use {
         EncodedConfirmedBlock, EncodedTransactionWithStatusMeta, EntrySummary, Rewards,
     },
     std::{
+        cell::RefCell,
         collections::HashMap,
         fmt::{self, Display, Formatter},
         io::{stdout, Write},
         result::Result,
+        sync::Arc,
+        rc::Rc,
     },
 };
 
@@ -548,6 +558,92 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
     program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
     for (program_id, count) in program_ids_array.iter() {
         println!("{:<44}: {}", program_id.to_string(), count);
+    }
+}
+
+pub struct AccountsOutputStreamer {
+    account_scanner: AccountsScanner,
+    total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
+}
+
+impl AccountsOutputStreamer {
+    pub fn new(
+        bank: Arc<Bank>,
+        include_sysvars: bool,
+        include_account_contents: bool,
+        include_account_data: bool,
+        account_data_encoding: UiAccountEncoding,
+    ) -> Self {
+        let total_accounts_stats = Rc::new(RefCell::new(TotalAccountsStats::default()));
+        let account_scanner = AccountsScanner {
+            bank,
+            total_accounts_stats: total_accounts_stats.clone(),
+            include_sysvars,
+            include_account_contents,
+            include_account_data,
+            account_data_encoding,
+        };
+        Self {
+            account_scanner,
+            total_accounts_stats,
+        }
+    }
+
+    pub fn output(&self) {
+        let mut serializer = serde_json::Serializer::new(stdout());
+        let mut struct_serializer = serializer.serialize_struct("accountInfo", 2).unwrap();
+        struct_serializer
+            .serialize_field("accounts", &self.account_scanner)
+            .unwrap();
+        struct_serializer
+            .serialize_field("summary", &*self.total_accounts_stats.borrow())
+            .unwrap();
+        SerializeStruct::end(struct_serializer).unwrap();
+    }
+}
+
+pub struct AccountsScanner {
+    bank: Arc<Bank>,
+    total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
+    include_sysvars: bool,
+    include_account_contents: bool,
+    include_account_data: bool,
+    account_data_encoding: UiAccountEncoding,
+}
+
+impl Serialize for AccountsScanner {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
+        let rent_collector = self.bank.rent_collector();
+
+        let cli_account_new_config = CliAccountNewConfig {
+            data_encoding: self.account_data_encoding,
+            ..CliAccountNewConfig::default()
+        };
+
+        let mut seq_serializer = serializer.serialize_seq(None)?;
+        let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+            if let Some((pubkey, account, _slot)) = account_tuple.filter(|(_, account, _)| {
+                solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
+            }) {
+                if !self.include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
+                    return;
+                }
+                total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                if self.include_account_contents {
+                    let cli_account =
+                        CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
+                    seq_serializer.serialize_element(&cli_account).unwrap();
+                }
+            }
+        };
+        self.bank
+            .scan_all_accounts(scan_func)
+            .map_err(ser::Error::custom)?;
+        seq_serializer.end()
     }
 }
 
