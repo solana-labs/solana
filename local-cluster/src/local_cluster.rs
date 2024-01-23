@@ -6,7 +6,7 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_accounts_db::accounts_db::create_accounts_run_and_snapshot_dirs,
+    solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
