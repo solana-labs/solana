@@ -1977,7 +1977,16 @@ fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
 ) -> SharedBuffer {
-    let open_file = || fs_err::File::open(snapshot_tar).unwrap();
+    let open_file = || {
+        fs::File::open(snapshot_tar)
+            .map_err(|err| {
+                IoError::other(format!(
+                    "failed to open snapshot archive '{}': {err}",
+                    snapshot_tar.display(),
+                ))
+            })
+            .unwrap()
+    };
     match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
