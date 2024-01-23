@@ -361,6 +361,7 @@ impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
 
 impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
+        panic!("{}", line!());
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
             slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
@@ -369,14 +370,17 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
+        panic!("{}", line!());
         self.borrow_slot_list_guard()
     }
 
     pub fn ref_count(&self) -> RefCount {
+        panic!("{}", line!());
         self.borrow_owned_entry().ref_count()
     }
 
     pub fn addref(&self) {
+        panic!("{}", line!());
         self.borrow_owned_entry().addref();
     }
 }
