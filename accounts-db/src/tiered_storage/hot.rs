@@ -556,27 +556,14 @@ impl HotStorageWriter {
                 address,
                 offset: HotAccountOffset::new(cursor)?,
             };
-            if let Some(account) = account {
-                cursor += self.write_account(
-                    account.lamports(),
-                    account.rent_epoch(),
-                    account.data(),
-                    account.executable(),
-                    &account_hash,
-                )?;
-            } else {
-                // None happens when an account has zero lamports.  If such an
-                // account is included in the input to the write_accounts, it
-                // means we want to persist it to reflect the fact that this
-                // account has turned into a zero-lamport account.
-                cursor += self.write_account(
-                    0, // lamports
-                    0, // rent_epoch
-                    &[],
-                    false, // executable
-                    &account_hash,
-                )?;
-            }
+
+            cursor += self.write_account(
+                account.map(|acc| acc.lamports()).unwrap_or(0),
+                account.map(|acc| acc.rent_epoch()).unwrap_or(Epoch::MAX),
+                account.map(|acc| acc.data()).unwrap_or(&[]),
+                account.map(|acc| acc.executable()).unwrap_or(false),
+                &account_hash,
+            )?;
             index.push(index_entry);
         }
         footer.account_entry_count = (len - skip) as u32;
