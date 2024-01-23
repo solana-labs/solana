@@ -49,7 +49,7 @@ impl OwnersBlockFormat {
         match self {
             Self::AddressesOnly => {
                 let mut bytes_written = 0;
-                for address in owners_table.owners_set.iter() {
+                for address in &owners_table.owners_set {
                     bytes_written += file.write_pod(*address)?;
                 }
 
