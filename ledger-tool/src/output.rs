@@ -561,6 +561,11 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
     }
 }
 
+/// A type to facilitate streaming account information to an output destination
+///
+/// This type scans every account, so streaming is preferred over the simpler
+/// approach of accumulating all the accounts into a Vec and printing or
+/// serializing that directly.
 pub struct AccountsOutputStreamer {
     account_scanner: AccountsScanner,
     total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
@@ -594,21 +599,17 @@ impl AccountsOutputStreamer {
 
     pub fn output(&self) {
         match self.output_format {
-            OutputFormat::Json | OutputFormat::JsonCompact => self.output_json(),
+            OutputFormat::Json | OutputFormat::JsonCompact => self.output_json().unwrap(),
             _ => self.print(),
         }
     }
 
-    fn output_json(&self) {
+    fn output_json(&self) -> Result<(), serde_json::Error> {
         let mut serializer = serde_json::Serializer::new(stdout());
-        let mut struct_serializer = serializer.serialize_struct("accountInfo", 2).unwrap();
-        struct_serializer
-            .serialize_field("accounts", &self.account_scanner)
-            .unwrap();
-        struct_serializer
-            .serialize_field("summary", &*self.total_accounts_stats.borrow())
-            .unwrap();
-        SerializeStruct::end(struct_serializer).unwrap();
+        let mut struct_serializer = serializer.serialize_struct("accountInfo", 2)?;
+        struct_serializer.serialize_field("accounts", &self.account_scanner)?;
+        struct_serializer.serialize_field("summary", &*self.total_accounts_stats.borrow())?;
+        SerializeStruct::end(struct_serializer)
     }
 
     fn print(&self) {
