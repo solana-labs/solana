@@ -374,7 +374,8 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    // we preserve the old deserialize on not(target_os = "solana") because the new does not support V0_23_5
+    // we retain bincode deserialize for not(target_os = "solana")
+    // because the hand-written parser does not support V0_23_5
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         #[cfg(not(target_os = "solana"))]
         {
@@ -390,6 +391,10 @@ impl VoteState {
         }
     }
 
+    /// Deserializes the input buffer into the provided `VoteState`
+    ///
+    /// This function exists to deserialize `VoteState` in a BPF context without going above
+    /// the compute limit, and must be kept up to date with `bincode::deserialize`.
     pub fn deserialize_into(
         input: &[u8],
         vote_state: &mut VoteState,
@@ -850,10 +855,9 @@ pub mod serde_compact_vote_state_update {
 mod tests {
     use {
         super::*,
-        crate::msg,
         arbitrary::{Arbitrary, Unstructured},
         itertools::Itertools,
-        rand::{rngs::StdRng, Rng, SeedableRng},
+        rand::Rng,
     };
 
     #[test]
@@ -886,9 +890,10 @@ mod tests {
         assert_eq!(target_vote_state, test_vote_state);
 
         // variant
+        // provide 4x the minimum struct size in bytes to ensure we typically touch every field
+        let struct_bytes_x4 = std::mem::size_of::<u64>() * 4;
         for _ in 0..1000 {
-            let size_hint = VoteStateVersions::size_hint(0).0 * 4;
-            let raw_data: Vec<u8> = (0..size_hint).map(|_| rand::random::<u8>()).collect();
+            let raw_data: Vec<u8> = (0..struct_bytes_x4).map(|_| rand::random::<u8>()).collect();
             let mut unstructured = Unstructured::new(&raw_data);
 
             let target_vote_state_versions =
@@ -911,19 +916,16 @@ mod tests {
         assert_eq!(e, InstructionError::InvalidAccountData);
 
         // variant
-        let seed = rand::random::<u64>();
-        msg!("test_vote_deserialize_into_nopanic seed: {}", seed);
-        let mut r = StdRng::seed_from_u64(seed);
-
+        let serialized_len_x4 = bincode::serialized_size(&test_vote_state).unwrap() * 4;
+        let mut rng = rand::thread_rng();
         for _ in 0..1000 {
-            let raw_data_length = r.gen_range(1..1024);
-            let mut raw_data: Vec<u8> = vec![0; raw_data_length];
-            r.fill(&mut raw_data[..]);
+            let raw_data_length = rng.gen_range(1..serialized_len_x4);
+            let raw_data: Vec<u8> = (0..raw_data_length).map(|_| rng.gen::<u8>()).collect();
 
+            // it is extremely improbable, though theoretically possible, for random bytes to be syntactically valid
+            // so we only check that the deserialize function does not panic
             let mut test_vote_state = VoteState::default();
-            let e = VoteState::deserialize_into(&raw_data, &mut test_vote_state).unwrap_err();
-
-            assert_eq!(e, InstructionError::InvalidAccountData);
+            let _ = VoteState::deserialize_into(&raw_data, &mut test_vote_state);
         }
     }
 
