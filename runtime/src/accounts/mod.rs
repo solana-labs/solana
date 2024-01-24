@@ -49,7 +49,7 @@ pub(super) fn load_accounts(
     accounts_db: &AccountsDb,
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],
-    lock_results: Vec<TransactionCheckResult>,
+    lock_results: &[TransactionCheckResult],
     hash_queue: &BlockhashQueue,
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
@@ -123,7 +123,7 @@ pub(super) fn load_accounts(
 
                 (Ok(loaded_transaction), nonce)
             }
-            (_, (Err(e), _nonce)) => (Err(e), None),
+            (_, (Err(e), _nonce)) => (Err(e.clone()), None),
         })
         .collect()
 }
@@ -544,7 +544,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[sanitized_tx],
-            vec![(Ok(()), None)],
+            &[(Ok(()), None)],
             &hash_queue,
             error_counters,
             rent_collector,
@@ -1022,7 +1022,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[tx],
-            vec![(Ok(()), None)],
+            &[(Ok(()), None)],
             &hash_queue,
             &mut error_counters,
             &rent_collector,
