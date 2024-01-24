@@ -336,6 +336,21 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub error_counters: TransactionErrorMetrics,
 }
 
+pub struct LoadAndExecuteSanitizedTransactionsOutput {
+    pub loaded_transactions: Vec<TransactionLoadResult>,
+    // Vector of results indicating whether a transaction was executed or could not
+    // be executed. Note executed transactions can still have failed!
+    pub execution_results: Vec<TransactionExecutionResult>,
+    // Total number of transactions that were executed
+    pub executed_transactions_count: usize,
+    // Number of non-vote transactions that were executed
+    pub executed_non_vote_transactions_count: usize,
+    // Total number of the executed transactions that returned success/not
+    // an error.
+    pub executed_with_successful_result_count: usize,
+    pub signature_count: u64,
+}
+
 pub struct TransactionSimulationResult {
     pub result: Result<()>,
     pub logs: TransactionLogMessages,
@@ -5157,11 +5172,51 @@ impl Bank {
             &mut error_counters,
         );
         check_time.stop();
+        debug!("check: {}us", check_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
 
+        let sanitized_output = self.load_and_execute_sanitized_transactions(
+            sanitized_txs,
+            &mut check_results,
+            &mut error_counters,
+            enable_cpi_recording,
+            enable_log_recording,
+            enable_return_data_recording,
+            timings,
+            account_overrides,
+            log_messages_bytes_limit,
+        );
+        LoadAndExecuteTransactionsOutput {
+            loaded_transactions: sanitized_output.loaded_transactions,
+            execution_results: sanitized_output.execution_results,
+            retryable_transaction_indexes,
+            executed_transactions_count: sanitized_output.executed_transactions_count,
+            executed_non_vote_transactions_count: sanitized_output
+                .executed_non_vote_transactions_count,
+            executed_with_successful_result_count: sanitized_output
+                .executed_with_successful_result_count,
+            signature_count: sanitized_output.signature_count,
+            error_counters,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn load_and_execute_sanitized_transactions(
+        &self,
+        sanitized_txs: &[SanitizedTransaction],
+        check_results: &mut [TransactionCheckResult],
+        error_counters: &mut TransactionErrorMetrics,
+        enable_cpi_recording: bool,
+        enable_log_recording: bool,
+        enable_return_data_recording: bool,
+        timings: &mut ExecuteTimings,
+        account_overrides: Option<&AccountOverrides>,
+        log_messages_bytes_limit: Option<usize>,
+    ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = self.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
-            &mut check_results,
+            check_results,
             PROGRAM_OWNERS,
             &self.blockhash_queue.read().unwrap(),
         );
@@ -5179,9 +5234,9 @@ impl Bank {
             &self.rc.accounts.accounts_db,
             &self.ancestors,
             sanitized_txs,
-            &check_results,
+            check_results,
             &self.blockhash_queue.read().unwrap(),
-            &mut error_counters,
+            error_counters,
             &self.rent_collector,
             &self.feature_set,
             &self.fee_structure,
@@ -5233,7 +5288,7 @@ impl Bank {
                         enable_log_recording,
                         enable_return_data_recording,
                         timings,
-                        &mut error_counters,
+                        error_counters,
                         log_messages_bytes_limit,
                         &programs_loaded_for_tx_batch.borrow(),
                     );
@@ -5269,14 +5324,12 @@ impl Bank {
             );
 
         debug!(
-            "check: {}us load: {}us execute: {}us txs_len={}",
-            check_time.as_us(),
+            "load: {}us execute: {}us txs_len={}",
             load_time.as_us(),
             execution_time.as_us(),
             sanitized_txs.len(),
         );
 
-        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
@@ -5392,15 +5445,13 @@ impl Bank {
                 *err_count + executed_with_successful_result_count
             );
         }
-        LoadAndExecuteTransactionsOutput {
+        LoadAndExecuteSanitizedTransactionsOutput {
             loaded_transactions,
             execution_results,
-            retryable_transaction_indexes,
             executed_transactions_count,
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
-            error_counters,
         }
     }
 
