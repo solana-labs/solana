@@ -12,7 +12,7 @@ use {
     assert_matches::assert_matches,
     crossbeam_channel::{
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
-        RecvTimeoutError, Sender, SendError, TryRecvError,
+        RecvTimeoutError, SendError, Sender, TryRecvError,
     },
     derivative::Derivative,
     log::*,
