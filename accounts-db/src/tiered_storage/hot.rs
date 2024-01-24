@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        account_storage::meta::{AccountMeta, StoredAccountMeta},
+        account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
         tiered_storage::{
