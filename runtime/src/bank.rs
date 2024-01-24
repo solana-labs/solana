@@ -5172,6 +5172,8 @@ impl Bank {
             &mut error_counters,
         );
         check_time.stop();
+        debug!("check: {}us", check_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
 
         let sanitized_output = self.load_and_execute_sanitized_transactions(
             sanitized_txs,
@@ -5183,7 +5185,6 @@ impl Bank {
             timings,
             account_overrides,
             log_messages_bytes_limit,
-            &mut check_time,
         );
         LoadAndExecuteTransactionsOutput {
             loaded_transactions: sanitized_output.loaded_transactions,
@@ -5211,7 +5212,6 @@ impl Bank {
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
-        check_time: &mut Measure,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = self.filter_executable_program_accounts(
             &self.ancestors,
@@ -5324,14 +5324,12 @@ impl Bank {
             );
 
         debug!(
-            "check: {}us load: {}us execute: {}us txs_len={}",
-            check_time.as_us(),
+            "load: {}us execute: {}us txs_len={}",
             load_time.as_us(),
             execution_time.as_us(),
             sanitized_txs.len(),
         );
 
-        timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
