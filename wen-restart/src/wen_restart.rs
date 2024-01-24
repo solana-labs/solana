@@ -52,13 +52,19 @@ fn send_restart_last_voted_fork_slots(
         }
         None => {
             // repair and restart option does not work without last voted slot.
-            let last_vote_slot = last_vote
-                .last_voted_slot()
-                .expect("wen_restart doesn't work if local tower is wiped");
-            last_vote_hash = last_vote.hash();
-            last_vote_fork_slots = AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
-                .take(RestartLastVotedForkSlots::MAX_SLOTS)
-                .collect();
+            if let VoteTransaction::Vote(ref vote) = last_vote {
+                if let Some(last_vote_slot) = vote.last_voted_slot() {
+                    last_vote_hash = vote.hash;
+                    last_vote_fork_slots =
+                        AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
+                            .take(RestartLastVotedForkSlots::MAX_SLOTS)
+                            .collect();
+                } else {
+                    return Err("last vote does not have last voted slot".into());
+                }
+            } else {
+                return Err("last vote is not a vote transaction".into());
+            }
         }
     }
     info!(
@@ -208,10 +214,10 @@ pub fn wait_for_wen_restart(
     }
 }
 
-fn increment_and_write_wen_restart_records(
+pub(crate) fn increment_and_write_wen_restart_records(
     records_path: &PathBuf,
     new_progress: &mut WenRestartProgress,
-) -> Result<(), Error> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let new_state = match new_progress.state() {
         RestartState::Init => RestartState::LastVotedForkSlots,
         RestartState::LastVotedForkSlots => RestartState::HeaviestFork,
@@ -220,11 +226,13 @@ fn increment_and_write_wen_restart_records(
         | RestartState::FinishedSnapshot
         | RestartState::GeneratingSnapshot
         | RestartState::WaitingForSupermajority => {
-            panic!("Unexpected state {:?}", new_progress.state())
+            error!("Unexpected state {:?}", new_progress.state());
+            return Err("unexpected state".into());
         }
     };
     new_progress.set_state(new_state);
-    write_wen_restart_records(records_path, new_progress)
+    write_wen_restart_records(records_path, new_progress)?;
+    Ok(())
 }
 
 fn initialize(records_path: &PathBuf) -> Result<WenRestartProgress, Error> {
@@ -262,7 +270,7 @@ fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress
     Ok(progress)
 }
 
-fn write_wen_restart_records(
+pub(crate) fn write_wen_restart_records(
     records_path: &PathBuf,
     new_progress: &WenRestartProgress,
 ) -> Result<(), Error> {
@@ -279,6 +287,7 @@ fn write_wen_restart_records(
 mod tests {
     use {
         crate::wen_restart::*,
+        assert_matches::assert_matches,
         solana_entry::entry,
         solana_gossip::{
             cluster_info::ClusterInfo,
@@ -289,7 +298,10 @@ mod tests {
             restart_crds_values::RestartLastVotedForkSlots,
         },
         solana_ledger::{blockstore, get_tmp_ledger_path_auto_delete},
-        solana_program::{hash::Hash, vote::state::Vote},
+        solana_program::{
+            hash::Hash,
+            vote::state::{Vote, VoteStateUpdate},
+        },
         solana_runtime::{
             bank::Bank,
             genesis_utils::{
@@ -303,6 +315,7 @@ mod tests {
         },
         solana_streamer::socket::SocketAddrSpace,
         std::{fs::read, sync::Arc, thread::Builder},
+        tempfile::TempDir,
     };
 
     fn push_restart_last_voted_fork_slots(
@@ -335,12 +348,20 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_wen_restart_normal_flow() {
+    fn wen_restart_test_init(
+        ledger_path: &TempDir,
+        expected_slots: usize,
+        shred_version: u16,
+        last_vote_fork_slots: &mut Vec<Slot>,
+    ) -> (
+        Vec<ValidatorVoteKeypairs>,
+        Arc<Blockstore>,
+        Arc<ClusterInfo>,
+        Arc<RwLock<BankForks>>,
+    ) {
         let validator_voting_keypairs: Vec<_> =
             (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
         let node_keypair = Arc::new(validator_voting_keypairs[0].node_keypair.insecure_clone());
-        let shred_version = 2;
         let cluster_info = Arc::new(ClusterInfo::new(
             {
                 let mut contact_info =
@@ -351,10 +372,6 @@ mod tests {
             node_keypair.clone(),
             SocketAddrSpace::Unspecified,
         ));
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
-        wen_restart_proto_path.push("wen_restart_status.proto");
-        let wen_restart_repair_slots = Some(Arc::new(RwLock::new(Vec::new())));
         let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             10_000,
@@ -362,24 +379,21 @@ mod tests {
             vec![100; validator_voting_keypairs.len()],
         );
         let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let expected_slots = 400;
-        let last_vote_slot = (RestartLastVotedForkSlots::MAX_SLOTS + expected_slots)
-            .try_into()
-            .unwrap();
         let last_parent = (RestartLastVotedForkSlots::MAX_SLOTS >> 1)
             .try_into()
             .unwrap();
-        let mut last_vote_fork_slots = Vec::new();
         for i in 0..expected_slots {
             let entries = entry::create_ticks(1, 0, Hash::default());
             let parent_slot = if i > 0 {
-                (RestartLastVotedForkSlots::MAX_SLOTS + i)
+                (RestartLastVotedForkSlots::MAX_SLOTS.saturating_add(i))
                     .try_into()
                     .unwrap()
             } else {
                 last_parent
             };
-            let slot = (RestartLastVotedForkSlots::MAX_SLOTS + i + 1) as Slot;
+            let slot = (RestartLastVotedForkSlots::MAX_SLOTS
+                .saturating_add(i)
+                .saturating_add(1)) as Slot;
             let shreds = blockstore::entries_to_test_shreds(
                 &entries,
                 slot,
@@ -403,7 +417,34 @@ mod tests {
         );
         last_vote_fork_slots.extend([last_parent, 1]);
         blockstore.insert_shreds(shreds, None, false).unwrap();
+        (
+            validator_voting_keypairs,
+            blockstore,
+            cluster_info,
+            bank_forks,
+        )
+    }
+
+    #[test]
+    fn test_wen_restart_normal_flow() {
+        let shred_version = 2;
+        let expected_slots = 400;
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
+        wen_restart_proto_path.push("wen_restart_status.proto");
+        let mut last_vote_fork_slots = Vec::new();
+        let last_vote_slot = (RestartLastVotedForkSlots::MAX_SLOTS + expected_slots)
+            .try_into()
+            .unwrap();
         let last_vote_bankhash = Hash::new_unique();
+        let wen_restart_repair_slots = Some(Arc::new(RwLock::new(Vec::new())));
+        let (validator_voting_keypairs, blockstore, cluster_info, bank_forks) =
+            wen_restart_test_init(
+                &ledger_path,
+                expected_slots,
+                shred_version,
+                &mut last_vote_fork_slots,
+            );
         let wen_restart_proto_path_clone = wen_restart_proto_path.clone();
         let cluster_info_clone = cluster_info.clone();
         let expected_slots_to_repair: Vec<Slot> =
@@ -479,5 +520,117 @@ mod tests {
                 }),
             }
         )
+    }
+
+    fn change_proto_file_readonly(wen_restart_proto_path: &PathBuf, readonly: bool) {
+        let mut perms = std::fs::metadata(wen_restart_proto_path)
+            .unwrap()
+            .permissions();
+        perms.set_readonly(readonly);
+        std::fs::set_permissions(wen_restart_proto_path, perms).unwrap();
+    }
+
+    #[test]
+    fn test_wen_restart_failures() {
+        let shred_version = 2;
+        let expected_slots = 400;
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
+        wen_restart_proto_path.push("wen_restart_status.proto");
+        let wen_restart_repair_slots = Some(Arc::new(RwLock::new(Vec::new())));
+        let mut last_vote_fork_slots = Vec::new();
+        let (_, blockstore, cluster_info, bank_forks) = wen_restart_test_init(
+            &ledger_path,
+            expected_slots,
+            shred_version,
+            &mut last_vote_fork_slots,
+        );
+        let init_progress = WenRestartProgress {
+            state: RestartState::Init.into(),
+            my_last_voted_fork_slots: None,
+            last_voted_fork_slots_aggregate: None,
+        };
+        let last_vote_slot: Slot = (RestartLastVotedForkSlots::MAX_SLOTS + expected_slots)
+            .try_into()
+            .unwrap();
+        let last_vote_bankhash = Hash::new_unique();
+        let last_voted_fork_slots_progress = WenRestartProgress {
+            state: RestartState::LastVotedForkSlots.into(),
+            my_last_voted_fork_slots: Some(LastVotedForkSlotsRecord {
+                last_vote_fork_slots: vec![last_vote_slot],
+                last_vote_bankhash: last_vote_bankhash.to_string(),
+                shred_version: shred_version as u32,
+            }),
+            last_voted_fork_slots_aggregate: None,
+        };
+        for (progress, last_vote, setup, expected_err, cleanup) in vec![
+            (
+                init_progress.clone(),
+                VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (last_vote_slot, 1)])),
+                None,
+                "last vote is not a vote transaction",
+                None,
+            ),
+            (
+                init_progress,
+                VoteTransaction::from(Vote::new(vec![], Hash::new_unique())),
+                None,
+                "last vote does not have last voted slot",
+                None,
+            ),
+            (
+                last_voted_fork_slots_progress,
+                VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
+                Some(|| change_proto_file_readonly(&wen_restart_proto_path, true)),
+                "Permission denied",
+                Some(|| change_proto_file_readonly(&wen_restart_proto_path, false)),
+            ),
+        ] {
+            assert!(write_wen_restart_records(&wen_restart_proto_path, &progress,).is_ok());
+            if let Some(setup_function) = setup {
+                setup_function();
+            }
+            assert_matches!(wait_for_wen_restart(
+                &wen_restart_proto_path,
+                last_vote,
+                blockstore.clone(),
+                cluster_info.clone(),
+                bank_forks.clone(),
+                wen_restart_repair_slots.clone(),
+                80,
+                Arc::new(AtomicBool::new(false)),
+            ).err().unwrap().to_string(), message if message.contains(expected_err));
+            if let Some(cleanup_function) = cleanup {
+                cleanup_function();
+            }
+        }
+    }
+
+    #[test]
+    fn test_increment_and_write_wen_restart_records() {
+        let mut progress = WenRestartProgress {
+            state: RestartState::Init.into(),
+            my_last_voted_fork_slots: None,
+            last_voted_fork_slots_aggregate: None,
+        };
+        let my_dir = TempDir::new().unwrap();
+        let mut wen_restart_proto_path = my_dir.path().to_path_buf();
+        wen_restart_proto_path.push("wen_restart_status.proto");
+        for expected_state in [
+            RestartState::LastVotedForkSlots,
+            RestartState::HeaviestFork,
+            RestartState::Done,
+        ] {
+            assert!(increment_and_write_wen_restart_records(
+                &wen_restart_proto_path,
+                &mut progress
+            )
+            .is_ok());
+            assert_eq!(progress.state(), expected_state);
+        }
+        assert!(
+            increment_and_write_wen_restart_records(&wen_restart_proto_path, &mut progress)
+                .is_err()
+        );
     }
 }

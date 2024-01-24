@@ -7709,6 +7709,7 @@ dependencies = [
 name = "solana-wen-restart"
 version = "1.18.0"
 dependencies = [
+ "assert_matches",
  "log",
  "prost",
  "prost-build",
@@ -7727,6 +7728,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-vote-program",
+ "tempfile",
 ]
 
 [[package]]
