@@ -44,6 +44,7 @@ fn hash_to_partition(hash: u64, partitions: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::arithmetic_side_effects)]
     use {super::*, std::ops::RangeInclusive};
 
     #[test]
