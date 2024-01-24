@@ -1,10 +1,7 @@
 pub mod account_rent_state;
 
 use {
-    crate::{
-        accounts::account_rent_state::{check_rent_state_with_account, RentState},
-        bank::RewardInterval,
-    },
+    crate::{accounts::account_rent_state::RentState, bank::RewardInterval},
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{
@@ -476,7 +473,7 @@ pub fn validate_fee_payer(
         .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
     let payer_post_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
-    check_rent_state_with_account(
+    RentState::check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
         payer_address,

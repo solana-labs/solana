@@ -1,8 +1,5 @@
 use {
-    crate::{
-        accounts::account_rent_state::{check_rent_state, RentState},
-        bank::Bank,
-    },
+    crate::{accounts::account_rent_state::RentState, bank::Bank},
     solana_sdk::{
         account::ReadableAccount,
         message::SanitizedMessage,
@@ -63,7 +60,7 @@ impl Bank {
         for (i, (pre_state_info, post_state_info)) in
             pre_state_infos.iter().zip(post_state_infos).enumerate()
         {
-            check_rent_state(
+            RentState::check_rent_state(
                 pre_state_info.rent_state.as_ref(),
                 post_state_info.rent_state.as_ref(),
                 transaction_context,
