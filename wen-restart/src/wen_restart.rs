@@ -109,11 +109,21 @@ fn aggregate_restart_last_voted_fork_slots(
             return Err("Exiting".into());
         }
         let start = timestamp();
-        let new_last_voted_fork_slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
-        let result = last_voted_fork_slots_aggregate.aggregate(
-            new_last_voted_fork_slots,
-            progress.last_voted_fork_slots_aggregate.as_mut().unwrap(),
-        );
+        for new_last_voted_fork_slots in cluster_info.get_restart_last_voted_fork_slots(&mut cursor)
+        {
+            let from = new_last_voted_fork_slots.from.to_string();
+            if let Some(record) =
+                last_voted_fork_slots_aggregate.aggregate(new_last_voted_fork_slots)
+            {
+                progress
+                    .last_voted_fork_slots_aggregate
+                    .as_mut()
+                    .unwrap()
+                    .received
+                    .insert(from, record);
+            }
+        }
+        let result = last_voted_fork_slots_aggregate.get_aggregate_result();
         let mut filtered_slots: Vec<Slot>;
         {
             let my_bank_forks = bank_forks.read().unwrap();
