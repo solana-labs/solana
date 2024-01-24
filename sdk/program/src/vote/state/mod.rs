@@ -405,9 +405,9 @@ impl VoteState {
         match variant {
             // V0_23_5. not supported; these should not exist on mainnet
             0 => Err(InstructionError::InvalidAccountData),
-            // V1_14_11. substantially different layout and data
+            // V1_14_11. substantially different layout and data from V0_23_5
             1 => deserialize_vote_state_into(&mut cursor, vote_state, false),
-            // Current. the only difference is the addition of a slot-latency to each vote
+            // Current. the only difference from V1_14_11 is the addition of a slot-latency to each vote
             2 => deserialize_vote_state_into(&mut cursor, vote_state, true),
             _ => Err(InstructionError::InvalidAccountData),
         }
@@ -853,12 +853,7 @@ pub mod serde_compact_vote_state_update {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        arbitrary::{Arbitrary, Unstructured},
-        itertools::Itertools,
-        rand::Rng,
-    };
+    use {super::*, itertools::Itertools, rand::Rng};
 
     #[test]
     fn test_vote_serialize() {
