@@ -509,6 +509,7 @@ fn run_accounts_bench(
     close_nth_batch: u64,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
+    max_accounts: Option<usize>,
     mint: Option<Pubkey>,
     reclaim_accounts: bool,
     rpc_benches: Option<Vec<RpcBench>>,
@@ -691,6 +692,11 @@ fn run_accounts_bench(
         }
         if iterations != 0 && count >= iterations {
             break;
+        }
+        if let Some(max_accounts) = max_accounts {
+            if total_accounts_created >= max_accounts {
+                break;
+            }
         }
         if executor.num_outstanding() >= batch_size {
             sleep(Duration::from_millis(500));
@@ -884,6 +890,13 @@ fn main() {
                 .help("Number of iterations to make. 0 = unlimited iterations."),
         )
         .arg(
+            Arg::with_name("max_accounts")
+                .long("max-accounts")
+                .takes_value(true)
+                .value_name("NUM_ACCOUNTS")
+                .help("Halt after client has created this number of accounts. Does not count closed accounts."),
+        )
+        .arg(
             Arg::with_name("check_gossip")
                 .long("check-gossip")
                 .help("Just use entrypoint address directly"),
@@ -925,6 +938,7 @@ fn main() {
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
     let close_nth_batch = value_t!(matches, "close_nth_batch", u64).unwrap_or(0);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
+    let max_accounts = value_t!(matches, "max_accounts", usize).ok();
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
         eprintln!("bad num_instructions: {num_instructions}");
@@ -1018,6 +1032,7 @@ fn main() {
         close_nth_batch,
         lamports,
         num_instructions,
+        max_accounts,
         mint,
         matches.is_present("reclaim_accounts"),
         rpc_benches,
@@ -1094,6 +1109,7 @@ pub mod test {
             close_nth_batch,
             maybe_lamports,
             num_instructions,
+            None,
             mint,
             reclaim_accounts,
             Some(vec![RpcBench::ProgramAccounts]),
@@ -1193,6 +1209,7 @@ pub mod test {
             close_nth_batch,
             Some(minimum_balance),
             num_instructions,
+            None,
             Some(spl_mint_keypair.pubkey()),
             true,
             None,
