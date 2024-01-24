@@ -386,9 +386,8 @@ impl WindowService {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
         popular_pruned_forks_sender: PopularPrunedForksSender,
+        outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> WindowService {
-        let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
-
         let cluster_info = repair_info.cluster_info.clone();
         let bank_forks = repair_info.bank_forks.clone();
 
@@ -401,7 +400,7 @@ impl WindowService {
             repair_quic_endpoint_response_sender,
             repair_info,
             verified_vote_receiver,
-            outstanding_requests.clone(),
+            outstanding_repair_requests.clone(),
             ancestor_hashes_replay_update_receiver,
             dumped_slots_receiver,
             popular_pruned_forks_sender,
@@ -426,7 +425,7 @@ impl WindowService {
             duplicate_sender,
             completed_data_sets_sender,
             retransmit_sender,
-            outstanding_requests,
+            outstanding_repair_requests,
         );
 
         WindowService {

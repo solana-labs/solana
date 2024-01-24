@@ -780,6 +780,12 @@ fn test_cli_program_extend_program() {
     noop_path.push("noop");
     noop_path.set_extension("so");
 
+    let mut noop_large_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_large_path.push("tests");
+    noop_large_path.push("fixtures");
+    noop_large_path.push("noop_large");
+    noop_large_path.set_extension("so");
+
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -826,7 +832,7 @@ fn test_cli_program_extend_program() {
         allow_excessive_balance: false,
         upgrade_authority_signer_index: 1,
         is_final: false,
-        max_len: Some(max_len),
+        max_len: None, // Use None to check that it defaults to the max length
         skip_fee_check: false,
     });
     config.output_format = OutputFormat::JsonCompact;
@@ -837,22 +843,78 @@ fn test_cli_program_extend_program() {
         &bpf_loader_upgradeable::id(),
     );
 
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len = UpgradeableLoaderState::size_of_programdata(max_len);
+    assert_eq!(expected_len, programdata_account.data.len());
+
     // Wait one slot to avoid "Program was deployed in this block already" error
     wait_n_slots(&rpc_client, 1);
 
-    // Extend program
-    let additional_bytes = 100;
+    // Extend program for larger program, minus 1 required byte
+    let mut file = File::open(noop_large_path.to_str().unwrap()).unwrap();
+    let mut new_program_data = Vec::new();
+    file.read_to_end(&mut new_program_data).unwrap();
+    let new_max_len = new_program_data.len();
+    let additional_bytes = (new_max_len - max_len) as u32;
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::ExtendProgram {
         program_pubkey: program_keypair.pubkey(),
-        additional_bytes,
+        additional_bytes: additional_bytes - 1,
     });
     process_command(&config).unwrap();
 
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
-    let expected_len =
-        UpgradeableLoaderState::size_of_programdata(max_len + additional_bytes as usize);
+    let expected_len = UpgradeableLoaderState::size_of_programdata(new_max_len - 1);
     assert_eq!(expected_len, programdata_account.data.len());
+
+    // Larger program deploy fails because missing 1 byte
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    process_command(&config).unwrap_err();
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
+
+    // Extend 1 last byte
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::ExtendProgram {
+        program_pubkey: program_keypair.pubkey(),
+        additional_bytes: 1,
+    });
+    process_command(&config).unwrap();
+
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len = UpgradeableLoaderState::size_of_programdata(new_max_len);
+    assert_eq!(expected_len, programdata_account.data.len());
+
+    // Larger program deploy finally succeeds
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    process_command(&config).unwrap();
 }
 
 #[test]

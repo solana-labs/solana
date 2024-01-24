@@ -102,15 +102,23 @@ The command looks the same as the deployment command:
 solana program deploy <PROGRAM_FILEPATH>
 ```
 
-By default, programs are deployed to accounts that are twice the size of the
-original deployment. Doing so leaves room for program growth in future
-redeployments. But, if the initially deployed program is very small and then
-later grows substantially, the redeployment may fail. To avoid this, specify a
-`max_len` that is at least the size (in bytes) that the program is expected to
-become (plus some wiggle room).
+By default, programs are deployed to accounts that match the size of the
+original program file. But, if the redeployed program is larger, the
+redeployment will fail. To avoid this, specify a `max_len` that is at least the
+size (in bytes) that the program is expected to become (plus some wiggle room).
 
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
+```
+
+### Extend a program
+
+If a program has already been deployed, and a redeployment goes beyond the
+`max_len` of the account, it's possible to extend the program to fit the larger
+redeployment:
+
+```bash
+solana program extend <PROGRAM_ID> <ADDITIONAL_BYTES>
 ```
 
 ### Resuming a failed deploy

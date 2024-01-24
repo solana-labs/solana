@@ -792,6 +792,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
+        None,
         exit,
     );
     let bank0_slot = bank0.slot();

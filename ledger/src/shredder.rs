@@ -93,6 +93,7 @@ impl Shredder {
                 self.version,
                 self.reference_tick,
                 is_last_in_slot,
+                None, // chained_merkle_root
                 next_shred_index,
                 next_code_index,
                 reed_solomon_cache,

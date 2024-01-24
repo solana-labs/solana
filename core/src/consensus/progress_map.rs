@@ -293,8 +293,7 @@ impl ForkProgress {
 
 #[derive(Debug, Clone, Default)]
 pub struct ForkStats {
-    pub weight: u128,
-    pub fork_weight: u128,
+    pub fork_stake: Stake,
     pub total_stake: Stake,
     pub block_height: u64,
     pub has_voted: bool,
@@ -308,6 +307,13 @@ pub struct ForkStats {
     pub lockout_intervals: LockoutIntervals,
     pub bank_hash: Option<Hash>,
     pub my_latest_landed_vote: Option<Slot>,
+}
+
+impl ForkStats {
+    /// Return fork_weight, i.e. bank_stake over total_stake.
+    pub fn fork_weight(&self) -> f64 {
+        self.fork_stake as f64 / self.total_stake as f64
+    }
 }
 
 #[derive(Clone, Default)]

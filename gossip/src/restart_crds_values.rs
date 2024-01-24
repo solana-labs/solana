@@ -1,5 +1,5 @@
 use {
-    crate::crds_value::new_rand_timestamp,
+    crate::crds_value::{new_rand_timestamp, sanitize_wallclock},
     bv::BitVec,
     itertools::Itertools,
     rand::Rng,
@@ -29,6 +29,16 @@ pub enum RestartLastVotedForkSlotsError {
     LastVotedForkEmpty,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
+pub struct RestartHeaviestFork {
+    pub from: Pubkey,
+    pub wallclock: u64,
+    pub last_slot: Slot,
+    pub last_slot_hash: Hash,
+    pub observed_stake: u64,
+    pub shred_version: u16,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 enum SlotsOffsets {
     RunLengthEncoding(RunLengthEncoding),
@@ -48,6 +58,7 @@ struct RawOffsets(BitVec<u8>);
 
 impl Sanitize for RestartLastVotedForkSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
         self.last_voted_hash.sanitize()
     }
 }
@@ -94,7 +105,7 @@ impl RestartLastVotedForkSlots {
     }
 
     /// New random Version for tests and benchmarks.
-    pub fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let num_slots = rng.gen_range(2..20);
         let slots = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
@@ -118,6 +129,27 @@ impl RestartLastVotedForkSlots {
             SlotsOffsets::RawOffsets(raw_offsets) => {
                 raw_offsets.to_slots(self.last_voted_slot, min_slot)
             }
+        }
+    }
+}
+
+impl Sanitize for RestartHeaviestFork {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        self.last_slot_hash.sanitize()
+    }
+}
+
+impl RestartHeaviestFork {
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, from: Option<Pubkey>) -> Self {
+        let from = from.unwrap_or_else(solana_sdk::pubkey::new_rand);
+        Self {
+            from,
+            wallclock: new_rand_timestamp(rng),
+            last_slot: rng.gen_range(0..1000),
+            last_slot_hash: Hash::new_unique(),
+            observed_stake: rng.gen_range(1..u64::MAX),
+            shred_version: 1,
         }
     }
 }
@@ -316,5 +348,23 @@ mod test {
         let large_length = 500;
         let range: Vec<Slot> = make_rand_slots(&mut rng).take(large_length).collect();
         check_run_length_encoding(range);
+    }
+
+    #[test]
+    fn test_restart_heaviest_fork() {
+        let keypair = Keypair::new();
+        let slot = 53;
+        let mut fork = RestartHeaviestFork {
+            from: keypair.pubkey(),
+            wallclock: timestamp(),
+            last_slot: slot,
+            last_slot_hash: Hash::default(),
+            observed_stake: 800_000,
+            shred_version: 1,
+        };
+        assert_eq!(fork.sanitize(), Ok(()));
+        assert_eq!(fork.observed_stake, 800_000);
+        fork.wallclock = crate::crds_value::MAX_WALLCLOCK;
+        assert_eq!(fork.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 }

@@ -47,7 +47,7 @@ jobs:
         id: build
         shell: bash
         run: |
-          choco install openssl
+          choco install openssl --version=3.1.1
           if [[ -d "C:\Program Files\OpenSSL" ]]; then
             echo "OPENSSL_DIR: C:\Program Files\OpenSSL"
             export OPENSSL_DIR="C:\Program Files\OpenSSL"

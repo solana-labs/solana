@@ -3,7 +3,9 @@ use {
     clap::{value_t, value_t_or_exit, values_t_or_exit, ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
-    solana_accounts_db::hardened_unpack::open_genesis_config,
+    solana_accounts_db::{
+        hardened_unpack::open_genesis_config, utils::create_all_accounts_run_and_snapshot_dirs,
+    },
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier, validator::BlockVerificationMethod,
     },
@@ -21,6 +23,7 @@ use {
         blockstore_processor::{
             self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
         },
+        use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_measure::measure,
     solana_rpc::transaction_status_service::TransactionStatusService,
@@ -34,8 +37,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
-            move_and_async_delete_path_contents, SnapshotError,
+            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
         },
     },
     solana_sdk::{
@@ -64,10 +66,10 @@ const PROCESS_SLOTS_HELP_STRING: &str =
 #[derive(Error, Debug)]
 pub(crate) enum LoadAndProcessLedgerError {
     #[error("failed to clean orphaned account snapshot directories: {0}")]
-    CleanOrphanedAccountSnapshotDirectories(#[source] SnapshotError),
+    CleanOrphanedAccountSnapshotDirectories(#[source] std::io::Error),
 
     #[error("failed to create all run and snapshot directories: {0}")]
-    CreateAllAccountsRunAndSnapshotDirectories(#[source] SnapshotError),
+    CreateAllAccountsRunAndSnapshotDirectories(#[source] std::io::Error),
 
     #[error("custom accounts path is not supported with seconday blockstore access")]
     CustomAccountsPathUnsupported(#[source] BlockstoreError),
@@ -552,7 +554,11 @@ fn open_blockstore_with_temporary_primary_access(
 pub fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
-    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
+
+    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size).unwrap_or_else(|err| {
+        eprintln!("Exiting. Failed to open genesis config: {err}");
+        exit(1);
+    })
 }
 
 pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
@@ -563,4 +569,13 @@ pub fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubke
         .instructions()
         .iter()
         .map(|ix| ix.program_id(account_keys))
+}
+
+/// Get the AccessType required, based on `process_options`
+pub(crate) fn get_access_type(process_options: &ProcessOptions) -> AccessType {
+    match process_options.use_snapshot_archives_at_startup {
+        UseSnapshotArchivesAtStartup::Always => AccessType::Secondary,
+        UseSnapshotArchivesAtStartup::Never => AccessType::PrimaryForMaintenance,
+        UseSnapshotArchivesAtStartup::WhenNewest => AccessType::PrimaryForMaintenance,
+    }
 }

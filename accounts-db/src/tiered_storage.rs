@@ -19,13 +19,14 @@ use {
         storable_accounts::StorableAccounts,
     },
     error::TieredStorageError,
-    footer::{AccountBlockFormat, AccountMetaFormat, OwnersBlockFormat},
+    footer::{AccountBlockFormat, AccountMetaFormat},
     index::IndexBlockFormat,
+    owners::OwnersBlockFormat,
     readable::TieredStorageReader,
     solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
-        fs::OpenOptions,
+        fs::{self, OpenOptions},
         path::{Path, PathBuf},
         sync::OnceLock,
     },
@@ -53,8 +54,11 @@ pub struct TieredStorage {
 
 impl Drop for TieredStorage {
     fn drop(&mut self) {
-        if let Err(err) = fs_err::remove_file(&self.path) {
-            panic!("TieredStorage failed to remove backing storage file: {err}");
+        if let Err(err) = fs::remove_file(&self.path) {
+            panic!(
+                "TieredStorage failed to remove backing storage file '{}': {err}",
+                self.path.display(),
+            );
         }
     }
 }
