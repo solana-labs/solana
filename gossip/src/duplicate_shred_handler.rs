@@ -137,19 +137,7 @@ impl DuplicateShredHandler {
                     shred1.into_payload(),
                     shred2.into_payload(),
                 )?;
-                let should_notify = {
-                    let root_bank = self.bank_forks.read().unwrap().root_bank();
-                    let activated_slot = root_bank
-                        .feature_set
-                        .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                        .map(|slot| root_bank.epoch_schedule().get_epoch(slot));
-                    activated_slot.is_some_and(|feature_epoch| {
-                        root_bank.epoch_schedule().get_epoch(slot) > feature_epoch
-                            // feature_epoch could only be 0 in tests and new cluster setup.
-                            || feature_epoch == 0
-                    })
-                };
-                if should_notify {
+                if self.should_notify_state_machine(slot) {
                     // Notify duplicate consensus state machine
                     self.duplicate_slots_sender
                         .send(slot)
@@ -159,6 +147,19 @@ impl DuplicateShredHandler {
             self.consumed.insert(slot, true);
         }
         Ok(())
+    }
+
+    fn should_notify_state_machine(&self, slot: Slot) -> bool {
+        let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let activated_slot = root_bank
+            .feature_set
+            .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+            .map(|slot| root_bank.epoch_schedule().get_epoch(slot));
+        activated_slot.is_some_and(|feature_epoch| {
+            root_bank.epoch_schedule().get_epoch(slot) > feature_epoch
+                // feature_epoch could only be 0 in tests and new cluster setup.
+                || feature_epoch == 0
+        })
     }
 
     fn should_consume_slot(&mut self, slot: Slot) -> bool {
