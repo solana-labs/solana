@@ -683,7 +683,15 @@ fn run_accounts_bench(
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 || (count >= iterations && iterations != 0) {
+        let max_accounts_met = if let Some(max_accounts) = max_accounts {
+            total_accounts_created >= max_accounts
+        } else {
+            false
+        };
+        if last_log.elapsed().as_millis() > 3000
+            || (count >= iterations && iterations != 0)
+            || max_accounts_met
+        {
             info!(
                 "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
@@ -693,10 +701,8 @@ fn run_accounts_bench(
         if iterations != 0 && count >= iterations {
             break;
         }
-        if let Some(max_accounts) = max_accounts {
-            if total_accounts_created >= max_accounts {
-                break;
-            }
+        if max_accounts_met {
+            break;
         }
         if executor.num_outstanding() >= batch_size {
             sleep(Duration::from_millis(500));
