@@ -5,12 +5,10 @@ use {
         serialize_utils::cursor::*,
         vote::state::{BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS},
     },
-    bincode::serialized_size,
     std::io::Cursor,
 };
 
 pub(super) fn deserialize_vote_state_into(
-    input: &[u8],
     cursor: &mut Cursor<&[u8]>,
     vote_state: &mut VoteState,
     has_latency: bool,
@@ -21,26 +19,7 @@ pub(super) fn deserialize_vote_state_into(
     read_votes_into(cursor, vote_state, has_latency)?;
     vote_state.root_slot = read_option_u64(cursor)?;
     read_authorized_voters_into(cursor, vote_state)?;
-
-    // `serialized_size()` must be used over `mem::size_of()` because of alignment
-    let position_after_prior_voters = cursor
-        .position()
-        .checked_add(
-            serialized_size(&vote_state.prior_voters)
-                .map_err(|_| InstructionError::InvalidAccountData)?,
-        )
-        .ok_or(InstructionError::InvalidAccountData)?;
-
-    let is_empty_idx = position_after_prior_voters
-        .checked_sub(1)
-        .ok_or(InstructionError::InvalidAccountData)?;
-
-    match input[is_empty_idx as usize] {
-        0 => read_prior_voters_into(cursor, vote_state)?,
-        1 => cursor.set_position(position_after_prior_voters),
-        _ => return Err(InstructionError::InvalidAccountData),
-    }
-
+    read_prior_voters_into(cursor, vote_state)?;
     read_epoch_credits_into(cursor, vote_state)?;
     read_last_timestamp_into(cursor, vote_state)?;
 

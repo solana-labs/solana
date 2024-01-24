@@ -406,9 +406,9 @@ impl VoteState {
             // V0_23_5. not supported; these should not exist on mainnet
             0 => Err(InstructionError::InvalidAccountData),
             // V1_14_11. substantially different layout and data
-            1 => deserialize_vote_state_into(input, &mut cursor, vote_state, false),
+            1 => deserialize_vote_state_into(&mut cursor, vote_state, false),
             // Current. the only difference is the addition of a slot-latency to each vote
-            2 => deserialize_vote_state_into(input, &mut cursor, vote_state, true),
+            2 => deserialize_vote_state_into(&mut cursor, vote_state, true),
             _ => Err(InstructionError::InvalidAccountData),
         }
     }
