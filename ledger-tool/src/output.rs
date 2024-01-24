@@ -2,7 +2,7 @@ use {
     crate::ledger_utils::get_program_ids,
     chrono::{Local, TimeZone},
     serde::{
-        ser::{self, SerializeSeq, SerializeStruct, Serializer},
+        ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
         Deserialize, Serialize,
     },
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
@@ -597,24 +597,27 @@ impl AccountsOutputStreamer {
         }
     }
 
-    pub fn output(&self) {
+    pub fn output(&self) -> Result<(), serde_json::Error> {
         match self.output_format {
-            OutputFormat::Json | OutputFormat::JsonCompact => self.output_json().unwrap(),
-            _ => self.print(),
+            OutputFormat::Json | OutputFormat::JsonCompact => {
+                let mut serializer = serde_json::Serializer::new(stdout());
+                let mut struct_serializer = serializer.serialize_struct("accountInfo", 2)?;
+                struct_serializer.serialize_field("accounts", &self.account_scanner)?;
+                struct_serializer
+                    .serialize_field("summary", &*self.total_accounts_stats.borrow())?;
+                SerializeStruct::end(struct_serializer)
+            }
+            _ => {
+                // The compiler needs a placeholder type to satisfy the generic
+                // SerializeSeq trait on AccountScanner::output(). The type
+                // doesn't really matter since we're passing None, so just use
+                // serde::ser::Impossible as it already implements SerializeSeq
+                self.account_scanner
+                    .output::<Impossible<(), serde_json::Error>>(&mut None);
+                println!("\n{:#?}", self.total_accounts_stats.borrow());
+                Ok(())
+            }
         }
-    }
-
-    fn output_json(&self) -> Result<(), serde_json::Error> {
-        let mut serializer = serde_json::Serializer::new(stdout());
-        let mut struct_serializer = serializer.serialize_struct("accountInfo", 2)?;
-        struct_serializer.serialize_field("accounts", &self.account_scanner)?;
-        struct_serializer.serialize_field("summary", &*self.total_accounts_stats.borrow())?;
-        SerializeStruct::end(struct_serializer)
-    }
-
-    fn print(&self) {
-        self.account_scanner.print();
-        println!("\n{:#?}", self.total_accounts_stats.borrow());
     }
 }
 
@@ -636,9 +639,17 @@ impl AccountsScanner {
 }
 
 impl AccountsScanner {
-    pub fn print(&self) {
+    pub fn output<S>(&self, seq_serializer: &mut Option<S>)
+    where
+        S: SerializeSeq,
+    {
         let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
         let rent_collector = self.bank.rent_collector();
+
+        let cli_account_new_config = CliAccountNewConfig {
+            data_encoding: self.account_data_encoding,
+            ..CliAccountNewConfig::default()
+        };
 
         let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
             if let Some((pubkey, account, slot)) = account_tuple
@@ -647,13 +658,19 @@ impl AccountsScanner {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
 
                 if self.include_account_contents {
-                    output_account(
-                        pubkey,
-                        &account,
-                        Some(slot),
-                        self.include_account_data,
-                        self.account_data_encoding,
-                    );
+                    if let Some(serializer) = seq_serializer {
+                        let cli_account =
+                            CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
+                        serializer.serialize_element(&cli_account).unwrap();
+                    } else {
+                        output_account(
+                            pubkey,
+                            &account,
+                            Some(slot),
+                            self.include_account_data,
+                            self.account_data_encoding,
+                        );
+                    }
                 }
             }
         };
@@ -667,33 +684,9 @@ impl Serialize for AccountsScanner {
     where
         S: Serializer,
     {
-        let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
-        let rent_collector = self.bank.rent_collector();
-
-        let cli_account_new_config = CliAccountNewConfig {
-            data_encoding: self.account_data_encoding,
-            ..CliAccountNewConfig::default()
-        };
-
-        let mut seq_serializer = serializer.serialize_seq(None)?;
-        let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-            if let Some((pubkey, account, _slot)) = account_tuple
-                .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
-            {
-                total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
-
-                if self.include_account_contents {
-                    let cli_account =
-                        CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
-                    seq_serializer.serialize_element(&cli_account).unwrap();
-                }
-            }
-        };
-
-        self.bank
-            .scan_all_accounts(scan_func)
-            .map_err(ser::Error::custom)?;
-        seq_serializer.end()
+        let mut seq_serializer = Some(serializer.serialize_seq(None)?);
+        self.output(&mut seq_serializer);
+        seq_serializer.unwrap().end()
     }
 }
 
