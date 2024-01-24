@@ -485,11 +485,12 @@ impl Consumer {
             .iter()
             .zip(transaction_qos_cost_results.iter_mut())
             .map(|(lock_result, cost)| {
-                if let Err(_lock_err) = lock_result {
-                    if let Ok(tx_cost) = cost {
-                        // reset cost to lock_err, so it won't be  accidentally removed more than once
-                        // TODO *cost = Err(lock_err.clone());
-                        return Some(tx_cost);
+                if let Err(lock_err) = lock_result {
+                    if cost.is_ok() {
+                        // set cost to lock_err, so it won't be  accidentally removed more than once
+                        let mut c = Err(lock_err.clone());
+                        std::mem::swap(cost, &mut c);
+                        return Some(c.unwrap());
                     }
                 }
                 None
