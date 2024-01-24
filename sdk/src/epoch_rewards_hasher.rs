@@ -1,4 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
 use {
     siphasher::sip::SipHasher13,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -34,6 +33,9 @@ impl EpochRewardsHasher {
 
 /// Compute the partition index by modulo the address hash to number of partitions w.o bias.
 /// (rand_int * DESIRED_RANGE_MAX) / (RAND_MAX + 1)
+// Clippy objects to `u128::from(u64::MAX).saturating_add(1)`, even though it
+// can never overflow
+#[allow(clippy::arithmetic_side_effects)]
 fn hash_to_partition(hash: u64, partitions: usize) -> usize {
     ((partitions as u128)
         .saturating_mul(u128::from(hash))
