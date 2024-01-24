@@ -379,12 +379,12 @@ impl CacheHashData {
 
 /// The values of each part of a cache hash data filename
 #[derive(Debug)]
-struct ParsedFilename {
-    slot_range_start: Slot,
-    _slot_range_end: Slot,
-    _bin_range_start: u64,
-    _bin_range_end: u64,
-    _hash: u64,
+pub struct ParsedFilename {
+    pub slot_range_start: Slot,
+    pub slot_range_end: Slot,
+    pub bin_range_start: u64,
+    pub bin_range_end: u64,
+    pub hash: u64,
 }
 
 /// Parses a cache hash data filename into its parts
@@ -403,10 +403,10 @@ fn parse_filename(cache_filename: impl AsRef<Path>) -> Option<ParsedFilename> {
     let hash = u64::from_str_radix(parts.get(4)?, 16).ok()?; // the hash is in hex
     Some(ParsedFilename {
         slot_range_start,
-        _slot_range_end: slot_range_end,
-        _bin_range_start: bin_range_start,
-        _bin_range_end: bin_range_end,
-        _hash: hash,
+        slot_range_end,
+        bin_range_start,
+        bin_range_end,
+        hash,
     })
 }
 
@@ -573,10 +573,10 @@ mod tests {
         let good_filename = "123.456.0.65536.537d65697d9b2baa";
         let parsed_filename = parse_filename(good_filename).unwrap();
         assert_eq!(parsed_filename.slot_range_start, 123);
-        assert_eq!(parsed_filename._slot_range_end, 456);
-        assert_eq!(parsed_filename._bin_range_start, 0);
-        assert_eq!(parsed_filename._bin_range_end, 65536);
-        assert_eq!(parsed_filename._hash, 0x537d65697d9b2baa);
+        assert_eq!(parsed_filename.slot_range_end, 456);
+        assert_eq!(parsed_filename.bin_range_start, 0);
+        assert_eq!(parsed_filename.bin_range_end, 65536);
+        assert_eq!(parsed_filename.hash, 0x537d65697d9b2baa);
 
         let bad_filenames = [
             // bad separator
