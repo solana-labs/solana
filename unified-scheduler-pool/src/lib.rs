@@ -1819,12 +1819,10 @@ mod tests {
         scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         // That's because we're testing the serialized failing execution case in this test.
-        // However, currently threaded impl can't properly abort in this situtation..
-        // so, 1 should be observed, intead of 0.
         // Also note that bank.transaction_count() is generally racy by nature, because
         // blockstore_processor and unified_scheduler both tend to process non-conflicting batches
         // in parallel as part of the normal operation.
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.transaction_count(), 0);
 
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(
