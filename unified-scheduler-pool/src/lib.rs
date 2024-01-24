@@ -994,8 +994,8 @@ where
                                     // caller doesn't care.
                                     return Some(executed_task.result_with_timings);
                                 } else {
-                                    executed_task_sender.send_buffered(ExecutedTaskPayload::Payload(executed_task)).unwrap();
                                     state_machine.deschedule_task(&executed_task.task);
+                                    executed_task_sender.send_buffered(ExecutedTaskPayload::Payload(executed_task)).unwrap();
                                 }
                                 "step"
                             },
