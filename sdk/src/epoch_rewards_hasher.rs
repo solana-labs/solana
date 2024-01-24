@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 use {
     siphasher::sip::SipHasher13,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
