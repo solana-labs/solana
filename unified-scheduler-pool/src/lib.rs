@@ -891,6 +891,9 @@ where
         // 4. the handler thread processes the dispatched task.
         // 5. the handler thread reply back to the scheduler thread as an executed task.
         // 6. the scheduler thread post-processes the executed task.
+        // 7. the scheduler thread send the executed task to the accumulator thread.
+        // 8. the accumulator thread examines the executed task's result and accumulate its timing,
+        //    finally dropping the transaction inside the executed task.
         let scheduler_main_loop = || {
             let handler_count = self.handler_count;
             let session_result_sender = self.session_result_sender.clone();
@@ -997,9 +1000,9 @@ where
                                 "step"
                             },
                             recv(new_task_receiver) -> message => {
+                                assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        assert!(!session_ending && !thread_suspending);
                                         if let Some(task) = state_machine.schedule_task(task) {
                                             idle_transaction_sender.send(task).unwrap();
                                         }
@@ -1016,7 +1019,6 @@ where
                                         "S+T:started"
                                     }
                                     Ok(NewTaskPayload::CloseSubchannel) => {
-                                        assert!(!session_ending && !thread_suspending);
                                         session_ending = true;
                                         "S:ending"
                                     }
