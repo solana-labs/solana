@@ -460,7 +460,7 @@ impl Consumer {
         pre_results: impl Iterator<Item = Result<(), TransactionError>>,
     ) -> ProcessTransactionBatchOutput {
         let (
-            (transaction_qos_cost_results, cost_model_throttled_transactions_count),
+            (mut transaction_qos_cost_results, cost_model_throttled_transactions_count),
             cost_model_us,
         ) = measure_us!(self.qos_service.select_and_accumulate_transaction_costs(
             bank,
@@ -478,6 +478,31 @@ impl Consumer {
                 Err(err) => Err(err.clone()),
             })
         ));
+
+        // Remove reserved block space for transaction failed to acquire lock
+        let unlocked_cost_results: Vec<_> = batch
+            .lock_results()
+            .iter()
+            .zip(transaction_qos_cost_results.iter_mut())
+            .map(|(lock_result, cost)| {
+                if let Err(_lock_err) = lock_result {
+                    if let Ok(tx_cost) = cost {
+                        // reset cost to lock_err, so it won't be  accidentally removed more than once
+                        // TODO *cost = Err(lock_err.clone());
+                        return Some(tx_cost);
+                    }
+                }
+                None
+            })
+            .collect();
+        {
+            let mut cost_tracker = bank.write_cost_tracker().unwrap();
+            unlocked_cost_results.iter().for_each(|tx_cost| {
+                if let Some(tx_cost) = tx_cost {
+                    cost_tracker.remove(tx_cost);
+                }
+            });
+        }
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
