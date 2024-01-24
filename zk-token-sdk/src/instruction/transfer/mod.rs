@@ -146,7 +146,10 @@ pub fn try_combine_lo_hi_commitments(
     Ok(comm_lo + comm_hi * &Scalar::from(two_power))
 }
 
-#[deprecated(since = "1.18.0", note = "please use `try_combine_lo_hi_openings` instead")]
+#[deprecated(
+    since = "1.18.0",
+    note = "please use `try_combine_lo_hi_openings` instead"
+)]
 #[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_openings(
     opening_lo: &PedersenOpening,
