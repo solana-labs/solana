@@ -200,9 +200,7 @@ pub(crate) struct CacheHashData {
 
 impl Drop for CacheHashData {
     fn drop(&mut self) {
-        if self.should_delete_old_cache_files_on_drop {
-            self.delete_old_cache_files();
-        }
+        self.delete_old_cache_files();
         self.stats.report();
     }
 }
@@ -223,13 +221,9 @@ impl CacheHashData {
         result.get_cache_files();
         result
     }
-<<<<<<< HEAD
-    fn delete_old_cache_files(&self) {
-        let old_cache_files = std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
-=======
 
     /// delete all pre-existing files that will not be used
-    pub(crate) fn delete_old_cache_files(&self) {
+    fn delete_old_cache_files(&self) {
         // all the renaming files in `pre_existing_cache_files` were *not* used for this
         // accounts hash calculation
         let mut old_cache_files =
@@ -252,7 +246,6 @@ impl CacheHashData {
             });
         }
 
->>>>>>> 5898b9a2f7 (Cleans up stale accounts hash cache files (#34933))
         if !old_cache_files.is_empty() {
             self.stats
                 .unused_cache_files
