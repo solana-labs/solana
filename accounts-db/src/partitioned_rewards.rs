@@ -1,5 +1,7 @@
 //! Code related to partitioned rewards distribution
 //!
+
+use std::{ops::RangeInclusive, sync::Arc};
 use {
     solana_sdk::{
         clock::Slot, epoch_rewards_partition_data::get_epoch_rewards_partition_data_address,
@@ -136,27 +138,27 @@ impl PartitionRewardPDAAndSysvarAddresses {
         &mut self,
         epoch: Epoch,
     ) -> HashSet<Pubkey> {
+        fn add_pda_accounts(r: RangeInclusive<u64>, s: &mut HashSet<Pubkey>) {
+            for e in r {
+                let pda = get_epoch_rewards_partition_data_address(e);
+                s.insert(pda);
+            }
+        }
+
         if self.addresses.is_empty() {
             self.addresses.insert(sysvar::epoch_rewards::id());
-
-            for e in 0..=epoch {
-                let pda = get_epoch_rewards_partition_data_address(e);
-                self.addresses.insert(pda);
-            }
+            add_pda_accounts(0..=epoch, &mut self.addresses);
             self.max_epoch = epoch;
         } else if epoch > self.max_epoch {
-            for e in self.max_epoch + 1..=epoch {
-                let pda = get_epoch_rewards_partition_data_address(e);
-                self.addresses.insert(pda);
-            }
+            add_pda_accounts(self.max_epoch + 1..=epoch, &mut self.addresses);
             self.max_epoch = epoch;
         }
 
-        self.addresses.to_owned()
+        self.addresses.clone()
     }
 
     pub fn copy_partition_reward_pda_and_sysvar_addresses(&self) -> HashSet<Pubkey> {
-        self.addresses.to_owned()
+        self.addresses.clone()
     }
 }
 
@@ -173,13 +175,16 @@ mod tests {
         let s = a.get_partition_reward_pda_and_sysvar_addresses(3);
         assert_eq!(s.len(), 5);
         assert_eq!(a.max_epoch, 3);
+        assert_eq!(s, a.copy_partition_reward_pda_and_sysvar_addresses());
 
         let s = a.get_partition_reward_pda_and_sysvar_addresses(2);
         assert_eq!(s.len(), 5);
         assert_eq!(a.max_epoch, 3);
+        assert_eq!(s, a.copy_partition_reward_pda_and_sysvar_addresses());
 
         let s = a.get_partition_reward_pda_and_sysvar_addresses(4);
         assert_eq!(s.len(), 6);
         assert_eq!(a.max_epoch, 4);
+        assert_eq!(s, a.copy_partition_reward_pda_and_sysvar_addresses());
     }
 }
