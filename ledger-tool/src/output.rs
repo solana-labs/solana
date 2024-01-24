@@ -28,9 +28,9 @@ use {
         collections::HashMap,
         fmt::{self, Display, Formatter},
         io::{stdout, Write},
+        rc::Rc,
         result::Result,
         sync::Arc,
-        rc::Rc,
     },
 };
 
