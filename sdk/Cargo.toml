@@ -75,6 +75,7 @@ serde_json = { workspace = true, optional = true }
 serde_with = { workspace = true, features = ["macros"] }
 sha2 = { workspace = true }
 sha3 = { workspace = true, optional = true }
+siphasher = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-logger = { workspace = true, optional = true }
