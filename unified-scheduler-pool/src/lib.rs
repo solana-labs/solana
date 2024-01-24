@@ -1,4 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
 //! Transaction scheduling code.
 //!
 //! This crate implements 3 solana-runtime traits (`InstalledScheduler`, `UninstalledScheduler` and
@@ -13,7 +12,7 @@ use {
     assert_matches::assert_matches,
     crossbeam_channel::{
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
-        RecvTimeoutError, Sender, TryRecvError,
+        RecvTimeoutError, Sender, SendError, TryRecvError,
     },
     derivative::Derivative,
     log::*,
@@ -153,7 +152,7 @@ where
                 .task_from_tid(tid)
                 .unwrap();
             let stat = task.stat().unwrap();
-            let current_tick = stat.utime + stat.stime;
+            let current_tick = stat.utime.checked_add(stat.stime).unwrap();
             if current_tick > self.tick {
                 self.tick = current_tick;
                 self.updated_at = Instant::now();
@@ -203,7 +202,7 @@ where
 {
     // Some internal impl and test code want an actual concrete type, NOT the
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
-    pub fn new(
+    fn new(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
@@ -300,7 +299,7 @@ where
     }
 
     // See a comment at the weak_self field for justification of this method's existence.
-    pub fn self_arc(&self) -> Arc<Self> {
+    fn self_arc(&self) -> Arc<Self> {
         self.weak_self
             .upgrade()
             .expect("self-referencing Arc-ed pool")
@@ -415,27 +414,8 @@ impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
     }
 }
 
-#[derive(Default, Debug)]
-pub struct AddressBook {
-    book: dashmap::DashMap<Pubkey, Page>,
-}
-
-impl AddressBook {
-    pub fn load(&self, address: Pubkey) -> Page {
-        self.book.entry(address).or_default().clone()
-    }
-
-    pub fn page_count(&self) -> usize {
-        self.book.len()
-    }
-
-    pub fn clear(&self) {
-        self.book.clear();
-    }
-}
-
 #[derive(Debug)]
-pub struct ExecutedTask {
+struct ExecutedTask {
     task: Task,
     result_with_timings: ResultWithTimings,
     slot: Slot,
@@ -500,7 +480,7 @@ type ExecutedTaskPayload = SubchanneledPayload<Box<ExecutedTask>, ()>;
 // minimum at the cost of a single channel recreation per switching. Needless to say, such an
 // allocation can be amortized to be negligible.
 mod chained_channel {
-    use {super::*, crossbeam_channel::SendError};
+    use super::*;
 
     // hide variants by putting this inside newtype
     enum ChainedChannelPrivate<P, C> {
@@ -604,6 +584,25 @@ mod chained_channel {
 
 fn initialized_result_with_timings() -> ResultWithTimings {
     (Ok(()), ExecuteTimings::default())
+}
+
+#[derive(Default, Debug)]
+pub struct AddressBook {
+    book: dashmap::DashMap<Pubkey, Page>,
+}
+
+impl AddressBook {
+    pub fn load(&self, address: Pubkey) -> Page {
+        self.book.entry(address).or_default().clone()
+    }
+
+    pub fn page_count(&self) -> usize {
+        self.book.len()
+    }
+
+    pub fn clear(&self) {
+        self.book.clear();
+    }
 }
 
 // Currently, simplest possible implementation (i.e. single-threaded)
@@ -750,7 +749,7 @@ struct LogInterval(usize);
 impl LogInterval {
     fn increment(&mut self) -> bool {
         let should_log = self.0 % 1000 == 0;
-        self.0 += 1;
+        self.0 = self.0.checked_add(1).unwrap();
         should_log
     }
 }
