@@ -873,14 +873,14 @@ fn main() {
             Arg::with_name("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
-                .value_name("NUM")
+                .value_name("NUM_INSTRUCTIONS")
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
             Arg::with_name("iterations")
                 .long("iterations")
                 .takes_value(true)
-                .value_name("NUM")
+                .value_name("NUM_ITERATIONS")
                 .help("Number of iterations to make. 0 = unlimited iterations."),
         )
         .arg(
@@ -892,6 +892,7 @@ fn main() {
             Arg::with_name("mint")
                 .long("mint")
                 .takes_value(true)
+                .value_name("MINT_ADDRESS")
                 .help("Mint address to initialize account"),
         )
         .arg(
@@ -904,12 +905,14 @@ fn main() {
             Arg::with_name("num_rpc_bench_threads")
                 .long("num-rpc-bench-threads")
                 .takes_value(true)
+                .value_name("NUM_THREADS")
                 .help("Spawn this many RPC benching threads for each type passed by --rpc-bench"),
         )
         .arg(
             Arg::with_name("rpc_bench")
                 .long("rpc-bench")
                 .takes_value(true)
+                .value_name("RPC_BENCH_TYPE(S)")
                 .multiple(true)
                 .help("Spawn a thread which calls a specific RPC method in a loop to benchmark it"),
         )
