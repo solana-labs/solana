@@ -9,7 +9,6 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Epoch, Slot},
-        epoch_schedule::EpochSchedule,
         feature_set,
         pubkey::Pubkey,
     },
@@ -43,10 +42,10 @@ pub struct DuplicateShredHandler {
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
-    epoch_schedule: EpochSchedule,
     // Cache information from root bank so we could function correctly without reading roots.
     cached_on_epoch: Epoch,
     cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
+    cached_slots_in_epoch: u64,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
 }
@@ -70,17 +69,13 @@ impl DuplicateShredHandler {
         bank_forks: Arc<RwLock<BankForks>>,
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
-        let epoch_schedule = {
-            let root_bank = bank_forks.read().unwrap().root_bank();
-            root_bank.epoch_schedule().clone()
-        };
         Self {
             buffer: HashMap::<(Slot, Pubkey), BufferEntry>::default(),
             consumed: HashMap::<Slot, bool>::default(),
             last_root: 0,
             cached_on_epoch: 0,
             cached_staked_nodes: Arc::new(HashMap::new()),
-            epoch_schedule,
+            cached_slots_in_epoch: 0,
             blockstore,
             leader_schedule_cache,
             bank_forks,
@@ -102,6 +97,7 @@ impl DuplicateShredHandler {
                 if let Some(cached_staked_nodes) = root_bank.epoch_staked_nodes(epoch_info.epoch) {
                     self.cached_staked_nodes = cached_staked_nodes;
                 }
+                self.cached_slots_in_epoch = epoch_info.slots_in_epoch;
             }
         }
     }
@@ -141,19 +137,19 @@ impl DuplicateShredHandler {
                     shred1.into_payload(),
                     shred2.into_payload(),
                 )?;
-                // feature_epoch could only be 0 in tests and new cluster setup.
-                if self
-                    .bank_forks
-                    .read()
-                    .unwrap()
-                    .root_bank()
-                    .feature_set
-                    .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
-                    .map(|slot| self.epoch_schedule.get_epoch(slot))
-                    .is_some_and(|feature_epoch| {
-                        self.epoch_schedule.get_epoch(slot) > feature_epoch || feature_epoch == 0
+                let should_notify = {
+                    let root_bank = self.bank_forks.read().unwrap().root_bank();
+                    let activated_slot = root_bank
+                        .feature_set
+                        .activated_slot(&feature_set::enable_gossip_duplicate_proof_ingestion::id())
+                        .map(|slot| root_bank.epoch_schedule().get_epoch(slot));
+                    activated_slot.is_some_and(|feature_epoch| {
+                        root_bank.epoch_schedule().get_epoch(slot) > feature_epoch
+                            // feature_epoch could only be 0 in tests and new cluster setup.
+                            || feature_epoch == 0
                     })
-                {
+                };
+                if should_notify {
                     // Notify duplicate consensus state machine
                     self.duplicate_slots_sender
                         .send(slot)
@@ -167,10 +163,7 @@ impl DuplicateShredHandler {
 
     fn should_consume_slot(&mut self, slot: Slot) -> bool {
         slot > self.last_root
-            && slot
-                < self
-                    .last_root
-                    .saturating_add(self.epoch_schedule.slots_per_epoch)
+            && slot < self.last_root.saturating_add(self.cached_slots_in_epoch)
             && should_consume_slot(slot, &self.blockstore, &mut self.consumed)
     }
 
@@ -433,9 +426,8 @@ mod tests {
         assert!(receiver.is_empty());
 
         // This proof will be rejected because the slot is too far away in the future.
-        let future_slot = blockstore.max_root()
-            + duplicate_shred_handler.epoch_schedule.slots_per_epoch
-            + start_slot;
+        let future_slot =
+            blockstore.max_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
