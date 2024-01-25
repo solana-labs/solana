@@ -818,6 +818,72 @@ where
         }
     }
 
+    fn accumulate_result_with_timings(
+        (result, timings): &mut ResultWithTimings,
+        executed_task: Box<ExecutedTask>,
+    ) {
+        match executed_task.result_with_timings.0 {
+            Ok(()) => {}
+            Err(error) => {
+                error!("error is detected while accumulating....: {error:?}");
+                // Override errors intentionally for simplicity, not retaining the
+                // first error unlike the block verification in the
+                // blockstore_processor. This will be addressed with more
+                // full-fledged impl later.
+                *result = Err(error);
+            }
+        }
+        timings.accumulate(&executed_task.result_with_timings.1);
+        if let Some(handler_timings) = &executed_task.handler_timings {
+            use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+
+            let sig = executed_task.task.transaction().signature().to_string();
+
+            solana_metrics::datapoint_info_at!(
+                handler_timings.finish_time,
+                "transaction_timings",
+                ("slot", executed_task.slot, i64),
+                ("index", executed_task.task.task_index(), i64),
+                (
+                    "thread",
+                    format!("solScExLane{:02}", executed_task.thx),
+                    String
+                ),
+                ("signature", &sig, String),
+                (
+                    "account_locks_in_json",
+                    serde_json::to_string(
+                        &executed_task
+                            .task
+                            .transaction()
+                            .get_account_locks_unchecked()
+                    )
+                    .unwrap(),
+                    String
+                ),
+                (
+                    "status",
+                    format!("{:?}", executed_task.result_with_timings.0),
+                    String
+                ),
+                ("duration", handler_timings.execution_us, i64),
+                ("cpu_duration", handler_timings.execution_cpu_us, i64),
+                ("compute_units", 0 /*task.cu*/, i64),
+                (
+                    "priority",
+                    executed_task
+                        .task
+                        .transaction()
+                        .get_transaction_priority_details(false)
+                        .map(|d| d.priority)
+                        .unwrap_or_default(),
+                    i64
+                ),
+            );
+        }
+        drop(executed_task);
+    }
+
     fn take_session_result_with_timings(&mut self) -> ResultWithTimings {
         self.session_result_with_timings.take().unwrap()
     }
@@ -1169,54 +1235,6 @@ where
                                 .unwrap()
                                 .1
                                 .accumulate(&executed_task.result_with_timings.1);
-                            if let Some(handler_timings) = &executed_task.handler_timings {
-                                use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-
-                                let sig = executed_task.task.transaction().signature().to_string();
-
-                                solana_metrics::datapoint_info_at!(
-                                    handler_timings.finish_time,
-                                    "transaction_timings",
-                                    ("slot", executed_task.slot, i64),
-                                    ("index", executed_task.task.task_index(), i64),
-                                    (
-                                        "thread",
-                                        format!("solScExLane{:02}", executed_task.thx),
-                                        String
-                                    ),
-                                    ("signature", &sig, String),
-                                    (
-                                        "account_locks_in_json",
-                                        serde_json::to_string(
-                                            &executed_task
-                                                .task
-                                                .transaction()
-                                                .get_account_locks_unchecked()
-                                        )
-                                        .unwrap(),
-                                        String
-                                    ),
-                                    (
-                                        "status",
-                                        format!("{:?}", executed_task.result_with_timings.0),
-                                        String
-                                    ),
-                                    ("duration", handler_timings.execution_us, i64),
-                                    ("cpu_duration", handler_timings.execution_cpu_us, i64),
-                                    ("compute_units", 0 /*task.cu*/, i64),
-                                    (
-                                        "priority",
-                                        executed_task
-                                            .task
-                                            .transaction()
-                                            .get_transaction_priority_details(false)
-                                            .map(|d| d.priority)
-                                            .unwrap_or_default(),
-                                        i64
-                                    ),
-                                );
-                            }
-                            drop(executed_task);
                         }
                         Ok(ExecutedTaskPayload::OpenSubchannel(())) => {
                             assert_matches!(
