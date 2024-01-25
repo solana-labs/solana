@@ -1637,14 +1637,7 @@ impl Bank {
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
-        // Skip creating data account when we are testing partitioned
-        // rewards but feature is not yet active
-        let should_create = self.is_partitioned_rewards_code_enabled()
-            || !self.force_partition_rewards_in_first_block_of_epoch();
-
-        if should_create {
-            self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
-        }
+        self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -3638,9 +3631,16 @@ impl Bank {
         .unwrap();
 
         info!(
-            "create epoch rewards partition data account {} {address} {epoch_rewards_partition_data:?}", self.slot
+            "create epoch rewards partition data account {} {address} \
+            {epoch_rewards_partition_data:?}",
+            self.slot
         );
-        self.store_account_and_update_capitalization(&address, &new_account);
+
+        // Skip storing data account when we are testing partitioned
+        // rewards but feature is not yet active
+        if !self.force_partition_rewards_in_first_block_of_epoch() {
+            self.store_account_and_update_capitalization(&address, &new_account);
+        }
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
