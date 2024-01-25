@@ -307,7 +307,6 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.clear()
     }
 
-
     pub fn schedule_retryable_task(&mut self) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
@@ -540,8 +539,8 @@ type UniqueWeight = u64;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use {
+        super::*,
         assert_matches::assert_matches,
         iai_callgrind::{
             client_requests::callgrind::toggle_collect, library_benchmark, library_benchmark_group,
@@ -556,9 +555,8 @@ mod tests {
             system_transaction,
             transaction::{Result, SanitizedTransaction, Transaction},
         },
-        std::hint::black_box,
+        std::{collections::HashMap, hint::black_box},
     };
-    use std::collections::HashMap;
 
     fn simplest_transaction() -> SanitizedTransaction {
         let payer = Keypair::new();
@@ -589,14 +587,14 @@ mod tests {
     #[test]
     fn test_create_task() {
         let sanitized = simplest_transaction();
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+        let task =
+            SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
         assert_eq!(task.task_index(), 3);
         assert_eq!(task.transaction(), &sanitized);
     }
 
     fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
-        let mut pages =
-            HashMap::<Pubkey, Page>::new();
+        let mut pages = HashMap::<Pubkey, Page>::new();
 
         move |address| pages.entry(address).or_default().clone()
     }
