@@ -1,5 +1,5 @@
 use {
-    crate::{accounts::account_rent_state::RentState, bank::Bank},
+    crate::{bank::Bank, svm::account_rent_state::RentState},
     solana_sdk::{
         account::ReadableAccount,
         message::SanitizedMessage,

@@ -23,8 +23,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
     },
     solana_runtime::{
-        accounts::validate_fee_payer,
         bank::{Bank, LoadAndExecuteTransactionsOutput},
+        svm::account_loader::validate_fee_payer,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
