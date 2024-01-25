@@ -699,9 +699,14 @@ fn run_accounts_bench(
             last_log = Instant::now();
         }
         if iterations != 0 && count >= iterations {
+            info!("{iterations} iterations reached");
             break;
         }
         if max_accounts_met {
+            info!(
+                "Max account limit of {:?} reached",
+                max_accounts.unwrap_or_default()
+            );
             break;
         }
         if executor.num_outstanding() >= batch_size {
