@@ -907,7 +907,7 @@ where
 
         let (mut runnable_task_sender, runnable_task_receiver) =
             chained_channel::unbounded::<Task, SchedulingContext>(context.clone());
-        let (idle_task_receiver, idle_task_receiver) = unbounded::<Task>();
+        let (idle_task_sender, idle_task_receiver) = unbounded::<Task>();
         let (finished_task_sender, finished_task_receiver) = unbounded::<Box<ExecutedTask>>();
         let (finished_idle_task_sender, finished_idle_task_receiver) =
             unbounded::<Box<ExecutedTask>>();
@@ -993,7 +993,7 @@ where
                             state_machine.reschedule_count(),
                             state_machine.rescheduled_task_count(),
                             new_task_receiver.len(),
-                            runnable_task_sender.len(), idle_task_receiver.len(),
+                            runnable_task_sender.len(), idle_task_sender.len(),
                             finished_task_receiver.len(), finished_idle_task_receiver.len(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
@@ -1038,7 +1038,7 @@ where
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
                                         if let Some(task) = state_machine.schedule_task(task) {
-                                            idle_task_receiver.send(task).unwrap();
+                                            idle_task_sender.send(task).unwrap();
                                         }
                                         "step"
                                     }
