@@ -44,6 +44,7 @@ use {
     std::{
         env,
         fmt::Debug,
+        process,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
