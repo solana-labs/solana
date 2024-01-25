@@ -298,7 +298,7 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
 mod tests {
     use {
         super::*,
-        clap::{Arg, Command},
+        clap::{Arg, ArgAction, Command},
         solana_sdk::{hash::Hash, pubkey::Pubkey},
     };
 
@@ -308,7 +308,7 @@ mod tests {
                 Arg::new("multiple")
                     .long("multiple")
                     .takes_value(true)
-                    .multiple_occurrences(true)
+                    .action(ArgAction::Append)
                     .multiple_values(true),
             )
             .arg(Arg::new("single").takes_value(true).long("single"))
