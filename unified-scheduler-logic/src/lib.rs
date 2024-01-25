@@ -329,7 +329,9 @@ impl SchedulingStateMachine {
     ) -> usize {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
-        for (lock_count, attempt) in lock_attempts.iter_mut().enumerate() {
+        let mut lock_count = 0;
+
+        for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
@@ -337,12 +339,13 @@ impl SchedulingStateMachine {
                     } else {
                         attempt.uncommited_usage = usage;
                     }
+                    lock_count += 1;
                 }
-                LockStatus::Failed => return lock_count,
+                LockStatus::Failed => break,
             }
         }
 
-        lock_attempts.len()
+        lock_count
     }
 
     fn attempt_lock_address(
