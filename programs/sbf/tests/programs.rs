@@ -16,7 +16,7 @@ use {
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
     solana_accounts_db::transaction_results::{
-        DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
+        InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
         TransactionResults,
     },
     solana_ledger::token_balances::collect_token_balances,
@@ -190,25 +190,13 @@ fn execute_transactions(
                         status,
                         log_messages,
                         inner_instructions,
-                        durable_nonce_fee,
                         return_data,
                         executed_units,
                         ..
                     } = details;
 
-                    let lamports_per_signature = match durable_nonce_fee {
-                        Some(DurableNonceFee::Valid(lamports_per_signature)) => {
-                            Some(lamports_per_signature)
-                        }
-                        Some(DurableNonceFee::Invalid) => None,
-                        None => bank.get_lamports_per_signature_for_blockhash(
-                            &tx.message().recent_blockhash,
-                        ),
-                    }
-                    .expect("lamports_per_signature must be available");
-                    let fee = bank.get_fee_for_message_with_lamports_per_signature(
+                    let fee = bank.get_fee_for_message(
                         &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
-                        lamports_per_signature,
                     );
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
@@ -3985,7 +3973,6 @@ fn test_program_fees() {
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
-        congestion_multiplier,
         &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
             .unwrap_or_default()
             .into(),
@@ -4008,7 +3995,6 @@ fn test_program_fees() {
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
-        congestion_multiplier,
         &process_compute_budget_instructions(sanitized_message.program_instructions_iter())
             .unwrap_or_default()
             .into(),

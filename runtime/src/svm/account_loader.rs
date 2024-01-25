@@ -7,8 +7,7 @@ use {
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         accounts_db::AccountsDb,
         ancestors::Ancestors,
-        blockhash_queue::BlockhashQueue,
-        nonce_info::{NonceFull, NonceInfo},
+        nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -45,7 +44,6 @@ pub(crate) fn load_accounts(
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],
     lock_results: &[TransactionCheckResult],
-    hash_queue: &BlockhashQueue,
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
     feature_set: &FeatureSet,
@@ -60,27 +58,14 @@ pub(crate) fn load_accounts(
         .zip(lock_results)
         .map(|etx| match etx {
             (tx, (Ok(()), nonce)) => {
-                let lamports_per_signature = nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    });
-                let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        tx.message(),
-                        lamports_per_signature,
-                        &process_compute_budget_instructions(
-                            tx.message().program_instructions_iter(),
-                        )
+                let fee = fee_structure.calculate_fee(
+                    tx.message(),
+                    &process_compute_budget_instructions(tx.message().program_instructions_iter())
                         .unwrap_or_default()
                         .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                    )
-                } else {
-                    return (Err(TransactionError::BlockhashNotFound), None);
-                };
+                    feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                );
 
                 // load transactions
                 let loaded_transaction = match load_transaction_accounts(
@@ -519,14 +504,11 @@ mod tests {
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[TransactionAccount],
-        lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut TransactionErrorMetrics,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
         let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
@@ -540,7 +522,6 @@ mod tests {
             &ancestors,
             &[sanitized_tx],
             &[(Ok(()), None)],
-            &hash_queue,
             error_counters,
             rent_collector,
             feature_set,
@@ -573,7 +554,6 @@ mod tests {
         load_accounts_with_fee_and_rent(
             tx,
             ka,
-            lamports_per_signature,
             &RentCollector::default(),
             error_counters,
             &all_features_except(exclude_features),
@@ -685,7 +665,6 @@ mod tests {
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
-            lamports_per_signature,
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),
@@ -776,7 +755,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &all_features_except(None),
@@ -792,7 +770,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &FeatureSet::all_enabled(),
@@ -809,7 +786,6 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
-            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
             &FeatureSet::all_enabled(),
@@ -1008,8 +984,6 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let rent_collector = RentCollector::default();
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -1018,7 +992,6 @@ mod tests {
             &ancestors,
             &[tx],
             &[(Ok(()), None)],
-            &hash_queue,
             &mut error_counters,
             &rent_collector,
             &FeatureSet::all_enabled(),
@@ -1219,7 +1192,6 @@ mod tests {
         let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
-            lamports_per_signature,
             &process_compute_budget_instructions(message.program_instructions_iter())
                 .unwrap_or_default()
                 .into(),

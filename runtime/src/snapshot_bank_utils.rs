@@ -1816,7 +1816,7 @@ mod tests {
             lamports_to_transfer,
             blockhash,
         ));
-        let fee = bank2.get_fee_for_message(tx.message()).unwrap();
+        let fee = bank2.get_fee_for_message(tx.message());
         let tx = system_transaction::transfer(
             &key1,
             &key2.pubkey(),
@@ -2184,7 +2184,7 @@ mod tests {
                 let transaction = SanitizedTransaction::from_transaction_for_tests(
                     system_transaction::transfer(&key2, &key3.pubkey(), amount, blockhash),
                 );
-                bank.get_fee_for_message(transaction.message()).unwrap()
+                bank.get_fee_for_message(transaction.message())
             };
             bank.transfer(amount + fee, mint, &key1.pubkey()).unwrap();
             bank.transfer(amount + fee, mint, &key2.pubkey()).unwrap();

@@ -2,7 +2,7 @@ use {
     crate::transaction_notifier_interface::TransactionNotifierArc,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
-    solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
+    solana_accounts_db::transaction_results::TransactionExecutionDetails,
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
@@ -99,25 +99,11 @@ impl TransactionStatusService {
                             status,
                             log_messages,
                             inner_instructions,
-                            durable_nonce_fee,
                             return_data,
                             executed_units,
                             ..
                         } = details;
-                        let lamports_per_signature = match durable_nonce_fee {
-                            Some(DurableNonceFee::Valid(lamports_per_signature)) => {
-                                Some(lamports_per_signature)
-                            }
-                            Some(DurableNonceFee::Invalid) => None,
-                            None => bank.get_lamports_per_signature_for_blockhash(
-                                transaction.message().recent_blockhash(),
-                            ),
-                        }
-                        .expect("lamports_per_signature must be available");
-                        let fee = bank.get_fee_for_message_with_lamports_per_signature(
-                            transaction.message(),
-                            lamports_per_signature,
-                        );
+                        let fee = bank.get_fee_for_message(transaction.message());
                         let tx_account_locks = transaction.get_account_locks_unchecked();
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
@@ -215,6 +201,7 @@ pub(crate) mod tests {
         solana_accounts_db::{
             nonce_info::{NonceFull, NoncePartial},
             rent_debits::RentDebits,
+            transaction_results::DurableNonceFee,
         },
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::{Bank, TransactionBalancesSet},

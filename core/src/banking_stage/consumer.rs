@@ -714,7 +714,6 @@ impl Consumer {
             process_compute_budget_instructions(message.program_instructions_iter())?.into();
         let fee = bank.fee_structure.calculate_fee(
             message,
-            bank.get_lamports_per_signature(),
             &budget_limits,
             bank.feature_set.is_active(
                 &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),

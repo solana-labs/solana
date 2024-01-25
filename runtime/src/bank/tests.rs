@@ -2669,10 +2669,6 @@ fn test_bank_tx_compute_unit_fee() {
 
     let expected_fee_paid = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-        genesis_config
-            .fee_rate_governor
-            .create_fee_calculator()
-            .lamports_per_signature,
         &bank.fee_structure,
     );
 
@@ -2797,7 +2793,6 @@ fn test_bank_blockhash_fee_structure() {
     assert_eq!(bank.get_balance(&key), 1);
     let cheap_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-        cheap_lamports_per_signature,
         &bank.fee_structure,
     );
     assert_eq!(
@@ -2813,7 +2808,6 @@ fn test_bank_blockhash_fee_structure() {
     assert_eq!(bank.get_balance(&key), 1);
     let expensive_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-        expensive_lamports_per_signature,
         &bank.fee_structure,
     );
     assert_eq!(
@@ -2859,7 +2853,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     assert_eq!(bank.get_balance(&key), 1);
     let cheap_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-        cheap_lamports_per_signature,
         &bank.fee_structure,
     );
     assert_eq!(
@@ -2875,7 +2868,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     assert_eq!(bank.get_balance(&key), 1);
     let expensive_fee = calculate_test_fee(
         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-        expensive_lamports_per_signature,
         &bank.fee_structure,
     );
     assert_eq!(
@@ -2983,10 +2975,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                     calculate_test_fee(
                         &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique())))
                             .unwrap(),
-                        genesis_config
-                            .fee_rate_governor
-                            .create_fee_calculator()
-                            .lamports_per_signature,
                         &bank.fee_structure,
                     ) * 2
                 )
@@ -5275,10 +5263,8 @@ fn test_nonce_transaction() {
     /* Check balances */
     let mut recent_message = nonce_tx.message;
     recent_message.recent_blockhash = bank.last_blockhash();
-    let mut expected_balance = 4_650_000
-        - bank
-            .get_fee_for_message(&recent_message.try_into().unwrap())
-            .unwrap();
+    let mut expected_balance =
+        4_650_000 - bank.get_fee_for_message(&recent_message.try_into().unwrap());
     assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
     assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
     assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -5335,9 +5321,8 @@ fn test_nonce_transaction() {
     /* Check fee charged and nonce has advanced */
     let mut recent_message = nonce_tx.message.clone();
     recent_message.recent_blockhash = bank.last_blockhash();
-    expected_balance -= bank
-        .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap())
-        .unwrap();
+    expected_balance -=
+        bank.get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap());
     assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
     assert_ne!(
         nonce_hash,
@@ -5402,10 +5387,8 @@ fn test_nonce_transaction_with_tx_wide_caps() {
     /* Check balances */
     let mut recent_message = nonce_tx.message;
     recent_message.recent_blockhash = bank.last_blockhash();
-    let mut expected_balance = 4_650_000
-        - bank
-            .get_fee_for_message(&recent_message.try_into().unwrap())
-            .unwrap();
+    let mut expected_balance =
+        4_650_000 - bank.get_fee_for_message(&recent_message.try_into().unwrap());
     assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
     assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
     assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -5462,9 +5445,8 @@ fn test_nonce_transaction_with_tx_wide_caps() {
     /* Check fee charged and nonce has advanced */
     let mut recent_message = nonce_tx.message.clone();
     recent_message.recent_blockhash = bank.last_blockhash();
-    expected_balance -= bank
-        .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap())
-        .unwrap();
+    expected_balance -=
+        bank.get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap());
     assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
     assert_ne!(
         nonce_hash,
@@ -5593,10 +5575,7 @@ fn test_nonce_payer() {
     recent_message.recent_blockhash = bank.last_blockhash();
     assert_eq!(
         bank.get_balance(&nonce_pubkey),
-        nonce_starting_balance
-            - bank
-                .get_fee_for_message(&recent_message.try_into().unwrap())
-                .unwrap()
+        nonce_starting_balance - bank.get_fee_for_message(&recent_message.try_into().unwrap())
     );
     assert_ne!(
         nonce_hash,
@@ -5660,10 +5639,7 @@ fn test_nonce_payer_tx_wide_cap() {
     recent_message.recent_blockhash = bank.last_blockhash();
     assert_eq!(
         bank.get_balance(&nonce_pubkey),
-        nonce_starting_balance
-            - bank
-                .get_fee_for_message(&recent_message.try_into().unwrap())
-                .unwrap()
+        nonce_starting_balance - bank.get_fee_for_message(&recent_message.try_into().unwrap())
     );
     assert_ne!(
         nonce_hash,
@@ -10019,16 +9995,12 @@ fn test_call_precomiled_program() {
     bank.process_transaction(&tx).unwrap();
 }
 
-fn calculate_test_fee(
-    message: &SanitizedMessage,
-    lamports_per_signature: u64,
-    fee_structure: &FeeStructure,
-) -> u64 {
+fn calculate_test_fee(message: &SanitizedMessage, fee_structure: &FeeStructure) -> u64 {
     let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
         .unwrap_or_default()
         .into();
 
-    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false)
+    fee_structure.calculate_fee(message, &budget_limits, false)
 }
 
 #[test]
@@ -10039,7 +10011,6 @@ fn test_calculate_fee() {
     assert_eq!(
         calculate_test_fee(
             &message,
-            0,
             &FeeStructure {
                 lamports_per_signature: 0,
                 ..FeeStructure::default()
@@ -10052,7 +10023,6 @@ fn test_calculate_fee() {
     assert_eq!(
         calculate_test_fee(
             &message,
-            1,
             &FeeStructure {
                 lamports_per_signature: 1,
                 ..FeeStructure::default()
@@ -10070,7 +10040,6 @@ fn test_calculate_fee() {
     assert_eq!(
         calculate_test_fee(
             &message,
-            2,
             &FeeStructure {
                 lamports_per_signature: 2,
                 ..FeeStructure::default()
@@ -10094,7 +10063,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        calculate_test_fee(&message, 1, &fee_structure,),
+        calculate_test_fee(&message, &fee_structure,),
         max_fee + lamports_per_signature
     );
 
@@ -10105,7 +10074,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        calculate_test_fee(&message, 1, &fee_structure,),
+        calculate_test_fee(&message, &fee_structure,),
         max_fee + 3 * lamports_per_signature
     );
 
@@ -10138,7 +10107,7 @@ fn test_calculate_fee_compute_units() {
             Some(&Pubkey::new_unique()),
         ))
         .unwrap();
-        let fee = calculate_test_fee(&message, 1, &fee_structure);
+        let fee = calculate_test_fee(&message, &fee_structure);
         assert_eq!(
             fee,
             lamports_per_signature + prioritization_fee_details.get_fee()
@@ -10170,11 +10139,7 @@ fn test_calculate_prioritization_fee() {
     ))
     .unwrap();
 
-    let fee = calculate_test_fee(
-        &message,
-        fee_structure.lamports_per_signature,
-        &fee_structure,
-    );
+    let fee = calculate_test_fee(&message, &fee_structure);
     assert_eq!(
         fee,
         fee_structure.lamports_per_signature + prioritization_fee
@@ -10211,7 +10176,7 @@ fn test_calculate_fee_secp256k1() {
         Some(&key0),
     ))
     .unwrap();
-    assert_eq!(calculate_test_fee(&message, 1, &fee_structure,), 2);
+    assert_eq!(calculate_test_fee(&message, &fee_structure,), 2);
 
     secp_instruction1.data = vec![0];
     secp_instruction2.data = vec![10];
@@ -10220,7 +10185,7 @@ fn test_calculate_fee_secp256k1() {
         Some(&key0),
     ))
     .unwrap();
-    assert_eq!(calculate_test_fee(&message, 1, &fee_structure,), 11);
+    assert_eq!(calculate_test_fee(&message, &fee_structure,), 11);
 }
 
 #[test]
@@ -10755,7 +10720,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         &recent_blockhash,
     ))
     .unwrap();
-    let fee = bank.get_fee_for_message(&dummy_message).unwrap();
+    let fee = bank.get_fee_for_message(&dummy_message);
 
     // RentPaying fee-payer can remain RentPaying
     let tx = Transaction::new(
@@ -10990,7 +10955,6 @@ fn test_rent_state_list_len() {
         &bank.ancestors,
         &[sanitized_tx.clone()],
         &[(Ok(()), None)],
-        &bank.blockhash_queue.read().unwrap(),
         &mut error_counters,
         &bank.rent_collector,
         &bank.feature_set,
@@ -11939,10 +11903,6 @@ fn test_stake_account_consistency_with_rent_epoch_max_feature(
 
 #[test]
 fn test_calculate_fee_with_congestion_multiplier() {
-    let lamports_scale: u64 = 5;
-    let base_lamports_per_signature: u64 = 5_000;
-    let cheap_lamports_per_signature: u64 = base_lamports_per_signature / lamports_scale;
-    let expensive_lamports_per_signature: u64 = base_lamports_per_signature * lamports_scale;
     let signature_count: u64 = 2;
     let signature_fee: u64 = 10;
     let fee_structure = FeeStructure {
@@ -11957,17 +11917,8 @@ fn test_calculate_fee_with_congestion_multiplier() {
     let ix1 = system_instruction::transfer(&key1, &key0, 1);
     let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
 
-    // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
-    // congestion_multiplier has no effect on fee.
     assert_eq!(
-        calculate_test_fee(&message, cheap_lamports_per_signature, &fee_structure),
-        signature_fee * signature_count
-    );
-
-    // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
-    // congestion_multiplier will change calculated fee.
-    assert_eq!(
-        calculate_test_fee(&message, expensive_lamports_per_signature, &fee_structure,),
+        calculate_test_fee(&message, &fee_structure),
         signature_fee * signature_count
     );
 }
@@ -11976,7 +11927,6 @@ fn test_calculate_fee_with_congestion_multiplier() {
 fn test_calculate_fee_with_request_heap_frame_flag() {
     let key0 = Pubkey::new_unique();
     let key1 = Pubkey::new_unique();
-    let lamports_per_signature: u64 = 5_000;
     let signature_fee: u64 = 10;
     let request_cu: u64 = 1;
     let lamports_per_cu: u64 = 5;
@@ -11998,7 +11948,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
     // assert when request_heap_frame is presented in tx, prioritization fee will be counted
     // into transaction fee
     assert_eq!(
-        calculate_test_fee(&message, lamports_per_signature, &fee_structure),
+        calculate_test_fee(&message, &fee_structure),
         signature_fee + request_cu * lamports_per_cu
     );
 }
@@ -12126,7 +12076,7 @@ fn test_bank_verify_accounts_hash_with_base() {
             let transaction = SanitizedTransaction::from_transaction_for_tests(
                 system_transaction::transfer(&key2, &key3.pubkey(), amount, blockhash),
             );
-            bank.get_fee_for_message(transaction.message()).unwrap()
+            bank.get_fee_for_message(transaction.message())
         };
         bank.transfer(amount + fee, &mint, &key1.pubkey()).unwrap();
         bank.transfer(amount + fee, &mint, &key2.pubkey()).unwrap();
