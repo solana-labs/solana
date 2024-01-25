@@ -829,8 +829,8 @@ where
         timings.accumulate(&executed_task.result_with_timings.1);
 
         if let Some(handler_timings) = &executed_task.handler_timings {
-            let sig = executed_task.task.transaction().signature().to_string();
             let thread = format!("solScExLane{:02}", executed_task.thx);
+            let signature = executed_task.task.transaction().signature().to_string();
             let account_locks_in_json = serde_json::to_string(
                 &executed_task
                     .task
@@ -852,7 +852,7 @@ where
                 ("slot", executed_task.slot, i64),
                 ("index", executed_task.task.task_index(), i64),
                 ("thread", thread, String),
-                ("signature", &sig, String),
+                ("signature", signature, String),
                 ("account_locks_in_json", account_locks_in_json, String),
                 ("status", status, String),
                 ("duration", handler_timings.execution_us, i64),
