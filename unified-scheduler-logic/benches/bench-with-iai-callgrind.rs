@@ -1,26 +1,21 @@
-use std::hint::black_box;
-use iai_callgrind::{main, library_benchmark_group, library_benchmark};
-use solana_unified_scheduler_logic::SchedulingStateMachine;
-use iai_callgrind::client_requests::callgrind::toggle_collect;
 use {
-    solana_sdk::{
-        system_transaction,
-        transaction::{Result, SanitizedTransaction},
+    assert_matches::assert_matches,
+    iai_callgrind::{
+        client_requests::callgrind::toggle_collect, library_benchmark, library_benchmark_group,
+        main,
     },
-};
-
-use {
     solana_sdk::{
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
         signature::Signer,
         signer::keypair::Keypair,
-        transaction::Transaction,
+        system_transaction,
+        transaction::{Result, SanitizedTransaction, Transaction},
     },
-    solana_unified_scheduler_logic::{Page, Task},
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
+    std::hint::black_box,
 };
-use assert_matches::assert_matches;
 
 #[library_benchmark]
 #[bench::min(0)]
@@ -136,15 +131,22 @@ fn bench_schedule_task_conflicting_hot(account_count: usize) {
 
     let mut scheduler = SchedulingStateMachine::default();
 
-    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> = std::collections::HashMap::new();
-    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| pages.entry(address).or_default().clone());
+    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+        std::collections::HashMap::new();
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| {
+        pages.entry(address).or_default().clone()
+    });
     let task = scheduler.schedule_task(task).unwrap();
     for i in 1..=account_count {
-        let task = SchedulingStateMachine::create_task(tx0.clone(), i, |address| pages.entry(address).or_default().clone());
+        let task = SchedulingStateMachine::create_task(tx0.clone(), i, |address| {
+            pages.entry(address).or_default().clone()
+        });
         assert_matches!(scheduler.schedule_task(task), None);
     }
 
-    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |address| pages.entry(address).or_default().clone());
+    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |address| {
+        pages.entry(address).or_default().clone()
+    });
     let task2 = task.clone();
 
     toggle_collect();
@@ -226,9 +228,14 @@ fn bench_schedule_retryable_task(account_count: usize) {
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
-    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> = std::collections::HashMap::new();
-    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| pages.entry(address).or_default().clone());
-    let task2 = SchedulingStateMachine::create_task(tx0, 1, |address| pages.entry(address).or_default().clone());
+    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+        std::collections::HashMap::new();
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| {
+        pages.entry(address).or_default().clone()
+    });
+    let task2 = SchedulingStateMachine::create_task(tx0, 1, |address| {
+        pages.entry(address).or_default().clone()
+    });
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
     assert_matches!(scheduler.schedule_task(task2), None);
