@@ -291,7 +291,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        self.total_task_count += 1;
+        //self.total_task_count += 1;
         self.active_task_count += 1;
         self.try_lock_for_task(TaskSource::Runnable, task)
     }
