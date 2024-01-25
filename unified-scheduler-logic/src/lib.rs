@@ -599,7 +599,8 @@ mod tests {
     #[test]
     fn test_schedule_non_conflicting_task() {
         let sanitized = simplest_transaction();
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+        let address_loader = &mut create_address_loader();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         let task = state_machine.schedule_task(task).unwrap();
