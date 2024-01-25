@@ -1415,7 +1415,7 @@ where
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let scheduler = Self::do_spawn(pool, initial_context, handler);
+        let scheduler = Self::do_spawn(pool.clone(), initial_context, handler);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
         scheduler
     }
