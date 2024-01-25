@@ -56,66 +56,67 @@ impl RentState {
             }
         }
     }
-}
 
-pub(super) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_state: &RentState) {
-    match (pre_rent_state, post_rent_state) {
-        (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
-            inc_new_counter_info!("rent_paying_err-new_account", 1);
+    fn submit_rent_state_metrics(pre_rent_state: &Self, post_rent_state: &Self) {
+        match (pre_rent_state, post_rent_state) {
+            (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_err-new_account", 1);
+            }
+            (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_ok-legacy", 1);
+            }
+            (_, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_err-other", 1);
+            }
+            _ => {}
         }
-        (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {
-            inc_new_counter_info!("rent_paying_ok-legacy", 1);
-        }
-        (_, &RentState::RentPaying { .. }) => {
-            inc_new_counter_info!("rent_paying_err-other", 1);
-        }
-        _ => {}
     }
-}
 
-pub(crate) fn check_rent_state(
-    pre_rent_state: Option<&RentState>,
-    post_rent_state: Option<&RentState>,
-    transaction_context: &TransactionContext,
-    index: IndexOfAccount,
-) -> Result<()> {
-    if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
-        let expect_msg = "account must exist at TransactionContext index if rent-states are Some";
-        check_rent_state_with_account(
-            pre_rent_state,
-            post_rent_state,
-            transaction_context
-                .get_key_of_account_at_index(index)
-                .expect(expect_msg),
-            &transaction_context
-                .get_account_at_index(index)
-                .expect(expect_msg)
-                .borrow(),
-            index,
-        )?;
-    }
-    Ok(())
-}
-
-pub(super) fn check_rent_state_with_account(
-    pre_rent_state: &RentState,
-    post_rent_state: &RentState,
-    address: &Pubkey,
-    account_state: &AccountSharedData,
-    account_index: IndexOfAccount,
-) -> Result<()> {
-    submit_rent_state_metrics(pre_rent_state, post_rent_state);
-    if !solana_sdk::incinerator::check_id(address)
-        && !post_rent_state.transition_allowed_from(pre_rent_state)
-    {
-        debug!(
-            "Account {} not rent exempt, state {:?}",
-            address, account_state,
-        );
-        let account_index = account_index as u8;
-        Err(TransactionError::InsufficientFundsForRent { account_index })
-    } else {
+    pub(crate) fn check_rent_state(
+        pre_rent_state: Option<&Self>,
+        post_rent_state: Option<&Self>,
+        transaction_context: &TransactionContext,
+        index: IndexOfAccount,
+    ) -> Result<()> {
+        if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
+            let expect_msg =
+                "account must exist at TransactionContext index if rent-states are Some";
+            Self::check_rent_state_with_account(
+                pre_rent_state,
+                post_rent_state,
+                transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect(expect_msg),
+                &transaction_context
+                    .get_account_at_index(index)
+                    .expect(expect_msg)
+                    .borrow(),
+                index,
+            )?;
+        }
         Ok(())
+    }
+
+    pub(super) fn check_rent_state_with_account(
+        pre_rent_state: &Self,
+        post_rent_state: &Self,
+        address: &Pubkey,
+        account_state: &AccountSharedData,
+        account_index: IndexOfAccount,
+    ) -> Result<()> {
+        Self::submit_rent_state_metrics(pre_rent_state, post_rent_state);
+        if !solana_sdk::incinerator::check_id(address)
+            && !post_rent_state.transition_allowed_from(pre_rent_state)
+        {
+            debug!(
+                "Account {} not rent exempt, state {:?}",
+                address, account_state,
+            );
+            let account_index = account_index as u8;
+            Err(TransactionError::InsufficientFundsForRent { account_index })
+        } else {
+            Ok(())
+        }
     }
 }
 
