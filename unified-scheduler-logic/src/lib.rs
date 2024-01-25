@@ -84,7 +84,7 @@ impl SchedulingStateMachine {
     pub fn create_task(
         transaction: SanitizedTransaction,
         index: usize,
-        mut page_loader: &mut impl FnMut(Pubkey) -> Page,
+        page_loader: &mut impl FnMut(Pubkey) -> Page,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
 
