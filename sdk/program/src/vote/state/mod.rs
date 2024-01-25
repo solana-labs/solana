@@ -1,9 +1,12 @@
 //! Vote state
 
-#[cfg(test)]
-use crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET;
 #[cfg(not(target_os = "solana"))]
 use bincode::deserialize;
+#[cfg(test)]
+use {
+    crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+    arbitrary::{Arbitrary, Unstructured},
+};
 use {
     crate::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -11,17 +14,20 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
+        serialize_utils::cursor::read_u32,
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
     bincode::{serialize_into, ErrorKind},
     serde_derive::{Deserialize, Serialize},
-    std::{collections::VecDeque, fmt::Debug},
+    std::{collections::VecDeque, fmt::Debug, io::Cursor},
 };
 
 mod vote_state_0_23_5;
 pub mod vote_state_1_14_11;
 pub use vote_state_1_14_11::*;
+mod vote_state_deserialize;
+use vote_state_deserialize::deserialize_vote_state_into;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
@@ -67,6 +73,7 @@ impl Vote {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Lockout {
     slot: Slot,
     confirmation_count: u32,
@@ -114,6 +121,7 @@ impl Lockout {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct LandedVote {
     // Latency is the difference in slot number between the slot that was voted on (lockout.slot) and the slot in
     // which the vote that added this Lockout landed.  For votes which were cast before versions of the validator
@@ -226,6 +234,7 @@ pub struct VoteAuthorizeCheckedWithSeedArgs {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct BlockTimestamp {
     pub slot: Slot,
     pub timestamp: UnixTimestamp,
@@ -280,8 +289,26 @@ impl<I> CircBuf<I> {
     }
 }
 
+#[cfg(test)]
+impl<'a, I: Default + Copy> Arbitrary<'a> for CircBuf<I>
+where
+    I: Arbitrary<'a>,
+{
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut circbuf = Self::default();
+
+        let len = u.arbitrary_len::<I>()?;
+        for _ in 0..len {
+            circbuf.append(I::arbitrary(u)?);
+        }
+
+        Ok(circbuf)
+    }
+}
+
 #[frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ")]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -347,16 +374,43 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    #[allow(clippy::used_underscore_binding)]
-    pub fn deserialize(_input: &[u8]) -> Result<Self, InstructionError> {
+    // we retain bincode deserialize for not(target_os = "solana")
+    // because the hand-written parser does not support V0_23_5
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         #[cfg(not(target_os = "solana"))]
         {
-            deserialize::<VoteStateVersions>(_input)
+            deserialize::<VoteStateVersions>(input)
                 .map(|versioned| versioned.convert_to_current())
                 .map_err(|_| InstructionError::InvalidAccountData)
         }
         #[cfg(target_os = "solana")]
-        unimplemented!();
+        {
+            let mut vote_state = Self::default();
+            Self::deserialize_into(input, &mut vote_state)?;
+            Ok(vote_state)
+        }
+    }
+
+    /// Deserializes the input buffer into the provided `VoteState`
+    ///
+    /// This function exists to deserialize `VoteState` in a BPF context without going above
+    /// the compute limit, and must be kept up to date with `bincode::deserialize`.
+    pub fn deserialize_into(
+        input: &[u8],
+        vote_state: &mut VoteState,
+    ) -> Result<(), InstructionError> {
+        let mut cursor = Cursor::new(input);
+
+        let variant = read_u32(&mut cursor)?;
+        match variant {
+            // V0_23_5. not supported; these should not exist on mainnet
+            0 => Err(InstructionError::InvalidAccountData),
+            // V1_14_11. substantially different layout and data from V0_23_5
+            1 => deserialize_vote_state_into(&mut cursor, vote_state, false),
+            // Current. the only difference from V1_14_11 is the addition of a slot-latency to each vote
+            2 => deserialize_vote_state_into(&mut cursor, vote_state, true),
+            _ => Err(InstructionError::InvalidAccountData),
+        }
     }
 
     pub fn serialize(
@@ -816,6 +870,58 @@ mod tests {
             VoteState::deserialize(&buffer).unwrap(),
             versioned.convert_to_current()
         );
+    }
+
+    #[test]
+    fn test_vote_deserialize_into() {
+        // base case
+        let target_vote_state = VoteState::default();
+        let vote_state_buf =
+            bincode::serialize(&VoteStateVersions::new_current(target_vote_state.clone())).unwrap();
+
+        let mut test_vote_state = VoteState::default();
+        VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+
+        assert_eq!(target_vote_state, test_vote_state);
+
+        // variant
+        // provide 4x the minimum struct size in bytes to ensure we typically touch every field
+        let struct_bytes_x4 = std::mem::size_of::<u64>() * 4;
+        for _ in 0..1000 {
+            let raw_data: Vec<u8> = (0..struct_bytes_x4).map(|_| rand::random::<u8>()).collect();
+            let mut unstructured = Unstructured::new(&raw_data);
+
+            let target_vote_state_versions =
+                VoteStateVersions::arbitrary(&mut unstructured).unwrap();
+            let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
+            let target_vote_state = target_vote_state_versions.convert_to_current();
+
+            let mut test_vote_state = VoteState::default();
+            VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+
+            assert_eq!(target_vote_state, test_vote_state);
+        }
+    }
+
+    #[test]
+    fn test_vote_deserialize_into_nopanic() {
+        // base case
+        let mut test_vote_state = VoteState::default();
+        let e = VoteState::deserialize_into(&[], &mut test_vote_state).unwrap_err();
+        assert_eq!(e, InstructionError::InvalidAccountData);
+
+        // variant
+        let serialized_len_x4 = bincode::serialized_size(&test_vote_state).unwrap() * 4;
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            let raw_data_length = rng.gen_range(1..serialized_len_x4);
+            let raw_data: Vec<u8> = (0..raw_data_length).map(|_| rng.gen::<u8>()).collect();
+
+            // it is extremely improbable, though theoretically possible, for random bytes to be syntactically valid
+            // so we only check that the deserialize function does not panic
+            let mut test_vote_state = VoteState::default();
+            let _ = VoteState::deserialize_into(&raw_data, &mut test_vote_state);
+        }
     }
 
     #[test]

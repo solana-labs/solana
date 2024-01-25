@@ -60,20 +60,31 @@ pub trait ForkGraph {
     }
 }
 
+/// Actual payload of [LoadedProgram].
 #[derive(Default)]
 pub enum LoadedProgramType {
-    /// Tombstone for undeployed, closed or unloadable programs
+    /// Tombstone for programs which did not pass the verifier.
+    ///
+    /// These can potentially come back alive if the environment changes.
     FailedVerification(ProgramRuntimeEnvironment),
+    /// Tombstone for programs which were explicitly undeployoed / closed.
     #[default]
     Closed,
+    /// Tombstone for programs which have recently been modified but the new version is not visible yet.
     DelayVisibility,
-    /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
+    /// Successfully verified but not currently compiled.
+    ///
+    /// It continues to track usage statistics even when the compiled executable of the program is evicted from memory.
     Unloaded(ProgramRuntimeEnvironment),
+    /// Verified and compiled program of loader-v1 or loader-v2
     LegacyV0(Executable<InvokeContext<'static>>),
+    /// Verified and compiled program of loader-v3 (aka upgradable loader)
     LegacyV1(Executable<InvokeContext<'static>>),
+    /// Verified and compiled program of loader-v4
     Typed(Executable<InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded(ProgramRuntimeEnvironment),
+    /// A built-in program which is not stored on-chain but backed into and distributed with the validator
     Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
 
@@ -113,6 +124,9 @@ impl LoadedProgramType {
     }
 }
 
+/// Holds a program version at a specific address and on a specific slot / fork.
+///
+/// It contains the actual program in [LoadedProgramType] and a bunch of meta-data.
 #[derive(Debug, Default)]
 pub struct LoadedProgram {
     /// The program of this entry
@@ -133,17 +147,28 @@ pub struct LoadedProgram {
     pub latest_access_slot: AtomicU64,
 }
 
+/// Global cache statistics for [LoadedPrograms].
 #[derive(Debug, Default)]
 pub struct Stats {
+    /// a program was requested
     pub hits: AtomicU64,
+    /// a program was polled during cooperative loading
     pub misses: AtomicU64,
+    /// a compiled executable was unloaded
     pub evictions: HashMap<Pubkey, u64>,
+    /// a program was loaded
     pub insertions: AtomicU64,
+    /// a program was reloaded or redeployed
     pub replacements: AtomicU64,
+    /// a program was only used once before being unloaded
     pub one_hit_wonders: AtomicU64,
+    /// a program became unreachable in the fork graph because of rerooting
     pub prunes_orphan: AtomicU64,
+    /// a program got pruned because its expiration slot passed
     pub prunes_expired: AtomicU64,
+    /// a program got pruned because it was not recompiled for the next epoch
     pub prunes_environment: AtomicU64,
+    /// the [SecondLevel] was empty because all slot versions got pruned
     pub empty_entries: AtomicU64,
 }
 
@@ -203,12 +228,18 @@ impl Stats {
     }
 }
 
+/// Time measurements for loading a single [LoadedProgram].
 #[derive(Debug, Default)]
 pub struct LoadProgramMetrics {
+    /// Program address, but as text
     pub program_id: String,
+    /// Microseconds it took to `create_program_runtime_environment`
     pub register_syscalls_us: u64,
+    /// Microseconds it took to `Executable::<InvokeContext>::load`
     pub load_elf_us: u64,
+    /// Microseconds it took to `executable.verify::<RequisiteVerifier>`
     pub verify_code_us: u64,
+    /// Microseconds it took to `executable.jit_compile`
     pub jit_compile_us: u64,
 }
 
@@ -434,11 +465,14 @@ impl LoadedProgram {
     }
 }
 
+/// Globally shared RBPF config and syscall registry
+///
+/// This is only valid in an epoch range as long as no feature affecting RBPF is activated.
 #[derive(Clone, Debug)]
 pub struct ProgramRuntimeEnvironments {
-    /// Globally shared RBPF config and syscall registry for runtime V1
+    /// For program runtime V1
     pub program_runtime_v1: ProgramRuntimeEnvironment,
-    /// Globally shared RBPF config and syscall registry for runtime V2
+    /// For program runtime V2
     pub program_runtime_v2: ProgramRuntimeEnvironment,
 }
 
@@ -469,7 +503,7 @@ impl LoadingTaskCookie {
     }
 }
 
-/// Prevents excessive polling during cooperative loading
+/// Suspends the thread in case no cooprative loading task was assigned
 #[derive(Debug, Default)]
 pub struct LoadingTaskWaiter {
     cookie: Mutex<LoadingTaskCookie>,
@@ -503,13 +537,33 @@ impl LoadingTaskWaiter {
     }
 }
 
+/// Contains all the program versions at a specific address.
 #[derive(Debug, Default)]
 struct SecondLevel {
+    /// List of all versions (across all forks) of a program sorted by the slot in which they were modified
     slot_versions: Vec<Arc<LoadedProgram>>,
-    /// Contains the bank and TX batch a program at this address is currently being loaded
+    /// `Some` if there is currently a cooperative loading task for this program address
+    ///
+    /// It is possible that multiple TX batches from different slots need different versions of a program.
+    /// However, that can only be figured out once a program is loaded and its deployment slot is known.
     cooperative_loading_lock: Option<(Slot, std::thread::ThreadId)>,
 }
 
+/// This structure is the global cache of loaded, verified and compiled programs.
+///
+/// It ...
+/// - is validator global and fork graph aware, so it can optimize the commonalities across banks.
+/// - handles the visibility rules of un/re/deployments.
+/// - stores the usage statistics and verification status of each program.
+/// - is elastic and uses a probabilistic eviction stragety based on the usage statistics.
+/// - also keeps the compiled executables around, but only for the most used programs.
+/// - supports various kinds of tombstones to avoid loading programs which can not be loaded.
+/// - cleans up entries on orphan branches when the block store is rerooted.
+/// - supports the recompilation phase before feature activations which can change cached programs.
+/// - manages the environments of the programs and upcoming environments for the next epoch.
+/// - allows for cooperative loading of TX batches which hit the same missing programs simultaneously.
+/// - enforces that all programs used in a batch are eagerly loaded ahead of execution.
+/// - is not persisted to disk or a snapshot, so it needs to cold start and warm up first.
 pub struct LoadedPrograms<FG: ForkGraph> {
     /// A two level index:
     ///
@@ -529,8 +583,11 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     pub upcoming_environments: Option<ProgramRuntimeEnvironments>,
     /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
     pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
+    /// Statistics counters
     pub stats: Stats,
+    /// Reference to the block store
     pub fork_graph: Option<Arc<RwLock<FG>>>,
+    /// Coordinates TX batches waiting for others to complete their task during cooperative loading
     pub loading_task_waiter: Arc<LoadingTaskWaiter>,
 }
 
@@ -545,6 +602,11 @@ impl<FG: ForkGraph> Debug for LoadedPrograms<FG> {
     }
 }
 
+/// Local view into [LoadedPrograms] which was extracted for a specific TX batch.
+///
+/// This isolation enables the global [LoadedPrograms] to continue to evolve (e.g. evictions),
+/// while the TX batch is guaranteed it will continue to find all the programs it requires.
+/// For program management instructions this also buffers them before they are merged back into the global [LoadedPrograms].
 #[derive(Clone, Debug, Default)]
 pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
