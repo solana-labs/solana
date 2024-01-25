@@ -96,7 +96,7 @@ impl SchedulingStateMachine {
             .iter()
             .map(|address| LockAttempt::readonly(page_loader(**address)));
         for r in readonly_locks {
-            lock.push(r);
+            locks.push(r);
         }
         //panic!("{}", locks.len());
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
