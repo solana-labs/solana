@@ -107,6 +107,55 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 #[bench::normal(32)]
 #[bench::large(64)]
 #[bench::max(128)]
+fn bench_schedule_task_conflicting_hot(account_count: usize) {
+    toggle_collect();
+    let mut accounts = vec![];
+    for _ in 0..100 {
+        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    }
+
+    let payer = Keypair::new();
+    let memo_ix = Instruction {
+        program_id: Pubkey::default(),
+        accounts,
+        data: vec![0x00],
+    };
+    let mut ixs = vec![];
+    for _ in 0..1 {
+        ixs.push(memo_ix.clone());
+    }
+    let msg = Message::new(&ixs, Some(&payer.pubkey()));
+    let mut txn = Transaction::new_unsigned(msg);
+    //panic!("{:?}", txn);
+    //assert_eq!(wire_txn.len(), 3);
+    let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+
+    let mut scheduler = SchedulingStateMachine::default();
+
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |_| Page::default());
+    let task = scheduler.schedule_task(task).unwrap();
+    for i in 1..=account_count {
+        let task = SchedulingStateMachine::create_task(tx0.clone(), i, |_| Page::default());
+        assert_matches!(scheduler.schedule_task(task.clone()), None);
+    }
+
+    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |_| Page::default());
+
+    toggle_collect();
+    assert_matches!(scheduler.schedule_task(task.clone()), None);
+    toggle_collect();
+
+    drop(task);
+}
+
+#[library_benchmark]
+#[bench::min(0)]
+#[bench::one(1)]
+#[bench::two(2)]
+#[bench::three(3)]
+#[bench::normal(32)]
+#[bench::large(64)]
+#[bench::max(128)]
 fn bench_deschedule_task_conflicting(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
