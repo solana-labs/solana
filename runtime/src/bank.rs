@@ -1630,7 +1630,17 @@ impl Bank {
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
-        self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
+        // Skip creating reward partition account when we are testing partitioned reward against mainnet.
+        let skip_reward_partition_account = !self.is_partitioned_rewards_feature_enabled()
+            && (self
+                .partitioned_epoch_rewards_config()
+                .test_enable_partitioned_rewards
+                && self.get_reward_calculation_num_blocks() == 0
+                && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX);
+
+        if !(skip_reward_partition_account) {
+            self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
+        }
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -3622,6 +3632,10 @@ impl Bank {
             &solana_sdk::sysvar::id(),
         )
         .unwrap();
+
+        info!(
+            "create epoch_reward partition data account {} {address} {epoch_rewards_partition_data:#?}", self.slot
+        );
         self.store_account_and_update_capitalization(&address, &new_account);
     }
 
