@@ -91,8 +91,9 @@ fn bench_schedule_task_conflicting(account_count: usize) {
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
-    toggle_collect();
     let task = scheduler.schedule_task(task).unwrap();
+    toggle_collect();
+    assert_eq!(scheduler.schedule_task(task.clone()), None);
     toggle_collect();
     drop(task);
 }
