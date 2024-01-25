@@ -48,7 +48,7 @@ fn bench_schedule_task(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
@@ -86,7 +86,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
@@ -128,7 +128,7 @@ fn bench_schedule_task_conflicting_hot(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
@@ -178,7 +178,7 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
@@ -218,7 +218,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
@@ -262,7 +262,7 @@ fn bench_deschedule_task(account_count: usize) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
