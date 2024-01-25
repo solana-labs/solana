@@ -45,7 +45,7 @@ use {
         message::{v0, Message as LegacyMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
+        transaction::{self, maybe_uses_durable_nonce, Transaction, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -80,7 +80,7 @@ impl SerializableMessage for v0::Message {}
 pub trait SerializableTransaction: Serialize {
     fn get_signature(&self) -> &Signature;
     fn get_recent_blockhash(&self) -> &Hash;
-    fn uses_durable_nonce(&self) -> bool;
+    fn maybe_uses_durable_nonce(&self) -> bool;
 }
 impl SerializableTransaction for Transaction {
     fn get_signature(&self) -> &Signature {
@@ -89,8 +89,8 @@ impl SerializableTransaction for Transaction {
     fn get_recent_blockhash(&self) -> &Hash {
         &self.message.recent_blockhash
     }
-    fn uses_durable_nonce(&self) -> bool {
-        uses_durable_nonce(self).is_some()
+    fn maybe_uses_durable_nonce(&self) -> bool {
+        maybe_uses_durable_nonce(self).is_some()
     }
 }
 impl SerializableTransaction for VersionedTransaction {
@@ -100,8 +100,8 @@ impl SerializableTransaction for VersionedTransaction {
     fn get_recent_blockhash(&self) -> &Hash {
         self.message.recent_blockhash()
     }
-    fn uses_durable_nonce(&self) -> bool {
-        self.uses_durable_nonce()
+    fn maybe_uses_durable_nonce(&self) -> bool {
+        self.maybe_uses_durable_nonce()
     }
 }
 
