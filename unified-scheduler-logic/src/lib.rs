@@ -324,7 +324,7 @@ impl SchedulingStateMachine {
 
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
-        unique_weight: &UniqueWeight,
+        unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         task_source: &TaskSource,
     ) -> usize {
@@ -351,7 +351,7 @@ impl SchedulingStateMachine {
 
     fn attempt_lock_address(
         page_token: &mut PageToken,
-        this_unique_weight: &UniqueWeight,
+        this_unique_weight: UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
@@ -372,12 +372,12 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|existing_unique_weight| *this_unique_weight == existing_unique_weight)
+                    .map(|existing_unique_weight| this_unique_weight == existing_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task_weight()
-                    .map(|existing_unique_weight| *this_unique_weight > existing_unique_weight)
+                    .map(|existing_unique_weight| this_unique_weight > existing_unique_weight)
                     .unwrap_or(true))
             ;
 
@@ -424,7 +424,7 @@ impl SchedulingStateMachine {
     fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
         let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
-            &task.unique_weight,
+            task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
             &task_source,
         );
