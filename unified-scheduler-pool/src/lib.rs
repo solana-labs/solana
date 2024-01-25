@@ -584,10 +584,6 @@ mod chained_channel {
     }
 }
 
-fn initialized_result_with_timings() -> ResultWithTimings {
-    (Ok(()), ExecuteTimings::default())
-}
-
 #[derive(Default, Debug)]
 pub struct AddressBook {
     book: DashMap<Pubkey, Page>,
@@ -605,6 +601,10 @@ impl AddressBook {
     pub fn clear(&self) {
         self.book.clear();
     }
+}
+
+fn initialized_result_with_timings() -> ResultWithTimings {
+    (Ok(()), ExecuteTimings::default())
 }
 
 #[derive(Debug)]
