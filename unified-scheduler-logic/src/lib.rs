@@ -329,7 +329,7 @@ impl SchedulingStateMachine {
     ) -> usize {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
-        for (attempt, lock_count) in lock_attempts.iter_mut().enumerate() {
+        for (lock_count, attempt) in lock_attempts.iter_mut().enumerate() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
