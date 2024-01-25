@@ -135,7 +135,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 #[library_benchmark]
 #[bench::min(3, 0)]
 #[bench::one(3, 1)]
-#[bench::two(3, 2)]
+#[bench::two(2, 2)]
 #[bench::three(3, 3)]
 #[bench::normal(3, 32)]
 #[bench::large(3, 64)]
