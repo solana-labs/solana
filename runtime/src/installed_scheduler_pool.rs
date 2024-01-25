@@ -27,7 +27,7 @@ use {
     solana_sdk::{
         hash::Hash,
         scheduling::{SchedulingMode, WithSchedulingMode},
-        slot_history::Slot,
+        clock::Slot,
         transaction::{Result, SanitizedTransaction},
     },
     std::{
