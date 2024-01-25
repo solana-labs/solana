@@ -58,7 +58,9 @@ use {
         append_vec::{
             aligned_stored_size, AppendVec, APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
         },
-        cache_hash_data::{CacheHashData, CacheHashDataFileReference},
+        cache_hash_data::{
+            CacheHashData, CacheHashDataFileReference, DeletionPolicy as CacheHashDeletionPolicy,
+        },
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         in_mem_accounts_index::StartupStats,
@@ -7549,10 +7551,13 @@ impl AccountsDb {
             _ = std::fs::remove_dir_all(&failed_dir);
             failed_dir
         };
-        CacheHashData::new(
-            accounts_hash_cache_path,
-            (kind == CalcAccountsHashKind::Incremental).then_some(storages_start_slot),
-        )
+        let deletion_policy = match kind {
+            CalcAccountsHashKind::Full => CacheHashDeletionPolicy::AllUnused,
+            CalcAccountsHashKind::Incremental => {
+                CacheHashDeletionPolicy::UnusedAtLeast(storages_start_slot)
+            }
+        };
+        CacheHashData::new(accounts_hash_cache_path, deletion_policy)
     }
 
     // modeled after calculate_accounts_delta_hash
@@ -9775,7 +9780,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(accounts_hash_cache_path, None),
+                &CacheHashData::new(accounts_hash_cache_path, CacheHashDeletionPolicy::AllUnused),
                 storage,
                 stats,
                 bins,
@@ -10843,7 +10848,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(accounts_hash_cache_path, None),
+            &CacheHashData::new(accounts_hash_cache_path, CacheHashDeletionPolicy::AllUnused),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&[storage]),
             test_scan,
