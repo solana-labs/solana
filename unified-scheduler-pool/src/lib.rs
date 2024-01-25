@@ -42,6 +42,7 @@ use {
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
+        env,
         fmt::Debug,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
