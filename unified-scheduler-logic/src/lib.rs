@@ -620,9 +620,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        let task1;
-        assert_matches!(task1 = state_machine.schedule_task(task1), Some(_));
-        assert_matches!(state_machine.schedule_task(task2), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
     }
 
     #[test]
