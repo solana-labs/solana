@@ -22,6 +22,7 @@ use {
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
     solana_measure::measure::Measure,
+    solana_metrics::datapoint_info_at,
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank,
@@ -53,7 +54,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_metrics::datapoint_info_at;
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -830,29 +830,31 @@ where
 
         if let Some(handler_timings) = &executed_task.handler_timings {
             let sig = executed_task.task.transaction().signature().to_string();
+            let thread = format!("solScExLane{:02}", executed_task.thx);
             let account_locks_in_json = serde_json::to_string(
-                        &executed_task
-                            .task
-                            .transaction()
-                            .get_account_locks_unchecked()
-                    )
-                    .unwrap();
+                &executed_task
+                    .task
+                    .transaction()
+                    .get_account_locks_unchecked(),
+            )
+            .unwrap();
+            let status = format!("{:?}", executed_task.result_with_timings.0);
             let priority = executed_task
-                        .task
-                        .transaction()
-                        .get_transaction_priority_details(false)
-                        .map(|d| d.priority)
-                        .unwrap_or_default();
+                .task
+                .transaction()
+                .get_transaction_priority_details(false)
+                .map(|d| d.priority)
+                .unwrap_or_default();
 
             datapoint_info_at!(
                 handler_timings.finish_time,
                 "transaction_timings",
                 ("slot", executed_task.slot, i64),
                 ("index", executed_task.task.task_index(), i64),
-                ("thread", format!("solScExLane{:02}", executed_task.thx), String),
+                ("thread", thread, String),
                 ("signature", &sig, String),
                 ("account_locks_in_json", account_locks_in_json, String),
-                ("status", format!("{:?}", executed_task.result_with_timings.0), String),
+                ("status", status, String),
                 ("duration", handler_timings.execution_us, i64),
                 ("cpu_duration", handler_timings.execution_cpu_us, i64),
                 ("compute_units", 0 /*task.cu*/, i64),
