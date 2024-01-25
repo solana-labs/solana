@@ -1,7 +1,5 @@
-pub mod account_rent_state;
-
 use {
-    crate::{accounts::account_rent_state::RentState, bank::RewardInterval},
+    crate::{bank::RewardInterval, svm::account_rent_state::RentState},
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{
@@ -42,7 +40,7 @@ use {
 };
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn load_accounts(
+pub(crate) fn load_accounts(
     accounts_db: &AccountsDb,
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],

@@ -4,7 +4,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-pub mod accounts;
 pub mod accounts_background_service;
 pub mod bank;
 pub mod bank_client;
@@ -37,6 +36,7 @@ pub mod stake_weighted_timestamp;
 pub mod stakes;
 pub mod static_ids;
 pub mod status_cache;
+pub mod svm;
 pub mod transaction_batch;
 pub mod transaction_priority_details;
 

@@ -59,6 +59,7 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
+        svm::account_loader::load_accounts,
         transaction_batch::TransactionBatch,
     },
     byteorder::{ByteOrder, LittleEndian},
@@ -282,7 +283,6 @@ pub struct BankRc {
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
-use crate::accounts::load_accounts;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
