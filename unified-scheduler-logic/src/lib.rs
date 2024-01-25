@@ -308,9 +308,8 @@ impl SchedulingStateMachine {
                 self.reschedule_count += 1;
                 self.try_lock_for_task(TaskSource::Retryable, task)
             })
-            .map(|task| {
+            .inspect(|_| {
                 self.rescheduled_task_count += 1;
-                task
             })
     }
 
