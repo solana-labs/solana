@@ -7151,6 +7151,29 @@ impl AccountsDb {
             })
             .collect::<Vec<_>>();
 
+        // Calculate the hits and misses of the hash data files cache.
+        // This is outside of the parallel loop above so that we only need to
+        // update each atomic stat value once.
+        // There are approximately 173 items in the cache files list,
+        // so should be very fast to iterate and compute.
+        // (173 cache files == 432,000 slots / 2,5000 slots-per-cache-file)
+        let mut hits = 0;
+        let mut misses = 0;
+        for cache_file in &cache_files {
+            match cache_file {
+                ScanAccountStorageResult::CacheFileAlreadyExists(_) => hits += 1,
+                ScanAccountStorageResult::CacheFileNeedsToBeCreated(_) => misses += 1,
+            };
+        }
+        cache_hash_data
+            .stats
+            .hits
+            .fetch_add(hits, Ordering::Relaxed);
+        cache_hash_data
+            .stats
+            .misses
+            .fetch_add(misses, Ordering::Relaxed);
+
         // deletes the old files that will not be used before creating new ones
         cache_hash_data.delete_old_cache_files();
 
