@@ -135,14 +135,15 @@ fn bench_schedule_task_conflicting_hot(account_count: usize) {
 
     let mut scheduler = SchedulingStateMachine::default();
 
-    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |_| Page::default());
+    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> = std::collections::HashMap::new();
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| pages.entry(address).or_default().clone());
     let task = scheduler.schedule_task(task).unwrap();
     for i in 1..=account_count {
-        let task = SchedulingStateMachine::create_task(tx0.clone(), i, |_| Page::default());
-        assert_matches!(scheduler.schedule_task(task.clone()), None);
+        let task = SchedulingStateMachine::create_task(tx0.clone(), i, |address| pages.entry(address).or_default().clone());
+        assert_matches!(scheduler.schedule_task(task), None);
     }
 
-    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |_| Page::default());
+    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |address| pages.entry(address).or_default().clone());
 
     toggle_collect();
     assert_matches!(scheduler.schedule_task(task.clone()), None);
