@@ -615,9 +615,9 @@ mod tests {
     #[test]
     fn test_schedule_conflicting_tasks() {
         let sanitized = simplest_transaction();
-        let mut address_loader = create_address_loader();
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, &mut address_loader);
+        let address_loader = &mut create_address_loader();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         state_machine.schedule_task(task).unwrap();
