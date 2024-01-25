@@ -567,10 +567,10 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn readonly_transaction() -> SanitizedTransaction {
+    fn readonly_transaction(readonly_address: Pubkey) -> SanitizedTransaction {
         let instruction = Instruction {
             program_id: Pubkey::default(),
-            accounts: vec![AccountMeta::new_readonly(Pubkey::default(), false)],
+            accounts: vec![AccountMeta::new_readonly(readonly_address, false)],
             data: vec![],
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
@@ -640,10 +640,11 @@ mod tests {
 
     #[test]
     fn test_schedule_non_conflicting_readonly_tasks() {
-        let sanitized = readonly_transaction();
+        let sanitized1 = readonly_transaction(Pubkey::new_unique());
+        let sanitized2 = readonly_transaction(Pubkey::new_unique());
         let address_loader = &mut create_address_loader();
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
