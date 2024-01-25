@@ -381,7 +381,7 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
-        clap::{Arg, Command},
+        clap::{Arg, ArgAction, Command},
         solana_remote_wallet::locator::Manufacturer,
         solana_sdk::signature::write_keypair_file,
         std::fs,
@@ -512,7 +512,7 @@ mod tests {
                 Arg::new("multiple")
                     .long("multiple")
                     .takes_value(true)
-                    .multiple_occurrences(true)
+                    .action(ArgAction::Append)
                     .multiple_values(true),
             )
             .arg(Arg::new("single").takes_value(true).long("single"))

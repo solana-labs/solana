@@ -1,6 +1,6 @@
 use {
     crate::{input_parsers::signer::PubkeySignature, ArgConstant},
-    clap::{value_parser, Arg, Command},
+    clap::{value_parser, Arg, ArgAction, Command},
     solana_sdk::hash::Hash,
 };
 
@@ -52,7 +52,7 @@ fn signer_arg<'a>() -> Arg<'a> {
         .value_name("PUBKEY=SIGNATURE")
         .value_parser(value_parser!(PubkeySignature))
         .requires(BLOCKHASH_ARG.name)
-        .multiple_occurrences(true)
+        .action(ArgAction::Append)
         .multiple_values(false)
         .help(SIGNER_ARG.help)
 }
