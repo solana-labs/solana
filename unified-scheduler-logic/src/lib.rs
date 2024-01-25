@@ -303,7 +303,7 @@ impl SchedulingStateMachine {
         !self.retryable_task_queue.is_empty()
     }
 
-    pub fn clear_retryable_tasks(&mut self) -> bool {
+    pub fn clear_retryable_tasks(&mut self) {
         self.retryable_task_queue.clear()
     }
 
