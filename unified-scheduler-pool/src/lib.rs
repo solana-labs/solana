@@ -169,7 +169,7 @@ where
                 let elapsed = self.updated_at.elapsed();
                 if elapsed > IDLE_DURATION_FOR_EAGER_THREAD_RECLAIM {
                     const BITS_PER_HEX_DIGIT: usize = 4;
-                    let mut thread_manager = thread_manager.write().unwrap();
+                    let thread_manager = &mut thread_manager.write().unwrap();
                     info!(
                         "[sch_{:0width$x}]: watchdog: retire_if_stale(): stopping thread manager ({tid}/{} <= {}/{:?})...",
                         thread_manager.scheduler_id,
@@ -223,7 +223,7 @@ where
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
-                let mut thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
+                let thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
 
                 'outer: loop {
                     let mut schedulers = scheduler_pool.scheduler_inners.lock().unwrap();
@@ -1427,7 +1427,7 @@ where
                 .ensure_thread_manager_resumed(&self.context)?
                 .send_task(task);
             if abort_detected {
-                let mut thread_manager = self.inner.thread_manager.write().unwrap();
+                let thread_manager = &mut self.inner.thread_manager.write().unwrap();
                 thread_manager.suspend();
                 thread_manager.reset_session_on_error()
             } else {
