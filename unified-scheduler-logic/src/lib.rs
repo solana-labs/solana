@@ -168,7 +168,7 @@ impl LockAttempt {
         Self {
             page,
             requested_usage,
-            uncommited_usage: Usage::Unused,
+            uncommited_usage: Usage::default(),
         }
     }
 
