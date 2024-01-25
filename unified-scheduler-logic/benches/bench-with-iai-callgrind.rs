@@ -109,7 +109,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 fn bench_schedule_task_conflicting_hot(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..10 {
+    for _ in 0..32 {
         accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
     }
 
