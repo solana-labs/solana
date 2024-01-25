@@ -616,11 +616,12 @@ mod tests {
     fn test_schedule_conflicting_tasks() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader();
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task), Some(_));
+        let task1;
+        assert_matches!(task1 = state_machine.schedule_task(task1), Some(_));
         assert_matches!(state_machine.schedule_task(task2), None);
     }
 
