@@ -584,6 +584,7 @@ mod tests {
         let state_machine = SchedulingStateMachine::default();
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
+        assert_eq!(state_machine.is_empty(), true);
     }
 
     #[test]
