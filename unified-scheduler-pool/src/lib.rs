@@ -654,6 +654,19 @@ type Tid = i32;
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 const DUMMY_TID: Tid = 0;
 
+#[derive(Default)]
+struct LogInterval(usize);
+
+impl LogInterval {
+    fn increment(&mut self) -> bool {
+        let should_log = self.0 % 1000 == 0;
+        self.0 = self.0.checked_add(1).unwrap();
+        should_log
+    }
+}
+
+const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
+
 // This type manages the OS threads for scheduling and executing transactions. The term
 // `session` is consistently used to mean a group of Tasks scoped under a single SchedulingContext.
 // This is equivalent to a particular bank for block verification. However, new terms is introduced
@@ -685,7 +698,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    pub fn do_spawn(
+    fn do_spawn(
         pool: Arc<SchedulerPool<Self, TH, SEA>>,
         initial_context: SchedulingContext,
         handler: TH,
@@ -694,7 +707,7 @@ where
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let scheduler = Self::from_inner(
+        Self::from_inner(
             PooledSchedulerInner {
                 thread_manager: Arc::new(RwLock::new(ThreadManager::new(
                     pool.clone(),
@@ -705,10 +718,7 @@ where
                 pooled_at: Instant::now(),
             },
             initial_context,
-        );
-        pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
-
-        scheduler
+        )
     }
 
     fn ensure_thread_manager_resumed(
@@ -740,19 +750,6 @@ where
         }
     }
 }
-
-#[derive(Default)]
-struct LogInterval(usize);
-
-impl LogInterval {
-    fn increment(&mut self) -> bool {
-        let should_log = self.0 % 1000 == 0;
-        self.0 = self.0.checked_add(1).unwrap();
-        should_log
-    }
-}
-
-const PRIMARY_SCHEDULER_ID: SchedulerId = 0;
 
 impl<S, TH, SEA> ThreadManager<S, TH, SEA>
 where
@@ -1419,13 +1416,7 @@ where
         handler: TH,
     ) -> Self {
         let scheduler = Self::do_spawn(pool, initial_context, handler);
-        scheduler
-            .inner
-            .thread_manager
-            .write()
-            .unwrap()
-            .start_or_try_resume_threads(&scheduler.context)
-            .unwrap();
+        pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
         scheduler
     }
 }
