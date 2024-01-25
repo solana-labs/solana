@@ -1337,11 +1337,12 @@ fn process_program_upgrade(
         let mut tx = Transaction::new_unsigned(message);
         let signers = &[fee_payer_signer, upgrade_authority_signer];
         tx.try_sign(signers, blockhash)?;
-        rpc_client
+        let final_tx_sig = rpc_client
             .send_and_confirm_transaction_with_spinner(&tx)
             .map_err(|e| format!("Upgrading program failed: {e}"))?;
         let program_id = CliProgramId {
             program_id: program_id.to_string(),
+            signature: Some(final_tx_sig.to_string()),
         };
         Ok(config.output_format.formatted_string(&program_id))
     }
@@ -2263,7 +2264,7 @@ fn do_process_program_write_and_deploy(
         )?;
     }
 
-    send_deploy_messages(
+    let final_tx_sig = send_deploy_messages(
         rpc_client,
         config,
         &initial_message,
@@ -2278,6 +2279,7 @@ fn do_process_program_write_and_deploy(
     if let Some(program_signers) = program_signers {
         let program_id = CliProgramId {
             program_id: program_signers[0].pubkey().to_string(),
+            signature: final_tx_sig.as_ref().map(ToString::to_string),
         };
         Ok(config.output_format.formatted_string(&program_id))
     } else {
@@ -2396,7 +2398,7 @@ fn do_process_program_upgrade(
         )?;
     }
 
-    send_deploy_messages(
+    let final_tx_sig = send_deploy_messages(
         rpc_client,
         config,
         &initial_message,
@@ -2410,6 +2412,7 @@ fn do_process_program_upgrade(
 
     let program_id = CliProgramId {
         program_id: program_id.to_string(),
+        signature: final_tx_sig.as_ref().map(ToString::to_string),
     };
     Ok(config.output_format.formatted_string(&program_id))
 }
@@ -2534,7 +2537,7 @@ fn send_deploy_messages(
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<Signature>, Box<dyn std::error::Error>> {
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
@@ -2626,20 +2629,22 @@ fn send_deploy_messages(
             let mut signers = final_signers.to_vec();
             signers.push(fee_payer_signer);
             final_tx.try_sign(&signers, blockhash)?;
-            rpc_client
-                .send_and_confirm_transaction_with_spinner_and_config(
-                    &final_tx,
-                    config.commitment,
-                    RpcSendTransactionConfig {
-                        preflight_commitment: Some(config.commitment.commitment),
-                        ..RpcSendTransactionConfig::default()
-                    },
-                )
-                .map_err(|e| format!("Deploying program failed: {e}"))?;
+            return Ok(Some(
+                rpc_client
+                    .send_and_confirm_transaction_with_spinner_and_config(
+                        &final_tx,
+                        config.commitment,
+                        RpcSendTransactionConfig {
+                            preflight_commitment: Some(config.commitment.commitment),
+                            ..RpcSendTransactionConfig::default()
+                        },
+                    )
+                    .map_err(|e| format!("Deploying program failed: {e}"))?,
+            ));
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 fn create_ephemeral_keypair(
