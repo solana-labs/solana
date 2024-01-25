@@ -332,17 +332,25 @@ impl SchedulingStateMachine {
 
         let mut lock_count = 0;
 
-        for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(page_token, unique_weight, attempt) {
-                LockStatus::Succeded(usage) => {
-                    if rollback_on_failure {
+        if rollback_on_failure {
+            for attempt in lock_attempts.iter_mut() {
+                match Self::attempt_lock_address(page_token, unique_weight, attempt) {
+                    LockStatus::Succeded(usage) => {
                         attempt.page_mut(page_token).current_usage = usage;
-                    } else {
-                        attempt.uncommited_usage = usage;
+                        lock_count += 1;
                     }
-                    lock_count += 1;
+                    LockStatus::Failed => break,
                 }
-                LockStatus::Failed => break,
+            }
+        } else {
+            for attempt in lock_attempts.iter_mut() {
+                match Self::attempt_lock_address(page_token, unique_weight, attempt) {
+                    LockStatus::Succeded(usage) => {
+                        attempt.uncommited_usage = usage;
+                        lock_count += 1;
+                    }
+                    LockStatus::Failed => break,
+                }
             }
         }
 
