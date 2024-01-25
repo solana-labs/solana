@@ -110,7 +110,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 #[bench::large2(128)]
 #[bench::large3(256)]
 #[bench::large4(1024)]
-#[bench::larget(2048)]
+#[bench::large5(2048)]
 fn bench_schedule_task_conflicting_hot(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
