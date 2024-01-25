@@ -1160,7 +1160,7 @@ where
                 );
                 loop {
                     let (task, sender) = select_biased! {
-                        recv runnable_task_receiver.for_select()) -> message => {
+                        recv(runnable_task_receiver.for_select()) -> message => {
                             match message {
                                 Ok(message) => {
                                     if let Some(task) = runnable_task_receiver.after_select(message) {
