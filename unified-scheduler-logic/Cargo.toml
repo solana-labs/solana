@@ -12,3 +12,8 @@ edition = { workspace = true }
 [dependencies]
 solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
+
+[dev-dependencies]
+iai-callgrind = { version = "0.10.1", features = [
+    "client_requests"
+] }
