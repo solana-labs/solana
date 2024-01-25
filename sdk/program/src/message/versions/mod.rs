@@ -79,7 +79,7 @@ impl VersionedMessage {
     /// used in the runtime.
     pub fn is_maybe_writable(&self, index: usize) -> bool {
         match self {
-            Self::Legacy(message) => message.is_writable(index),
+            Self::Legacy(message) => message.is_maybe_writable(index),
             Self::V0(message) => message.is_maybe_writable(index),
         }
     }
