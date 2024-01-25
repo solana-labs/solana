@@ -827,6 +827,7 @@ where
     ) {
         assert_matches!(executed_task.result_with_timings.0, Ok(()));
         timings.accumulate(&executed_task.result_with_timings.1);
+
         if let Some(handler_timings) = &executed_task.handler_timings {
             let sig = executed_task.task.transaction().signature().to_string();
 
@@ -872,6 +873,7 @@ where
                 ),
             );
         }
+
         drop(executed_task);
     }
 
