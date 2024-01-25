@@ -829,47 +829,33 @@ where
 
         if let Some(handler_timings) = &executed_task.handler_timings {
             let sig = executed_task.task.transaction().signature().to_string();
-
-            solana_metrics::datapoint_info_at!(
-                handler_timings.finish_time,
-                "transaction_timings",
-                ("slot", executed_task.slot, i64),
-                ("index", executed_task.task.task_index(), i64),
-                (
-                    "thread",
-                    format!("solScExLane{:02}", executed_task.thx),
-                    String
-                ),
-                ("signature", &sig, String),
-                (
-                    "account_locks_in_json",
-                    serde_json::to_string(
+            let account_locks_in_json = serde_json::to_string(
                         &executed_task
                             .task
                             .transaction()
                             .get_account_locks_unchecked()
                     )
-                    .unwrap(),
-                    String
-                ),
-                (
-                    "status",
-                    format!("{:?}", executed_task.result_with_timings.0),
-                    String
-                ),
-                ("duration", handler_timings.execution_us, i64),
-                ("cpu_duration", handler_timings.execution_cpu_us, i64),
-                ("compute_units", 0 /*task.cu*/, i64),
-                (
-                    "priority",
-                    executed_task
+                    .unwrap();
+            let priority = executed_task
                         .task
                         .transaction()
                         .get_transaction_priority_details(false)
                         .map(|d| d.priority)
                         .unwrap_or_default(),
-                    i64
-                ),
+
+            datapoint_info_at!(
+                handler_timings.finish_time,
+                "transaction_timings",
+                ("slot", executed_task.slot, i64),
+                ("index", executed_task.task.task_index(), i64),
+                ("thread", format!("solScExLane{:02}", executed_task.thx), String),
+                ("signature", &sig, String),
+                ("account_locks_in_json", account_locks_in_json, String),
+                ("status", format!("{:?}", executed_task.result_with_timings.0), String),
+                ("duration", handler_timings.execution_us, i64),
+                ("cpu_duration", handler_timings.execution_cpu_us, i64),
+                ("compute_units", 0 /*task.cu*/, i64),
+                ("priority", priority, i64),
             );
         }
 
