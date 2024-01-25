@@ -6,7 +6,7 @@ use {
         blockstore::*,
         ledger_path::*,
         ledger_utils::*,
-        output::{output_account, AccountsOutputStreamer},
+        output::{output_account, AccountsOutputConfig, AccountsOutputStreamer},
         program::*,
     },
     clap::{
@@ -2177,18 +2177,18 @@ fn main() {
                     let include_sysvars = arg_matches.is_present("include_sysvars");
                     let include_account_contents = !arg_matches.is_present("no_account_contents");
                     let include_account_data = !arg_matches.is_present("no_account_data");
-                    let output_format =
-                        OutputFormat::from_matches(arg_matches, "output_format", false);
-                    let data_encoding = parse_encoding_format(arg_matches);
-
-                    let accounts_streamer = AccountsOutputStreamer::new(
-                        bank,
-                        output_format,
+                    let account_data_encoding = parse_encoding_format(arg_matches);
+                    let config = AccountsOutputConfig {
                         include_sysvars,
                         include_account_contents,
                         include_account_data,
-                        data_encoding,
-                    );
+                        account_data_encoding,
+                    };
+                    let output_format =
+                        OutputFormat::from_matches(arg_matches, "output_format", false);
+
+                    let accounts_streamer =
+                        AccountsOutputStreamer::new(bank, output_format, config);
                     let (_, scan_time) = measure!(accounts_streamer.output(), "accounts scan");
                     info!("{scan_time}");
                 }

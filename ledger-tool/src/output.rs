@@ -565,30 +565,27 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
 ///
 /// This type scans every account, so streaming is preferred over the simpler
 /// approach of accumulating all the accounts into a Vec and printing or
-/// serializing that directly.
+/// serializing the Vec directly.
 pub struct AccountsOutputStreamer {
     account_scanner: AccountsScanner,
     total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
     output_format: OutputFormat,
 }
 
+pub struct AccountsOutputConfig {
+    pub include_sysvars: bool,
+    pub include_account_contents: bool,
+    pub include_account_data: bool,
+    pub account_data_encoding: UiAccountEncoding,
+}
+
 impl AccountsOutputStreamer {
-    pub fn new(
-        bank: Arc<Bank>,
-        output_format: OutputFormat,
-        include_sysvars: bool,
-        include_account_contents: bool,
-        include_account_data: bool,
-        account_data_encoding: UiAccountEncoding,
-    ) -> Self {
+    pub fn new(bank: Arc<Bank>, output_format: OutputFormat, config: AccountsOutputConfig) -> Self {
         let total_accounts_stats = Rc::new(RefCell::new(TotalAccountsStats::default()));
         let account_scanner = AccountsScanner {
             bank,
             total_accounts_stats: total_accounts_stats.clone(),
-            include_sysvars,
-            include_account_contents,
-            include_account_data,
-            account_data_encoding,
+            config,
         };
         Self {
             account_scanner,
@@ -624,17 +621,14 @@ impl AccountsOutputStreamer {
 struct AccountsScanner {
     bank: Arc<Bank>,
     total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
-    include_sysvars: bool,
-    include_account_contents: bool,
-    include_account_data: bool,
-    account_data_encoding: UiAccountEncoding,
+    config: AccountsOutputConfig,
 }
 
 impl AccountsScanner {
     /// Returns true if this account should be included in the output
     fn should_process_account(&self, account: &AccountSharedData, pubkey: &Pubkey) -> bool {
         solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
-            && (self.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
+            && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
     }
 }
 
@@ -647,7 +641,7 @@ impl AccountsScanner {
         let rent_collector = self.bank.rent_collector();
 
         let cli_account_new_config = CliAccountNewConfig {
-            data_encoding: self.account_data_encoding,
+            data_encoding: self.config.account_data_encoding,
             ..CliAccountNewConfig::default()
         };
 
@@ -657,7 +651,7 @@ impl AccountsScanner {
             {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
 
-                if self.include_account_contents {
+                if self.config.include_account_contents {
                     if let Some(serializer) = seq_serializer {
                         let cli_account =
                             CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
@@ -667,8 +661,8 @@ impl AccountsScanner {
                             pubkey,
                             &account,
                             Some(slot),
-                            self.include_account_data,
-                            self.account_data_encoding,
+                            self.config.include_account_data,
+                            self.config.account_data_encoding,
                         );
                     }
                 }
