@@ -1375,7 +1375,7 @@ where
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner) {
         let result_with_timings = {
-            let mut manager = self.inner.thread_manager.write().unwrap();
+            let manager = &mut self.inner.thread_manager.write().unwrap();
             manager.end_session();
             manager.take_session_result_with_timings()
         };
