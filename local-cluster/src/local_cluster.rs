@@ -18,6 +18,7 @@ use {
         gossip_service::discover_cluster,
     },
     solana_ledger::{create_new_tmp_ledger, shred::Shred},
+    solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
@@ -27,7 +28,6 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
-        client::SyncClient,
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -446,12 +446,12 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
+        let (rpc, _) = LegacyContactInfo::try_from(&self.entry_point_info)
             .map(|node| {
                 cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
             })
             .unwrap();
-        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
+        let client = RpcClient::new_socket_with_commitment(rpc, CommitmentConfig::processed());
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -543,12 +543,12 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
+        let (rpc, _) = LegacyContactInfo::try_from(&self.entry_point_info)
             .map(|node| {
                 cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
             })
             .unwrap();
-        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
+        let client = RpcClient::new_socket_with_commitment(rpc, CommitmentConfig::processed());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -617,7 +617,7 @@ impl LocalCluster {
     }
 
     fn transfer_with_client(
-        client: &ThinClient,
+        client: &RpcClient,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
         lamports: u64,
@@ -626,16 +626,14 @@ impl LocalCluster {
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let mut tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
+        let tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
             source_keypair.pubkey(),
             *dest_pubkey
         );
-        client
-            .retry_transfer(source_keypair, &mut tx, 10)
-            .expect("client transfer");
+        client.send_transaction(&tx).expect("client transfer");
         client
             .wait_for_balance_with_commitment(
                 dest_pubkey,
@@ -646,7 +644,7 @@ impl LocalCluster {
     }
 
     fn setup_vote_and_stake_accounts(
-        client: &ThinClient,
+        client: &RpcClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,
@@ -695,7 +693,7 @@ impl LocalCluster {
                 },
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
+            let transaction = Transaction::new(
                 &[from_account.as_ref(), vote_account],
                 message,
                 client
@@ -703,9 +701,7 @@ impl LocalCluster {
                     .unwrap()
                     .0,
             );
-            client
-                .retry_transfer(from_account, &mut transaction, 10)
-                .expect("fund vote");
+            client.send_transaction(&transaction).expect("fund vote");
             client
                 .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
@@ -723,7 +719,7 @@ impl LocalCluster {
                 amount,
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
+            let transaction = Transaction::new(
                 &[from_account.as_ref(), &stake_account_keypair],
                 message,
                 client
@@ -733,12 +729,7 @@ impl LocalCluster {
             );
 
             client
-                .send_and_confirm_transaction(
-                    &[from_account.as_ref(), &stake_account_keypair],
-                    &mut transaction,
-                    5,
-                    0,
-                )
+                .send_and_confirm_transaction(&transaction)
                 .expect("delegate stake");
             client
                 .wait_for_balance_with_commitment(
@@ -756,8 +747,11 @@ impl LocalCluster {
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
             client
-                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
-            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
+                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed())
+                .map(|r| r.value),
+            client
+                .get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed())
+                .map(|r| r.value),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (

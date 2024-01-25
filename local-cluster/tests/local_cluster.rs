@@ -221,18 +221,18 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let (rpc, tpu) = LegacyContactInfo::try_from(non_bootstrap_info)
+    let (rpc, _) = LegacyContactInfo::try_from(non_bootstrap_info)
         .map(|node| {
             cluster_tests::get_client_facing_addr(cluster.connection_cache.protocol(), node)
         })
         .unwrap();
-    let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+    let tx_client = RpcClient::new_socket_with_commitment(rpc, CommitmentConfig::processed());
 
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
 
-    let mut transaction = system_transaction::transfer(
+    let transaction = system_transaction::transfer(
         &cluster.funding_keypair,
         &solana_sdk::pubkey::new_rand(),
         10,
@@ -249,9 +249,7 @@ fn test_local_cluster_signature_subscribe() {
     )
     .unwrap();
 
-    tx_client
-        .retry_transfer(&cluster.funding_keypair, &mut transaction, 5)
-        .unwrap();
+    tx_client.send_transaction(&transaction).unwrap();
 
     let mut got_received_notification = false;
     loop {

@@ -21,6 +21,7 @@ use {
         gossip_service::{self, discover_cluster, GossipService},
     },
     solana_ledger::blockstore::Blockstore,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         client::SyncClient,
         clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -75,6 +76,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     socket_addr_space: SocketAddrSpace,
     connection_cache: &Arc<ConnectionCache>,
 ) {
+    let rpc_client = RpcClient::new_socket_with_commitment(
+        entry_point_info.rpc().unwrap(),
+        CommitmentConfig::confirmed(),
+    );
     let cluster_nodes = discover_cluster(
         &entry_point_info.gossip().unwrap(),
         nodes,
@@ -100,12 +105,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
-        let mut transaction =
+        let transaction =
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        let sig = client
-            .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
-            .unwrap();
+        let sig = rpc_client.send_transaction(&transaction).unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(validator.pubkey()) {
                 continue;
@@ -141,8 +144,8 @@ pub fn send_many_transactions(
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
-    let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), node);
-    let client = ThinClient::new(rpc, tpu, connection_cache.clone());
+    let (rpc, _) = get_client_facing_addr(connection_cache.protocol(), node);
+    let client = RpcClient::new_socket_with_commitment(rpc, CommitmentConfig::processed());
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
@@ -158,16 +161,13 @@ pub fn send_many_transactions(
             .unwrap();
         let transfer_amount = thread_rng().gen_range(1..max_tokens_per_transfer);
 
-        let mut transaction = system_transaction::transfer(
+        let transaction = system_transaction::transfer(
             funding_keypair,
             &random_keypair.pubkey(),
             transfer_amount,
             blockhash,
         );
-
-        client
-            .retry_transfer(funding_keypair, &mut transaction, 5)
-            .unwrap();
+        client.send_transaction(&transaction).unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
     }
@@ -267,8 +267,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
             continue;
         }
 
-        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
-        let client = ThinClient::new(rpc, tpu, connection_cache.clone());
+        let (rpc, _) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
+        let client = RpcClient::new_socket_with_commitment(rpc, CommitmentConfig::processed());
         let balance = client
             .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
@@ -277,7 +277,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             .expect("balance in source");
         assert_ne!(balance, 0);
 
-        let mut result = Ok(());
+        let mut result: Result<(), Box<dyn std::error::Error>> = Ok(());
         let mut retries = 0;
         loop {
             retries += 1;
@@ -289,7 +289,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             let (blockhash, _) = client
                 .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                 .unwrap();
-            let mut transaction = system_transaction::transfer(
+            let transaction = system_transaction::transfer(
                 funding_keypair,
                 &random_keypair.pubkey(),
                 1,
@@ -298,18 +298,12 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
-                let sig = client.retry_transfer_until_confirmed(
-                    funding_keypair,
-                    &mut transaction,
-                    5,
-                    confs,
-                );
+                let sig = client.send_transaction(&transaction);
                 match sig {
                     Err(e) => {
-                        result = Err(e);
+                        result = Err(Box::new(e));
                         continue;
                     }
-
                     Ok(sig) => sig,
                 }
             };
@@ -323,7 +317,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             ) {
                 Err(e) => {
                     info!("poll_all_nodes_for_signature() failed {:?}", e);
-                    result = Err(e);
+                    result = Err(Box::new(e));
                 }
                 Ok(()) => {
                     info!("poll_all_nodes_for_signature() succeeded, done.");
