@@ -1595,6 +1595,13 @@ impl Bank {
         }
     }
 
+    fn force_partition_rewards_in_first_block_of_epoch(&self) -> bool {
+        self.partitioned_epoch_rewards_config()
+            .test_enable_partitioned_rewards
+            && self.get_reward_calculation_num_blocks() == 0
+            && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX
+    }
+
     /// Begin the process of calculating and distributing rewards.
     /// This process can take multiple slots.
     fn begin_partitioned_rewards(
@@ -1631,14 +1638,10 @@ impl Bank {
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
         // Skip creating data account when we are testing partitioned rewards
-        let skip_reward_partition_account = !self.is_partitioned_rewards_feature_enabled()
-            && (self
-                .partitioned_epoch_rewards_config()
-                .test_enable_partitioned_rewards
-                && self.get_reward_calculation_num_blocks() == 0
-                && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX);
+        let should_create = self.is_partitioned_rewards_code_enabled()
+            || !self.force_partition_rewards_in_first_block_of_epoch();
 
-        if !(skip_reward_partition_account) {
+        if should_create {
             self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
         }
 
@@ -7007,12 +7010,8 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         let slot = self.slot();
         let ignore = (!self.is_partitioned_rewards_feature_enabled()
-            && (self
-                .partitioned_epoch_rewards_config()
-                .test_enable_partitioned_rewards
-                && self.get_reward_calculation_num_blocks() == 0
-                && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX))
-            .then_some(sysvar::epoch_rewards::id());
+            && self.force_partition_rewards_in_first_block_of_epoch())
+        .then_some(sysvar::epoch_rewards::id());
         let accounts_delta_hash = self
             .rc
             .accounts
