@@ -640,8 +640,9 @@ mod tests {
 
     #[test]
     fn test_schedule_non_conflicting_readonly_tasks() {
-        let sanitized1 = readonly_transaction(Pubkey::new_unique());
-        let sanitized2 = readonly_transaction(Pubkey::new_unique());
+        let conflicting_readonly_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_readonly_address);
+        let sanitized2 = readonly_transaction(conflicting_readonly_address);
         let address_loader = &mut create_address_loader();
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
