@@ -588,7 +588,7 @@ mod tests {
         assert_eq!(task.transaction(), &sanitized);
     }
 
-    fn address_loader() -> impl FnMut(Pubkey) -> Page {
+    fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
         let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
             std::collections::HashMap::new();
 
@@ -613,10 +613,9 @@ mod tests {
     #[test]
     fn test_schedule_conflicting_tasks() {
         let sanitized = simplest_transaction();
-        let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
-            std::collections::HashMap::new();
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |address| pages.entry(address).or_default().clone());
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, &mut |address| pages.entry(address).or_default().clone());
+        let mut address_loader = create_address_loader();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, &mut address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         state_machine.schedule_task(task).unwrap();
