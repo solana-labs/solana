@@ -866,6 +866,7 @@ mod tests {
             nonce_account::verify_nonce_account,
             poh_config::PohConfig,
             pubkey::Pubkey,
+            reserved_account_keys::ReservedAccountKeys,
             signature::Keypair,
             signer::Signer,
             system_instruction, system_program, system_transaction,
@@ -2032,6 +2033,7 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank.as_ref(),
+            &ReservedAccountKeys::empty(),
         )
         .unwrap();
 

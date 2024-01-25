@@ -139,6 +139,7 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank,
+            &bank.reserved_account_keys,
         )
         .unwrap()
     }

@@ -946,6 +946,7 @@ mod tests {
         solana_sdk::{
             hash::{hash, Hash},
             pubkey::Pubkey,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signer},
             system_transaction,
             transaction::{
@@ -1039,6 +1040,7 @@ mod tests {
                         message_hash,
                         None,
                         SimpleAddressLoader::Disabled,
+                        &ReservedAccountKeys::empty(),
                     )
                 }?;
 

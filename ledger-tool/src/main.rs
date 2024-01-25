@@ -66,6 +66,7 @@ use {
         native_token::{lamports_to_sol, sol_to_lamports, Sol},
         pubkey::Pubkey,
         rent::Rent,
+        reserved_account_keys::ReservedAccountKeys,
         shred_version::compute_shred_version,
         stake::{self, state::StakeStateV2},
         system_program,
@@ -460,6 +461,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut program_ids = HashMap::new();
     let mut cost_tracker = CostTracker::default();
 
+    let feature_set = FeatureSet::all_enabled();
+    let reserved_account_keys = ReservedAccountKeys::active_and_inactive();
+
     for entry in entries {
         num_transactions += entry.transactions.len();
         entry
@@ -471,6 +475,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
+                    &reserved_account_keys,
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
@@ -480,7 +485,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = CostModel::calculate_cost(&transaction, &FeatureSet::all_enabled());
+                let tx_cost = CostModel::calculate_cost(&transaction, &feature_set);
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(

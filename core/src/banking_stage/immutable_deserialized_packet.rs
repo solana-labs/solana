@@ -5,6 +5,7 @@ use {
         feature_set,
         hash::Hash,
         message::Message,
+        pubkey::Pubkey,
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -13,7 +14,7 @@ use {
             VersionedTransaction,
         },
     },
-    std::{cmp::Ordering, mem::size_of, sync::Arc},
+    std::{cmp::Ordering, collections::HashSet, mem::size_of, sync::Arc},
     thiserror::Error,
 };
 
@@ -105,6 +106,7 @@ impl ImmutableDeserializedPacket {
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         address_loader: impl AddressLoader,
+        reserved_account_keys: &HashSet<Pubkey>,
     ) -> Option<SanitizedTransaction> {
         if votes_only && !self.is_simple_vote() {
             return None;
@@ -114,6 +116,7 @@ impl ImmutableDeserializedPacket {
             *self.message_hash(),
             self.is_simple_vote(),
             address_loader,
+            reserved_account_keys,
         )
         .ok()?;
         tx.verify_precompiles(feature_set).ok()?;

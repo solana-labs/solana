@@ -196,7 +196,7 @@ fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
 }
 
 fn new_sanitized_message(message: Message) -> SanitizedMessage {
-    SanitizedMessage::try_from_legacy_message(message).unwrap()
+    SanitizedMessage::try_from_legacy_message(message, &ReservedAccountKeys::empty()).unwrap()
 }
 
 #[test]
@@ -7952,6 +7952,32 @@ fn test_compute_active_feature_set() {
     let (feature_set, new_activations) = bank.compute_active_feature_set(true);
     assert!(new_activations.is_empty());
     assert!(feature_set.is_active(&test_feature));
+}
+
+#[test]
+fn test_reserved_account_keys() {
+    let bank0 = create_simple_test_arc_bank(100_000).0;
+    let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
+    bank.feature_set = Arc::new(FeatureSet::default());
+
+    assert_eq!(
+        bank.reserved_account_keys.len(),
+        20,
+        "before activating the new feature, bank should already have active reserved keys"
+    );
+
+    // Activate `add_new_reserved_account_keys` feature
+    bank.store_account(
+        &feature_set::add_new_reserved_account_keys::id(),
+        &feature::create_account(&Feature::default(), 42),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, true);
+
+    assert_eq!(
+        bank.reserved_account_keys.len(),
+        29,
+        "after activating the new feature, bank should have new active reserved keys"
+    );
 }
 
 #[test]

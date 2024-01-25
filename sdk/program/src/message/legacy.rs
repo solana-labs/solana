@@ -22,7 +22,7 @@ use {
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
-    std::{convert::TryFrom, str::FromStr},
+    std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
 
 lazy_static! {
@@ -558,9 +558,9 @@ impl Message {
                     - self.header.num_readonly_unsigned_accounts as usize)
     }
 
-    pub fn is_writable(&self, i: usize) -> bool {
+    pub fn is_writable(&self, i: usize, reserved_account_keys: &HashSet<Pubkey>) -> bool {
         (self.is_writable_index(i))
-            && !is_builtin_key_or_sysvar(&self.account_keys[i])
+            && !reserved_account_keys.contains(&self.account_keys[i])
             && !self.demote_program_id(i)
     }
 
@@ -579,11 +579,14 @@ impl Message {
     }
 
     #[deprecated]
-    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+    pub fn get_account_keys_by_lock_type(
+        &self,
+        reserved_account_keys: &HashSet<Pubkey>,
+    ) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i) {
+            if self.is_writable(i, reserved_account_keys) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -763,12 +766,14 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        assert!(message.is_writable(0));
-        assert!(!message.is_writable(1));
-        assert!(!message.is_writable(2));
-        assert!(message.is_writable(3));
-        assert!(message.is_writable(4));
-        assert!(!message.is_writable(5));
+
+        let reserved_keys = HashSet::from_iter([key2, key3]);
+        assert!(message.is_writable(0, &reserved_keys));
+        assert!(!message.is_writable(1, &reserved_keys));
+        assert!(!message.is_writable(2, &reserved_keys));
+        assert!(!message.is_writable(3, &reserved_keys));
+        assert!(message.is_writable(4, &reserved_keys));
+        assert!(!message.is_writable(5, &reserved_keys));
     }
 
     #[test]
@@ -796,7 +801,7 @@ mod tests {
             Some(&id1),
         );
         assert_eq!(
-            message.get_account_keys_by_lock_type(),
+            message.get_account_keys_by_lock_type(&HashSet::default()),
             (vec![&id1, &id0], vec![&id3, &program_id, &id2])
         );
     }

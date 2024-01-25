@@ -481,6 +481,7 @@ mod tests {
             nonce,
             rent::Rent,
             rent_collector::RentCollector,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signer},
             system_program, sysvar,
             transaction::{Result, Transaction, TransactionError},
@@ -678,7 +679,11 @@ mod tests {
             instructions,
         );
 
-        let message = SanitizedMessage::try_from_legacy_message(tx.message().clone()).unwrap();
+        let message = SanitizedMessage::try_from_legacy_message(
+            tx.message().clone(),
+            &ReservedAccountKeys::empty(),
+        )
+        .unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
@@ -1207,7 +1212,11 @@ mod tests {
             Hash::default(),
         );
 
-        let message = SanitizedMessage::try_from_legacy_message(tx.message().clone()).unwrap();
+        let message = SanitizedMessage::try_from_legacy_message(
+            tx.message().clone(),
+            &ReservedAccountKeys::empty(),
+        )
+        .unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,

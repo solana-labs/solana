@@ -141,6 +141,7 @@ use {
         rent::RentDue,
         rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
+        reserved_account_keys::ReservedAccountKeys,
         reward_info::RewardInfo,
         saturating_add_assign,
         signature::{Keypair, Signature},
@@ -534,6 +535,7 @@ impl PartialEq for Bank {
             transaction_log_collector_config: _,
             transaction_log_collector: _,
             feature_set: _,
+            reserved_account_keys: _,
             drop_callback: _,
             freeze_started: _,
             vote_only_bank: _,
@@ -776,6 +778,9 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
+    /// Set of reserved account keys that cannot be write locked
+    pub reserved_account_keys: Arc<HashSet<Pubkey>>,
+
     /// callback function only to be called when dropping and should only be called once
     pub drop_callback: RwLock<OptionalDropCallback>,
 
@@ -978,6 +983,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
+            reserved_account_keys: Arc::<HashSet<Pubkey>>::default(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
@@ -1292,6 +1298,7 @@ impl Bank {
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set: Arc::clone(&feature_set),
+            reserved_account_keys: parent.reserved_account_keys.clone(),
             drop_callback: RwLock::new(OptionalDropCallback(
                 parent
                     .drop_callback
@@ -1813,6 +1820,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
+            reserved_account_keys: Arc::<HashSet<Pubkey>>::default(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
@@ -4197,7 +4205,15 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    self,
+                    &self.reserved_account_keys,
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
@@ -6556,7 +6572,13 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, self)
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                None,
+                self,
+                &self.reserved_account_keys,
+            )
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
@@ -7204,6 +7226,9 @@ impl Bank {
                 }
             }
         }
+
+        // Update active set of reserved account keys which are not allowed to be write locked
+        self.reserved_account_keys = Arc::new(ReservedAccountKeys::active(&self.feature_set));
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
             *self.inflation.write().unwrap() = Inflation::pico();

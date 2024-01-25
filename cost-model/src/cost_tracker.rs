@@ -270,6 +270,7 @@ mod tests {
         crate::transaction_cost::*,
         solana_sdk::{
             hash::Hash,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signer},
             system_transaction,
             transaction::{
@@ -332,6 +333,7 @@ mod tests {
             MessageHash::Compute,
             Some(true),
             SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty(),
         )
         .unwrap();
 
