@@ -10,6 +10,7 @@
 
 use {
     assert_matches::assert_matches,
+    cpu_time::ThreadTime,
     crossbeam_channel::{
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
         RecvTimeoutError, SendError, Sender, TryRecvError,
@@ -20,6 +21,7 @@ use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
+    solana_measure::measure::Measure,
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank,
@@ -30,6 +32,7 @@ use {
             WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
+        transaction_priority_details::GetTransactionPriorityDetails,
     },
     solana_sdk::{
         clock::Slot,
@@ -48,10 +51,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_measure::measure::Measure;
-use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-use cpu_time::ThreadTime;
-
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -794,10 +793,8 @@ where
         handler_context: &HandlerContext,
         send_metrics: bool,
     ) {
-        let handler_timings = send_metrics.then_some((
-            Measure::start("process_message_time"),
-            ThreadTime::now(),
-        ));
+        let handler_timings =
+            send_metrics.then_some((Measure::start("process_message_time"), ThreadTime::now()));
         debug!("handling task at {:?}", thread::current());
         TH::handle(
             handler,
@@ -1218,30 +1215,28 @@ where
         };
 
         let accumulator_main_loop = || {
-            move || {
-                'outer: loop {
-                    match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
-                        Ok(ExecutedTaskPayload::Payload(executed_task)) => {
-                            let result_with_timings = result_with_timings.as_mut().unwrap();
-                            Self::accumulate_result_with_timings(result_with_timings, executed_task);
-                        }
-                        Ok(ExecutedTaskPayload::OpenSubchannel(())) => {
-                            assert_matches!(
-                                result_with_timings.replace(initialized_result_with_timings()),
-                                None
-                            );
-                        }
-                        Ok(ExecutedTaskPayload::CloseSubchannel) => {
-                            if accumulated_result_sender
-                                .send(result_with_timings.take())
-                                .is_err()
-                            {
-                                break 'outer;
-                            }
-                        }
-                        Err(RecvTimeoutError::Disconnected) => break 'outer,
-                        Err(RecvTimeoutError::Timeout) => continue,
+            move || 'outer: loop {
+                match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
+                    Ok(ExecutedTaskPayload::Payload(executed_task)) => {
+                        let result_with_timings = result_with_timings.as_mut().unwrap();
+                        Self::accumulate_result_with_timings(result_with_timings, executed_task);
                     }
+                    Ok(ExecutedTaskPayload::OpenSubchannel(())) => {
+                        assert_matches!(
+                            result_with_timings.replace(initialized_result_with_timings()),
+                            None
+                        );
+                    }
+                    Ok(ExecutedTaskPayload::CloseSubchannel) => {
+                        if accumulated_result_sender
+                            .send(result_with_timings.take())
+                            .is_err()
+                        {
+                            break 'outer;
+                        }
+                    }
+                    Err(RecvTimeoutError::Disconnected) => break 'outer,
+                    Err(RecvTimeoutError::Timeout) => continue,
                 }
             }
         };
