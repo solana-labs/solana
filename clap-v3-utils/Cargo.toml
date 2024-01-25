@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 chrono = { workspace = true, features = ["default"] }
-clap = { version = "3.2.23", features = ["cargo"] }
+clap = { version = "3.2.23", features = ["cargo", "deprecated"] }
 rpassword = { workspace = true }
 solana-remote-wallet = { workspace = true }
 solana-sdk = { workspace = true }
