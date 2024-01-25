@@ -86,16 +86,18 @@ impl SchedulingStateMachine {
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
         panic!();
-        /*
         let writable_locks = locks
             .writable
             .iter()
             .map(|address| LockAttempt::writable(page_loader(**address)));
+        let mut locks = writable_locks.collect::<Vec<LockAttempt>>();
         let readonly_locks = locks
             .readonly
             .iter()
             .map(|address| LockAttempt::readonly(page_loader(**address)));
-        let locks = writable_locks.chain(readonly_locks).collect::<Vec<LockAttempt>>();
+        for r in readonly_locks {
+            lock.push(r);
+        }
         //panic!("{}", locks.len());
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
@@ -103,7 +105,6 @@ impl SchedulingStateMachine {
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
-        */
     }
 }
 
