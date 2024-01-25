@@ -644,14 +644,10 @@ mod tests {
         let sanitized = readonly_transaction();
         let address_loader = &mut create_address_loader();
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 2, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        let task1 = state_machine.schedule_task(task1).unwrap();
-        assert_eq!(state_machine.active_task_count(), 1);
-        assert_eq!(state_machine.total_task_count(), 1);
-        state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.active_task_count(), 0);
-        assert_eq!(state_machine.total_task_count(), 1);
-        drop(task1);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
     }
 }
