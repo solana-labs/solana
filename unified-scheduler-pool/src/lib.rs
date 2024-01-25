@@ -905,7 +905,7 @@ where
 
         let send_metrics = env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
-        let (mut blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
+        let (mut runnable_task_sender, runnable_task_receiver) =
             chained_channel::unbounded::<Task, SchedulingContext>(context.clone());
         let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Task>();
         let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
@@ -994,7 +994,7 @@ where
                             state_machine.reschedule_count(),
                             state_machine.rescheduled_task_count(),
                             new_task_receiver.len(),
-                            blocked_transaction_sessioned_sender.len(), idle_transaction_sender.len(),
+                            runnable_task_sender.len(), idle_transaction_sender.len(),
                             handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
@@ -1045,7 +1045,7 @@ where
                                     }
                                     Ok(NewTaskPayload::OpenSubchannel(context)) => {
                                         slot = context.bank().slot();
-                                        blocked_transaction_sessioned_sender
+                                        runnable_task_sender
                                             .send_chained_channel(context, handler_count)
                                             .unwrap();
                                         executed_task_sender
@@ -1075,7 +1075,7 @@ where
                                 assert_matches!(dummy_result, Err(RecvError));
 
                                 if let Some(task) = state_machine.schedule_retryable_task() {
-                                    blocked_transaction_sessioned_sender
+                                    runnable_task_sender
                                         .send_payload(task)
                                         .unwrap();
                                 }
@@ -1146,8 +1146,8 @@ where
         let handler_main_loop = |thx| {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
-            let mut blocked_transaction_sessioned_receiver =
-                blocked_transaction_sessioned_receiver.clone();
+            let mut runnable_task_receiver =
+             runrunnable_task_receiver.clone();
             let mut idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
@@ -1160,10 +1160,10 @@ where
                 );
                 loop {
                     let (task, sender) = select_biased! {
-                        recv(blocked_transaction_sessioned_receiver.for_select()) -> message => {
+                        recv runnable_task_receiver.for_select()) -> message => {
                             match message {
                                 Ok(message) => {
-                                    if let Some(task) = blocked_transaction_sessioned_receiver.after_select(message) {
+                                    if let Some(task) = runnable_task_receiver.after_select(message) {
                                         (task, &handled_blocked_transaction_sender)
                                     } else {
                                         continue;
@@ -1181,7 +1181,7 @@ where
                             }
                         },
                     };
-                    let bank = blocked_transaction_sessioned_receiver.context().bank();
+                    let bank = runnable_task_receiver.context().bank();
                     let mut task = ExecutedTask::new_boxed(task, thx, bank.slot());
                     Self::execute_task_with_handler(
                         &handler,
