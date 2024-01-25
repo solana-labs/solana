@@ -294,6 +294,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
+        debug_assert!(!self.retryable_task_queue.includes(task.unique_weight));
         self.total_task_count += 1;
         self.active_task_count += 1;
         self.try_lock_for_task(TaskSource::Runnable, task)
