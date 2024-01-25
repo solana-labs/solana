@@ -1,7 +1,7 @@
 use {
     crate::{keypair::prompt_passphrase, ArgConstant},
     bip39::Language,
-    clap::{Arg, ArgMatches},
+    clap::{builder::PossibleValuesParser, Arg, ArgMatches},
     std::error,
 };
 
@@ -28,7 +28,7 @@ pub const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
 pub fn word_count_arg<'a>() -> Arg<'a> {
     Arg::new(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
-        .possible_values(["12", "15", "18", "21", "24"])
+        .value_parser(PossibleValuesParser::new(["12", "15", "18", "21", "24"]))
         .default_value("12")
         .value_name("NUMBER")
         .takes_value(true)
@@ -38,7 +38,7 @@ pub fn word_count_arg<'a>() -> Arg<'a> {
 pub fn language_arg<'a>() -> Arg<'a> {
     Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
-        .possible_values([
+        .value_parser(PossibleValuesParser::new([
             "english",
             "chinese-simplified",
             "chinese-traditional",
@@ -47,7 +47,7 @@ pub fn language_arg<'a>() -> Arg<'a> {
             "korean",
             "french",
             "italian",
-        ])
+        ]))
         .default_value("english")
         .value_name("LANGUAGE")
         .takes_value(true)
