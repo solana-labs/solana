@@ -414,7 +414,6 @@ impl<SEA: ScheduleExecutionArg> TaskHandler<SEA> for DefaultTaskHandler {
     }
 }
 
-#[derive(Debug)]
 struct ExecutedTask {
     task: Task,
     result_with_timings: ResultWithTimings,
@@ -423,7 +422,6 @@ struct ExecutedTask {
     handler_timings: Option<HandlerTimings>,
 }
 
-#[derive(Debug)]
 pub struct HandlerTimings {
     finish_time: SystemTime,
     execution_us: u64,
