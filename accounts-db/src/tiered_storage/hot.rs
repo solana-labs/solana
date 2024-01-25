@@ -9,19 +9,20 @@ use {
             byte_block,
             file::TieredStorageFile,
             footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter},
-            index::{AccountOffset, IndexBlockFormat, IndexOffset},
+            index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
             owners::{OwnerOffset, OwnersBlockFormat},
             readable::TieredReadableAccount,
-            TieredStorageError, TieredStorageFormat, TieredStorageResult,
+            StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
+            TieredStorageFormat, TieredStorageResult,
         },
     },
     bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
-    std::{fs::OpenOptions, option::Option, path::Path},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
+    std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
 };
 
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
@@ -45,9 +46,6 @@ fn new_hot_footer() -> TieredStorageFooter {
     }
 }
 
-/// The maximum number of padding bytes used in a hot account entry.
-const MAX_HOT_PADDING: u8 = 7;
-
 /// The maximum allowed value for the owner index of a hot account.
 const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 
@@ -58,8 +56,25 @@ const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 /// bytes in HotAccountOffset.
 pub(crate) const HOT_ACCOUNT_ALIGNMENT: usize = 8;
 
+/// The alignemnt for the blocks inside a hot accounts file.  A hot accounts
+/// file consists of accounts block, index block, owners block, and footer.
+/// This requirement allows the offset of each block properly aligned so
+/// that they can be readable under mmap.
+pub(crate) const HOT_BLOCK_ALIGNMENT: usize = 8;
+
 /// The maximum supported offset for hot accounts storage.
 const MAX_HOT_ACCOUNT_OFFSET: usize = u32::MAX as usize * HOT_ACCOUNT_ALIGNMENT;
+
+// returns the required number of padding
+fn padding_bytes(data_len: usize) -> u8 {
+    ((HOT_ACCOUNT_ALIGNMENT - (data_len % HOT_ACCOUNT_ALIGNMENT)) % HOT_ACCOUNT_ALIGNMENT) as u8
+}
+
+/// The maximum number of padding bytes used in a hot account entry.
+const MAX_HOT_PADDING: u8 = 7;
+
+/// The buffer that is used for padding.
+const PADDING_BUFFER: [u8; 8] = [0u8; HOT_ACCOUNT_ALIGNMENT];
 
 #[bitfield(bits = 32)]
 #[repr(C)]
@@ -444,6 +459,23 @@ impl HotStorageReader {
     }
 }
 
+fn write_optional_fields(
+    file: &TieredStorageFile,
+    opt_fields: &AccountMetaOptionalFields,
+) -> TieredStorageResult<usize> {
+    let mut size = 0;
+    if let Some(rent_epoch) = opt_fields.rent_epoch {
+        size += file.write_pod(&rent_epoch)?;
+    }
+    if let Some(hash) = opt_fields.account_hash {
+        size += file.write_pod(&hash)?;
+    }
+
+    debug_assert_eq!(size, opt_fields.size());
+
+    Ok(size)
+}
+
 /// The writer that creates a hot accounts file.
 #[derive(Debug)]
 pub struct HotStorageWriter {
@@ -457,25 +489,144 @@ impl HotStorageWriter {
             storage: TieredStorageFile::new_writable(file_path)?,
         })
     }
+
+    /// Persists an account with the specified information and returns
+    /// the stored size of the account.
+    fn write_account(
+        &self,
+        lamports: u64,
+        account_data: &[u8],
+        executable: bool,
+        rent_epoch: Option<Epoch>,
+        account_hash: Option<AccountHash>,
+    ) -> TieredStorageResult<usize> {
+        let optional_fields = AccountMetaOptionalFields {
+            rent_epoch,
+            account_hash,
+        };
+
+        let mut flags = AccountMetaFlags::new_from(&optional_fields);
+        flags.set_executable(executable);
+
+        let padding_len = padding_bytes(account_data.len());
+        let meta = HotAccountMeta::new()
+            .with_lamports(lamports)
+            .with_account_data_size(account_data.len() as u64)
+            .with_account_data_padding(padding_len)
+            .with_flags(&flags);
+
+        let mut stored_size = 0;
+
+        stored_size += self.storage.write_pod(&meta)?;
+        stored_size += self.storage.write_bytes(account_data)?;
+        stored_size += self
+            .storage
+            .write_bytes(&PADDING_BUFFER[0..(padding_len as usize)])?;
+        stored_size += write_optional_fields(&self.storage, &optional_fields)?;
+
+        Ok(stored_size)
+    }
+
+    /// A work-in-progress function that will eventually implements
+    /// AccountsFile::appends_account()
+    pub fn write_accounts<
+        'a,
+        'b,
+        T: ReadableAccount + Sync,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<AccountHash>,
+    >(
+        &self,
+        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        skip: usize,
+    ) -> TieredStorageResult<()> {
+        let mut footer = new_hot_footer();
+        let mut index = vec![];
+        let mut cursor = 0;
+
+        // writing accounts blocks
+        let len = accounts.accounts.len();
+        for i in skip..len {
+            let (account, address, account_hash, _write_version) = accounts.get(i);
+            let index_entry = AccountIndexWriterEntry {
+                address,
+                offset: HotAccountOffset::new(cursor)?,
+            };
+
+            // Obtain necessary fields from the account, or default fields
+            // for a zero-lamport account in the None case.
+            let (lamports, data, executable, rent_epoch, account_hash) = account
+                .map(|acc| {
+                    (
+                        acc.lamports(),
+                        acc.data(),
+                        acc.executable(),
+                        // only persist rent_epoch for those non-rent-exempt accounts
+                        (acc.rent_epoch() != Epoch::MAX).then_some(acc.rent_epoch()),
+                        Some(*account_hash),
+                    )
+                })
+                .unwrap_or((0, &[], false, None, None));
+
+            cursor += self.write_account(lamports, data, executable, rent_epoch, account_hash)?;
+            index.push(index_entry);
+        }
+        footer.account_entry_count = (len - skip) as u32;
+
+        // writing index block
+        // expect the offset of each block aligned.
+        assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
+        footer.index_block_offset = cursor as u64;
+        cursor += footer
+            .index_block_format
+            .write_index_block(&self.storage, &index)?;
+        if cursor % HOT_BLOCK_ALIGNMENT != 0 {
+            // In case it is not yet aligned, it is due to the fact that
+            // the index block has an odd number of entries.  In such case,
+            // we expect the amount off is equal to 4.
+            assert_eq!(cursor % HOT_BLOCK_ALIGNMENT, 4);
+            cursor += self.storage.write_pod(&0u32)?;
+        }
+
+        // TODO: owner block will be implemented in the follow-up PRs
+        // expect the offset of each block aligned.
+        assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
+        footer.owners_block_offset = cursor as u64;
+        footer.owner_count = 0;
+
+        footer.write_footer_block(&self.storage)?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
-        crate::tiered_storage::{
-            byte_block::ByteBlockWriter,
-            file::TieredStorageFile,
-            footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter, FOOTER_SIZE},
-            hot::{HotAccountMeta, HotStorageReader},
-            index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
-            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
-            owners::{OwnersBlockFormat, OwnersTable},
+        crate::{
+            account_storage::meta::StoredMeta,
+            rent_collector::RENT_EXEMPT_RENT_EPOCH,
+            tiered_storage::{
+                byte_block::ByteBlockWriter,
+                file::TieredStorageFile,
+                footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter, FOOTER_SIZE},
+                hot::{HotAccountMeta, HotStorageReader},
+                index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
+                meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+                owners::{OwnersBlockFormat, OwnersTable},
+            },
         },
         assert_matches::assert_matches,
         memoffset::offset_of,
         rand::{seq::SliceRandom, Rng},
-        solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+        solana_sdk::{
+            account::{Account, AccountSharedData, ReadableAccount},
+            hash::Hash,
+            pubkey::Pubkey,
+            slot_history::Slot,
+            stake_history::Epoch,
+        },
         tempfile::TempDir,
     };
 
@@ -957,11 +1108,6 @@ pub mod tests {
         }
     }
 
-    // returns the required number of padding
-    fn padding_bytes(data_len: usize) -> u8 {
-        ((HOT_ACCOUNT_ALIGNMENT - (data_len % HOT_ACCOUNT_ALIGNMENT)) % HOT_ACCOUNT_ALIGNMENT) as u8
-    }
-
     #[test]
     fn test_hot_storage_get_account() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
@@ -1087,5 +1233,102 @@ pub mod tests {
         // Expect the second call on the same path returns Err, as the
         // HotStorageWriter only writes once.
         assert_matches!(HotStorageWriter::new(&path), Err(_));
+    }
+
+    /// Create a test account based on the specified seed.
+    /// The created test account might have default rent_epoch
+    /// and write_version.
+    fn create_test_account(seed: u64) -> (StoredMeta, AccountSharedData) {
+        let data_byte = seed as u8;
+        let account = Account {
+            lamports: seed + 1,
+            data: std::iter::repeat(data_byte).take(seed as usize).collect(),
+            owner: Pubkey::new_unique(),
+            executable: seed % 2 > 0,
+            rent_epoch: if seed % 3 > 0 {
+                seed
+            } else {
+                RENT_EXEMPT_RENT_EPOCH
+            },
+        };
+
+        let stored_meta = StoredMeta {
+            write_version_obsolete: u64::MAX,
+            pubkey: Pubkey::new_unique(),
+            data_len: seed,
+        };
+        (stored_meta, AccountSharedData::from(account))
+    }
+
+    #[test]
+    fn test_write_account_and_index_blocks() {
+        let account_data_sizes = &[
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1000, 2000, 3000, 4000, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+        ];
+
+        let accounts: Vec<_> = account_data_sizes
+            .iter()
+            .map(|size| create_test_account(*size))
+            .collect();
+
+        let account_refs: Vec<_> = accounts
+            .iter()
+            .map(|account| (&account.0.pubkey, &account.1))
+            .collect();
+
+        // Slot information is not used here
+        let account_data = (Slot::MAX, &account_refs[..]);
+        let hashes: Vec<_> = std::iter::repeat_with(|| AccountHash(Hash::new_unique()))
+            .take(account_data_sizes.len())
+            .collect();
+
+        let write_versions: Vec<_> = accounts
+            .iter()
+            .map(|account| account.0.write_version_obsolete)
+            .collect();
+
+        let storable_accounts =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &account_data,
+                hashes.clone(),
+                write_versions.clone(),
+            );
+
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_write_account_and_index_blocks");
+
+        {
+            let writer = HotStorageWriter::new(&path).unwrap();
+            writer.write_accounts(&storable_accounts, 0).unwrap();
+        }
+
+        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+
+        let num_accounts = account_data_sizes.len();
+
+        for i in 0..num_accounts {
+            let (stored_meta, next) = hot_storage
+                .get_account(IndexOffset(i as u32))
+                .unwrap()
+                .unwrap();
+
+            let (account, address, hash, _write_version) = storable_accounts.get(i);
+            let account = account.unwrap();
+
+            assert_eq!(stored_meta.lamports(), account.lamports());
+            assert_eq!(stored_meta.data().len(), account.data().len());
+            assert_eq!(stored_meta.data(), account.data());
+            assert_eq!(stored_meta.executable(), account.executable());
+            assert_eq!(stored_meta.pubkey(), address);
+            assert_eq!(stored_meta.hash(), hash);
+
+            assert_eq!(i + 1, next);
+        }
+        // Make sure it returns None on NUM_ACCOUNTS to allow termination on
+        // while loop in actual accounts-db read case.
+        assert_matches!(
+            hot_storage.get_account(IndexOffset(num_accounts as u32)),
+            Ok(None)
+        );
     }
 }
