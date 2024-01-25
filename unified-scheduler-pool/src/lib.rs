@@ -1933,7 +1933,7 @@ mod tests {
         for AsyncScheduler<TRIGGER_RACE_CONDITION>
     {
         fn retire_if_stale(&mut self) -> bool {
-            todo!();
+            unimplemented!();
         }
     }
 
