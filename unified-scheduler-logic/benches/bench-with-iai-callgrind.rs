@@ -177,7 +177,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
     toggle_collect();
     let retried_task = scheduler.schedule_retryable_task().unwrap();
     toggle_collect();
-    assert_eq(task.transaction(), retried_task.transaction());
+    assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
 
