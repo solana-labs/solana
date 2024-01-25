@@ -44,7 +44,6 @@ use {
     std::{
         env,
         fmt::Debug,
-        mem,
         process,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
@@ -1553,7 +1552,7 @@ mod tests {
             system_transaction,
             transaction::{SanitizedTransaction, TransactionError},
         },
-        std::{sync::Arc, thread::JoinHandle},
+        std::{mem, sync::Arc, thread::JoinHandle},
     };
 
     #[test]
