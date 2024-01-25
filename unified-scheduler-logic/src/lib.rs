@@ -184,6 +184,7 @@ enum Usage {
     Readonly(UsageCount),
     Writable,
 }
+static_assertions::const_assert_eq!(std::mem::size_of::<Usage>(), 0);
 
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
@@ -308,8 +309,9 @@ impl SchedulingStateMachine {
                 self.reschedule_count += 1;
                 self.try_lock_for_task(TaskSource::Retryable, task)
             })
-            .inspect(|_| {
+            .inspect(|task| {
                 self.rescheduled_task_count += 1;
+                task
             })
     }
 
