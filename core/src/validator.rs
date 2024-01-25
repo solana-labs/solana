@@ -343,6 +343,7 @@ impl ValidatorConfig {
         Self {
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
+            block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
             ..Self::default()
         }
     }

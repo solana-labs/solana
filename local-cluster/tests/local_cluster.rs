@@ -2268,7 +2268,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
     let validator_config = ValidatorConfig {
         snapshot_config: LocalCluster::create_dummy_load_only_snapshot_config(),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
         cluster_lamports: 100_000,
@@ -5236,7 +5236,7 @@ fn test_duplicate_shreds_switch_failure() {
                 validator_keypair,
                 validator_config: ValidatorConfig {
                     voting_disabled,
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 },
                 in_genesis,
             }
