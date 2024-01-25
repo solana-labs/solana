@@ -3634,7 +3634,7 @@ impl Bank {
         .unwrap();
 
         info!(
-            "create epoch_reward partition data account {} {address} {epoch_rewards_partition_data:#?}", self.slot
+            "create epoch rewards partition data account {} {address} {epoch_rewards_partition_data:?}", self.slot
         );
         self.store_account_and_update_capitalization(&address, &new_account);
     }
