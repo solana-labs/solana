@@ -822,17 +822,7 @@ where
         (result, timings): &mut ResultWithTimings,
         executed_task: Box<ExecutedTask>,
     ) {
-        match executed_task.result_with_timings.0 {
-            Ok(()) => {}
-            Err(error) => {
-                error!("error is detected while accumulating....: {error:?}");
-                // Override errors intentionally for simplicity, not retaining the
-                // first error unlike the block verification in the
-                // blockstore_processor. This will be addressed with more
-                // full-fledged impl later.
-                *result = Err(error);
-            }
-        }
+        assert_matches!(executed_task.result_with_timings.0, Ok(()));
         timings.accumulate(&executed_task.result_with_timings.1);
         if let Some(handler_timings) = &executed_task.handler_timings {
             use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
