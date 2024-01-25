@@ -33,7 +33,7 @@ use {
     },
     solana_sdk::{
         pubkey::Pubkey,
-        slot_history::Slot,
+        clock::Slot,
         transaction::{Result, SanitizedTransaction, TransactionError},
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
