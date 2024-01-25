@@ -570,7 +570,7 @@ mod tests {
     fn readonly_transaction(readonly_address: Pubkey) -> SanitizedTransaction {
         let instruction = Instruction {
             program_id: Pubkey::default(),
-            accounts: vec![AccountMeta::new(readonly_address, false)],
+            accounts: vec![AccountMeta::new_readonly(readonly_address, false)],
             data: vec![],
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
