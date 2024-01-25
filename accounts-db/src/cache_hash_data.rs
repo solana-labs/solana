@@ -6,6 +6,7 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
+    solana_sdk::clock::Slot,
     std::{
         collections::HashSet,
         fs::{self, remove_file, File, OpenOptions},
@@ -192,7 +193,8 @@ impl CacheHashDataFile {
 pub(crate) struct CacheHashData {
     cache_dir: PathBuf,
     pre_existing_cache_files: Arc<Mutex<HashSet<PathBuf>>>,
-    should_delete_old_cache_files_on_drop: bool,
+    /// Decides which old cache files to delete.  See `delete_old_cache_files()` for more info.
+    storages_start_slot: Option<Slot>,
     pub stats: Arc<CacheHashDataStats>,
 }
 
@@ -204,10 +206,7 @@ impl Drop for CacheHashData {
 }
 
 impl CacheHashData {
-    pub(crate) fn new(
-        cache_dir: PathBuf,
-        should_delete_old_cache_files_on_drop: bool,
-    ) -> CacheHashData {
+    pub(crate) fn new(cache_dir: PathBuf, storages_start_slot: Option<Slot>) -> CacheHashData {
         std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
             panic!("error creating cache dir {}: {err}", cache_dir.display())
         });
@@ -215,7 +214,7 @@ impl CacheHashData {
         let result = CacheHashData {
             cache_dir,
             pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
-            should_delete_old_cache_files_on_drop,
+            storages_start_slot,
             stats: Arc::default(),
         };
 
@@ -225,17 +224,35 @@ impl CacheHashData {
 
     /// delete all pre-existing files that will not be used
     pub(crate) fn delete_old_cache_files(&self) {
-        if self.should_delete_old_cache_files_on_drop {
-            let old_cache_files =
-                std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
-            if !old_cache_files.is_empty() {
-                self.stats
-                    .unused_cache_files
-                    .fetch_add(old_cache_files.len(), Ordering::Relaxed);
-                for file_name in old_cache_files.iter() {
-                    let result = self.cache_dir.join(file_name);
-                    let _ = fs::remove_file(result);
-                }
+        // all the renaming files in `pre_existing_cache_files` were *not* used for this
+        // accounts hash calculation
+        let mut old_cache_files =
+            std::mem::take(&mut *self.pre_existing_cache_files.lock().unwrap());
+
+        // If `storages_start_slot` is None, we're doing a full accounts hash calculation, and thus
+        // all unused cache files can be deleted.
+        // If `storages_start_slot` is Some, we're doing an incremental accounts hash calculation,
+        // and we only want to delete the unused cache files *that IAH considered*.
+        if let Some(storages_start_slot) = self.storages_start_slot {
+            old_cache_files.retain(|old_cache_file| {
+                let Some(parsed_filename) = parse_filename(old_cache_file) else {
+                    // if parsing the cache filename fails, we *do* want to delete it
+                    return true;
+                };
+
+                // if the old cache file is in the incremental accounts hash calculation range,
+                // then delete it
+                parsed_filename.slot_range_start >= storages_start_slot
+            });
+        }
+
+        if !old_cache_files.is_empty() {
+            self.stats
+                .unused_cache_files
+                .fetch_add(old_cache_files.len(), Ordering::Relaxed);
+            for file_name in old_cache_files.iter() {
+                let result = self.cache_dir.join(file_name);
+                let _ = fs::remove_file(result);
             }
         }
     }
@@ -360,6 +377,39 @@ impl CacheHashData {
     }
 }
 
+/// The values of each part of a cache hash data filename
+#[derive(Debug)]
+pub struct ParsedFilename {
+    pub slot_range_start: Slot,
+    pub slot_range_end: Slot,
+    pub bin_range_start: u64,
+    pub bin_range_end: u64,
+    pub hash: u64,
+}
+
+/// Parses a cache hash data filename into its parts
+///
+/// Returns None if the filename is invalid
+fn parse_filename(cache_filename: impl AsRef<Path>) -> Option<ParsedFilename> {
+    let filename = cache_filename.as_ref().to_string_lossy().to_string();
+    let parts: Vec<_> = filename.split('.').collect(); // The parts are separated by a `.`
+    if parts.len() != 5 {
+        return None;
+    }
+    let slot_range_start = parts.first()?.parse().ok()?;
+    let slot_range_end = parts.get(1)?.parse().ok()?;
+    let bin_range_start = parts.get(2)?.parse().ok()?;
+    let bin_range_end = parts.get(3)?.parse().ok()?;
+    let hash = u64::from_str_radix(parts.get(4)?, 16).ok()?; // the hash is in hex
+    Some(ParsedFilename {
+        slot_range_start,
+        slot_range_end,
+        bin_range_start,
+        bin_range_end,
+        hash,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, crate::accounts_hash::AccountHash, rand::Rng};
@@ -427,7 +477,7 @@ mod tests {
                                 data_this_pass.push(this_bin_data);
                             }
                         }
-                        let cache = CacheHashData::new(cache_dir.clone(), true);
+                        let cache = CacheHashData::new(cache_dir.clone(), None);
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
                         cache.get_cache_files();
@@ -516,5 +566,40 @@ mod tests {
                 .collect::<Vec<_>>(),
             ct,
         )
+    }
+
+    #[test]
+    fn test_parse_filename() {
+        let good_filename = "123.456.0.65536.537d65697d9b2baa";
+        let parsed_filename = parse_filename(good_filename).unwrap();
+        assert_eq!(parsed_filename.slot_range_start, 123);
+        assert_eq!(parsed_filename.slot_range_end, 456);
+        assert_eq!(parsed_filename.bin_range_start, 0);
+        assert_eq!(parsed_filename.bin_range_end, 65536);
+        assert_eq!(parsed_filename.hash, 0x537d65697d9b2baa);
+
+        let bad_filenames = [
+            // bad separator
+            "123-456-0-65536.537d65697d9b2baa",
+            // bad values
+            "abc.456.0.65536.537d65697d9b2baa",
+            "123.xyz.0.65536.537d65697d9b2baa",
+            "123.456.?.65536.537d65697d9b2baa",
+            "123.456.0.@#$%^.537d65697d9b2baa",
+            "123.456.0.65536.base19shouldfail",
+            "123.456.0.65536.123456789012345678901234567890",
+            // missing values
+            "123.456.0.65536.",
+            "123.456.0.65536",
+            // extra junk
+            "123.456.0.65536.537d65697d9b2baa.42",
+            "123.456.0.65536.537d65697d9b2baa.",
+            "123.456.0.65536.537d65697d9b2baa/",
+            ".123.456.0.65536.537d65697d9b2baa",
+            "/123.456.0.65536.537d65697d9b2baa",
+        ];
+        for bad_filename in bad_filenames {
+            assert!(parse_filename(bad_filename).is_none());
+        }
     }
 }
