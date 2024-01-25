@@ -187,11 +187,12 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
-    let task2 = task.clone();
-    assert_matches!(scheduler.schedule_task(task2), None);
+    assert_matches!(scheduler.schedule_task(task.clone()), None);
+
     toggle_collect();
     scheduler.deschedule_task(&task);
     toggle_collect();
+
     drop(task);
 }
 
