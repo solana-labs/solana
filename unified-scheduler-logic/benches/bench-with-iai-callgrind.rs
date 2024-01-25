@@ -133,20 +133,20 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 }
 
 #[library_benchmark]
-#[bench::min(0)]
-#[bench::one(1)]
-#[bench::two(2)]
-#[bench::three(3)]
-#[bench::normal(32)]
-#[bench::large(64)]
-#[bench::large2(128)]
-#[bench::large3(256)]
-#[bench::large4(1024)]
-#[bench::large5(2048)]
-fn bench_schedule_task_conflicting_hot(account_count: usize) {
+#[bench::min(32, 0)]
+#[bench::one(32, 1)]
+#[bench::two(32, 2)]
+#[bench::three(32, 3)]
+#[bench::normal(32, 32)]
+#[bench::large(32, 64)]
+#[bench::large2(32, 128)]
+#[bench::large3(32, 256)]
+#[bench::large4(32, 1024)]
+#[bench::large5(32, 2048)]
+fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..32 {
+    for _ in 0..account_count {
         accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
     }
 
@@ -174,14 +174,14 @@ fn bench_schedule_task_conflicting_hot(account_count: usize) {
         pages.entry(address).or_default().clone()
     });
     let task = scheduler.schedule_task(task).unwrap();
-    for i in 1..=account_count {
+    for i in 1..=task_count {
         let task = SchedulingStateMachine::create_task(tx0.clone(), i, |address| {
             pages.entry(address).or_default().clone()
         });
         assert_matches!(scheduler.schedule_task(task), None);
     }
 
-    let task = SchedulingStateMachine::create_task(tx0.clone(), account_count + 1, |address| {
+    let task = SchedulingStateMachine::create_task(tx0.clone(), task_count + 1, |address| {
         pages.entry(address).or_default().clone()
     });
     let task2 = task.clone();
