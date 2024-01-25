@@ -643,9 +643,9 @@ struct AccountsScanner {
 
 impl AccountsScanner {
     /// Returns true if this account should be included in the output
-    fn should_process_account(&self, account: &AccountSharedData, pubkey: &Pubkey) -> bool {
+    fn should_process_account(&self, account: &AccountSharedData, _pubkey: &Pubkey) -> bool {
         solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
-            && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
+            && (self.config.include_sysvars || !solana_sdk::sysvar::check_id(account.owner()))
     }
 
     fn maybe_output_account<S>(

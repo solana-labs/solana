@@ -58,6 +58,11 @@ lazy_static! {
     };
 }
 
+#[deprecated(
+    since = "1.18.0",
+    note = "please use solana_sdk::reserved_account_keys::ReservedAccountKeys instead"
+)]
+#[allow(deprecated)]
 pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
     if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
         return sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key);
@@ -568,6 +573,7 @@ impl Message {
     /// instructions in this message. Since the dynamic set of reserved accounts
     /// isn't used here to demote write locks, this shouldn't be used in the
     /// runtime.
+    #[allow(deprecated)]
     pub fn is_maybe_writable(&self, i: usize) -> bool {
         (self.is_writable_index(i))
             && !is_builtin_key_or_sysvar(&self.account_keys[i])

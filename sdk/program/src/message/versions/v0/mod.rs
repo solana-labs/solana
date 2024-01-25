@@ -9,6 +9,8 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
+#[allow(deprecated)]
+use crate::message::legacy::is_builtin_key_or_sysvar;
 use crate::{
     address_lookup_table_account::AddressLookupTableAccount,
     bpf_loader_upgradeable,
@@ -16,7 +18,6 @@ use crate::{
     instruction::{CompiledInstruction, Instruction},
     message::{
         compiled_keys::{CompileError, CompiledKeys},
-        legacy::is_builtin_key_or_sysvar,
         AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
     },
     pubkey::Pubkey,
@@ -338,6 +339,7 @@ impl Message {
     /// writable. Before loading addresses and without the reserved account keys
     /// set, we can't demote write locks properly so this should not be used by
     /// the runtime.
+    #[allow(deprecated)]
     pub fn is_maybe_writable(&self, key_index: usize) -> bool {
         self.is_writable_index(key_index)
             && !{

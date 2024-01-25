@@ -10,8 +10,8 @@ use {
         deserialize_utils::default_on_eof,
         message::v0::LoadedAddresses,
         pubkey::Pubkey,
+        reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
-        sysvar::is_sysvar_id,
         timing::AtomicInterval,
         transaction::{TransactionError, VersionedTransaction},
     },
@@ -938,6 +938,7 @@ impl LedgerStorage {
             entries,
         } = confirmed_block;
 
+        let reserved_account_keys = ReservedAccountKeys::active_and_inactive();
         let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
@@ -947,7 +948,7 @@ impl LedgerStorage {
             let memo = extract_and_fmt_memos(transaction_with_meta);
 
             for address in transaction_with_meta.account_keys().iter() {
-                if !is_sysvar_id(address) {
+                if !reserved_account_keys.contains(address) {
                     by_addr
                         .entry(address)
                         .or_default()
@@ -1083,9 +1084,9 @@ impl LedgerStorage {
                     let err = None;
 
                     for address in transaction.message.account_keys.iter() {
-                        if !is_sysvar_id(address) {
-                            addresses.insert(address);
-                        }
+                        // Some of these addresses might be reserved keys but it's
+                        // ok if we attempt to delete a row that doesn't exist
+                        addresses.insert(address);
                     }
 
                     expected_tx_infos.insert(
@@ -1100,9 +1101,9 @@ impl LedgerStorage {
                     let err = meta.status.clone().err();
 
                     for address in tx_with_meta.account_keys().iter() {
-                        if !is_sysvar_id(address) {
-                            addresses.insert(address);
-                        }
+                        // Some of these addresses might be reserved keys but it's
+                        // ok if we attempt to delete a row that doesn't exist
+                        addresses.insert(address);
                     }
 
                     expected_tx_infos.insert(
