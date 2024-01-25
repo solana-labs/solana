@@ -222,7 +222,7 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_schedule_task, bench_schedule_task_conflicting, bench_deschedule_task, bench_deschedule_task_conflicting
+    benchmarks = bench_schedule_task, bench_schedule_task_conflicting, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
 );
 
 main!(library_benchmark_groups = bench_scheduling_state_machine);
