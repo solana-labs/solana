@@ -84,7 +84,7 @@ impl SchedulingStateMachine {
     pub fn create_task(
         transaction: SanitizedTransaction,
         index: usize,
-        mut page_loader: impl FnMut(Pubkey) -> Page,
+        mut page_loader: &mut impl FnMut(Pubkey) -> Page,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
 
@@ -532,3 +532,109 @@ enum TaskSource {
 }
 
 type UniqueWeight = u64;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use {
+        assert_matches::assert_matches,
+        iai_callgrind::{
+            client_requests::callgrind::toggle_collect, library_benchmark, library_benchmark_group,
+            main,
+        },
+        solana_sdk::{
+            instruction::{AccountMeta, Instruction},
+            message::Message,
+            pubkey::Pubkey,
+            signature::Signer,
+            signer::keypair::Keypair,
+            system_transaction,
+            transaction::{Result, SanitizedTransaction, Transaction},
+        },
+        std::hint::black_box,
+    };
+
+    fn simplest_transaction() -> SanitizedTransaction {
+        let payer = Keypair::new();
+        let message = Message::new(&[], Some(&payer.pubkey()));
+        let unsigned = Transaction::new_unsigned(message);
+        SanitizedTransaction::from_transaction_for_tests(unsigned)
+    }
+
+    fn readonly_transaction() -> SanitizedTransaction {
+        let payer = Keypair::new();
+        let instruction = Instruction {
+            program_id: Pubkey::default(),
+            accounts: vec![AccountMeta::new_readonly(Keypair::new().pubkey(), false)],
+            data: vec![],
+        };
+        let message = Message::new(&[instruction], Some(&payer.pubkey()));
+        let unsigned = Transaction::new_unsigned(message);
+        SanitizedTransaction::from_transaction_for_tests(unsigned)
+    }
+
+    #[test]
+    fn test_scheduling_state_machine_default() {
+        let state_machine = SchedulingStateMachine::default();
+        assert_eq!(state_machine.active_task_count(), 0);
+        assert_eq!(state_machine.total_task_count(), 0);
+    }
+
+    #[test]
+    fn test_create_task() {
+        let sanitized = simplest_transaction();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+        assert_eq!(task.task_index(), 3);
+        assert_eq!(task.transaction(), &sanitized);
+    }
+
+    fn address_loader() -> impl FnMut(Pubkey) -> Page {
+        let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+            std::collections::HashMap::new();
+
+        move |address| pages.entry(address).or_default().clone()
+    }
+
+    #[test]
+    fn test_schedule_non_conflicting_task() {
+        let sanitized = simplest_transaction();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+
+        let mut state_machine = SchedulingStateMachine::default();
+        let task = state_machine.schedule_task(task).unwrap();
+        assert_eq!(state_machine.active_task_count(), 1);
+        assert_eq!(state_machine.total_task_count(), 1);
+        state_machine.deschedule_task(&task);
+        assert_eq!(state_machine.active_task_count(), 0);
+        assert_eq!(state_machine.total_task_count(), 1);
+        drop(task);
+    }
+
+    #[test]
+    fn test_schedule_conflicting_tasks() {
+        let sanitized = simplest_transaction();
+        let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+            std::collections::HashMap::new();
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |address| pages.entry(address).or_default().clone());
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, &mut |address| pages.entry(address).or_default().clone());
+
+        let mut state_machine = SchedulingStateMachine::default();
+        state_machine.schedule_task(task).unwrap();
+        assert_matches!(state_machine.schedule_task(task2), None);
+    }
+
+    #[test]
+    fn test_schedule_non_conflicting_readonly_tasks() {
+        let sanitized = readonly_transaction();
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+
+        let mut state_machine = SchedulingStateMachine::default();
+        let task1 = state_machine.schedule_task(task1).unwrap();
+        assert_eq!(state_machine.active_task_count(), 1);
+        assert_eq!(state_machine.total_task_count(), 1);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.active_task_count(), 0);
+        assert_eq!(state_machine.total_task_count(), 1);
+        drop(task1);
+    }
+}
