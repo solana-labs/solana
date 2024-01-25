@@ -302,11 +302,10 @@ mod tests {
             message::{Message as LegacyMessage, SanitizedMessage},
             pubkey::Pubkey,
         },
-        std::convert::TryFrom,
     };
 
     fn new_sanitized_message(message: LegacyMessage) -> SanitizedMessage {
-        SanitizedMessage::try_from(message).unwrap()
+        SanitizedMessage::try_from_legacy_message(message).unwrap()
     }
 
     #[test]

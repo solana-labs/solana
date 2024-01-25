@@ -200,7 +200,7 @@ fn execute_transactions(
                     }
                     .expect("lamports_per_signature must be available");
                     let fee = bank.get_fee_for_message_with_lamports_per_signature(
-                        &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                        &SanitizedMessage::try_from_legacy_message(tx.message().clone()).unwrap(),
                         lamports_per_signature,
                     );
 
@@ -3705,7 +3705,7 @@ fn test_program_fees() {
         Some(&mint_keypair.pubkey()),
     );
 
-    let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
+    let sanitized_message = SanitizedMessage::try_from_legacy_message(message.clone()).unwrap();
     let expected_normal_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
@@ -3729,7 +3729,7 @@ fn test_program_fees() {
         ],
         Some(&mint_keypair.pubkey()),
     );
-    let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
+    let sanitized_message = SanitizedMessage::try_from_legacy_message(message.clone()).unwrap();
     let expected_prioritized_fee = fee_structure.calculate_fee(
         &sanitized_message,
         congestion_multiplier,
