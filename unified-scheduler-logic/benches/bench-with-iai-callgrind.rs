@@ -20,6 +20,7 @@ use {
     },
     solana_unified_scheduler_logic::{Page, Task},
 };
+use assert_matches::assert_matches;
 
 #[library_benchmark]
 #[bench::min(0)]
