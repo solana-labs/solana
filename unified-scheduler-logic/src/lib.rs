@@ -589,8 +589,8 @@ mod tests {
     }
 
     fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
-        let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
-            std::collections::HashMap::new();
+        let mut pages =
+            HashMap::<Pubkey, Page>::new();
 
         move |address| pages.entry(address).or_default().clone()
     }
