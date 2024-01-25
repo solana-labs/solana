@@ -184,7 +184,7 @@ enum Usage {
     Readonly(UsageCount),
     Writable,
 }
-static_assertions::const_assert_eq!(std::mem::size_of::<Usage>(), 0);
+static_assertions::const_assert_eq!(std::mem::size_of::<Usage>(), 8);
 
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
