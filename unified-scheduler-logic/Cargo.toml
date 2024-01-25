@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
 solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
 
