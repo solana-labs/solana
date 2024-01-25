@@ -85,6 +85,7 @@ impl SchedulingStateMachine {
         mut page_loader: impl FnMut(Pubkey) -> Page,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
+
         let writable_locks = locks
             .writable
             .iter()
@@ -93,13 +94,16 @@ impl SchedulingStateMachine {
             .readonly
             .iter()
             .map(|address| (address, RequestedUsage::Readonly));
+
         let locks = writable_locks
             .chain(readonly_locks)
             .map(|(address, requested_usage)| {
                 LockAttempt::new(page_loader(**address), requested_usage)
             })
             .collect();
+
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
+
         Task::new(TaskInner {
             unique_weight,
             transaction,
