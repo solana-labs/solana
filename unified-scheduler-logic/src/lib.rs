@@ -588,7 +588,7 @@ mod tests {
         assert_eq!(task.transaction(), &sanitized);
     }
 
-    fn address_loader() -> impl FnMut(Pubkey) -> Page {
+    fn address_loader() -> &mut impl FnMut(Pubkey) -> Page {
         let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
             std::collections::HashMap::new();
 
