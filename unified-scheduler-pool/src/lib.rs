@@ -743,7 +743,7 @@ where
             } else {
                 debug!("ensure_thread_manager_resumed(): will start threads...");
                 drop(read);
-                let mut write = self.inner.thread_manager.write().unwrap();
+                let write = &mut self.inner.thread_manager.write().unwrap();
                 write.start_or_try_resume_threads(context)?;
                 drop(write);
                 was_already_active = false;
