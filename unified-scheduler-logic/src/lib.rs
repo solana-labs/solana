@@ -8,7 +8,7 @@ use {
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 enum LockStatus {
     Succeded(Usage),
     Failed,
