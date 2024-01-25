@@ -627,7 +627,8 @@ mod tests {
     #[test]
     fn test_schedule_non_conflicting_readonly_tasks() {
         let sanitized = readonly_transaction();
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
+        let address_loader = &mut create_address_loader();
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         let task1 = state_machine.schedule_task(task1).unwrap();
