@@ -249,7 +249,9 @@ fn test_local_cluster_signature_subscribe() {
     )
     .unwrap();
 
-    tx_client.send_transaction(&transaction).unwrap();
+    tx_client
+        .send_and_confirm_transaction(&transaction)
+        .unwrap();
 
     let mut got_received_notification = false;
     loop {

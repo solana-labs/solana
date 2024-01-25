@@ -108,7 +108,9 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
         let transaction =
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        let sig = rpc_client.send_transaction(&transaction).unwrap();
+        let sig = rpc_client
+            .send_and_confirm_transaction(&transaction)
+            .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(validator.pubkey()) {
                 continue;
@@ -167,7 +169,7 @@ pub fn send_many_transactions(
             transfer_amount,
             blockhash,
         );
-        client.send_transaction(&transaction).unwrap();
+        client.send_and_confirm_transaction(&transaction).unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
     }
@@ -298,7 +300,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
-                let sig = client.send_transaction(&transaction);
+                let sig = client.send_and_confirm_transaction(&transaction);
                 match sig {
                     Err(e) => {
                         result = Err(Box::new(e));

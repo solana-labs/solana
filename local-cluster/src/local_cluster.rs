@@ -633,7 +633,9 @@ impl LocalCluster {
             source_keypair.pubkey(),
             *dest_pubkey
         );
-        client.send_transaction(&tx).expect("client transfer");
+        client
+            .send_and_confirm_transaction(&tx)
+            .expect("client transfer");
         client
             .wait_for_balance_with_commitment(
                 dest_pubkey,
@@ -701,7 +703,9 @@ impl LocalCluster {
                     .unwrap()
                     .0,
             );
-            client.send_transaction(&transaction).expect("fund vote");
+            client
+                .send_and_confirm_transaction(&transaction)
+                .expect("fund vote");
             client
                 .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
