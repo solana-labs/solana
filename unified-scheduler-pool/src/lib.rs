@@ -1146,8 +1146,7 @@ where
         let handler_main_loop = |thx| {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
-            let mut runnable_task_receiver =
-             runrunnable_task_receiver.clone();
+            let mut runnable_task_receiver = runnable_task_receiver.clone();
             let mut idle_transaction_receiver = idle_transaction_receiver.clone();
             let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
             let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
