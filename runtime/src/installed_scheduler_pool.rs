@@ -25,9 +25,9 @@ use {
     log::*,
     solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{
+        clock::Slot,
         hash::Hash,
         scheduling::{SchedulingMode, WithSchedulingMode},
-        clock::Slot,
         transaction::{Result, SanitizedTransaction},
     },
     std::{

@@ -32,8 +32,8 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
-        pubkey::Pubkey,
         clock::Slot,
+        pubkey::Pubkey,
         transaction::{Result, SanitizedTransaction, TransactionError},
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
