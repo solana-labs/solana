@@ -93,7 +93,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
     toggle_collect();
-    assert_eq!(scheduler.schedule_task(task.clone()), None);
+    assert_matches!(scheduler.schedule_task(task.clone()), None);
     toggle_collect();
     drop(task);
 }
