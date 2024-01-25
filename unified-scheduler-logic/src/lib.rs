@@ -568,7 +568,7 @@ mod tests {
     }
 
     fn readonly_transaction() -> SanitizedTransaction {
-        let payer = Keypair::new();
+        let payer = Keypair::new_random();
         let instruction = Instruction {
             program_id: Pubkey::default(),
             accounts: vec![AccountMeta::new_readonly(Keypair::new().pubkey(), false)],
