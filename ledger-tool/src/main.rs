@@ -843,7 +843,7 @@ fn main() {
         .arg(
             Arg::with_name("ignore_ulimit_nofile_error")
                 .long("ignore-ulimit-nofile-error")
-                .value_name("FORMAT")
+                .takes_value(false)
                 .global(true)
                 .help(
                     "Allow opening the blockstore to succeed even if the desired open file \
