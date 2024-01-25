@@ -5,6 +5,7 @@ use {
         account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         tiered_storage::{
             byte_block,
             file::TieredStorageFile,
@@ -562,7 +563,7 @@ impl HotStorageWriter {
                         acc.data(),
                         acc.executable(),
                         // only persist rent_epoch for those non-rent-exempt accounts
-                        (acc.rent_epoch() != Epoch::MAX).then_some(acc.rent_epoch()),
+                        (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH).then_some(acc.rent_epoch()),
                         Some(*account_hash),
                     )
                 })
@@ -606,7 +607,6 @@ pub mod tests {
         super::*,
         crate::{
             account_storage::meta::StoredMeta,
-            rent_collector::RENT_EXEMPT_RENT_EPOCH,
             tiered_storage::{
                 byte_block::ByteBlockWriter,
                 file::TieredStorageFile,
