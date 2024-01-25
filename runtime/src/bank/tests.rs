@@ -13746,7 +13746,8 @@ fn test_filter_executable_program_accounts() {
 
     let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
-    let programs = bank.filter_executable_program_accounts(
+    let transaction_processor = TransactionBatchProcessor::new(&bank);
+    let programs = transaction_processor.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],
         &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
@@ -13842,7 +13843,8 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
     let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
     let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
-    let programs = bank.filter_executable_program_accounts(
+    let transaction_processor = TransactionBatchProcessor::new(&bank);
+    let programs = transaction_processor.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],
         &mut lock_results,
