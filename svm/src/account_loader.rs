@@ -678,7 +678,7 @@ mod tests {
             instructions,
         );
 
-        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let message = SanitizedMessage::try_from_legacy_message(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,
@@ -1207,7 +1207,7 @@ mod tests {
             Hash::default(),
         );
 
-        let message = SanitizedMessage::try_from(tx.message().clone()).unwrap();
+        let message = SanitizedMessage::try_from_legacy_message(tx.message().clone()).unwrap();
         let fee = FeeStructure::default().calculate_fee(
             &message,
             lamports_per_signature,

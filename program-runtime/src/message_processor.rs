@@ -187,7 +187,6 @@ mod tests {
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program, system_program,
         },
-        std::convert::TryFrom,
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -200,7 +199,7 @@ mod tests {
     }
 
     fn new_sanitized_message(message: Message) -> SanitizedMessage {
-        SanitizedMessage::try_from(message).unwrap()
+        SanitizedMessage::try_from_legacy_message(message).unwrap()
     }
 
     #[test]

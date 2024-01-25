@@ -117,7 +117,7 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
-        convert::{TryFrom, TryInto},
+        convert::TryInto,
         fs::File,
         io::Read,
         str::FromStr,
@@ -196,7 +196,7 @@ fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
 }
 
 fn new_sanitized_message(message: Message) -> SanitizedMessage {
-    SanitizedMessage::try_from(message).unwrap()
+    SanitizedMessage::try_from_legacy_message(message).unwrap()
 }
 
 #[test]
