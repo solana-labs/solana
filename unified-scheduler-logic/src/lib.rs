@@ -93,7 +93,7 @@ impl SchedulingStateMachine {
             .readonly
             .iter()
             .map(|address| (page_loader(**address), RequestedUsage::Readonly));
-        let locks = writable_locks.chain(readonly_locks).map(|page, requested_usage| LockAttempt::new(page, requested_usage)).collect();
+        let locks = writable_locks.chain(readonly_locks).map(|(page, requested_usage)| LockAttempt::new(page, requested_usage)).collect();
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
