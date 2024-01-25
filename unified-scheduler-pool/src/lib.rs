@@ -150,7 +150,7 @@ where
                 return true;
             };
 
-            let pid = std::process::id();
+            let pid = process::id();
             let task = procfs::process::Process::new(pid.try_into().unwrap())
                 .unwrap()
                 .task_from_tid(tid)
@@ -702,7 +702,7 @@ where
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let handler_count = std::env::var("SOLANA_UNIFIED_SCHEDULER_HANDLER_COUNT")
+        let handler_count = env::var("SOLANA_UNIFIED_SCHEDULER_HANDLER_COUNT")
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
@@ -913,7 +913,7 @@ where
         }
         debug!("try_resume(): doing now");
 
-        let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
+        let send_metrics = env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let (mut blocked_transaction_sessioned_sender, blocked_transaction_sessioned_receiver) =
             chained_channel::unbounded::<Task, SchedulingContext>(context.clone());
@@ -1775,7 +1775,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         assert_matches!(scheduler.schedule_execution(&(bad_tx, 0)), Ok(()));
         // simulate the task-sending thread is stalled for some reason.
-        thread::sleep(std::time::Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(1));
         assert_eq!(bank.transaction_count(), 0);
 
         let good_tx_after_bad_tx =
@@ -1791,7 +1791,7 @@ mod tests {
                 .result,
             Ok(_)
         );
-        thread::sleep(std::time::Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(3));
         assert_matches!(
             scheduler.schedule_execution(&(good_tx_after_bad_tx, 0)),
             Err(_)
@@ -1859,7 +1859,7 @@ mod tests {
             self.1.lock().unwrap().push(thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
                 // is handle before finishing executing scheduled transactions
-                thread::sleep(std::time::Duration::from_secs(1));
+                thread::sleep(Duration::from_secs(1));
 
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
@@ -1884,7 +1884,7 @@ mod tests {
             _is_dropped: bool,
         ) -> (ResultWithTimings, UninstalledSchedulerBox) {
             self.do_wait();
-            let result_with_timings = std::mem::replace(
+            let result_with_timings = mem::replace(
                 &mut *self.0.lock().unwrap(),
                 initialized_result_with_timings(),
             );
