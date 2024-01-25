@@ -841,7 +841,7 @@ where
                         .transaction()
                         .get_transaction_priority_details(false)
                         .map(|d| d.priority)
-                        .unwrap_or_default(),
+                        .unwrap_or_default();
 
             datapoint_info_at!(
                 handler_timings.finish_time,
