@@ -53,6 +53,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use solana_metrics::datapoint_info_at;
 
 type AtomicSchedulerId = AtomicU64;
 
