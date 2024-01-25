@@ -907,10 +907,9 @@ where
 
         let (mut runnable_task_sender, runnable_task_receiver) =
             chained_channel::unbounded::<Task, SchedulingContext>(context.clone());
-        let (idle_transaction_sender, idle_transaction_receiver) = unbounded::<Task>();
-        let (handled_blocked_transaction_sender, handled_blocked_transaction_receiver) =
-            unbounded::<Box<ExecutedTask>>();
-        let (handled_idle_transaction_sender, handled_idle_transaction_receiver) =
+        let (idle_task_receiver, idle_task_receiver) = unbounded::<Task>();
+        let (finished_task_sender, finished_task_receiver) = unbounded::<Box<ExecutedTask>>();
+        let (finished_idle_task_sender, finished_idle_task_receiver) =
             unbounded::<Box<ExecutedTask>>();
         let (executed_task_sender, executed_task_receiver) = unbounded::<ExecutedTaskPayload>();
         let (accumulated_result_sender, accumulated_result_receiver) =
@@ -994,8 +993,8 @@ where
                             state_machine.reschedule_count(),
                             state_machine.rescheduled_task_count(),
                             new_task_receiver.len(),
-                            runnable_task_sender.len(), idle_transaction_sender.len(),
-                            handled_blocked_transaction_receiver.len(), handled_idle_transaction_receiver.len(),
+                            runnable_task_sender.len(), idle_task_receiver.len(),
+                            finished_task_receiver.len(), finished_idle_task_receiver.len(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
                     };
@@ -1018,7 +1017,7 @@ where
                     let mut is_finished = false;
                     while !is_finished {
                         let state_change = select_biased! {
-                            recv(handled_blocked_transaction_receiver) -> executed_task => {
+                            recv(finished_task_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("S+T:aborted");
@@ -1039,7 +1038,7 @@ where
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
                                         if let Some(task) = state_machine.schedule_task(task) {
-                                            idle_transaction_sender.send(task).unwrap();
+                                            idle_task_receiver.send(task).unwrap();
                                         }
                                         "step"
                                     }
@@ -1081,7 +1080,7 @@ where
                                 }
                                 "step"
                             },
-                            recv(handled_idle_transaction_receiver) -> executed_task => {
+                            recv(finished_idle_task_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("S+T:aborted");
@@ -1147,9 +1146,9 @@ where
             let pool = self.pool.clone();
             let handler = self.handler.clone();
             let mut runnable_task_receiver = runnable_task_receiver.clone();
-            let mut idle_transaction_receiver = idle_transaction_receiver.clone();
-            let handled_blocked_transaction_sender = handled_blocked_transaction_sender.clone();
-            let handled_idle_transaction_sender = handled_idle_transaction_sender.clone();
+            let mut idle_task_receiver = idle_task_receiver.clone();
+            let finished_task_sender = finished_task_sender.clone();
+            let finished_idle_task_sender = finished_idle_task_sender.clone();
 
             move || {
                 trace!(
@@ -1163,7 +1162,7 @@ where
                             match message {
                                 Ok(message) => {
                                     if let Some(task) = runnable_task_receiver.after_select(message) {
-                                        (task, &handled_blocked_transaction_sender)
+                                        (task, &finished_task_sender)
                                     } else {
                                         continue;
                                     }
@@ -1171,11 +1170,11 @@ where
                                 Err(_) => break,
                             }
                         },
-                        recv(idle_transaction_receiver) -> task => {
+                        recv(idle_task_receiver) -> task => {
                             if let Ok(task) = task {
-                                (task, &handled_idle_transaction_sender)
+                                (task, &finished_idle_task_sender)
                             } else {
-                                idle_transaction_receiver = never();
+                                idle_task_receiver = never();
                                 continue;
                             }
                         },
