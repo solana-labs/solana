@@ -88,21 +88,17 @@ impl SchedulingStateMachine {
         let writable_locks = locks
             .writable
             .iter()
-            .map(|address| LockAttempt::writable(page_loader(**address)));
-        let mut locks2 = writable_locks.collect::<Vec<LockAttempt>>();
+            .map(|address| (page_loader(**address), RequestedUsage::Writable));
         let readonly_locks = locks
             .readonly
             .iter()
-            .map(|address| LockAttempt::readonly(page_loader(**address)));
-        for r in readonly_locks {
-            locks2.push(r);
-        }
-        //panic!("{}", locks.len());
+            .map(|address| (page_loader(**address), RequestedUsage::Readonly));
+        let locks = writable_locks.chain(readonly_locks).map(|page, requested_usage| LockAttempt::new(page, requested_usage)).collect();
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
             transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(locks2)),
+            task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
     }
 }
