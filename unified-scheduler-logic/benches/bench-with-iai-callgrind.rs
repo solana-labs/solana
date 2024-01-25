@@ -169,8 +169,9 @@ fn bench_schedule_retryable_task(account_count: usize) {
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
-    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |_| Page::default());
-    let task2 = SchedulingStateMachine::create_task(tx0, 1, |_| Page::default());
+    let mut pages = std::collections::HashMap::new();
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, |address| pages.entry(address).or_default());
+    let task2 = SchedulingStateMachine::create_task(tx0, 1, |address| pages.entry(address).or_default());
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
     assert_matches!(scheduler.schedule_task(task2), None);
