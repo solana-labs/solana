@@ -1630,7 +1630,7 @@ impl Bank {
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
 
-        // Skip creating reward partition account when we are testing partitioned reward against mainnet.
+        // Skip creating data account when we are testing partitioned rewards
         let skip_reward_partition_account = !self.is_partitioned_rewards_feature_enabled()
             && (self
                 .partitioned_epoch_rewards_config()
