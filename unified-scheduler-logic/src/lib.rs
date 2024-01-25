@@ -294,6 +294,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
+        // .contains_key() is too costly for assert!()
         debug_assert!(!self.retryable_task_queue.contains_key(&task.unique_weight));
 
         self.total_task_count += 1;
