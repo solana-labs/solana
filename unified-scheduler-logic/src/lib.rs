@@ -553,6 +553,7 @@ mod tests {
         },
         std::hint::black_box,
     };
+    use std::collections::HashMap;
 
     fn simplest_transaction() -> SanitizedTransaction {
         let payer = Keypair::new();
