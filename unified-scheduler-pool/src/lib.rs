@@ -1084,7 +1084,7 @@ where
                             recv(handled_idle_transaction_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
-                                    log_scheduler!("T:aborted");
+                                    log_scheduler!("S+T:aborted");
                                     session_result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
                                     drop(new_task_receiver);
