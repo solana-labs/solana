@@ -48,6 +48,10 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use solana_measure::measure::Measure;
+use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+use cpu_time::ThreadTime;
+
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -790,10 +794,9 @@ where
         handler_context: &HandlerContext,
         send_metrics: bool,
     ) {
-        use solana_measure::measure::Measure;
         let handler_timings = send_metrics.then_some((
             Measure::start("process_message_time"),
-            cpu_time::ThreadTime::now(),
+            ThreadTime::now(),
         ));
         debug!("handling task at {:?}", thread::current());
         TH::handle(
@@ -825,8 +828,6 @@ where
         assert_matches!(executed_task.result_with_timings.0, Ok(()));
         timings.accumulate(&executed_task.result_with_timings.1);
         if let Some(handler_timings) = &executed_task.handler_timings {
-            use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-
             let sig = executed_task.task.transaction().signature().to_string();
 
             solana_metrics::datapoint_info_at!(
