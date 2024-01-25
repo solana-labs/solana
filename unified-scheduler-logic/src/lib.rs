@@ -85,7 +85,6 @@ impl SchedulingStateMachine {
         mut page_loader: impl FnMut(Pubkey) -> Page,
     ) -> Task {
         let locks = transaction.get_account_locks_unchecked();
-        panic!();
         let writable_locks = locks
             .writable
             .iter()
