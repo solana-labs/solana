@@ -263,7 +263,7 @@ where
             }
         };
 
-        let watchdog_thread = std::thread::Builder::new()
+        let watchdog_thread = thread::Builder::new()
             .name("solScWatchdog".to_owned())
             .spawn(watchdog_main_loop())
             .unwrap();
@@ -358,7 +358,7 @@ where
             .unwrap();
         info!(
             "SchedulerPool::uninstalled_from_bank_forks(): joined watchdog thread at {:?}...",
-            std::thread::current()
+            thread::current()
         );
     }
 }
@@ -1011,10 +1011,7 @@ where
                     };
                 }
 
-                trace!(
-                    "solScheduler thread is running at: {:?}",
-                    std::thread::current()
-                );
+                trace!("solScheduler thread is running at: {:?}", thread::current());
                 tid_sender
                     .send({
                         #[cfg(not(target_os = "linux"))]
@@ -1149,7 +1146,7 @@ where
                 };
                 trace!(
                     "solScheduler thread is terminating at: {:?}",
-                    std::thread::current()
+                    thread::current()
                 );
                 result_with_timings
             }
@@ -1168,7 +1165,7 @@ where
                 trace!(
                     "solScHandler{:02} thread is running at: {:?}",
                     thx,
-                    std::thread::current()
+                    thread::current()
                 );
                 loop {
                     let (task, sender) = select_biased! {
@@ -1209,7 +1206,7 @@ where
                 trace!(
                     "solScHandler{:02} thread is terminating at: {:?}",
                     thx,
-                    std::thread::current()
+                    thread::current()
                 );
             }
         };
@@ -1242,7 +1239,7 @@ where
         };
 
         self.scheduler_thread_and_tid = Some((
-            std::thread::Builder::new()
+            thread::Builder::new()
                 .name("solScheduler".to_owned())
                 .spawn(scheduler_main_loop())
                 .unwrap(),
@@ -1250,7 +1247,7 @@ where
         ));
 
         self.accumulator_thread = Some(
-            std::thread::Builder::new()
+            thread::Builder::new()
                 .name("solScAccmltr".to_owned())
                 .spawn(accumulator_main_loop())
                 .unwrap(),
@@ -1259,7 +1256,7 @@ where
         self.handler_threads = (0..self.handler_count)
             .map({
                 |thx| {
-                    std::thread::Builder::new()
+                    thread::Builder::new()
                         .name(format!("solScHandler{:02}", thx))
                         .spawn(handler_main_loop(thx))
                         .unwrap()
@@ -1274,10 +1271,7 @@ where
             warn!("suspend(): already suspended...");
             return;
         };
-        debug!(
-            "suspend(): terminating threads by {:?}",
-            std::thread::current()
-        );
+        debug!("suspend(): terminating threads by {:?}", thread::current());
 
         let (s, r) = unbounded();
         (self.new_task_sender, self.new_task_receiver) = (s, Some(r));
@@ -1293,7 +1287,7 @@ where
 
         debug!(
             "suspend(): successfully suspended threads by {:?}",
-            std::thread::current()
+            thread::current()
         );
     }
 
@@ -1781,7 +1775,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         assert_matches!(scheduler.schedule_execution(&(bad_tx, 0)), Ok(()));
         // simulate the task-sending thread is stalled for some reason.
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        thread::sleep(std::time::Duration::from_secs(1));
         assert_eq!(bank.transaction_count(), 0);
 
         let good_tx_after_bad_tx =
@@ -1797,7 +1791,7 @@ mod tests {
                 .result,
             Ok(_)
         );
-        std::thread::sleep(std::time::Duration::from_secs(3));
+        thread::sleep(std::time::Duration::from_secs(3));
         assert_matches!(
             scheduler.schedule_execution(&(good_tx_after_bad_tx, 0)),
             Err(_)
@@ -1862,10 +1856,10 @@ mod tests {
             let context = self.context().clone();
             let pool = self.3.clone();
 
-            self.1.lock().unwrap().push(std::thread::spawn(move || {
+            self.1.lock().unwrap().push(thread::spawn(move || {
                 // intentionally sleep to simulate race condition where register_recent_blockhash
                 // is handle before finishing executing scheduled transactions
-                std::thread::sleep(std::time::Duration::from_secs(1));
+                thread::sleep(std::time::Duration::from_secs(1));
 
                 let mut result = Ok(());
                 let mut timings = ExecuteTimings::default();
