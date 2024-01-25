@@ -602,9 +602,6 @@ impl AddressBook {
     }
 }
 
-// Currently, simplest possible implementation (i.e. single-threaded)
-// this will be replaced with more proper implementation...
-// not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 pub struct PooledScheduler<TH, SEA>
 where
