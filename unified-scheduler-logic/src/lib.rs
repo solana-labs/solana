@@ -158,18 +158,10 @@ struct LockAttempt {
 }
 
 impl LockAttempt {
-    fn readonly(page: Page) -> Self {
+    fn new(page: Page, requested_usage: RequestedUsage) -> Self {
         Self {
             page,
-            requested_usage: RequestedUsage::Readonly,
-            uncommited_usage: Usage::Unused,
-        }
-    }
-
-    fn writable(page: Page) -> Self {
-        Self {
-            page,
-            requested_usage: RequestedUsage::Writable,
+            requested_usage,
             uncommited_usage: Usage::Unused,
         }
     }
