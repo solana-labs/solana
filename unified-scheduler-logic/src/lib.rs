@@ -13,6 +13,7 @@ enum LockStatus {
     Succeded(Usage),
     Failed,
 }
+static_assertions::const_assert_eq!(std::mem::size_of::<Task>(), 16);
 
 pub type Task = Arc<TaskInner>;
 static_assertions::const_assert_eq!(std::mem::size_of::<Task>(), 8);
