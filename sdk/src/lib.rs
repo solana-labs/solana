@@ -55,7 +55,7 @@ pub use solana_program::{
     program_pack, rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serde_varint,
     serialize_utils, short_vec, slot_hashes, slot_history, stable_layout, stake, stake_history,
     syscalls, system_instruction, system_program, sysvar, unchecked_div_by_const, vote,
-    wasm_bindgen,
+    wasm_bindgen, zk_token_proof_program,
 };
 
 pub mod account;

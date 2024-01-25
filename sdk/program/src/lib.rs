@@ -535,6 +535,7 @@ pub mod system_program;
 pub mod sysvar;
 pub mod vote;
 pub mod wasm;
+pub mod zk_token_proof_program;
 
 #[deprecated(
     since = "1.17.0",
