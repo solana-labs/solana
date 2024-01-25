@@ -21,7 +21,7 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
 };
 
@@ -495,14 +495,14 @@ impl HotStorageWriter {
     fn write_account(
         &self,
         lamports: u64,
-        rent_epoch: Epoch,
         account_data: &[u8],
         executable: bool,
-        account_hash: &AccountHash,
+        rent_epoch: Option<Epoch>,
+        account_hash: Option<AccountHash>,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
-            rent_epoch: (rent_epoch != Epoch::MAX).then_some(rent_epoch),
-            account_hash: (*account_hash != AccountHash(Hash::default())).then_some(*account_hash),
+            rent_epoch,
+            account_hash,
         };
 
         let mut flags = AccountMetaFlags::new_from(&optional_fields);
@@ -555,18 +555,20 @@ impl HotStorageWriter {
 
             // Obtain necessary fields from the account, or default fields
             // for a zero-lamport account in the None case.
-            let (lamports, rent_epoch, data, executable) = account
+            let (lamports, data, executable, rent_epoch, account_hash) = account
                 .map(|acc| {
                     (
                         acc.lamports(),
-                        acc.rent_epoch(),
                         acc.data(),
                         acc.executable(),
+                        // only persist rent_epoch for those non-rent-exempt accounts
+                        (acc.rent_epoch() != Epoch::MAX).then_some(acc.rent_epoch()),
+                        Some(*account_hash),
                     )
                 })
-                .unwrap_or((0, Epoch::MAX, &[], false));
+                .unwrap_or((0, &[], false, None, None));
 
-            cursor += self.write_account(lamports, rent_epoch, data, executable, account_hash)?;
+            cursor += self.write_account(lamports, data, executable, rent_epoch, account_hash)?;
             index.push(index_entry);
         }
         footer.account_entry_count = (len - skip) as u32;
