@@ -568,13 +568,12 @@ mod tests {
     }
 
     fn readonly_transaction() -> SanitizedTransaction {
-        let payer = Keypair::new_random();
         let instruction = Instruction {
             program_id: Pubkey::default(),
             accounts: vec![AccountMeta::new_readonly(Keypair::new().pubkey(), false)],
             data: vec![],
         };
-        let message = Message::new(&[instruction], Some(&payer.pubkey()));
+        let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
         let unsigned = Transaction::new_unsigned(message);
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
