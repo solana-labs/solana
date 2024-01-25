@@ -14,6 +14,7 @@ use {
         bounded, disconnected, never, select_biased, unbounded, Receiver, RecvError,
         RecvTimeoutError, SendError, Sender, TryRecvError,
     },
+    dashmap::DashMap,
     derivative::Derivative,
     log::*,
     solana_ledger::blockstore_processor::{
@@ -47,7 +48,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use dashmap::DashMap;
 
 type AtomicSchedulerId = AtomicU64;
 
