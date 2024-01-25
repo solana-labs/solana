@@ -59,9 +59,48 @@ fn bench_schedule_task(account_count: usize) {
     drop(task);
 }
 
+#[library_benchmark]
+#[bench::min(0)]
+#[bench::one(1)]
+#[bench::two(2)]
+#[bench::three(3)]
+#[bench::normal(32)]
+#[bench::large(64)]
+#[bench::max(128)]
+fn bench_deschedule_task(account_count: usize) {
+    toggle_collect();
+    let mut accounts = vec![];
+    for _ in 0..account_count {
+        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    }
+
+    let payer = Keypair::new();
+    let memo_ix = Instruction {
+        program_id: Pubkey::default(),
+        accounts,
+        data: vec![0x00],
+    };
+    let mut ixs = vec![];
+    for _ in 0..1 {
+        ixs.push(memo_ix.clone());
+    }
+    let msg = Message::new(&ixs, Some(&payer.pubkey()));
+    let mut txn = Transaction::new_unsigned(msg);
+    //panic!("{:?}", txn);
+    //assert_eq!(wire_txn.len(), 3);
+    let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+    let task = SchedulingStateMachine::create_task(tx0, 0, |_| Page::default());
+    let mut scheduler = SchedulingStateMachine::default();
+    let task = scheduler.schedule_task(task).unwrap();
+    toggle_collect();
+    scheduler.deschedule_task(&task);
+    toggle_collect();
+    drop(task);
+}
+
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_schedule_task
+    benchmarks = bench_schedule_task, bench_deschedule_task
 );
 
 main!(library_benchmark_groups = bench_scheduling_state_machine);
