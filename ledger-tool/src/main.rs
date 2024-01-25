@@ -2189,7 +2189,12 @@ fn main() {
 
                     let accounts_streamer =
                         AccountsOutputStreamer::new(bank, output_format, config);
-                    let (_, scan_time) = measure!(accounts_streamer.output(), "accounts scan");
+                    let (_, scan_time) = measure!(
+                        accounts_streamer
+                            .output()
+                            .map_err(|err| error!("Error while outputting accounts: {err}")),
+                        "accounts scan"
+                    );
                     info!("{scan_time}");
                 }
                 ("capitalization", Some(arg_matches)) => {

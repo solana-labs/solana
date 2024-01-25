@@ -594,15 +594,21 @@ impl AccountsOutputStreamer {
         }
     }
 
-    pub fn output(&self) -> Result<(), serde_json::Error> {
+    pub fn output(&self) -> Result<(), String> {
         match self.output_format {
             OutputFormat::Json | OutputFormat::JsonCompact => {
                 let mut serializer = serde_json::Serializer::new(stdout());
-                let mut struct_serializer = serializer.serialize_struct("accountInfo", 2)?;
-                struct_serializer.serialize_field("accounts", &self.account_scanner)?;
+                let mut struct_serializer = serializer
+                    .serialize_struct("accountInfo", 2)
+                    .map_err(|err| format!("unable to start serialization: {err}"))?;
                 struct_serializer
-                    .serialize_field("summary", &*self.total_accounts_stats.borrow())?;
+                    .serialize_field("accounts", &self.account_scanner)
+                    .map_err(|err| format!("unable to serialize accounts scanner: {err}"))?;
+                struct_serializer
+                    .serialize_field("summary", &*self.total_accounts_stats.borrow())
+                    .map_err(|err| format!("unable to serialize accounts summary: {err}"))?;
                 SerializeStruct::end(struct_serializer)
+                    .map_err(|err| format!("unable to end serialization: {err}"))
             }
             _ => {
                 // The compiler needs a placeholder type to satisfy the generic
