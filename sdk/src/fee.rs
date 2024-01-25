@@ -146,10 +146,9 @@ impl FeeStructure {
             });
 
         FeeDetails {
-            transaction_fee: (signature_fee
+            transaction_fee: signature_fee
                 .saturating_add(write_lock_fee)
-                .saturating_add(compute_fee) as f64)
-                .round() as u64,
+                .saturating_add(compute_fee),
             prioritization_fee: budget_limits.prioritization_fee,
         }
     }
