@@ -44,6 +44,7 @@ use {
     std::{
         env,
         fmt::Debug,
+        mem,
         process,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
