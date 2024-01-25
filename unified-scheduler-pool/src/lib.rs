@@ -819,7 +819,7 @@ where
     }
 
     fn accumulate_result_with_timings(
-        (result, timings): &mut ResultWithTimings,
+        (_result, timings): &mut ResultWithTimings,
         executed_task: Box<ExecutedTask>,
     ) {
         assert_matches!(executed_task.result_with_timings.0, Ok(()));
