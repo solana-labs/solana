@@ -295,6 +295,7 @@ impl SchedulingStateMachine {
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         debug_assert!(!self.retryable_task_queue.contains_key(&task.unique_weight));
+
         self.total_task_count += 1;
         self.active_task_count += 1;
         self.try_lock_for_task(TaskSource::Runnable, task)
@@ -630,9 +631,9 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.has_retryable_task(), true);
         assert_eq!(state_machine.retryable_task_count(), 1);
-        //state_machine.clear_retryable_tasks();
-        //assert_eq!(state_machine.has_retryable_task(), false);
-        //assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.clear_retryable_tasks();
+        assert_eq!(state_machine.has_retryable_task(), false);
+        assert_eq!(state_machine.retryable_task_count(), 0);
 
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
     }
