@@ -33,11 +33,9 @@ impl Source {
                     .value;
                 Ok((res.0, res.1))
             }
-            Self::NonceAccount(ref pubkey) => {
-                #[allow(clippy::redundant_closure)]
-                let data = crate::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| crate::data_from_account(a))?;
-                Ok((data.blockhash(), data.fee_calculator))
+            Self::NonceAccount(ref _pubkey) => {
+                // Note - to break or to gut entire deprecated function?
+                Err("Deprecated, NonceAccount no longer support fee_calculator".into())
             }
         }
     }
@@ -60,12 +58,9 @@ impl Source {
                     .value;
                 Ok(res)
             }
-            Self::NonceAccount(ref pubkey) => {
-                let res = crate::get_account_with_commitment(rpc_client, pubkey, commitment)?;
-                let res = crate::data_from_account(&res)?;
-                Ok(Some(res)
-                    .filter(|d| d.blockhash() == *blockhash)
-                    .map(|d| d.fee_calculator))
+            Self::NonceAccount(ref _pubkey) => {
+                // Note - to break or to gut entire deprecated function?
+                Err("Deprecated, NonceAccount no longer support fee_calculator".into())
             }
         }
     }
@@ -420,7 +415,6 @@ mod tests {
         let data = nonce::state::Data {
             authority: Pubkey::from([3u8; 32]),
             durable_nonce,
-            fee_calculator: nonce_fee_calc,
         };
         let nonce_account = Account::new_data_with_space(
             42,

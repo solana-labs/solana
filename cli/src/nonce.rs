@@ -597,7 +597,9 @@ pub fn process_show_nonce_account(
         };
         if let Some(data) = data {
             nonce_account.nonce = Some(data.blockhash().to_string());
-            nonce_account.lamports_per_signature = Some(data.fee_calculator.lamports_per_signature);
+            // TODO - shoudl also nonce_account's lamports_per_signature in this PR? or do it in
+            // separate one.
+            nonce_account.lamports_per_signature = None;
             nonce_account.authority = Some(data.authority.to_string());
         }
 
@@ -1001,7 +1003,6 @@ mod tests {
         let data = Versions::new(State::Initialized(nonce::state::Data::new(
             nonce_pubkey,
             durable_nonce,
-            0,
         )));
         let valid = Account::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
@@ -1024,7 +1025,6 @@ mod tests {
         let data = Versions::new(State::Initialized(nonce::state::Data::new(
             nonce_pubkey,
             invalid_durable_nonce,
-            0,
         )));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID).unwrap();
         if let CliError::InvalidNonce(err) =
@@ -1043,7 +1043,6 @@ mod tests {
         let data = Versions::new(State::Initialized(nonce::state::Data::new(
             new_nonce_authority,
             durable_nonce,
-            0,
         )));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
@@ -1092,7 +1091,7 @@ mod tests {
         assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
-        let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce, 42);
+        let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce);
         nonce_account
             .set_state(&Versions::new(State::Initialized(data.clone())))
             .unwrap();
@@ -1122,7 +1121,7 @@ mod tests {
         );
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
-        let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce, 42);
+        let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce);
         nonce_account
             .set_state(&Versions::new(State::Initialized(data.clone())))
             .unwrap();

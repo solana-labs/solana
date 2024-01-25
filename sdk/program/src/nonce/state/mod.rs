@@ -90,7 +90,6 @@ impl Versions {
         let data = Data::new(
             authority,
             data.durable_nonce,
-            data.get_lamports_per_signature(),
         );
         let state = Box::new(State::Initialized(data));
         // Preserve Version variant since cannot
@@ -115,7 +114,7 @@ impl From<Versions> for State {
 mod tests {
     use {
         super::*,
-        crate::{fee_calculator::FeeCalculator, pubkey::Pubkey},
+        crate::pubkey::Pubkey,
         std::iter::repeat_with,
     };
 
@@ -132,9 +131,6 @@ mod tests {
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 2718,
-            },
         };
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
         assert_eq!(versions.verify_recent_blockhash(&Hash::default()), None);
@@ -174,9 +170,6 @@ mod tests {
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 2718,
-            },
         };
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
         let durable_nonce = DurableNonce::from_blockhash(durable_nonce.as_hash());
@@ -213,9 +206,6 @@ mod tests {
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 2718,
-            },
         };
         let account_authority = data.authority;
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));

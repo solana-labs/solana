@@ -657,7 +657,6 @@ impl Accounts {
         loaded: &mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
-        lamports_per_signature: u64,
     ) {
         let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
@@ -665,7 +664,6 @@ impl Accounts {
             loaded,
             rent_collector,
             durable_nonce,
-            lamports_per_signature,
         );
         self.accounts_db
             .store_cached_inline_update_index((slot, &accounts_to_store[..]), Some(&transactions));
@@ -691,7 +689,6 @@ impl Accounts {
         load_results: &'a mut [TransactionLoadResult],
         _rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
-        lamports_per_signature: u64,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
         Vec<Option<&'a SanitizedTransaction>>,
@@ -741,7 +738,6 @@ impl Accounts {
                         is_fee_payer,
                         maybe_nonce,
                         durable_nonce,
-                        lamports_per_signature,
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
@@ -763,7 +759,6 @@ fn prepare_if_nonce_account(
     is_fee_payer: bool,
     maybe_nonce: Option<(&NonceFull, bool)>,
     &durable_nonce: &DurableNonce,
-    lamports_per_signature: u64,
 ) -> bool {
     if let Some((nonce, rollback)) = maybe_nonce {
         if address == nonce.address() {
@@ -786,7 +781,6 @@ fn prepare_if_nonce_account(
                 let nonce_state = NonceState::new_initialized(
                     &data.authority,
                     durable_nonce,
-                    lamports_per_signature,
                 );
                 let nonce_versions = NonceVersions::new(nonce_state);
                 account.set_state(&nonce_versions).unwrap();
@@ -1583,7 +1577,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &DurableNonce::default(),
-            0,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -1639,7 +1632,6 @@ mod tests {
         AccountSharedData,
         AccountSharedData,
         DurableNonce,
-        u64,
         Option<AccountSharedData>,
     ) {
         let data = NonceVersions::new(NonceState::Initialized(nonce::state::Data::default()));
@@ -1652,7 +1644,6 @@ mod tests {
             pre_account,
             account,
             durable_nonce,
-            1234,
             None,
         )
     }
@@ -1664,7 +1655,6 @@ mod tests {
         is_fee_payer: bool,
         maybe_nonce: Option<(&NonceFull, bool)>,
         durable_nonce: &DurableNonce,
-        lamports_per_signature: u64,
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
@@ -1684,7 +1674,6 @@ mod tests {
             is_fee_payer,
             maybe_nonce,
             durable_nonce,
-            lamports_per_signature,
         );
         assert_eq!(expect_account, account);
         expect_account == account
@@ -1697,7 +1686,6 @@ mod tests {
             pre_account,
             mut post_account,
             blockhash,
-            lamports_per_signature,
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_address = pre_account_address;
@@ -1710,7 +1698,7 @@ mod tests {
         let mut expect_account = pre_account;
         expect_account
             .set_state(&NonceVersions::new(NonceState::Initialized(
-                nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
+                nonce::state::Data::new(Pubkey::default(), blockhash),
             )))
             .unwrap();
 
@@ -1721,7 +1709,6 @@ mod tests {
             false,
             Some((&nonce, true)),
             &blockhash,
-            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -1733,7 +1720,6 @@ mod tests {
             _pre_account,
             _post_account,
             blockhash,
-            lamports_per_signature,
             _maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_address = pre_account_address;
@@ -1747,7 +1733,6 @@ mod tests {
             false,
             None,
             &blockhash,
-            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -1759,7 +1744,6 @@ mod tests {
             pre_account,
             mut post_account,
             blockhash,
-            lamports_per_signature,
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
 
@@ -1774,7 +1758,6 @@ mod tests {
             false,
             Some((&nonce, true)),
             &blockhash,
-            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -1786,7 +1769,6 @@ mod tests {
             pre_account,
             mut post_account,
             blockhash,
-            lamports_per_signature,
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_address = pre_account_address;
@@ -1796,7 +1778,7 @@ mod tests {
 
         expect_account
             .set_state(&NonceVersions::new(NonceState::Initialized(
-                nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
+                nonce::state::Data::new(Pubkey::default(), blockhash),
             )))
             .unwrap();
 
@@ -1810,7 +1792,6 @@ mod tests {
             false,
             Some((&nonce, true)),
             &blockhash,
-            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -1838,7 +1819,6 @@ mod tests {
             false,
             Some((&nonce, true)),
             &DurableNonce::default(),
-            1,
             &post_fee_payer_account,
         ));
 
@@ -1849,7 +1829,6 @@ mod tests {
             true,
             Some((&nonce, true)),
             &DurableNonce::default(),
-            1,
             &post_fee_payer_account,
         ));
 
@@ -1863,7 +1842,6 @@ mod tests {
             true,
             None,
             &DurableNonce::default(),
-            1,
             &post_fee_payer_account,
         ));
 
@@ -1877,7 +1855,6 @@ mod tests {
             true,
             Some((&nonce, true)),
             &DurableNonce::default(),
-            1,
             &pre_fee_payer_account,
         ));
     }
@@ -1895,7 +1872,6 @@ mod tests {
         let nonce_state = NonceVersions::new(NonceState::Initialized(nonce::state::Data::new(
             nonce_authority.pubkey(),
             durable_nonce,
-            0,
         )));
         let nonce_account_post =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
@@ -1923,7 +1899,6 @@ mod tests {
         let nonce_state = NonceVersions::new(NonceState::Initialized(nonce::state::Data::new(
             nonce_authority.pubkey(),
             durable_nonce,
-            0,
         )));
         let nonce_account_pre =
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
@@ -1964,7 +1939,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &durable_nonce,
-            0,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2005,7 +1979,6 @@ mod tests {
         let nonce_state = NonceVersions::new(NonceState::Initialized(nonce::state::Data::new(
             nonce_authority.pubkey(),
             durable_nonce,
-            0,
         )));
         let nonce_account_post =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
@@ -2033,7 +2006,6 @@ mod tests {
         let nonce_state = NonceVersions::new(NonceState::Initialized(nonce::state::Data::new(
             nonce_authority.pubkey(),
             durable_nonce,
-            0,
         )));
         let nonce_account_pre =
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
@@ -2073,7 +2045,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &durable_nonce,
-            0,
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

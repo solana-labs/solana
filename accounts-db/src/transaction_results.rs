@@ -6,7 +6,7 @@
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
     crate::{
-        nonce_info::{NonceFull, NonceInfo, NoncePartial},
+        nonce_info::{NonceFull, NoncePartial},
         rent_debits::RentDebits,
     },
     solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
@@ -87,6 +87,7 @@ pub struct TransactionExecutionDetails {
     pub accounts_data_len_delta: i64,
 }
 
+// TODO - remove `DurableNonceFee` as it'd always be Invalid.
 #[derive(Debug, Clone)]
 pub enum DurableNonceFee {
     Valid(u64),
@@ -94,11 +95,8 @@ pub enum DurableNonceFee {
 }
 
 impl From<&NonceFull> for DurableNonceFee {
-    fn from(nonce: &NonceFull) -> Self {
-        match nonce.lamports_per_signature() {
-            Some(lamports_per_signature) => Self::Valid(lamports_per_signature),
-            None => Self::Invalid,
-        }
+    fn from(_nonce: &NonceFull) -> Self {
+        Self::Invalid
     }
 }
 

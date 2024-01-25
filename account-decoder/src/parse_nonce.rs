@@ -20,7 +20,8 @@ pub fn parse_nonce(data: &[u8]) -> Result<UiNonceState, ParseAccountError> {
         State::Initialized(data) => Ok(UiNonceState::Initialized(UiNonceData {
             authority: data.authority.to_string(),
             blockhash: data.blockhash().to_string(),
-            fee_calculator: data.fee_calculator.into(),
+            // NOTE: plug a dummy fee_calculator for decorder for now.
+            fee_calculator: UiFeeCalculator::default(),
         })),
     }
 }

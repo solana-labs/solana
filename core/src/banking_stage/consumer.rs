@@ -825,7 +825,6 @@ mod tests {
                 state::{AddressLookupTable, LookupTableMeta},
             },
             compute_budget,
-            fee_calculator::FeeCalculator,
             hash::Hash,
             instruction::InstructionError,
             message::{
@@ -1164,7 +1163,6 @@ mod tests {
         let nonce_state = nonce::State::Initialized(nonce::state::Data {
             authority: mint_keypair.pubkey(),
             durable_nonce,
-            fee_calculator: FeeCalculator::new(5000),
         });
 
         store_nonce_account(&bank, nonce_pubkey, nonce_state);

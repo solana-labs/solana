@@ -3,7 +3,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         message::SanitizedMessage,
-        nonce_account,
         pubkey::Pubkey,
         transaction::{self, TransactionError},
         transaction_context::TransactionAccount,
@@ -13,7 +12,6 @@ use {
 pub trait NonceInfo {
     fn address(&self) -> &Pubkey;
     fn account(&self) -> &AccountSharedData;
-    fn lamports_per_signature(&self) -> Option<u64>;
     fn fee_payer_account(&self) -> Option<&AccountSharedData>;
 }
 
@@ -36,9 +34,6 @@ impl NonceInfo for NoncePartial {
     }
     fn account(&self) -> &AccountSharedData {
         &self.account
-    }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
     }
     fn fee_payer_account(&self) -> Option<&AccountSharedData> {
         None
@@ -108,9 +103,6 @@ impl NonceInfo for NonceFull {
     fn account(&self) -> &AccountSharedData {
         &self.account
     }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
-    }
     fn fee_payer_account(&self) -> Option<&AccountSharedData> {
         self.fee_payer_account.as_ref()
     }
@@ -139,8 +131,6 @@ mod tests {
 
     #[test]
     fn test_nonce_info() {
-        let lamports_per_signature = 42;
-
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
         let nonce_address = nonce_authority.pubkey();
         let from = keypair_from_seed(&[1; 32]).unwrap();
@@ -153,7 +143,6 @@ mod tests {
             &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
                 Pubkey::default(),
                 durable_nonce,
-                lamports_per_signature,
             ))),
             &system_program::id(),
         )
@@ -183,10 +172,6 @@ mod tests {
         let partial = NoncePartial::new(nonce_address, rent_collected_nonce_account.clone());
         assert_eq!(*partial.address(), nonce_address);
         assert_eq!(*partial.account(), rent_collected_nonce_account);
-        assert_eq!(
-            partial.lamports_per_signature(),
-            Some(lamports_per_signature)
-        );
         assert_eq!(partial.fee_payer_account(), None);
 
         // Add rent debits to ensure the rollback captures accounts without rent fees
@@ -225,7 +210,6 @@ mod tests {
                 NonceFull::from_partial(&partial, &message, &accounts, &rent_debits).unwrap();
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), rent_collected_nonce_account);
-            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
             assert_eq!(
                 full.fee_payer_account(),
                 Some(&from_account),
@@ -256,7 +240,6 @@ mod tests {
                 NonceFull::from_partial(&partial, &message, &accounts, &rent_debits).unwrap();
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), nonce_account);
-            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
             assert_eq!(full.fee_payer_account(), None);
         }
 

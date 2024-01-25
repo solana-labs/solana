@@ -545,7 +545,6 @@ mod tests {
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData, ReadableAccount},
-        fee_calculator::FeeCalculator,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         nonce::{
@@ -2007,9 +2006,6 @@ mod tests {
         let data = NonceData {
             authority: Pubkey::new_unique(),
             durable_nonce,
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 2718,
-            },
         };
         let versions = NonceVersions::Legacy(Box::new(NonceState::Initialized(data.clone())));
         let nonce_account = new_nonce_account(versions);

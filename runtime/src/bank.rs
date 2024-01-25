@@ -91,7 +91,7 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         epoch_accounts_hash::EpochAccountsHash,
-        nonce_info::{NonceInfo, NoncePartial},
+        nonce_info::NoncePartial,
         partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
@@ -5075,11 +5075,9 @@ impl Bank {
             if let ((Ok(()), nonce), tx) = etx {
                 if nonce
                     .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    })
-                    .is_some()
+                    // NOTE: doesn't need lamports_per_signature to determine if nonce or blockhash is valid 
+                    .map(|_nonce| true )
+                    .unwrap_or_else(|| hash_queue.is_hash_valid(tx.message().recent_blockhash()))
                 {
                     tx.message()
                         .account_keys()
@@ -5587,7 +5585,7 @@ impl Bank {
         loaded_txs: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
-        lamports_per_signature: u64,
+        _lamports_per_signature: u64,
         counts: CommitTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
@@ -5631,7 +5629,6 @@ impl Bank {
             loaded_txs,
             &self.rent_collector,
             &durable_nonce,
-            lamports_per_signature,
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 

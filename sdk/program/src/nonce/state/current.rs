@@ -1,6 +1,5 @@
 use {
     crate::{
-        fee_calculator::FeeCalculator,
         hash::{hashv, Hash},
         pubkey::Pubkey,
     },
@@ -21,8 +20,6 @@ pub struct Data {
     pub authority: Pubkey,
     /// Durable nonce value derived from a valid previous blockhash.
     pub durable_nonce: DurableNonce,
-    /// The fee calculator associated with the blockhash.
-    pub fee_calculator: FeeCalculator,
 }
 
 impl Data {
@@ -30,12 +27,10 @@ impl Data {
     pub fn new(
         authority: Pubkey,
         durable_nonce: DurableNonce,
-        lamports_per_signature: u64,
     ) -> Self {
         Data {
             authority,
             durable_nonce,
-            fee_calculator: FeeCalculator::new(lamports_per_signature),
         }
     }
 
@@ -44,11 +39,6 @@ impl Data {
     /// have separate domains.
     pub fn blockhash(&self) -> Hash {
         self.durable_nonce.0
-    }
-
-    /// Get the cost per signature for the next transaction to use this nonce.
-    pub fn get_lamports_per_signature(&self) -> u64 {
-        self.fee_calculator.lamports_per_signature
     }
 }
 
@@ -79,9 +69,8 @@ impl State {
     pub fn new_initialized(
         authority: &Pubkey,
         durable_nonce: DurableNonce,
-        lamports_per_signature: u64,
     ) -> Self {
-        Self::Initialized(Data::new(*authority, durable_nonce, lamports_per_signature))
+        Self::Initialized(Data::new(*authority, durable_nonce))
     }
 
     /// Get the serialized size of the nonce state.

@@ -41,19 +41,11 @@ pub fn verify_nonce_account(
         .flatten()
 }
 
-pub fn lamports_per_signature_of(account: &AccountSharedData) -> Option<u64> {
-    match StateMut::<Versions>::state(account).ok()?.state() {
-        State::Initialized(data) => Some(data.fee_calculator.lamports_per_signature),
-        State::Uninitialized => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         crate::{
-            fee_calculator::FeeCalculator,
             nonce::state::{Data, DurableNonce},
             pubkey::Pubkey,
             system_program,
@@ -98,9 +90,6 @@ mod tests {
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 2718,
-            },
         };
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
         let account = new_nonce_account(versions);

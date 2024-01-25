@@ -5773,7 +5773,6 @@ pub mod tests {
                     &nonce::state::Versions::new(nonce::State::new_initialized(
                         &authority,
                         DurableNonce::default(),
-                        1000,
                     )),
                     &system_program::id(),
                 )

@@ -54,7 +54,6 @@ pub fn advance_nonce_account(
             let new_data = nonce::state::Data::new(
                 data.authority,
                 next_durable_nonce,
-                invoke_context.lamports_per_signature,
             );
             account.set_state(
                 &Versions::new(State::Initialized(new_data)),
@@ -187,7 +186,6 @@ pub fn initialize_nonce_account(
             let data = nonce::state::Data::new(
                 *nonce_authority,
                 durable_nonce,
-                invoke_context.lamports_per_signature,
             );
             let state = State::Initialized(data);
             account.set_state(&Versions::new(state), &invoke_context.feature_set)
@@ -350,7 +348,6 @@ mod test {
         let data = nonce::state::Data::new(
             data.authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         // First nonce instruction drives state from Uninitialized to Initialized
         assert_eq!(versions.state(), &State::Initialized(data.clone()));
@@ -360,7 +357,6 @@ mod test {
         let data = nonce::state::Data::new(
             data.authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         // Second nonce instruction consumes and replaces stored nonce
         assert_eq!(versions.state(), &State::Initialized(data.clone()));
@@ -370,7 +366,6 @@ mod test {
         let data = nonce::state::Data::new(
             data.authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         // Third nonce instruction for fun and profit
         assert_eq!(versions.state(), &State::Initialized(data));
@@ -429,7 +424,6 @@ mod test {
         let data = nonce::state::Data::new(
             authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         assert_eq!(versions.state(), &State::Initialized(data));
         // Nonce account did not sign
@@ -741,7 +735,6 @@ mod test {
         let data = nonce::state::Data::new(
             authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         assert_eq!(versions.state(), &State::Initialized(data.clone()));
         let withdraw_lamports = 42;
@@ -770,7 +763,6 @@ mod test {
         let data = nonce::state::Data::new(
             data.authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         assert_eq!(versions.state(), &State::Initialized(data));
         assert_eq!(nonce_account.get_lamports(), from_expect_lamports);
@@ -962,7 +954,6 @@ mod test {
         let data = nonce::state::Data::new(
             authorized,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         assert_eq!(result, Ok(()));
         let versions = nonce_account.get_state::<Versions>().unwrap();
@@ -1033,7 +1024,6 @@ mod test {
         let data = nonce::state::Data::new(
             authority,
             DurableNonce::from_blockhash(&invoke_context.blockhash),
-            invoke_context.lamports_per_signature,
         );
         authorize_nonce_account(&mut nonce_account, &authority, &signers, &invoke_context).unwrap();
         let versions = nonce_account.get_state::<Versions>().unwrap();

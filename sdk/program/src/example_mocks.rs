@@ -101,7 +101,6 @@ pub mod solana_rpc_client_nonce_utils {
         Ok(Data::new(
             Pubkey::new_unique(),
             DurableNonce::default(),
-            5000,
         ))
     }
 }

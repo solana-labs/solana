@@ -126,7 +126,6 @@ mod tests {
         },
         solana_sdk::{
             account::Account,
-            fee_calculator::FeeCalculator,
             hash::hash,
             nonce::{self, state::DurableNonce},
             system_program,
@@ -361,11 +360,9 @@ mod tests {
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[2u8; 32]));
         let nonce_blockhash = *durable_nonce.as_hash();
-        let nonce_fee_calc = FeeCalculator::new(4242);
         let data = nonce::state::Data {
             authority: Pubkey::from([3u8; 32]),
             durable_nonce,
-            fee_calculator: nonce_fee_calc,
         };
         let nonce_account = Account::new_data_with_space(
             42,

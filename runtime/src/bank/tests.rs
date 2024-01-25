@@ -5202,7 +5202,6 @@ fn test_nonce_must_be_advanceable() {
         &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
             nonce_authority,
             durable_nonce,
-            5000,
         ))),
         &system_program::id(),
     )
@@ -5685,14 +5684,14 @@ fn test_nonce_fee_calculator_updates() {
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
-    // Grab the hash and fee_calculator stored in the nonce account
-    let (stored_nonce_hash, stored_fee_calculator) = bank
+    // Grab the hash stored in the nonce account
+    let stored_nonce_hash = bank
         .get_account(&nonce_pubkey)
         .and_then(|acc| {
             let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
             match nonce_versions.ok()?.state() {
                 nonce::State::Initialized(ref data) => {
-                    Some((data.blockhash(), data.fee_calculator))
+                    Some(data.blockhash())
                 }
                 _ => None,
             }
@@ -5721,14 +5720,14 @@ fn test_nonce_fee_calculator_updates() {
     );
     bank.process_transaction(&nonce_tx).unwrap();
 
-    // Grab the new hash and fee_calculator; both should be updated
-    let (nonce_hash, fee_calculator) = bank
+    // Grab the new hash; both should be updated
+    let nonce_hash = bank
         .get_account(&nonce_pubkey)
         .and_then(|acc| {
             let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
             match nonce_versions.ok()?.state() {
                 nonce::State::Initialized(ref data) => {
-                    Some((data.blockhash(), data.fee_calculator))
+                    Some(data.blockhash())
                 }
                 _ => None,
             }
@@ -5736,7 +5735,6 @@ fn test_nonce_fee_calculator_updates() {
         .unwrap();
 
     assert_ne!(stored_nonce_hash, nonce_hash);
-    assert_ne!(stored_fee_calculator, fee_calculator);
 }
 
 #[test]
@@ -5753,14 +5751,14 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
-    // Grab the hash and fee_calculator stored in the nonce account
-    let (stored_nonce_hash, stored_fee_calculator) = bank
+    // Grab the hash stored in the nonce account
+    let stored_nonce_hash = bank
         .get_account(&nonce_pubkey)
         .and_then(|acc| {
             let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
             match nonce_versions.ok()?.state() {
                 nonce::State::Initialized(ref data) => {
-                    Some((data.blockhash(), data.fee_calculator))
+                    Some(data.blockhash())
                 }
                 _ => None,
             }
@@ -5789,14 +5787,14 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
     );
     bank.process_transaction(&nonce_tx).unwrap();
 
-    // Grab the new hash and fee_calculator; both should be updated
-    let (nonce_hash, fee_calculator) = bank
+    // Grab the new hash, should be updated
+    let nonce_hash = bank
         .get_account(&nonce_pubkey)
         .and_then(|acc| {
             let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
             match nonce_versions.ok()?.state() {
                 nonce::State::Initialized(ref data) => {
-                    Some((data.blockhash(), data.fee_calculator))
+                    Some(data.blockhash())
                 }
                 _ => None,
             }
@@ -5804,7 +5802,6 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
         .unwrap();
 
     assert_ne!(stored_nonce_hash, nonce_hash);
-    assert_ne!(stored_fee_calculator, fee_calculator);
 }
 
 #[test]
