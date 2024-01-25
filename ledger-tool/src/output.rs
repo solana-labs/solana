@@ -621,7 +621,7 @@ impl AccountsOutputStreamer {
     }
 }
 
-pub struct AccountsScanner {
+struct AccountsScanner {
     bank: Arc<Bank>,
     total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
     include_sysvars: bool,
