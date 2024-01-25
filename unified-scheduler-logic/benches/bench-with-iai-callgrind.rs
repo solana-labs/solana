@@ -133,16 +133,16 @@ fn bench_schedule_task_conflicting(account_count: usize) {
 }
 
 #[library_benchmark]
-#[bench::min(32, 0)]
-#[bench::one(32, 1)]
-#[bench::two(32, 2)]
-#[bench::three(32, 3)]
-#[bench::normal(32, 32)]
-#[bench::large(32, 64)]
-#[bench::large2(32, 128)]
-#[bench::large3(32, 256)]
-#[bench::large4(32, 1024)]
-#[bench::large5(32, 2048)]
+#[bench::min(3 0)]
+#[bench::one(3, 1)]
+#[bench::two(3, 2)]
+#[bench::three(3, 3)]
+#[bench::normal(3, 32)]
+#[bench::large(3, 64)]
+#[bench::large2(3, 128)]
+#[bench::large3(3, 256)]
+#[bench::large4(3, 1024)]
+#[bench::large5(3, 2048)]
 fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
