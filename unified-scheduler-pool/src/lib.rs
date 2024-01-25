@@ -584,7 +584,7 @@ fn initialized_result_with_timings() -> ResultWithTimings {
 
 #[derive(Default, Debug)]
 pub struct AddressBook {
-    book: dashmap::DashMap<Pubkey, Page>,
+    book: DashMap<Pubkey, Page>,
 }
 
 impl AddressBook {
