@@ -1038,7 +1038,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
 dependencies = [
- "crossbeam-utils 0.8.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.18",
 ]
 
 [[package]]
@@ -1151,10 +1151,9 @@ dependencies = [
 [[package]]
 name = "crossbeam-channel"
 version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "176dc175b78f56c0f321911d9c8eb2b77a78a4860b9c19db83835fea1a46649b"
+source = "git+https://github.com/ryoqun/crossbeam?rev=438ec7cdaf6c6a8f593e50344c725fef8a13c7a5#438ec7cdaf6c6a8f593e50344c725fef8a13c7a5"
 dependencies = [
- "crossbeam-utils",
+ "crossbeam-utils 0.8.19",
 ]
 
 [[package]]
@@ -1165,7 +1164,7 @@ checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.18",
 ]
 
 [[package]]
@@ -1175,7 +1174,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec02e091aa634e2c3ada4a392989e7c3116673ef0ac5b72232439094d73b7fd"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.18",
  "lazy_static",
  "memoffset 0.6.4",
  "scopeguard",
@@ -1192,11 +1191,8 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.18"
-source = "git+https://github.com/ryoqun/crossbeam?rev=9835eb9c5c7789b58501f11c5960ac03392dfc91#9835eb9c5c7789b58501f11c5960ac03392dfc91"
-dependencies = [
- "cfg-if 1.0.0",
-]
+version = "0.8.19"
+source = "git+https://github.com/ryoqun/crossbeam?rev=438ec7cdaf6c6a8f593e50344c725fef8a13c7a5#438ec7cdaf6c6a8f593e50344c725fef8a13c7a5"
 
 [[package]]
 name = "crunchy"
@@ -3704,7 +3700,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "731e0d9356b0c25f16f33b5be79b1c57b562f141ebfcdb0ad8ac2c13a24293b4"
 dependencies = [
- "bitflags 2.4.1",
+ "bitflags 2.4.2",
  "chrono",
  "flate2",
  "hex",
@@ -3719,7 +3715,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d3554923a69f4ce04c4a754260c338f505ce22642d3830e049a399fc2059a29"
 dependencies = [
- "bitflags 2.4.1",
+ "bitflags 2.4.2",
  "chrono",
  "hex",
 ]
@@ -3961,7 +3957,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
- "crossbeam-utils 0.8.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.18",
 ]
 
 [[package]]

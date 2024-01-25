@@ -166,7 +166,7 @@ members = [
 targets = ["x86_64-unknown-linux-gnu"]
 
 [patch.crates-io]
-crossbeam-channel = { git = "https://github.com/ryoqun/crossbeam", rev = "9835eb9c5c7789b58501f11c5960ac03392dfc91" }
+crossbeam-channel = { git = "https://github.com/ryoqun/crossbeam", rev = "438ec7cdaf6c6a8f593e50344c725fef8a13c7a5" }
 
 # We include the following crates as our dependencies from crates.io:
 #
