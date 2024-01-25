@@ -13,7 +13,7 @@ use {
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
     },
-    solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
+    solana_sdk::{clock::Slot, sysvar::epoch_schedule::EpochSchedule},
     std::{
         path::{Path, PathBuf},
         sync::Arc,
@@ -35,7 +35,6 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
-    pub is_incremental_accounts_hash_feature_enabled: bool,
 
     /// Supplemental information needed for snapshots
     pub snapshot_info: Option<SupplementalSnapshotInfo>,
@@ -137,9 +136,6 @@ impl AccountsPackage {
         accounts_hash_for_testing: Option<AccountsHash>,
         snapshot_info: Option<SupplementalSnapshotInfo>,
     ) -> Self {
-        let is_incremental_accounts_hash_feature_enabled = bank
-            .feature_set
-            .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id());
         Self {
             package_kind,
             slot: bank.slot(),
@@ -150,7 +146,6 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: bank.epoch_schedule().clone(),
             rent_collector: bank.rent_collector().clone(),
-            is_incremental_accounts_hash_feature_enabled,
             snapshot_info,
             enqueued: Instant::now(),
         }
@@ -171,7 +166,6 @@ impl AccountsPackage {
             accounts: Arc::new(accounts),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
-            is_incremental_accounts_hash_feature_enabled: bool::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
                 bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,
