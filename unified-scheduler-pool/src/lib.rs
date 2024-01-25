@@ -1219,12 +1219,8 @@ where
                 'outer: loop {
                     match executed_task_receiver.recv_timeout(Duration::from_millis(40)) {
                         Ok(ExecutedTaskPayload::Payload(executed_task)) => {
-                            assert_matches!(executed_task.result_with_timings.0, Ok(()));
-                            result_with_timings
-                                .as_mut()
-                                .unwrap()
-                                .1
-                                .accumulate(&executed_task.result_with_timings.1);
+                            let result_with_timings = result_with_timings.as_mut().unwrap();
+                            Self::accumulate_result_with_timings(result_with_timings, executed_task);
                         }
                         Ok(ExecutedTaskPayload::OpenSubchannel(())) => {
                             assert_matches!(
