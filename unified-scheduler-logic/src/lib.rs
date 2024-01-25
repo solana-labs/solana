@@ -94,13 +94,13 @@ impl SchedulingStateMachine {
             .iter()
             .map(|address| LockAttempt::readonly(page_loader(**address)));
         let locks = writable_locks.chain(readonly_locks).collect();
-        panic!("{}", locks.len());
         let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
         Task::new(TaskInner {
             unique_weight,
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
+        panic!("{}", locks.len());
     }
 }
 
