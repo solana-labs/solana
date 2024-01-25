@@ -1,0 +1,67 @@
+use std::hint::black_box;
+use iai_callgrind::{main, library_benchmark_group, library_benchmark};
+use solana_unified_scheduler_logic::SchedulingStateMachine;
+use iai_callgrind::client_requests::callgrind::toggle_collect;
+use {
+    solana_sdk::{
+        system_transaction,
+        transaction::{Result, SanitizedTransaction},
+    },
+};
+
+use {
+    solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signer,
+        signer::keypair::Keypair,
+        transaction::Transaction,
+    },
+    solana_unified_scheduler_logic::{Page, Task},
+};
+
+#[library_benchmark]
+#[bench::min(0)]
+#[bench::one(1)]
+#[bench::two(2)]
+#[bench::three(3)]
+#[bench::normal(32)]
+#[bench::large(64)]
+#[bench::max(128)]
+fn bench_schedule_task(account_count: usize) {
+    toggle_collect();
+    let mut accounts = vec![];
+    for _ in 0..account_count {
+        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    }
+
+    let payer = Keypair::new();
+    let memo_ix = Instruction {
+        program_id: Pubkey::default(),
+        accounts,
+        data: vec![0x00],
+    };
+    let mut ixs = vec![];
+    for _ in 0..1 {
+        ixs.push(memo_ix.clone());
+    }
+    let msg = Message::new(&ixs, Some(&payer.pubkey()));
+    let mut txn = Transaction::new_unsigned(msg);
+    //panic!("{:?}", txn);
+    //assert_eq!(wire_txn.len(), 3);
+    let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+    let task = SchedulingStateMachine::create_task(tx0, 0, |_| Page::default());
+    let mut scheduler = SchedulingStateMachine::default();
+    toggle_collect();
+    let task = scheduler.schedule_task(task).unwrap();
+    toggle_collect();
+    drop(task);
+}
+
+library_benchmark_group!(
+    name = bench_scheduling_state_machine;
+    benchmarks = bench_schedule_task
+);
+
+main!(library_benchmark_groups = bench_scheduling_state_machine);
