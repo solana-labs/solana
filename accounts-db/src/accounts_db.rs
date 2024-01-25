@@ -9786,12 +9786,6 @@ pub mod tests {
     }
 
     impl AccountsDb {
-        pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
-            let ancestors = vec![(slot, 1)].into_iter().collect();
-            let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-            result.map(|(list, index)| list.slot_list()[index].1.store_id())
-        }
-
         fn scan_snapshot_stores(
             &self,
             storage: &SortedStorages,
