@@ -45,7 +45,6 @@ use {
     std::{
         env,
         fmt::Debug,
-        process,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc, Mutex, RwLock, RwLockReadGuard, Weak,
@@ -153,7 +152,7 @@ where
                 return true;
             };
 
-            let pid = process::id();
+            let pid = std::process::id();
             let task = procfs::process::Process::new(pid.try_into().unwrap())
                 .unwrap()
                 .task_from_tid(tid)
