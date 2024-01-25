@@ -1255,31 +1255,6 @@ where
         Ok(())
     }
 
-    fn suspend(&mut self) {
-        let Some(scheduler_thread) = self.take_scheduler_thread() else {
-            warn!("suspend(): already suspended...");
-            return;
-        };
-        debug!("suspend(): terminating threads by {:?}", thread::current());
-
-        let (s, r) = unbounded();
-        (self.new_task_sender, self.new_task_receiver) = (s, Some(r));
-
-        let () = self.accumulator_thread.take().unwrap().join().unwrap();
-        for thread in self.handler_threads.drain(..) {
-            debug!("joining...: {:?}", thread);
-            () = thread.join().unwrap();
-        }
-        if let Some(result_with_timings) = scheduler_thread.join().unwrap() {
-            self.put_session_result_with_timings(result_with_timings);
-        }
-
-        debug!(
-            "suspend(): successfully suspended threads by {:?}",
-            thread::current()
-        );
-    }
-
     fn send_task(&self, task: Task) -> bool {
         debug!("send_task()");
         self.new_task_sender
@@ -1325,6 +1300,31 @@ where
             self.put_session_result_with_timings(initialized_result_with_timings());
             assert_matches!(self.start_or_try_resume_threads(context), Ok(()));
         }
+    }
+
+    fn suspend(&mut self) {
+        let Some(scheduler_thread) = self.take_scheduler_thread() else {
+            warn!("suspend(): already suspended...");
+            return;
+        };
+        debug!("suspend(): terminating threads by {:?}", thread::current());
+
+        let (s, r) = unbounded();
+        (self.new_task_sender, self.new_task_receiver) = (s, Some(r));
+
+        let () = self.accumulator_thread.take().unwrap().join().unwrap();
+        for thread in self.handler_threads.drain(..) {
+            debug!("joining...: {:?}", thread);
+            () = thread.join().unwrap();
+        }
+        if let Some(result_with_timings) = scheduler_thread.join().unwrap() {
+            self.put_session_result_with_timings(result_with_timings);
+        }
+
+        debug!(
+            "suspend(): successfully suspended threads by {:?}",
+            thread::current()
+        );
     }
 
     fn is_primary(&self) -> bool {
