@@ -15,6 +15,7 @@ enum LockStatus {
 }
 
 pub type Task = Arc<TaskInner>;
+static_assertions::const_assert_eq!(std::mem::size_of::<Task>(), 8);
 
 #[derive(Debug)]
 struct TaskStatus {
@@ -291,7 +292,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        //self.total_task_count += 1;
+        self.total_task_count += 1;
         self.active_task_count += 1;
         self.try_lock_for_task(TaskSource::Runnable, task)
     }
