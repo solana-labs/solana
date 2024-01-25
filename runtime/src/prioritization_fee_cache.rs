@@ -459,7 +459,7 @@ mod tests {
             Some(signer_account),
         ));
 
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap()
+        SanitizedTransaction::from_transaction_for_tests(transaction)
     }
 
     // update fee cache is asynchronous, this test helper blocks until update is completed.
