@@ -223,7 +223,7 @@ where
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
 
-                let thread_managers: Vec<WatchedThreadManager<S, TH, SEA>> = vec![];
+                let thread_managers = &mut vec![];
 
                 'outer: loop {
                     let mut schedulers = scheduler_pool.scheduler_inners.lock().unwrap();
