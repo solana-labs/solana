@@ -591,7 +591,7 @@ mod tests {
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
         assert_eq!(format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))), "Succeded(Readonly(1))");
-        assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![], uncontended: 0 });
+        assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![], uncontended: 0 }), "aajaj");
     }
 
     #[test]
