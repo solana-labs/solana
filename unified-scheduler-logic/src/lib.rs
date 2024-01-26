@@ -749,12 +749,10 @@ mod tests {
 
     #[test]
     fn test_schedule_non_conflicting_readonly_task() {
-        let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = readonly_transaction(conflicting_readonly_address);
-        let sanitized2 = readonly_transaction(conflicting_readonly_address);
+        let sanitized1 = transaction_with_2_writable();
+        //let pages = HashMap::new();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
