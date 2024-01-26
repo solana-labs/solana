@@ -581,6 +581,12 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
+    fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
+        let mut pages = HashMap::<Pubkey, Page>::new();
+
+        move |address| pages.entry(address).or_default().clone()
+    }
+
     #[test]
     fn test_scheduling_state_machine_default() {
         let state_machine = SchedulingStateMachine::default();
@@ -596,12 +602,6 @@ mod tests {
             SchedulingStateMachine::create_task(sanitized.clone(), 3, &mut |_| Page::default());
         assert_eq!(task.task_index(), 3);
         assert_eq!(task.transaction(), &sanitized);
-    }
-
-    fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
-        let mut pages = HashMap::<Pubkey, Page>::new();
-
-        move |address| pages.entry(address).or_default().clone()
     }
 
     #[test]
@@ -621,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_conflicting_tasks() {
+    fn test_schedule_conflicting_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader();
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -642,7 +642,23 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_non_conflicting_readonly_tasks() {
+    fn test_schedule_retryable_task() {
+        let sanitized = simplest_transaction();
+        let address_loader = &mut create_address_loader();
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+
+        state_machine.deschedule_task(&task1);
+
+        assert_eq!(state_machine.schedule_retryable_task().unwrap(), task2);
+    }
+
+    #[test]
+    fn test_schedule_non_conflicting_readonly_task() {
         let conflicting_readonly_address = Pubkey::new_unique();
         let sanitized1 = readonly_transaction(conflicting_readonly_address);
         let sanitized2 = readonly_transaction(conflicting_readonly_address);
