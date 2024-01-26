@@ -33,8 +33,6 @@ use {
     },
 };
 
-pub type AccountsHashFaultInjector = fn(&Hash, Slot) -> Option<Hash>;
-
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
 }
