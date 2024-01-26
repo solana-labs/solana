@@ -375,6 +375,7 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
+        trace!("succeded!");
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let no_heavier_other_tasks =
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
