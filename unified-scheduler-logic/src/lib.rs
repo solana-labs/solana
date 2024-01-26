@@ -596,9 +596,8 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn create_address_loader(pages: Option<HashMap<Pubkey, Page>>) -> impl FnMut(Pubkey) -> Page {
-        let mut pages = pages.unwrap_or_default();
-        move |address| pages.entry(address).or_default().clone()
+    fn create_address_loader(mut pages: Option<HashMap<Pubkey, Page>>) -> impl FnMut(Pubkey) -> Page {
+        move |address| pages.unwrap_or_default().entry(address).or_default().clone()
     }
 
     #[test]
