@@ -762,6 +762,7 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         for page in pages.lock().unwrap().values() {
+            page.0.borrow_mut();
         }
     }
 }
