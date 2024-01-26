@@ -575,20 +575,15 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
-        iai_callgrind::{
-            client_requests::callgrind::toggle_collect, library_benchmark, library_benchmark_group,
-            main,
-        },
         solana_sdk::{
             instruction::{AccountMeta, Instruction},
             message::Message,
             pubkey::Pubkey,
             signature::Signer,
             signer::keypair::Keypair,
-            system_transaction,
-            transaction::{Result, SanitizedTransaction, Transaction},
+            transaction::{SanitizedTransaction, Transaction},
         },
-        std::{collections::HashMap, hint::black_box, sync::Mutex},
+        std::{collections::HashMap, sync::Mutex},
     };
 
     fn simplest_transaction() -> SanitizedTransaction {
@@ -910,7 +905,7 @@ mod tests {
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions2() {
         let mut state_machine = SchedulingStateMachine::default();
-        let mut page = Page::default();
+        let page = Page::default();
         page.0
             .borrow_mut(&mut state_machine.page_token)
             .current_usage = Usage::Writable;
@@ -924,7 +919,7 @@ mod tests {
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
-        let mut page = Page::default();
+        let page = Page::default();
         page.0
             .borrow_mut(&mut state_machine.page_token)
             .current_usage = Usage::Readonly(3);
