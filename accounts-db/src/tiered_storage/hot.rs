@@ -469,7 +469,7 @@ fn write_optional_fields(
         size += file.write_pod(&rent_epoch)?;
     }
     if let Some(hash) = opt_fields.account_hash {
-        size += file.write_pod(&hash)?;
+        size += file.write_pod(hash)?;
     }
 
     debug_assert_eq!(size, opt_fields.size());
@@ -500,7 +500,7 @@ impl HotStorageWriter {
         account_data: &[u8],
         executable: bool,
         rent_epoch: Option<Epoch>,
-        account_hash: Option<AccountHash>,
+        account_hash: Option<&AccountHash>,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch,
@@ -567,9 +567,9 @@ impl HotStorageWriter {
                         acc.owner(),
                         acc.data(),
                         acc.executable(),
-                        // only persist rent_epoch for those non-rent-exempt accounts
+                        // only persist rent_epoch for those rent-paying accounts
                         (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH).then_some(acc.rent_epoch()),
-                        Some(*account_hash),
+                        Some(account_hash),
                     )
                 })
                 .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None, None));
@@ -722,10 +722,11 @@ pub mod tests {
         const TEST_PADDING: u8 = 5;
         const TEST_OWNER_OFFSET: OwnerOffset = OwnerOffset(0x1fef_1234);
         const TEST_RENT_EPOCH: Epoch = 7;
+        let acc_hash = AccountHash(Hash::new_unique());
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(AccountHash(Hash::new_unique())),
+            account_hash: Some(&acc_hash),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -745,6 +746,7 @@ pub mod tests {
     fn test_hot_account_meta_full() {
         let account_data = [11u8; 83];
         let padding = [0u8; 5];
+        let acc_hash = AccountHash(Hash::new_unique());
 
         const TEST_LAMPORT: u64 = 2314232137;
         const OWNER_OFFSET: u32 = 0x1fef_1234;
@@ -752,7 +754,7 @@ pub mod tests {
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(AccountHash(Hash::new_unique())),
+            account_hash: Some(&acc_hash),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -789,7 +791,7 @@ pub mod tests {
         assert_eq!(account_data, meta.account_data(account_block));
         assert_eq!(meta.rent_epoch(account_block), optional_fields.rent_epoch);
         assert_eq!(
-            *(meta.account_hash(account_block).unwrap()),
+            (meta.account_hash(account_block).unwrap()),
             optional_fields.account_hash.unwrap()
         );
     }
@@ -1339,7 +1341,7 @@ pub mod tests {
                         acc.owner(),
                         acc.data(),
                         acc.executable(),
-                        // only persist rent_epoch for those non-rent-exempt accounts
+                        // only persist rent_epoch for those rent-paying accounts
                         Some(*account_hash),
                     )
                 })
