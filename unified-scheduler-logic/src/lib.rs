@@ -597,7 +597,8 @@ mod tests {
     }
 
     fn create_address_loader(pages: Option<HashMap<Pubkey, Page>>) -> impl FnMut(Pubkey) -> Page {
-        move |address| pages.unwrap_or_default().entry(address).or_default().clone()
+        let pages = pages.unwrap_or_default();
+        move |address| pages.entry(address).or_default().clone()
     }
 
     #[test]
