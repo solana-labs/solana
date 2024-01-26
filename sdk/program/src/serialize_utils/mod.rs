@@ -3,6 +3,8 @@
 #![allow(clippy::arithmetic_side_effects)]
 use crate::{pubkey::Pubkey, sanitize::SanitizeError};
 
+pub mod cursor;
+
 pub fn append_u16(buf: &mut Vec<u8>, data: u16) {
     let start = buf.len();
     buf.resize(buf.len() + 2, 0);

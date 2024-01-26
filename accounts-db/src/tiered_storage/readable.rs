@@ -64,11 +64,8 @@ impl<'accounts_file, M: TieredAccountMeta> ReadableAccount
     }
 
     /// Returns true if the data associated to this account is executable.
-    ///
-    /// Temporarily unimplemented!() as program runtime v2 will use
-    /// a different API for executable.
     fn executable(&self) -> bool {
-        unimplemented!();
+        self.meta.flags().executable()
     }
 
     /// Returns the epoch that this account will next owe rent by parsing
