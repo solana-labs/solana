@@ -2,9 +2,9 @@
 use {
     crate::cell::{SchedulerCell, Token},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+    static_assertions::const_assert_eq,
     std::{collections::BTreeMap, sync::Arc},
 };
-use static_assertions::const_assert_eq;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -312,7 +312,10 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        assert!(task.is_new(&self.task_token), "scheduling bad task: {task:?}");
+        assert!(
+            task.is_new(&self.task_token),
+            "scheduling bad task: {task:?}"
+        );
 
         self.total_task_count += 1;
         self.active_task_count += 1;
@@ -341,7 +344,10 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        assert!(task.has_been_scheduled(&self.task_token), "descheduling bad task: {task:?}");
+        assert!(
+            task.has_been_scheduled(&self.task_token),
+            "descheduling bad task: {task:?}"
+        );
 
         self.active_task_count -= 1;
         self.handled_task_count += 1;
@@ -582,8 +588,7 @@ mod tests {
             system_transaction,
             transaction::{Result, SanitizedTransaction, Transaction},
         },
-        std::{collections::HashMap, hint::black_box},
-        std::sync::Mutex,
+        std::{collections::HashMap, hint::black_box, sync::Mutex},
     };
 
     fn simplest_transaction() -> SanitizedTransaction {
@@ -615,7 +620,9 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn create_address_loader(pages: Option<Arc<Mutex<HashMap<Pubkey, Page>>>>) -> impl FnMut(Pubkey) -> Page {
+    fn create_address_loader(
+        pages: Option<Arc<Mutex<HashMap<Pubkey, Page>>>>,
+    ) -> impl FnMut(Pubkey) -> Page {
         let pages = pages.unwrap_or_default();
         move |address| pages.lock().unwrap().entry(address).or_default().clone()
     }
@@ -623,7 +630,10 @@ mod tests {
     #[test]
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
-        assert_eq!(format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))), "Succeded(Readonly(1))");
+        assert_eq!(
+            format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))),
+            "Succeded(Readonly(1))"
+        );
         assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)], uncontended: 0 }), "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { .. })), requested_usage: Writable, uncommited_usage: Unused }], uncontended: 0 }");
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
@@ -726,7 +736,13 @@ mod tests {
 
         assert_eq!(state_machine.reschedule_count(), 0);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
-        assert_eq!(state_machine.schedule_retryable_task().unwrap().task_index(), task2.task_index());
+        assert_eq!(
+            state_machine
+                .schedule_retryable_task()
+                .unwrap()
+                .task_index(),
+            task2.task_index()
+        );
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
         assert_matches!(state_machine.schedule_retryable_task(), None);
@@ -867,16 +883,27 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
-        assert_matches!(page.0.borrow(&state_machine.page_token).current_usage, Usage::Writable);
-        let page = pages.get(task2.transaction().message().fee_payer()).unwrap();
-        assert_matches!(page.0.borrow(&state_machine.page_token).current_usage, Usage::Unused);
+        assert_matches!(
+            page.0.borrow(&state_machine.page_token).current_usage,
+            Usage::Writable
+        );
+        let page = pages
+            .get(task2.transaction().message().fee_payer())
+            .unwrap();
+        assert_matches!(
+            page.0.borrow(&state_machine.page_token).current_usage,
+            Usage::Unused
+        );
     }
 
     #[test]
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions() {
         let mut state_machine = SchedulingStateMachine::default();
-        SchedulingStateMachine::unlock(&mut state_machine.page_token, &LockAttempt::new(Page::default(), RequestedUsage::Writable));
+        SchedulingStateMachine::unlock(
+            &mut state_machine.page_token,
+            &LockAttempt::new(Page::default(), RequestedUsage::Writable),
+        );
     }
 
     #[test]
@@ -884,8 +911,13 @@ mod tests {
     fn test_unreachable_unlock_conditions2() {
         let mut state_machine = SchedulingStateMachine::default();
         let mut page = Page::default();
-        page.0.borrow_mut(&mut state_machine.page_token).current_usage = Usage::Writable;
-        SchedulingStateMachine::unlock(&mut state_machine.page_token, &LockAttempt::new(page, RequestedUsage::Readonly));
+        page.0
+            .borrow_mut(&mut state_machine.page_token)
+            .current_usage = Usage::Writable;
+        SchedulingStateMachine::unlock(
+            &mut state_machine.page_token,
+            &LockAttempt::new(page, RequestedUsage::Readonly),
+        );
     }
 
     #[test]
@@ -893,7 +925,12 @@ mod tests {
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
         let mut page = Page::default();
-        page.0.borrow_mut(&mut state_machine.page_token).current_usage = Usage::Readonly(3);
-        SchedulingStateMachine::unlock(&mut state_machine.page_token, &LockAttempt::new(page, RequestedUsage::Writable));
+        page.0
+            .borrow_mut(&mut state_machine.page_token)
+            .current_usage = Usage::Readonly(3);
+        SchedulingStateMachine::unlock(
+            &mut state_machine.page_token,
+            &LockAttempt::new(page, RequestedUsage::Writable),
+        );
     }
 }
