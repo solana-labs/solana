@@ -459,7 +459,7 @@ impl SchedulingStateMachine {
         }
 
         if matches!(task_source, TaskSource::Retryable) {
-            // as soon as next tack is succeeded in locking, trigger re-checks on read only
+            // as soon as next task is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
             task.mark_as_uncontended(&mut self.task_token);
             for attempt in task.lock_attempts_mut(&mut self.task_token) {
