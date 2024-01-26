@@ -312,7 +312,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        assert!(task.is_new(&self.task_token));
+        assert!(task.is_new(&self.task_token), "scheduling bad task: {task:?}");
 
         self.total_task_count += 1;
         self.active_task_count += 1;
@@ -341,7 +341,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        assert!(task.has_been_scheduled(&self.task_token), "descheduling unknown task: {task:?}");
+        assert!(task.has_been_scheduled(&self.task_token), "descheduling bad task: {task:?}");
 
         self.active_task_count -= 1;
         self.handled_task_count += 1;
@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "descheduling unknown task")]
+    #[should_panic(expected = "descheduling bad task")]
     fn test_deschedule_task_without_scheduling_first() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
