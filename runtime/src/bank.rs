@@ -270,6 +270,24 @@ impl AddAssign for SquashTiming {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default, Copy, AbiExample)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectorFeeDetails {
+    pub base_fee: u64,
+    pub priority_fee: u64,
+    // more fees such as write_lock_fee go here
+}
+
+impl CollectorFeeDetails {
+    // TODO - just a placeholder
+    pub fn add(&mut self, fees: u64) {
+        let _ = self.base_fee.saturating_add(fees);
+    }
+    pub fn dummy(&self) -> u64 {
+        self.base_fee
+    }
+}
+
 #[derive(Debug)]
 pub struct BankRc {
     /// where all the Accounts are stored
@@ -456,7 +474,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
     pub(crate) collector_id: Pubkey,
-    pub(crate) collector_fees: u64,
+    pub(crate) collector_fees: CollectorFeeDetails,
     pub(crate) fee_calculator: FeeCalculator,
     pub(crate) fee_rate_governor: FeeRateGovernor,
     pub(crate) collected_rent: u64,
@@ -502,7 +520,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
     pub(crate) collector_id: Pubkey,
-    pub(crate) collector_fees: u64,
+    pub(crate) collector_fees: CollectorFeeDetails,
     pub(crate) fee_calculator: FeeCalculator,
     pub(crate) fee_rate_governor: FeeRateGovernor,
     pub(crate) collected_rent: u64,
@@ -607,7 +625,7 @@ impl PartialEq for Bank {
             && epoch == &other.epoch
             && block_height == &other.block_height
             && collector_id == &other.collector_id
-            && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
+            && *collector_fees.read().unwrap() == *other.collector_fees.read().unwrap()
             && fee_rate_governor == &other.fee_rate_governor
             && collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
             && rent_collector == &other.rent_collector
@@ -759,7 +777,7 @@ pub struct Bank {
     collector_id: Pubkey,
 
     /// Fees that have been collected
-    collector_fees: AtomicU64,
+    collector_fees: RwLock<CollectorFeeDetails>,
 
     /// Track cluster signature throughput and adjust fee rate
     pub(crate) fee_rate_governor: FeeRateGovernor,
@@ -1000,7 +1018,7 @@ impl Bank {
             epoch: Epoch::default(),
             block_height: u64::default(),
             collector_id: Pubkey::default(),
-            collector_fees: AtomicU64::default(),
+            collector_fees: RwLock::new(CollectorFeeDetails::default()),
             fee_rate_governor: FeeRateGovernor::default(),
             collected_rent: AtomicU64::default(),
             rent_collector: RentCollector::default(),
@@ -1309,7 +1327,7 @@ impl Bank {
             parent_hash: parent.hash(),
             parent_slot: parent.slot(),
             collector_id: *collector_id,
-            collector_fees: AtomicU64::new(0),
+            collector_fees: RwLock::new(CollectorFeeDetails::default()),
             ancestors: Ancestors::default(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
@@ -1813,7 +1831,7 @@ impl Bank {
             epoch: fields.epoch,
             block_height: fields.block_height,
             collector_id: fields.collector_id,
-            collector_fees: AtomicU64::new(fields.collector_fees),
+            collector_fees: RwLock::new(fields.collector_fees),
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
             // clone()-ing is needed to consider a gated behavior in rent_collector
@@ -1932,7 +1950,7 @@ impl Bank {
             epoch: self.epoch,
             block_height: self.block_height,
             collector_id: self.collector_id,
-            collector_fees: self.collector_fees.load(Relaxed),
+            collector_fees: *self.collector_fees.read().unwrap(),
             fee_calculator: FeeCalculator::default(),
             fee_rate_governor: self.fee_rate_governor.clone(),
             collected_rent: self.collected_rent.load(Relaxed),
@@ -5563,7 +5581,7 @@ impl Bank {
             })
             .collect();
 
-        self.collector_fees.fetch_add(fees, Relaxed);
+        self.collector_fees.write().unwrap().add(fees);
         results
     }
 

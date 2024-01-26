@@ -46,7 +46,7 @@ impl Bank {
     // still being stake-weighted.
     // Ref: distribute_rent_to_validators
     pub(super) fn distribute_transaction_fees(&self) {
-        let collector_fees = self.collector_fees.load(Relaxed);
+        let collector_fees = self.collector_fees.read().unwrap().dummy();
         if collector_fees != 0 {
             let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
             if deposit > 0 {
@@ -344,8 +344,8 @@ pub mod tests {
             genesis.genesis_config.rent = rent; // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
             let bank = Bank::new_for_tests(&genesis.genesis_config);
             let transaction_fees = 100;
-            bank.collector_fees.fetch_add(transaction_fees, Relaxed);
-            assert_eq!(transaction_fees, bank.collector_fees.load(Relaxed));
+            bank.collector_fees.write().unwrap().add(transaction_fees);
+            assert_eq!(transaction_fees, bank.collector_fees.read().unwrap().dummy());
             let (expected_collected_fees, burn_amount) =
                 bank.fee_rate_governor.burn(transaction_fees);
             assert!(burn_amount > 0);
@@ -416,7 +416,7 @@ pub mod tests {
     fn test_distribute_transaction_fees_zero() {
         let genesis = create_genesis_config(0);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
-        assert_eq!(bank.collector_fees.load(Relaxed), 0);
+        assert_eq!(bank.collector_fees.read().unwrap().dummy(), 0);
 
         let initial_capitalization = bank.capitalization();
         let initial_collector_id_balance = bank.get_balance(bank.collector_id());
@@ -438,8 +438,8 @@ pub mod tests {
         genesis.genesis_config.fee_rate_governor.burn_percent = 100;
         let bank = Bank::new_for_tests(&genesis.genesis_config);
         let transaction_fees = 100;
-        bank.collector_fees.fetch_add(transaction_fees, Relaxed);
-        assert_eq!(transaction_fees, bank.collector_fees.load(Relaxed));
+        bank.collector_fees.write().unwrap().add(transaction_fees);
+        assert_eq!(transaction_fees, bank.collector_fees.read().unwrap().dummy());
 
         let initial_capitalization = bank.capitalization();
         let initial_collector_id_balance = bank.get_balance(bank.collector_id());
@@ -463,8 +463,8 @@ pub mod tests {
         let genesis = create_genesis_config(0);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
         let transaction_fees = 100;
-        bank.collector_fees.fetch_add(transaction_fees, Relaxed);
-        assert_eq!(transaction_fees, bank.collector_fees.load(Relaxed));
+        bank.collector_fees.write().unwrap().add(transaction_fees);
+        assert_eq!(transaction_fees, bank.collector_fees.read().unwrap().dummy());
 
         // ensure that account balance will overflow and fee distribution will fail
         let account = AccountSharedData::new(u64::MAX, 0, &system_program::id());
