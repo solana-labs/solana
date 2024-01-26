@@ -330,6 +330,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
+        assert!(task.has_been_scheduled(), "descheduling unscheduled task...");
         self.active_task_count -= 1;
         self.handled_task_count += 1;
         self.unlock_after_execution(task);
