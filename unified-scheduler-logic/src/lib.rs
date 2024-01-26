@@ -737,7 +737,6 @@ mod tests {
         assert!(state_machine.is_empty());
     }
 
-
     #[test]
     fn test_schedule_non_conflicting_readonly_task() {
         let conflicting_readonly_address = Pubkey::new_unique();
