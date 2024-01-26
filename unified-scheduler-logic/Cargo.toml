@@ -13,6 +13,7 @@ edition = { workspace = true }
 assert_matches = { workspace = true }
 solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
+qualifier_attr = { workspace = true }
 
 [[bench]]
 name = "bench-with-iai-callgrind"
