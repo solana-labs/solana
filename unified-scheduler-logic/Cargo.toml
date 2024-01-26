@@ -25,6 +25,7 @@ iai-callgrind = { version = "0.10.1", features = [
 ] }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-unified-scheduler-logic = { path = ".", features = ["dev-context-only-utils"] }
+bump-allocator = { version = "0.1.2" }
 
 [features]
 dev-context-only-utils = []
