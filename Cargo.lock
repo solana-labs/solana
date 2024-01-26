@@ -7654,6 +7654,7 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "iai-callgrind",
+ "qualifier_attr",
  "solana-sdk",
  "static_assertions",
 ]

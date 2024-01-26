@@ -23,3 +23,5 @@ harness = false
 iai-callgrind = { version = "0.10.1", features = [
     "client_requests"
 ] }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-unified-scheduler-logic = { path = ".", features = ["dev-context-only-utils"] }
