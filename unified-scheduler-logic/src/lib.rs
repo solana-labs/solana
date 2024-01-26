@@ -595,7 +595,7 @@ mod tests {
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
         assert!(format!("{:?}", task).contains("TaskInner"));
-        assert_eq!(format!("{:?}", RequestedUsage::Writable), "Succeded(Readonly(1))");
+        assert_eq!(format!("{:?}", RequestedUsage::Writable), "Writable");
     }
 
     #[test]
