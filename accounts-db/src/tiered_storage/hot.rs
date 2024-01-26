@@ -551,7 +551,8 @@ impl HotStorageWriter {
 
         // writing accounts blocks
         let len = accounts.accounts.len();
-        let mut stored_infos = Vec::with_capacity(len - skip);
+        let total_input_accounts = len - skip;
+        let mut stored_infos = Vec::with_capacity(total_input_accounts);
         for i in skip..len {
             let (account, address, account_hash, _write_version) = accounts.get(i);
             let index_entry = AccountIndexWriterEntry {
@@ -601,7 +602,7 @@ impl HotStorageWriter {
             });
             index.push(index_entry);
         }
-        footer.account_entry_count = (len - skip) as u32;
+        footer.account_entry_count = total_input_accounts as u32;
 
         // writing index block
         // expect the offset of each block aligned.
@@ -1311,7 +1312,7 @@ pub mod tests {
                     acc.owner(),
                     acc.data(),
                     acc.executable(),
-                    // only persist rent_epoch for those non-rent-exempt accounts
+                    // only persist rent_epoch for those rent-paying accounts
                     Some(*account_hash),
                 )
             })
