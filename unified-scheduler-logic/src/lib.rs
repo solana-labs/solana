@@ -580,7 +580,7 @@ enum TaskSource {
     Retryable,
 }
 
-type UniqueWeight = u8;
+type UniqueWeight = u64;
 
 #[cfg(test)]
 mod tests {
