@@ -486,7 +486,7 @@ impl SchedulingStateMachine {
             return None;
         }
 
-        if matches!(task_source, TaskSource::Retryable) {
+        match task_source { TaskSource::Retryable => {
             task.mark_as_uncontended(&mut self.task_token);
 
             for attempt in task.lock_attempts_mut(&mut self.task_token) {
@@ -512,8 +512,9 @@ impl SchedulingStateMachine {
                         .or_insert_with(|| heaviest_blocked_task.clone());
                 }
             }
-        } else {
+        }, TaskSource::Runnable =>  {
             task.mark_as_idle(&mut self.task_token);
+        },
         }
 
         Some(task)
