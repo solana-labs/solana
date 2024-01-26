@@ -7,7 +7,7 @@ use {
 };
 
 #[cfg(feature = "dev-context-only-utils")]
-use qualifier_attr::qualifiers;
+use qualifier_attr::{field_qualifiers, qualifiers};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
