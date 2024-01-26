@@ -160,6 +160,7 @@ impl TaskInner {
         *self.uncontended_mut(task_token) = 1;
     }
 
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn reset_as_new(&self, task_token: &mut TaskToken) {
         *self.uncontended_mut(task_token) = 0;
     }
