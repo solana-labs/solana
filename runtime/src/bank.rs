@@ -4460,7 +4460,7 @@ impl Bank {
                     &hash_queue,
                     error_counters,
                 ),
-                Err(e) => (Err(e.clone()), None),
+                Err(e) => (Err(e.clone()), None, None),
             })
             .collect()
     }
@@ -4475,14 +4475,20 @@ impl Bank {
     ) -> TransactionCheckResult {
         let recent_blockhash = tx.message().recent_blockhash();
         if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
-            (Ok(()), None)
+            (
+                Ok(()),
+                None,
+                hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
+            )
         } else if let Some((address, account)) =
             self.check_transaction_for_nonce(tx, next_durable_nonce)
         {
-            (Ok(()), Some(NoncePartial::new(address, account)))
+            let nonce = NoncePartial::new(address, account);
+            let lamports_per_signature = nonce.lamports_per_signature();
+            (Ok(()), Some(nonce), lamports_per_signature)
         } else {
             error_counters.blockhash_not_found += 1;
-            (Err(TransactionError::BlockhashNotFound), None)
+            (Err(TransactionError::BlockhashNotFound), None, None)
         }
     }
 
@@ -4508,16 +4514,16 @@ impl Bank {
         sanitized_txs
             .iter()
             .zip(lock_results)
-            .map(|(sanitized_tx, (lock_result, nonce))| {
+            .map(|(sanitized_tx, (lock_result, nonce, lamports))| {
                 let sanitized_tx = sanitized_tx.borrow();
                 if lock_result.is_ok()
                     && self.is_transaction_already_processed(sanitized_tx, &rcache)
                 {
                     error_counters.already_processed += 1;
-                    return (Err(TransactionError::AlreadyProcessed), None);
+                    return (Err(TransactionError::AlreadyProcessed), None, None);
                 }
 
-                (lock_result, nonce)
+                (lock_result, nonce, lamports)
             })
             .collect()
     }
@@ -5075,19 +5081,11 @@ impl Bank {
         txs: &[SanitizedTransaction],
         lock_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
-        hash_queue: &BlockhashQueue,
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
         lock_results.iter_mut().zip(txs).for_each(|etx| {
-            if let ((Ok(()), nonce), tx) = etx {
-                if nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    })
-                    .is_some()
-                {
+            if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
+                if lamports_per_signature.is_some() {
                     tx.message()
                         .account_keys()
                         .iter()
@@ -5113,7 +5111,7 @@ impl Bank {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
                     // transaction, and update the status of the transaction.
-                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None);
+                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None, None);
                 }
             }
         });
@@ -5340,7 +5338,6 @@ impl Bank {
             sanitized_txs,
             check_results,
             PROGRAM_OWNERS,
-            &self.blockhash_queue.read().unwrap(),
         );
         let native_loader = native_loader::id();
         for builtin_program in self.builtin_programs.iter() {
@@ -5357,7 +5354,6 @@ impl Bank {
             &self.ancestors,
             sanitized_txs,
             check_results,
-            &self.blockhash_queue.read().unwrap(),
             error_counters,
             &self.rent_collector,
             &self.feature_set,
