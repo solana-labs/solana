@@ -464,16 +464,15 @@ impl SchedulingStateMachine {
 
     fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
-        let ll = task.lock_attempts_mut(&mut self.task_token);
 
         let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
-            ll,
+            task.lock_attempts_mut(&mut self.task_token),
             rollback_on_failure,
         );
 
-        if lock_count < ll.len() {
+        if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
             if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
                 task.mark_as_contended(&mut self.task_token);
@@ -484,7 +483,7 @@ impl SchedulingStateMachine {
         } else {
             match task_source {
                 TaskSource::Retryable => {
-                    for attempt in ll {
+                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
                     }
 
