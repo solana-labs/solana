@@ -31,6 +31,9 @@ struct TaskStatus {
 mod cell {
     use std::{cell::UnsafeCell, marker::PhantomData};
 
+    #[cfg(feature = "dev-context-only-utils")]
+    use qualifier_attr::qualifiers;
+
     #[derive(Debug, Default)]
     pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
 
