@@ -592,6 +592,9 @@ mod tests {
         // these are almost meaningless just to see eye-pleasing coverage report....
         assert_eq!(format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))), "Succeded(Readonly(1))");
         assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![], uncontended: 0 }), "TaskStatus { lock_attempts: [], uncontended: 0 }");
+        let sanitized = simplest_transaction();
+        let task =
+            SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
     }
 
     #[test]
