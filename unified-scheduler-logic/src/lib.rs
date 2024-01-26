@@ -5,7 +5,7 @@ use {
     crate::cell::{SchedulerCell, Token},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
-    std::{collections::BTreeMap, sync::Arc},
+    std::{collections::BTreeMap, mem, sync::Arc},
 };
 
 type UsageCount = u32;
@@ -16,10 +16,10 @@ enum LockStatus {
     Succeded(Usage),
     Failed,
 }
-const_assert_eq!(std::mem::size_of::<LockStatus>(), 8);
+const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 
 pub type Task = Arc<TaskInner>;
-const_assert_eq!(std::mem::size_of::<Task>(), 8);
+const_assert_eq!(mem::size_of::<Task>(), 8);
 
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
@@ -65,10 +65,10 @@ mod cell {
 }
 
 type PageToken = Token<PageInner>;
-const_assert_eq!(std::mem::size_of::<PageToken>(), 0);
+const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
 type TaskToken = Token<TaskStatus>;
-const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
+const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
@@ -188,7 +188,7 @@ struct LockAttempt {
     requested_usage: RequestedUsage,
     uncommited_usage: Usage,
 }
-const_assert_eq!(std::mem::size_of::<LockAttempt>(), 24);
+const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
 impl LockAttempt {
     fn new(page: Page, requested_usage: RequestedUsage) -> Self {
@@ -211,7 +211,7 @@ enum Usage {
     Readonly(UsageCount),
     Writable,
 }
-const_assert_eq!(std::mem::size_of::<Usage>(), 8);
+const_assert_eq!(mem::size_of::<Usage>(), 8);
 
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
@@ -271,11 +271,11 @@ impl PageInner {
     }
 }
 
-const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<SchedulerCell<PageInner>>);
-const_assert_eq!(std::mem::size_of::<Page>(), 8);
+const_assert_eq!(mem::size_of::<Page>(), 8);
 
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
@@ -484,7 +484,8 @@ impl SchedulingStateMachine {
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
+                        attempt.page_mut(&mut self.page_token).current_usage =
+                            attempt.uncommited_usage;
                     }
 
                     task.mark_as_uncontended(&mut self.task_token);
