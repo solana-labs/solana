@@ -333,14 +333,3 @@ impl SnapshotKind {
         matches!(self, SnapshotKind::IncrementalSnapshot(_))
     }
 }
-
-/// Helper function to retain only max n of elements to the right of a vector,
-/// viz. remove v.len() - n elements from the left of the vector.
-#[inline(always)]
-pub fn retain_max_n_elements<T>(v: &mut Vec<T>, n: usize) {
-    if v.len() > n {
-        let to_truncate = v.len() - n;
-        v.rotate_left(to_truncate);
-        v.truncate(n);
-    }
-}
