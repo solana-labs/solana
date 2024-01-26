@@ -151,7 +151,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
-        fee::FeeStructure,
+        fee::{FeeDetails, FeeStructure},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hard_forks::HardForks,
@@ -269,6 +269,36 @@ impl AddAssign for SquashTiming {
         self.squash_accounts_index_ms += rhs.squash_accounts_index_ms;
         self.squash_accounts_store_ms += rhs.squash_accounts_store_ms;
         self.squash_cache_ms += rhs.squash_cache_ms;
+    }
+}
+
+// NOTE testing SIMD-0110 fee collecting and distributing
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default, Copy, AbiExample)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectorFeeDetails {
+    pub transaction_fee: u64,
+    pub priority_fee: u64,
+    pub write_lock_fee: u64
+}
+
+impl CollectorFeeDetails {
+    // TODO - just a placeholder
+    pub fn add(&mut self, fee_details: &FeeDetails, write_lock_fee: u64) {
+        self.transaction_fee = self
+            .transaction_fee
+            .saturating_add(fee_details.transaction_fee);
+        self.priority_fee = self
+            .priority_fee
+            .saturating_add(fee_details.prioritization_fee);
+        self.write_lock_fee = self
+            .write_lock_fee
+            .saturating_add(write_lock_fee);
+    }
+    pub fn get(&self) -> Self {
+        *self
+    }
+    pub fn dummy(&self) -> u64 {
+        self.transaction_fee
     }
 }
 
@@ -585,7 +615,8 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
-            write_lock_fee_cache,
+            write_lock_fee_cache: _,
+            collector_fee_details: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -621,6 +652,7 @@ impl PartialEq for Bank {
             && is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
             // TODO testing SIMD-0110, perhaps need to include cache in bank comparison
             //&& *write_lock_fee_cache.read().unwrap() == *other.write_lock_fee_cache.read().unwrap()
+            //&& *collector_fee_details.read().unwrap() == *other.collector_fee_details.read().unwrap()
     }
 }
 
@@ -851,7 +883,9 @@ pub struct Bank {
 
     epoch_reward_status: EpochRewardStatus,
 
+    // NOTE: testing SIMD-0110, these two field should includein spashot
     pub write_lock_fee_cache: RwLock<WriteLockFeeCache>,
+    pub collector_fee_details: RwLock<CollectorFeeDetails>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1043,6 +1077,7 @@ impl Bank {
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
             write_lock_fee_cache: RwLock::<WriteLockFeeCache>::default(),
+            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1357,6 +1392,7 @@ impl Bank {
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
             write_lock_fee_cache,
+            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1868,6 +1904,7 @@ impl Bank {
             // TODO testing SIMD-0110, need to add write_lock_fee_cache to snapshots, and read from
             // fields here.
             write_lock_fee_cache: RwLock::new(WriteLockFeeCache::default()),
+            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -3747,6 +3784,8 @@ impl Bank {
             self.distribute_rent_fees();
             self.update_slot_history();
             self.run_incinerator();
+            // NOTE testing SIMD-0110, write-lock-fee-cache should be updated *after* fee
+            // collecting and distributing.
             self.update_write_lock_fee_cache();
 
             // freeze is a one-way trip, idempotent
@@ -5581,8 +5620,8 @@ impl Bank {
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
-        let hash_queue = self.blockhash_queue.read().unwrap();
-        let mut fees = 0;
+        let mut accumulated_fee_details = FeeDetails::default();
+        let mut accumulated_write_lock_fees: u64 = 0;
 
         let results = txs
             .iter()
@@ -5595,21 +5634,35 @@ impl Bank {
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
-                let (lamports_per_signature, is_nonce) = durable_nonce_fee
-                    .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
-                    .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
-                    .unwrap_or_else(|| {
-                        (
-                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
-                            false,
-                        )
-                    });
+                let is_nonce = durable_nonce_fee.is_some();
 
-                let lamports_per_signature =
-                    lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = self.get_fee_for_message_with_lamports_per_signature(
-                    tx.message(),
-                    lamports_per_signature,
+                // TODO can refactor self.get_fee_for_message_with_lamports_per_signature() out
+                let message = tx.message();
+                let budget_limits = process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default();
+                let writable_accounts: Vec<Pubkey> = message
+                    .account_keys()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, k)| {
+                        if message.is_writable(i) {
+                            Some(*k)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let write_lock_fee = self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
+                    &writable_accounts,
+                    budget_limits.compute_unit_limit,
+                    );
+                // TODO, testing SIMD-0110, need to withdraw write-lock-fee for successful tx
+                // somewhere.
+
+                let fee_details = self.fee_structure.calculate_fee_details(
+                    message,
+                    &budget_limits.into(),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -5620,15 +5673,20 @@ impl Bank {
                 // post-load, fee deducted, pre-execute account state
                 // stored
                 if execution_status.is_err() && !is_nonce {
-                    self.withdraw(tx.message().fee_payer(), fee)?;
+                    let total_fee = write_lock_fee.saturating_add(fee_details.total_fee());
+                    self.withdraw(tx.message().fee_payer(), total_fee)?;
                 }
 
-                fees += fee;
+                accumulated_write_lock_fees = accumulated_write_lock_fees.saturating_add(write_lock_fee);
+                accumulated_fee_details.accumulate(&fee_details);
                 Ok(())
             })
             .collect();
 
-        self.collector_fees.fetch_add(fees, Relaxed);
+        self.collector_fee_details
+            .write()
+            .unwrap()
+            .add(&accumulated_fee_details, accumulated_write_lock_fees);
         results
     }
 
