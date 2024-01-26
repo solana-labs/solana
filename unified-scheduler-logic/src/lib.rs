@@ -473,7 +473,7 @@ impl SchedulingStateMachine {
             rollback_on_failure,
         );
 
-        if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
+        if lock_count < ll.len() {
             if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
                 task.mark_as_contended(&mut self.task_token);
