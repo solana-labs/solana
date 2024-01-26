@@ -321,12 +321,10 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        /*
         assert!(
             task.is_new(&self.task_token),
             "scheduling bad task: {task:?}"
         );
-        */
 
         self.total_task_count += 1;
         self.active_task_count += 1;
