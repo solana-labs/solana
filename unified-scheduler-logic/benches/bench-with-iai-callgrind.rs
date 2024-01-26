@@ -229,6 +229,7 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
     let task = scheduler.schedule_task(task).unwrap();
     task.reset_as_new(&mut scheduler.task_token);
     assert_matches!(scheduler.schedule_task(task.clone()), None);
+    task.mark_as_uncontended(&mut scheduler.task_token);
 
     toggle_collect();
     scheduler.deschedule_task(&task);
