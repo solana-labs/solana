@@ -362,7 +362,7 @@ impl HotStorageReader {
     pub fn account_matches_owners(
         &self,
         account_offset: HotAccountOffset,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta_from_offset(account_offset)
@@ -377,7 +377,7 @@ impl HotStorageReader {
 
             owners
                 .iter()
-                .position(|candidate| &account_owner == candidate)
+                .position(|candidate| account_owner == candidate)
                 .ok_or(MatchAccountOwnerError::NoMatch)
         }
     }
@@ -1081,7 +1081,7 @@ pub mod tests {
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
 
         // First, verify whether we can find the expected owners.
-        let mut owner_candidates: Vec<_> = owner_addresses.iter().collect();
+        let mut owner_candidates = owner_addresses.clone();
         owner_candidates.shuffle(&mut rng);
 
         for (account_offset, account_meta) in account_offsets.iter().zip(hot_account_metas.iter()) {
@@ -1090,16 +1090,15 @@ pub mod tests {
                 .unwrap();
             assert_eq!(
                 owner_candidates[index],
-                &owner_addresses[account_meta.owner_offset().0 as usize]
+                owner_addresses[account_meta.owner_offset().0 as usize]
             );
         }
 
         // Second, verify the MatchAccountOwnerError::NoMatch case
         const NUM_UNMATCHED_OWNERS: usize = 20;
-        let unmatched_owners: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+        let unmatched_candidates: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
             .take(NUM_UNMATCHED_OWNERS)
             .collect();
-        let unmatched_candidates: Vec<_> = unmatched_owners.iter().collect();
 
         for account_offset in account_offsets.iter() {
             assert_eq!(
@@ -1119,7 +1118,7 @@ pub mod tests {
                 .unwrap();
             assert_eq!(
                 owner_candidates[index],
-                &owner_addresses[account_meta.owner_offset().0 as usize]
+                owner_addresses[account_meta.owner_offset().0 as usize]
             );
         }
     }
