@@ -756,9 +756,11 @@ mod tests {
         let pages = Arc::new(Mutex::new(HashMap::new()));
         let address_loader = &mut create_address_loader(Some(pages.clone()));
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
         dbg!(pages);
     }
 }
