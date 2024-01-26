@@ -596,7 +596,7 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn create_address_loader() -> impl FnMut(Pubkey) -> Page {
+    fn create_address_loader(pages: Option<HashMap<Pubkey, Page>>) -> impl FnMut(Pubkey) -> Page {
         let mut pages = HashMap::<Pubkey, Page>::new();
 
         move |address| pages.entry(address).or_default().clone()
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn test_schedule_non_conflicting_task() {
         let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
@@ -649,7 +649,7 @@ mod tests {
     #[should_panic(expected = "descheduling unknown task")]
     fn test_deschedule_task_without_scheduling_first() {
         let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
@@ -659,7 +659,7 @@ mod tests {
     #[test]
     fn test_schedule_conflicting_task() {
         let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn test_schedule_retryable_task() {
         let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
@@ -703,7 +703,7 @@ mod tests {
     #[test]
     fn test_schedule_retryable_task2() {
         let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 0, address_loader);
@@ -742,7 +742,7 @@ mod tests {
         let conflicting_readonly_address = Pubkey::new_unique();
         let sanitized1 = readonly_transaction(conflicting_readonly_address);
         let sanitized2 = readonly_transaction(conflicting_readonly_address);
-        let address_loader = &mut create_address_loader();
+        let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
