@@ -668,8 +668,32 @@ mod tests {
         assert_eq!(state_machine.schedule_retryable_task().unwrap().task_index(), task2.task_index());
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_matches!(state_machine.schedule_retryable_task(), None);
-        assert_eq!(state_machine.reschedule_count(), 2);
+        assert_eq!(state_machine.reschedule_count(), 1);
     }
+
+    #[test]
+    fn test_schedule_retryable_task2() {
+        let sanitized = simplest_transaction();
+        let address_loader = &mut create_address_loader();
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.retryable_task_count(), 1);
+
+        assert_eq!(state_machine.reschedule_count(), 0);
+        assert_eq!(state_machine.schedule_retryable_task().unwrap().task_index(), task2.task_index());
+        assert_eq!(state_machine.reschedule_count(), 1);
+        assert_matches!(state_machine.schedule_retryable_task(), None);
+        assert_eq!(state_machine.reschedule_count(), 1);
+    }
+
 
     #[test]
     fn test_schedule_non_conflicting_readonly_task() {
