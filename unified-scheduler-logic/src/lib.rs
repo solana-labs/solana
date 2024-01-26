@@ -764,6 +764,8 @@ mod tests {
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(page.0.borrow(&state_machine.page_token).current_usage, Usage::Writable);
-        sanitized2.message().fee_payer()
+        let page = pages.get(&sanitized2.message().fee_payer()).unwrap();
+        assert_matches!(page.0.borrow(&state_machine.page_token).current_usage, Usage::Unused);
+        
     }
 }
