@@ -588,6 +588,12 @@ mod tests {
     }
 
     #[test]
+    fn test_debug() {
+        // these are almost meaningless just to see eye-pleasing coverage report....
+        assert_eq!(format!("{:?}", LockStatus::Succeded(1)), "aa")
+    }
+
+    #[test]
     fn test_scheduling_state_machine_default() {
         let state_machine = SchedulingStateMachine::default();
         assert_eq!(state_machine.active_task_count(), 0);
