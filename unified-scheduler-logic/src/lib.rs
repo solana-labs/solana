@@ -375,7 +375,6 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
-        eprintln!("succeded!");
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let no_heavier_other_tasks =
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
@@ -391,7 +390,6 @@ impl SchedulingStateMachine {
                     .unwrap_or(true))
             ;
 
-            eprintln!("{no_heavier_other_tasks:?}, {requested_usage:?}");
             if !no_heavier_other_tasks {
                 lock_status = LockStatus::Failed
             }
@@ -692,7 +690,6 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.retryable_task_count(), 1);
 
-        eprintln!("before");
         assert_matches!(state_machine.schedule_task(task3.clone()), Some(_));
 
         assert_matches!(state_machine.schedule_retryable_task(), None);
