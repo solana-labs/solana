@@ -697,9 +697,15 @@ mod tests {
         assert_matches!(state_machine.schedule_retryable_task(), None);
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
+        assert_matches!(state_machine.schedule_retryable_task(), None);
+        assert_eq!(state_machine.reschedule_count(), 2);
+        assert_eq!(state_machine.rescheduled_task_count(), 0);
+
         state_machine.deschedule_task(&task3);
 
         assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+        assert_eq!(state_machine.reschedule_count(), 3);
+        assert_eq!(state_machine.rescheduled_task_count(), 1);
     }
 
 
