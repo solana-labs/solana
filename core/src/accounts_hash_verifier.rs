@@ -1,7 +1,4 @@
-// Service to verify accounts hashes with other known validator nodes.
-//
-// Each interval, publish the snapshot hash which is the full accounts state
-// hash on gossip.
+//! Service to calculate accounts hashes
 
 use {
     crossbeam_channel::{Receiver, Sender},
@@ -13,14 +10,13 @@ use {
         },
         sorted_storages::SortedStorages,
     },
-    solana_gossip::cluster_info::{ClusterInfo, MAX_ACCOUNTS_HASHES},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_runtime::{
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            self, retain_max_n_elements, AccountsPackage, AccountsPackageKind, SnapshotKind,
-            SnapshotPackage,
+            self, AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage,
         },
         snapshot_utils,
     },
@@ -50,8 +46,8 @@ impl AccountsHashVerifier {
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
         exit: Arc<AtomicBool>,
-        cluster_info: Arc<ClusterInfo>,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
+        _cluster_info: Arc<ClusterInfo>,
+        _accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
@@ -60,7 +56,6 @@ impl AccountsHashVerifier {
             .name("solAcctHashVer".to_string())
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
-                let mut hashes = vec![];
                 // To support fastboot, we must ensure the storages used in the latest POST snapshot are
                 // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
                 // expiring.
@@ -95,11 +90,8 @@ impl AccountsHashVerifier {
                     let slot = accounts_package.slot;
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
-                        &cluster_info,
                         snapshot_package_sender.as_ref(),
-                        &mut hashes,
                         &snapshot_config,
-                        accounts_hash_fault_injector,
                         &exit,
                     ));
 
@@ -256,25 +248,14 @@ impl AccountsHashVerifier {
     #[allow(clippy::too_many_arguments)]
     fn process_accounts_package(
         accounts_package: AccountsPackage,
-        cluster_info: &ClusterInfo,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
-        hashes: &mut Vec<(Slot, Hash)>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         exit: &AtomicBool,
     ) {
         let accounts_hash =
             Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
-
-        Self::push_accounts_hashes_to_cluster(
-            &accounts_package,
-            cluster_info,
-            hashes,
-            accounts_hash,
-            accounts_hash_fault_injector,
-        );
 
         Self::submit_for_packaging(
             accounts_package,
@@ -535,23 +516,6 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn push_accounts_hashes_to_cluster(
-        accounts_package: &AccountsPackage,
-        cluster_info: &ClusterInfo,
-        hashes: &mut Vec<(Slot, Hash)>,
-        accounts_hash: AccountsHashKind,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
-    ) {
-        let hash = accounts_hash_fault_injector
-            .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
-            .or(Some(*accounts_hash.as_hash()));
-        hashes.push((accounts_package.slot, hash.unwrap()));
-
-        retain_max_n_elements(hashes, MAX_ACCOUNTS_HASHES);
-
-        cluster_info.push_accounts_hashes(hashes.clone());
-    }
-
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
@@ -590,83 +554,7 @@ impl AccountsHashVerifier {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        rand::seq::SliceRandom,
-        solana_gossip::contact_info::ContactInfo,
-        solana_runtime::{
-            snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_package::SnapshotKind,
-        },
-        solana_sdk::{
-            signature::{Keypair, Signer},
-            timing::timestamp,
-        },
-        solana_streamer::socket::SocketAddrSpace,
-        std::str::FromStr,
-    };
-
-    fn new_test_cluster_info() -> ClusterInfo {
-        let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
-    }
-
-    #[test]
-    fn test_max_hashes() {
-        solana_logger::setup();
-        let cluster_info = new_test_cluster_info();
-        let cluster_info = Arc::new(cluster_info);
-        let exit = AtomicBool::new(false);
-
-        let mut hashes = vec![];
-        let full_snapshot_archive_interval_slots = 100;
-        let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots,
-            incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
-            ..SnapshotConfig::default()
-        };
-        let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        for i in 0..MAX_ACCOUNTS_HASHES + 1 {
-            let slot = full_snapshot_archive_interval_slots + i as u64;
-            let accounts_package = AccountsPackage {
-                slot,
-                block_height: slot,
-                ..AccountsPackage::default_for_tests()
-            };
-
-            AccountsHashVerifier::process_accounts_package(
-                accounts_package,
-                &cluster_info,
-                None,
-                &mut hashes,
-                &snapshot_config,
-                None,
-                &exit,
-            );
-
-            // sleep for 1ms to create a newer timestamp for gossip entry
-            // otherwise the timestamp won't be newer.
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        cluster_info.flush_push_queue();
-        let cluster_hashes = cluster_info
-            .get_accounts_hash_for_node(&cluster_info.id(), |c| c.clone())
-            .unwrap();
-        info!("{:?}", cluster_hashes);
-        assert_eq!(hashes.len(), MAX_ACCOUNTS_HASHES);
-        assert_eq!(cluster_hashes.len(), MAX_ACCOUNTS_HASHES);
-        assert_eq!(
-            cluster_hashes[0],
-            (full_snapshot_archive_interval_slots + 1, expected_hash)
-        );
-        assert_eq!(
-            cluster_hashes[MAX_ACCOUNTS_HASHES - 1],
-            (
-                full_snapshot_archive_interval_slots + MAX_ACCOUNTS_HASHES as u64,
-                expected_hash
-            )
-        );
-    }
+    use {super::*, rand::seq::SliceRandom, solana_runtime::snapshot_package::SnapshotKind};
 
     fn new(package_kind: AccountsPackageKind, slot: Slot) -> AccountsPackage {
         AccountsPackage {
