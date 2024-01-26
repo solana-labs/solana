@@ -144,6 +144,10 @@ impl TaskInner {
         *self.uncontended_ref(task_token) >= 2
     }
 
+    fn is_new(&self, task_token: &TaskToken) -> bool {
+        *self.uncontended_ref(task_token) == 0
+    }
+
     fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
         *self.uncontended_ref(task_token) == 1 || *self.uncontended_ref(task_token) == 3
     }
@@ -305,6 +309,7 @@ impl SchedulingStateMachine {
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         // .contains_key() is too costly for assert!()
+        assert!(task.is_new());
         debug_assert!(!self.retryable_task_queue.contains_key(&task.unique_weight));
 
         self.total_task_count += 1;
