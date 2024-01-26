@@ -160,6 +160,10 @@ impl TaskInner {
         *self.uncontended_mut(task_token) = 1;
     }
 
+    fn reset_as_new(&self, task_token: &mut TaskToken) {
+        *self.uncontended_mut(task_token) = 0;
+    }
+
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
         *self.uncontended_mut(task_token) = 3;
