@@ -878,4 +878,13 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         SchedulingStateMachine::unlock(&mut state_machine.page_token, &LockAttempt::new(Page::default(), RequestedUsage::Writable));
     }
+
+    #[test]
+    #[should_panic(expected = "internal error: entered unreachable code")]
+    fn test_unreachable_unlock_conditions2() {
+        let mut state_machine = SchedulingStateMachine::default();
+        let mut page = Page::default();
+        page.current_usage = Usage::Writable;
+        SchedulingStateMachine::unlock(&mut state_machine.page_token, &LockAttempt::new(page, RequestedUsage::Readonly));
+    }
 }
