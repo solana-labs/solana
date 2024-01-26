@@ -529,8 +529,9 @@ impl HotStorageWriter {
         Ok(stored_size)
     }
 
-    /// Persists the specified accounts from index [`skip`] into the underlying
-    /// hot accounts file associated with the HotStorageWriter.
+    /// Persists `accounts` into the underlying hot accounts file associated
+    /// with this HotStorageWriter.  The first `skip` number of accounts are
+    /// *not* persisted.
     pub fn write_accounts<
         'a,
         'b,
