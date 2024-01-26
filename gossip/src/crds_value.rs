@@ -87,7 +87,7 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
     LegacySnapshotHashes(LegacySnapshotHashes), // Deprecated
-    AccountsHashes(AccountsHashes),
+    AccountsHashes(AccountsHashes),             // Deprecated
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
@@ -659,13 +659,6 @@ impl CrdsValue {
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
         match &self.data {
             CrdsData::LegacyContactInfo(contact_info) => Some(contact_info),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn accounts_hash(&self) -> Option<&AccountsHashes> {
-        match &self.data {
-            CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
         }
     }
