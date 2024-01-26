@@ -487,11 +487,11 @@ impl SchedulingStateMachine {
         }
 
         if matches!(task_source, TaskSource::Retryable) {
+            task.mark_as_uncontended(&mut self.task_token);
 
             for attempt in task.lock_attempts_mut(&mut self.task_token) {
                 attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
             }
-            task.mark_as_uncontended(&mut self.task_token);
 
             // as soon as `task` is succeeded in locking, trigger re-checks on read only
             // addresses so that more readonly transactions can be executed
