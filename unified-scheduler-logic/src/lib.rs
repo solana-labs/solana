@@ -690,6 +690,10 @@ mod tests {
         assert_eq!(state_machine.has_retryable_task(), false);
         assert_eq!(state_machine.retryable_task_count(), 0);
 
+        assert!(!task2.is_new());
+        task2.reset_as_new();
+        assert!(task2.is_new());
+
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
     }
 
