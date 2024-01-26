@@ -636,9 +636,7 @@ impl AccountsScanner {
         solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
             && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
     }
-}
 
-impl AccountsScanner {
     pub fn output<S>(&self, seq_serializer: &mut Option<S>)
     where
         S: SerializeSeq,
