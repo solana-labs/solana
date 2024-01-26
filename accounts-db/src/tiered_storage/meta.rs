@@ -261,7 +261,7 @@ pub mod tests {
                 let derived_size = account_hash_offset
                     + account_hash
                         .as_ref()
-                        .map(std::mem::size_of_val)
+                        .map(|acc_hash| std::mem::size_of_val(*acc_hash))
                         .unwrap_or(0);
                 let opt_fields = AccountMetaOptionalFields {
                     rent_epoch,

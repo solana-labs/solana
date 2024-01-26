@@ -567,7 +567,7 @@ impl HotStorageWriter {
                         acc.owner(),
                         acc.data(),
                         acc.executable(),
-                        // only persist rent_epoch for those non-rent-exempt accounts
+                        // only persist rent_epoch for those rent-paying accounts
                         (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH).then_some(acc.rent_epoch()),
                         Some(account_hash),
                     )
@@ -1341,7 +1341,7 @@ pub mod tests {
                         acc.owner(),
                         acc.data(),
                         acc.executable(),
-                        // only persist rent_epoch for those non-rent-exempt accounts
+                        // only persist rent_epoch for those rent-paying accounts
                         Some(*account_hash),
                     )
                 })
