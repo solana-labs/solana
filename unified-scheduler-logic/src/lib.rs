@@ -749,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_non_conflicting_readonly_task() {
+    fn test_schedule_multiple_readonly_task() {
         let conflicting_readonly_address = Pubkey::new_unique();
         let sanitized1 = readonly_transaction(conflicting_readonly_address);
         let sanitized2 = readonly_transaction(conflicting_readonly_address);
