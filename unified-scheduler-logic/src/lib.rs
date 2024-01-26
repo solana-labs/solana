@@ -275,6 +275,7 @@ const_assert_eq!(std::mem::size_of::<Page>(), 8);
 
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
     active_task_count: usize,
@@ -282,7 +283,7 @@ pub struct SchedulingStateMachine {
     reschedule_count: usize,
     rescheduled_task_count: usize,
     total_task_count: usize,
-    pub task_token: TaskToken,
+    task_token: TaskToken,
     page_token: PageToken,
 }
 
