@@ -148,6 +148,10 @@ impl TaskInner {
         *self.uncontended_mut(task_token) = 2;
     }
 
+    fn mark_as_idle(&self, task_token: &mut TaskToken) {
+        *self.uncontended_mut(task_token) = 1;
+    }
+
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
         *self.uncontended_mut(task_token) = 3;
@@ -473,6 +477,8 @@ impl SchedulingStateMachine {
                         .or_insert_with(|| heaviest_blocked_task.clone());
                 }
             }
+        } else {
+            task.mark_as_idle(&mut self.task_token);
         }
 
         Some(task)
