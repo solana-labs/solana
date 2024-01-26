@@ -7656,6 +7656,7 @@ dependencies = [
  "iai-callgrind",
  "qualifier_attr",
  "solana-sdk",
+ "solana-unified-scheduler-logic",
  "static_assertions",
 ]
 

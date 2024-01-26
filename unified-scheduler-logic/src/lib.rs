@@ -6,6 +6,9 @@ use {
     std::{collections::BTreeMap, sync::Arc},
 };
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
+
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
 
