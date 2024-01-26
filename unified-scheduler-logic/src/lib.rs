@@ -637,6 +637,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic("aaaa")]
     fn test_deschedule_task_without_scheduling_first() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader();
