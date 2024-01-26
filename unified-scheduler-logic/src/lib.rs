@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
-        assert_eq!(format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))), "aa")
+        assert_eq!(format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))), "Succeded(Readonly(1))")
     }
 
     #[test]
