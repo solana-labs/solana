@@ -145,7 +145,7 @@ impl TaskInner {
     }
 
     fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) >= 1
+        *self.uncontended_ref(task_token) == 1 || *self.uncontended_ref(task_token) == 3
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
@@ -769,6 +769,23 @@ mod tests {
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.handled_task_count(), 2);
+    }
+
+    #[test]
+    fn test_schedule_writable_after_readonly() {
+        let conflicting_readonly_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_readonly_address);
+        let sanitized2 = transaction_with_shared_writable(conflicting_readonly_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
+
+        state_machine.deschedule_task(&task1);
+        state_machine.deschedule_task(&task2);
     }
 
     #[test]
