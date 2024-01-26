@@ -391,7 +391,7 @@ impl SchedulingStateMachine {
                     .unwrap_or(true))
             ;
 
-            eprintln!("{no_heavier_other_tasks:?}");
+            eprintln!("{no_heavier_other_tasks:?}, {requested_usage:?}");
             if !no_heavier_other_tasks {
                 lock_status = LockStatus::Failed
             }
