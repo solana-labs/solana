@@ -173,6 +173,7 @@ impl TaskInner {
         *self.uncontended_mut(task_token) = 0;
     }
 
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
         *self.uncontended_mut(task_token) = 3;
