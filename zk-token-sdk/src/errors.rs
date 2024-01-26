@@ -38,6 +38,8 @@ pub enum ProofVerificationError {
     ProofContext,
     #[error("illegal commitment length")]
     IllegalCommitmentLength,
+    #[error("illegal amount bit length")]
+    IllegalAmountBitLength,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

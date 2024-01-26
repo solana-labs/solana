@@ -1,6 +1,6 @@
 use {
     super::Bank,
-    crate::accounts::account_rent_state::RentState,
+    crate::svm::account_rent_state::RentState,
     log::{debug, warn},
     solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{

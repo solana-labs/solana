@@ -7,7 +7,7 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
-    jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
+    jsonrpc_core::{futures::future, types::error, BoxFuture, Error, ErrorCode, Metadata, Result},
     jsonrpc_derive::rpc,
     solana_account_decoder::{
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
@@ -62,6 +62,10 @@ use {
         clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
         commitment_config::{CommitmentConfig, CommitmentLevel},
         epoch_info::EpochInfo,
+        epoch_rewards_hasher::EpochRewardsHasher,
+        epoch_rewards_partition_data::{
+            get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion,
+        },
         epoch_schedule::EpochSchedule,
         exit::Exit,
         feature_set,
@@ -112,6 +116,8 @@ use {
         time::Duration,
     },
 };
+
+pub mod account_resolver;
 
 type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
@@ -170,6 +176,7 @@ pub struct RpcBigtableConfig {
     pub bigtable_instance_name: String,
     pub bigtable_app_profile_id: String,
     pub timeout: Option<Duration>,
+    pub max_message_size: usize,
 }
 
 impl Default for RpcBigtableConfig {
@@ -181,6 +188,7 @@ impl Default for RpcBigtableConfig {
             bigtable_instance_name,
             bigtable_app_profile_id,
             timeout: None,
+            max_message_size: solana_storage_bigtable::DEFAULT_MAX_MESSAGE_SIZE,
         }
     }
 }
@@ -429,7 +437,7 @@ impl JsonRpcRequestProcessor {
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
 
-        let response = get_encoded_account(&bank, pubkey, encoding, data_slice)?;
+        let response = get_encoded_account(&bank, pubkey, encoding, data_slice, None)?;
         Ok(new_response(&bank, response))
     }
 
@@ -452,7 +460,7 @@ impl JsonRpcRequestProcessor {
 
         let accounts = pubkeys
             .into_iter()
-            .map(|pubkey| get_encoded_account(&bank, &pubkey, encoding, data_slice))
+            .map(|pubkey| get_encoded_account(&bank, &pubkey, encoding, data_slice, None))
             .collect::<Result<Vec<_>>>()?;
         Ok(new_response(&bank, accounts))
     }
@@ -515,6 +523,38 @@ impl JsonRpcRequestProcessor {
         })
     }
 
+    async fn get_reward_map<F>(
+        &self,
+        slot: Slot,
+        addresses: &[String],
+        reward_type_filter: &F,
+        config: &RpcEpochConfig,
+    ) -> Result<HashMap<String, (Reward, Slot)>>
+    where
+        F: Fn(RewardType) -> bool,
+    {
+        let Ok(Some(block)) = self
+            .get_block(
+                slot,
+                Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+            )
+            .await
+        else {
+            return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+        };
+
+        Ok(block
+            .rewards
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|reward| {
+                reward.reward_type.is_some_and(reward_type_filter)
+                    && addresses.contains(&reward.pubkey)
+            })
+            .map(|reward| (reward.clone().pubkey, (reward, slot)))
+            .collect())
+    }
+
     pub async fn get_inflation_reward(
         &self,
         addresses: Vec<Pubkey>,
@@ -523,18 +563,20 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block().await;
+        let slot_context = RpcContextConfig {
+            commitment: config.commitment,
+            min_context_slot: config.min_context_slot,
+        };
         let epoch = match config.epoch {
             Some(epoch) => epoch,
             None => epoch_schedule
-                .get_epoch(self.get_slot(RpcContextConfig {
-                    commitment: config.commitment,
-                    min_context_slot: config.min_context_slot,
-                })?)
+                .get_epoch(self.get_slot(slot_context)?)
                 .saturating_sub(1),
         };
-
         // Rewards for this epoch are found in the first confirmed block of the next epoch
-        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
+        let rewards_epoch = epoch.saturating_add(1);
+        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(rewards_epoch);
+
         if first_slot_in_epoch < first_available_block {
             if self.bigtable_ledger_storage.is_some() {
                 return Err(RpcCustomError::LongTermStorageSlotSkipped {
@@ -550,6 +592,8 @@ impl JsonRpcRequestProcessor {
             }
         }
 
+        let bank = self.get_bank_with_config(slot_context)?;
+
         let first_confirmed_block_in_epoch = *self
             .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
             .await?
@@ -557,44 +601,94 @@ impl JsonRpcRequestProcessor {
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
             })?;
+        let partitioned_epoch_reward_enabled_slot = bank
+            .feature_set
+            .activated_slot(&feature_set::enable_partitioned_epoch_reward::id());
+        let partitioned_epoch_reward_enabled = partitioned_epoch_reward_enabled_slot
+            .map(|slot| slot <= first_confirmed_block_in_epoch)
+            .unwrap_or(false);
 
-        let Ok(Some(first_confirmed_block)) = self
-            .get_block(
+        let mut reward_map: HashMap<String, (Reward, Slot)> = {
+            let addresses: Vec<String> =
+                addresses.iter().map(|pubkey| pubkey.to_string()).collect();
+
+            self.get_reward_map(
                 first_confirmed_block_in_epoch,
-                Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+                &addresses,
+                &|reward_type| -> bool {
+                    reward_type == RewardType::Voting
+                        || (!partitioned_epoch_reward_enabled && reward_type == RewardType::Staking)
+                },
+                &config,
             )
-            .await
-        else {
-            return Err(RpcCustomError::BlockNotAvailable {
-                slot: first_confirmed_block_in_epoch,
-            }
-            .into());
+            .await?
         };
 
-        let addresses: Vec<String> = addresses
-            .into_iter()
-            .map(|pubkey| pubkey.to_string())
-            .collect();
+        if partitioned_epoch_reward_enabled {
+            let partition_data_address = get_epoch_rewards_partition_data_address(rewards_epoch);
+            let partition_data_account =
+                bank.get_account(&partition_data_address)
+                    .ok_or_else(|| Error {
+                        code: ErrorCode::InternalError,
+                        message: format!(
+                            "Partition data account not found for epoch {:?} at {:?}",
+                            epoch, partition_data_address
+                        ),
+                        data: None,
+                    })?;
+            let EpochRewardsPartitionDataVersion::V0(partition_data) =
+                bincode::deserialize(partition_data_account.data())
+                    .map_err(|_| Error::internal_error())?;
+            let hasher = EpochRewardsHasher::new(
+                partition_data.num_partitions,
+                &partition_data.parent_blockhash,
+            );
+            let mut partition_index_addresses: HashMap<usize, Vec<String>> = HashMap::new();
+            for address in addresses.iter() {
+                let address_string = address.to_string();
+                // Skip this address if (Voting) rewards were already found in
+                // the first block of the epoch
+                if !reward_map.contains_key(&address_string) {
+                    let partition_index = hasher.clone().hash_address_to_partition(address);
+                    partition_index_addresses
+                        .entry(partition_index)
+                        .and_modify(|list| list.push(address_string.clone()))
+                        .or_insert(vec![address_string]);
+                }
+            }
 
-        let reward_hash: HashMap<String, Reward> = first_confirmed_block
-            .rewards
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|reward| match reward.reward_type? {
-                RewardType::Staking | RewardType::Voting => addresses
-                    .contains(&reward.pubkey)
-                    .then(|| (reward.clone().pubkey, reward)),
-                _ => None,
-            })
-            .collect();
+            let block_list = self
+                .get_blocks_with_limit(
+                    first_confirmed_block_in_epoch + 1,
+                    partition_data.num_partitions,
+                    config.commitment,
+                )
+                .await?;
+
+            for (partition_index, addresses) in partition_index_addresses.iter() {
+                let slot = *block_list
+                    .get(*partition_index)
+                    .ok_or_else(Error::internal_error)?;
+
+                let index_reward_map = self
+                    .get_reward_map(
+                        slot,
+                        addresses,
+                        &|reward_type| -> bool { reward_type == RewardType::Staking },
+                        &config,
+                    )
+                    .await?;
+                reward_map.extend(index_reward_map);
+            }
+        }
 
         let rewards = addresses
             .iter()
             .map(|address| {
-                if let Some(reward) = reward_hash.get(address) {
+                if let Some((reward, slot)) = reward_map.get(&address.to_string()) {
                     return Some(RpcInflationReward {
                         epoch,
-                        effective_slot: first_confirmed_block_in_epoch,
+                        effective_slot: *slot,
                         amount: reward.lamports.unsigned_abs(),
                         post_balance: reward.post_balance,
                         commission: reward.commission,
@@ -603,7 +697,6 @@ impl JsonRpcRequestProcessor {
                 None
             })
             .collect();
-
         Ok(rewards)
     }
 
@@ -2379,13 +2472,15 @@ fn get_encoded_account(
     pubkey: &Pubkey,
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
+    // only used for simulation results
+    overwrite_accounts: Option<&HashMap<Pubkey, AccountSharedData>>,
 ) -> Result<Option<UiAccount>> {
-    match bank.get_account(pubkey) {
+    match account_resolver::get_account_from_overwrites_or_bank(pubkey, bank, overwrite_accounts) {
         Some(account) => {
             let response = if is_known_spl_token_id(account.owner())
                 && encoding == UiAccountEncoding::JsonParsed
             {
-                get_parsed_token_account(bank, pubkey, account)
+                get_parsed_token_account(bank, pubkey, account, overwrite_accounts)
             } else {
                 encode_account(&account, pubkey, encoding, data_slice)?
             };
@@ -3884,19 +3979,24 @@ pub mod rpc_full {
                 if result.is_err() {
                     Some(vec![None; config_accounts.addresses.len()])
                 } else {
+                    let mut post_simulation_accounts_map = HashMap::new();
+                    for (pubkey, data) in post_simulation_accounts {
+                        post_simulation_accounts_map.insert(pubkey, data);
+                    }
+
                     Some(
                         config_accounts
                             .addresses
                             .iter()
                             .map(|address_str| {
-                                let address = verify_pubkey(address_str)?;
-                                post_simulation_accounts
-                                    .iter()
-                                    .find(|(key, _account)| key == &address)
-                                    .map(|(pubkey, account)| {
-                                        encode_account(account, pubkey, accounts_encoding, None)
-                                    })
-                                    .transpose()
+                                let pubkey = verify_pubkey(address_str)?;
+                                get_encoded_account(
+                                    bank,
+                                    &pubkey,
+                                    accounts_encoding,
+                                    None,
+                                    Some(&post_simulation_accounts_map),
+                                )
                             })
                             .collect::<Result<Vec<_>>>()?,
                     )
@@ -6227,6 +6327,358 @@ pub mod tests {
             "id": 1,
         });
 
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rpc_simulate_transaction_with_parsing_token_accounts() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let RpcHandler {
+            ref meta, ref io, ..
+        } = rpc;
+
+        // init mint
+        let mint_rent_exempt_amount =
+            bank.get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN);
+        let mint_pubkey = Pubkey::from_str("mint111111111111111111111111111111111111111").unwrap();
+        let mut mint_data = [0u8; spl_token::state::Mint::LEN];
+        Pack::pack_into_slice(
+            &spl_token::state::Mint {
+                mint_authority: COption::None,
+                supply: 0,
+                decimals: 8,
+                is_initialized: true,
+                freeze_authority: COption::None,
+            },
+            &mut mint_data,
+        );
+        let account = AccountSharedData::create(
+            mint_rent_exempt_amount,
+            mint_data.into(),
+            spl_token::id(),
+            false,
+            0,
+        );
+        bank.store_account(&mint_pubkey, &account);
+
+        // init token account
+        let token_account_rent_exempt_amount =
+            bank.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN);
+        let token_account_pubkey = Pubkey::new_unique();
+        let owner_pubkey = Pubkey::from_str("owner11111111111111111111111111111111111111").unwrap();
+        let mut token_account_data = [0u8; spl_token::state::Account::LEN];
+        Pack::pack_into_slice(
+            &spl_token::state::Account {
+                mint: mint_pubkey,
+                owner: owner_pubkey,
+                amount: 1,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+            &mut token_account_data,
+        );
+        let account = AccountSharedData::create(
+            token_account_rent_exempt_amount,
+            token_account_data.into(),
+            spl_token::id(),
+            false,
+            0,
+        );
+        bank.store_account(&token_account_pubkey, &account);
+
+        // prepare tx
+        let fee_payer = rpc.mint_keypair;
+        let recent_blockhash = bank.confirmed_last_blockhash();
+        let tx =
+            system_transaction::transfer(&fee_payer, &token_account_pubkey, 1, recent_blockhash);
+        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+
+        // Simulation bank must be frozen
+        bank.freeze();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "encoding": "jsonParsed",
+                       "addresses": ["{}", "{}"]
+                     }}
+                   }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+            solana_sdk::pubkey::new_rand(),
+            token_account_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": [
+                        null,
+                        {
+                            "data": {
+                                "parsed": {
+                                  "info": {
+                                    "isNative": false,
+                                    "mint": "mint111111111111111111111111111111111111111",
+                                    "owner": "owner11111111111111111111111111111111111111",
+                                    "state": "initialized",
+                                    "tokenAmount": {
+                                      "amount": "1",
+                                      "decimals": 8,
+                                      "uiAmount": 0.00000001,
+                                      "uiAmountString": "0.00000001"
+                                    }
+                                  },
+                                  "type": "account"
+                                },
+                                "program": "spl-token",
+                                "space": 165
+                              },
+                              "executable": false,
+                              "lamports": (token_account_rent_exempt_amount + 1),
+                              "owner": bs58::encode(spl_token::id()).into_string(),
+                              "rentEpoch": u64::MAX,
+                              "space": spl_token::state::Account::LEN
+                        },
+                    ],
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "returnData": null,
+                    "unitsConsumed": 150,
+                }
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rpc_simulate_transaction_with_inner_instructions() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let recent_blockhash = bank.confirmed_last_blockhash();
+        let RpcHandler {
+            ref meta, ref io, ..
+        } = rpc;
+
+        let recent_slot = 123;
+        let mut slot_hashes = SlotHashes::default();
+        slot_hashes.add(recent_slot, Hash::new_unique());
+        bank.set_sysvar_for_tests(&slot_hashes);
+
+        let lookup_table_authority = Keypair::new();
+        let lookup_table_space = solana_sdk::address_lookup_table::state::LOOKUP_TABLE_META_SIZE;
+        let lookup_table_lamports = bank.get_minimum_balance_for_rent_exemption(lookup_table_space);
+
+        let (instruction, lookup_table_address) =
+            solana_sdk::address_lookup_table::instruction::create_lookup_table(
+                lookup_table_authority.pubkey(),
+                rpc.mint_keypair.pubkey(),
+                recent_slot,
+            );
+        let tx = Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&rpc.mint_keypair.pubkey()),
+            &[&rpc.mint_keypair],
+            recent_blockhash,
+        );
+        let tx_serialized_encoded =
+            base64::prelude::BASE64_STANDARD.encode(serialize(&tx).unwrap());
+
+        // Simulation bank must be frozen
+        bank.freeze();
+
+        // `innerInstructions` not provided, should not be in response
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{ "encoding": "base64" }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": null,
+                    "err":null,
+                    "innerInstructions": null,
+                    "logs":[
+                        "Program AddressLookupTab1e1111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program AddressLookupTab1e1111111111111111111111111 success"
+                    ],
+                    "returnData":null,
+                    "unitsConsumed":1200,
+                }
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+
+        // `innerInstructions` provided as `false`, should not be in response
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{ "innerInstructions": false, "encoding": "base64" }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": null,
+                    "err":null,
+                    "innerInstructions": null,
+                    "logs":[
+                        "Program AddressLookupTab1e1111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program AddressLookupTab1e1111111111111111111111111 success"
+                    ],
+                    "returnData":null,
+                    "unitsConsumed":1200,
+                }
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+
+        // `innerInstructions` provided as `true`, should have parsed inner instructions
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{ "innerInstructions": true, "encoding": "base64" }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": null,
+                    "err":null,
+                    "innerInstructions": [
+                        {
+                        "index": 0,
+                        "instructions": [
+                            {
+                            "parsed": {
+                                "info": {
+                                "destination": lookup_table_address.to_string(),
+                                "lamports": lookup_table_lamports,
+                                "source": rpc.mint_keypair.pubkey().to_string()
+                                },
+                                "type": "transfer"
+                            },
+                            "program": "system",
+                            "programId": "11111111111111111111111111111111",
+                            "stackHeight": 2
+                            },
+                            {
+                            "parsed": {
+                                "info": {
+                                "account": lookup_table_address.to_string(),
+                                "space": lookup_table_space
+                                },
+                                "type": "allocate"
+                            },
+                            "program": "system",
+                            "programId": "11111111111111111111111111111111",
+                            "stackHeight": 2
+                            },
+                            {
+                            "parsed": {
+                                "info": {
+                                "account": lookup_table_address.to_string(),
+                                "owner": "AddressLookupTab1e1111111111111111111111111"
+                                },
+                                "type": "assign"
+                            },
+                            "program": "system",
+                            "programId": "11111111111111111111111111111111",
+                            "stackHeight": 2
+                            }
+                        ]
+                        }
+                    ],
+                    "logs":[
+                        "Program AddressLookupTab1e1111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program AddressLookupTab1e1111111111111111111111111 success"
+                    ],
+                    "returnData":null,
+                    "unitsConsumed":1200,
+                }
+            },
+            "id": 1,
+        });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

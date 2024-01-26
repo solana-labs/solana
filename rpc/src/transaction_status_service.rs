@@ -365,7 +365,7 @@ pub(crate) mod tests {
             inner_instructions: None,
             durable_nonce_fee: Some(DurableNonceFee::from(
                 &NonceFull::from_partial(
-                    rollback_partial,
+                    &rollback_partial,
                     &SanitizedMessage::Legacy(LegacyMessage::new(message)),
                     &[(pubkey, nonce_account)],
                     &rent_debits,

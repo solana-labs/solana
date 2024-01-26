@@ -34,7 +34,7 @@ fn test_transfer() {
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        1,
+        fee_one_sig,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );
@@ -325,13 +325,14 @@ fn test_transfer() {
 #[test]
 fn test_transfer_multisession_signing() {
     solana_logger::setup();
-    let fee = FeeStructure::default().get_max_fee(2, 0);
+    let fee_one_sig = FeeStructure::default().get_max_fee(1, 0);
+    let fee_two_sig = FeeStructure::default().get_max_fee(2, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        1,
+        fee_one_sig,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );
@@ -355,7 +356,7 @@ fn test_transfer_multisession_signing() {
         &rpc_client,
         &CliConfig::recent_for_tests(),
         &offline_fee_payer_signer.pubkey(),
-        sol_to_lamports(1.0) + 2 * fee,
+        sol_to_lamports(1.0) + 2 * fee_two_sig,
     )
     .unwrap();
     check_balance!(
@@ -364,7 +365,7 @@ fn test_transfer_multisession_signing() {
         &offline_from_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(1.0) + 2 * fee,
+        sol_to_lamports(1.0) + 2 * fee_two_sig,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
@@ -467,7 +468,7 @@ fn test_transfer_multisession_signing() {
         &offline_from_signer.pubkey(),
     );
     check_balance!(
-        sol_to_lamports(1.0) + fee,
+        sol_to_lamports(1.0) + fee_two_sig,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
@@ -483,7 +484,7 @@ fn test_transfer_all() {
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        1,
+        fee,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );
@@ -592,7 +593,7 @@ fn test_transfer_with_seed() {
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        1,
+        fee,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );

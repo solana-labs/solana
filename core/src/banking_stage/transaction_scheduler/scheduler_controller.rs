@@ -10,6 +10,7 @@ use {
     },
     crate::banking_stage::{
         consume_worker::ConsumeWorkerMetrics,
+        consumer::Consumer,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         packet_deserializer::PacketDeserializer,
@@ -17,6 +18,7 @@ use {
     },
     crossbeam_channel::RecvTimeoutError,
     solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
+    solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
@@ -163,8 +165,17 @@ impl SchedulerController {
             &mut error_counters,
         );
 
-        for ((check_result, _), result) in check_results.into_iter().zip(results.iter_mut()) {
-            *result = check_result.is_ok();
+        let fee_check_results: Vec<_> = check_results
+            .into_iter()
+            .zip(transactions)
+            .map(|((result, _nonce), tx)| {
+                result?; // if there's already error do nothing
+                Consumer::check_fee_payer_unlocked(bank, tx.message(), &mut error_counters)
+            })
+            .collect();
+
+        for (fee_check_result, result) in fee_check_results.into_iter().zip(results.iter_mut()) {
+            *result = fee_check_result.is_ok();
         }
     }
 
@@ -332,6 +343,8 @@ impl SchedulerController {
             {
                 saturating_add_assign!(post_transaction_check_count, 1);
                 let transaction_id = self.transaction_id_generator.next();
+
+                let transaction_cost = CostModel::calculate_cost(&transaction, &bank.feature_set);
                 let transaction_ttl = SanitizedTransactionTTL {
                     transaction,
                     max_age_slot: last_slot_in_epoch,
@@ -341,6 +354,7 @@ impl SchedulerController {
                     transaction_id,
                     transaction_ttl,
                     priority_details,
+                    transaction_cost,
                 ) {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
                 }
@@ -580,13 +594,11 @@ mod tests {
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
             poh_config::PohConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
-            system_instruction, transaction::Transaction,
+            system_instruction, system_transaction, transaction::Transaction,
         },
         std::sync::{atomic::AtomicBool, Arc, RwLock},
         tempfile::TempDir,
     };
-
-    const TEST_TIMEOUT: Duration = Duration::from_millis(1000);
 
     fn create_channels<T>(num: usize) -> (Vec<Sender<T>>, Vec<Receiver<T>>) {
         (0..num).map(|_| unbounded()).unzip()
@@ -596,6 +608,7 @@ mod tests {
     // such that our tests can be more easily set up and run.
     struct TestFrame {
         bank: Arc<Bank>,
+        mint_keypair: Keypair,
         _ledger_path: TempDir,
         _entry_receiver: Receiver<WorkingBankEntry>,
         _record_receiver: Receiver<Record>,
@@ -607,7 +620,11 @@ mod tests {
     }
 
     fn create_test_frame(num_threads: usize) -> (TestFrame, SchedulerController) {
-        let GenesisConfigInfo { genesis_config, .. } = create_slow_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(u64::MAX);
         let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -637,6 +654,7 @@ mod tests {
 
         let test_frame = TestFrame {
             bank,
+            mint_keypair,
             _ledger_path: ledger_path,
             _entry_receiver: entry_receiver,
             _record_receiver: record_receiver,
@@ -656,13 +674,26 @@ mod tests {
         (test_frame, scheduler_controller)
     }
 
-    fn prioritized_tranfer(
+    fn create_and_fund_prioritized_transfer(
+        bank: &Bank,
+        mint_keypair: &Keypair,
         from_keypair: &Keypair,
         to_pubkey: &Pubkey,
         lamports: u64,
         priority: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
+        // Fund the sending key, so that the transaction does not get filtered by the fee-payer check.
+        {
+            let transfer = system_transaction::transfer(
+                mint_keypair,
+                &from_keypair.pubkey(),
+                500_000, // just some amount that will always be enough
+                bank.last_blockhash(),
+            );
+            bank.process_transaction(&transfer).unwrap();
+        }
+
         let transfer = system_instruction::transfer(&from_keypair.pubkey(), to_pubkey, lamports);
         let prioritization = ComputeBudgetInstruction::set_compute_unit_price(priority);
         let message = Message::new(&[transfer, prioritization], Some(&from_keypair.pubkey()));
@@ -674,10 +705,27 @@ mod tests {
         Arc::new((packet_batch, None))
     }
 
+    // Helper function to let test receive and then schedule packets.
+    // The order of operations here is convenient for testing, but does not
+    // match the order of operations in the actual scheduler.
+    // The actual scheduler will process immediately after the decision,
+    // in order to keep the decision as recent as possible for processing.
+    // In the tests, the decision will not become stale, so it is more convenient
+    // to receive first and then schedule.
+    fn test_receive_then_schedule(scheduler_controller: &mut SchedulerController) {
+        let decision = scheduler_controller
+            .decision_maker
+            .make_consume_or_forward_decision();
+        assert!(matches!(decision, BufferedPacketsDecision::Consume(_)));
+        assert!(scheduler_controller.receive_completed().is_ok());
+        assert!(scheduler_controller.receive_and_buffer_packets(&decision));
+        assert!(scheduler_controller.process_transactions(&decision).is_ok());
+    }
+
     #[test]
     #[should_panic(expected = "batch id 0 is not being tracked")]
     fn test_unexpected_batch_id() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, scheduler_controller) = create_test_frame(1);
         let TestFrame {
             finished_consume_work_sender,
             ..
@@ -695,14 +743,15 @@ mod tests {
             })
             .unwrap();
 
-        central_scheduler_banking_stage.run().unwrap();
+        scheduler_controller.run().unwrap();
     }
 
     #[test]
     fn test_schedule_consume_single_threaded_no_conflicts() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, mut scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
+            mint_keypair,
             poh_recorder,
             banking_packet_sender,
             consume_work_receivers,
@@ -713,17 +762,20 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
 
         // Send packet batch to the scheduler - should do nothing until we become the leader.
-        let tx1 = prioritized_tranfer(
+        let tx1 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
             1,
             bank.last_blockhash(),
         );
-        let tx2 = prioritized_tranfer(
+        let tx2 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
@@ -738,9 +790,8 @@ mod tests {
             .send(to_banking_packet_batch(&txs))
             .unwrap();
 
-        let consume_work = consume_work_receivers[0]
-            .recv_timeout(TEST_TIMEOUT)
-            .unwrap();
+        test_receive_then_schedule(&mut scheduler_controller);
+        let consume_work = consume_work_receivers[0].try_recv().unwrap();
         assert_eq!(consume_work.ids.len(), 2);
         assert_eq!(consume_work.transactions.len(), 2);
         let message_hashes = consume_work
@@ -749,16 +800,14 @@ mod tests {
             .map(|tx| tx.message_hash())
             .collect_vec();
         assert_eq!(message_hashes, vec![&tx2_hash, &tx1_hash]);
-
-        drop(test_frame);
-        let _ = scheduler_thread.join();
     }
 
     #[test]
     fn test_schedule_consume_single_threaded_conflict() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, mut scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
+            mint_keypair,
             poh_recorder,
             banking_packet_sender,
             consume_work_receivers,
@@ -769,11 +818,26 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
 
         let pk = Pubkey::new_unique();
-        let tx1 = prioritized_tranfer(&Keypair::new(), &pk, 1, 1, bank.last_blockhash());
-        let tx2 = prioritized_tranfer(&Keypair::new(), &pk, 1, 2, bank.last_blockhash());
+        let tx1 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
+            &Keypair::new(),
+            &pk,
+            1,
+            1,
+            bank.last_blockhash(),
+        );
+        let tx2 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
+            &Keypair::new(),
+            &pk,
+            1,
+            2,
+            bank.last_blockhash(),
+        );
         let tx1_hash = tx1.message().hash();
         let tx2_hash = tx2.message().hash();
 
@@ -783,12 +847,9 @@ mod tests {
             .unwrap();
 
         // We expect 2 batches to be scheduled
+        test_receive_then_schedule(&mut scheduler_controller);
         let consume_works = (0..2)
-            .map(|_| {
-                consume_work_receivers[0]
-                    .recv_timeout(TEST_TIMEOUT)
-                    .unwrap()
-            })
+            .map(|_| consume_work_receivers[0].try_recv().unwrap())
             .collect_vec();
 
         let num_txs_per_batch = consume_works.iter().map(|cw| cw.ids.len()).collect_vec();
@@ -798,23 +859,20 @@ mod tests {
             .collect_vec();
         assert_eq!(num_txs_per_batch, vec![1; 2]);
         assert_eq!(message_hashes, vec![&tx2_hash, &tx1_hash]);
-
-        drop(test_frame);
-        let _ = scheduler_thread.join();
     }
 
     #[test]
     fn test_schedule_consume_single_threaded_multi_batch() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, mut scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
+            mint_keypair,
             poh_recorder,
             banking_packet_sender,
             consume_work_receivers,
             ..
         } = &test_frame;
 
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
         poh_recorder
             .write()
             .unwrap()
@@ -823,7 +881,9 @@ mod tests {
         // Send multiple batches - all get scheduled
         let txs1 = (0..2 * TARGET_NUM_TRANSACTIONS_PER_BATCH)
             .map(|i| {
-                prioritized_tranfer(
+                create_and_fund_prioritized_transfer(
+                    bank,
+                    mint_keypair,
                     &Keypair::new(),
                     &Pubkey::new_unique(),
                     i as u64,
@@ -834,7 +894,9 @@ mod tests {
             .collect_vec();
         let txs2 = (0..2 * TARGET_NUM_TRANSACTIONS_PER_BATCH)
             .map(|i| {
-                prioritized_tranfer(
+                create_and_fund_prioritized_transfer(
+                    bank,
+                    mint_keypair,
                     &Keypair::new(),
                     &Pubkey::new_unique(),
                     i as u64,
@@ -852,28 +914,23 @@ mod tests {
             .unwrap();
 
         // We expect 4 batches to be scheduled
+        test_receive_then_schedule(&mut scheduler_controller);
         let consume_works = (0..4)
-            .map(|_| {
-                consume_work_receivers[0]
-                    .recv_timeout(TEST_TIMEOUT)
-                    .unwrap()
-            })
+            .map(|_| consume_work_receivers[0].try_recv().unwrap())
             .collect_vec();
 
         assert_eq!(
             consume_works.iter().map(|cw| cw.ids.len()).collect_vec(),
             vec![TARGET_NUM_TRANSACTIONS_PER_BATCH; 4]
         );
-
-        drop(test_frame);
-        let _ = scheduler_thread.join();
     }
 
     #[test]
     fn test_schedule_consume_simple_thread_selection() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(2);
+        let (test_frame, mut scheduler_controller) = create_test_frame(2);
         let TestFrame {
             bank,
+            mint_keypair,
             poh_recorder,
             banking_packet_sender,
             consume_work_receivers,
@@ -884,12 +941,13 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
 
         // Send 4 transactions w/o conflicts. 2 should be scheduled on each thread
         let txs = (0..4)
             .map(|i| {
-                prioritized_tranfer(
+                create_and_fund_prioritized_transfer(
+                    bank,
+                    mint_keypair,
                     &Keypair::new(),
                     &Pubkey::new_unique(),
                     1,
@@ -913,15 +971,17 @@ mod tests {
             .into_iter()
             .map(|i| txs[i].message().hash())
             .collect_vec();
+
+        test_receive_then_schedule(&mut scheduler_controller);
         let t0_actual = consume_work_receivers[0]
-            .recv_timeout(TEST_TIMEOUT)
+            .try_recv()
             .unwrap()
             .transactions
             .iter()
             .map(|tx| *tx.message_hash())
             .collect_vec();
         let t1_actual = consume_work_receivers[1]
-            .recv_timeout(TEST_TIMEOUT)
+            .try_recv()
             .unwrap()
             .transactions
             .iter()
@@ -930,16 +990,14 @@ mod tests {
 
         assert_eq!(t0_actual, t0_expected);
         assert_eq!(t1_actual, t1_expected);
-
-        drop(test_frame);
-        let _ = scheduler_thread.join();
     }
 
     #[test]
     fn test_schedule_consume_retryable() {
-        let (test_frame, central_scheduler_banking_stage) = create_test_frame(1);
+        let (test_frame, mut scheduler_controller) = create_test_frame(1);
         let TestFrame {
             bank,
+            mint_keypair,
             poh_recorder,
             banking_packet_sender,
             consume_work_receivers,
@@ -951,17 +1009,20 @@ mod tests {
             .write()
             .unwrap()
             .set_bank_for_test(bank.clone());
-        let scheduler_thread = std::thread::spawn(move || central_scheduler_banking_stage.run());
 
         // Send packet batch to the scheduler - should do nothing until we become the leader.
-        let tx1 = prioritized_tranfer(
+        let tx1 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
             1,
             bank.last_blockhash(),
         );
-        let tx2 = prioritized_tranfer(
+        let tx2 = create_and_fund_prioritized_transfer(
+            bank,
+            mint_keypair,
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
@@ -976,9 +1037,8 @@ mod tests {
             .send(to_banking_packet_batch(&txs))
             .unwrap();
 
-        let consume_work = consume_work_receivers[0]
-            .recv_timeout(TEST_TIMEOUT)
-            .unwrap();
+        test_receive_then_schedule(&mut scheduler_controller);
+        let consume_work = consume_work_receivers[0].try_recv().unwrap();
         assert_eq!(consume_work.ids.len(), 2);
         assert_eq!(consume_work.transactions.len(), 2);
         let message_hashes = consume_work
@@ -997,9 +1057,8 @@ mod tests {
             .unwrap();
 
         // Transaction should be rescheduled
-        let consume_work = consume_work_receivers[0]
-            .recv_timeout(TEST_TIMEOUT)
-            .unwrap();
+        test_receive_then_schedule(&mut scheduler_controller);
+        let consume_work = consume_work_receivers[0].try_recv().unwrap();
         assert_eq!(consume_work.ids.len(), 1);
         assert_eq!(consume_work.transactions.len(), 1);
         let message_hashes = consume_work
@@ -1008,8 +1067,5 @@ mod tests {
             .map(|tx| tx.message_hash())
             .collect_vec();
         assert_eq!(message_hashes, vec![&tx1_hash]);
-
-        drop(test_frame);
-        let _ = scheduler_thread.join();
     }
 }

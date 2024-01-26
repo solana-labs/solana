@@ -20,7 +20,6 @@ use {
         pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
         transaction::SanitizedTransaction,
     },
-    std::collections::HashMap,
 };
 
 pub(crate) struct PrioGraphScheduler {
@@ -70,7 +69,6 @@ impl PrioGraphScheduler {
     ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut batches = Batches::new(num_threads);
-        let mut chain_id_to_thread_index = HashMap::new();
         // Some transactions may be unschedulable due to multi-thread conflicts.
         // These transactions cannot be scheduled until some conflicting work is completed.
         // However, the scheduler should not allow other transactions that conflict with
@@ -170,10 +168,6 @@ impl PrioGraphScheduler {
                     continue;
                 }
 
-                let maybe_chain_thread = chain_id_to_thread_index
-                    .get(&prio_graph.chain_id(&id))
-                    .copied();
-
                 // Schedule the transaction if it can be.
                 let transaction_locks = transaction.get_account_locks_unchecked();
                 let Some(thread_id) = self.account_locks.try_lock_accounts(
@@ -183,7 +177,6 @@ impl PrioGraphScheduler {
                     |thread_set| {
                         Self::select_thread(
                             thread_set,
-                            maybe_chain_thread,
                             &batches.transactions,
                             self.in_flight_tracker.num_in_flight_per_thread(),
                         )
@@ -197,13 +190,8 @@ impl PrioGraphScheduler {
 
                 saturating_add_assign!(num_scheduled, 1);
 
-                // Track the chain-id to thread-index mapping.
-                chain_id_to_thread_index.insert(prio_graph.chain_id(&id), thread_id);
-
                 let sanitized_transaction_ttl = transaction_state.transition_to_pending();
-                let cu_limit = transaction_state
-                    .transaction_priority_details()
-                    .compute_unit_limit;
+                let cost = transaction_state.transaction_cost().sum();
 
                 let SanitizedTransactionTTL {
                     transaction,
@@ -213,7 +201,7 @@ impl PrioGraphScheduler {
                 batches.transactions[thread_id].push(transaction);
                 batches.ids[thread_id].push(id.id);
                 batches.max_age_slots[thread_id].push(max_age_slot);
-                saturating_add_assign!(batches.total_cus[thread_id], cu_limit);
+                saturating_add_assign!(batches.total_cus[thread_id], cost);
 
                 // If target batch size is reached, send only this batch.
                 if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
@@ -403,16 +391,9 @@ impl PrioGraphScheduler {
     /// Panics if the `thread_set` is empty.
     fn select_thread(
         thread_set: ThreadSet,
-        chain_thread: Option<ThreadId>,
         batches_per_thread: &[Vec<SanitizedTransaction>],
         in_flight_per_thread: &[usize],
     ) -> ThreadId {
-        if let Some(chain_thread) = chain_thread {
-            if thread_set.contains(chain_thread) {
-                return chain_thread;
-            }
-        }
-
         thread_set
             .contained_threads_iter()
             .map(|thread_id| {
@@ -509,10 +490,12 @@ mod tests {
         crate::banking_stage::consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
+        solana_cost_model::cost_model::CostModel,
         solana_runtime::transaction_priority_details::TransactionPriorityDetails,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, pubkey::Pubkey,
-            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, hash::Hash,
+            message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
+            system_instruction, transaction::Transaction,
         },
         std::borrow::Borrow,
     };
@@ -585,6 +568,7 @@ mod tests {
             let id = TransactionId::new(index as u64);
             let transaction =
                 prioritized_tranfers(from_keypair.borrow(), to_pubkeys, lamports, priority);
+            let transaction_cost = CostModel::calculate_cost(&transaction, &FeatureSet::default());
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
                 max_age_slot: Slot::MAX,
@@ -596,6 +580,7 @@ mod tests {
                     priority,
                     compute_unit_limit: 1,
                 },
+                transaction_cost,
             );
         }
 
@@ -708,42 +693,6 @@ mod tests {
         assert_eq!(scheduling_summary.num_unschedulable, 0);
         assert_eq!(collect_work(&work_receivers[0]).1, [txids!([3, 1])]);
         assert_eq!(collect_work(&work_receivers[1]).1, [txids!([2, 0])]);
-    }
-
-    #[test]
-    fn test_schedule_look_ahead() {
-        let (mut scheduler, work_receivers, _finished_work_sender) = create_test_frame(2);
-
-        let accounts = (0..6).map(|_| Keypair::new()).collect_vec();
-        let mut container = create_container([
-            (&accounts[0], &[accounts[1].pubkey()], 1, 4),
-            (&accounts[1], &[accounts[2].pubkey()], 1, 3),
-            (&accounts[3], &[accounts[4].pubkey()], 1, 2),
-            (&accounts[4], &[accounts[5].pubkey()], 1, 1),
-            (&accounts[2], &[accounts[5].pubkey()], 1, 0),
-        ]);
-
-        // The look-ahead window allows the prio-graph to have a limited view of
-        // upcoming transactions, so that un-schedulable transactions are less
-        // likely to occur. In this case, we have 5 transactions that have a
-        // prio-graph that can be visualized as:
-        // [0] --> [1] \
-        //               -> [4]
-        //             /
-        // [2] --> [3]
-        // Even though [0] and [2] could be scheduled to different threads, the
-        // fact they eventually join means that the scheduler will schedule them
-        // onto the same thread to avoid causing [4], which conflicts with both
-        // chains, to be un-schedulable.
-        let scheduling_summary = scheduler
-            .schedule(&mut container, test_pre_graph_filter, test_pre_lock_filter)
-            .unwrap();
-        assert_eq!(scheduling_summary.num_scheduled, 5);
-        assert_eq!(scheduling_summary.num_unschedulable, 0);
-        assert_eq!(
-            collect_work(&work_receivers[0]).1,
-            [txids!([0, 2]), txids!([1, 3]), txids!([4])]
-        );
     }
 
     #[test]

@@ -631,7 +631,11 @@ impl Blockstore {
             }
             match data_cf.get_bytes((slot, i)).unwrap() {
                 None => {
-                    warn!("Data shred deleted while reading for recovery");
+                    error!(
+                        "Unable to read the data shred with slot {slot}, index {i} for shred \
+                         recovery. The shred is marked present in the slot's data shred index, \
+                         but the shred could not be found in the data shred column."
+                    );
                     None
                 }
                 Some(data) => Shred::new_from_serialized_shred(data).ok(),
@@ -656,7 +660,11 @@ impl Blockstore {
             }
             match code_cf.get_bytes((slot, i)).unwrap() {
                 None => {
-                    warn!("Code shred deleted while reading for recovery");
+                    error!(
+                        "Unable to read the coding shred with slot {slot}, index {i} for shred \
+                         recovery. The shred is marked present in the slot's coding shred index, \
+                         but the shred could not be found in the coding shred column."
+                    );
                     None
                 }
                 Some(code) => Shred::new_from_serialized_shred(code).ok(),
@@ -1795,7 +1803,7 @@ impl Blockstore {
         };
 
         // Parent for slot meta should have been set by this point
-        assert!(!is_orphan(slot_meta));
+        assert!(!slot_meta.is_orphan());
 
         let new_consumed = if slot_meta.consumed == index {
             let mut current_index = index + 1;
@@ -3814,7 +3822,8 @@ impl Blockstore {
         let meta_backup = &slot_meta_entry.old_slot_meta;
         {
             let mut meta_mut = meta.borrow_mut();
-            let was_orphan_slot = meta_backup.is_some() && is_orphan(meta_backup.as_ref().unwrap());
+            let was_orphan_slot =
+                meta_backup.is_some() && meta_backup.as_ref().unwrap().is_orphan();
 
             // If:
             // 1) This is a new slot
@@ -3840,7 +3849,7 @@ impl Blockstore {
 
                     // If the parent of `slot` is a newly inserted orphan, insert it into the orphans
                     // column family
-                    if is_orphan(&RefCell::borrow(&*prev_slot_meta)) {
+                    if RefCell::borrow(&*prev_slot_meta).is_orphan() {
                         write_batch.put::<cf::Orphans>(prev_slot, &true)?;
                     }
                 }
@@ -3948,7 +3957,7 @@ impl Blockstore {
                 // during the chaining process, see the function find_slot_meta_in_cached_state()
                 // for details. Slots that are orphans are missing a parent_slot, so we should
                 // fill in the parent now that we know it.
-                if is_orphan(&meta) {
+                if meta.is_orphan() {
                     meta.parent_slot = Some(parent_slot);
                 }
 
@@ -4206,12 +4215,6 @@ fn find_slot_meta_in_cached_state<'a>(
     } else {
         chained_slots.get(&slot).cloned()
     }
-}
-
-fn is_orphan(meta: &SlotMeta) -> bool {
-    // If we have no parent, then this is the head of a detached chain of
-    // slots
-    meta.parent_slot.is_none()
 }
 
 // 1) Chain current_slot to the previous slot defined by prev_slot_meta
@@ -6316,7 +6319,7 @@ pub mod tests {
             .meta(1)
             .expect("Expect database get to succeed")
             .unwrap();
-        assert!(is_orphan(&meta));
+        assert!(meta.is_orphan());
         assert_eq!(
             blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
             vec![1]
@@ -6332,12 +6335,12 @@ pub mod tests {
             .meta(1)
             .expect("Expect database get to succeed")
             .unwrap();
-        assert!(!is_orphan(&meta));
+        assert!(!meta.is_orphan());
         let meta = blockstore
             .meta(0)
             .expect("Expect database get to succeed")
             .unwrap();
-        assert!(is_orphan(&meta));
+        assert!(meta.is_orphan());
         assert_eq!(
             blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
             vec![0]
@@ -6361,7 +6364,7 @@ pub mod tests {
                 .meta(i)
                 .expect("Expect database get to succeed")
                 .unwrap();
-            assert!(!is_orphan(&meta));
+            assert!(!meta.is_orphan());
         }
         // Orphans cf is empty
         assert!(blockstore.orphans_cf.is_empty().unwrap());

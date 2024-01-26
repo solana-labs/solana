@@ -263,6 +263,13 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    /// Returns a boolean indicating whether this meta's parent slot is known.
+    /// This value being true indicates that this meta's slot is the head of a
+    /// detached chain of slots.
+    pub(crate) fn is_orphan(&self) -> bool {
+        self.parent_slot.is_none()
+    }
+
     /// Returns a boolean indicating whether the meta is connected.
     pub fn is_connected(&self) -> bool {
         self.connected_flags.contains(ConnectedFlags::CONNECTED)

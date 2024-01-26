@@ -32,6 +32,8 @@ pub const VERIFY_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 6_40
 pub const VERIFY_BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_COMPUTE_UNITS: u64 = 13_000;
 pub const VERIFY_FEE_SIGMA_COMPUTE_UNITS: u64 = 6_500;
 
+const INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT: usize = 5;
+
 fn process_verify_proof<T, U>(invoke_context: &mut InvokeContext) -> Result<(), InstructionError>
 where
     T: Pod + ZkProofData<U>,
@@ -40,24 +42,75 @@ where
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let proof_data = ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
-        ic_msg!(invoke_context, "invalid proof data");
-        InstructionError::InvalidInstructionData
-    })?;
 
-    proof_data.verify_proof().map_err(|err| {
-        ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
-        InstructionError::InvalidInstructionData
-    })?;
+    // number of accessed accounts so far
+    let mut accessed_accounts = 0_u16;
 
-    // create context state if accounts are provided with the instruction
-    if instruction_context.get_number_of_instruction_accounts() > 0 {
+    // if instruction data is exactly 5 bytes, then read proof from an account
+    let context_data = if instruction_data.len() == INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT {
+        if !invoke_context
+            .feature_set
+            .is_active(&feature_set::enable_zk_proof_from_account::id())
+        {
+            return Err(InstructionError::InvalidInstructionData);
+        }
+
+        let proof_data_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
+        accessed_accounts = accessed_accounts.checked_add(1).unwrap();
+
+        let proof_data_offset = u32::from_le_bytes(
+            // the first byte is the instruction discriminator
+            instruction_data[1..INSTRUCTION_DATA_LENGTH_WITH_PROOF_ACCOUNT]
+                .try_into()
+                .map_err(|_| InstructionError::InvalidInstructionData)?,
+        );
+        let proof_data_start: usize = proof_data_offset
+            .try_into()
+            .map_err(|_| InstructionError::InvalidInstructionData)?;
+        let proof_data_end = proof_data_start
+            .checked_add(std::mem::size_of::<T>())
+            .ok_or(InstructionError::InvalidInstructionData)?;
+        let proof_data_raw = proof_data_account
+            .get_data()
+            .get(proof_data_start..proof_data_end)
+            .ok_or(InstructionError::InvalidAccountData)?;
+
+        let proof_data = bytemuck::try_from_bytes::<T>(proof_data_raw).map_err(|_| {
+            ic_msg!(invoke_context, "invalid proof data");
+            InstructionError::InvalidInstructionData
+        })?;
+        proof_data.verify_proof().map_err(|err| {
+            ic_msg!(invoke_context, "proof verification failed: {:?}", err);
+            InstructionError::InvalidInstructionData
+        })?;
+
+        *proof_data.context_data()
+    } else {
+        let proof_data =
+            ProofInstruction::proof_data::<T, U>(instruction_data).ok_or_else(|| {
+                ic_msg!(invoke_context, "invalid proof data");
+                InstructionError::InvalidInstructionData
+            })?;
+        proof_data.verify_proof().map_err(|err| {
+            ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
+            InstructionError::InvalidInstructionData
+        })?;
+
+        *proof_data.context_data()
+    };
+
+    // create context state if additional accounts are provided with the instruction
+    if instruction_context.get_number_of_instruction_accounts() > accessed_accounts {
         let context_state_authority = *instruction_context
-            .try_borrow_instruction_account(transaction_context, 1)?
+            .try_borrow_instruction_account(
+                transaction_context,
+                accessed_accounts.checked_add(1).unwrap(),
+            )?
             .get_key();
 
-        let mut proof_context_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let mut proof_context_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, accessed_accounts)?;
 
         if *proof_context_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
@@ -70,11 +123,8 @@ where
             return Err(InstructionError::AccountAlreadyInitialized);
         }
 
-        let context_state_data = ProofContextState::encode(
-            &context_state_authority,
-            T::PROOF_TYPE,
-            proof_data.context_data(),
-        );
+        let context_state_data =
+            ProofContextState::encode(&context_state_authority, T::PROOF_TYPE, &context_data);
 
         if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);
@@ -135,11 +185,6 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
 }
 
 declare_process_instruction!(Entrypoint, 0, |invoke_context| {
-    // Consume compute units if feature `native_programs_consume_cu` is activated
-    let native_programs_consume_cu = invoke_context
-        .feature_set
-        .is_active(&feature_set::native_programs_consume_cu::id());
-
     let enable_zk_transfer_with_fee = invoke_context
         .feature_set
         .is_active(&feature_set::enable_zk_transfer_with_fee::id());
@@ -159,38 +204,30 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
 
     match instruction {
         ProofInstruction::CloseContextState => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(CLOSE_CONTEXT_STATE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(CLOSE_CONTEXT_STATE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
         ProofInstruction::VerifyZeroBalance => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_ZERO_BALANCE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_ZERO_BALANCE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyZeroBalance");
             process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_WITHDRAW_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_WITHDRAW_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
         ProofInstruction::VerifyCiphertextCiphertextEquality => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_CIPHERTEXT_CIPHERTEXT_EQUALITY_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyCiphertextCiphertextEquality");
             process_verify_proof::<
                 CiphertextCiphertextEqualityProofData,
@@ -198,11 +235,9 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
             >(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_TRANSFER_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_TRANSFER_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyTransfer");
             process_verify_proof::<TransferData, TransferProofContext>(invoke_context)
         }
@@ -212,60 +247,53 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
                 return Err(InstructionError::InvalidInstructionData);
             }
 
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_TRANSFER_WITH_FEE_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             process_verify_proof::<TransferWithFeeData, TransferWithFeeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyPubkeyValidity => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_PUBKEY_VALIDITY_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
         ProofInstruction::VerifyRangeProofU64 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_RANGE_PROOF_U64_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyRangeProof");
             process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyBatchedRangeProofU64 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U64_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof64");
             process_verify_proof::<BatchedRangeProofU64Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }
         ProofInstruction::VerifyBatchedRangeProofU128 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U128_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof128");
             process_verify_proof::<BatchedRangeProofU128Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }
         ProofInstruction::VerifyBatchedRangeProofU256 => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            // transfer with fee related proofs are not enabled
+            if !enable_zk_transfer_with_fee {
+                return Err(InstructionError::InvalidInstructionData);
             }
+
+            invoke_context
+                .consume_checked(VERIFY_BATCHED_RANGE_PROOF_U256_COMPUTE_UNITS)
+                .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             ic_msg!(invoke_context, "VerifyBatchedRangeProof256");
             process_verify_proof::<BatchedRangeProofU256Data, BatchedRangeProofContext>(
                 invoke_context,

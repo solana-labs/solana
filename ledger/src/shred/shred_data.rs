@@ -97,8 +97,8 @@ impl ShredData {
     // Possibly zero pads bytes stored in blockstore.
     pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
         match shred::layout::get_shred_variant(&shred)? {
-            ShredVariant::LegacyCode | ShredVariant::MerkleCode(_) => Err(Error::InvalidShredType),
-            ShredVariant::MerkleData(_) => {
+            ShredVariant::LegacyCode | ShredVariant::MerkleCode(..) => Err(Error::InvalidShredType),
+            ShredVariant::MerkleData(..) => {
                 if shred.len() != merkle::ShredData::SIZE_OF_PAYLOAD {
                     return Err(Error::InvalidPayloadSize(shred.len()));
                 }
@@ -111,10 +111,12 @@ impl ShredData {
     // Maximum size of ledger data that can be embedded in a data-shred.
     // merkle_proof_size is the number of merkle proof entries.
     // None indicates a legacy data-shred.
-    pub fn capacity(merkle_proof_size: Option<u8>) -> Result<usize, Error> {
-        match merkle_proof_size {
+    pub fn capacity(
+        merkle_variant: Option<(/*proof_size:*/ u8, /*chained:*/ bool)>,
+    ) -> Result<usize, Error> {
+        match merkle_variant {
             None => Ok(legacy::ShredData::CAPACITY),
-            Some(proof_size) => merkle::ShredData::capacity(proof_size),
+            Some((proof_size, chained)) => merkle::ShredData::capacity(proof_size, chained),
         }
     }
 

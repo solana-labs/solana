@@ -4,9 +4,9 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_accounts_db::{
-        accounts_db::{create_accounts_run_and_snapshot_dirs, AccountsDbConfig},
-        accounts_index::AccountsIndexConfig,
+        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,

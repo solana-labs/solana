@@ -8,17 +8,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 and follows a [Backwards Compatibility Policy](https://docs.solanalabs.com/backwards-compatibility)
 
 Release channels have their own copy of this changelog:
-* [edge - v1.18](#edge-channel)
-* [beta - v1.17](https://github.com/solana-labs/solana/blob/v1.17/CHANGELOG.md)
-* [stable - v1.16](https://github.com/solana-labs/solana/blob/v1.16/CHANGELOG.md)
+* [edge - v2.0](#edge-channel)
+* [beta - v1.18](https://github.com/solana-labs/solana/blob/v1.18/CHANGELOG.md)
+* [stable - v1.17](https://github.com/solana-labs/solana/blob/v1.17/CHANGELOG.md)
 
 <a name="edge-channel"></a>
-## [1.18.0] - Unreleased
+## [2.0.0] - Unreleased
+
+## [1.18.0]
 * Changes
   * Added a github check to support `changelog` label
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
     * The default for `solana-ledger-tool`, however, remains `always` (#34228)
   * Added `central-scheduler` option for `--block-production-method` (#33890)
+    * `central-scheduler` as default option for `--block-production-method` (#34891)
   * Updated to Borsh v1
   * Added allow_commission_decrease_at_any_time feature which will allow commission on a vote account to be
     decreased even in the second half of epochs when the commission_updates_only_allowed_in_first_half_of_epoch
@@ -29,6 +32,9 @@ Release channels have their own copy of this changelog:
   * Bigtable upload now includes entry summary data for each slot, stored in a
     new `entries` table
   * Forbid multiple values for the `--signer` CLI flag, forcing users to specify multiple occurrences of `--signer`, one for each signature
+  * New program deployments default to the exact size of a program, instead of
+    double the size. Program accounts must be extended with `solana program extend`
+    before an upgrade if they need to accommodate larger programs.
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.

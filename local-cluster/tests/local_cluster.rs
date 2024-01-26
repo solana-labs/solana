@@ -7,7 +7,7 @@ use {
     rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
-        accounts_db::create_accounts_run_and_snapshot_dirs, hardened_unpack::open_genesis_config,
+        hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_client::thin_client::ThinClient,
     solana_core::{
@@ -16,7 +16,7 @@ use {
         },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        validator::{BlockVerificationMethod, ValidatorConfig},
+        validator::{BlockProductionMethod, BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_entry::entry::create_ticks,
@@ -349,11 +349,16 @@ fn test_forwarding() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
+    // Only ThreadLocalMultiIterator banking stage forwards transactions,
+    // so must use that block-production-method.
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default_for_test(),
+            &ValidatorConfig {
+                block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+                ..ValidatorConfig::default_for_test()
+            },
             2,
         ),
         ..ClusterConfig::default()
@@ -2196,7 +2201,7 @@ fn create_snapshot_to_hard_fork(
         ..ProcessOptions::default()
     };
     let ledger_path = blockstore.ledger_path();
-    let genesis_config = open_genesis_config(ledger_path, u64::max_value());
+    let genesis_config = open_genesis_config(ledger_path, u64::max_value()).unwrap();
     let snapshot_config = create_simple_snapshot_config(ledger_path);
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
@@ -2263,7 +2268,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
     let validator_config = ValidatorConfig {
         snapshot_config: LocalCluster::create_dummy_load_only_snapshot_config(),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
         cluster_lamports: 100_000,
@@ -4257,7 +4262,10 @@ fn test_leader_failure_4() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_leader_failure_4");
     let num_nodes = 4;
-    let validator_config = ValidatorConfig::default_for_test();
+    let validator_config = ValidatorConfig {
+        block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+        ..ValidatorConfig::default_for_test()
+    };
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         node_stakes: vec![DEFAULT_NODE_STAKE; 4],
@@ -5228,7 +5236,7 @@ fn test_duplicate_shreds_switch_failure() {
                 validator_keypair,
                 validator_config: ValidatorConfig {
                     voting_disabled,
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 },
                 in_genesis,
             }
