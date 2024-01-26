@@ -47,7 +47,7 @@ fn bench_schedule_task(account_count: usize) {
     //panic!("{:?}", txn);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
-    let task = SchedulingStateMachine::create_task(tx0, 0, |_| Page::default());
+    let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     toggle_collect();
     let task = scheduler.schedule_task(task).unwrap();
