@@ -871,4 +871,10 @@ mod tests {
         let page = pages.get(task2.transaction().message().fee_payer()).unwrap();
         assert_matches!(page.0.borrow(&state_machine.page_token).current_usage, Usage::Unused);
     }
+
+    #[test]
+    fn test_unreachable_unlock_conditions() {
+        let mut state_machine = SchedulingStateMachine::default();
+        SchedulingStateMachine::unlock(&mut state_machine.page_token, LockAttempt::new(Page::default(), RequestedUsage::Writable)]);
+    }
 }
