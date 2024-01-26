@@ -761,7 +761,7 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
-        let page = pages.lock().unwrap().get(conflicting_address).unwrap();
+        let page = pages.lock().unwrap().get(&conflicting_address).unwrap();
         dbg!(page.0.borrow(&state_machine.page_token));
     }
 }
