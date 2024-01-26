@@ -761,6 +761,7 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
-        dbg!(pages);
+        for page in pages.lock().unwrap().values() {
+        }
     }
 }
