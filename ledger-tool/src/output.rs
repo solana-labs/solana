@@ -6,6 +6,7 @@ use {
         Deserialize, Serialize,
     },
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_accounts_db::accounts_index::ScanConfig,
     solana_cli_output::{
         display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
         VerboseDisplay,
@@ -575,6 +576,7 @@ pub struct AccountsOutputStreamer {
 pub enum AccountsOutputMode {
     AllAccounts,
     IndividualAccounts(Vec<Pubkey>),
+    ProgramAccounts(Pubkey),
 }
 
 pub struct AccountsOutputConfig {
@@ -614,7 +616,10 @@ impl AccountsOutputStreamer {
                     .serialize_field("summary", &*self.total_accounts_stats.borrow())
                     .map_err(|err| format!("unable to serialize accounts summary: {err}"))?;
                 SerializeStruct::end(struct_serializer)
-                    .map_err(|err| format!("unable to end serialization: {err}"))
+                    .map_err(|err| format!("unable to end serialization: {err}"))?;
+                // The serializer doesn't give us a trailing newline so do it ourselves
+                println!("");
+                Ok(())
             }
             _ => {
                 // The compiler needs a placeholder type to satisfy the generic
@@ -648,7 +653,7 @@ impl AccountsScanner {
         seq_serializer: &mut Option<S>,
         pubkey: &Pubkey,
         account: &AccountSharedData,
-        slot: Slot,
+        slot: Option<Slot>,
         cli_account_new_config: &CliAccountNewConfig,
     ) where
         S: SerializeSeq,
@@ -662,7 +667,7 @@ impl AccountsScanner {
                 output_account(
                     pubkey,
                     &account,
-                    Some(slot),
+                    slot,
                     self.config.include_account_data,
                     self.config.account_data_encoding,
                 );
@@ -691,7 +696,7 @@ impl AccountsScanner {
                     seq_serializer,
                     pubkey,
                     &account,
-                    slot,
+                    Some(slot),
                     &cli_account_new_config,
                 );
             }
@@ -712,11 +717,27 @@ impl AccountsScanner {
                         seq_serializer,
                         pubkey,
                         &account,
-                        slot,
+                        Some(slot),
                         &cli_account_new_config,
                     );
                 }
             }),
+            AccountsOutputMode::ProgramAccounts(program_pubkey) => self
+                .bank
+                .get_program_accounts(&program_pubkey, &ScanConfig::default())
+                .unwrap()
+                .iter()
+                .filter(|(pubkey, account)| self.should_process_account(account, pubkey))
+                .for_each(|(pubkey, account)| {
+                    total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                    self.maybe_output_account(
+                        seq_serializer,
+                        pubkey,
+                        &account,
+                        None,
+                        &cli_account_new_config,
+                    );
+                }),
         }
     }
 }

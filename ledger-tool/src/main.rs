@@ -1346,6 +1346,15 @@ fn main() {
                             "Limit output to accounts corresponding to the specified pubkey(s), \
                             may be specified multiple times",
                         ),
+                )
+                .arg(
+                    Arg::with_name("program_accounts")
+                        .long("program-accounts")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .conflicts_with("account")
+                        .help("Limit output to accounts owned by the provided program pubkey"),
                 ),
         )
         .subcommand(
@@ -2192,9 +2201,14 @@ fn main() {
                     let include_account_contents = !arg_matches.is_present("no_account_contents");
                     let include_account_data = !arg_matches.is_present("no_account_data");
                     let account_data_encoding = parse_encoding_format(arg_matches);
-                    let mode = if let Some(accounts) = pubkeys_of(arg_matches, "account") {
-                        AccountsOutputMode::IndividualAccounts(accounts)
+                    let mode = if let Some(pubkeys) = pubkeys_of(arg_matches, "account") {
+                        info!("Scanning individual accounts: {pubkeys:?}");
+                        AccountsOutputMode::IndividualAccounts(pubkeys)
+                    } else if let Some(pubkey) = pubkey_of(arg_matches, "program_accounts") {
+                        info!("Scanning program accounts for {pubkey}");
+                        AccountsOutputMode::ProgramAccounts(pubkey)
                     } else {
+                        info!("Scanning all accounts");
                         AccountsOutputMode::AllAccounts
                     };
                     let config = AccountsOutputConfig {
