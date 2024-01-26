@@ -334,7 +334,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        assert!(task.has_been_scheduled(&self.task_token), "descheduling unscheduled task: {task:?}...");
+        assert!(task.has_been_scheduled(&self.task_token), "descheduling unknown task: {task:?}");
 
         self.active_task_count -= 1;
         self.handled_task_count += 1;
@@ -643,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "aaaa")]
+    #[should_panic(expected = "descheduling unknown task")]
     fn test_deschedule_task_without_scheduling_first() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader();
