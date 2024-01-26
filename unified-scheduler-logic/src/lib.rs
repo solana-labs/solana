@@ -752,10 +752,11 @@ mod tests {
     fn test_schedule_non_conflicting_readonly_task() {
         let sanitized1 = transaction_with_2_writable(Pubkey::new_unique());
         let pages = Arc::new(Mutex::new(HashMap::new()));
-        let address_loader = &mut create_address_loader(Some(pages));
+        let address_loader = &mut create_address_loader(Some(pages.clone()));
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        dbg!(pages);
     }
 }
