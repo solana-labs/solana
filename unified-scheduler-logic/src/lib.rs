@@ -1,13 +1,12 @@
 #![allow(clippy::arithmetic_side_effects)]
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::{field_qualifiers, qualifiers};
 use {
     crate::cell::{SchedulerCell, Token},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{collections::BTreeMap, sync::Arc},
 };
-
-#[cfg(feature = "dev-context-only-utils")]
-use qualifier_attr::{field_qualifiers, qualifiers};
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -30,10 +29,9 @@ struct TaskStatus {
 }
 
 mod cell {
-    use std::{cell::UnsafeCell, marker::PhantomData};
-
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
+    use std::{cell::UnsafeCell, marker::PhantomData};
 
     #[derive(Debug, Default)]
     pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
@@ -486,35 +484,37 @@ impl SchedulingStateMachine {
             return None;
         }
 
-        match task_source { TaskSource::Retryable => {
-            task.mark_as_uncontended(&mut self.task_token);
+        match task_source {
+            TaskSource::Retryable => {
+                task.mark_as_uncontended(&mut self.task_token);
 
-            for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
-            }
+                for attempt in task.lock_attempts_mut(&mut self.task_token) {
+                    attempt.page_mut(&mut self.page_token).current_usage = attempt.uncommited_usage;
+                }
 
-            // as soon as `task` is succeeded in locking, trigger re-checks on read only
-            // addresses so that more readonly transactions can be executed
-            for read_only_lock_attempt in task
-                .lock_attempts(&self.task_token)
-                .iter()
-                .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
-            {
-                if let Some(heaviest_blocked_task) = read_only_lock_attempt
-                    .page_mut(&mut self.page_token)
-                    .heaviest_still_blocked_task(&self.task_token)
-                    .and_then(|(task, requested_usage)| {
-                        matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
-                    })
+                // as soon as `task` is succeeded in locking, trigger re-checks on read only
+                // addresses so that more readonly transactions can be executed
+                for read_only_lock_attempt in task
+                    .lock_attempts(&self.task_token)
+                    .iter()
+                    .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                 {
-                    self.retryable_task_queue
-                        .entry(heaviest_blocked_task.unique_weight)
-                        .or_insert_with(|| heaviest_blocked_task.clone());
+                    if let Some(heaviest_blocked_task) = read_only_lock_attempt
+                        .page_mut(&mut self.page_token)
+                        .heaviest_still_blocked_task(&self.task_token)
+                        .and_then(|(task, requested_usage)| {
+                            matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
+                        })
+                    {
+                        self.retryable_task_queue
+                            .entry(heaviest_blocked_task.unique_weight)
+                            .or_insert_with(|| heaviest_blocked_task.clone());
+                    }
                 }
             }
-        }, TaskSource::Runnable =>  {
-            task.mark_as_idle(&mut self.task_token);
-        },
+            TaskSource::Runnable => {
+                task.mark_as_idle(&mut self.task_token);
+            }
         }
 
         Some(task)
