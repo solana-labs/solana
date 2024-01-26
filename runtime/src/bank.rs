@@ -1533,11 +1533,7 @@ impl Bank {
         // After saving a snapshot of stakes, apply stake rewards and commission
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
-                if self.is_partitioned_rewards_feature_enabled()
-                    || self
-                        .partitioned_epoch_rewards_config()
-                        .test_enable_partitioned_rewards
-                {
+                if self.is_partitioned_rewards_code_enabled() {
                     self.begin_partitioned_rewards(
                         reward_calc_tracer,
                         &thread_pool,
@@ -1593,6 +1589,13 @@ impl Bank {
                 self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
             }
         }
+    }
+
+    fn force_partition_rewards_in_first_block_of_epoch(&self) -> bool {
+        self.partitioned_epoch_rewards_config()
+            .test_enable_partitioned_rewards
+            && self.get_reward_calculation_num_blocks() == 0
+            && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX
     }
 
     /// Begin the process of calculating and distributing rewards.
@@ -3622,7 +3625,18 @@ impl Bank {
             &solana_sdk::sysvar::id(),
         )
         .unwrap();
-        self.store_account_and_update_capitalization(&address, &new_account);
+
+        info!(
+            "create epoch rewards partition data account {} {address} \
+            {epoch_rewards_partition_data:?}",
+            self.slot
+        );
+
+        // Skip storing data account when we are testing partitioned
+        // rewards but feature is not yet active
+        if !self.force_partition_rewards_in_first_block_of_epoch() {
+            self.store_account_and_update_capitalization(&address, &new_account);
+        }
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
@@ -6993,12 +7007,8 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         let slot = self.slot();
         let ignore = (!self.is_partitioned_rewards_feature_enabled()
-            && (self
-                .partitioned_epoch_rewards_config()
-                .test_enable_partitioned_rewards
-                && self.get_reward_calculation_num_blocks() == 0
-                && self.partitioned_rewards_stake_account_stores_per_block() == u64::MAX))
-            .then_some(sysvar::epoch_rewards::id());
+            && self.force_partition_rewards_in_first_block_of_epoch())
+        .then_some(sysvar::epoch_rewards::id());
         let accounts_delta_hash = self
             .rc
             .accounts
