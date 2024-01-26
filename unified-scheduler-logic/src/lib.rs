@@ -749,6 +749,25 @@ mod tests {
     }
 
     #[test]
+    fn test_schedule_retryable_task3() {
+        let sanitized = simplest_transaction();
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.retryable_task_count(), 1);
+
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+    }
+
+    #[test]
     fn test_schedule_multiple_readonly_task() {
         let conflicting_readonly_address = Pubkey::new_unique();
         let sanitized1 = readonly_transaction(conflicting_readonly_address);
