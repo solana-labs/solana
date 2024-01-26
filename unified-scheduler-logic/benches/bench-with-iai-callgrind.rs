@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: bump_allocator::BumpPointer = bump_allocator::BumpPointer;
+
 use {
     assert_matches::assert_matches,
     iai_callgrind::{
