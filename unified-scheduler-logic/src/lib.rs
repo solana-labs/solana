@@ -396,6 +396,8 @@ impl SchedulingStateMachine {
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task_weight()
+                    // this_unique_weight is readonly and existing_unique_weight writable. so given
+                    // unique_weight can't be same; thus > instead of >= is correct
                     .map(|existing_unique_weight| this_unique_weight > existing_unique_weight)
                     .unwrap_or(true))
             ;
