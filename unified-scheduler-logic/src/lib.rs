@@ -676,7 +676,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "scheduling bad task")]
-    fn test_deschedule_task_without_scheduling_first() {
+    fn test_reschedule_task_without_descheduling_first() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
