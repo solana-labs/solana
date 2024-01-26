@@ -163,6 +163,7 @@ struct LockAttempt {
     requested_usage: RequestedUsage,
     uncommited_usage: Usage,
 }
+static_assertions::const_assert_eq!(std::mem::size_of::<Usage>(), 24);
 
 impl LockAttempt {
     fn new(page: Page, requested_usage: RequestedUsage) -> Self {
