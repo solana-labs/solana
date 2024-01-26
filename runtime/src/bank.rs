@@ -148,7 +148,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
-        fee::FeeStructure,
+        fee::{FeeDetails, FeeStructure},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hard_forks::HardForks,
@@ -273,18 +273,26 @@ impl AddAssign for SquashTiming {
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default, Copy, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectorFeeDetails {
-    pub base_fee: u64,
+    pub transaction_fee: u64,
     pub priority_fee: u64,
     // more fees such as write_lock_fee go here
 }
 
 impl CollectorFeeDetails {
     // TODO - just a placeholder
-    pub fn add(&mut self, fees: u64) {
-        let _ = self.base_fee.saturating_add(fees);
+    pub fn add(&mut self, fee_details: &FeeDetails) {
+        self.transaction_fee = self
+            .transaction_fee
+            .saturating_add(fee_details.transaction_fee);
+        self.priority_fee = self
+            .priority_fee
+            .saturating_add(fee_details.prioritization_fee);
+    }
+    pub fn get(&self) -> Self {
+        *self
     }
     pub fn dummy(&self) -> u64 {
-        self.base_fee
+        self.transaction_fee
     }
 }
 
@@ -5534,8 +5542,7 @@ impl Bank {
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
-        let hash_queue = self.blockhash_queue.read().unwrap();
-        let mut fees = 0;
+        let mut accumulated_fee_details = FeeDetails::default();
 
         let results = txs
             .iter()
@@ -5548,21 +5555,17 @@ impl Bank {
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
-                let (lamports_per_signature, is_nonce) = durable_nonce_fee
-                    .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
-                    .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
-                    .unwrap_or_else(|| {
-                        (
-                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
-                            false,
-                        )
-                    });
+                let is_nonce = durable_nonce_fee.is_some();
 
-                let lamports_per_signature =
-                    lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = self.get_fee_for_message_with_lamports_per_signature(
-                    tx.message(),
-                    lamports_per_signature,
+                // TODO can refactor self.get_fee_for_message_with_lamports_per_signature() out
+                let message = tx.message();
+                let fee_details = self.fee_structure.calculate_fee_details(
+                    message,
+                    &process_compute_budget_instructions(message.program_instructions_iter())
+                        .unwrap_or_default()
+                        .into(),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -5573,15 +5576,18 @@ impl Bank {
                 // post-load, fee deducted, pre-execute account state
                 // stored
                 if execution_status.is_err() && !is_nonce {
-                    self.withdraw(tx.message().fee_payer(), fee)?;
+                    self.withdraw(tx.message().fee_payer(), fee_details.total_fee())?;
                 }
 
-                fees += fee;
+                accumulated_fee_details.accumulate(&fee_details);
                 Ok(())
             })
             .collect();
 
-        self.collector_fees.write().unwrap().add(fees);
+        self.collector_fees
+            .write()
+            .unwrap()
+            .add(&accumulated_fee_details);
         results
     }
 

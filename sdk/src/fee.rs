@@ -34,13 +34,22 @@ pub struct FeeStructure {
 /// Return type of calculate_fee(...)
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct FeeDetails {
-    transaction_fee: u64,
-    prioritization_fee: u64,
+    pub transaction_fee: u64,
+    pub prioritization_fee: u64,
 }
 
 impl FeeDetails {
     pub fn total_fee(&self) -> u64 {
         self.transaction_fee.saturating_add(self.prioritization_fee)
+    }
+
+    pub fn accumulate(&mut self, fee_details: &FeeDetails) {
+        self.transaction_fee = self
+            .transaction_fee
+            .saturating_add(fee_details.transaction_fee);
+        self.prioritization_fee = self
+            .prioritization_fee
+            .saturating_add(fee_details.prioritization_fee)
     }
 }
 
