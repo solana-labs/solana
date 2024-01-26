@@ -4,6 +4,7 @@ use {
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     std::{collections::BTreeMap, sync::Arc},
 };
+use static_assertions::const_assert_eq;
 
 type UsageCount = u32;
 const SOLE_USE_COUNT: UsageCount = 1;
@@ -13,10 +14,10 @@ enum LockStatus {
     Succeded(Usage),
     Failed,
 }
-static_assertions::const_assert_eq!(std::mem::size_of::<LockStatus>(), 8);
+const_assert_eq!(std::mem::size_of::<LockStatus>(), 8);
 
 pub type Task = Arc<TaskInner>;
-static_assertions::const_assert_eq!(std::mem::size_of::<Task>(), 8);
+const_assert_eq!(std::mem::size_of::<Task>(), 8);
 
 #[derive(Debug)]
 struct TaskStatus {
@@ -58,10 +59,10 @@ mod cell {
 }
 
 type PageToken = Token<PageInner>;
-static_assertions::const_assert_eq!(std::mem::size_of::<PageToken>(), 0);
+const_assert_eq!(std::mem::size_of::<PageToken>(), 0);
 
 type TaskToken = Token<TaskStatus>;
-static_assertions::const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
+const_assert_eq!(std::mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
@@ -163,7 +164,7 @@ struct LockAttempt {
     requested_usage: RequestedUsage,
     uncommited_usage: Usage,
 }
-static_assertions::const_assert_eq!(std::mem::size_of::<LockAttempt>(), 24);
+const_assert_eq!(std::mem::size_of::<LockAttempt>(), 24);
 
 impl LockAttempt {
     fn new(page: Page, requested_usage: RequestedUsage) -> Self {
@@ -186,7 +187,7 @@ enum Usage {
     Readonly(UsageCount),
     Writable,
 }
-static_assertions::const_assert_eq!(std::mem::size_of::<Usage>(), 8);
+const_assert_eq!(std::mem::size_of::<Usage>(), 8);
 
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
@@ -246,11 +247,11 @@ impl PageInner {
     }
 }
 
-static_assertions::const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(std::mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<SchedulerCell<PageInner>>);
-static_assertions::const_assert_eq!(std::mem::size_of::<Page>(), 8);
+const_assert_eq!(std::mem::size_of::<Page>(), 8);
 
 type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
