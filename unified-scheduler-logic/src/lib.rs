@@ -790,6 +790,27 @@ mod tests {
     }
 
     #[test]
+    fn test_schedule_readonly_after_writable() {
+        let conflicting_readonly_address = Pubkey::new_unique();
+        let sanitized1 = transaction_with_shared_writable(conflicting_readonly_address);
+        let sanitized2 = readonly_transaction(conflicting_readonly_address);
+        let sanitized3 = readonly_transaction(conflicting_readonly_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+
+        state_machine.deschedule_task(&task1);
+        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+    }
+
+    #[test]
     fn test_rollback() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_shared_writable(conflicting_address);
