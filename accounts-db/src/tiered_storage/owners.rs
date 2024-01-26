@@ -16,6 +16,10 @@ use {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OwnerOffset(pub u32);
 
+lazy_static! {
+    pub static ref OWNER_NO_OWNER: Pubkey = Pubkey::default();
+}
+
 /// Owner block holds a set of unique addresses of account owners,
 /// and an account meta has a owner_offset field for accessing
 /// it's owner address.

@@ -12,7 +12,7 @@ use {
             index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
-            owners::{OwnerOffset, OwnersBlockFormat, OwnersTable},
+            owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
             readable::TieredReadableAccount,
             StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
             TieredStorageFormat, TieredStorageResult,
@@ -542,8 +542,6 @@ impl HotStorageWriter {
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
     ) -> TieredStorageResult<()> {
-        let zero_lamport_account_owner: Pubkey = Pubkey::default();
-
         let mut footer = new_hot_footer();
         let mut index = vec![];
         let mut owners_table = OwnersTable::default();
@@ -572,8 +570,7 @@ impl HotStorageWriter {
                         Some(*account_hash),
                     )
                 })
-                .unwrap_or((0, &zero_lamport_account_owner, &[], false, None, None));
-
+                .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None, None));
             let owner_offset = owners_table.insert(owner);
             cursor += self.write_account(
                 lamports,
@@ -1254,11 +1251,14 @@ pub mod tests {
     /// Create a test account based on the specified seed.
     /// The created test account might have default rent_epoch
     /// and write_version.
+    ///
+    /// When the seed is zero, then a zero-lamport test account will be
+    /// created.
     fn create_test_account(seed: u64) -> (StoredMeta, AccountSharedData) {
         let data_byte = seed as u8;
         let owner_byte = u8::MAX - data_byte;
         let account = Account {
-            lamports: seed + 1,
+            lamports: seed,
             data: std::iter::repeat(data_byte).take(seed as usize).collect(),
             // this will allow some test account sharing the same owner.
             owner: [owner_byte; 32].into(),
@@ -1330,16 +1330,30 @@ pub mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, hash, _write_version) = storable_accounts.get(i);
-            let account = account.unwrap();
+            let (account, address, account_hash, _write_version) = storable_accounts.get(i);
+            let (lamports, owner, data, executable, account_hash) = account
+                .map(|acc| {
+                    (
+                        acc.lamports(),
+                        acc.owner(),
+                        acc.data(),
+                        acc.executable(),
+                        // only persist rent_epoch for those non-rent-exempt accounts
+                        Some(*account_hash),
+                    )
+                })
+                .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
 
-            assert_eq!(stored_meta.lamports(), account.lamports());
-            assert_eq!(stored_meta.data().len(), account.data().len());
-            assert_eq!(stored_meta.data(), account.data());
-            assert_eq!(stored_meta.executable(), account.executable());
-            assert_eq!(stored_meta.owner(), account.owner());
+            assert_eq!(stored_meta.lamports(), lamports);
+            assert_eq!(stored_meta.data().len(), data.len());
+            assert_eq!(stored_meta.data(), data);
+            assert_eq!(stored_meta.executable(), executable);
+            assert_eq!(stored_meta.owner(), owner);
             assert_eq!(stored_meta.pubkey(), address);
-            assert_eq!(stored_meta.hash(), hash);
+            assert_eq!(
+                *stored_meta.hash(),
+                account_hash.unwrap_or(AccountHash(Hash::default()))
+            );
 
             assert_eq!(i + 1, next);
         }
