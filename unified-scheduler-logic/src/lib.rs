@@ -585,10 +585,10 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn readonly_transaction(readonly_address: Pubkey) -> SanitizedTransaction {
+    fn readonly_transaction(address: Pubkey) -> SanitizedTransaction {
         let instruction = Instruction {
             program_id: Pubkey::default(),
-            accounts: vec![AccountMeta::new_readonly(readonly_address, false)],
+            accounts: vec![AccountMeta::new_readonly(address, false)],
             data: vec![],
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
@@ -596,10 +596,10 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
-    fn transaction_with_2_writable(readonly_address: Pubkey) -> SanitizedTransaction {
+    fn transaction_with_2_writable(address: Pubkey) -> SanitizedTransaction {
         let instruction = Instruction {
             program_id: Pubkey::default(),
-            accounts: vec![AccountMeta::new_readonly(readonly_address, false)],
+            accounts: vec![AccountMeta::new(address, false)],
             data: vec![],
         };
         let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
