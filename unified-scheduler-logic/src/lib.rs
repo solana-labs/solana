@@ -137,20 +137,20 @@ impl TaskInner {
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) == 1
+        *self.uncontended_ref(task_token) == 2
     }
 
     fn has_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) > 0
+        *self.uncontended_ref(task_token) >= 2
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = 1;
+        *self.uncontended_mut(task_token) = 2;
     }
 
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
-        *self.uncontended_mut(task_token) = 2;
+        *self.uncontended_mut(task_token) = 3;
     }
 
     pub fn task_index(&self) -> usize {
