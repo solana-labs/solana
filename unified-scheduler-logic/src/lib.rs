@@ -22,6 +22,7 @@ const_assert_eq!(std::mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(std::mem::size_of::<Task>(), 8);
 
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
