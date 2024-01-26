@@ -596,6 +596,17 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
+    fn transaction_with_2_writable(readonly_address: Pubkey) -> SanitizedTransaction {
+        let instruction = Instruction {
+            program_id: Pubkey::default(),
+            accounts: vec![AccountMeta::new_readonly(readonly_address, false)],
+            data: vec![],
+        };
+        let message = Message::new(&[instruction], Some(&Pubkey::new_unique()));
+        let unsigned = Transaction::new_unsigned(message);
+        SanitizedTransaction::from_transaction_for_tests(unsigned)
+    }
+
     fn create_address_loader(pages: Option<HashMap<Pubkey, Page>>) -> impl FnMut(Pubkey) -> Page {
         let mut pages = pages.unwrap_or_default();
         move |address| pages.entry(address).or_default().clone()
