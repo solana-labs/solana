@@ -637,6 +637,33 @@ impl AccountsScanner {
             && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
     }
 
+    fn maybe_output_account<S>(
+        &self,
+        seq_serializer: &mut Option<S>,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+        slot: Slot,
+        cli_account_new_config: &CliAccountNewConfig,
+    ) where
+        S: SerializeSeq,
+    {
+        if self.config.include_account_contents {
+            if let Some(serializer) = seq_serializer {
+                let cli_account =
+                    CliAccount::new_with_config(pubkey, account, &cli_account_new_config);
+                serializer.serialize_element(&cli_account).unwrap();
+            } else {
+                output_account(
+                    pubkey,
+                    &account,
+                    Some(slot),
+                    self.config.include_account_data,
+                    self.config.account_data_encoding,
+                );
+            }
+        }
+    }
+
     pub fn output<S>(&self, seq_serializer: &mut Option<S>)
     where
         S: SerializeSeq,
@@ -654,22 +681,13 @@ impl AccountsScanner {
                 .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
             {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
-
-                if self.config.include_account_contents {
-                    if let Some(serializer) = seq_serializer {
-                        let cli_account =
-                            CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
-                        serializer.serialize_element(&cli_account).unwrap();
-                    } else {
-                        output_account(
-                            pubkey,
-                            &account,
-                            Some(slot),
-                            self.config.include_account_data,
-                            self.config.account_data_encoding,
-                        );
-                    }
-                }
+                self.maybe_output_account(
+                    seq_serializer,
+                    pubkey,
+                    &account,
+                    slot,
+                    &cli_account_new_config,
+                );
             }
         };
 
