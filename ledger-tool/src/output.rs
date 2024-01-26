@@ -572,7 +572,13 @@ pub struct AccountsOutputStreamer {
     output_format: OutputFormat,
 }
 
+pub enum AccountsOutputMode {
+    AllAccounts,
+    IndividualAccounts(Vec<Pubkey>),
+}
+
 pub struct AccountsOutputConfig {
+    pub mode: AccountsOutputMode,
     pub include_sysvars: bool,
     pub include_account_contents: bool,
     pub include_account_data: bool,
@@ -691,7 +697,27 @@ impl AccountsScanner {
             }
         };
 
-        self.bank.scan_all_accounts(scan_func).unwrap();
+        match &self.config.mode {
+            AccountsOutputMode::AllAccounts => {
+                self.bank.scan_all_accounts(scan_func).unwrap();
+            }
+            AccountsOutputMode::IndividualAccounts(pubkeys) => pubkeys.iter().for_each(|pubkey| {
+                if let Some((account, slot)) = self
+                    .bank
+                    .get_account_modified_slot_with_fixed_root(pubkey)
+                    .filter(|(account, _)| self.should_process_account(account, pubkey))
+                {
+                    total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                    self.maybe_output_account(
+                        seq_serializer,
+                        pubkey,
+                        &account,
+                        slot,
+                        &cli_account_new_config,
+                    );
+                }
+            }),
+        }
     }
 }
 
