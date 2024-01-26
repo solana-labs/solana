@@ -10,7 +10,6 @@ use {
         },
         sorted_storages::SortedStorages,
     },
-    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_runtime::{
         serde_snapshot::BankIncrementalSnapshotPersistence,
@@ -46,8 +45,6 @@ impl AccountsHashVerifier {
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
         exit: Arc<AtomicBool>,
-        _cluster_info: Arc<ClusterInfo>,
-        _accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check

@@ -778,8 +778,6 @@ impl Validator {
             accounts_package_receiver,
             snapshot_package_sender,
             exit.clone(),
-            cluster_info.clone(),
-            config.accounts_hash_fault_injector,
             config.snapshot_config.clone(),
         );
 
