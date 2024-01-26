@@ -282,7 +282,7 @@ pub struct SchedulingStateMachine {
     reschedule_count: usize,
     rescheduled_task_count: usize,
     total_task_count: usize,
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))] task_token: TaskToken,
+    pub task_token: TaskToken,
     page_token: PageToken,
 }
 
