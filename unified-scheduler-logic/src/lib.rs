@@ -576,6 +576,7 @@ mod tests {
             transaction::{Result, SanitizedTransaction, Transaction},
         },
         std::{collections::HashMap, hint::black_box},
+        std::sync::Mutex,
     };
 
     fn simplest_transaction() -> SanitizedTransaction {
