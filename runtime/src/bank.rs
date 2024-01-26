@@ -72,6 +72,7 @@ use {
         slice::ParallelSlice,
         ThreadPool, ThreadPoolBuilder,
     },
+    serde::Serialize,
     solana_accounts_db::{
         account_overrides::AccountOverrides,
         accounts::{
@@ -8485,7 +8486,7 @@ impl CollectRentInPartitionInfo {
 }
 
 /// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize)]
 pub struct TotalAccountsStats {
     /// Total number of accounts
     pub num_accounts: usize,
