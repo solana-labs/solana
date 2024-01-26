@@ -513,7 +513,7 @@ impl SchedulingStateMachine {
                 }
             }
         } else {
-            task.mark_as_idle(&mut self.task_token);
+            //task.mark_as_idle(&mut self.task_token);
         }
 
         Some(task)
