@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![], uncontended: 0 }), "TaskStatus { lock_attempts: [], uncontended: 0 }");
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
-        assert_matches!(format!("{:?}", task), "aaa");
+        assert_matches!(format!("{:?}", task), "aaa".to_string());
     }
 
     #[test]
