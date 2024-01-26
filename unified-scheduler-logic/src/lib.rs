@@ -369,10 +369,8 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        task_source: &TaskSource,
+        rollback_on_failure: bool,
     ) -> usize {
-        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
-
         let mut lock_count = 0;
 
         for attempt in lock_attempts.iter_mut() {
@@ -467,15 +465,17 @@ impl SchedulingStateMachine {
     }
 
     fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
+        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
+
         let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
-            &task_source,
+            rollback_on_failure,
         );
 
         if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
-            if matches!(task_source, TaskSource::Runnable) {
+            if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
                 task.mark_as_contended(&mut self.task_token);
                 self.index_task_with_pages(&task);
