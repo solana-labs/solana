@@ -750,8 +750,8 @@ mod tests {
     #[test]
     fn test_schedule_non_conflicting_readonly_task() {
         let sanitized1 = transaction_with_2_writable(Pubkey::new_unique());
-        //let pages = HashMap::new();
-        let address_loader = &mut create_address_loader(None);
+        let pages = HashMap::new();
+        let address_loader = &mut create_address_loader(Some(pages));
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
