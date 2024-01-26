@@ -464,11 +464,12 @@ impl SchedulingStateMachine {
 
     fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
+        let ll = task.lock_attempts_mut(&mut self.task_token);
 
         let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
-            task.lock_attempts_mut(&mut self.task_token),
+            ll,
             rollback_on_failure,
         );
 
