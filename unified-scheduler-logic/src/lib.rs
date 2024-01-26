@@ -680,7 +680,7 @@ mod tests {
         let address_loader = &mut create_address_loader();
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
-        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 0, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
