@@ -441,7 +441,7 @@ impl SchedulingStateMachine {
         );
 
         self.active_task_count.decrement_self();
-        self.handled_task_count += 1;
+        self.handled_task_count.increment_self();
         self.unlock_after_execution(task);
     }
 
