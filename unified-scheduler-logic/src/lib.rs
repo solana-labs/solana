@@ -393,7 +393,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn total_task_count(&self) -> usize {
-        self.total_task_count
+        self.total_task_count.current()
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
