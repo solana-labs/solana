@@ -12,9 +12,10 @@ enum State {
 }
 
 message LastVotedForkSlotsRecord {
-    repeated uint64 last_vote_fork_slots = 1;
+    repeated uint64 last_voted_fork_slots = 1;
     string last_vote_bankhash = 2;
     uint32 shred_version = 3;
+    uint64 wallclock = 4;
 }
 
 message LastVotedForkSlotsAggregateRecord {
