@@ -21,7 +21,7 @@ pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
 mod counter {
-    #[derive(Clone, Copy)]
+    #[derive(Debug, Clone, Copy)]
     pub(super) struct Counter(usize);
 
     impl Counter {
