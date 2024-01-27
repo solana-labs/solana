@@ -172,47 +172,47 @@ impl TaskInner {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
-    fn uncontended_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut State {
+    fn state_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut State {
         &mut self.task_status.borrow_mut(task_token).state
     }
 
-    fn uncontended_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
+    fn state_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
         &self.task_status.borrow(task_token).state
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
-        self.uncontended_ref(task_token).is_blocked()
+        self.state_ref(task_token).is_blocked()
     }
 
-    fn has_contended(&self, task_token: &TaskToken) -> bool {
-        self.uncontended_ref(task_token).is_scheduled_as_blocked()
+    fn is_scheduled_as_blocked(&self, task_token: &TaskToken) -> bool {
+        self.state_ref(task_token).is_scheduled_as_blocked()
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
-        self.uncontended_ref(task_token).is_new()
+        self.state_ref(task_token).is_new()
     }
 
-    fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
-        self.uncontended_ref(task_token).is_scheduled()
+    fn is_scheduled(&self, task_token: &TaskToken) -> bool {
+        self.state_ref(task_token).is_scheduled()
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = State::Blocked;
+        *self.state_mut(task_token) = State::Blocked;
     }
 
-    fn mark_as_idle(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = State::ScheduledAsIdle;
+    fn mark_as_scheduled_as_idle(&self, task_token: &mut TaskToken) {
+        *self.state_mut(task_token) = State::ScheduledAsIdle;
     }
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn reset_as_new(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = State::New;
+        *self.state_mut(task_token) = State::New;
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
+    fn mark_as_scheduled_as_blocked(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
-        *self.uncontended_mut(task_token) = State::ScheduledAsBlocked;
+        *self.state_mut(task_token) = State::ScheduledAsBlocked;
     }
 
     pub fn task_index(&self) -> usize {
@@ -392,7 +392,7 @@ impl SchedulingStateMachine {
 
     pub fn deschedule_task(&mut self, task: &Task) {
         assert!(
-            task.has_been_scheduled(&self.task_token),
+            task.is_scheduled(&self.task_token),
             "descheduling bad task: {task:?}"
         );
 
@@ -526,7 +526,7 @@ impl SchedulingStateMachine {
                             attempt.uncommited_usage;
                     }
 
-                    task.mark_as_uncontended(&mut self.task_token);
+                    task.mark_as_scheduled_as_blocked(&mut self.task_token);
 
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
                     // addresses so that more readonly transactions can be executed
@@ -549,7 +549,7 @@ impl SchedulingStateMachine {
                     }
                 }
                 TaskSource::Runnable => {
-                    task.mark_as_idle(&mut self.task_token);
+                    task.mark_as_scheduled_as_idle(&mut self.task_token);
                 }
             }
             Some(task)
@@ -572,7 +572,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        let should_remove = task.has_contended(&self.task_token);
+        let should_remove = task.is_scheduled_as_blocked(&self.task_token);
 
         for unlock_attempt in task.lock_attempts(&self.task_token) {
             if should_remove {
