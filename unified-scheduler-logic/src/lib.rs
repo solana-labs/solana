@@ -28,6 +28,9 @@ mod counter {
             Self(v)
         }
     }
+
+    impl std::ops::Add for Counter {
+    }
 }
 use crate::counter::Counter;
 
