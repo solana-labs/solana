@@ -647,9 +647,9 @@ impl Default for SchedulingStateMachine {
         Self {
             retryable_task_queue: TaskQueue::default(),
             active_task_count: Counter::zero(),
-            handled_task_count: 0,
-            reschedule_count: 0,
-            rescheduled_task_count: 0,
+            handled_task_count: Counter::zero(),
+            reschedule_count: Counter::zero(),
+            rescheduled_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
             task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
