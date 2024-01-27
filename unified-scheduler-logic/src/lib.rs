@@ -32,6 +32,10 @@ mod counter {
             Self(1)
         }
 
+        pub(super) fn is_one(&self) -> bool {
+            self.0 == 1
+        } 
+
         pub(super) fn increment(self) -> Self {
             Self(self.0.checked_add(1).unwrap())
         }
