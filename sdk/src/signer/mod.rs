@@ -85,7 +85,7 @@ pub trait Signer {
     fn is_interactive(&self) -> bool;
 }
 
-/// This impl allows using Signer with types like Box/Rc/Arc.
+/// This implements `Signer` for all ptr types - `Box/Rc/Arc/&/&mut` etc
 impl<Container: Deref<Target = impl Signer + ?Sized>> Signer for Container {
     #[inline]
     fn pubkey(&self) -> Pubkey {
