@@ -143,6 +143,13 @@ impl State {
             State::New | State::Blocked => false,
         }
     }
+
+    fn is_scheduled_as_blocked(&self) -> bool {
+        match self {
+            State::ScheduledAsBlocked => true,
+            State::New | State::Blocked | State::ScheduledAsIdle => false,
+        }
+    }
 }
 
 impl TaskInner {
@@ -171,7 +178,7 @@ impl TaskInner {
     }
 
     fn has_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) == 3
+        self.uncontended_ref(task_token).is_scheduled_as_blocked()
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
