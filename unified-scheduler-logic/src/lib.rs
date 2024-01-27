@@ -34,6 +34,7 @@ mod counter {
         }
     }
 }
+use crate::counter::Counter;
 
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
