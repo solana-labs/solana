@@ -20,16 +20,18 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
-#[derive(Clone, Copy)]
-struct Counter(usize);
+mod counter {
+    #[derive(Clone, Copy)]
+    pub(super) struct Counter(usize);
 
-impl Counter {
-    fn increment(&mut self) {
-        self.0 = self.0.checked_add(1).unwrap();
-    }
+    impl Counter {
+        fn increment(&mut self) {
+            self.0 = self.0.checked_add(1).unwrap();
+        }
 
-    fn decrement(&mut self) {
-        self.0 = self.0.checked_sub(1).unwrap();
+        fn decrement(&mut self) {
+            self.0 = self.0.checked_sub(1).unwrap();
+        }
     }
 }
 
