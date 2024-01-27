@@ -20,6 +20,18 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
+struct Counter(usize);
+
+impl Counter {
+    fn increment(&mut self) {
+        self.0 = self.0.checked_add(1).unwrap();
+    }
+
+    fn decrement(&mut self) {
+        self.0 = self.0.checked_sub(1).unwrap();
+    }
+}
+
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
 struct TaskStatus {
