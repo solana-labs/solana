@@ -467,7 +467,7 @@ impl SchedulingStateMachine {
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count.checked_add(1).unwrap())),
+                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count.increment())),
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
