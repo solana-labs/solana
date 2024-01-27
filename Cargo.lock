@@ -892,15 +892,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bump-allocator"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2edbf93379814cd29418bca52cbdc4c0118b973d7c1be1dc258bb2ab4f96eb2"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7662,7 +7653,6 @@ name = "solana-unified-scheduler-logic"
 version = "1.18.0"
 dependencies = [
  "assert_matches",
- "bump-allocator",
  "iai-callgrind",
  "qualifier_attr",
  "solana-sdk",
