@@ -27,11 +27,18 @@ mod counter {
         pub(super) fn new(v: usize) -> Self {
             Self(v)
         }
-    }
 
-    impl std::ops::Add for Counter {
-        type Output = Self;
-        fn add(self, _: counter::Counter) -> <Self as std::ops::Add<counter::Counter>>::Output { todo!() }
+        fn increment(self) -> Self {
+            Self(self.0.checked_add(1).unwrap())
+        }
+
+        fn increment_self(&mut self) {
+            self.0 = self.0.checked_add(1).unwrap();
+        }
+
+        fn decrement_self(&mut self) {
+            self.0 = self.0.checked_sub(1).unwrap();
+        }
     }
 }
 use crate::counter::Counter;
@@ -452,7 +459,7 @@ impl SchedulingStateMachine {
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
+                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count.checked_add(1).unwrap())),
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
