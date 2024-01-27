@@ -8,7 +8,6 @@ use {
 };
 
 type UsageCount = Counter;
-const SOLE_USE_COUNT: UsageCount = 1;
 
 #[derive(Clone, Debug)]
 enum LockStatus {
@@ -269,7 +268,7 @@ const_assert_eq!(mem::size_of::<Usage>(), 8);
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => Usage::Readonly(SOLE_USE_COUNT),
+            RequestedUsage::Readonly => Usage::Readonly(1.into()),
             RequestedUsage::Writable => Usage::Writable,
         }
     }
