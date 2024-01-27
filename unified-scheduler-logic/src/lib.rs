@@ -121,6 +121,13 @@ impl SchedulingStateMachine {
     }
 }
 
+enum State {
+    New,
+    Blocked,
+    ScheduledAsIdle,
+    ScheduledAsBlocked,
+}
+
 impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.transaction
