@@ -13,11 +13,9 @@ use {
         pubkey::Pubkey,
         signature::Signer,
         signer::keypair::Keypair,
-        system_transaction,
-        transaction::{Result, SanitizedTransaction, Transaction},
+        transaction::{SanitizedTransaction, Transaction},
     },
-    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
-    std::hint::black_box,
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
 };
 
 #[library_benchmark]
