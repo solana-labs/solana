@@ -358,7 +358,7 @@ type TaskQueue = BTreeMap<UniqueWeight, Task>;
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
-    active_task_count: usize,
+    active_task_count: Counter,
     handled_task_count: usize,
     reschedule_count: usize,
     rescheduled_task_count: usize,
@@ -376,8 +376,8 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.len()
     }
 
-    pub fn active_task_count(&self) -> usize {
-        self.active_task_count
+    pub fn active_task_count(&self) -> u32 {
+        self.active_task_count.current()
     }
 
     pub fn handled_task_count(&self) -> usize {
