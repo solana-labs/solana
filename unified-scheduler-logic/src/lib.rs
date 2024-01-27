@@ -176,7 +176,7 @@ impl TaskInner {
     }
 
     fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) == 1 || *self.uncontended_ref(task_token) == 3
+        *self.uncontended_ref(task_token).is_scheduled()
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
