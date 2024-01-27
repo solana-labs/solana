@@ -640,7 +640,7 @@ impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
             retryable_task_queue: TaskQueue::default(),
-            active_task_count: 0,
+            active_task_count: Counter::zero(),
             handled_task_count: 0,
             reschedule_count: 0,
             rescheduled_task_count: 0,
