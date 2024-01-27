@@ -205,7 +205,7 @@ impl TaskInner {
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub(crate) fn reset_as_new(&self, task_token: &mut TaskToken) {
+    pub fn reset_as_new(&self, task_token: &mut TaskToken) {
         *self.uncontended_mut(task_token) = State::New;
     }
 
