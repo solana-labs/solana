@@ -1,4 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
