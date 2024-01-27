@@ -776,6 +776,10 @@ pub mod enable_gossip_duplicate_proof_ingestion {
     solana_sdk::declare_id!("FNKCMBzYUdjhHyPdsKG2LSmdzH8TCHXn3ytj8RNBS4nG");
 }
 
+pub mod enable_chained_merkle_shreds {
+    solana_sdk::declare_id!("7uZBkJXJ1HkuP6R3MJfZs7mLwymBcDbKdqbF51ZWLier");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -965,6 +969,7 @@ lazy_static! {
         (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
+        (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
