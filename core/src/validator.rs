@@ -143,8 +143,8 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BlockVerificationMethod {
-    #[default]
     BlockstoreProcessor,
+    #[default]
     UnifiedScheduler,
 }
 
