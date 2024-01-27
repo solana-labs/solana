@@ -1,10 +1,5 @@
-pub mod account_rent_state;
-
 use {
-    crate::{
-        accounts::account_rent_state::{check_rent_state_with_account, RentState},
-        bank::RewardInterval,
-    },
+    crate::{bank::RewardInterval, svm::account_rent_state::RentState},
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{
@@ -12,8 +7,7 @@ use {
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         accounts_db::AccountsDb,
         ancestors::Ancestors,
-        blockhash_queue::BlockhashQueue,
-        nonce_info::{NonceFull, NonceInfo},
+        nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -45,12 +39,11 @@ use {
 };
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn load_accounts(
+pub(crate) fn load_accounts(
     accounts_db: &AccountsDb,
     ancestors: &Ancestors,
     txs: &[SanitizedTransaction],
-    lock_results: Vec<TransactionCheckResult>,
-    hash_queue: &BlockhashQueue,
+    lock_results: &[TransactionCheckResult],
     error_counters: &mut TransactionErrorMetrics,
     rent_collector: &RentCollector,
     feature_set: &FeatureSet,
@@ -64,17 +57,11 @@ pub(super) fn load_accounts(
     txs.iter()
         .zip(lock_results)
         .map(|etx| match etx {
-            (tx, (Ok(()), nonce)) => {
-                let lamports_per_signature = nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    });
+            (tx, (Ok(()), nonce, lamports_per_signature)) => {
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
                     fee_structure.calculate_fee(
                         tx.message(),
-                        lamports_per_signature,
+                        *lamports_per_signature,
                         &process_compute_budget_instructions(
                             tx.message().program_instructions_iter(),
                         )
@@ -123,7 +110,7 @@ pub(super) fn load_accounts(
 
                 (Ok(loaded_transaction), nonce)
             }
-            (_, (Err(e), _nonce)) => (Err(e), None),
+            (_, (Err(e), _nonce, _lamports_per_signature)) => (Err(e.clone()), None),
         })
         .collect()
 }
@@ -476,7 +463,7 @@ pub fn validate_fee_payer(
         .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
     let payer_post_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
-    check_rent_state_with_account(
+    RentState::check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
         payer_address,
@@ -530,8 +517,6 @@ mod tests {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
         let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
@@ -544,8 +529,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[sanitized_tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
+            &[(Ok(()), None, Some(lamports_per_signature))],
             error_counters,
             rent_collector,
             feature_set,
@@ -1013,8 +997,6 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let rent_collector = RentCollector::default();
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -1022,8 +1004,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
+            &[(Ok(()), None, Some(10))],
             &mut error_counters,
             &rent_collector,
             &FeatureSet::all_enabled(),

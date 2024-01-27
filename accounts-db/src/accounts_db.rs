@@ -58,7 +58,9 @@ use {
         append_vec::{
             aligned_stored_size, AppendVec, APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
         },
-        cache_hash_data::{CacheHashData, CacheHashDataFileReference},
+        cache_hash_data::{
+            CacheHashData, CacheHashDataFileReference, DeletionPolicy as CacheHashDeletionPolicy,
+        },
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
         in_mem_accounts_index::StartupStats,
@@ -7149,6 +7151,29 @@ impl AccountsDb {
             })
             .collect::<Vec<_>>();
 
+        // Calculate the hits and misses of the hash data files cache.
+        // This is outside of the parallel loop above so that we only need to
+        // update each atomic stat value once.
+        // There are approximately 173 items in the cache files list,
+        // so should be very fast to iterate and compute.
+        // (173 cache files == 432,000 slots / 2,5000 slots-per-cache-file)
+        let mut hits = 0;
+        let mut misses = 0;
+        for cache_file in &cache_files {
+            match cache_file {
+                ScanAccountStorageResult::CacheFileAlreadyExists(_) => hits += 1,
+                ScanAccountStorageResult::CacheFileNeedsToBeCreated(_) => misses += 1,
+            };
+        }
+        cache_hash_data
+            .stats
+            .hits
+            .fetch_add(hits, Ordering::Relaxed);
+        cache_hash_data
+            .stats
+            .misses
+            .fetch_add(misses, Ordering::Relaxed);
+
         // deletes the old files that will not be used before creating new ones
         cache_hash_data.delete_old_cache_files();
 
@@ -7537,6 +7562,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         kind: CalcAccountsHashKind,
         slot: Slot,
+        storages_start_slot: Slot,
     ) -> CacheHashData {
         let accounts_hash_cache_path = if !config.store_detailed_debug_info_on_failure {
             accounts_hash_cache_path
@@ -7548,7 +7574,13 @@ impl AccountsDb {
             _ = std::fs::remove_dir_all(&failed_dir);
             failed_dir
         };
-        CacheHashData::new(accounts_hash_cache_path, kind == CalcAccountsHashKind::Full)
+        let deletion_policy = match kind {
+            CalcAccountsHashKind::Full => CacheHashDeletionPolicy::AllUnused,
+            CalcAccountsHashKind::Incremental => {
+                CacheHashDeletionPolicy::UnusedAtLeast(storages_start_slot)
+            }
+        };
+        CacheHashData::new(accounts_hash_cache_path, deletion_policy)
     }
 
     // modeled after calculate_accounts_delta_hash
@@ -7607,7 +7639,8 @@ impl AccountsDb {
     ) -> Result<(AccountsHashKind, u64), AccountsHashVerificationError> {
         let total_time = Measure::start("");
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-        stats.oldest_root = storages.range().start;
+        let storages_start_slot = storages.range().start;
+        stats.oldest_root = storages_start_slot;
 
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
@@ -7623,7 +7656,8 @@ impl AccountsDb {
                 accounts_hash_cache_path,
                 config,
                 kind,
-                slot
+                slot,
+                storages_start_slot,
             ));
             stats.cache_hash_data_us += cache_hash_data_us;
 
@@ -9752,12 +9786,6 @@ pub mod tests {
     }
 
     impl AccountsDb {
-        pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
-            let ancestors = vec![(slot, 1)].into_iter().collect();
-            let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-            result.map(|(list, index)| list.slot_list()[index].1.store_id())
-        }
-
         fn scan_snapshot_stores(
             &self,
             storage: &SortedStorages,
@@ -9769,7 +9797,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(accounts_hash_cache_path, true),
+                &CacheHashData::new(accounts_hash_cache_path, CacheHashDeletionPolicy::AllUnused),
                 storage,
                 stats,
                 bins,
@@ -10837,7 +10865,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(accounts_hash_cache_path, true),
+            &CacheHashData::new(accounts_hash_cache_path, CacheHashDeletionPolicy::AllUnused),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&[storage]),
             test_scan,

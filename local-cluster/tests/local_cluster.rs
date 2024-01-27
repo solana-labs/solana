@@ -16,7 +16,7 @@ use {
         },
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        validator::{BlockVerificationMethod, ValidatorConfig},
+        validator::{BlockProductionMethod, BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_entry::entry::create_ticks,
@@ -349,11 +349,16 @@ fn test_forwarding() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
+    // Only ThreadLocalMultiIterator banking stage forwards transactions,
+    // so must use that block-production-method.
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default_for_test(),
+            &ValidatorConfig {
+                block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+                ..ValidatorConfig::default_for_test()
+            },
             2,
         ),
         ..ClusterConfig::default()
@@ -2263,7 +2268,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
     let validator_config = ValidatorConfig {
         snapshot_config: LocalCluster::create_dummy_load_only_snapshot_config(),
-        ..ValidatorConfig::default()
+        ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
         cluster_lamports: 100_000,
@@ -2740,6 +2745,9 @@ fn test_oc_bad_signatures() {
             }
         },
         voter_thread_sleep_ms as u64,
+        cluster.validators.len().saturating_sub(1),
+        0,
+        0,
     );
 
     let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
@@ -3740,6 +3748,18 @@ fn test_kill_partition_switch_threshold_progress() {
 #[serial]
 #[allow(unused_attributes)]
 fn test_duplicate_shreds_broadcast_leader() {
+    run_duplicate_shreds_broadcast_leader(true);
+}
+#[test]
+#[serial]
+#[ignore]
+#[allow(unused_attributes)]
+fn test_duplicate_shreds_broadcast_leader_ancestor_hashes() {
+    run_duplicate_shreds_broadcast_leader(false);
+}
+
+fn run_duplicate_shreds_broadcast_leader(vote_on_duplicate: bool) {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Create 4 nodes:
     // 1) Bad leader sending different versions of shreds to both of the other nodes
     // 2) 1 node who's voting behavior in gossip
@@ -3790,11 +3810,13 @@ fn test_duplicate_shreds_broadcast_leader() {
     // for the partition.
     assert!(partition_node_stake < our_node_stake && partition_node_stake < good_node_stake);
 
+    let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
+
     // 1) Set up the cluster
     let (mut cluster, validator_keys) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
             partition: ClusterPartition::Stake(partition_node_stake),
-            duplicate_slot_sender: None,
+            duplicate_slot_sender: Some(duplicate_slot_sender),
         }),
         node_stakes,
         None,
@@ -3836,27 +3858,23 @@ fn test_duplicate_shreds_broadcast_leader() {
         {
             let node_keypair = node_keypair.insecure_clone();
             let vote_keypair = vote_keypair.insecure_clone();
-            let mut max_vote_slot = 0;
             let mut gossip_vote_index = 0;
+            let mut duplicate_slots = vec![];
             move |latest_vote_slot, leader_vote_tx, parsed_vote, cluster_info| {
                 info!("received vote for {}", latest_vote_slot);
                 // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
-                if latest_vote_slot > max_vote_slot {
-                    let new_epoch_slots: Vec<Slot> =
-                        (max_vote_slot + 1..latest_vote_slot + 1).collect();
-                    info!(
-                        "Simulating epoch slots from our node: {:?}",
-                        new_epoch_slots
-                    );
-                    cluster_info.push_epoch_slots(&new_epoch_slots);
-                    max_vote_slot = latest_vote_slot;
-                }
+                let new_epoch_slots: Vec<Slot> = (0..latest_vote_slot + 1).collect();
+                info!(
+                    "Simulating epoch slots from our node: {:?}",
+                    new_epoch_slots
+                );
+                cluster_info.push_epoch_slots(&new_epoch_slots);
 
-                // Only vote on even slots. Note this may violate lockouts if the
-                // validator started voting on a different fork before we could exit
-                // it above.
+                for slot in duplicate_slot_receiver.try_iter() {
+                    duplicate_slots.push(slot);
+                }
                 let vote_hash = parsed_vote.hash();
-                if latest_vote_slot % 2 == 0 {
+                if vote_on_duplicate || !duplicate_slots.contains(&latest_vote_slot) {
                     info!(
                         "Simulating vote from our node on slot {}, hash {}",
                         latest_vote_slot, vote_hash
@@ -3894,6 +3912,9 @@ fn test_duplicate_shreds_broadcast_leader() {
             }
         },
         voter_thread_sleep_ms as u64,
+        cluster.validators.len().saturating_sub(1),
+        5000, // Refresh if 5 seconds of inactivity
+        5,    // Refresh the past 5 votes
     );
 
     // 4) Check that the cluster is making progress
@@ -4257,7 +4278,10 @@ fn test_leader_failure_4() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_leader_failure_4");
     let num_nodes = 4;
-    let validator_config = ValidatorConfig::default_for_test();
+    let validator_config = ValidatorConfig {
+        block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+        ..ValidatorConfig::default_for_test()
+    };
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         node_stakes: vec![DEFAULT_NODE_STAKE; 4],
@@ -5228,7 +5252,7 @@ fn test_duplicate_shreds_switch_failure() {
                 validator_keypair,
                 validator_config: ValidatorConfig {
                     voting_disabled,
-                    ..ValidatorConfig::default()
+                    ..ValidatorConfig::default_for_test()
                 },
                 in_genesis,
             }

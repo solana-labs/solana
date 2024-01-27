@@ -10,6 +10,10 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
+crossbeam-channel = { workspace = true }
+derivative = { workspace = true }
+log = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }

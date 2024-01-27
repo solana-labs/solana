@@ -182,6 +182,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d5a26814d8dcb93b0e5a0ff3c6d80a8843bafb21b39e8e18a6f05471870e110"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "arc-swap"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -908,9 +917,9 @@ checksum = "e1e5f035d16fc623ae5f74981db80a439803888314e3a555fd6f04acd51a3205"
 
 [[package]]
 name = "bytemuck"
-version = "1.14.0"
+version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
+checksum = "ed2490600f404f2b94c167e31d3ed1d5f3c225a0f3b80230053b3e0b7b962bd9"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -1613,6 +1622,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_arbitrary"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2029,15 +2049,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
-name = "fs-err"
-version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2417,14 +2428,15 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hidapi"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723777263b0dcc5730aec947496bd8c3940ba63c15f5633b288cc615f4f6af79"
+checksum = "3b125253e27c9fd67beac20665348f4bfc5b488b5c8a1020610eeb7e6d205cde"
 dependencies = [
  "cc",
+ "cfg-if 1.0.0",
  "libc",
  "pkg-config",
- "winapi 0.3.9",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -5316,6 +5328,7 @@ dependencies = [
  "fnv",
  "im",
  "index_list",
+ "indexmap 2.1.0",
  "itertools",
  "lazy_static",
  "libsecp256k1",
@@ -6671,6 +6684,7 @@ name = "solana-program"
 version = "1.18.0"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "ark-bn254",
  "ark-ec",
  "ark-ff",
@@ -7033,7 +7047,6 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "fnv",
- "fs-err",
  "im",
  "index_list",
  "itertools",
@@ -7061,7 +7074,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "siphasher",
  "solana-accounts-db",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
@@ -7157,6 +7169,7 @@ dependencies = [
  "serde_with",
  "sha2 0.10.8",
  "sha3 0.10.4",
+ "siphasher",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",
@@ -7543,12 +7556,18 @@ dependencies = [
 [[package]]
 name = "solana-unified-scheduler-logic"
 version = "1.18.0"
+dependencies = [
+ "solana-sdk",
+]
 
 [[package]]
 name = "solana-unified-scheduler-pool"
 version = "1.18.0"
 dependencies = [
  "assert_matches",
+ "crossbeam-channel",
+ "derivative",
+ "log",
  "solana-ledger",
  "solana-logger",
  "solana-program-runtime",
