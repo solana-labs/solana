@@ -25,7 +25,7 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    uncontended: usize,
+    state: usize,
 }
 
 mod cell {
@@ -74,7 +74,7 @@ impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
             lock_attempts,
-            uncontended: 0,
+            state: 0,
         }
     }
 }
@@ -142,11 +142,11 @@ impl TaskInner {
     }
 
     fn uncontended_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
-        &mut self.task_status.borrow_mut(task_token).uncontended
+        &mut self.task_status.borrow_mut(task_token).state
     }
 
     fn uncontended_ref<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
-        &self.task_status.borrow(task_token).uncontended
+        &self.task_status.borrow(task_token).state
     }
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
@@ -650,12 +650,12 @@ mod tests {
         );
         let task_status = TaskStatus {
             lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            uncontended: 0,
+            state: 0,
         };
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, uncommited_usage: Unused }], uncontended: 0 }"
+             .. })), requested_usage: Writable, uncommited_usage: Unused }], state: 0 }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
