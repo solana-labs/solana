@@ -61,6 +61,15 @@ pub(crate) fn read_pubkey<T: AsRef<[u8]>>(
     Ok(Pubkey::from(buf))
 }
 
+pub(crate) fn read_bool<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<bool, InstructionError> {
+    let byte = read_u8(cursor)?;
+    match byte {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(InstructionError::InvalidAccountData),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {super::*, rand::Rng, std::fmt::Debug};
@@ -113,6 +122,12 @@ mod test {
             let test_value = Pubkey::from(buf);
             test_read(read_pubkey, test_value);
         }
+    }
+
+    #[test]
+    fn test_read_bool() {
+        test_read(read_bool, false);
+        test_read(read_bool, true);
     }
 
     fn test_read<T: Debug + PartialEq + serde::Serialize + borsh0_10::BorshSerialize>(
