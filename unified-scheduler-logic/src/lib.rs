@@ -24,8 +24,12 @@ mod counter {
     pub(super) struct Counter(usize);
 
     impl Counter {
-        pub(super) fn new(v: usize) -> Self {
-            Self(v)
+        pub(super) fn zero() -> Self {
+            Self(0)
+        }
+
+        pub(super) fn one() -> Self {
+            Self(1)
         }
 
         fn increment(self) -> Self {
