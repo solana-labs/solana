@@ -177,7 +177,7 @@ fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) 
     let task = SchedulingStateMachine::create_task(tx0.clone(), 0, &mut |address| {
         pages.entry(address).or_default().clone()
     });
-    let task = scheduler.schedule_task(task).unwrap();
+    scheduler.schedule_task(task).unwrap();
     for i in 1..=task_count {
         let task = SchedulingStateMachine::create_task(tx0.clone(), i, &mut |address| {
             pages.entry(address).or_default().clone()
