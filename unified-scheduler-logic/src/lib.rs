@@ -1024,7 +1024,7 @@ mod tests {
         let page = Page::default();
         page.0
             .borrow_mut(&mut state_machine.page_token)
-            .current_usage = Usage::Readonly(3);
+            .current_usage = Usage::Readonly(Counter::one());
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Writable),
