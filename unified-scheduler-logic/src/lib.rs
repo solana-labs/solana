@@ -32,19 +32,19 @@ mod counter {
             Self(1)
         }
 
-        fn increment(self) -> Self {
+        pub(super) fn increment(self) -> Self {
             Self(self.0.checked_add(1).unwrap())
         }
 
-        fn decrement(self) -> Self {
+        pub(super) fn decrement(self) -> Self {
             Self(self.0.checked_sub(1).unwrap())
         }
 
-        fn increment_self(&mut self) {
+        pub(super) fn increment_self(&mut self) {
             self.0 = self.0.checked_add(1).unwrap();
         }
 
-        fn decrement_self(&mut self) {
+        pub(super) fn decrement_self(&mut self) {
             self.0 = self.0.checked_sub(1).unwrap();
         }
     }
