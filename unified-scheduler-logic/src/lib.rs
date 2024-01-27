@@ -34,11 +34,11 @@ mod counter {
 
         pub(super) fn is_one(&self) -> bool {
             self.0 == 1
-        } 
+        }
 
         pub(super) fn is_zero(&self) -> bool {
             self.0 == 0
-        } 
+        }
 
         pub(super) fn current(&self) -> u32 {
             self.0
@@ -188,7 +188,9 @@ impl SchedulingStateMachine {
             })
             .collect();
 
-        let unique_weight = UniqueWeight::max_value().checked_sub(index as UniqueWeight).unwrap();
+        let unique_weight = UniqueWeight::max_value()
+            .checked_sub(index as UniqueWeight)
+            .unwrap();
 
         Task::new(TaskInner {
             unique_weight,
@@ -255,7 +257,9 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        UniqueWeight::max_value().checked_sub(self.unique_weight).unwrap() as usize
+        UniqueWeight::max_value()
+            .checked_sub(self.unique_weight)
+            .unwrap() as usize
     }
 }
 
@@ -476,7 +480,9 @@ impl SchedulingStateMachine {
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count.increment())),
+                RequestedUsage::Readonly => {
+                    LockStatus::Succeded(Usage::Readonly(count.increment()))
+                }
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
@@ -715,7 +721,10 @@ mod tests {
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
         assert_eq!(
-            format!("{:?}", LockStatus::Succeded(Usage::Readonly(Counter::one()))),
+            format!(
+                "{:?}",
+                LockStatus::Succeded(Usage::Readonly(Counter::one()))
+            ),
             "Succeded(Readonly(Counter(1)))"
         );
         let task_status = TaskStatus {
