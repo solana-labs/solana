@@ -25,7 +25,7 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    state: usize,
+    state: State,
 }
 
 mod cell {
