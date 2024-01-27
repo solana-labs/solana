@@ -438,7 +438,7 @@ impl SchedulingStateMachine {
             "descheduling bad task: {task:?}"
         );
 
-        self.active_task_count -= 1;
+        self.active_task_count.decrement_self();
         self.handled_task_count += 1;
         self.unlock_after_execution(task);
     }
