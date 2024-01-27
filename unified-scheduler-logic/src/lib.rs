@@ -698,7 +698,7 @@ mod tests {
         let state_machine = SchedulingStateMachine::default();
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
-        assert_eq!(state_machine.is_empty(), true);
+        assert!(state_machine.is_empty());
     }
 
     #[test]
@@ -761,10 +761,10 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.has_retryable_task(), true);
+        assert!(state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 1);
         state_machine.clear_retryable_tasks();
-        assert_eq!(state_machine.has_retryable_task(), false);
+        assert!(!state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 0);
 
         assert!(!task2.is_new(&state_machine.task_token));
