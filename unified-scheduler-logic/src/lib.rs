@@ -20,6 +20,7 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
+#[derive(Clone, Copy)]
 struct Counter(usize);
 
 impl Counter {
