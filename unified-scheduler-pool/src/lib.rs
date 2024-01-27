@@ -1420,9 +1420,10 @@ where
         transaction_with_index: SEA::TransactionWithIndex<'_>,
     ) -> Result<()> {
         transaction_with_index.with_transaction_and_index(|transaction, index| {
-            let task = SchedulingStateMachine::create_task(transaction.clone(), index, &mut |pubkey| {
-                self.inner.address_book.load(pubkey)
-            });
+            let task =
+                SchedulingStateMachine::create_task(transaction.clone(), index, &mut |pubkey| {
+                    self.inner.address_book.load(pubkey)
+                });
             let abort_detected = self
                 .ensure_thread_manager_resumed(&self.context)?
                 .send_task(task);
