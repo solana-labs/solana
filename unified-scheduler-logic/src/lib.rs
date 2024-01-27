@@ -129,6 +129,19 @@ enum State {
     ScheduledAsBlocked,
 }
 
+impl State {
+    fn is_new(&self) -> bool {
+        self == State::New
+    }
+
+    fn is_scheduled(&self) -> bool {
+        match self {
+            State::New | State::Blocked => false,
+            State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
+        }
+    }
+}
+
 impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.transaction
@@ -159,7 +172,7 @@ impl TaskInner {
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) == 0
+        *self.uncontended_ref(task_token).is_new()
     }
 
     fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
