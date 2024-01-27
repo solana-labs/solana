@@ -641,7 +641,12 @@ mod tests {
             format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))),
             "Succeded(Readonly(1))"
         );
-        assert_eq!(format!("{:?}", TaskStatus { lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)], uncontended: 0 }), "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { .. })), requested_usage: Writable, uncommited_usage: Unused }], uncontended: 0 }");
+        let task_status = TaskStatus { lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)], uncontended: 0 };
+        assert_eq!(
+            format!("{:?}", task_status),
+            "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell {"
+            ".. })), requested_usage: Writable, uncommited_usage: Unused }], uncontended: 0 }"
+        );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
         assert!(format!("{:?}", task).contains("TaskInner"));
