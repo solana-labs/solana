@@ -24,7 +24,7 @@ mod counter {
     pub(super) struct Counter(usize);
 
     impl Counter {
-        fn new(v: usize) -> Self {
+        pub(super) fn new(v: usize) -> Self {
             Self(v)
         }
 
