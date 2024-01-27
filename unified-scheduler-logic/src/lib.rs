@@ -171,7 +171,7 @@ impl TaskInner {
     }
 
     fn mark_as_idle(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = 1;
+        *self.uncontended_mut(task_token) = State::ScheduledAsIdle;
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
@@ -182,7 +182,7 @@ impl TaskInner {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn mark_as_uncontended(&self, task_token: &mut TaskToken) {
         assert!(self.currently_contended(task_token));
-        *self.uncontended_mut(task_token) = 3;
+        *self.uncontended_mut(task_token) = State::ScheduledAsBlocked;
     }
 
     pub fn task_index(&self) -> usize {
