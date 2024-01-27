@@ -155,7 +155,7 @@ impl TaskInner {
     }
 
     fn has_contended(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token) >= 2
+        *self.uncontended_ref(task_token) == 3
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
