@@ -146,7 +146,7 @@ impl TaskInner {
         &mut self.task_status.borrow_mut(task_token).state
     }
 
-    fn uncontended_ref<'t>(&self, task_token: &'t TaskToken) -> &'t usize {
+    fn uncontended_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
         &self.task_status.borrow(task_token).state
     }
 
