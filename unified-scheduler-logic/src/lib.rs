@@ -44,10 +44,12 @@ mod counter {
             self.0
         }
 
+        #[must_use]
         pub(super) fn increment(self) -> Self {
             Self(self.0.checked_add(1).unwrap())
         }
 
+        #[must_use]
         pub(super) fn decrement(self) -> Self {
             Self(self.0.checked_sub(1).unwrap())
         }
