@@ -131,13 +131,16 @@ enum State {
 
 impl State {
     fn is_new(&self) -> bool {
-        self == State::New
+        match self {
+            State::New => true,
+            State::Blocked | State::ScheduledAsIdle | State::ScheduledAsBlocked => false,
+        }
     }
 
     fn is_scheduled(&self) -> bool {
         match self {
-            State::New | State::Blocked => false,
             State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
+            State::New | State::Blocked => false,
         }
     }
 }
