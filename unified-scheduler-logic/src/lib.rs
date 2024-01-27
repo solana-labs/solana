@@ -572,10 +572,10 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        let should_remove_from_pages = task.is_scheduled_as_blocked(&self.task_token);
+        let should_unregister_from_pages = task.is_scheduled_as_blocked(&self.task_token);
 
         for unlock_attempt in task.lock_attempts(&self.task_token) {
-            if should_remove_from_pages {
+            if should_unregister_from_pages {
                 unlock_attempt
                     .page_mut(&mut self.page_token)
                     .remove_blocked_task(task.unique_weight);
