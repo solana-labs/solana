@@ -30,6 +30,8 @@ mod counter {
     }
 
     impl std::ops::Add for Counter {
+        type Output = Self;
+        fn add(self, _: counter::Counter) -> <Self as std::ops::Add<counter::Counter>>::Output { todo!() }
     }
 }
 use crate::counter::Counter;
