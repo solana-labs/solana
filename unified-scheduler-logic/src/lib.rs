@@ -641,7 +641,10 @@ mod tests {
             format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))),
             "Succeded(Readonly(1))"
         );
-        let task_status = TaskStatus { lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)], uncontended: 0 };
+        let task_status = TaskStatus {
+            lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
+            uncontended: 0,
+        };
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
