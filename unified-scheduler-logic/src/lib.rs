@@ -32,6 +32,10 @@ mod counter {
             Self(self.0.checked_add(1).unwrap())
         }
 
+        fn decrement(self) -> Self {
+            Self(self.0.checked_sub(1).unwrap())
+        }
+
         fn increment_self(&mut self) {
             self.0 = self.0.checked_add(1).unwrap();
         }
