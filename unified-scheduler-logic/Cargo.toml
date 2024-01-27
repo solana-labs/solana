@@ -10,5 +10,22 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
 solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
+qualifier_attr = { workspace = true }
+
+[[bench]]
+name = "bench-with-iai-callgrind"
+harness = false
+
+[dev-dependencies]
+iai-callgrind = { version = "0.10.1", features = [
+    "client_requests"
+] }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-unified-scheduler-logic = { path = ".", features = ["dev-context-only-utils"] }
+bump-allocator = { version = "0.1.2" }
+
+[features]
+dev-context-only-utils = []
