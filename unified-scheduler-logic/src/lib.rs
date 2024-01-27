@@ -196,7 +196,7 @@ impl TaskInner {
         self.state_ref(task_token).is_scheduled()
     }
 
-    fn mark_as_contended(&self, task_token: &mut TaskToken) {
+    fn mark_as_blocked(&self, task_token: &mut TaskToken) {
         *self.state_mut(task_token) = State::Blocked;
     }
 
@@ -513,8 +513,8 @@ impl SchedulingStateMachine {
         if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
             if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
-                task.mark_as_contended(&mut self.task_token);
-                self.index_task_with_pages(&task);
+                task.mark_as_blocked(&mut self.task_token);
+                self.register_blocked_task_into_pages(&task);
             }
 
             None
@@ -562,7 +562,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn index_task_with_pages(&mut self, task: &Task) {
+    fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
             let requested_usage = lock_attempt.requested_usage;
             lock_attempt
@@ -572,10 +572,10 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        let should_remove = task.is_scheduled_as_blocked(&self.task_token);
+        let should_remove_from_pages = task.is_scheduled_as_blocked(&self.task_token);
 
         for unlock_attempt in task.lock_attempts(&self.task_token) {
-            if should_remove {
+            if should_remove_from_pages {
                 unlock_attempt
                     .page_mut(&mut self.page_token)
                     .remove_blocked_task(task.unique_weight);
