@@ -478,7 +478,7 @@ impl SchedulingStateMachine {
                     if *count == SOLE_USE_COUNT {
                         is_unused_now = true;
                     } else {
-                        *count -= 1;
+                        *count = count.checked_sub(1).unwrap();
                     }
                 }
                 RequestedUsage::Writable => unreachable!(),
