@@ -148,7 +148,7 @@ impl SchedulingStateMachine {
             })
             .collect();
 
-        let unique_weight = UniqueWeight::max_value() - index as UniqueWeight;
+        let unique_weight = UniqueWeight::max_value().checked_sub(index as UniqueWeight).unwrap();
 
         Task::new(TaskInner {
             unique_weight,
