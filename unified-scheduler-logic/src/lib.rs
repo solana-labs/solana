@@ -640,7 +640,7 @@ impl Default for SchedulingStateMachine {
             handled_task_count: 0,
             reschedule_count: 0,
             rescheduled_task_count: 0,
-            total_task_count: 0,
+            total_task_count: Counter::zero(),
             task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
