@@ -358,7 +358,7 @@ pub struct SchedulingStateMachine {
     handled_task_count: usize,
     reschedule_count: usize,
     rescheduled_task_count: usize,
-    total_task_count: usize,
+    total_task_count: Counter,
     task_token: TaskToken,
     page_token: PageToken,
 }
