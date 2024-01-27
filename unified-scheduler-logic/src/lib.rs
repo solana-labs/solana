@@ -142,7 +142,7 @@ impl TaskInner {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
-    fn uncontended_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut usize {
+    fn uncontended_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut State {
         &mut self.task_status.borrow_mut(task_token).state
     }
 
@@ -167,7 +167,7 @@ impl TaskInner {
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
-        *self.uncontended_mut(task_token) = 2;
+        *self.uncontended_mut(task_token) = State::Blocked;
     }
 
     fn mark_as_idle(&self, task_token: &mut TaskToken) {
