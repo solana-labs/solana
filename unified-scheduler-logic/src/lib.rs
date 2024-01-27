@@ -369,7 +369,7 @@ pub struct SchedulingStateMachine {
 
 impl SchedulingStateMachine {
     pub fn is_empty(&self) -> bool {
-        self.active_task_count == 0
+        self.active_task_count.is_zero()
     }
 
     pub fn retryable_task_count(&self) -> usize {
