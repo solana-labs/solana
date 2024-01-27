@@ -27,14 +27,6 @@ mod counter {
         pub(super) fn new(v: usize) -> Self {
             Self(v)
         }
-
-        fn increment(&mut self) {
-            self.0 = self.0.checked_add(1).unwrap();
-        }
-
-        fn decrement(&mut self) {
-            self.0 = self.0.checked_sub(1).unwrap();
-        }
     }
 }
 use crate::counter::Counter;
@@ -455,7 +447,7 @@ impl SchedulingStateMachine {
         let mut lock_status = match page.current_usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count.checked_add(1).unwrap())),
+                RequestedUsage::Readonly => LockStatus::Succeded(Usage::Readonly(count + 1)),
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
