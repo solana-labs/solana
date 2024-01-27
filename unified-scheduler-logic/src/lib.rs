@@ -398,8 +398,8 @@ impl SchedulingStateMachine {
             "scheduling bad task: {task:?}"
         );
 
-        self.total_task_count += 1;
-        self.active_task_count += 1;
+        self.total_task_count.increment_self();
+        self.active_task_count.increment_self();
         self.try_lock_for_task(TaskSource::Runnable, task)
     }
 
