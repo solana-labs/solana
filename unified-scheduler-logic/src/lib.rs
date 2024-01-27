@@ -121,6 +121,7 @@ impl SchedulingStateMachine {
     }
 }
 
+#[derive(Debug)]
 enum State {
     New,
     Blocked,
