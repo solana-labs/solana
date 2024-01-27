@@ -644,7 +644,7 @@ mod tests {
         let task_status = TaskStatus { lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)], uncontended: 0 };
         assert_eq!(
             format!("{:?}", task_status),
-            "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell {\
+            "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
              .. })), requested_usage: Writable, uncommited_usage: Unused }], uncontended: 0 }"
         );
         let sanitized = simplest_transaction();
