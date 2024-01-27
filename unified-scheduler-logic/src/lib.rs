@@ -720,7 +720,7 @@ mod tests {
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
         assert_eq!(
-            format!("{:?}", LockStatus::Succeded(Usage::Readonly(1))),
+            format!("{:?}", LockStatus::Succeded(Usage::Readonly(Counter::one()))),
             "Succeded(Readonly(1))"
         );
         let task_status = TaskStatus {
