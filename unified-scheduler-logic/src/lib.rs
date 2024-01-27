@@ -284,7 +284,7 @@ const_assert_eq!(mem::size_of::<Usage>(), 8);
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => Usage::Readonly(Counter::new(1)),
+            RequestedUsage::Readonly => Usage::Readonly(Counter::one()),
             RequestedUsage::Writable => Usage::Writable,
         }
     }
