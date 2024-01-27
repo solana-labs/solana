@@ -1,7 +1,10 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::cell::{SchedulerCell, Token},
+    crate::{
+        cell::{SchedulerCell, Token},
+        counter::Counter,
+    },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{collections::BTreeMap, mem, sync::Arc},
@@ -58,7 +61,6 @@ mod counter {
         }
     }
 }
-use crate::counter::Counter;
 
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
