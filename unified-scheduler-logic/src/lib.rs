@@ -260,7 +260,7 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        (UniqueWeight::max_value().checked_sub(self.unique_weight).unwrap() as usize
+        UniqueWeight::max_value().checked_sub(self.unique_weight).unwrap() as usize
     }
 }
 
