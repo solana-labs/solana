@@ -172,11 +172,11 @@ impl TaskInner {
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token).is_new()
+        self.uncontended_ref(task_token).is_new()
     }
 
     fn has_been_scheduled(&self, task_token: &TaskToken) -> bool {
-        *self.uncontended_ref(task_token).is_scheduled()
+        self.uncontended_ref(task_token).is_scheduled()
     }
 
     fn mark_as_contended(&self, task_token: &mut TaskToken) {
