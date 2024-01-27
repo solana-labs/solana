@@ -24,6 +24,10 @@ mod counter {
     pub(super) struct Counter(usize);
 
     impl Counter {
+        fn new(v: usize) -> Self {
+            Self(v)
+        }
+
         fn increment(&mut self) {
             self.0 = self.0.checked_add(1).unwrap();
         }
