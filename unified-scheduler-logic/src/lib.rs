@@ -506,7 +506,7 @@ impl SchedulingStateMachine {
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    if *count == SOLE_USE_COUNT {
+                    if count.is_one() {
                         is_unused_now = true;
                     } else {
                         count.decrement_self();
