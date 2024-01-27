@@ -392,7 +392,7 @@ impl SchedulingStateMachine {
         self.rescheduled_task_count
     }
 
-    pub fn total_task_count(&self) -> usize {
+    pub fn total_task_count(&self) -> u32 {
         self.total_task_count.current()
     }
 
