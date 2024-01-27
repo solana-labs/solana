@@ -28,6 +28,44 @@ struct TaskStatus {
     state: State,
 }
 
+#[derive(Debug)]
+enum State {
+    New,
+    Blocked,
+    ScheduledAsIdle,
+    ScheduledAsBlocked,
+}
+
+impl State {
+    fn is_new(&self) -> bool {
+        match self {
+            State::New => true,
+            State::Blocked | State::ScheduledAsIdle | State::ScheduledAsBlocked => false,
+        }
+    }
+
+    fn is_blocked(&self) -> bool {
+        match self {
+            State::Blocked => true,
+            State::New | State::ScheduledAsBlocked | State::ScheduledAsIdle => false,
+        }
+    }
+
+    fn is_scheduled(&self) -> bool {
+        match self {
+            State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
+            State::New | State::Blocked => false,
+        }
+    }
+
+    fn is_scheduled_as_blocked(&self) -> bool {
+        match self {
+            State::ScheduledAsBlocked => true,
+            State::New | State::Blocked | State::ScheduledAsIdle => false,
+        }
+    }
+}
+
 mod cell {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
@@ -118,44 +156,6 @@ impl SchedulingStateMachine {
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
-    }
-}
-
-#[derive(Debug)]
-enum State {
-    New,
-    Blocked,
-    ScheduledAsIdle,
-    ScheduledAsBlocked,
-}
-
-impl State {
-    fn is_new(&self) -> bool {
-        match self {
-            State::New => true,
-            State::Blocked | State::ScheduledAsIdle | State::ScheduledAsBlocked => false,
-        }
-    }
-
-    fn is_blocked(&self) -> bool {
-        match self {
-            State::Blocked => true,
-            State::New | State::ScheduledAsBlocked | State::ScheduledAsIdle => false,
-        }
-    }
-
-    fn is_scheduled(&self) -> bool {
-        match self {
-            State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
-            State::New | State::Blocked => false,
-        }
-    }
-
-    fn is_scheduled_as_blocked(&self) -> bool {
-        match self {
-            State::ScheduledAsBlocked => true,
-            State::New | State::Blocked | State::ScheduledAsIdle => false,
-        }
     }
 }
 
