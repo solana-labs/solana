@@ -451,7 +451,7 @@ impl SchedulingStateMachine {
         lock_attempts: &mut [LockAttempt],
         rollback_on_failure: bool,
     ) -> usize {
-        let mut lock_count = 0;
+        let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
@@ -461,13 +461,13 @@ impl SchedulingStateMachine {
                     } else {
                         attempt.uncommited_usage = usage;
                     }
-                    lock_count += 1;
+                    lock_count.increment_self()
                 }
                 LockStatus::Failed => break,
             }
         }
 
-        lock_count
+        lock_count.current() as usize
     }
 
     fn attempt_lock_address(
