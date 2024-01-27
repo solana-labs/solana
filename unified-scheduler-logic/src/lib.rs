@@ -7,7 +7,7 @@ use {
     std::{collections::BTreeMap, mem, sync::Arc},
 };
 
-type UsageCount = u32;
+type UsageCount = Counter;
 const SOLE_USE_COUNT: UsageCount = 1;
 
 #[derive(Clone, Debug)]
