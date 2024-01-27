@@ -59,7 +59,10 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
-        svm::account_loader::load_accounts,
+        svm::{
+            account_loader::load_accounts,
+            transaction_account_state_info::TransactionAccountStateInfo,
+        },
         transaction_batch::TransactionBatch,
     },
     byteorder::{ByteOrder, LittleEndian},
@@ -230,7 +233,6 @@ mod serde_snapshot;
 mod sysvar_cache;
 #[cfg(test)]
 pub(crate) mod tests;
-mod transaction_account_state_info;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -4862,8 +4864,11 @@ impl Bank {
         #[cfg(debug_assertions)]
         transaction_context.set_signature(tx.signature());
 
-        let pre_account_state_info =
-            self.get_transaction_account_state_info(&transaction_context, tx.message());
+        let pre_account_state_info = TransactionAccountStateInfo::new(
+            &self.rent_collector.rent,
+            &transaction_context,
+            tx.message(),
+        );
 
         let log_collector = if enable_log_recording {
             match log_messages_bytes_limit {
@@ -4908,9 +4913,12 @@ impl Bank {
 
         let mut status = process_result
             .and_then(|info| {
-                let post_account_state_info =
-                    self.get_transaction_account_state_info(&transaction_context, tx.message());
-                self.verify_transaction_account_state_changes(
+                let post_account_state_info = TransactionAccountStateInfo::new(
+                    &self.rent_collector.rent,
+                    &transaction_context,
+                    tx.message(),
+                );
+                TransactionAccountStateInfo::verify_changes(
                     &pre_account_state_info,
                     &post_account_state_info,
                     &transaction_context,
