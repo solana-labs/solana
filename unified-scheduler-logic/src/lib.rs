@@ -204,7 +204,7 @@ impl TaskInner {
         *self.uncontended_mut(task_token) = State::ScheduledAsIdle;
     }
 
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    #[cfg(feature = "dev-context-only-utils")]
     fn reset_as_new(&self, task_token: &mut TaskToken) {
         *self.uncontended_mut(task_token) = State::New;
     }
