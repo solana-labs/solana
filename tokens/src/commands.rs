@@ -1850,8 +1850,8 @@ mod tests {
             lockup_date: None,
         }];
         let args = DistributeTokensArgs {
-            sender_keypair: read_keypair_file(sender_keypair_file).unwrap().into(),
-            fee_payer: read_keypair_file(fee_payer).unwrap().into(),
+            sender_keypair: Box::new(read_keypair_file(sender_keypair_file).unwrap()),
+            fee_payer: Box::new(read_keypair_file(fee_payer).unwrap()),
             dry_run: false,
             input_csv: "".to_string(),
             transaction_db: "".to_string(),
@@ -1893,12 +1893,8 @@ mod tests {
         let unfunded_payer = Keypair::new();
         let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
         write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
@@ -1933,12 +1929,9 @@ mod tests {
             .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
-        args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair =
+            Box::new(read_keypair_file(&partially_funded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&partially_funded_payer_keypair_file).unwrap());
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
@@ -1999,10 +1992,8 @@ mod tests {
         let unfunded_payer = Keypair::new();
         let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
         write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+        args.sender_keypair = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&sender_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
@@ -2015,10 +2006,8 @@ mod tests {
         }
 
         // Unfunded fee payer
-        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair = Box::new(read_keypair_file(&sender_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
@@ -2145,12 +2134,8 @@ mod tests {
         let unfunded_payer = Keypair::new();
         let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
         write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
@@ -2185,12 +2170,9 @@ mod tests {
             .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
-        args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair =
+            Box::new(read_keypair_file(&partially_funded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&partially_funded_payer_keypair_file).unwrap());
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
                 .unwrap_err();
@@ -2258,10 +2240,8 @@ mod tests {
         let unfunded_payer = Keypair::new();
         let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
         write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+        args.sender_keypair = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&sender_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)
@@ -2274,10 +2254,8 @@ mod tests {
         }
 
         // Unfunded fee payer
-        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
+        args.sender_keypair = Box::new(read_keypair_file(&sender_keypair_file).unwrap());
+        args.fee_payer = Box::new(read_keypair_file(&unfunded_payer_keypair_file).unwrap());
 
         let err_result =
             check_payer_balances(&[one_signer_message(&client)], &allocations, &client, &args)

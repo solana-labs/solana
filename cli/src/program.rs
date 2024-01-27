@@ -2789,7 +2789,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2817,7 +2817,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2848,8 +2848,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2879,7 +2879,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2911,8 +2911,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&program_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&program_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2945,8 +2945,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2974,7 +2974,7 @@ mod tests {
                     skip_fee_check: false,
                     allow_excessive_balance: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -3008,7 +3008,7 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3033,7 +3033,7 @@ mod tests {
                     max_len: Some(42),
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3062,8 +3062,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3093,8 +3093,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3129,9 +3129,9 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3175,7 +3175,7 @@ mod tests {
                     dump_transaction_message: true,
                     blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3203,7 +3203,7 @@ mod tests {
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3236,10 +3236,8 @@ mod tests {
                     blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&new_authority_pubkey_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&new_authority_pubkey_file).unwrap()),
                 ],
             }
         );
@@ -3266,7 +3264,7 @@ mod tests {
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3295,8 +3293,8 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3330,7 +3328,7 @@ mod tests {
                     buffer_authority_index: Some(0),
                     new_buffer_authority: new_authority_pubkey,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3354,7 +3352,7 @@ mod tests {
                     buffer_authority_index: Some(0),
                     new_buffer_authority: new_authority_keypair.pubkey(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -3521,7 +3519,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3544,7 +3542,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: true,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3569,8 +3567,8 @@ mod tests {
                     bypass_warning: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3594,7 +3592,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap()),],
             }
         );
 
@@ -3616,7 +3614,7 @@ mod tests {
                     use_lamports_unit: true,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap()),],
             }
         );
     }
@@ -3648,7 +3646,7 @@ mod tests {
                     program_pubkey,
                     additional_bytes
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }

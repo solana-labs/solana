@@ -1517,7 +1517,7 @@ mod tests {
                     new_authorized: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -1551,8 +1551,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authorized_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1586,8 +1586,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authorized_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1635,8 +1635,11 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    Presigner::new(&pubkey2, &sig2).into(),
-                    Presigner::new(&authorized_keypair.pubkey(), &authorized_sig).into(),
+                    Box::new(Presigner::new(&pubkey2, &sig2)),
+                    Box::new(Presigner::new(
+                        &authorized_keypair.pubkey(),
+                        &authorized_sig
+                    )),
                 ],
             }
         );
@@ -1672,8 +1675,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&voter_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&voter_keypair_file).unwrap())
                 ],
             }
         );
@@ -1704,9 +1707,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
-                    read_keypair_file(&voter_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authorized_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&voter_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1758,9 +1761,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1792,9 +1795,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1833,9 +1836,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1886,10 +1889,10 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    Presigner::new(&identity_keypair.pubkey(), &identity_sig).into(),
-                    Presigner::new(&pubkey2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(Presigner::new(&identity_keypair.pubkey(), &identity_sig)),
+                    Box::new(Presigner::new(&pubkey2, &sig2)),
                 ],
             }
         );
@@ -1929,9 +1932,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
                     Box::new(keypair),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1968,9 +1971,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -1999,9 +2002,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
-                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&identity_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2030,7 +2033,7 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
                 ],
             }
@@ -2061,7 +2064,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2090,7 +2093,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2125,8 +2128,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_file).unwrap())
                 ],
             }
         );
@@ -2163,7 +2166,9 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&withdraw_authority_file).unwrap().into()],
+                signers: vec![Box::new(
+                    read_keypair_file(&withdraw_authority_file).unwrap()
+                )],
             }
         );
 
@@ -2204,7 +2209,10 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![Presigner::new(&withdraw_authority.pubkey(), &authorized_sig).into(),],
+                signers: vec![Box::new(Presigner::new(
+                    &withdraw_authority.pubkey(),
+                    &authorized_sig
+                )),],
             }
         );
 
@@ -2226,7 +2234,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2254,8 +2262,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_file).unwrap())
                 ],
             }
         );
@@ -2286,8 +2294,8 @@ mod tests {
                     compute_unit_price: Some(99),
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_file).unwrap())
                 ],
             }
         );
