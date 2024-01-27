@@ -6592,6 +6592,8 @@ dependencies = [
 name = "solana-unified-scheduler-logic"
 version = "1.18.0"
 dependencies = [
+ "assert_matches",
+ "qualifier_attr",
  "solana-sdk",
  "static_assertions",
 ]
