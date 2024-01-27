@@ -365,9 +365,9 @@ type TaskQueue = BTreeMap<UniqueWeight, Task>;
 pub struct SchedulingStateMachine {
     retryable_task_queue: TaskQueue,
     active_task_count: Counter,
-    handled_task_count: usize,
-    reschedule_count: usize,
-    rescheduled_task_count: usize,
+    handled_task_count: Counter,
+    reschedule_count: Counter,
+    rescheduled_task_count: Counter,
     total_task_count: Counter,
     task_token: TaskToken,
     page_token: PageToken,
