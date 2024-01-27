@@ -2203,13 +2203,13 @@ fn main() {
                     let account_data_encoding = parse_encoding_format(arg_matches);
                     let mode = if let Some(pubkeys) = pubkeys_of(arg_matches, "account") {
                         info!("Scanning individual accounts: {pubkeys:?}");
-                        AccountsOutputMode::IndividualAccounts(pubkeys)
+                        AccountsOutputMode::Individual(pubkeys)
                     } else if let Some(pubkey) = pubkey_of(arg_matches, "program_accounts") {
                         info!("Scanning program accounts for {pubkey}");
-                        AccountsOutputMode::ProgramAccounts(pubkey)
+                        AccountsOutputMode::Program(pubkey)
                     } else {
                         info!("Scanning all accounts");
-                        AccountsOutputMode::AllAccounts
+                        AccountsOutputMode::All
                     };
                     let config = AccountsOutputConfig {
                         mode,

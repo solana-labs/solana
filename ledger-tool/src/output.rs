@@ -574,9 +574,9 @@ pub struct AccountsOutputStreamer {
 }
 
 pub enum AccountsOutputMode {
-    AllAccounts,
-    IndividualAccounts(Vec<Pubkey>),
-    ProgramAccounts(Pubkey),
+    All,
+    Individual(Vec<Pubkey>),
+    Program(Pubkey),
 }
 
 pub struct AccountsOutputConfig {
@@ -618,7 +618,7 @@ impl AccountsOutputStreamer {
                 SerializeStruct::end(struct_serializer)
                     .map_err(|err| format!("unable to end serialization: {err}"))?;
                 // The serializer doesn't give us a trailing newline so do it ourselves
-                println!("");
+                println!();
                 Ok(())
             }
             _ => {
@@ -661,12 +661,12 @@ impl AccountsScanner {
         if self.config.include_account_contents {
             if let Some(serializer) = seq_serializer {
                 let cli_account =
-                    CliAccount::new_with_config(pubkey, account, &cli_account_new_config);
+                    CliAccount::new_with_config(pubkey, account, cli_account_new_config);
                 serializer.serialize_element(&cli_account).unwrap();
             } else {
                 output_account(
                     pubkey,
-                    &account,
+                    account,
                     slot,
                     self.config.include_account_data,
                     self.config.account_data_encoding,
@@ -703,10 +703,10 @@ impl AccountsScanner {
         };
 
         match &self.config.mode {
-            AccountsOutputMode::AllAccounts => {
+            AccountsOutputMode::All => {
                 self.bank.scan_all_accounts(scan_func).unwrap();
             }
-            AccountsOutputMode::IndividualAccounts(pubkeys) => pubkeys.iter().for_each(|pubkey| {
+            AccountsOutputMode::Individual(pubkeys) => pubkeys.iter().for_each(|pubkey| {
                 if let Some((account, slot)) = self
                     .bank
                     .get_account_modified_slot_with_fixed_root(pubkey)
@@ -722,18 +722,18 @@ impl AccountsScanner {
                     );
                 }
             }),
-            AccountsOutputMode::ProgramAccounts(program_pubkey) => self
+            AccountsOutputMode::Program(program_pubkey) => self
                 .bank
-                .get_program_accounts(&program_pubkey, &ScanConfig::default())
+                .get_program_accounts(program_pubkey, &ScanConfig::default())
                 .unwrap()
                 .iter()
                 .filter(|(pubkey, account)| self.should_process_account(account, pubkey))
                 .for_each(|(pubkey, account)| {
-                    total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                    total_accounts_stats.accumulate_account(pubkey, account, rent_collector);
                     self.maybe_output_account(
                         seq_serializer,
                         pubkey,
-                        &account,
+                        account,
                         None,
                         &cli_account_new_config,
                     );
