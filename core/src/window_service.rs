@@ -582,6 +582,7 @@ mod test {
             keypair,
             entries,
             true, // is_last_in_slot
+            None, // chained_merkle_root
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant

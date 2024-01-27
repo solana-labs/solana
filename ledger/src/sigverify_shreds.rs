@@ -739,7 +739,9 @@ mod tests {
                 .entries_to_shreds(
                     keypair,
                     &make_entries(rng, num_entries),
-                    rng.gen(),              // is_last_in_slot
+                    rng.gen(), // is_last_in_slot
+                    // chained_merkle_root
+                    rng.gen::<bool>().then(|| Hash::new_from_array(rng.gen())),
                     rng.gen_range(0..2671), // next_shred_index
                     rng.gen_range(0..2781), // next_code_index
                     rng.gen(),              // merkle_variant,

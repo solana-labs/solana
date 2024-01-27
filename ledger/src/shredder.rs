@@ -13,7 +13,7 @@ use {
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{clock::Slot, signature::Keypair},
+    solana_sdk::{clock::Slot, hash::Hash, signature::Keypair},
     std::{
         borrow::Borrow,
         fmt::Debug,
@@ -69,11 +69,13 @@ impl Shredder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn entries_to_shreds(
         &self,
         keypair: &Keypair,
         entries: &[Entry],
         is_last_in_slot: bool,
+        chained_merkle_root: Option<Hash>,
         next_shred_index: u32,
         next_code_index: u32,
         merkle_variant: bool,
@@ -93,7 +95,7 @@ impl Shredder {
                 self.version,
                 self.reference_tick,
                 is_last_in_slot,
-                None, // chained_merkle_root
+                chained_merkle_root,
                 next_shred_index,
                 next_code_index,
                 reed_solomon_cache,
@@ -500,6 +502,7 @@ mod tests {
             system_transaction,
         },
         std::{collections::HashSet, convert::TryInto, iter::repeat_with, sync::Arc},
+        test_case::test_case,
     };
 
     fn verify_test_code_shred(shred: &Shred, index: u32, slot: Slot, pk: &Pubkey, verify: bool) {
@@ -510,7 +513,7 @@ mod tests {
         assert_eq!(verify, shred.verify(pk));
     }
 
-    fn run_test_data_shredder(slot: Slot) {
+    fn run_test_data_shredder(slot: Slot, chained: bool) {
         let keypair = Arc::new(Keypair::new());
 
         // Test that parent cannot be > current slot
@@ -548,6 +551,8 @@ mod tests {
             &keypair,
             &entries,
             is_last_in_slot,
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             start_index, // next_shred_index
             start_index, // next_code_index
             true,        // merkle_variant
@@ -602,13 +607,15 @@ mod tests {
         assert_eq!(entries, deshred_entries);
     }
 
-    #[test]
-    fn test_data_shredder() {
-        run_test_data_shredder(0x1234_5678_9abc_def0);
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_data_shredder(chained: bool) {
+        run_test_data_shredder(0x1234_5678_9abc_def0, chained);
     }
 
-    #[test]
-    fn test_deserialize_shred_payload() {
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_deserialize_shred_payload(chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
         let parent_slot = 0;
@@ -627,6 +634,8 @@ mod tests {
             &keypair,
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
@@ -639,8 +648,9 @@ mod tests {
         assert_eq!(deserialized_shred, *data_shreds.last().unwrap());
     }
 
-    #[test]
-    fn test_shred_reference_tick() {
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_shred_reference_tick(chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
         let parent_slot = 0;
@@ -659,6 +669,8 @@ mod tests {
             &keypair,
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root,
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
@@ -676,8 +688,9 @@ mod tests {
         assert_eq!(deserialized_shred.reference_tick(), 5);
     }
 
-    #[test]
-    fn test_shred_reference_tick_overflow() {
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_shred_reference_tick_overflow(chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
         let parent_slot = 0;
@@ -696,6 +709,8 @@ mod tests {
             &keypair,
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
@@ -722,7 +737,7 @@ mod tests {
         );
     }
 
-    fn run_test_data_and_code_shredder(slot: Slot) {
+    fn run_test_data_and_code_shredder(slot: Slot, chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
         // Create enough entries to make > 1 shred
@@ -742,6 +757,8 @@ mod tests {
             &keypair,
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
@@ -766,9 +783,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_data_and_code_shredder() {
-        run_test_data_and_code_shredder(0x1234_5678_9abc_def0);
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_data_and_code_shredder(chained: bool) {
+        run_test_data_and_code_shredder(0x1234_5678_9abc_def0, chained);
     }
 
     fn run_test_recovery_and_reassembly(slot: Slot, is_last_in_slot: bool) {
@@ -799,6 +817,7 @@ mod tests {
             &keypair,
             &entries,
             is_last_in_slot,
+            None,  // chained_merkle_root
             0,     // next_shred_index
             0,     // next_code_index
             false, // merkle_variant
@@ -936,6 +955,7 @@ mod tests {
             &keypair,
             &entries,
             true,  // is_last_in_slot
+            None,  // chained_merkle_root
             25,    // next_shred_index,
             25,    // next_code_index
             false, // merkle_variant
@@ -1032,6 +1052,7 @@ mod tests {
             &keypair,
             &[entry],
             is_last_in_slot,
+            None, // chained_merkle_root
             next_shred_index,
             next_shred_index, // next_code_index
             false,            // merkle_variant
@@ -1073,8 +1094,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_shred_version() {
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_shred_version(chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
         let version = shred_version::version_from_hash(&hash);
@@ -1094,6 +1116,8 @@ mod tests {
             &keypair,
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
@@ -1106,8 +1130,9 @@ mod tests {
             .any(|s| s.version() != version));
     }
 
-    #[test]
-    fn test_shred_fec_set_index() {
+    #[test_case(false)]
+    #[test_case(true)]
+    fn test_shred_fec_set_index(chained: bool) {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
         let version = shred_version::version_from_hash(&hash);
@@ -1127,7 +1152,9 @@ mod tests {
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,
             &entries,
-            true,        // is_last_in_slot
+            true, // is_last_in_slot
+            // chained_merkle_root
+            chained.then(|| Hash::new_from_array(rand::thread_rng().gen())),
             start_index, // next_shred_index
             start_index, // next_code_index
             true,        // merkle_variant
