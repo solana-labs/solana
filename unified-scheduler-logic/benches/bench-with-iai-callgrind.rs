@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 //#[global_allocator]
 //static GLOBAL: bump_allocator::BumpPointer = bump_allocator::BumpPointer;
 
