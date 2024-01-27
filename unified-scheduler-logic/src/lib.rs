@@ -21,7 +21,7 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 
 mod counter {
     #[derive(Debug, Clone, Copy)]
-    pub(super) struct Counter(usize);
+    pub(super) struct Counter(u32);
 
     impl Counter {
         pub(super) fn zero() -> Self {
