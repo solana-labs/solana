@@ -337,7 +337,7 @@ impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_tasks
-            .insert(task.unique_weight, (task, requested_usage));
+            .insert((task, requested_usage));
         assert!(!pre_existed);
     }
 
