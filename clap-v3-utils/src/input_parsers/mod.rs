@@ -83,6 +83,11 @@ pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
 
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `ArgMatches::get_one::<ClusterType>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn cluster_type_of(matches: &ArgMatches, name: &str) -> Option<ClusterType> {
     value_of(matches, name)
 }
@@ -585,6 +590,33 @@ mod tests {
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--timestamp", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_cluster_type() {
+        let command = Command::new("test").arg(
+            Arg::new("cluster")
+                .long("cluster")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(ClusterType)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--cluster", "testnet"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<ClusterType>("cluster").unwrap(),
+            ClusterType::Testnet
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--cluster", "this_is_an_invalid_arg"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
