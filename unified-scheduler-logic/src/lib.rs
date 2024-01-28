@@ -631,7 +631,7 @@ impl SchedulingStateMachine {
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
-                continue;
+                //continue;
             }
 
             let heaviest_uncontended_now = unlock_attempt
