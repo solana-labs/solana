@@ -167,6 +167,9 @@ pub struct TaskInner {
     task_status: SchedulerCell<TaskStatus>,
 }
 
+impl Ord for TaskInner {
+}
+
 impl SchedulingStateMachine {
     pub fn create_task(
         transaction: SanitizedTransaction,
