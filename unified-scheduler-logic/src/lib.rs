@@ -940,13 +940,16 @@ mod tests {
         let conflicting_readonly_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_shared_writable(conflicting_readonly_address);
         let sanitized2 = transaction_with_shared_writable(conflicting_readonly_address);
+        let sanitized3 = transaction_with_shared_writable(conflicting_readonly_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized2, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
