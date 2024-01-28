@@ -53,7 +53,7 @@ mod counter {
         }
 
         pub(super) fn increment_self(&mut self) {
-            self.0 = self.0.checked_add(1).unwrap();
+            *self = self.increment()
         }
 
         pub(super) fn decrement_self(&mut self) {
@@ -158,10 +158,7 @@ impl TaskStatus {
     }
 }
 
-#[cfg_attr(
-    feature = "dev-context-only-utils",
-    field_qualifiers(unique_weight(pub))
-)]
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(unique_weight(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
     // put this field out of this struct for maximum space efficiency?
@@ -950,18 +947,8 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(
-            state_machine
-                .schedule_task(task1.clone())
-                .map(|task| task.task_index()),
-            Some(3)
-        );
-        assert_matches!(
-            state_machine
-                .schedule_task(task2.clone())
-                .map(|task| task.task_index()),
-            Some(4)
-        );
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|task| task.task_index()), Some(3));
+        assert_matches!(state_machine.schedule_task(task2.clone()).map(|task| task.task_index()), Some(4));
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
