@@ -330,7 +330,7 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     current_usage: Usage,
-    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    blocked_tasks: BTreeSet<(Task, RequestedUsage)>,
 }
 
 impl PageInner {
