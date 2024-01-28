@@ -384,7 +384,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // the various dashboards.
             CrdsData::Version(_) => true,
             CrdsData::NodeInstance(_) => true,
-            CrdsData::AccountsHashes(_) => false,
+            CrdsData::AccountsHashes(_) => true,
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _)
