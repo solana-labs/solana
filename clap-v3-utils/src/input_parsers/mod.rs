@@ -27,6 +27,11 @@ pub use signer::{
 };
 
 // Return parsed values from matches at `name`
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use the functions `ArgMatches::get_many` or `ArgMatches::try_get_many` instead"
+)]
+#[allow(deprecated)]
 pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
 where
     T: std::str::FromStr,
@@ -38,6 +43,11 @@ where
 }
 
 // Return a parsed value from matches at `name`
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use the functions `ArgMatches::get_one` or `ArgMatches::try_get_one` instead"
+)]
+#[allow(deprecated)]
 pub fn value_of<T>(matches: &ArgMatches, name: &str) -> Option<T>
 where
     T: std::str::FromStr,
@@ -63,6 +73,7 @@ pub fn unix_timestamp_from_rfc3339_datetime(
     since = "1.17.0",
     note = "please use `Amount::parse_decimal` and `Amount::sol_to_lamport` instead"
 )]
+#[allow(deprecated)]
 pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
