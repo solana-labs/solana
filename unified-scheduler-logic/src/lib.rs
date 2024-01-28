@@ -158,7 +158,7 @@ impl TaskStatus {
     }
 }
 
-#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(unique_weight(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
     // put this field out of this struct for maximum space efficiency?
