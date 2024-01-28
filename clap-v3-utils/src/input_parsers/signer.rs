@@ -418,10 +418,12 @@ impl FromStr for PubkeySignature {
     }
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use {
         super::*,
+        crate::input_parsers::{keypair_of, pubkey_of, pubkeys_of},
         assert_matches::assert_matches,
         clap::{Arg, ArgAction, Command},
         solana_remote_wallet::locator::Manufacturer,

@@ -1257,6 +1257,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn signer_from_path_with_file() -> Result<(), Box<dyn std::error::Error>> {
         let dir = TempDir::new()?;
         let dir = dir.path();
