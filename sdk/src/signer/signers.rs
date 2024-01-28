@@ -14,85 +14,43 @@ pub trait Signers {
     fn is_interactive(&self) -> bool;
 }
 
-/// Do not make any blanket impls for [impl Signer] or Deref<Target = [impl Signer]> for now because
-/// fixed size arrays [T; N] do not implement it yet, but std lib will still
-/// throw conflicting impl bec it might impl it in the future.
-/// This SignerSlice helper trait helps to unify across [T], [T; N], Vec<T> etc
+/// Any `T` where `&T` impls `IntoIterator` yielding
+/// references to `Signer`s implements `Signers`.
 ///
-/// TODO: replace this helper trait
-/// with blanket over [SlicePattern](https://doc.rust-lang.org/stable/core/slice/trait.SlicePattern.html)
-/// or [core::str::Pattern](https://doc.rust-lang.org/stable/core/str/pattern/trait.Pattern.html) once stabilized
-trait SignerSlice {
-    type Item: Signer;
-
-    fn as_signer_slice(&self) -> &[Self::Item];
-}
-
-impl<T: SignerSlice + ?Sized> Signers for T {
+/// This includes [&dyn Signer], &[Box<dyn Signer>],
+/// [&dyn Signer; N], Vec<dyn Signer>, Vec<Keypair>, HashSet<Box<dyn Signer>> etc
+impl<T: ?Sized, S: Signer + ?Sized> Signers for T
+where
+    for<'a> &'a T: IntoIterator<Item = &'a S>,
+{
     fn pubkeys(&self) -> Vec<Pubkey> {
-        self.as_signer_slice()
-            .iter()
-            .map(|keypair| keypair.pubkey())
-            .collect()
+        self.into_iter().map(|keypair| keypair.pubkey()).collect()
     }
 
     fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
         let mut pubkeys = Vec::new();
-        for keypair in self.as_signer_slice().iter() {
+        for keypair in self.into_iter() {
             pubkeys.push(keypair.try_pubkey()?);
         }
         Ok(pubkeys)
     }
 
     fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
-        self.as_signer_slice()
-            .iter()
+        self.into_iter()
             .map(|keypair| keypair.sign_message(message))
             .collect()
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
         let mut signatures = Vec::new();
-        for keypair in self.as_signer_slice().iter() {
+        for keypair in self.into_iter() {
             signatures.push(keypair.try_sign_message(message)?);
         }
         Ok(signatures)
     }
 
     fn is_interactive(&self) -> bool {
-        self.as_signer_slice().iter().any(|s| s.is_interactive())
-    }
-}
-
-impl<T: Signer> SignerSlice for [T] {
-    type Item = T;
-
-    fn as_signer_slice(&self) -> &[Self::Item] {
-        self
-    }
-}
-
-impl<T: Signer, const N: usize> SignerSlice for [T; N] {
-    type Item = T;
-
-    fn as_signer_slice(&self) -> &[Self::Item] {
-        self
-    }
-}
-
-impl<T: Signer> SignerSlice for Vec<T> {
-    type Item = T;
-
-    fn as_signer_slice(&self) -> &[Self::Item] {
-        self
-    }
-}
-
-impl<S: SignerSlice + ?Sized> SignerSlice for &S {
-    type Item = S::Item;
-
-    fn as_signer_slice(&self) -> &[Self::Item] {
-        (**self).as_signer_slice()
+        self.into_iter().any(|s| s.is_interactive())
     }
 }
 
