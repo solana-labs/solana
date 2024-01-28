@@ -10,8 +10,6 @@ use {
     std::{collections::BTreeMap, mem, sync::Arc},
 };
 
-type UsageCount = Counter;
-
 #[derive(Clone, Debug)]
 enum LockStatus {
     Succeded(Usage),
@@ -300,7 +298,7 @@ impl LockAttempt {
 enum Usage {
     #[default]
     Unused,
-    Readonly(UsageCount),
+    Readonly(Counter),
     Writable,
 }
 const_assert_eq!(mem::size_of::<Usage>(), 8);
