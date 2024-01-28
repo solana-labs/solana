@@ -484,7 +484,7 @@ impl SchedulingStateMachine {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    LockStatus::Succeded(Usage::Readonly(count))
+                    LockStatus::Succeded(Usage::Readonly(count.increment()))
                 }
                 RequestedUsage::Writable => LockStatus::Failed,
             },
