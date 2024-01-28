@@ -167,6 +167,9 @@ pub struct TaskInner {
     task_status: SchedulerCell<TaskStatus>,
 }
 
+impl Eq for TaskInner {
+}
+
 impl Ord for TaskInner {
 }
 
