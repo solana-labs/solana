@@ -364,7 +364,7 @@ impl PageInner {
         task_token: &TaskToken,
     ) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
-            .values()
+            .iter()
             .rev()
             .find(|(task, _)| task.currently_contended(task_token))
     }
