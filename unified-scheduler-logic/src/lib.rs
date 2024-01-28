@@ -255,7 +255,7 @@ impl TaskInner {
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn mark_as_scheduled_as_blocked(&self, task_token: &mut TaskToken) {
-        debug_assert!(self.currently_contended(task_token));
+        assert!(self.currently_contended(task_token));
         *self.state_mut(task_token) = State::ScheduledAsBlocked;
     }
 
@@ -323,12 +323,12 @@ impl PageInner {
         let pre_existed = self
             .blocked_tasks
             .insert(task.unique_weight, (task, requested_usage));
-        debug_assert!(pre_existed.is_none());
+        assert!(pre_existed.is_none());
     }
 
     fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
         let removed_entry = self.blocked_tasks.remove(&unique_weight);
-        debug_assert!(removed_entry.is_some());
+        assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
@@ -405,7 +405,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        debug_assert!(
+        assert!(
             task.is_new(&self.task_token),
             "scheduling bad task: {task:?}"
         );
@@ -437,7 +437,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        debug_assert!(
+        assert!(
             task.is_scheduled(&self.task_token),
             "descheduling bad task: {task:?}"
         );
@@ -741,7 +741,7 @@ mod tests {
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
-        debug_assert!(format!("{:?}", task).contains("TaskInner"));
+        assert!(format!("{:?}", task).contains("TaskInner"));
     }
 
     #[test]
@@ -749,7 +749,7 @@ mod tests {
         let state_machine = SchedulingStateMachine::default();
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
-        debug_assert!(state_machine.is_empty());
+        assert!(state_machine.is_empty());
     }
 
     #[test]
