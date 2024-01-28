@@ -1,7 +1,7 @@
 use {
-    crate::{
-        input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
-        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path, ASK_KEYWORD},
+    crate::keypair::{
+        keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+        ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::{
@@ -11,7 +11,7 @@ use {
     solana_sdk::{
         derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
+        signature::{read_keypair_file, Keypair, Signature, Signer},
     },
     std::{error, rc::Rc, str::FromStr},
     thiserror::Error,
@@ -236,16 +236,36 @@ pub fn try_keypair_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Keypair>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypair_of(matches, name))
+    if let Some(value) = matches.try_get_one::<String>(name)? {
+        if value == ASK_KEYWORD {
+            let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+            keypair_from_seed_phrase(name, skip_validation, true, None, true).map(Some)
+        } else {
+            read_keypair_file(value).map(Some)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn try_keypairs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypairs_of(matches, name))
+    Ok(matches.try_get_many::<String>(name)?.map(|values| {
+        values
+            .filter_map(|value| {
+                if value == ASK_KEYWORD {
+                    let skip_validation = matches
+                        .try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .unwrap();
+                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
+                } else {
+                    read_keypair_file(value).ok()
+                }
+            })
+            .collect()
+    }))
 }
 
 // Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
@@ -254,16 +274,28 @@ pub fn try_pubkey_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkey_of(matches, name))
+    if let Some(pubkey) = matches.try_get_one::<Pubkey>(name)? {
+        Ok(Some(*pubkey))
+    } else {
+        Ok(try_keypair_of(matches, name)?.map(|keypair| keypair.pubkey()))
+    }
 }
 
 pub fn try_pubkeys_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_of(matches, name))
+    Ok(matches.try_get_many::<String>(name)?.map(|values| {
+        values
+            .map(|value| {
+                value.parse::<Pubkey>().unwrap_or_else(|_| {
+                    read_keypair_file(value)
+                        .expect("read_keypair_file failed")
+                        .pubkey()
+                })
+            })
+            .collect()
+    }))
 }
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
