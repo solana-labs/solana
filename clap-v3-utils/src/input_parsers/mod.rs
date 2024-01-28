@@ -58,6 +58,11 @@ where
         .and_then(|value| value.parse::<T>().ok())
 }
 
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `ArgMatches::get_one::<UnixTimestamp>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn unix_timestamp_from_rfc3339_datetime(
     matches: &ArgMatches,
     name: &str,
@@ -555,5 +560,32 @@ mod tests {
                 assert_eq!(matches.get_one::<String>("derivation").unwrap(), arg);
             }
         }
+    }
+
+    #[test]
+    fn test_unix_timestamp_from_rfc3339_datetime() {
+        let command = Command::new("test").arg(
+            Arg::new("timestamp")
+                .long("timestamp")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(UnixTimestamp)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--timestamp", "1234"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UnixTimestamp>("timestamp").unwrap(),
+            1234,
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--timestamp", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 }
