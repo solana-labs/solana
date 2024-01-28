@@ -173,42 +173,6 @@ pub struct TaskInner {
     task_status: SchedulerCell<TaskStatus>,
 }
 
-impl SchedulingStateMachine {
-    pub fn create_task(
-        transaction: SanitizedTransaction,
-        index: usize,
-        page_loader: &mut impl FnMut(Pubkey) -> Page,
-    ) -> Task {
-        let locks = transaction.get_account_locks_unchecked();
-
-        let writable_locks = locks
-            .writable
-            .iter()
-            .map(|address| (address, RequestedUsage::Writable));
-        let readonly_locks = locks
-            .readonly
-            .iter()
-            .map(|address| (address, RequestedUsage::Readonly));
-
-        let locks = writable_locks
-            .chain(readonly_locks)
-            .map(|(address, requested_usage)| {
-                LockAttempt::new(page_loader(**address), requested_usage)
-            })
-            .collect();
-
-        let unique_weight = UniqueWeight::max_value()
-            .checked_sub(index as UniqueWeight)
-            .unwrap();
-
-        Task::new(TaskInner {
-            unique_weight,
-            transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(locks)),
-        })
-    }
-}
-
 impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.transaction
@@ -363,6 +327,7 @@ impl PageInner {
 
 const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
+// very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<SchedulerCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
@@ -649,6 +614,40 @@ impl SchedulingStateMachine {
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
+    }
+
+    pub fn create_task(
+        transaction: SanitizedTransaction,
+        index: usize,
+        page_loader: &mut impl FnMut(Pubkey) -> Page,
+    ) -> Task {
+        let locks = transaction.get_account_locks_unchecked();
+
+        let writable_locks = locks
+            .writable
+            .iter()
+            .map(|address| (address, RequestedUsage::Writable));
+        let readonly_locks = locks
+            .readonly
+            .iter()
+            .map(|address| (address, RequestedUsage::Readonly));
+
+        let locks = writable_locks
+            .chain(readonly_locks)
+            .map(|(address, requested_usage)| {
+                LockAttempt::new(page_loader(**address), requested_usage)
+            })
+            .collect();
+
+        let unique_weight = UniqueWeight::max_value()
+            .checked_sub(index as UniqueWeight)
+            .unwrap();
+
+        Task::new(TaskInner {
+            unique_weight,
+            transaction,
+            task_status: SchedulerCell::new(TaskStatus::new(locks)),
+        })
     }
 }
 
