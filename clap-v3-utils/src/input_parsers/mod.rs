@@ -339,6 +339,7 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     })
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use {
