@@ -498,7 +498,7 @@ impl SchedulingStateMachine {
                 (page
                     .heaviest_blocked_task()
                     .map(|existing_unique_weight| this_unique_weight >= existing_unique_weight)
-                    .unwrap_or(true)) ||
+                    .unwrap_or(false)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task_weight()
