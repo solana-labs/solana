@@ -631,7 +631,7 @@ impl SchedulingStateMachine {
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
-                //continue;
+                continue;
             }
 
             let heaviest_uncontended_now = unlock_attempt
@@ -922,6 +922,31 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
+
+        assert_eq!(state_machine.active_task_count(), 2);
+        assert_eq!(state_machine.handled_task_count(), 0);
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.active_task_count(), 1);
+        assert_eq!(state_machine.handled_task_count(), 1);
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task2);
+        assert_eq!(state_machine.active_task_count(), 0);
+        assert_eq!(state_machine.handled_task_count(), 2);
+    }
+
+    #[test]
+    fn test_schedule_multiple_writable_tasks() {
+        let conflicting_readonly_address = Pubkey::new_unique();
+        let sanitized1 = transaction_with_shared_writable(conflicting_readonly_address);
+        let sanitized2 = transaction_with_shared_writable(conflicting_readonly_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
