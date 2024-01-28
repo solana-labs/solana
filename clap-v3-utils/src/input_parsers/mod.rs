@@ -272,6 +272,11 @@ pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `input_parsers::signer::try_keypair_of` instead"
+)]
+#[allow(deprecated)]
 pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
@@ -285,6 +290,11 @@ pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     }
 }
 
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `input_parsers::signer::try_keypairs_of` instead"
+)]
+#[allow(deprecated)]
 pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values
@@ -302,10 +312,20 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
 
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `input_parsers::signer::try_pubkey_of` instead"
+)]
+#[allow(deprecated)]
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `input_parsers::signer::try_pubkeys_of` instead"
+)]
+#[allow(deprecated)]
 pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     matches.values_of(name).map(|values| {
         values
