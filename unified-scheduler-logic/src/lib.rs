@@ -171,6 +171,7 @@ impl PartialEq for TaskInner {
 }
 
 impl Eq for TaskInner {
+    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(other.unique_weight) }
 }
 
 impl Ord for TaskInner {
