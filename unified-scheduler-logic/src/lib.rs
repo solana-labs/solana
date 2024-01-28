@@ -631,7 +631,6 @@ impl SchedulingStateMachine {
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
-                panic!();
                 continue;
             }
 
