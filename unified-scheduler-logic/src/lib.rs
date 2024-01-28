@@ -174,6 +174,9 @@ impl PartialEq for TaskInner {
 impl Eq for TaskInner {
 }
 
+impl PartialOrd for TaskInner {
+}
+
 impl Ord for TaskInner {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering { self.unique_weight.cmp(other.unique_weight) }
 }
