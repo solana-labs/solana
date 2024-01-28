@@ -168,10 +168,10 @@ pub struct TaskInner {
 }
 
 impl PartialEq for TaskInner {
+    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(other.unique_weight) }
 }
 
 impl Eq for TaskInner {
-    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(other.unique_weight) }
 }
 
 impl Ord for TaskInner {
