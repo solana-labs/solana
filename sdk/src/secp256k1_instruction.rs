@@ -1,6 +1,6 @@
 //! Instructions for the [secp256k1 native program][np].
 //!
-//! [np]: https://docs.solana.com/developing/runtime-facilities/programs#secp256k1-program
+//! [np]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
 //!
 //! _This module provides low-level cryptographic building blocks that must be
 //! used carefully to ensure proper security. Read this documentation and

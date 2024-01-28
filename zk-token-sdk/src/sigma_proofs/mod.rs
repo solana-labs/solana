@@ -3,7 +3,7 @@
 //! Formal documentation and security proofs for the sigma proofs in this module can be found in
 //! [`ZK Token proof`] program documentation.
 //!
-//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+//! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
 pub mod batched_grouped_ciphertext_validity_proof;
 pub mod ciphertext_ciphertext_equality_proof;

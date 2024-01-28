@@ -1,6 +1,6 @@
 //! Configuration for network [rent].
 //!
-//! [rent]: https://docs.solana.com/implemented-proposals/rent
+//! [rent]: https://docs.solanalabs.com/implemented-proposals/rent
 
 #![allow(clippy::arithmetic_side_effects)]
 

@@ -6,7 +6,7 @@
 //! A formal documentation of how transfer fees and fee sigma proof are computed can be found in
 //! the [`ZK Token proof`] program documentation.
 //!
-//! [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+//! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -43,7 +43,7 @@ pub struct FeeSigmaProofData {
 ///
 /// We refer to [`ZK Token proof`] for the formal details on how the fee sigma proof is computed.
 ///
-/// [`ZK Token proof`]: https://edge.docs.solana.com/developing/runtime-facilities/zk-token-proof
+/// [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct FeeSigmaProofContext {
