@@ -17,8 +17,12 @@ pub trait Signers {
 /// Any `T` where `&T` impls `IntoIterator` yielding
 /// references to `Signer`s implements `Signers`.
 ///
-/// This includes [&dyn Signer], &[Box<dyn Signer>],
-/// [&dyn Signer; N], Vec<dyn Signer>, Vec<Keypair>, HashSet<Box<dyn Signer>> etc
+/// This includes [&dyn Signer], [Box<dyn Signer>],
+/// [&dyn Signer; N], Vec<dyn Signer>, Vec<Keypair>, etc.
+/// 
+/// When used as a generic function param, `&S`
+/// should be used instead of `S` where S: Signers, due to the `?Sized` bounds on T.
+/// E.g. [Signer] implements `Signers`, but `&[Signer]` does not
 impl<T: ?Sized, S: Signer + ?Sized> Signers for T
 where
     for<'a> &'a T: IntoIterator<Item = &'a S>,
