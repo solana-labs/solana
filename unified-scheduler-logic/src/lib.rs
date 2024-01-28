@@ -330,7 +330,7 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     current_usage: Usage,
-    blocked_tasks: BTreeSet<(Task, RequestedUsage)>,
+    blocked_tasks: std::collections::BTreeSet<(Task, RequestedUsage)>,
 }
 
 impl PageInner {
