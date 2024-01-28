@@ -321,7 +321,7 @@ impl Usage {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum RequestedUsage {
     Readonly,
     Writable,
