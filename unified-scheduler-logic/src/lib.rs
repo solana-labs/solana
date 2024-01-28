@@ -641,7 +641,7 @@ impl SchedulingStateMachine {
             if should_unregister_from_pages {
                 unlock_attempt
                     .page_mut(&mut self.page_token)
-                    .remove_blocked_task(&(*task, unlock_attempt.requested_usage));
+                    .remove_blocked_task(&(task.clone(), unlock_attempt.requested_usage));
             }
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
