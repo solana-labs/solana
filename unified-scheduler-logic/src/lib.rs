@@ -947,7 +947,7 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()).as_re(), Some(TaskInner{unique_weight: 3, ..}));
+        assert_matches!(state_machine.schedule_task(task1.clone()).as_ref(), Some(TaskInner{unique_weight: 3, ..}));
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
