@@ -299,6 +299,8 @@ pub fn try_pubkeys_of(
 }
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
+#[deprecated(since = "1.19.0", note = "Please use `try_pubkeys_sigs_of` instead")]
+#[allow(deprecated)]
 pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
         values
@@ -318,8 +320,16 @@ pub fn try_pubkeys_sigs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_sigs_of(matches, name))
+    Ok(matches.try_get_many::<String>(name)?.map(|values| {
+        values
+            .map(|pubkey_signer_string| {
+                let mut signer = pubkey_signer_string.split('=');
+                let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+                let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+                (key, sig)
+            })
+            .collect()
+    }))
 }
 
 // Return a signer from matches at `name`
