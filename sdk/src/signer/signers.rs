@@ -19,7 +19,7 @@ pub trait Signers {
 ///
 /// This includes [&dyn Signer], [Box<dyn Signer>],
 /// [&dyn Signer; N], Vec<dyn Signer>, Vec<Keypair>, etc.
-/// 
+///
 /// When used as a generic function param, `&S`
 /// should be used instead of `S` where S: Signers, due to the `?Sized` bounds on T.
 /// E.g. [Signer] implements `Signers`, but `&[Signer]` does not
@@ -32,11 +32,9 @@ where
     }
 
     fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
-        let mut pubkeys = Vec::new();
-        for keypair in self.into_iter() {
-            pubkeys.push(keypair.try_pubkey()?);
-        }
-        Ok(pubkeys)
+        self.into_iter()
+            .map(|keypair| keypair.try_pubkey())
+            .collect()
     }
 
     fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
@@ -46,11 +44,9 @@ where
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
-        let mut signatures = Vec::new();
-        for keypair in self.into_iter() {
-            signatures.push(keypair.try_sign_message(message)?);
-        }
-        Ok(signatures)
+        self.into_iter()
+            .map(|keypair| keypair.try_sign_message(message))
+            .collect()
     }
 
     fn is_interactive(&self) -> bool {
