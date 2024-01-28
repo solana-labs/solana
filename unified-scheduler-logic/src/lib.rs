@@ -341,7 +341,7 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
+    fn remove_blocked_task(&mut self, kk: &(Task, RequestedUsage)) {
         let removed_entry = self.blocked_tasks.remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
@@ -641,7 +641,7 @@ impl SchedulingStateMachine {
             if should_unregister_from_pages {
                 unlock_attempt
                     .page_mut(&mut self.page_token)
-                    .remove_blocked_task(task.unique_weight);
+                    .remove_blocked_task(&(task, unlock_attempt.requested_usage));
             }
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
