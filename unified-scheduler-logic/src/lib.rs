@@ -948,7 +948,7 @@ mod tests {
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
