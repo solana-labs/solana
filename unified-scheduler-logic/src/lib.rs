@@ -158,28 +158,12 @@ impl TaskStatus {
     }
 }
 
-#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(unique_weight(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
     // put this field out of this struct for maximum space efficiency?
     unique_weight: UniqueWeight,
     transaction: SanitizedTransaction, // actually should be Bundle
     task_status: SchedulerCell<TaskStatus>,
-}
-
-impl PartialEq for TaskInner {
-    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(&other.unique_weight) }
-}
-
-impl Eq for TaskInner {
-}
-
-impl PartialOrd for TaskInner {
-    fn partial_cmp(&self, other: &TaskInner) -> Option<std::cmp::Ordering> { self.unique_weight.partial_cmp(&other.unique_weight) }
-}
-
-impl Ord for TaskInner {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering { self.unique_weight.cmp(&other.unique_weight) }
 }
 
 impl SchedulingStateMachine {
@@ -321,7 +305,7 @@ impl Usage {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug)]
 enum RequestedUsage {
     Readonly,
     Writable,
@@ -330,25 +314,25 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     current_usage: Usage,
-    blocked_tasks: std::collections::BTreeSet<(Task, RequestedUsage)>,
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_tasks
-            .insert((task, requested_usage));
-        assert!(pre_existed);
+            .insert(task.unique_weight, (task, requested_usage));
+        assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(&mut self, kk: &(Task, RequestedUsage)) {
-        let removed_entry = self.blocked_tasks.remove(kk);
-        assert!(removed_entry);
+    fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
+        let removed_entry = self.blocked_tasks.remove(&unique_weight);
+        assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
         self.blocked_tasks
-            .iter()
+            .values()
             .rev()
             .find_map(|(task, requested_usage)| {
                 matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
@@ -356,7 +340,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
-        self.blocked_tasks.last().map(|entry| entry.0.unique_weight)
+        self.blocked_tasks.last_entry().map(|entry| *entry.key())
     }
 
     fn heaviest_still_blocked_task(
@@ -364,7 +348,7 @@ impl PageInner {
         task_token: &TaskToken,
     ) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
-            .iter()
+            .values()
             .rev()
             .find(|(task, _)| task.currently_contended(task_token))
     }
@@ -641,7 +625,7 @@ impl SchedulingStateMachine {
             if should_unregister_from_pages {
                 unlock_attempt
                     .page_mut(&mut self.page_token)
-                    .remove_blocked_task(&(task.clone(), unlock_attempt.requested_usage));
+                    .remove_blocked_task(task.unique_weight);
             }
 
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);

@@ -121,9 +121,9 @@ fn bench_insert_task(account_count: usize) {
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
 
-    let mut b = std::collections::BTreeSet::new();
+    let mut b = std::collections::BTreeMap::new();
     toggle_collect();
-    b.insert(task);
+    b.insert(task.unique_weight, task);
     toggle_collect();
     drop(b);
 }
