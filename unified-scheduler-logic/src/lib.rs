@@ -131,6 +131,7 @@ mod cell {
     }
 
     unsafe impl<V> Send for SchedulerCell<V> {}
+    unsafe impl<V> Sync for SchedulerCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<T>(PhantomData<*mut T>);
