@@ -961,6 +961,7 @@ mod tests {
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
+        assert_eq!(state_machine.retryable_task_count(), 1);
     }
 
     #[test]
