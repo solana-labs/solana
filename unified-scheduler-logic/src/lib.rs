@@ -505,7 +505,7 @@ impl SchedulingStateMachine {
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
                     .map(|existing_unique_weight| this_unique_weight > existing_unique_weight)
-                    .unwrap_or(true))
+                    .unwrap_or(false))
             ;
 
             if !no_heavier_other_tasks {
