@@ -338,7 +338,7 @@ impl PageInner {
         let pre_existed = self
             .blocked_tasks
             .insert((task, requested_usage));
-        assert!(!pre_existed);
+        assert!(pre_existed);
     }
 
     fn remove_blocked_task(&mut self, kk: &(Task, RequestedUsage)) {
