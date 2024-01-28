@@ -123,7 +123,7 @@ fn bench_insert_task(account_count: usize) {
 
     let mut b = std::collections::BTreeSet::new();
     toggle_collect();
-    b.insert(task.unique_weight, task);
+    b.insert(task);
     toggle_collect();
     drop(b);
 }
