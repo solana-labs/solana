@@ -495,11 +495,7 @@ impl SchedulingStateMachine {
             let no_heavier_other_tasks =
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
-                (page
-                    .heaviest_blocked_task()
-                    .map(|existing_unique_weight| this_unique_weight >= existing_unique_weight)
-                    .unwrap_or(true)) ||
-                // this _read-only_ unique_weight is heavier than any of contened write locks.
+                                // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task_weight()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
