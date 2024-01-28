@@ -13,7 +13,7 @@ use {
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
     solana_gossip::{
-        cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+        cluster_info::{ClusterInfo, GOSSIP_CYCLE_DURATION},
         crds::Cursor,
     },
     solana_ledger::blockstore::Blockstore,
@@ -324,7 +324,7 @@ impl ClusterInfoVoteListener {
                 verified_vote_transactions_sender.send(vote_txs)?;
                 verified_vote_label_packets_sender.send(packets)?;
             }
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+            sleep(GOSSIP_CYCLE_DURATION);
         }
         Ok(())
     }

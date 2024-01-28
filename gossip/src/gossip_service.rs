@@ -287,9 +287,7 @@ fn spy(
         if i % 20 == 0 {
             info!("discovering...\n{}", spy_ref.contact_info_trace());
         }
-        sleep(Duration::from_millis(
-            crate::cluster_info::GOSSIP_SLEEP_MILLIS,
-        ));
+        sleep(crate::cluster_info::GOSSIP_CYCLE_DURATION);
         i += 1;
     }
     (met_criteria, now.elapsed(), all_peers, tvu_peers)

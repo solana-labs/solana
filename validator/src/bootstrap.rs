@@ -157,7 +157,7 @@ fn start_gossip_node(
     );
     let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
-    cluster_info.restore_contact_info(ledger_path, 0);
+    cluster_info.restore_contact_info(ledger_path, Duration::MAX);
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));

@@ -103,7 +103,7 @@ use {
 };
 
 /// milliseconds we sleep for between gossip requests
-pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
+pub const GOSSIP_CYCLE_DURATION: Duration = Duration::from_millis(100);
 /// The maximum size of a bloom filter
 pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
 pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
@@ -132,8 +132,8 @@ const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 65536;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
 const GOSSIP_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(1280 / 64);
-pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
-pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
+pub const DEFAULT_CONTACT_DEBUG_INTERVAL: Duration = Duration::from_secs(10);
+pub const DEFAULT_CONTACT_SAVE_INTERVAL: Duration = Duration::from_secs(60);
 /// Minimum serialized size of a Protocol::PullResponse packet.
 const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
 // Limit number of unique pubkeys in the crds table.
@@ -171,8 +171,8 @@ pub struct ClusterInfo {
     stats: GossipStats,
     socket: UdpSocket,
     local_message_pending_push_queue: Mutex<Vec<CrdsValue>>,
-    contact_debug_interval: u64, // milliseconds, 0 = disabled
-    contact_save_interval: u64,  // milliseconds, 0 = disabled
+    contact_debug_interval: Duration,
+    contact_save_interval: Duration,
     instance: RwLock<NodeInstance>,
     contact_info_path: PathBuf,
     socket_addr_space: SocketAddrSpace,
@@ -419,10 +419,10 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: Mutex::default(),
-            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
+            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
             instance: RwLock::new(NodeInstance::new(&mut thread_rng(), id, timestamp())),
             contact_info_path: PathBuf::default(),
-            contact_save_interval: 0, // disabled
+            contact_save_interval: Duration::MAX, // disabled
             socket_addr_space,
         };
         me.insert_self();
@@ -430,7 +430,7 @@ impl ClusterInfo {
         me
     }
 
-    pub fn set_contact_debug_interval(&mut self, new: u64) {
+    pub fn set_contact_debug_interval(&mut self, new: Duration) {
         self.contact_debug_interval = new;
     }
 
@@ -609,7 +609,11 @@ impl ClusterInfo {
         }
     }
 
-    pub fn restore_contact_info(&mut self, contact_info_path: &Path, contact_save_interval: u64) {
+    pub fn restore_contact_info(
+        &mut self,
+        contact_info_path: &Path,
+        contact_save_interval: Duration,
+    ) {
         self.contact_info_path = contact_info_path.into();
         self.contact_save_interval = contact_save_interval;
 
@@ -1783,30 +1787,26 @@ impl ClusterInfo {
             .thread_name(|i| format!("solRunGossip{i:02}"))
             .build()
             .unwrap();
+        let mut last_push =
+            Instant::now() - Duration::from_millis(CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS);
+        let mut last_contact_info_trace = Instant::now();
+        let mut last_contact_info_save = Instant::now();
+        let mut entrypoints_processed = false;
+        let recycler = PacketBatchRecycler::default();
+        for value in vec![
+            CrdsData::Version(Version::new(self.id())),
+            CrdsData::NodeInstance(self.instance.read().unwrap().with_wallclock(timestamp())),
+        ] {
+            let value = CrdsValue::new_signed(value, &self.keypair());
+            self.push_message(value);
+        }
+        let mut generate_pull_requests = true;
         Builder::new()
             .name("solGossip".to_string())
             .spawn(move || {
-                let mut last_push = 0;
-                let mut last_contact_info_trace = timestamp();
-                let mut last_contact_info_save = timestamp();
-                let mut entrypoints_processed = false;
-                let recycler = PacketBatchRecycler::default();
-                let crds_data = vec![
-                    CrdsData::Version(Version::new(self.id())),
-                    CrdsData::NodeInstance(
-                        self.instance.read().unwrap().with_wallclock(timestamp()),
-                    ),
-                ];
-                for value in crds_data {
-                    let value = CrdsValue::new_signed(value, &self.keypair());
-                    self.push_message(value);
-                }
-                let mut generate_pull_requests = true;
                 loop {
-                    let start = timestamp();
-                    if self.contact_debug_interval != 0
-                        && start - last_contact_info_trace > self.contact_debug_interval
-                    {
+                    let start = Instant::now();
+                    if last_contact_info_trace.elapsed() > self.contact_debug_interval {
                         // Log contact info
                         info!(
                             "\n{}\n\n{}",
@@ -1816,9 +1816,7 @@ impl ClusterInfo {
                         last_contact_info_trace = start;
                     }
 
-                    if self.contact_save_interval != 0
-                        && start - last_contact_info_save > self.contact_save_interval
-                    {
+                    if last_contact_info_save.elapsed() > self.contact_save_interval {
                         self.save_contact_info();
                         last_contact_info_save = start;
                     }
@@ -1848,7 +1846,9 @@ impl ClusterInfo {
                     entrypoints_processed = entrypoints_processed || self.process_entrypoints();
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an self.read().unwrap().timeout into sleep
-                    if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
+                    if last_push.elapsed()
+                        > Duration::from_millis(CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS) / 2
+                    {
                         self.push_self();
                         self.refresh_push_active_set(
                             &recycler,
@@ -1856,12 +1856,11 @@ impl ClusterInfo {
                             gossip_validators.as_ref(),
                             &sender,
                         );
-                        last_push = timestamp();
+                        last_push = Instant::now();
                     }
-                    let elapsed = timestamp() - start;
-                    if GOSSIP_SLEEP_MILLIS > elapsed {
-                        let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
-                        sleep(Duration::from_millis(time_left));
+                    let elapsed = start.elapsed();
+                    if let Some(time_left) = GOSSIP_CYCLE_DURATION.checked_sub(elapsed) {
+                        sleep(time_left);
                     }
                     generate_pull_requests = !generate_pull_requests;
                 }

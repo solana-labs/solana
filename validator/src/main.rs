@@ -1063,6 +1063,11 @@ pub fn main() {
     };
 
     let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
+    let contact_debug_interval = if contact_debug_interval == 0 {
+        Duration::MAX // disabled
+    } else {
+        Duration::from_millis(contact_debug_interval)
+    };
 
     let account_indexes = process_account_indexes(&matches);
 
