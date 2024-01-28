@@ -1853,7 +1853,7 @@ impl Bank {
                 fields.epoch,
             ))),
             check_program_modification_slot: false,
-            epoch_reward_status: EpochRewardStatus::default(),
+            epoch_reward_status: fields.epoch_reward_status,
         };
         bank.finish_init(
             genesis_config,
