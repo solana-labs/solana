@@ -938,8 +938,8 @@ mod tests {
     #[test]
     fn test_schedule_multiple_writable_tasks() {
         let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = transaction_with_shared_writable(conflicting_readonly_address);
-        let sanitized2 = transaction_with_shared_writable(conflicting_readonly_address);
+        let sanitized1 = readonly_transaction(conflicting_readonly_address);
+        let sanitized2 = readonly_transaction(conflicting_readonly_address);
         let sanitized3 = transaction_with_shared_writable(conflicting_readonly_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
