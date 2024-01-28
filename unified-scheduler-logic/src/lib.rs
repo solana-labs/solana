@@ -168,7 +168,7 @@ pub struct TaskInner {
 }
 
 impl PartialEq for TaskInner {
-    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(other.unique_weight) }
+    fn eq(&self, other: &TaskInner) -> bool { self.unique_weight.eq(&other.unique_weight) }
 }
 
 impl Eq for TaskInner {
@@ -178,7 +178,7 @@ impl PartialOrd for TaskInner {
 }
 
 impl Ord for TaskInner {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering { self.unique_weight.cmp(other.unique_weight) }
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering { self.unique_weight.cmp(&other.unique_weight) }
 }
 
 impl SchedulingStateMachine {
