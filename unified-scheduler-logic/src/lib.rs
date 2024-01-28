@@ -52,12 +52,17 @@ mod counter {
             Self(self.0.checked_add(1).unwrap())
         }
 
+        #[must_use]
+        pub(super) fn decrement(self) -> Self {
+            Self(self.0.checked_sub(1).unwrap())
+        }
+
         pub(super) fn increment_self(&mut self) {
             *self = self.increment()
         }
 
         pub(super) fn decrement_self(&mut self) {
-            self.0 = self.0.checked_sub(1).unwrap();
+            *self = self.decrement()
         }
     }
 }
