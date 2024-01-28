@@ -14,7 +14,7 @@ mod tests {
             streamer::StakedNodes, tls_certificates::new_dummy_x509_certificate,
         },
         std::{
-            net::{IpAddr, SocketAddr, UdpSocket},
+            net::{SocketAddr, UdpSocket},
             sync::{
                 atomic::{AtomicBool, Ordering},
                 Arc, RwLock,
@@ -49,12 +49,11 @@ mod tests {
         assert!(total_packets > 0);
     }
 
-    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair, IpAddr) {
+    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair) {
         (
             UdpSocket::bind("127.0.0.1:0").unwrap(),
             Arc::new(AtomicBool::new(false)),
             Keypair::new(),
-            "127.0.0.1".parse().unwrap(),
         )
     }
 
@@ -67,7 +66,7 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, _) = server_args();
+        let (s, exit, keypair) = server_args();
         let SpawnServerResult {
             endpoint: _,
             thread: t,
@@ -150,7 +149,7 @@ mod tests {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (s, exit, keypair, _) = server_args();
+        let (s, exit, keypair) = server_args();
         let (_, _, t) = solana_streamer::nonblocking::quic::spawn_server(
             "quic_streamer_test",
             s.try_clone().unwrap(),
@@ -207,7 +206,7 @@ mod tests {
         // Request Receiver
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (request_recv_socket, request_recv_exit, keypair, _) = server_args();
+        let (request_recv_socket, request_recv_exit, keypair) = server_args();
         let SpawnServerResult {
             endpoint: request_recv_endpoint,
             thread: request_recv_thread,
@@ -229,7 +228,7 @@ mod tests {
 
         drop(request_recv_endpoint);
         // Response Receiver:
-        let (response_recv_socket, response_recv_exit, keypair2, _) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2) = server_args();
         let (sender2, receiver2) = unbounded();
 
         let addr = response_recv_socket.local_addr().unwrap().ip();

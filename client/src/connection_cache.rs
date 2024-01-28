@@ -239,19 +239,18 @@ mod tests {
         },
     };
 
-    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair, IpAddr) {
+    fn server_args() -> (UdpSocket, Arc<AtomicBool>, Keypair) {
         (
             UdpSocket::bind("127.0.0.1:0").unwrap(),
             Arc::new(AtomicBool::new(false)),
             Keypair::new(),
-            "127.0.0.1".parse().unwrap(),
         )
     }
 
     #[test]
     fn test_connection_with_specified_client_endpoint() {
         // Start a response receiver:
-        let (response_recv_socket, response_recv_exit, keypair2, _) = server_args();
+        let (response_recv_socket, response_recv_exit, keypair2) = server_args();
         let (sender2, _receiver2) = unbounded();
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
