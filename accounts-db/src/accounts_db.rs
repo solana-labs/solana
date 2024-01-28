@@ -7156,7 +7156,7 @@ impl AccountsDb {
         // update each atomic stat value once.
         // There are approximately 173 items in the cache files list,
         // so should be very fast to iterate and compute.
-        // (173 cache files == 432,000 slots / 2,5000 slots-per-cache-file)
+        // (173 cache files == 432,000 slots / 2,500 slots-per-cache-file)
         let mut hits = 0;
         let mut misses = 0;
         for cache_file in &cache_files {
