@@ -92,6 +92,11 @@ pub fn cluster_type_of(matches: &ArgMatches, name: &str) -> Option<ClusterType> 
     value_of(matches, name)
 }
 
+#[deprecated(
+    since = "1.19.0",
+    note = "Please use `ArgMatches::get_one::<CommitmentConfig>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfig> {
     matches
         .value_of(name)
@@ -320,7 +325,7 @@ mod tests {
     use {
         super::*,
         clap::{Arg, ArgAction, Command},
-        solana_sdk::{hash::Hash, pubkey::Pubkey},
+        solana_sdk::{commitment_config::CommitmentLevel, hash::Hash, pubkey::Pubkey},
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -617,6 +622,35 @@ mod tests {
         let matches_error = command
             .clone()
             .try_get_matches_from(vec!["test", "--cluster", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_commitment_config() {
+        let command = Command::new("test").arg(
+            Arg::new("commitment")
+                .long("commitment")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(CommitmentConfig)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--commitment", "finalized"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<CommitmentConfig>("commitment").unwrap(),
+            CommitmentConfig {
+                commitment: CommitmentLevel::Finalized
+            },
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--commitment", "this_is_an_invalid_arg"])
             .unwrap_err();
         assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
