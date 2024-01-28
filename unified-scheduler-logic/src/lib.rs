@@ -342,7 +342,7 @@ impl PageInner {
     }
 
     fn remove_blocked_task(&mut self, kk: &(Task, RequestedUsage)) {
-        let removed_entry = self.blocked_tasks.remove(&unique_weight);
+        let removed_entry = self.blocked_tasks.remove(kk);
         assert!(!removed_entry);
     }
 
