@@ -167,6 +167,9 @@ pub struct TaskInner {
     task_status: SchedulerCell<TaskStatus>,
 }
 
+impl PartialEq for TaskInner {
+}
+
 impl Eq for TaskInner {
 }
 
