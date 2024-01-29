@@ -303,7 +303,7 @@ impl PageInner {
         self.blocked_tasks.last_key_value().map(|(key, value)| key)
     }
 
-    fn heaviest_still_blocked_task(
+    fn heaviest_blocked_task(
         &self,
     ) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks.last_key_value().map(|(_key, value)| value)
@@ -540,16 +540,16 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some(heaviest_blocked_task) = read_only_lock_attempt
+                        if let Some(heaviest_readonly_task) = read_only_lock_attempt
                             .page_mut(&mut self.page_token)
-                            .heaviest_still_blocked_task()
-                            .and_then(|(task, requested_usage)| {
-                                matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
+                            .heaviest_blocked_task()
+                            .and_then(|(heaviest_task, requested_usage)| {
+                                matches!(requested_usage, RequestedUsage::Readonly).then_some(heaviest_blocked_task)
                             })
                         {
                             self.retryable_task_queue
-                                .entry(heaviest_blocked_task.unique_weight)
-                                .or_insert_with(|| heaviest_blocked_task.clone());
+                                .entry(heaviest_readonly_task.unique_weight)
+                                .or_insert_with(|| heaviest_readonly_task.clone());
                         }
                     }
                 }
@@ -585,7 +585,7 @@ impl SchedulingStateMachine {
 
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
-                .heaviest_still_blocked_task();
+                .heaviest_blocked_task();
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
