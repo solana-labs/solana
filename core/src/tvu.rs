@@ -228,7 +228,7 @@ impl Tvu {
                 leader_schedule_cache.clone(),
                 verified_vote_receiver,
                 completed_data_sets_sender,
-                duplicate_slots_sender,
+                duplicate_slots_sender.clone(),
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
                 popular_pruned_forks_sender,
@@ -337,6 +337,7 @@ impl Tvu {
                 blockstore,
                 leader_schedule_cache.clone(),
                 bank_forks.clone(),
+                duplicate_slots_sender,
             ),
         );
 
