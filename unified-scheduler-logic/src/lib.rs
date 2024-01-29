@@ -227,14 +227,17 @@ impl PageInner {
         assert!(removed_entry.is_some());
     }
 
+    #[inline(always)]
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
         self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
+    #[inline(always)]
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
         self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
+    #[inline(always)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let heaviest_writable = self.heaviest_blocked_writing_task();
         let heaviest_readonly = self.heaviest_blocked_readonly_task();
