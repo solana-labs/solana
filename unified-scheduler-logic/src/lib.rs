@@ -238,18 +238,18 @@ impl PageInner {
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let heaviest_writable = self
             .w_blocked_tasks
-            .last_key_value()
+            .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Writable));
         let heaviest_readonly = self
             .r_blocked_tasks
-            .last_key_value()
+            .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly));
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a.0),
             (Some(a), Some(b)) => {
-                Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
+                Some(std::cmp::min_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
             }
         }
     }
