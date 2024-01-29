@@ -206,7 +206,7 @@ struct PageInner {
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let b = match requested_usage {
+        let mut b = match requested_usage {
             RequestedUsage::Readonly => self.r_blocked_tasks,
             RequestedUsage::Writable => self.w_blocked_tasks,
         };
@@ -219,7 +219,7 @@ impl PageInner {
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let b = match requested_usage {
+        let mut b = match requested_usage {
             RequestedUsage::Readonly => self.r_blocked_tasks,
             RequestedUsage::Writable => self.w_blocked_tasks,
         };
