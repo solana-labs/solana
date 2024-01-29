@@ -532,12 +532,12 @@ impl SchedulingStateMachine {
         let writable_locks = locks
             .writable
             .iter()
-            .map(|address| LockAttempt::new(page_loader(address), RequestedUsage::Writable))
+            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Writable))
             .collect::<Vec<_>>();
         let readonly_locks = locks
             .readonly
             .iter()
-            .map(|address| LockAttempt::new(page_loader(address), RequestedUsage::Readonly))
+            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Readonly))
             .collect::<Vec<_>>();
 
         let unique_weight = UniqueWeight::max_value()
