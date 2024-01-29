@@ -446,7 +446,6 @@ impl SchedulingStateMachine {
         if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
             if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
-                task.mark_as_blocked(&mut self.task_token);
                 self.register_blocked_task_into_pages(&task);
             }
 
