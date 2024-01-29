@@ -250,9 +250,9 @@ impl PageInner {
             (Some(a), None) | (None, Some(a)) => Some(a.get()),
             (Some(a), Some(b)) => {
                 Some(if a.get().unique_weight > b.get().unique_weight {
-                    a.get()
+                    a
                 } else {
-                    b.get()
+                    b
                 })
             }
         }
