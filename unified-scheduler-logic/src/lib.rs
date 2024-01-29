@@ -310,7 +310,7 @@ impl PageInner {
         self.blocked_tasks
             .values()
             .rev()
-            .find(|(task, _)| task.currently_contended(task_token))
+            .next()
     }
 }
 
