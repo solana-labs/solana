@@ -147,36 +147,6 @@ impl TaskInner {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
-    fn state_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut State {
-        &mut self.task_status.borrow_mut(task_token).state
-    }
-
-    fn state_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
-        &self.task_status.borrow(task_token).state
-    }
-
-    fn is_new(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_new()
-    }
-
-    fn is_scheduled(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_scheduled()
-    }
-
-    fn mark_as_blocked(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::Blocked;
-    }
-
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn mark_as_scheduled(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::Scheduled;
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn reset_as_new(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::New;
-    }
-
     pub fn task_index(&self) -> usize {
         UniqueWeight::max_value()
             .checked_sub(self.unique_weight)
