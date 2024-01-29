@@ -236,13 +236,11 @@ impl PageInner {
         let heaviest_writable = self
             .w_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Writable))
-            .next();
+            .map(|(_, task)| (task, RequestedUsage::Writable));
         let heaviest_readonly = self
             .r_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Readonly))
-            .next();
+            .map(|(_, task)| (task, RequestedUsage::Readonly));
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a),
