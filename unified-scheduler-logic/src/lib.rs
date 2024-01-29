@@ -241,7 +241,12 @@ impl PageInner {
             .rev()
             .map(|(_, task)| (task, RequestedUsage::Readonly))
             .next();
-        std::cmp::max_by(heaviest_writable, heaviest_readonly, |w, r| w.0.unique_weight.cmp(|| r.0.unique_weight))
+        match (heaviest_writable, heaviest_readonly) {
+            (None, None) => None,
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (Some(a), Some(b)) => std::cmp::max_by(heaviest_writable, heaviest_readonly, |w, r| w.0.unique_weight.cmp(|| r.0.unique_weight)),
+        }
     }
 }
 
