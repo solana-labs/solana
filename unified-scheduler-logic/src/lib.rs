@@ -588,7 +588,7 @@ impl SchedulingStateMachine {
 
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
-                .heaviest_still_blocked_task(&self.task_token);
+                .heaviest_still_blocked_task();
             if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
