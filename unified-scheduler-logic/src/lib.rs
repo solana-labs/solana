@@ -637,7 +637,8 @@ mod tests {
             "Succeded(Readonly(Counter(1)))"
         );
         let task_status = TaskStatus {
-            lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
+            writable_lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
+            readonly_lock_attempts: vec![],
         };
         assert_eq!(
             format!("{:?}", task_status),
