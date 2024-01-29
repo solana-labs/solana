@@ -880,7 +880,7 @@ mod tests {
                 .map(|t| t.task_index()),
             None
         );
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()).map(|t| t.task_index()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
