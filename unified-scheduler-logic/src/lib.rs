@@ -249,7 +249,6 @@ impl PageInner {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a.0),
             (Some(a), Some(b)) => {
-                panic!();
                 Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
             }
         }
