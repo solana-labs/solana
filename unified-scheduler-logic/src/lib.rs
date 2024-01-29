@@ -247,7 +247,7 @@ impl PageInner {
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
-            (Some(a), None) | (None, Some(a)) => Some(a.get()),
+            (Some(a), None) | (None, Some(a)) => Some(a),
             (Some(a), Some(b)) => {
                 Some(if a.get().unique_weight > b.get().unique_weight {
                     a
