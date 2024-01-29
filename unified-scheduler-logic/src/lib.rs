@@ -200,14 +200,17 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    blocked_tasks: BTreeMap<(RequestedUsage, UniqueWeight), Task>,
+    w_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    r_blocked_tasks: BTreeMap<UniqueWeight, Task>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self
-            .blocked_tasks
-            .insert((requested_usage, task.unique_weight), task);
+        let b = match requested_usage {
+            RequestedUsage::Readonly => self.r_blocked_tasks,
+            RequestedUsage::Writable => self.w_blocked_tasks,
+        };
+        let pre_existed = b.insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
 
@@ -216,38 +219,28 @@ impl PageInner {
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let removed_entry = self.blocked_tasks.remove(&(requested_usage, unique_weight));
+        let b = match requested_usage {
+            RequestedUsage::Readonly => self.r_blocked_tasks,
+            RequestedUsage::Writable => self.w_blocked_tasks,
+        };
+        let removed_entry = b.remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_tasks
-            .range(
-                (RequestedUsage::Writable, 0)
-                    ..=(RequestedUsage::Writable, UniqueWeight::max_value()),
-            )
-            .rev()
-            .map(|(_, task)| task.unique_weight)
-            .next()
+        self.w_blocked_tasks
+            .last_key_value()
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         let heaviest_writable = self
-            .blocked_tasks
-            .range(
-                (RequestedUsage::Writable, 0)
-                    ..=(RequestedUsage::Writable, UniqueWeight::max_value()),
-            )
-            .rev()
+            .w_blocked_tasks
+            .last_key_value()
             .map(|(_, task)| (task, RequestedUsage::Writable))
             .next();
         let heaviest_readonly = self
-            .blocked_tasks
-            .range(
-                (RequestedUsage::Readonly, 0)
-                    ..=(RequestedUsage::Readonly, UniqueWeight::max_value()),
-            )
-            .rev()
+            .r_blocked_tasks
+            .last_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly))
             .next();
         match (heaviest_writable, heaviest_readonly) {
