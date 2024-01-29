@@ -238,21 +238,21 @@ impl PageInner {
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let heaviest_writable = self
             .w_blocked_tasks
-            .last_key_value()
+            .last_entry()
             ;
         let heaviest_readonly = self
             .r_blocked_tasks
-            .last_key_value()
+            .last_entry()
             ;
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
-            (Some(a), None) | (None, Some(a)) => Some(a.1),
+            (Some(a), None) | (None, Some(a)) => Some(a.get()),
             (Some(a), Some(b)) => {
-                Some(if a.1.unique_weight > b.1.unique_weight {
-                    a.1
+                Some(if a.get().unique_weight > b.get().unique_weight {
+                    a.get()
                 } else {
-                    b.1
+                    b.get()
                 })
             }
         }
