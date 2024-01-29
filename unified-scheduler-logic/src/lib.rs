@@ -299,7 +299,7 @@ impl PageInner {
             })
     }
 
-    fn heaviest_blocked_task(&mut self) -> Option<&UniqueWeight> {
+    fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
         self.blocked_tasks.last_key_value().map(|(key, value)| key)
     }
 
@@ -452,7 +452,7 @@ impl SchedulingStateMachine {
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
                 (page
-                    .heaviest_blocked_task()
+                    .heaviest_blocked_unique_weight()
                     .map(|&existing_unique_weight| this_unique_weight >= existing_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
