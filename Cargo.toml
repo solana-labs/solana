@@ -263,7 +263,6 @@ pbkdf2 = { version = "0.11.0", default-features = false }
 pem = "1.1.1"
 percentage = "0.1.0"
 pickledb = { version = "0.5.1", default-features = false }
-pkcs8 = "0.8.0"
 predicates = "2.1"
 pretty-hex = "0.3.0"
 prio-graph = "0.2.1"
@@ -282,7 +281,6 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 raptorq = "1.8.0"
 rayon = "1.8.1"
-rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
 regex = "1.10.3"
 reqwest = { version = "0.11.23", default-features = false }
