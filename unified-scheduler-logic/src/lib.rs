@@ -877,13 +877,11 @@ mod tests {
         assert_matches!(
             state_machine
                 .schedule_task(task2.clone())
-                .map(|t| t.task_index()),
             None
         );
         assert_matches!(
             state_machine
                 .schedule_task(task3.clone())
-                .map(|t| t.task_index()),
             None
         );
 
