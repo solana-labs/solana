@@ -218,7 +218,7 @@ impl PageInner {
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
         self.blocked_tasks
-            .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value())
+            .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
             .rev()
             .find_map(|(task, requested_usage)| {
                 matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
