@@ -220,8 +220,8 @@ impl PageInner {
         unique_weight: UniqueWeight,
     ) {
         let mut b = match requested_usage {
-            RequestedUsage::Readonly => &self.r_blocked_tasks,
-            RequestedUsage::Writable => &self.w_blocked_tasks,
+            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
+            RequestedUsage::Writable => &mut self.w_blocked_tasks,
         };
         let removed_entry = b.remove(&unique_weight);
         assert!(removed_entry.is_some());
