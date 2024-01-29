@@ -227,7 +227,9 @@ impl PageInner {
     }
 
     fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
-        self.blocked_tasks.last_key_value().map(|((_rq, uw), _value)| uw)
+        // test passed with bolow outdated code!
+        //self.blocked_tasks.last_key_value().map(|((_rq, uw), _value)| uw)
+        self.heaviest_blocked_task().map(|(t, ru)| t.unique_weight)
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
