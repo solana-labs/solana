@@ -245,6 +245,7 @@ impl PageInner {
             .last_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly));
 
+        panic!();
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a.0),
