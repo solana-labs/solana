@@ -235,7 +235,7 @@ impl PageInner {
         self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_task(&self) -> Option<std::collections::btree_map::OccupiedEntry<'_, u64, Arc<TaskInner>>> {
+    fn heaviest_blocked_task(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, u64, Arc<TaskInner>>> {
         let heaviest_writable = self
             .w_blocked_tasks
             .last_entry()
