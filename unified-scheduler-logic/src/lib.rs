@@ -231,6 +231,11 @@ impl PageInner {
         self.w_blocked_tasks.last_key_value().map(|(k, _v)| *k)
     }
 
+    fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
+        self.r_blocked_tasks.last_key_value().map(|(k, v)| v)
+    }
+
+
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         let heaviest_writable = self
             .w_blocked_tasks
