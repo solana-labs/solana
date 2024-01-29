@@ -228,7 +228,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.w_blocked_tasks.last_key_value().map(|&(k, v)| k)
+        self.w_blocked_tasks.last_key_value().map(|(&k, v)| k)
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
