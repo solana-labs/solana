@@ -93,16 +93,14 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             return;
         }
         let random_keypair = Keypair::new();
-        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
-        let client = ThinClient::new(rpc, tpu, connection_cache.clone());
-        let bal = client
+        let bal = rpc_client
             .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
                 CommitmentConfig::processed(),
             )
             .expect("balance in source");
         assert!(bal > 0);
-        let (blockhash, _) = client
+        let (blockhash, _) = rpc_client
             .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
         let transaction =
