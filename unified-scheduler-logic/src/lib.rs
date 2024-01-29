@@ -629,7 +629,6 @@ mod tests {
         );
         let task_status = TaskStatus {
             lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            state: State::New,
         };
         assert_eq!(
             format!("{:?}", task_status),
