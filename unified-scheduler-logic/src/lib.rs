@@ -245,7 +245,7 @@ impl PageInner {
             (None, None) => None,
             (Some(a), None) => Some(a),
             (None, Some(b)) => Some(b),
-            (Some(a), Some(b)) => std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(|| r.0.unique_weight)),
+            (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(|| r.0.unique_weight))),
         }
     }
 }
