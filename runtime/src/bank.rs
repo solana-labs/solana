@@ -4000,7 +4000,7 @@ impl Bank {
     }
 
     pub fn get_lamports_per_signature(&self) -> u64 {
-        self.fee_rate_governor.lamports_per_signature
+        self.fee_structure.lamports_per_signature
     }
 
     pub fn get_lamports_per_signature_for_blockhash(&self, hash: &Hash) -> Option<u64> {
