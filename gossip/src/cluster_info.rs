@@ -32,8 +32,8 @@ use {
             CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         },
         crds_value::{
-            self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot,
-            NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
+            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -259,14 +259,6 @@ struct PullData {
     filter: CrdsFilter,
 }
 
-pub fn make_accounts_hashes_message(
-    keypair: &Keypair,
-    accounts_hashes: Vec<(Slot, Hash)>,
-) -> Option<CrdsValue> {
-    let message = CrdsData::AccountsHashes(AccountsHashes::new(keypair.pubkey(), accounts_hashes));
-    Some(CrdsValue::new_signed(message, keypair))
-}
-
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
@@ -392,7 +384,6 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // the various dashboards.
             CrdsData::Version(_) => true,
             CrdsData::NodeInstance(_) => true,
-            // getHealth fails if account hashes are not propagated.
             CrdsData::AccountsHashes(_) => true,
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
@@ -1021,19 +1012,6 @@ impl ClusterInfo {
             .push(message);
     }
 
-    pub fn push_accounts_hashes(&self, accounts_hashes: Vec<(Slot, Hash)>) {
-        if accounts_hashes.len() > MAX_ACCOUNTS_HASHES {
-            warn!(
-                "accounts hashes too large, ignored: {}",
-                accounts_hashes.len(),
-            );
-            return;
-        }
-
-        let message = CrdsData::AccountsHashes(AccountsHashes::new(self.id(), accounts_hashes));
-        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
-    }
-
     pub fn push_snapshot_hashes(
         &self,
         full: (Slot, Hash),
@@ -1219,16 +1197,6 @@ impl ClusterInfo {
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )?;
         Ok(())
-    }
-
-    pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
-    where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
-    {
-        self.time_gossip_read_lock("get_accounts_hash", &self.stats.get_accounts_hash)
-            .get::<&CrdsValue>(&CrdsValueLabel::AccountsHashes(*pubkey))
-            .map(|x| &x.accounts_hash().unwrap().hashes)
-            .map(map)
     }
 
     pub fn get_snapshot_hashes_for_node(&self, pubkey: &Pubkey) -> Option<SnapshotHashes> {
@@ -3185,7 +3153,7 @@ mod tests {
         super::*,
         crate::{
             crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
-            crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+            crds_value::{AccountsHashes, CrdsValue, CrdsValueLabel, Vote as CrdsVote},
             duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
         },
         itertools::izip,
