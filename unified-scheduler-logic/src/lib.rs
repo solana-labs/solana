@@ -235,25 +235,21 @@ impl PageInner {
         self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_task(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, u64, Arc<TaskInner>>> {
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
         let heaviest_writable = self
             .w_blocked_tasks
-            .last_entry()
-            ;
+            .last_key_value()
+            .map(|(_, task)| (task, RequestedUsage::Writable));
         let heaviest_readonly = self
             .r_blocked_tasks
-            .last_entry()
-            ;
+            .last_key_value()
+            .map(|(_, task)| (task, RequestedUsage::Readonly));
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
-            (Some(a), None) | (None, Some(a)) => Some(a),
+            (Some(a), None) | (None, Some(a)) => Some(a.0),
             (Some(a), Some(b)) => {
-                Some(if a.get().unique_weight > b.get().unique_weight {
-                    a
-                } else {
-                    b
-                })
+                Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
             }
         }
     }
@@ -392,7 +388,7 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|existing_task| this_unique_weight >= *existing_task.key())
+                    .map(|existing_task| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
@@ -519,8 +515,8 @@ impl SchedulingStateMachine {
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
                 self.retryable_task_queue
-                    .entry(*uncontended_task.key())
-                    .or_insert_with(|| uncontended_task.get().clone());
+                    .entry(uncontended_task.unique_weight)
+                    .or_insert_with(|| uncontended_task.clone());
             }
         }
     }
