@@ -68,7 +68,8 @@ mod counter {
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
 struct TaskStatus {
-    lock_attempts: Vec<LockAttempt>,
+    writable_lock_attempts: Vec<LockAttempt>,
+    readonly_lock_attempts: Vec<LockAttempt>,
 }
 
 mod cell {
@@ -114,8 +115,8 @@ type TaskToken = Token<TaskStatus>;
 const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
-    fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self { lock_attempts }
+    fn new(writable_lock_attempts: Vec<LockAttempt>, readonly_lock_attempts: Vec<LockAttempt>) -> Self {
+        Self { writable_lock_attempts, readonly_lock_attempts }
     }
 }
 
