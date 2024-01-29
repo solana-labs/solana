@@ -211,8 +211,8 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
-        let removed_entry = self.blocked_tasks.remove(&unique_weight);
+    fn remove_blocked_task(&mut self, requested_usage: RequestedUsage, unique_weight: UniqueWeight) {
+        let removed_entry = self.blocked_tasks.remove(&(requested_usage, unique_weight));
         assert!(removed_entry.is_some());
     }
 
