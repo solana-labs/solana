@@ -191,7 +191,7 @@ impl Usage {
     }
 }
 
-#[derive(Clone, Copy, Debug, Ord, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug)]
 enum RequestedUsage {
     Readonly,
     Writable,
@@ -200,57 +200,43 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    w_blocked_tasks: BTreeMap<UniqueWeight, Task>,
-    r_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let mut b = match requested_usage {
-            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
-            RequestedUsage::Writable => &mut self.w_blocked_tasks,
-        };
-        let pre_existed = b.insert(task.unique_weight, task);
+        let pre_existed = self
+            .blocked_tasks
+            .insert(task.unique_weight, (task, requested_usage));
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(
-        &mut self,
-        requested_usage: RequestedUsage,
-        unique_weight: UniqueWeight,
-    ) {
-        let b = match requested_usage {
-            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
-            RequestedUsage::Writable => &mut self.w_blocked_tasks,
-        };
-        let removed_entry = b.remove(&unique_weight);
+    fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
+        let removed_entry = self.blocked_tasks.remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.w_blocked_tasks.last_key_value().map(|(k, v)| *k)
+        self.blocked_tasks
+            .values()
+            .rev()
+            .find_map(|(task, requested_usage)| {
+                matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
+            })
     }
 
-    fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
-        let heaviest_writable = self
-            .w_blocked_tasks
+    fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
+        self.blocked_tasks.last_key_value().map(|(key, _value)| key)
+    }
+
+    fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
+        self.blocked_tasks
             .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Writable));
-        let heaviest_readonly = self
-            .r_blocked_tasks
-            .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Readonly));
-        match (heaviest_writable, heaviest_readonly) {
-            (None, None) => None,
-            (Some(a), None) | (None, Some(a)) => Some(a),
-            (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| {
-                w.0.unique_weight.cmp(&r.0.unique_weight)
-            })),
-        }
+            .map(|(_key, value)| value)
     }
 }
 
-//const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
@@ -382,8 +368,8 @@ impl SchedulingStateMachine {
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
                 (page
-                    .heaviest_blocked_task()
-                    .map(|(existing_task, _)| this_unique_weight >= existing_task.unique_weight)
+                    .heaviest_blocked_unique_weight()
+                    .map(|&existing_unique_weight| this_unique_weight >= existing_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
@@ -457,7 +443,7 @@ impl SchedulingStateMachine {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
                         page.usage = attempt.uncommited_usage;
-                        page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
+                        page.remove_blocked_task(task.unique_weight);
                     }
 
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
