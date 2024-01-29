@@ -155,14 +155,16 @@ impl TaskInner {
 #[derive(Debug)]
 struct LockAttempt {
     page: Page,
+    requested_usage: RequestedUsage,
     uncommited_usage: Usage,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
 impl LockAttempt {
-    fn new(page: Page) -> Self {
+    fn new(page: Page, requested_usage: RequestedUsage) -> Self {
         Self {
             page,
+            requested_usage,
             uncommited_usage: Usage::default(),
         }
     }
@@ -530,12 +532,12 @@ impl SchedulingStateMachine {
         let writable_locks = locks
             .writable
             .iter()
-            .map(|&&address| LockAttempt::new(page_loader(address)))
+            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Writable))
             .collect::<Vec<_>>();
         let readonly_locks = locks
             .readonly
             .iter()
-            .map(|&&address| LockAttempt::new(page_loader(address)))
+            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Readonly))
             .collect::<Vec<_>>();
 
         let unique_weight = UniqueWeight::max_value()
