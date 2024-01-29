@@ -234,13 +234,14 @@ impl PageInner {
         let heaviest_writable = self.blocked_tasks
             .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
             .rev()
-            .map(|(_, task)| task)
-            .next()
+            .map(|(_, task)| (task, RequestedUsage::Writable))
+            .next();
         let heaviest_readonly = self.blocked_tasks
-            .range((RequestedUsage::Readonly, 0)..=(RequestedUsage::ReadonlyWritable, UniqueWeight::max_value()))
+            .range((RequestedUsage::Readonly, 0)..=(RequestedUsage::Readonly, UniqueWeight::max_value()))
             .rev()
-            .map(|(_, task)| task)
-            .next()
+            .map(|(_, task)| (task, RequestedUsage::Readonly))
+            .next();
+        std::cmp::max_by(heaviest_writable, heaviest_readonly, |w, r| w.0.unique_weight.cmp(|| r.0.unique_weight))
     }
 }
 
