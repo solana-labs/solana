@@ -226,7 +226,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
-        self.blocked_tasks.last_key_value().map(|(key, _value)| key)
+        self.blocked_tasks.last_key_value().map(|((_rq, uw), _value)| uw)
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
