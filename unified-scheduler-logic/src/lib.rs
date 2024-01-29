@@ -399,7 +399,7 @@ impl SchedulingStateMachine {
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
-                self.try_lock_for_task::<false>::(TaskSource::Retryable, task)
+                self.try_lock_for_task::<false>(TaskSource::Retryable, task)
             })
             .map(|task| {
                 self.rescheduled_task_count.increment_self();
