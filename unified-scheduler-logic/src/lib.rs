@@ -305,7 +305,6 @@ impl PageInner {
 
     fn heaviest_still_blocked_task(
         &self,
-        task_token: &TaskToken,
     ) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .values()
@@ -546,7 +545,7 @@ impl SchedulingStateMachine {
                     {
                         if let Some(heaviest_blocked_task) = read_only_lock_attempt
                             .page_mut(&mut self.page_token)
-                            .heaviest_still_blocked_task(&self.task_token)
+                            .heaviest_still_blocked_task()
                             .and_then(|(task, requested_usage)| {
                                 matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
                             })
