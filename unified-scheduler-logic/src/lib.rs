@@ -322,11 +322,6 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        assert!(
-            task.is_scheduled(&self.task_token),
-            "descheduling bad task: {task:?}"
-        );
-
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
         self.unlock_after_execution(task);
