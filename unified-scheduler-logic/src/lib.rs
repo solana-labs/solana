@@ -884,6 +884,12 @@ mod tests {
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
         assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_matches!(
+            state_machine
+                .schedule_retryable_task()
+                .map(|t| t.task_index()),
+            Some(3)
+        );
     }
 
     #[test]
