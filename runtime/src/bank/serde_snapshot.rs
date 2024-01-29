@@ -411,7 +411,7 @@ mod tests {
             );
 
             // assert epoch_reward_status is the same as the set epoch reward status
-            let epoch_reward_status = bank
+            let epoch_reward_status = dbank
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
@@ -504,7 +504,7 @@ mod tests {
             );
 
             // assert epoch_reward_status is the same as the set epoch reward status
-            let epoch_reward_status = bank
+            let epoch_reward_status = dbank
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
@@ -593,7 +593,7 @@ mod tests {
         assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
 
         // epoch_reward status should default to `Inactive`
-        let epoch_reward_status = bank
+        let epoch_reward_status = dbank
             .get_epoch_reward_status_to_serialize()
             .unwrap_or(&EpochRewardStatus::Inactive);
         assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
