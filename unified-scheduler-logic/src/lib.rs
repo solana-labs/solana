@@ -395,7 +395,7 @@ impl SchedulingStateMachine {
                     .heaviest_blocked_writing_task_weight()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|existing_task| this_unique_weight > task.unique_weight)
+                    .map(|existing_task| this_unique_weight > existing_task.unique_weight)
                     .unwrap_or(true))
             ;
 
