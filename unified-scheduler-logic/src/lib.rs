@@ -245,7 +245,7 @@ impl PageInner {
             .last_key_value()
             .map(|(_, task)| task);
 
-        std::cmp::max_by(a, b, |w, r| w.unique_weight.cmp(&r.unique_weight))
+        std::cmp::max_by(a, b, |w, r| w.map(|t| t.unique_weight).cmp(&r.map(|t| t.unique_weight)))
     }
 }
 
