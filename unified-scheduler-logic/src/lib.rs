@@ -474,11 +474,7 @@ impl SchedulingStateMachine {
                     {
                         if let Some(heaviest_readonly_task) = read_only_lock_attempt
                             .page_mut(&mut self.page_token)
-                            .heaviest_blocked_task()
-                            .and_then(|(heaviest_task, requested_usage)| {
-                                matches!(requested_usage, RequestedUsage::Readonly)
-                                    .then_some(heaviest_task)
-                            })
+                            .heaviest_blocked_readonly_task()
                         {
                             self.retryable_task_queue
                                 .entry(heaviest_readonly_task.unique_weight)
