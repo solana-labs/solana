@@ -117,7 +117,6 @@ impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
             lock_attempts,
-            state: State::New,
         }
     }
 }
