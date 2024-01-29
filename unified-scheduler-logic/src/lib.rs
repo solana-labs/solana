@@ -540,9 +540,8 @@ impl SchedulingStateMachine {
         } else {
             match task_source {
                 TaskSource::Retryable => {
-                    for &mut LockAttempt {uncommited_usage} in task.lock_attempts_mut(&mut self.task_token) {
-                        attempt.page_mut(&mut self.page_token).current_usage =
-                            attempt.uncommited_usage;
+                    for &mut LockAttempt {uncommited_usage, ..} in task.lock_attempts_mut(&mut self.task_token) {
+                        attempt.page_mut(&mut self.page_token).current_usage = uncommited_usage;
                     }
 
                     task.mark_as_scheduled_as_blocked(&mut self.task_token);
