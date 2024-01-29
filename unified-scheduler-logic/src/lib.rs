@@ -226,12 +226,6 @@ impl PageInner {
             .next()
     }
 
-    fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
-        // test passed with bolow outdated code!
-        //self.blocked_tasks.last_key_value().map(|((_rq, uw), _value)| uw)
-        self.heaviest_blocked_task().map(|(t, _ru)| &t.unique_weight)
-    }
-
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         let heaviest_writable = self.blocked_tasks
             .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
@@ -384,8 +378,8 @@ impl SchedulingStateMachine {
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
                 (page
-                    .heaviest_blocked_unique_weight()
-                    .map(|&existing_unique_weight| this_unique_weight >= existing_unique_weight)
+                    .heaviest_blocked_task()
+                    .map(|(existing_task, _)| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
