@@ -540,7 +540,7 @@ impl SchedulingStateMachine {
         } else {
             match task_source {
                 TaskSource::Retryable => {
-                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
+                    for _ {uncommited_usage} in task.lock_attempts_mut(&mut self.task_token) {
                         attempt.page_mut(&mut self.page_token).current_usage =
                             attempt.uncommited_usage;
                     }
