@@ -383,7 +383,7 @@ impl SchedulingStateMachine {
 
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task::<true>::(TaskSource::Runnable, task)
+        self.try_lock_for_task<true>(TaskSource::Runnable, task)
     }
 
     pub fn has_retryable_task(&self) -> bool {
