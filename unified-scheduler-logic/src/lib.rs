@@ -284,7 +284,7 @@ enum RequestedUsage {
 
 #[derive(Debug, Default)]
 struct PageInner {
-    current_usage: Usage,
+    usage: Usage,
     blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
@@ -430,7 +430,7 @@ impl SchedulingStateMachine {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
-                        attempt.page_mut(page_token).current_usage = usage;
+                        attempt.page_mut(page_token).usage = usage;
                     } else {
                         attempt.uncommited_usage = usage;
                     }
@@ -451,7 +451,7 @@ impl SchedulingStateMachine {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
 
-        let mut lock_status = match page.current_usage {
+        let mut lock_status = match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
@@ -492,7 +492,7 @@ impl SchedulingStateMachine {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
 
-        match &mut page.current_usage {
+        match &mut page.usage {
             Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     if count.is_one() {
@@ -513,7 +513,7 @@ impl SchedulingStateMachine {
         }
 
         if is_unused_now {
-            page.current_usage = Usage::Unused;
+            page.usage = Usage::Unused;
         }
 
         is_unused_now
@@ -541,8 +541,7 @@ impl SchedulingStateMachine {
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        attempt.page_mut(&mut self.page_token).current_usage =
-                            attempt.uncommited_usage;
+                        attempt.page_mut(&mut self.page_token).usage = attempt.uncommited_usage;
                     }
 
                     task.mark_as_scheduled_as_blocked(&mut self.task_token);
@@ -1034,14 +1033,14 @@ mod tests {
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).current_usage,
+            page.0.borrow(&state_machine.page_token).usage,
             Usage::Writable
         );
         let page = pages
             .get(task2.transaction().message().fee_payer())
             .unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).current_usage,
+            page.0.borrow(&state_machine.page_token).usage,
             Usage::Unused
         );
     }
@@ -1061,9 +1060,7 @@ mod tests {
     fn test_unreachable_unlock_conditions2() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0
-            .borrow_mut(&mut state_machine.page_token)
-            .current_usage = Usage::Writable;
+        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Readonly),
@@ -1075,9 +1072,7 @@ mod tests {
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0
-            .borrow_mut(&mut state_machine.page_token)
-            .current_usage = Usage::Readonly(Counter::one());
+        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Readonly(Counter::one());
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Writable),
