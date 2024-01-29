@@ -544,7 +544,7 @@ impl SchedulingStateMachine {
                             .page_mut(&mut self.page_token)
                             .heaviest_blocked_task()
                             .and_then(|(heaviest_task, requested_usage)| {
-                                matches!(requested_usage, RequestedUsage::Readonly).then_some(heaviest_blocked_task)
+                                matches!(requested_usage, RequestedUsage::Readonly).then_some(heaviest_task)
                             })
                         {
                             self.retryable_task_queue
