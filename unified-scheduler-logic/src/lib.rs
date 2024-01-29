@@ -211,29 +211,42 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(&mut self, requested_usage: RequestedUsage, unique_weight: UniqueWeight) {
+    fn remove_blocked_task(
+        &mut self,
+        requested_usage: RequestedUsage,
+        unique_weight: UniqueWeight,
+    ) {
         let removed_entry = self.blocked_tasks.remove(&(requested_usage, unique_weight));
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
         self.blocked_tasks
-            .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
+            .range(
+                (RequestedUsage::Writable, 0)
+                    ..=(RequestedUsage::Writable, UniqueWeight::max_value()),
+            )
             .rev()
-            .map(|(_, task)| {
-                task.unique_weight
-            })
+            .map(|(_, task)| task.unique_weight)
             .next()
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
-        let heaviest_writable = self.blocked_tasks
-            .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
+        let heaviest_writable = self
+            .blocked_tasks
+            .range(
+                (RequestedUsage::Writable, 0)
+                    ..=(RequestedUsage::Writable, UniqueWeight::max_value()),
+            )
             .rev()
             .map(|(_, task)| (task, RequestedUsage::Writable))
             .next();
-        let heaviest_readonly = self.blocked_tasks
-            .range((RequestedUsage::Readonly, 0)..=(RequestedUsage::Readonly, UniqueWeight::max_value()))
+        let heaviest_readonly = self
+            .blocked_tasks
+            .range(
+                (RequestedUsage::Readonly, 0)
+                    ..=(RequestedUsage::Readonly, UniqueWeight::max_value()),
+            )
             .rev()
             .map(|(_, task)| (task, RequestedUsage::Readonly))
             .next();
@@ -241,7 +254,9 @@ impl PageInner {
             (None, None) => None,
             (Some(a), None) => Some(a),
             (None, Some(b)) => Some(b),
-            (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight))),
+            (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| {
+                w.0.unique_weight.cmp(&r.0.unique_weight)
+            })),
         }
     }
 }
