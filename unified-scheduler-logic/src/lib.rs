@@ -232,7 +232,7 @@ impl PageInner {
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks
             .last_key_value()
-            .map(|(_key, value)| value)
+            .map(|((rq, uw), value)| (value, rq))
     }
 }
 
