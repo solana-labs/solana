@@ -2118,6 +2118,7 @@ impl ReplayStage {
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
+        Self::set_last_merkle_root(blockstore, bank);
 
         blockstore.slots_stats.mark_dead(slot);
 
@@ -2901,6 +2902,8 @@ impl ReplayStage {
                         continue;
                     }
                 }
+
+                Self::set_last_merkle_root(blockstore, bank);
 
                 let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();
@@ -4176,6 +4179,18 @@ impl ReplayStage {
                 .send(RewardsMessage::Complete(bank.slot()))
                 .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
         }
+    }
+
+    /// After completion of replay, set the merkle root present in blockstore
+    fn set_last_merkle_root(blockstore: &Blockstore, bank: &Bank) {
+        if !bank
+            .feature_set
+            .is_active(&feature_set::add_merkle_root_to_bank_hash::id())
+        {
+            return;
+        }
+        let last_merkle_root = blockstore.get_last_merkle_root(bank.slot()).unwrap();
+        bank.set_last_merkle_root(Some(last_merkle_root))
     }
 
     pub fn get_unlock_switch_vote_slot(cluster_type: ClusterType) -> Slot {

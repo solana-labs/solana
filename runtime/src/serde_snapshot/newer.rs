@@ -61,6 +61,7 @@ struct DeserializableVersionedBank {
     unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    last_merkle_root: Option<Hash>,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -100,6 +101,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
             epoch_reward_status: EpochRewardStatus::Inactive,
+            last_merkle_root: dvb.last_merkle_root,
         }
     }
 }
@@ -141,6 +143,7 @@ struct SerializableVersionedBank<'a> {
     unused_accounts: UnusedAccounts,
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    last_merkle_root: Option<Hash>,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
@@ -178,6 +181,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            last_merkle_root: rhs.last_merkle_root,
         }
     }
 }
@@ -415,6 +419,7 @@ impl<'a> TypeContext<'a> for Context {
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: &rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            last_merkle_root: rhs.last_merkle_root,
         };
 
         match get_serialize_bank_fields(

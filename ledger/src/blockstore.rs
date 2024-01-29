@@ -1878,6 +1878,38 @@ impl Blockstore {
             .collect()
     }
 
+    /// Returns the merkle root of the last data shred in `slot`.
+    /// Will fail if `slot`'s last shred is not present in blockstore
+    /// or if `slot` is comprised of legacy shreds.
+    pub fn get_last_merkle_root(&self, slot: Slot) -> Result<Hash> {
+        let Some(slot_meta) = self.meta_cf.get(slot)? else {
+            return Err(BlockstoreError::InvalidShredData(Box::new(
+                bincode::ErrorKind::Custom(format!(
+                    "Could not get merkle root, slot meta missing: {slot}"
+                )),
+            )));
+        };
+        let Some(last_shred_index) = slot_meta.last_index else {
+            return Err(BlockstoreError::InvalidShredData(Box::new(
+                bincode::ErrorKind::Custom(format!(
+                    "Could not get merkle root, last index missing: {slot} {slot_meta:?}"
+                )),
+            )));
+        };
+        let last_shred_bytes = self.get_data_shred(slot, last_shred_index)?;
+        let last_shred =
+            Shred::new_from_serialized_shred(last_shred_bytes.unwrap()).map_err(|err| {
+                BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                    "Could not reconstruct shred from shred payload: {err:?}"
+                ))))
+            })?;
+        last_shred.merkle_root().map_err(|err| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "Could not get merkle root from deserialized shred: {err:?}"
+            ))))
+        })
+    }
+
     #[cfg(test)]
     fn get_data_shreds(
         &self,

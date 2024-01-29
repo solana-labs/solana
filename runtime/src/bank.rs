@@ -472,6 +472,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
     pub(crate) epoch_reward_status: EpochRewardStatus,
+    pub(crate) last_merkle_root: Option<Hash>,
 }
 
 /// Bank's common fields shared by all supported snapshot versions for serialization.
@@ -515,6 +516,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
+    pub(crate) last_merkle_root: Option<Hash>,
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
@@ -585,6 +587,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
+            last_merkle_root,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -618,6 +621,7 @@ impl PartialEq for Bank {
             && *stakes_cache.stakes() == *other.stakes_cache.stakes()
             && epoch_stakes == &other.epoch_stakes
             && is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
+            && *last_merkle_root.read().unwrap() == *other.last_merkle_root.read().unwrap()
     }
 }
 
@@ -847,6 +851,9 @@ pub struct Bank {
     pub check_program_modification_slot: bool,
 
     epoch_reward_status: EpochRewardStatus,
+
+    /// Merkle root for the last FEC set. Populated after replay is concluded.
+    last_merkle_root: RwLock<Option<Hash>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1037,6 +1044,7 @@ impl Bank {
             ))),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            last_merkle_root: RwLock::<Option<Hash>>::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1347,6 +1355,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
+            last_merkle_root: RwLock::new(None),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1854,6 +1863,7 @@ impl Bank {
             ))),
             check_program_modification_slot: false,
             epoch_reward_status: fields.epoch_reward_status,
+            last_merkle_root: RwLock::new(fields.last_merkle_root),
         };
         bank.finish_init(
             genesis_config,
@@ -1948,6 +1958,7 @@ impl Bank {
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
+            last_merkle_root: *self.last_merkle_root.read().unwrap(),
         }
     }
 
@@ -7039,6 +7050,13 @@ impl Bank {
             epoch_accounts_hash
         });
 
+        if self.should_include_last_merkle_root_in_hash() {
+            let last_merkle_root = self.last_merkle_root.read().unwrap().expect(
+                "feature flags are active, however `last_merkle_root` is `None` for bank {slot}",
+            );
+            hash = hashv(&[hash.as_ref(), last_merkle_root.as_ref()]);
+        }
+
         let buf = self
             .hard_forks
             .read()
@@ -7080,6 +7098,20 @@ impl Bank {
 
         let stop_slot = epoch_accounts_hash_utils::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
+    }
+
+    /// The last merkle root should be included in the bank hash once the feature flags are active,
+    fn should_include_last_merkle_root_in_hash(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::drop_legacy_shreds::id())
+            && self
+                .feature_set
+                .is_active(&feature_set::add_merkle_root_to_bank_hash::id())
+    }
+
+    /// After replay, set the merkle root from blockstore
+    pub fn set_last_merkle_root(&self, last_merkle_root: Option<Hash>) {
+        *self.last_merkle_root.write().unwrap() = last_merkle_root;
     }
 
     /// If the epoch accounts hash should be included in this Bank, then fetch it.  If the EAH

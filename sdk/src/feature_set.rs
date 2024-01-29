@@ -772,6 +772,10 @@ pub mod cost_model_requested_write_lock_cost {
     solana_sdk::declare_id!("wLckV1a64ngtcKPRGU4S4grVTestXjmNjxBjaKZrAcn");
 }
 
+pub mod add_merkle_root_to_bank_hash {
+    solana_sdk::declare_id!("mkBhZjgAxg1MuipMnFsHVEDJUDWAno7KDUfkMeTAs38");
+}
+
 pub mod enable_gossip_duplicate_proof_ingestion {
     solana_sdk::declare_id!("FNKCMBzYUdjhHyPdsKG2LSmdzH8TCHXn3ytj8RNBS4nG");
 }
@@ -970,6 +974,7 @@ lazy_static! {
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
+        (add_merkle_root_to_bank_hash::id(), "add merkle root to bank hash #35004"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
