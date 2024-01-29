@@ -888,7 +888,7 @@ mod tests {
             state_machine
                 .schedule_retryable_task()
                 .map(|t| t.task_index()),
-            Some(3)
+            Some(4)
         );
     }
 
