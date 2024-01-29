@@ -715,8 +715,6 @@ mod tests {
         assert!(!state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 0);
 
-        assert!(!task2.is_new(&state_machine.task_token));
-
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
     }
 
