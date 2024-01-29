@@ -76,28 +76,27 @@ struct TaskStatus {
 enum State {
     New,
     Blocked,
-    ScheduledAsIdle,
-    ScheduledAsBlocked,
+    Scheduled,
 }
 
 impl State {
     fn is_new(&self) -> bool {
         match self {
             State::New => true,
-            State::Blocked | State::ScheduledAsIdle | State::ScheduledAsBlocked => false,
+            State::Blocked | State::Scheduled => false,
         }
     }
 
     fn is_blocked(&self) -> bool {
         match self {
             State::Blocked => true,
-            State::New | State::ScheduledAsBlocked | State::ScheduledAsIdle => false,
+            State::New | State::Scheduled => false,
         }
     }
 
     fn is_scheduled(&self) -> bool {
         match self {
-            State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
+            State::Scheduled => true,
             State::New | State::Blocked => false,
         }
     }
@@ -203,19 +202,14 @@ impl TaskInner {
         *self.state_mut(task_token) = State::Blocked;
     }
 
-    fn mark_as_scheduled_as_idle(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::ScheduledAsIdle;
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn mark_as_scheduled(&self, task_token: &mut TaskToken) {
+        *self.state_mut(task_token) = State::Scheduled;
     }
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn reset_as_new(&self, task_token: &mut TaskToken) {
         *self.state_mut(task_token) = State::New;
-    }
-
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn mark_as_scheduled_as_blocked(&self, task_token: &mut TaskToken) {
-        assert!(self.currently_contended(task_token));
-        *self.state_mut(task_token) = State::ScheduledAsBlocked;
     }
 
     pub fn task_index(&self) -> usize {
@@ -523,6 +517,8 @@ impl SchedulingStateMachine {
 
             None
         } else {
+            task.mark_as_scheduled(&mut self.task_token);
+
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
@@ -530,8 +526,6 @@ impl SchedulingStateMachine {
                         page.usage = attempt.uncommited_usage;
                         page.remove_blocked_task(task.unique_weight);
                     }
-
-                    task.mark_as_scheduled_as_blocked(&mut self.task_token);
 
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
                     // addresses so that more readonly transactions can be executed
@@ -554,9 +548,7 @@ impl SchedulingStateMachine {
                         }
                     }
                 }
-                TaskSource::Runnable => {
-                    task.mark_as_scheduled_as_idle(&mut self.task_token);
-                }
+                TaskSource::Runnable => {}
             }
             Some(task)
         }
