@@ -231,9 +231,16 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(&Task, RequestedUsage)> {
-        self.blocked_tasks
-            .last_key_value()
-            .map(|((rq, uw), value)| &(value, *rq))
+        let heaviest_writable = self.blocked_tasks
+            .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
+            .rev()
+            .map(|(_, task)| task)
+            .next()
+        let heaviest_readonly = self.blocked_tasks
+            .range((RequestedUsage::Readonly, 0)..=(RequestedUsage::ReadonlyWritable, UniqueWeight::max_value()))
+            .rev()
+            .map(|(_, task)| task)
+            .next()
     }
 }
 
