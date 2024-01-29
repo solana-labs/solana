@@ -7,7 +7,6 @@ use {
             signer::{SignerSource, SignerSourceParserBuilder},
             STDOUT_OUTFILE_TOKEN,
         },
-        input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
             derivation_path::{acquire_derivation_path, derivation_path_arg},
@@ -18,7 +17,7 @@ use {
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
         keypair::{
-            keypair_from_path, keypair_from_seed_phrase, signer_from_path, signer_from_source,
+            keypair_from_seed_phrase, keypair_from_source, signer_from_path, signer_from_source,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
         DisplayError,
@@ -411,7 +410,7 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_prompt_signer_source)
+                        .value_parser(SignerSourceParserBuilder::default().allow_prompt().allow_legacy().build())
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
@@ -525,8 +524,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         }
         ("recover", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile").unwrap()
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").unwrap()
             } else {
                 path.extend([".config", "solana", "id.json"]);
                 path.to_str().unwrap()
@@ -537,12 +536,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
 
             let keypair_name = "recover";
-            let keypair = if let Some(path) = matches.value_of("prompt_signer") {
-                keypair_from_path(matches, path, keypair_name, true)?
-            } else {
-                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
-            };
+            let keypair =
+                if let Some(source) = matches.try_get_one::<SignerSource>("prompt_signer")? {
+                    keypair_from_source(matches, source, keypair_name, true)?
+                } else {
+                    let skip_validation =
+                        matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+                    keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+                };
             output_keypair(&keypair, outfile, "recovered")?;
         }
         ("grind", matches) => {
