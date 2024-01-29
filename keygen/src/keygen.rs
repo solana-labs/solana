@@ -471,9 +471,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         }
         ("new", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile")
-            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").map(|s| s.as_str())
+            } else if matches.try_contains_id(NO_OUTFILE_ARG.name)? {
                 None
             } else {
                 path.extend([".config", "solana", "id.json"]);
@@ -486,11 +486,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
+            let word_count = matches
+                .get_one::<String>(WORD_COUNT_ARG.name)
+                .and_then(|x| x.parse::<usize>().ok())
+                .unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
 
-            let silent = matches.is_present("silent");
+            let silent = matches.try_contains_id("silent")?;
             if !silent {
                 println!("Generating a new keypair");
             }
