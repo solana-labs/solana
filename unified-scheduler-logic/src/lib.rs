@@ -101,13 +101,6 @@ impl State {
             State::New | State::Blocked => false,
         }
     }
-
-    fn is_scheduled_as_blocked(&self) -> bool {
-        match self {
-            State::ScheduledAsBlocked => true,
-            State::New | State::Blocked | State::ScheduledAsIdle => false,
-        }
-    }
 }
 
 mod cell {
@@ -196,10 +189,6 @@ impl TaskInner {
 
     fn currently_contended(&self, task_token: &TaskToken) -> bool {
         self.state_ref(task_token).is_blocked()
-    }
-
-    fn is_scheduled_as_blocked(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_scheduled_as_blocked()
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
