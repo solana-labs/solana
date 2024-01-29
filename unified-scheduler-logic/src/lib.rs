@@ -443,7 +443,7 @@ impl SchedulingStateMachine {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
                         page.usage = attempt.uncommited_usage;
-                        page.remove_blocked_task(task.unique_weight);
+                        page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                     }
 
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
