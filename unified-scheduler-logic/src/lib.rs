@@ -383,7 +383,7 @@ impl SchedulingStateMachine {
 
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task::<true>(TaskSource::Runnable, task)
+        self.try_lock_for_task(TaskSource::Runnable, task)
     }
 
     pub fn has_retryable_task(&self) -> bool {
@@ -399,7 +399,7 @@ impl SchedulingStateMachine {
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
-                self.try_lock_for_task::<false>(TaskSource::Retryable, task)
+                self.try_lock_for_task(TaskSource::Retryable, task)
             })
             .map(|task| {
                 self.rescheduled_task_count.increment_self();
@@ -418,17 +418,18 @@ impl SchedulingStateMachine {
         self.unlock_after_execution(task);
     }
 
-    fn attempt_lock_for_execution<const ROLLBACK_ON_FAILURE: bool>(
+    fn attempt_lock_for_execution(
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
+        rollback_on_failure: bool,
     ) -> usize {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    if ROLLBACK_ON_FAILURE {
+                    if rollback_on_failure {
                         attempt.page_mut(page_token).current_usage = usage;
                     } else {
                         attempt.uncommited_usage = usage;
@@ -518,15 +519,18 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task<const ROLLBACK_ON_FAILURE: bool>(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
-        let lock_count = Self::attempt_lock_for_execution::<ROLLBACK_ON_FAILURE>(
+    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
+        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
+
+        let lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
+            rollback_on_failure,
         );
 
         if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
-            if ROLLBACK_ON_FAILURE {
+            if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
                 task.mark_as_blocked(&mut self.task_token);
                 self.register_blocked_task_into_pages(&task);
