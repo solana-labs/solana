@@ -445,7 +445,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-    let config = if let Some(config_file) = matches.value_of("config_file") {
+    let config = if let Some(config_file) = matches.try_get_one::<String>("config_file")? {
         Config::load(config_file).unwrap_or_default()
     } else {
         Config::default()
