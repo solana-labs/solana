@@ -245,11 +245,11 @@ impl PageInner {
             .last_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly));
 
-        panic!();
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a.0),
             (Some(a), Some(b)) => {
+                panic!();
                 Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
             }
         }
@@ -824,6 +824,45 @@ mod tests {
         let sanitized1 = readonly_transaction(conflicting_address);
         let sanitized2 = readonly_transaction(conflicting_address);
         let sanitized3 = transaction_with_shared_writable(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(3)
+        );
+        assert_matches!(
+            state_machine
+                .schedule_task(task2.clone())
+                .map(|t| t.task_index()),
+            Some(4)
+        );
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+
+        assert_eq!(state_machine.active_task_count(), 3);
+        assert_eq!(state_machine.handled_task_count(), 0);
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.active_task_count(), 2);
+        assert_eq!(state_machine.handled_task_count(), 1);
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task2);
+        assert_eq!(state_machine.active_task_count(), 1);
+        assert_eq!(state_machine.handled_task_count(), 2);
+        assert_eq!(state_machine.retryable_task_count(), 1);
+    }
+
+    #[test]
+    fn test_schedule_rw_mixed() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_address);
+        let sanitized2 = transaction_with_shared_writable(conflicting_address);
+        let sanitized3 = readonly_transaction(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
