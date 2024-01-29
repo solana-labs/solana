@@ -879,7 +879,7 @@ mod tests {
             state_machine
                 .schedule_task(task2.clone())
                 .map(|t| t.task_index()),
-            Some(4)
+            None
         );
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
