@@ -68,8 +68,7 @@ mod counter {
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
 struct TaskStatus {
-    writable_lock_attempts: Vec<LockAttempt>,
-    readonly_lock_attempts: Vec<LockAttempt>,
+    lock_attempts: Vec<LockAttempt>,
 }
 
 mod cell {
@@ -115,8 +114,8 @@ type TaskToken = Token<TaskStatus>;
 const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
-    fn new(writable_lock_attempts: Vec<LockAttempt>, readonly_lock_attempts: Vec<LockAttempt>) -> Self {
-        Self { writable_lock_attempts, readonly_lock_attempts }
+    fn new(lock_attempts: Vec<LockAttempt>) -> Self {
+        Self { lock_attempts }
     }
 }
 
@@ -137,16 +136,12 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn writable_lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
-        &mut self.task_status.borrow_mut(task_token).writable_lock_attempts
-    }
-
-    fn readonly_lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
-        &mut self.task_status.borrow_mut(task_token).readonly_lock_attempts
+    fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
+        &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.borrow(task_token).writable_lock_attempts
+        &self.task_status.borrow(task_token).lock_attempts
     }
 
     pub fn task_index(&self) -> usize {
@@ -536,13 +531,18 @@ impl SchedulingStateMachine {
         let writable_locks = locks
             .writable
             .iter()
-            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Writable))
-            .collect::<Vec<_>>();
+            .map(|address| (address, RequestedUsage::Writable));
         let readonly_locks = locks
             .readonly
             .iter()
-            .map(|&&address| LockAttempt::new(page_loader(address), RequestedUsage::Readonly))
-            .collect::<Vec<_>>();
+            .map(|address| (address, RequestedUsage::Readonly));
+
+        let locks = writable_locks
+            .chain(readonly_locks)
+            .map(|(address, requested_usage)| {
+                LockAttempt::new(page_loader(**address), requested_usage)
+            })
+            .collect();
 
         let unique_weight = UniqueWeight::max_value()
             .checked_sub(index as UniqueWeight)
@@ -551,7 +551,7 @@ impl SchedulingStateMachine {
         Task::new(TaskInner {
             unique_weight,
             transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(writable_locks, readonly_locks)),
+            task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
     }
 }
@@ -641,8 +641,7 @@ mod tests {
             "Succeded(Readonly(Counter(1)))"
         );
         let task_status = TaskStatus {
-            writable_lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            readonly_lock_attempts: vec![],
+            lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
         };
         assert_eq!(
             format!("{:?}", task_status),
