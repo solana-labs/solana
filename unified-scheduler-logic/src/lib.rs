@@ -519,7 +519,7 @@ impl SchedulingStateMachine {
     }
 
     fn try_lock_for_task<const ROLLBACK_ON_FAILURE: bool>(&mut self, task_source: TaskSource, task: Task) -> Option<Task> {
-        let lock_count = Self::attempt_lock_for_execution::<ROLLBACK_ON_FAILURE>::(
+        let lock_count = Self::attempt_lock_for_execution::<ROLLBACK_ON_FAILURE>(
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
