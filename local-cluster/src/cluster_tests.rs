@@ -78,7 +78,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
 ) {
     let rpc_client = RpcClient::new_socket_with_commitment(
         entry_point_info.rpc().unwrap(),
-        CommitmentConfig::confirmed(),
+        CommitmentConfig::processed(),
     );
     let cluster_nodes = discover_cluster(
         &entry_point_info.gossip().unwrap(),
