@@ -252,7 +252,7 @@ impl PageInner {
             .next();
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
-            (None, Some(a)) | (Some(a), None) => Some(a),
+            (Some(a), None) | (None, Some(a)) => Some(a),
             (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| {
                 w.0.unique_weight.cmp(&r.0.unique_weight)
             })),
