@@ -11014,8 +11014,12 @@ fn test_rent_state_list_len() {
     );
 
     assert_eq!(
-        bank.get_transaction_account_state_info(&transaction_context, sanitized_tx.message())
-            .len(),
+        TransactionAccountStateInfo::new(
+            &bank.rent_collector.rent,
+            &transaction_context,
+            sanitized_tx.message()
+        )
+        .len(),
         num_accounts,
     );
 }

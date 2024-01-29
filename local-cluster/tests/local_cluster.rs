@@ -5610,6 +5610,7 @@ fn test_invalid_forks_persisted_on_restart() {
                 &majority_keypair,
                 &entries,
                 true,  // is_full_slot
+                None,  // chained_merkle_root
                 0,     // next_shred_index,
                 0,     // next_code_index
                 false, // merkle_variant

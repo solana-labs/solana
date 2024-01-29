@@ -6,6 +6,7 @@ extern crate test;
 use {
     crossbeam_channel::unbounded,
     log::*,
+    rand::Rng,
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -105,6 +106,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &keypair,
         &entries,
         true, // is_last_in_slot
+        // chained_merkle_root
+        Some(Hash::new_from_array(rand::thread_rng().gen())),
         0,    // next_shred_index
         0,    // next_code_index
         true, // merkle_variant

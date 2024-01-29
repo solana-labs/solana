@@ -85,6 +85,7 @@ impl StandardBroadcastRun {
                     keypair,
                     &[],  // entries
                     true, // is_last_in_slot,
+                    None, // chained_merkle_root
                     state.next_shred_index,
                     state.next_code_index,
                     true, // merkle_variant
@@ -143,6 +144,7 @@ impl StandardBroadcastRun {
             keypair,
             entries,
             is_slot_end,
+            None, // chained_merkle_root
             next_shred_index,
             next_code_index,
             true, // merkle_variant
