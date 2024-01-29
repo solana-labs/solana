@@ -220,8 +220,8 @@ impl PageInner {
         self.blocked_tasks
             .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
             .rev()
-            .find_map(|(task, requested_usage)| {
-                matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
+            .map(|task| {
+                task.unique_weight
             })
     }
 
