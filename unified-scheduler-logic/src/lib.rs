@@ -223,6 +223,7 @@ impl PageInner {
             .map(|(_, task)| {
                 task.unique_weight
             })
+            .next()
     }
 
     fn heaviest_blocked_unique_weight(&mut self) -> Option<&UniqueWeight> {
