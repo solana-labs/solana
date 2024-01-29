@@ -3,7 +3,10 @@ use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
-        input_parsers::STDOUT_OUTFILE_TOKEN,
+        input_parsers::{
+            signer::{SignerSource, SignerSourceParserBuilder},
+            STDOUT_OUTFILE_TOKEN,
+        },
         input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
@@ -15,7 +18,7 @@ use {
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
         keypair::{
-            keypair_from_path, keypair_from_seed_phrase, signer_from_path,
+            keypair_from_path, keypair_from_seed_phrase, signer_from_path, signer_from_source,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
         DisplayError,
@@ -67,10 +70,12 @@ fn get_keypair_from_matches(
     config: Config,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    if matches.try_contains_id("keypair")? {
+        let source = matches.get_one::<SignerSource>("keypair").unwrap();
+        return signer_from_source(matches, source, "pubkey recovery", wallet_manager);
+    }
     let mut path = dirs_next::home_dir().expect("home directory");
-    let path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap()
-    } else if !config.keypair_path.is_empty() {
+    let path = if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
         path.extend([".config", "solana", "id.json"]);
@@ -257,6 +262,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
+                        .value_parser(
+                            SignerSourceParserBuilder::default().allow_all().build()
+                        )
                         .help("Filepath or URL to a keypair"),
                 )
         )
@@ -369,6 +377,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
+                        .value_parser(
+                            SignerSourceParserBuilder::default().allow_all().build()
+                        )
                         .help("Filepath or URL to a keypair"),
                 )
                 .arg(
@@ -450,8 +461,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let pubkey =
                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
 
-            if matches.is_present("outfile") {
-                let outfile = matches.value_of("outfile").unwrap();
+            if matches.try_contains_id("outfile")? {
+                let outfile = matches.get_one::<String>("outfile").unwrap();
                 check_for_overwrite(outfile, matches)?;
                 write_pubkey_file(outfile, pubkey)?;
             } else {
@@ -727,7 +738,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             )
             .serialize();
             let signature = keypair.try_sign_message(&simple_message)?;
-            let pubkey_bs58 = matches.value_of("pubkey").unwrap();
+            let pubkey_bs58 = matches.try_get_one::<String>("pubkey")?.unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
             if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {pubkey_bs58}: Success");
