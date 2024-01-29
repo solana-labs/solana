@@ -137,8 +137,8 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t impl Iterator<Item = &mut LockAttempt> {
-        self.task_status.borrow_mut(task_token).writable_lock_attempts.iter_mut()
+    fn writable_lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
+        &mut self.task_status.borrow_mut(task_token).writable_lock_attempts
     }
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
