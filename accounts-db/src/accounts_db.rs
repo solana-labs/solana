@@ -3989,11 +3989,15 @@ impl AccountsDb {
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
             for pubkey in shrink_collect.unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                    // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
-                    // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                    locked_entry.addref();
-                }
+                let lock = self.accounts_index.get_bin(pubkey);
+                lock.get_internal(pubkey, |entry| {
+                    if let Some(locked_entry) = entry {
+                        // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
+                        // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
+                        locked_entry.addref();
+                    }
+                    (false, ())
+                });
             }
             return;
         }
