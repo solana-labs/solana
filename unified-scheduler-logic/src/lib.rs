@@ -955,13 +955,13 @@ mod tests {
         assert_matches!(
             state_machine
                 .schedule_task(task1.clone())
-                .map(|task| task.task_index()),
+                .map(|t| t.task_index()),
             Some(3)
         );
         assert_matches!(
             state_machine
                 .schedule_task(task2.clone())
-                .map(|task| task.task_index()),
+                .map(|t| t.task_index()),
             Some(4)
         );
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
