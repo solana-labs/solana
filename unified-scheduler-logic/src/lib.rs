@@ -239,17 +239,21 @@ impl PageInner {
         let heaviest_writable = self
             .w_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Writable));
+            ;
         let heaviest_readonly = self
             .r_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Readonly));
+            ;
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
-            (Some(a), None) | (None, Some(a)) => Some(a.0),
+            (Some(a), None) | (None, Some(a)) => Some(a.1),
             (Some(a), Some(b)) => {
-                Some(std::cmp::max_by(a, b, |w, r| w.0.unique_weight.cmp(&r.0.unique_weight)).0)
+                Some(if a.1.unique_weight > b.1.unique_weight {
+                    a.1
+                } else {
+                    b.1
+                })
             }
         }
     }
