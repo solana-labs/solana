@@ -452,8 +452,6 @@ impl SchedulingStateMachine {
 
             None
         } else {
-            task.mark_as_scheduled(&mut self.task_token);
-
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
