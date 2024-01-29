@@ -230,7 +230,7 @@ impl PageInner {
         self.blocked_tasks.last_key_value().map(|((_rq, uw), _value)| uw)
     }
 
-    fn heaviest_blocked_task(&self) -> Option<&(&Task, RequestedUsage)> {
+    fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         let heaviest_writable = self.blocked_tasks
             .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
             .rev()
