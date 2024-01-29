@@ -115,9 +115,7 @@ const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self {
-            lock_attempts,
-        }
+        Self { lock_attempts }
     }
 }
 
