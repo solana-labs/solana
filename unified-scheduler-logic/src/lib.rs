@@ -306,10 +306,7 @@ impl PageInner {
     fn heaviest_still_blocked_task(
         &self,
     ) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks
-            .values()
-            .rev()
-            .next()
+        self.blocked_tasks.last_value()
     }
 }
 
