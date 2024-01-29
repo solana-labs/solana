@@ -537,13 +537,6 @@ impl SchedulingStateMachine {
             .iter()
             .map(|address| (address, RequestedUsage::Readonly));
 
-        let locks = writable_locks
-            .chain(readonly_locks)
-            .map(|(address, requested_usage)| {
-                LockAttempt::new(page_loader(**address), requested_usage)
-            })
-            .collect();
-
         let unique_weight = UniqueWeight::max_value()
             .checked_sub(index as UniqueWeight)
             .unwrap();
@@ -551,7 +544,7 @@ impl SchedulingStateMachine {
         Task::new(TaskInner {
             unique_weight,
             transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(locks)),
+            task_status: SchedulerCell::new(TaskStatus::new(writable_locks, readonly_locks)),
         })
     }
 }
