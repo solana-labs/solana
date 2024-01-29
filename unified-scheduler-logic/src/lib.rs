@@ -155,16 +155,14 @@ impl TaskInner {
 #[derive(Debug)]
 struct LockAttempt {
     page: Page,
-    requested_usage: RequestedUsage,
     uncommited_usage: Usage,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
 impl LockAttempt {
-    fn new(page: Page, requested_usage: RequestedUsage) -> Self {
+    fn new(page: Page) -> Self {
         Self {
             page,
-            requested_usage,
             uncommited_usage: Usage::default(),
         }
     }
