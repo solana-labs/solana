@@ -69,37 +69,6 @@ mod counter {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    state: State,
-}
-
-#[derive(Debug)]
-enum State {
-    New,
-    Blocked,
-    Scheduled,
-}
-
-impl State {
-    fn is_new(&self) -> bool {
-        match self {
-            State::New => true,
-            State::Blocked | State::Scheduled => false,
-        }
-    }
-
-    fn is_blocked(&self) -> bool {
-        match self {
-            State::Blocked => true,
-            State::New | State::Scheduled => false,
-        }
-    }
-
-    fn is_scheduled(&self) -> bool {
-        match self {
-            State::Scheduled => true,
-            State::New | State::Blocked => false,
-        }
-    }
 }
 
 mod cell {
@@ -184,10 +153,6 @@ impl TaskInner {
 
     fn state_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
         &self.task_status.borrow(task_token).state
-    }
-
-    fn currently_contended(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_blocked()
     }
 
     fn is_new(&self, task_token: &TaskToken) -> bool {
