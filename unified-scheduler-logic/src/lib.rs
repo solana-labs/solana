@@ -864,7 +864,7 @@ mod tests {
         let sanitized3 = readonly_transaction(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 45, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
