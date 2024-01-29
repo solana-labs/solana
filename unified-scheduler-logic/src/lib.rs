@@ -541,7 +541,9 @@ impl SchedulingStateMachine {
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        attempt.page_mut(&mut self.page_token).usage = attempt.uncommited_usage;
+                        let page = attempt.page_mut(&mut self.page_token);
+                        page.usage = attempt.uncommited_usage;
+                        page.remove_blocked_task(task.unique_weight);
                     }
 
                     task.mark_as_scheduled_as_blocked(&mut self.task_token);
@@ -590,15 +592,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        let should_unregister_from_pages = task.is_scheduled_as_blocked(&self.task_token);
-
         for unlock_attempt in task.lock_attempts(&self.task_token) {
-            if should_unregister_from_pages {
-                unlock_attempt
-                    .page_mut(&mut self.page_token)
-                    .remove_blocked_task(task.unique_weight);
-            }
-
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
                 continue;
