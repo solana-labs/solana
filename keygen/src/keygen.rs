@@ -1,5 +1,4 @@
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(deprecated)]
 use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command},
