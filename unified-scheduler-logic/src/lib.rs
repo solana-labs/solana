@@ -303,10 +303,10 @@ impl PageInner {
         self.blocked_tasks.last_key_value().map(|(key, _value)| key)
     }
 
-    fn heaviest_blocked_task(
-        &self,
-    ) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.last_key_value().map(|(_key, value)| value)
+    fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
+        self.blocked_tasks
+            .last_key_value()
+            .map(|(_key, value)| value)
     }
 }
 
@@ -544,7 +544,8 @@ impl SchedulingStateMachine {
                             .page_mut(&mut self.page_token)
                             .heaviest_blocked_task()
                             .and_then(|(heaviest_task, requested_usage)| {
-                                matches!(requested_usage, RequestedUsage::Readonly).then_some(heaviest_task)
+                                matches!(requested_usage, RequestedUsage::Readonly)
+                                    .then_some(heaviest_task)
                             })
                         {
                             self.retryable_task_queue
