@@ -220,7 +220,7 @@ impl PageInner {
         self.blocked_tasks
             .range((RequestedUsage::Writable, 0)..=(RequestedUsage::Writable, UniqueWeight::max_value()))
             .rev()
-            .map(|task| {
+            .map(|(_, task)| {
                 task.unique_weight
             })
     }
