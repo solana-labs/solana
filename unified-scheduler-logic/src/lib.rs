@@ -453,7 +453,7 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some(heaviest_readonly_task) = read_only_lock_attempt
+                        if let Some(&heaviest_readonly_task) = read_only_lock_attempt
                             .page_mut(&mut self.page_token)
                             .heaviest_blocked_task()
                             .and_then(|(heaviest_task, requested_usage)| {
