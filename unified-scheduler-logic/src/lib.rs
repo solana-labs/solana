@@ -232,7 +232,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.last_key_value().map(|(k, v)| v)
+        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
 
