@@ -232,24 +232,24 @@ impl PageInner {
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.r_blocked_tasks.last_key_value().map(|(k, v)| v)
     }
 
 
-    fn heaviest_blocked_task(&self) -> Option<&Task> {
+    fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         let heaviest_writable = self
             .w_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| task);
+            .map(|(_, task)| (task, RequestedUsage::Writable));
         let heaviest_readonly = self
             .r_blocked_tasks
             .last_key_value()
-            .map(|(_, task)| task);
+            .map(|(_, task)| (task, RequestedUsage::Readonly));
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a),
             (Some(a), Some(b)) => Some(std::cmp::max_by(a, b, |w, r| {
-                w.unique_weight.cmp(&r.unique_weight)
+                w.0.unique_weight.cmp(&r.0.unique_weight)
             })),
         }
     }
@@ -388,7 +388,7 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|existing_task| this_unique_weight >= existing_task.unique_weight)
+                    .map(|(existing_task, _)| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
@@ -513,7 +513,7 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
-            if let Some(uncontended_task) = heaviest_uncontended_now {
+            if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
