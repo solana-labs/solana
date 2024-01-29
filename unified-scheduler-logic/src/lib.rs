@@ -191,7 +191,7 @@ impl Usage {
     }
 }
 
-#[derive(Clone, Copy, Debug, Ord, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug)]
 enum RequestedUsage {
     Readonly,
     Writable,
@@ -206,7 +206,7 @@ struct PageInner {
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let mut b = match requested_usage {
+        let b = match requested_usage {
             RequestedUsage::Readonly => &mut self.r_blocked_tasks,
             RequestedUsage::Writable => &mut self.w_blocked_tasks,
         };
