@@ -306,7 +306,7 @@ impl PageInner {
     fn heaviest_still_blocked_task(
         &self,
     ) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.last_entry().map(|entry| entry.value())
+        self.blocked_tasks.last_entry().map(|entry| entry.get())
     }
 }
 
