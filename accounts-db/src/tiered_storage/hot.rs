@@ -326,7 +326,7 @@ impl HotStorageReader {
     }
 
     /// Returns the offset to the account given the specified index.
-    fn get_account_offset(
+    pub(super) fn get_account_offset(
         &self,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<HotAccountOffset> {
