@@ -438,7 +438,7 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task, on_success: impl Fn(&Task) -> ()) -> Option<Task> {
+    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let lock_count = Self::attempt_lock_for_execution(
