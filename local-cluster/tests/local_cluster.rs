@@ -3343,7 +3343,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     );
 
     let mut votes_on_c_fork = std::collections::BTreeSet::new(); // S4 and S5
-    for _ in 0..100 {
+    for _ in 0..500 {
         sleep(Duration::from_millis(100));
 
         if let Some((last_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
@@ -3371,7 +3371,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // monitor for actual votes from validator A
     let mut bad_vote_detected = false;
     let mut a_votes = vec![];
-    for _ in 0..100 {
+    for _ in 0..500 {
         sleep(Duration::from_millis(100));
 
         if let Some((last_vote, _)) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {

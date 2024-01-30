@@ -1,0 +1,31 @@
+--- cluster_info.rs
++++ cluster_info.rs
+@@ -1795,9 +1795,8 @@ impl ClusterInfo {
+             let value = CrdsValue::new_signed(value, &self.keypair());
+             self.push_message(value);
+         }
+-        let mut generate_pull_requests = true;
+         let run_gossip = move || {
+-            loop {
++            for round in 0u64.. {
+                 let start = timestamp();
+                 if self.contact_debug_interval != 0
+                     && start - last_contact_info_trace > self.contact_debug_interval
+@@ -1834,7 +1833,8 @@ impl ClusterInfo {
+                     &recycler,
+                     &stakes,
+                     &sender,
+-                    generate_pull_requests,
++                    // Generate pull requests once every 10 gossip rounds.
++                    (round % 10) == 0,
+                 );
+                 if exit.load(Ordering::Relaxed) {
+                     return;
+@@ -1858,7 +1858,6 @@ impl ClusterInfo {
+                     let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
+                     sleep(Duration::from_millis(time_left));
+                 }
+-                generate_pull_requests = !generate_pull_requests;
+             }
+         };
+         Builder::new()
