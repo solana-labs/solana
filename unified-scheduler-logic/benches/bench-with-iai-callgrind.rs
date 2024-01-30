@@ -160,7 +160,8 @@ fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
     let c = black_box(b.first_key_value());
     toggle_collect();
-    drop((c, b));
+    drop(c);
+    drop(b);
 }
 
 #[library_benchmark]
