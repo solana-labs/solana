@@ -10,8 +10,6 @@ use {
     std::{collections::BTreeMap, mem, sync::Arc},
 };
 
-type UsageCount = Counter;
-
 #[derive(Clone, Debug)]
 enum LockStatus {
     Succeded(Usage),
@@ -71,45 +69,6 @@ mod counter {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    state: State,
-}
-
-#[derive(Debug)]
-enum State {
-    New,
-    Blocked,
-    ScheduledAsIdle,
-    ScheduledAsBlocked,
-}
-
-impl State {
-    fn is_new(&self) -> bool {
-        match self {
-            State::New => true,
-            State::Blocked | State::ScheduledAsIdle | State::ScheduledAsBlocked => false,
-        }
-    }
-
-    fn is_blocked(&self) -> bool {
-        match self {
-            State::Blocked => true,
-            State::New | State::ScheduledAsBlocked | State::ScheduledAsIdle => false,
-        }
-    }
-
-    fn is_scheduled(&self) -> bool {
-        match self {
-            State::ScheduledAsIdle | State::ScheduledAsBlocked => true,
-            State::New | State::Blocked => false,
-        }
-    }
-
-    fn is_scheduled_as_blocked(&self) -> bool {
-        match self {
-            State::ScheduledAsBlocked => true,
-            State::New | State::Blocked | State::ScheduledAsIdle => false,
-        }
-    }
 }
 
 mod cell {
@@ -156,10 +115,7 @@ const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self {
-            lock_attempts,
-            state: State::New,
-        }
+        Self { lock_attempts }
     }
 }
 
@@ -175,42 +131,6 @@ pub struct TaskInner {
     task_status: SchedulerCell<TaskStatus>,
 }
 
-impl SchedulingStateMachine {
-    pub fn create_task(
-        transaction: SanitizedTransaction,
-        index: usize,
-        page_loader: &mut impl FnMut(Pubkey) -> Page,
-    ) -> Task {
-        let locks = transaction.get_account_locks_unchecked();
-
-        let writable_locks = locks
-            .writable
-            .iter()
-            .map(|address| (address, RequestedUsage::Writable));
-        let readonly_locks = locks
-            .readonly
-            .iter()
-            .map(|address| (address, RequestedUsage::Readonly));
-
-        let locks = writable_locks
-            .chain(readonly_locks)
-            .map(|(address, requested_usage)| {
-                LockAttempt::new(page_loader(**address), requested_usage)
-            })
-            .collect();
-
-        let unique_weight = UniqueWeight::max_value()
-            .checked_sub(index as UniqueWeight)
-            .unwrap();
-
-        Task::new(TaskInner {
-            unique_weight,
-            transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(locks)),
-        })
-    }
-}
-
 impl TaskInner {
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.transaction
@@ -224,53 +144,8 @@ impl TaskInner {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
-    fn state_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut State {
-        &mut self.task_status.borrow_mut(task_token).state
-    }
-
-    fn state_ref<'t>(&self, task_token: &'t TaskToken) -> &'t State {
-        &self.task_status.borrow(task_token).state
-    }
-
-    fn currently_contended(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_blocked()
-    }
-
-    fn is_scheduled_as_blocked(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_scheduled_as_blocked()
-    }
-
-    fn is_new(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_new()
-    }
-
-    fn is_scheduled(&self, task_token: &TaskToken) -> bool {
-        self.state_ref(task_token).is_scheduled()
-    }
-
-    fn mark_as_blocked(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::Blocked;
-    }
-
-    fn mark_as_scheduled_as_idle(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::ScheduledAsIdle;
-    }
-
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn reset_as_new(&self, task_token: &mut TaskToken) {
-        *self.state_mut(task_token) = State::New;
-    }
-
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn mark_as_scheduled_as_blocked(&self, task_token: &mut TaskToken) {
-        assert!(self.currently_contended(task_token));
-        *self.state_mut(task_token) = State::ScheduledAsBlocked;
-    }
-
     pub fn task_index(&self) -> usize {
-        UniqueWeight::max_value()
-            .checked_sub(self.unique_weight)
-            .unwrap() as usize
+        self.unique_weight as usize
     }
 }
 
@@ -300,7 +175,7 @@ impl LockAttempt {
 enum Usage {
     #[default]
     Unused,
-    Readonly(UsageCount),
+    Readonly(Counter),
     Writable,
 }
 const_assert_eq!(mem::size_of::<Usage>(), 8);
@@ -322,49 +197,65 @@ enum RequestedUsage {
 
 #[derive(Debug, Default)]
 struct PageInner {
-    current_usage: Usage,
-    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    usage: Usage,
+    w_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    r_blocked_tasks: BTreeMap<UniqueWeight, Task>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self
-            .blocked_tasks
-            .insert(task.unique_weight, (task, requested_usage));
+        let b = match requested_usage {
+            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
+            RequestedUsage::Writable => &mut self.w_blocked_tasks,
+        };
+        let pre_existed = b.insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(&mut self, unique_weight: UniqueWeight) {
-        let removed_entry = self.blocked_tasks.remove(&unique_weight);
+    fn remove_blocked_task(
+        &mut self,
+        requested_usage: RequestedUsage,
+        unique_weight: UniqueWeight,
+    ) {
+        let b = match requested_usage {
+            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
+            RequestedUsage::Writable => &mut self.w_blocked_tasks,
+        };
+        let removed_entry = b.remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_blocked_writing_task_weight(&self) -> Option<UniqueWeight> {
-        self.blocked_tasks
-            .values()
-            .rev()
-            .find_map(|(task, requested_usage)| {
-                matches!(requested_usage, RequestedUsage::Writable).then_some(task.unique_weight)
-            })
+    fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
+        self.w_blocked_tasks.first_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_task(&mut self) -> Option<UniqueWeight> {
-        self.blocked_tasks.last_entry().map(|entry| *entry.key())
+    fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
+        self.r_blocked_tasks.first_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_still_blocked_task(
-        &self,
-        task_token: &TaskToken,
-    ) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks
-            .values()
-            .rev()
-            .find(|(task, _)| task.currently_contended(task_token))
+    #[inline(never)]
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
+        use std::cmp::Reverse;
+        let d = self
+            .w_blocked_tasks
+            .first_key_value().map(|(a, b)| (Reverse(a), b));
+        let e = self
+            .r_blocked_tasks
+            .first_key_value().map(|(a, b)| (Reverse(a), b));
+        std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        /*
+        (match (d, e) {
+            (None, None) => None,
+            (None, Some(a)) | (Some(a), None) => Some(a.1),
+            (Some(x), Some(y)) => Some(std::cmp::min_by(x, y, |xx, yy| x.0.cmp(yy.0)).1),
+        })
+        */
     }
 }
 
-const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 56);
 
+// very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<SchedulerCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
@@ -413,11 +304,6 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        assert!(
-            task.is_new(&self.task_token),
-            "scheduling bad task: {task:?}"
-        );
-
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         self.try_lock_for_task(TaskSource::Runnable, task)
@@ -445,11 +331,6 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        assert!(
-            task.is_scheduled(&self.task_token),
-            "descheduling bad task: {task:?}"
-        );
-
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
         self.unlock_after_execution(task);
@@ -467,7 +348,7 @@ impl SchedulingStateMachine {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
                     if rollback_on_failure {
-                        attempt.page_mut(page_token).current_usage = usage;
+                        attempt.page_mut(page_token).usage = usage;
                     } else {
                         attempt.uncommited_usage = usage;
                     }
@@ -488,7 +369,7 @@ impl SchedulingStateMachine {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
 
-        let mut lock_status = match page.current_usage {
+        let mut lock_status = match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
@@ -505,14 +386,14 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|existing_unique_weight| this_unique_weight >= existing_unique_weight)
+                    .map(|existing_task| this_unique_weight <= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
-                    .heaviest_blocked_writing_task_weight()
+                    .heaviest_blocked_writing_task()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|existing_unique_weight| this_unique_weight > existing_unique_weight)
+                    .map(|existing_task| this_unique_weight < existing_task.unique_weight)
                     .unwrap_or(true))
             ;
 
@@ -529,7 +410,7 @@ impl SchedulingStateMachine {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
 
-        match &mut page.current_usage {
+        match &mut page.usage {
             Usage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     if count.is_one() {
@@ -550,7 +431,7 @@ impl SchedulingStateMachine {
         }
 
         if is_unused_now {
-            page.current_usage = Usage::Unused;
+            page.usage = Usage::Unused;
         }
 
         is_unused_now
@@ -569,7 +450,6 @@ impl SchedulingStateMachine {
         if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
             if rollback_on_failure {
                 self.rollback_locking(&task, lock_count);
-                task.mark_as_blocked(&mut self.task_token);
                 self.register_blocked_task_into_pages(&task);
             }
 
@@ -578,11 +458,10 @@ impl SchedulingStateMachine {
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        attempt.page_mut(&mut self.page_token).current_usage =
-                            attempt.uncommited_usage;
+                        let page = attempt.page_mut(&mut self.page_token);
+                        page.usage = attempt.uncommited_usage;
+                        page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                     }
-
-                    task.mark_as_scheduled_as_blocked(&mut self.task_token);
 
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
                     // addresses so that more readonly transactions can be executed
@@ -591,22 +470,17 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some(heaviest_blocked_task) = read_only_lock_attempt
+                        if let Some(heaviest_readonly_task) = read_only_lock_attempt
                             .page_mut(&mut self.page_token)
-                            .heaviest_still_blocked_task(&self.task_token)
-                            .and_then(|(task, requested_usage)| {
-                                matches!(requested_usage, RequestedUsage::Readonly).then_some(task)
-                            })
+                            .heaviest_blocked_readonly_task()
                         {
                             self.retryable_task_queue
-                                .entry(heaviest_blocked_task.unique_weight)
-                                .or_insert_with(|| heaviest_blocked_task.clone());
+                                .entry(heaviest_readonly_task.unique_weight)
+                                .or_insert_with(|| heaviest_readonly_task.clone());
                         }
                     }
                 }
-                TaskSource::Runnable => {
-                    task.mark_as_scheduled_as_idle(&mut self.task_token);
-                }
+                TaskSource::Runnable => {}
             }
             Some(task)
         }
@@ -628,15 +502,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        let should_unregister_from_pages = task.is_scheduled_as_blocked(&self.task_token);
-
         for unlock_attempt in task.lock_attempts(&self.task_token) {
-            if should_unregister_from_pages {
-                unlock_attempt
-                    .page_mut(&mut self.page_token)
-                    .remove_blocked_task(task.unique_weight);
-            }
-
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
                 continue;
@@ -644,13 +510,43 @@ impl SchedulingStateMachine {
 
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
-                .heaviest_still_blocked_task(&self.task_token);
-            if let Some((uncontended_task, _ru)) = heaviest_uncontended_now {
+                .heaviest_blocked_task();
+            if let Some(uncontended_task) = heaviest_uncontended_now {
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
+    }
+
+    pub fn create_task(
+        transaction: SanitizedTransaction,
+        index: usize,
+        page_loader: &mut impl FnMut(Pubkey) -> Page,
+    ) -> Task {
+        let locks = transaction.get_account_locks_unchecked();
+
+        let writable_locks = locks
+            .writable
+            .iter()
+            .map(|address| (address, RequestedUsage::Writable));
+        let readonly_locks = locks
+            .readonly
+            .iter()
+            .map(|address| (address, RequestedUsage::Readonly));
+
+        let locks = writable_locks
+            .chain(readonly_locks)
+            .map(|(address, requested_usage)| {
+                LockAttempt::new(page_loader(**address), requested_usage)
+            })
+            .collect();
+
+        Task::new(TaskInner {
+            unique_weight: index as UniqueWeight,
+            transaction,
+            task_status: SchedulerCell::new(TaskStatus::new(locks)),
+        })
     }
 }
 
@@ -740,12 +636,11 @@ mod tests {
         );
         let task_status = TaskStatus {
             lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            state: State::New,
         };
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, uncommited_usage: Unused }], state: New }"
+             .. })), requested_usage: Writable, uncommited_usage: Unused }] }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
@@ -786,29 +681,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "descheduling bad task")]
-    fn test_deschedule_task_without_scheduling_first() {
-        let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader(None);
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-
-        let mut state_machine = SchedulingStateMachine::default();
-        state_machine.deschedule_task(&task);
-    }
-
-    #[test]
-    #[should_panic(expected = "scheduling bad task")]
-    fn test_reschedule_task_without_descheduling_first() {
-        let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader(None);
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-
-        let mut state_machine = SchedulingStateMachine::default();
-        state_machine.schedule_task(task.clone());
-        state_machine.schedule_task(task.clone());
-    }
-
-    #[test]
     fn test_schedule_conflicting_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
@@ -825,10 +697,6 @@ mod tests {
         state_machine.clear_retryable_tasks();
         assert!(!state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 0);
-
-        assert!(!task2.is_new(&state_machine.task_token));
-        task2.reset_as_new(&mut state_machine.task_token);
-        assert!(task2.is_new(&state_machine.task_token));
 
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
     }
@@ -920,9 +788,9 @@ mod tests {
 
     #[test]
     fn test_schedule_multiple_readonly_task() {
-        let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = readonly_transaction(conflicting_readonly_address);
-        let sanitized2 = readonly_transaction(conflicting_readonly_address);
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_address);
+        let sanitized2 = readonly_transaction(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
@@ -945,10 +813,10 @@ mod tests {
 
     #[test]
     fn test_schedule_multiple_writable_tasks() {
-        let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = readonly_transaction(conflicting_readonly_address);
-        let sanitized2 = readonly_transaction(conflicting_readonly_address);
-        let sanitized3 = transaction_with_shared_writable(conflicting_readonly_address);
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_address);
+        let sanitized2 = readonly_transaction(conflicting_address);
+        let sanitized3 = transaction_with_shared_writable(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
@@ -958,13 +826,13 @@ mod tests {
         assert_matches!(
             state_machine
                 .schedule_task(task1.clone())
-                .map(|task| task.task_index()),
+                .map(|t| t.task_index()),
             Some(3)
         );
         assert_matches!(
             state_machine
                 .schedule_task(task2.clone())
-                .map(|task| task.task_index()),
+                .map(|t| t.task_index()),
             Some(4)
         );
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
@@ -983,10 +851,46 @@ mod tests {
     }
 
     #[test]
+    fn test_schedule_rw_mixed() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_address);
+        let sanitized2 = transaction_with_shared_writable(conflicting_address);
+        let sanitized3 = readonly_transaction(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
+
+        let mut state_machine = SchedulingStateMachine::default();
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(3)
+        );
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+
+        assert_eq!(state_machine.active_task_count(), 3);
+        assert_eq!(state_machine.handled_task_count(), 0);
+        assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task1);
+        assert_eq!(state_machine.active_task_count(), 2);
+        assert_eq!(state_machine.handled_task_count(), 1);
+        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_matches!(
+            state_machine
+                .schedule_retryable_task()
+                .map(|t| t.task_index()),
+            Some(4)
+        );
+    }
+
+    #[test]
     fn test_schedule_writable_after_readonly() {
-        let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = readonly_transaction(conflicting_readonly_address);
-        let sanitized2 = transaction_with_shared_writable(conflicting_readonly_address);
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = readonly_transaction(conflicting_address);
+        let sanitized2 = transaction_with_shared_writable(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
@@ -1002,10 +906,10 @@ mod tests {
 
     #[test]
     fn test_schedule_readonly_after_writable() {
-        let conflicting_readonly_address = Pubkey::new_unique();
-        let sanitized1 = transaction_with_shared_writable(conflicting_readonly_address);
-        let sanitized2 = readonly_transaction(conflicting_readonly_address);
-        let sanitized3 = readonly_transaction(conflicting_readonly_address);
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = transaction_with_shared_writable(conflicting_address);
+        let sanitized2 = readonly_transaction(conflicting_address);
+        let sanitized3 = readonly_transaction(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
@@ -1037,14 +941,14 @@ mod tests {
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).current_usage,
+            page.0.borrow(&state_machine.page_token).usage,
             Usage::Writable
         );
         let page = pages
             .get(task2.transaction().message().fee_payer())
             .unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).current_usage,
+            page.0.borrow(&state_machine.page_token).usage,
             Usage::Unused
         );
     }
@@ -1064,9 +968,7 @@ mod tests {
     fn test_unreachable_unlock_conditions2() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0
-            .borrow_mut(&mut state_machine.page_token)
-            .current_usage = Usage::Writable;
+        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Readonly),
@@ -1078,9 +980,7 @@ mod tests {
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0
-            .borrow_mut(&mut state_machine.page_token)
-            .current_usage = Usage::Readonly(Counter::one());
+        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Readonly(Counter::one());
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Writable),

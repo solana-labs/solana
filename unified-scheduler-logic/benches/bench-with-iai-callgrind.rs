@@ -19,6 +19,7 @@ use {
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
 };
+use std::hint::black_box;
 
 #[library_benchmark]
 #[bench::min(0)]
@@ -31,8 +32,12 @@ use {
 fn bench_schedule_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..account_count {
-        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    for i in 0..account_count {
+        if i % 2 == 0 {
+            accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+        } else {
+            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        }
     }
 
     let payer = Keypair::new();
@@ -129,6 +134,53 @@ fn bench_insert_task(account_count: usize) {
 }
 
 #[library_benchmark]
+#[bench::one(1)]
+fn bench_heaviest_task(account_count: usize) {
+    toggle_collect();
+    let mut accounts = vec![];
+    for _ in 0..account_count {
+        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    }
+
+    let payer = Keypair::new();
+    let memo_ix = Instruction {
+        program_id: Pubkey::default(),
+        accounts,
+        data: vec![0x00],
+    };
+    let mut ixs = vec![];
+    for _ in 0..1 {
+        ixs.push(memo_ix.clone());
+    }
+    let msg = Message::new(&ixs, Some(&payer.pubkey()));
+    let txn = Transaction::new_unsigned(msg);
+    //panic!("{:?}", txn);
+    //assert_eq!(wire_txn.len(), 3);
+    let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+    let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
+
+    let mut b = std::collections::BTreeMap::new();
+    b.insert(task.unique_weight, task.clone());
+    b.insert(task.unique_weight + 1, task.clone());
+    b.insert(task.unique_weight + 2, task.clone());
+    let mut c = std::collections::BTreeMap::new();
+    c.insert(task.unique_weight + 3, task.clone());
+    c.insert(task.unique_weight + 4, task.clone());
+    c.insert(task.unique_weight + 5, task.clone());
+
+    toggle_collect();
+    let d = b.first_key_value();
+    let e = c.first_key_value();
+    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1);
+    assert_matches!(f.map(|f| f.task_index()), Some(0));
+    toggle_collect();
+    dbg!(f);
+
+    drop((d, e, f));
+    drop(b);
+}
+
+#[library_benchmark]
 #[bench::min(0)]
 #[bench::one(1)]
 #[bench::two(2)]
@@ -161,7 +213,6 @@ fn bench_schedule_task_conflicting(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
-    task.reset_as_new(&mut scheduler.task_token);
     let task2 = task.clone();
     toggle_collect();
     assert_matches!(scheduler.schedule_task(task2), None);
@@ -263,9 +314,7 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     let task = scheduler.schedule_task(task).unwrap();
-    task.reset_as_new(&mut scheduler.task_token);
     assert_matches!(scheduler.schedule_task(task.clone()), None);
-    task.mark_as_scheduled_as_blocked(&mut scheduler.task_token);
 
     toggle_collect();
     scheduler.deschedule_task(&task);
@@ -334,8 +383,12 @@ fn bench_schedule_retryable_task(account_count: usize) {
 fn bench_deschedule_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..account_count {
-        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    for i in 0..account_count {
+        if i % 2 == 0 {
+            accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+        } else {
+            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        }
     }
 
     let payer = Keypair::new();
@@ -364,7 +417,7 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_drop_task, bench_insert_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    benchmarks = bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
 );
 
 main!(library_benchmark_groups = bench_scheduling_state_machine);
