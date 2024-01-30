@@ -298,9 +298,10 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
-        self.try_lock_for_task(TaskSource::Runnable, task, on_success)
+        let task = self.try_lock_for_task(TaskSource::Runnable, task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
+        task
     }
 
     pub fn has_retryable_task(&self) -> bool {
