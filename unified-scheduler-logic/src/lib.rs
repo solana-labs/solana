@@ -7,7 +7,7 @@ use {
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
-    std::{collections::BTreeMap, mem, sync::Arc},
+    std::{cmp, collections::BTreeMap, mem, sync::Arc},
 };
 
 #[derive(Clone, Debug)]
@@ -235,9 +235,9 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let d = self.w_blocked_tasks.last_key_value();
-        let e = self.r_blocked_tasks.last_key_value();
-        std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        let heaviest_writable = self.w_blocked_tasks.last_key_value();
+        let heaviest_readable = self.r_blocked_tasks.last_key_value();
+        cmp::max_by(heaviest_writable, heaviest_readable, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
 
