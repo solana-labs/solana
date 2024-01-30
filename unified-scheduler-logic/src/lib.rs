@@ -239,14 +239,12 @@ impl PageInner {
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let d = self
             .r_blocked_tasks
-            .first_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Writable));
+            .first_key_value();
         let e = self
             .w_blocked_tasks
-            .first_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Readonly));
+            .first_key_value();
         //heaviest_writable
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight))).map(|x| x.0)
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.0)
     }
 }
 
