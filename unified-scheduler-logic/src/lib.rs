@@ -236,11 +236,11 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let d = &mut self
+        let d = self
             .w_blocked_tasks
             .first_key_value()
             .map(|(_, task)| task);
-        let e = &mut self
+        let e = self
             .r_blocked_tasks
             .first_key_value()
             .map(|(_, task)| task);
