@@ -368,7 +368,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
     assert_matches!(scheduler.schedule_task(task2), None);
     scheduler.deschedule_task(&task);
     toggle_collect();
-    let retried_task = do_scheduler.schedule_retryable_task(|task| {
+    let retried_task = scheduler.do_schedule_retryable_task(|task| {
         toggle_collect();
         task
     }).unwrap();
