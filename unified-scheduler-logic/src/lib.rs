@@ -297,10 +297,10 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
-    pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
+    pub fn schedule_task<R>(&mut self, task: Task, impl Fn(Task) -> R) -> Option<R> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task(TaskSource::Runnable, task)
+        self.try_lock_for_task(TaskSource::Runnable, task, f)
     }
 
     pub fn has_retryable_task(&self) -> bool {
