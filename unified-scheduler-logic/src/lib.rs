@@ -251,7 +251,7 @@ impl PageInner {
         Self::heavier_task(heaviest_writable, heaviest_readable)
     }
 
-    fn heavier_task(x: Option<&Task>, y: Option<&Task>) -> Option<&Task> {
+    fn heavier_task<'a>(x: Option<&'a Task>, y: Option<&'a Task>) -> Option<&'a Task> {
         cmp::max_by(x, y, |x, y| {
             x.map(|x| x.0).cmp(&y.map(|y| y.0))
         })
