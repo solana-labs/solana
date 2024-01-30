@@ -246,7 +246,7 @@ impl PageInner {
             .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly));
         //heaviest_writable
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight)))
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight))).map(|x| x.0)
     }
 }
 
