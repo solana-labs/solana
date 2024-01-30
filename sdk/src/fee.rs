@@ -80,10 +80,17 @@ impl FeeStructure {
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
-        _lamports_per_signature: u64,
+        lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
+        // Fee based on compute units and signatures
+        let congestion_multiplier = if lamports_per_signature == 0 {
+            0.0 // test only
+        } else {
+            1.0 // multiplier that has no effect
+        };
+
         let signature_fee = message
             .num_signatures()
             .saturating_mul(self.lamports_per_signature);
@@ -115,11 +122,12 @@ impl FeeStructure {
                     .unwrap_or_default()
             });
 
-        (budget_limits
+        ((budget_limits
             .prioritization_fee
             .saturating_add(signature_fee)
             .saturating_add(write_lock_fee)
             .saturating_add(compute_fee) as f64)
+            * congestion_multiplier)
             .round() as u64
     }
 }
