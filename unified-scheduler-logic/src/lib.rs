@@ -205,7 +205,10 @@ struct PageInner {
 }
 
 impl PageInner {
-    fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) -> &mut BTreeMap<UniqueWeight, Task> {
+    fn blocked_tasks_mut(
+        &mut self,
+        requested_usage: RequestedUsage,
+    ) -> &mut BTreeMap<UniqueWeight, Task> {
         match requested_usage {
             RequestedUsage::Readonly => &mut self.readonly_blocked_tasks,
             RequestedUsage::Writable => &mut self.writable_blocked_tasks,
@@ -213,7 +216,9 @@ impl PageInner {
     }
 
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self.blocked_tasks_mut(requested_usage).insert(task.unique_weight, task);
+        let pre_existed = self
+            .blocked_tasks_mut(requested_usage)
+            .insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
 
@@ -222,22 +227,31 @@ impl PageInner {
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let removed_entry = self.blocked_tasks_mut(requested_usage).remove(&unique_weight);
+        let removed_entry = self
+            .blocked_tasks_mut(requested_usage)
+            .remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
-        self.writable_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.writable_blocked_tasks
+            .last_key_value()
+            .map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.readonly_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.readonly_blocked_tasks
+            .last_key_value()
+            .map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let heaviest_writable = self.writable_blocked_tasks.last_key_value();
         let heaviest_readable = self.readonly_blocked_tasks.last_key_value();
-        cmp::max_by(heaviest_writable, heaviest_readable, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        cmp::max_by(heaviest_writable, heaviest_readable, |x, y| {
+            x.map(|x| x.0).cmp(&y.map(|y| y.0))
+        })
+        .map(|x| x.1)
     }
 }
 
@@ -296,7 +310,11 @@ impl SchedulingStateMachine {
         self.schedule_task(task, |task| task.clone())
     }
 
-    pub fn schedule_task<R>(&mut self, task: Task, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
+    pub fn schedule_task<R>(
+        &mut self,
+        task: Task,
+        on_success: impl FnOnce(&Task) -> R,
+    ) -> Option<R> {
         let ret = self.try_lock_for_task(TaskSource::Runnable, task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
