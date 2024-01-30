@@ -1039,7 +1039,6 @@ where
                                     Ok(NewTaskPayload::Payload(task)) => {
                                         state_machine.do_schedule_task(task, |task| {
                                             idle_task_sender.send(task).unwrap();
-                                            task
                                         });
                                         "step"
                                     }
@@ -1078,7 +1077,6 @@ where
                                     blocked_task_sender
                                         .send_payload(task)
                                         .unwrap();
-                                    task
                                 });
                                 "step"
                             },
