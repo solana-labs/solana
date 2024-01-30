@@ -12,7 +12,6 @@ use {
     solana_geyser_plugin_manager::geyser_plugin_service::{
         GeyserPluginService, GeyserPluginServiceError,
     },
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         bank_forks_utils::{self, BankForksUtilsError},
         blockstore::{Blockstore, BlockstoreError},
@@ -41,10 +40,9 @@ use {
         },
     },
     solana_sdk::{
-        clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, signature::Signer,
-        signer::keypair::Keypair, timing::timestamp, transaction::VersionedTransaction,
+        clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey,
+        transaction::VersionedTransaction,
     },
-    solana_streamer::socket::SocketAddrSpace,
     solana_unified_scheduler_pool::DefaultSchedulerPool,
     std::{
         path::{Path, PathBuf},
@@ -315,20 +313,12 @@ pub fn load_and_process_ledger(
         }
     }
 
-    let node_id = Arc::new(Keypair::new());
-    let cluster_info = Arc::new(ClusterInfo::new(
-        ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
-        Arc::clone(&node_id),
-        SocketAddrSpace::Unspecified,
-    ));
     let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
     let accounts_hash_verifier = AccountsHashVerifier::new(
         accounts_package_sender.clone(),
         accounts_package_receiver,
         None,
         exit.clone(),
-        cluster_info,
-        None,
         SnapshotConfig::new_load_only(),
     );
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

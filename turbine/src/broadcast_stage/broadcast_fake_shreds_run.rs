@@ -60,6 +60,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
+            None, // chained_merkle_root
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant
@@ -81,6 +82,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),
+            None, // chained_merkle_root
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant

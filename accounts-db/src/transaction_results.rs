@@ -17,7 +17,7 @@ use {
     },
 };
 
-pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>);
+pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
 
 pub struct TransactionResults {
     pub fee_collection_results: Vec<transaction::Result<()>>,

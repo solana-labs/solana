@@ -5,6 +5,7 @@ use {
         account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         tiered_storage::{
             byte_block,
             file::TieredStorageFile,
@@ -12,7 +13,7 @@ use {
             index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
-            owners::{OwnerOffset, OwnersBlockFormat},
+            owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
             readable::TieredReadableAccount,
             StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
             TieredStorageFormat, TieredStorageResult,
@@ -325,7 +326,7 @@ impl HotStorageReader {
     }
 
     /// Returns the offset to the account given the specified index.
-    fn get_account_offset(
+    pub(super) fn get_account_offset(
         &self,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<HotAccountOffset> {
@@ -361,7 +362,7 @@ impl HotStorageReader {
     pub fn account_matches_owners(
         &self,
         account_offset: HotAccountOffset,
-        owners: &[&Pubkey],
+        owners: &[Pubkey],
     ) -> Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta_from_offset(account_offset)
@@ -376,7 +377,7 @@ impl HotStorageReader {
 
             owners
                 .iter()
-                .position(|candidate| &account_owner == candidate)
+                .position(|candidate| account_owner == candidate)
                 .ok_or(MatchAccountOwnerError::NoMatch)
         }
     }
@@ -468,7 +469,7 @@ fn write_optional_fields(
         size += file.write_pod(&rent_epoch)?;
     }
     if let Some(hash) = opt_fields.account_hash {
-        size += file.write_pod(&hash)?;
+        size += file.write_pod(hash)?;
     }
 
     debug_assert_eq!(size, opt_fields.size());
@@ -495,10 +496,11 @@ impl HotStorageWriter {
     fn write_account(
         &self,
         lamports: u64,
+        owner_offset: OwnerOffset,
         account_data: &[u8],
         executable: bool,
         rent_epoch: Option<Epoch>,
-        account_hash: Option<AccountHash>,
+        account_hash: Option<&AccountHash>,
     ) -> TieredStorageResult<usize> {
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch,
@@ -511,6 +513,7 @@ impl HotStorageWriter {
         let padding_len = padding_bytes(account_data.len());
         let meta = HotAccountMeta::new()
             .with_lamports(lamports)
+            .with_owner_offset(owner_offset)
             .with_account_data_size(account_data.len() as u64)
             .with_account_data_padding(padding_len)
             .with_flags(&flags);
@@ -527,8 +530,9 @@ impl HotStorageWriter {
         Ok(stored_size)
     }
 
-    /// A work-in-progress function that will eventually implements
-    /// AccountsFile::appends_account()
+    /// Persists `accounts` into the underlying hot accounts file associated
+    /// with this HotStorageWriter.  The first `skip` number of accounts are
+    /// *not* persisted.
     pub fn write_accounts<
         'a,
         'b,
@@ -542,6 +546,7 @@ impl HotStorageWriter {
     ) -> TieredStorageResult<()> {
         let mut footer = new_hot_footer();
         let mut index = vec![];
+        let mut owners_table = OwnersTable::default();
         let mut cursor = 0;
 
         // writing accounts blocks
@@ -555,20 +560,28 @@ impl HotStorageWriter {
 
             // Obtain necessary fields from the account, or default fields
             // for a zero-lamport account in the None case.
-            let (lamports, data, executable, rent_epoch, account_hash) = account
+            let (lamports, owner, data, executable, rent_epoch, account_hash) = account
                 .map(|acc| {
                     (
                         acc.lamports(),
+                        acc.owner(),
                         acc.data(),
                         acc.executable(),
-                        // only persist rent_epoch for those non-rent-exempt accounts
-                        (acc.rent_epoch() != Epoch::MAX).then_some(acc.rent_epoch()),
-                        Some(*account_hash),
+                        // only persist rent_epoch for those rent-paying accounts
+                        (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH).then_some(acc.rent_epoch()),
+                        Some(account_hash),
                     )
                 })
-                .unwrap_or((0, &[], false, None, None));
-
-            cursor += self.write_account(lamports, data, executable, rent_epoch, account_hash)?;
+                .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None, None));
+            let owner_offset = owners_table.insert(owner);
+            cursor += self.write_account(
+                lamports,
+                owner_offset,
+                data,
+                executable,
+                rent_epoch,
+                account_hash,
+            )?;
             index.push(index_entry);
         }
         footer.account_entry_count = (len - skip) as u32;
@@ -588,11 +601,13 @@ impl HotStorageWriter {
             cursor += self.storage.write_pod(&0u32)?;
         }
 
-        // TODO: owner block will be implemented in the follow-up PRs
-        // expect the offset of each block aligned.
+        // writing owners block
         assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.owners_block_offset = cursor as u64;
-        footer.owner_count = 0;
+        footer.owner_count = owners_table.len() as u32;
+        footer
+            .owners_block_format
+            .write_owners_block(&self.storage, &owners_table)?;
 
         footer.write_footer_block(&self.storage)?;
 
@@ -606,7 +621,6 @@ pub mod tests {
         super::*,
         crate::{
             account_storage::meta::StoredMeta,
-            rent_collector::RENT_EXEMPT_RENT_EPOCH,
             tiered_storage::{
                 byte_block::ByteBlockWriter,
                 file::TieredStorageFile,
@@ -708,10 +722,11 @@ pub mod tests {
         const TEST_PADDING: u8 = 5;
         const TEST_OWNER_OFFSET: OwnerOffset = OwnerOffset(0x1fef_1234);
         const TEST_RENT_EPOCH: Epoch = 7;
+        let acc_hash = AccountHash(Hash::new_unique());
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(AccountHash(Hash::new_unique())),
+            account_hash: Some(&acc_hash),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -731,6 +746,7 @@ pub mod tests {
     fn test_hot_account_meta_full() {
         let account_data = [11u8; 83];
         let padding = [0u8; 5];
+        let acc_hash = AccountHash(Hash::new_unique());
 
         const TEST_LAMPORT: u64 = 2314232137;
         const OWNER_OFFSET: u32 = 0x1fef_1234;
@@ -738,7 +754,7 @@ pub mod tests {
 
         let optional_fields = AccountMetaOptionalFields {
             rent_epoch: Some(TEST_RENT_EPOCH),
-            account_hash: Some(AccountHash(Hash::new_unique())),
+            account_hash: Some(&acc_hash),
         };
 
         let flags = AccountMetaFlags::new_from(&optional_fields);
@@ -775,7 +791,7 @@ pub mod tests {
         assert_eq!(account_data, meta.account_data(account_block));
         assert_eq!(meta.rent_epoch(account_block), optional_fields.rent_epoch);
         assert_eq!(
-            *(meta.account_hash(account_block).unwrap()),
+            (meta.account_hash(account_block).unwrap()),
             optional_fields.account_hash.unwrap()
         );
     }
@@ -1065,7 +1081,7 @@ pub mod tests {
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
 
         // First, verify whether we can find the expected owners.
-        let mut owner_candidates: Vec<_> = owner_addresses.iter().collect();
+        let mut owner_candidates = owner_addresses.clone();
         owner_candidates.shuffle(&mut rng);
 
         for (account_offset, account_meta) in account_offsets.iter().zip(hot_account_metas.iter()) {
@@ -1074,16 +1090,15 @@ pub mod tests {
                 .unwrap();
             assert_eq!(
                 owner_candidates[index],
-                &owner_addresses[account_meta.owner_offset().0 as usize]
+                owner_addresses[account_meta.owner_offset().0 as usize]
             );
         }
 
         // Second, verify the MatchAccountOwnerError::NoMatch case
         const NUM_UNMATCHED_OWNERS: usize = 20;
-        let unmatched_owners: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+        let unmatched_candidates: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
             .take(NUM_UNMATCHED_OWNERS)
             .collect();
-        let unmatched_candidates: Vec<_> = unmatched_owners.iter().collect();
 
         for account_offset in account_offsets.iter() {
             assert_eq!(
@@ -1103,7 +1118,7 @@ pub mod tests {
                 .unwrap();
             assert_eq!(
                 owner_candidates[index],
-                &owner_addresses[account_meta.owner_offset().0 as usize]
+                owner_addresses[account_meta.owner_offset().0 as usize]
             );
         }
     }
@@ -1238,12 +1253,17 @@ pub mod tests {
     /// Create a test account based on the specified seed.
     /// The created test account might have default rent_epoch
     /// and write_version.
+    ///
+    /// When the seed is zero, then a zero-lamport test account will be
+    /// created.
     fn create_test_account(seed: u64) -> (StoredMeta, AccountSharedData) {
         let data_byte = seed as u8;
+        let owner_byte = u8::MAX - data_byte;
         let account = Account {
-            lamports: seed + 1,
+            lamports: seed,
             data: std::iter::repeat(data_byte).take(seed as usize).collect(),
-            owner: Pubkey::new_unique(),
+            // this will allow some test account sharing the same owner.
+            owner: [owner_byte; 32].into(),
             executable: seed % 2 > 0,
             rent_epoch: if seed % 3 > 0 {
                 seed
@@ -1312,15 +1332,30 @@ pub mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, hash, _write_version) = storable_accounts.get(i);
-            let account = account.unwrap();
+            let (account, address, account_hash, _write_version) = storable_accounts.get(i);
+            let (lamports, owner, data, executable, account_hash) = account
+                .map(|acc| {
+                    (
+                        acc.lamports(),
+                        acc.owner(),
+                        acc.data(),
+                        acc.executable(),
+                        // only persist rent_epoch for those rent-paying accounts
+                        Some(*account_hash),
+                    )
+                })
+                .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
 
-            assert_eq!(stored_meta.lamports(), account.lamports());
-            assert_eq!(stored_meta.data().len(), account.data().len());
-            assert_eq!(stored_meta.data(), account.data());
-            assert_eq!(stored_meta.executable(), account.executable());
+            assert_eq!(stored_meta.lamports(), lamports);
+            assert_eq!(stored_meta.data().len(), data.len());
+            assert_eq!(stored_meta.data(), data);
+            assert_eq!(stored_meta.executable(), executable);
+            assert_eq!(stored_meta.owner(), owner);
             assert_eq!(stored_meta.pubkey(), address);
-            assert_eq!(stored_meta.hash(), hash);
+            assert_eq!(
+                *stored_meta.hash(),
+                account_hash.unwrap_or(AccountHash(Hash::default()))
+            );
 
             assert_eq!(i + 1, next);
         }

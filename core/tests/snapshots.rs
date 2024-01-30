@@ -1044,8 +1044,6 @@ fn test_snapshots_with_background_services(
         accounts_package_receiver,
         Some(snapshot_package_sender),
         exit.clone(),
-        cluster_info,
-        None,
         snapshot_test_config.snapshot_config.clone(),
     );
 

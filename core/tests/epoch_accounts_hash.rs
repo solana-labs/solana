@@ -197,8 +197,6 @@ impl BackgroundServices {
             accounts_package_receiver,
             Some(snapshot_package_sender),
             exit.clone(),
-            cluster_info,
-            None,
             snapshot_config.clone(),
         );
 

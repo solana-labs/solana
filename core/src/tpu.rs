@@ -19,7 +19,7 @@ use {
     },
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver},
-    solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
@@ -156,11 +156,6 @@ impl Tpu {
             "quic_streamer_tpu",
             transactions_quic_sockets,
             keypair,
-            cluster_info
-                .my_contact_info()
-                .tpu(Protocol::QUIC)
-                .expect("Operator must spin up node with valid (QUIC) TPU address")
-                .ip(),
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,
@@ -180,11 +175,6 @@ impl Tpu {
             "quic_streamer_tpu_forwards",
             transactions_forwards_quic_sockets,
             keypair,
-            cluster_info
-                .my_contact_info()
-                .tpu_forwards(Protocol::QUIC)
-                .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
-                .ip(),
             forwarded_packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,

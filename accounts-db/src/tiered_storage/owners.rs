@@ -16,6 +16,10 @@ use {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OwnerOffset(pub u32);
 
+lazy_static! {
+    pub static ref OWNER_NO_OWNER: Pubkey = Pubkey::default();
+}
+
 /// Owner block holds a set of unique addresses of account owners,
 /// and an account meta has a owner_offset field for accessing
 /// it's owner address.
@@ -96,6 +100,16 @@ impl<'a> OwnersTable<'a> {
         let (offset, _existed) = self.owners_set.insert_full(pubkey);
 
         OwnerOffset(offset as u32)
+    }
+
+    /// Returns the number of unique owner addresses in the table.
+    pub fn len(&self) -> usize {
+        self.owners_set.len()
+    }
+
+    /// Returns true if the OwnersTable is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

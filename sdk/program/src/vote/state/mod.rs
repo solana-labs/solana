@@ -18,7 +18,7 @@ use {
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
-    bincode::{serialize_into, ErrorKind},
+    bincode::{serialize_into, serialized_size, ErrorKind},
     serde_derive::{Deserialize, Serialize},
     std::{collections::VecDeque, fmt::Debug, io::Cursor},
 };
@@ -399,6 +399,12 @@ impl VoteState {
         input: &[u8],
         vote_state: &mut VoteState,
     ) -> Result<(), InstructionError> {
+        let minimum_size =
+            serialized_size(vote_state).map_err(|_| InstructionError::InvalidAccountData)?;
+        if (input.len() as u64) < minimum_size {
+            return Err(InstructionError::InvalidAccountData);
+        }
+
         let mut cursor = Cursor::new(input);
 
         let variant = read_u32(&mut cursor)?;
@@ -410,7 +416,13 @@ impl VoteState {
             // Current. the only difference from V1_14_11 is the addition of a slot-latency to each vote
             2 => deserialize_vote_state_into(&mut cursor, vote_state, true),
             _ => Err(InstructionError::InvalidAccountData),
+        }?;
+
+        if cursor.position() > input.len() as u64 {
+            return Err(InstructionError::InvalidAccountData);
         }
+
+        Ok(())
     }
 
     pub fn serialize(
@@ -886,7 +898,7 @@ mod tests {
 
         // variant
         // provide 4x the minimum struct size in bytes to ensure we typically touch every field
-        let struct_bytes_x4 = std::mem::size_of::<u64>() * 4;
+        let struct_bytes_x4 = std::mem::size_of::<VoteState>() * 4;
         for _ in 0..1000 {
             let raw_data: Vec<u8> = (0..struct_bytes_x4).map(|_| rand::random::<u8>()).collect();
             let mut unstructured = Unstructured::new(&raw_data);
@@ -911,7 +923,7 @@ mod tests {
         assert_eq!(e, InstructionError::InvalidAccountData);
 
         // variant
-        let serialized_len_x4 = bincode::serialized_size(&test_vote_state).unwrap() * 4;
+        let serialized_len_x4 = serialized_size(&test_vote_state).unwrap() * 4;
         let mut rng = rand::thread_rng();
         for _ in 0..1000 {
             let raw_data_length = rng.gen_range(1..serialized_len_x4);
@@ -1262,7 +1274,7 @@ mod tests {
     fn test_vote_state_size_of() {
         let vote_state = VoteState::get_max_sized_vote_state();
         let vote_state = VoteStateVersions::new_current(vote_state);
-        let size = bincode::serialized_size(&vote_state).unwrap();
+        let size = serialized_size(&vote_state).unwrap();
         assert_eq!(VoteState::size_of() as u64, size);
     }
 

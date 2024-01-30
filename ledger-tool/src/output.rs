@@ -1,11 +1,20 @@
 use {
     crate::ledger_utils::get_program_ids,
     chrono::{Local, TimeZone},
-    serde::{Deserialize, Serialize},
-    solana_cli_output::{display::writeln_transaction, OutputFormat, QuietDisplay, VerboseDisplay},
+    serde::{
+        ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
+        Deserialize, Serialize,
+    },
+    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_cli_output::{
+        display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
+        VerboseDisplay,
+    },
     solana_entry::entry::Entry,
     solana_ledger::blockstore::Blockstore,
+    solana_runtime::bank::{Bank, TotalAccountsStats},
     solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
         clock::{Slot, UnixTimestamp},
         hash::Hash,
         native_token::lamports_to_sol,
@@ -15,10 +24,13 @@ use {
         EncodedConfirmedBlock, EncodedTransactionWithStatusMeta, EntrySummary, Rewards,
     },
     std::{
+        cell::RefCell,
         collections::HashMap,
         fmt::{self, Display, Formatter},
         io::{stdout, Write},
+        rc::Rc,
         result::Result,
+        sync::Arc,
     },
 };
 
@@ -546,5 +558,170 @@ pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
     program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
     for (program_id, count) in program_ids_array.iter() {
         println!("{:<44}: {}", program_id.to_string(), count);
+    }
+}
+
+/// A type to facilitate streaming account information to an output destination
+///
+/// This type scans every account, so streaming is preferred over the simpler
+/// approach of accumulating all the accounts into a Vec and printing or
+/// serializing the Vec directly.
+pub struct AccountsOutputStreamer {
+    account_scanner: AccountsScanner,
+    total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
+    output_format: OutputFormat,
+}
+
+pub struct AccountsOutputConfig {
+    pub include_sysvars: bool,
+    pub include_account_contents: bool,
+    pub include_account_data: bool,
+    pub account_data_encoding: UiAccountEncoding,
+}
+
+impl AccountsOutputStreamer {
+    pub fn new(bank: Arc<Bank>, output_format: OutputFormat, config: AccountsOutputConfig) -> Self {
+        let total_accounts_stats = Rc::new(RefCell::new(TotalAccountsStats::default()));
+        let account_scanner = AccountsScanner {
+            bank,
+            total_accounts_stats: total_accounts_stats.clone(),
+            config,
+        };
+        Self {
+            account_scanner,
+            total_accounts_stats,
+            output_format,
+        }
+    }
+
+    pub fn output(&self) -> Result<(), String> {
+        match self.output_format {
+            OutputFormat::Json | OutputFormat::JsonCompact => {
+                let mut serializer = serde_json::Serializer::new(stdout());
+                let mut struct_serializer = serializer
+                    .serialize_struct("accountInfo", 2)
+                    .map_err(|err| format!("unable to start serialization: {err}"))?;
+                struct_serializer
+                    .serialize_field("accounts", &self.account_scanner)
+                    .map_err(|err| format!("unable to serialize accounts scanner: {err}"))?;
+                struct_serializer
+                    .serialize_field("summary", &*self.total_accounts_stats.borrow())
+                    .map_err(|err| format!("unable to serialize accounts summary: {err}"))?;
+                SerializeStruct::end(struct_serializer)
+                    .map_err(|err| format!("unable to end serialization: {err}"))
+            }
+            _ => {
+                // The compiler needs a placeholder type to satisfy the generic
+                // SerializeSeq trait on AccountScanner::output(). The type
+                // doesn't really matter since we're passing None, so just use
+                // serde::ser::Impossible as it already implements SerializeSeq
+                self.account_scanner
+                    .output::<Impossible<(), serde_json::Error>>(&mut None);
+                println!("\n{:#?}", self.total_accounts_stats.borrow());
+                Ok(())
+            }
+        }
+    }
+}
+
+struct AccountsScanner {
+    bank: Arc<Bank>,
+    total_accounts_stats: Rc<RefCell<TotalAccountsStats>>,
+    config: AccountsOutputConfig,
+}
+
+impl AccountsScanner {
+    /// Returns true if this account should be included in the output
+    fn should_process_account(&self, account: &AccountSharedData, pubkey: &Pubkey) -> bool {
+        solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
+            && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
+    }
+
+    pub fn output<S>(&self, seq_serializer: &mut Option<S>)
+    where
+        S: SerializeSeq,
+    {
+        let mut total_accounts_stats = self.total_accounts_stats.borrow_mut();
+        let rent_collector = self.bank.rent_collector();
+
+        let cli_account_new_config = CliAccountNewConfig {
+            data_encoding: self.config.account_data_encoding,
+            ..CliAccountNewConfig::default()
+        };
+
+        let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+            if let Some((pubkey, account, slot)) = account_tuple
+                .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
+            {
+                total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
+                if self.config.include_account_contents {
+                    if let Some(serializer) = seq_serializer {
+                        let cli_account =
+                            CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
+                        serializer.serialize_element(&cli_account).unwrap();
+                    } else {
+                        output_account(
+                            pubkey,
+                            &account,
+                            Some(slot),
+                            self.config.include_account_data,
+                            self.config.account_data_encoding,
+                        );
+                    }
+                }
+            }
+        };
+
+        self.bank.scan_all_accounts(scan_func).unwrap();
+    }
+}
+
+impl Serialize for AccountsScanner {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq_serializer = Some(serializer.serialize_seq(None)?);
+        self.output(&mut seq_serializer);
+        seq_serializer.unwrap().end()
+    }
+}
+
+pub fn output_account(
+    pubkey: &Pubkey,
+    account: &AccountSharedData,
+    modified_slot: Option<Slot>,
+    print_account_data: bool,
+    encoding: UiAccountEncoding,
+) {
+    println!("{pubkey}:");
+    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
+    println!("  owner: '{}'", account.owner());
+    println!("  executable: {}", account.executable());
+    if let Some(slot) = modified_slot {
+        println!("  slot: {slot}");
+    }
+    println!("  rent_epoch: {}", account.rent_epoch());
+    println!("  data_len: {}", account.data().len());
+    if print_account_data {
+        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        match account_data {
+            UiAccountData::Binary(data, data_encoding) => {
+                println!("  data: '{data}'");
+                println!(
+                    "  encoding: {}",
+                    serde_json::to_string(&data_encoding).unwrap()
+                );
+            }
+            UiAccountData::Json(account_data) => {
+                println!(
+                    "  data: '{}'",
+                    serde_json::to_string(&account_data).unwrap()
+                );
+                println!("  encoding: \"jsonParsed\"");
+            }
+            UiAccountData::LegacyBinary(_) => {}
+        };
     }
 }

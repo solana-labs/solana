@@ -10989,8 +10989,7 @@ fn test_rent_state_list_len() {
         &bank.accounts().accounts_db,
         &bank.ancestors,
         &[sanitized_tx.clone()],
-        &[(Ok(()), None)],
-        &bank.blockhash_queue.read().unwrap(),
+        &[(Ok(()), None, Some(0))],
         &mut error_counters,
         &bank.rent_collector,
         &bank.feature_set,
@@ -11015,8 +11014,12 @@ fn test_rent_state_list_len() {
     );
 
     assert_eq!(
-        bank.get_transaction_account_state_info(&transaction_context, sanitized_tx.message())
-            .len(),
+        TransactionAccountStateInfo::new(
+            &bank.rent_collector.rent,
+            &transaction_context,
+            sanitized_tx.message()
+        )
+        .len(),
         num_accounts,
     );
 }
@@ -13723,8 +13726,6 @@ fn test_filter_executable_program_accounts() {
         &AccountSharedData::new(40, 1, &program2_pubkey),
     );
 
-    let mut hash_queue = BlockhashQueue::new(100);
-
     let tx1 = Transaction::new_with_compiled_instructions(
         &[&keypair1],
         &[non_program_pubkey1],
@@ -13732,7 +13733,6 @@ fn test_filter_executable_program_accounts() {
         vec![account1_pubkey, account2_pubkey, account3_pubkey],
         vec![CompiledInstruction::new(1, &(), vec![0])],
     );
-    hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
     let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
 
     let tx2 = Transaction::new_with_compiled_instructions(
@@ -13742,7 +13742,6 @@ fn test_filter_executable_program_accounts() {
         vec![account4_pubkey, account3_pubkey, account2_pubkey],
         vec![CompiledInstruction::new(1, &(), vec![0])],
     );
-    hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
     let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
     let ancestors = vec![(0, 0)].into_iter().collect();
@@ -13750,9 +13749,8 @@ fn test_filter_executable_program_accounts() {
     let programs = bank.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],
-        &mut [(Ok(()), None), (Ok(()), None)],
+        &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
         owners,
-        &hash_queue,
     );
 
     // The result should contain only account3_pubkey, and account4_pubkey as the program accounts
@@ -13822,8 +13820,6 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
         &AccountSharedData::new(40, 1, &program2_pubkey),
     );
 
-    let mut hash_queue = BlockhashQueue::new(100);
-
     let tx1 = Transaction::new_with_compiled_instructions(
         &[&keypair1],
         &[non_program_pubkey1],
@@ -13831,7 +13827,6 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
         vec![account1_pubkey, account2_pubkey, account3_pubkey],
         vec![CompiledInstruction::new(1, &(), vec![0])],
     );
-    hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
     let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
 
     let tx2 = Transaction::new_with_compiled_instructions(
@@ -13846,13 +13841,12 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
 
     let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
-    let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
+    let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
     let programs = bank.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],
         &mut lock_results,
         owners,
-        &hash_queue,
     );
 
     // The result should contain only account3_pubkey as the program accounts

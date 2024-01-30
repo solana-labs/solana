@@ -168,7 +168,7 @@ impl SchedulerController {
         let fee_check_results: Vec<_> = check_results
             .into_iter()
             .zip(transactions)
-            .map(|((result, _nonce), tx)| {
+            .map(|((result, _nonce, _lamports), tx)| {
                 result?; // if there's already error do nothing
                 Consumer::check_fee_payer_unlocked(bank, tx.message(), &mut error_counters)
             })
@@ -226,7 +226,7 @@ impl SchedulerController {
                 &mut error_counters,
             );
 
-            for ((result, _nonce), id) in check_results.into_iter().zip(chunk.iter()) {
+            for ((result, _nonce, _lamports), id) in check_results.into_iter().zip(chunk.iter()) {
                 if result.is_err() {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_age_and_status, 1);
                     self.container.remove_by_id(&id.id);

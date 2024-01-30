@@ -636,6 +636,7 @@ pub fn process_deploy_program(
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
+        signature: None,
     };
     Ok(config.output_format.formatted_string(&program_id))
 }
@@ -690,6 +691,7 @@ fn process_undeploy_program(
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
+        signature: None,
     };
     Ok(config.output_format.formatted_string(&program_id))
 }
@@ -716,6 +718,7 @@ fn process_finalize_program(
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
+        signature: None,
     };
     Ok(config.output_format.formatted_string(&program_id))
 }

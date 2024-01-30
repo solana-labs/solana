@@ -173,6 +173,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
+            None, // chained_merkle_root
             self.next_shred_index,
             self.next_code_index,
             false, // merkle_variant
@@ -190,6 +191,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     keypair,
                     &[original_last_entry],
                     true,
+                    None, // chained_merkle_root
                     self.next_shred_index,
                     self.next_code_index,
                     false, // merkle_variant
@@ -203,6 +205,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     keypair,
                     &duplicate_extra_last_entries,
                     true,
+                    None, // chained_merkle_root
                     self.next_shred_index,
                     self.next_code_index,
                     false, // merkle_variant

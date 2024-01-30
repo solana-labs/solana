@@ -776,7 +776,7 @@ impl ThreadLocalUnprocessedPackets {
             .iter()
             .enumerate()
             .filter_map(
-                |(tx_index, (result, _))| if result.is_ok() { Some(tx_index) } else { None },
+                |(tx_index, (result, _, _))| if result.is_ok() { Some(tx_index) } else { None },
             )
             .collect_vec()
     }

@@ -27,7 +27,7 @@ use {
         transport::Result as TransportResult,
     },
     solana_streamer::{
-        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_dummy_x509_certificate,
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -148,9 +148,7 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-                .expect("Failed to create QUIC client certificate");
+        let (cert, priv_key) = new_dummy_x509_certificate(&Keypair::new());
         Self::new(
             Arc::new(QuicClientCertificate {
                 certificate: cert,

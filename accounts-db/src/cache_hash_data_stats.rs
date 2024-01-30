@@ -15,6 +15,10 @@ pub struct CacheHashDataStats {
     pub load_us: AtomicU64,
     pub read_us: AtomicU64,
     pub unused_cache_files: AtomicUsize,
+    /// the number of hash data files that were found in the cache and reused
+    pub hits: AtomicUsize,
+    /// the number of hash data files that were not found in the cache
+    pub misses: AtomicUsize,
 }
 
 impl CacheHashDataStats {
@@ -69,6 +73,8 @@ impl CacheHashDataStats {
                 self.unused_cache_files.load(Ordering::Relaxed),
                 i64
             ),
+            ("hits", self.hits.load(Ordering::Relaxed), i64),
+            ("misses", self.misses.load(Ordering::Relaxed), i64),
         );
     }
 }
