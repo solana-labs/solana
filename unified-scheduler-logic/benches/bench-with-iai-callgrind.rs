@@ -156,7 +156,7 @@ fn bench_heaviest_task(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
 
     let mut b = std::collections::BTreeMap::new();
-    b.insert(task.unique_weight, task);
+    b.insert(task.unique_weight, task.clone());
     b.insert(task.unique_weight + 1, task.clone());
     b.insert(task.unique_weight + 2, task.clone());
     toggle_collect();
