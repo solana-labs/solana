@@ -9,6 +9,7 @@ use {
     static_assertions::const_assert_eq,
     std::{collections::BTreeMap, mem, sync::Arc},
 };
+use iai_callgrind::client_requests::callgrind::toggle_collect;
 
 #[derive(Clone, Debug)]
 enum LockStatus {
