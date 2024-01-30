@@ -300,7 +300,7 @@ impl SchedulingStateMachine {
         self.do_schedule_task(task, |_task| ())
     }
 
-    pub fn do_schedule_task(&mut self, task: Task, on_success: impl Fn(&Task) -> ()) -> Option<Task> {
+    pub fn do_schedule_task(&mut self, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         self.try_lock_for_task(TaskSource::Runnable, task, on_success)
