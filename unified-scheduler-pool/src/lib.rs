@@ -1038,7 +1038,7 @@ where
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
                                         state_machine.do_schedule_task(task, |task| {
-                                            idle_task_sender.send(task).unwrap();
+                                            idle_task_sender.send(task.clone()).unwrap();
                                         });
                                         "step"
                                     }
