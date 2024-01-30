@@ -92,11 +92,11 @@ impl FeeStructure {
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
-        for_test_only: u64,
+        test_fee_rate: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
-        if for_test_only == 0 {
+        if test_fee_rate == 0 {
             return 0;
         }
 
