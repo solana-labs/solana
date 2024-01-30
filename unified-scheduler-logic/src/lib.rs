@@ -233,26 +233,25 @@ impl PageInner {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_blocked_writing_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.writable_blocked_tasks.last_key_value()
+    fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
+        self.writable_blocked_tasks
+            .last_key_value()
+            .map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_readonly_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.readonly_blocked_tasks.last_key_value()
+    fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
+        self.readonly_blocked_tasks
+            .last_key_value()
+            .map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        Self::heavier_task(
-            self.heaviest_blocked_writing_task(),
-            self.heaviest_blocked_readonly_task(),
-        ).map(|x| x.1)
-    }
-
-    fn heavier_task<'a>(
-        x: Option<(&'a UniqueWeight, &'a Task)>,
-        y: Option<(&'a UniqueWeight, &'a Task)>,
-    ) -> Option<(&'a UniqueWeight, &'a Task)> {
-        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)))
+        let heaviest_writable = self.writable_blocked_tasks.last_key_value();
+        let heaviest_readable = self.readonly_blocked_tasks.last_key_value();
+        cmp::max_by(heaviest_writable, heaviest_readable, |x, y| {
+            x.map(|x| x.0).cmp(&y.map(|y| y.0))
+        })
+        .map(|x| x.1)
     }
 }
 
@@ -400,21 +399,19 @@ impl SchedulingStateMachine {
         };
 
         if matches!(lock_status, LockStatus::Succeded(_)) {
-            let w = page.heaviest_blocked_writing_task();
-            let r = page.heaviest_blocked_readonly_task();
-
             let no_heavier_other_tasks =
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
-                (PageInner::heavier_task(w, r)
-                    .map(|(&e_unique_weight, _)| this_unique_weight >= e_unique_weight)
+                (page
+                    .heaviest_blocked_task()
+                    .map(|existing_task| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
-                (matches!(requested_usage, RequestedUsage::Readonly) &&
-                    r
+                (matches!(requested_usage, RequestedUsage::Readonly) && page
+                    .heaviest_blocked_writing_task()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|(&existing_unique_weight, _)| this_unique_weight > existing_unique_weight)
+                    .map(|existing_task| this_unique_weight > existing_task.unique_weight)
                     .unwrap_or(true))
             ;
 
@@ -497,13 +494,12 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some((&heaviest_readonly_unique_weight, heaviest_readonly_task)) =
-                            read_only_lock_attempt
-                                .page_mut(&mut self.page_token)
-                                .heaviest_blocked_readonly_task()
+                        if let Some(heaviest_readonly_task) = read_only_lock_attempt
+                            .page_mut(&mut self.page_token)
+                            .heaviest_blocked_readonly_task()
                         {
                             self.retryable_task_queue
-                                .entry(heaviest_readonly_unique_weight)
+                                .entry(heaviest_readonly_task.unique_weight)
                                 .or_insert_with(|| heaviest_readonly_task.clone());
                         }
                     }
