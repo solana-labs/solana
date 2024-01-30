@@ -535,7 +535,7 @@ impl SchedulingStateMachine {
             .collect();
 
         Task::new(TaskInner {
-            unique_weight: index,
+            unique_weight: index as UniqueWeight,
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
