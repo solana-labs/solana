@@ -119,10 +119,12 @@ impl TaskStatus {
     }
 }
 
+/*
 #[cfg_attr(
     feature = "dev-context-only-utils",
     field_qualifiers(unique_weight(pub))
 )]
+*/
 #[derive(Debug)]
 pub struct TaskInner {
     transaction: SanitizedTransaction, // actually should be Bundle
