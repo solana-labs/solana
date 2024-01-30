@@ -80,44 +80,6 @@ impl FeeStructure {
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-        _lamports_per_signature: u64,
-        budget_limits: &FeeBudgetLimits,
-        include_loaded_account_data_size_in_fee: bool,
-    ) -> u64 {
-=======
-        lamports_per_signature: u64,
-        budget_limits: &FeeBudgetLimits,
-        include_loaded_account_data_size_in_fee: bool,
-    ) -> u64 {
-        self.calculate_fee_details(
-            message,
-            lamports_per_signature,
-            budget_limits,
-            include_loaded_account_data_size_in_fee,
-        )
-        .total_fee()
-    }
-
-    /// Calculate fee details for `SanitizedMessage`
-    #[cfg(not(target_os = "solana"))]
-    pub fn calculate_fee_details(
-        &self,
-        message: &SanitizedMessage,
-        _lamports_per_signature: u64,
-        budget_limits: &FeeBudgetLimits,
-        include_loaded_account_data_size_in_fee: bool,
-    ) -> FeeDetails {
->>>>>>> 15423928c1 (Revert "refactor unused parameter (#34970)")
-=======
-        _lamports_per_signature: u64,
-        budget_limits: &FeeBudgetLimits,
-        include_loaded_account_data_size_in_fee: bool,
-    ) -> u64 {
->>>>>>> df2ee120e9 (Revert "separate priority fee and transaction fee from fee calculation (#34757)")
-=======
         lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
@@ -129,7 +91,6 @@ impl FeeStructure {
             1.0 // multiplier that has no effect
         };
 
->>>>>>> 0dcac3fe7c (Revert "Remove congestion multiplier from calculate fee (#34865)")
         let signature_fee = message
             .num_signatures()
             .saturating_mul(self.lamports_per_signature);
