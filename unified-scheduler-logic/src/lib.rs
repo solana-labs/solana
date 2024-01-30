@@ -240,7 +240,7 @@ impl PageInner {
             .w_blocked_tasks
             .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Writable))
-            .1
+            .map(|a| a.0)
             /*
         let heaviest_readonly = self
             .r_blocked_tasks
