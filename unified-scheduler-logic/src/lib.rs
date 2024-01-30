@@ -245,7 +245,20 @@ impl PageInner {
             .first_key_value()
             .map(|(_, task)| task);
         //heaviest_writable
-        heaviest_writable.and(heaviest_readonly)
+        heaviest_writable.and_then(|w|
+            if let Some(r) = heaviest_readonly {
+                if r.unique_weight > w.unique_weight {
+                    Some(r)
+                } else {
+                    Some(w)
+                }
+            } else {
+                Some(w)
+            }
+        );
+
+
+//                                   heaviest_readonly)
 
         /*
         match &(heaviest_writable, heaviest_readonly) {
