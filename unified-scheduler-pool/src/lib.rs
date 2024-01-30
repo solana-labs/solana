@@ -905,7 +905,7 @@ where
 
         let send_metrics = env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
-        let (mut runnable_task_sender, runnable_task_receiver) =
+        let (mut blocked_task_sender, blocked_task_receiver) =
             chained_channel::unbounded::<Task, SchedulingContext>(context.clone());
         let (idle_task_sender, idle_task_receiver) = unbounded::<Task>();
         let (finished_task_sender, finished_task_receiver) = unbounded::<Box<ExecutedTask>>();
@@ -993,7 +993,7 @@ where
                             state_machine.reschedule_count(),
                             state_machine.rescheduled_task_count(),
                             new_task_receiver.len(),
-                            runnable_task_sender.len(), idle_task_sender.len(),
+                            blocked_task_sender.len(), idle_task_sender.len(),
                             finished_task_receiver.len(), finished_idle_task_receiver.len(),
                             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
                         );
@@ -1037,7 +1037,7 @@ where
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        state_machine.schedule_task(task| task {
+                                        state_machine.schedule_task(task, |task| {
                                             idle_task_sender.send(task).unwrap();
                                             task
                                         });
@@ -1045,7 +1045,7 @@ where
                                     }
                                     Ok(NewTaskPayload::OpenSubchannel(context)) => {
                                         slot = context.bank().slot();
-                                        runnable_task_sender
+                                        blocked_task_sender
                                             .send_chained_channel(context, handler_count)
                                             .unwrap();
                                         executed_task_sender
@@ -1074,11 +1074,12 @@ where
                             recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> dummy_result => {
                                 assert_matches!(dummy_result, Err(RecvError));
 
-                                if let Some(task) = state_machine.schedule_retryable_task() {
-                                    runnable_task_sender
+                                state_machine.schedule_retryable_task(|task| {
+                                    blocked_task_sender
                                         .send_payload(task)
                                         .unwrap();
-                                }
+                                    task
+                                });
                                 "step"
                             },
                             recv(finished_idle_task_receiver) -> executed_task => {
@@ -1146,7 +1147,7 @@ where
         let handler_main_loop = |thx| {
             let pool = self.pool.clone();
             let handler = self.handler.clone();
-            let mut runnable_task_receiver = runnable_task_receiver.clone();
+            let mut blocked_task_receiver = blocked_task_receiver.clone();
             let mut idle_task_receiver = idle_task_receiver.clone();
             let finished_task_sender = finished_task_sender.clone();
             let finished_idle_task_sender = finished_idle_task_sender.clone();
@@ -1159,10 +1160,10 @@ where
                 );
                 loop {
                     let (task, sender) = select_biased! {
-                        recv(runnable_task_receiver.for_select()) -> message => {
+                        recv(blocked_task_receiver.for_select()) -> message => {
                             match message {
                                 Ok(message) => {
-                                    if let Some(task) = runnable_task_receiver.after_select(message) {
+                                    if let Some(task) = blocked_task_receiver.after_select(message) {
                                         (task, &finished_task_sender)
                                     } else {
                                         continue;
@@ -1180,7 +1181,7 @@ where
                             }
                         },
                     };
-                    let bank = runnable_task_receiver.context().bank();
+                    let bank = blocked_task_receiver.context().bank();
                     let mut task = ExecutedTask::new_boxed(task, thx, bank.slot());
                     Self::execute_task_with_handler(
                         &handler,
