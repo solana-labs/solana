@@ -205,12 +205,15 @@ struct PageInner {
 }
 
 impl PageInner {
-    fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let b = match requested_usage {
+    fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) {
+        match requested_usage {
             RequestedUsage::Readonly => &mut self.r_blocked_tasks,
             RequestedUsage::Writable => &mut self.w_blocked_tasks,
         };
-        let pre_existed = b.insert(task.unique_weight, task);
+    }
+
+    fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
+        let pre_existed = self.blocked_tasks_mut(requested_usage).insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
 
@@ -219,11 +222,7 @@ impl PageInner {
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let b = match requested_usage {
-            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
-            RequestedUsage::Writable => &mut self.w_blocked_tasks,
-        };
-        let removed_entry = b.remove(&unique_weight);
+        let removed_entry = self.blocked_tasks_mut(requested_usage).remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
