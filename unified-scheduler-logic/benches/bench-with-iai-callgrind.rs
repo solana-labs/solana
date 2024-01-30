@@ -18,7 +18,6 @@ use {
         transaction::{SanitizedTransaction, Transaction},
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
-    std::hint::black_box,
 };
 
 #[library_benchmark]
