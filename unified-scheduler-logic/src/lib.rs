@@ -297,7 +297,7 @@ impl SchedulingStateMachine {
         self.schedule_task(task, |_task| ())
     }
 
-    pub fn schedule_task(&mut self, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
+    pub fn schedule_task<R>(&mut self, task: Task, on_success: impl Fn(&Task) -> R) -> Option<R> {
         let task = self.try_lock_for_task(TaskSource::Runnable, task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -317,7 +317,7 @@ impl SchedulingStateMachine {
         self.schedule_retryable_task(|_task| ())
     }
 
-    pub fn schedule_retryable_task(&mut self, on_success: impl Fn(&Task)) -> Option<Task> {
+    pub fn schedule_retryable_task<R>(&mut self, on_success: impl Fn(&Task) -> R) -> Option<R> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
@@ -438,11 +438,11 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task(
+    fn try_lock_for_task<R>(
         &mut self,
         task_source: TaskSource,
         task: Task,
-        on_success: impl Fn(&Task),
+        on_success: impl Fn(&Task) -> R,
     ) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
@@ -461,7 +461,7 @@ impl SchedulingStateMachine {
 
             None
         } else {
-            on_success(&task);
+            let r = on_success(&task);
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
@@ -489,7 +489,7 @@ impl SchedulingStateMachine {
                 }
                 TaskSource::Runnable => {}
             }
-            Some(task)
+            Some(r)
         }
     }
 
