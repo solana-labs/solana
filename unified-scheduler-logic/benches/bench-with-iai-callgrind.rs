@@ -19,6 +19,7 @@ use {
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
 };
+use std::hint::black_box;
 
 #[library_benchmark]
 #[bench::min(0)]
