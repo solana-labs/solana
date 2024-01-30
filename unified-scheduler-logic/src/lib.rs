@@ -297,7 +297,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        self.do_schedule_task(task, |task| task)
+        self.do_schedule_task(task, |task| ())
     }
 
     pub fn do_schedule_task(&mut self, task: Task, on_success: impl Fn(Task) -> ()) -> Option<Task> {
@@ -315,7 +315,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_retryable_task(&mut self) -> Option<Task> {
-        self.do_schedule_retryable_task(|task| task)
+        self.do_schedule_retryable_task(|task| ())
     }
 
     pub fn do_schedule_retryable_task(&mut self, on_success: impl Fn(Task) -> ()) -> Option<Task> {
