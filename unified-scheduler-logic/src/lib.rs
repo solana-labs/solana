@@ -242,7 +242,7 @@ impl PageInner {
         let e = self
             .r_blocked_tasks
             .first_key_value().map(|(a, b)| (Reverse(a), b));
-        std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).unwrap_or(&UniqueWeight::max_value()).cmp(&y.map(|y| y.0).unwrap_or(&UniqueWeight::max_value()))).map(|x| x.1)
+        std::cmp::max_by(d, e, |x, y| x.map(|x| x.0)).cmp(&y.map(|y| y.0)).map(|x| x.1)
         /*
         (match (d, e) {
             (None, None) => None,
