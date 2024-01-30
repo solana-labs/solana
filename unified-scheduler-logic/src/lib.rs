@@ -243,7 +243,7 @@ impl PageInner {
         let e = self
             .r_blocked_tasks
             .first_key_value();
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1);
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
 
