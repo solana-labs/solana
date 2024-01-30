@@ -58,8 +58,10 @@ fn bench_schedule_task(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     toggle_collect();
-    let task = scheduler.schedule_task(task).unwrap();
-    toggle_collect();
+    let task = scheduler.do_schedule_task(task, |task| {
+        toggle_collect();
+        task
+    }).unwrap();
     drop(task);
 }
 
