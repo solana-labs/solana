@@ -18,8 +18,8 @@ use {
         transaction::{SanitizedTransaction, Transaction},
     },
     solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
+    std::hint::black_box,
 };
-use std::hint::black_box;
 
 #[library_benchmark]
 #[bench::min(0)]
@@ -58,9 +58,11 @@ fn bench_schedule_task(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     toggle_collect();
-    let task = scheduler.schedule_task(task, |_task| {
-        toggle_collect();
-    }).unwrap();
+    let task = scheduler
+        .schedule_task(task, |_task| {
+            toggle_collect();
+        })
+        .unwrap();
     drop(task);
 }
 
@@ -367,9 +369,11 @@ fn bench_schedule_retryable_task(account_count: usize) {
     assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
     toggle_collect();
-    let retried_task = scheduler.schedule_retryable_task(|_task| {
-        toggle_collect();
-    }).unwrap();
+    let retried_task = scheduler
+        .schedule_retryable_task(|_task| {
+            toggle_collect();
+        })
+        .unwrap();
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }

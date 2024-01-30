@@ -236,12 +236,8 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let d = self
-            .w_blocked_tasks
-            .last_key_value();
-        let e = self
-            .r_blocked_tasks
-            .last_key_value();
+        let d = self.w_blocked_tasks.last_key_value();
+        let e = self.r_blocked_tasks.last_key_value();
         std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
@@ -440,7 +436,12 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
+    fn try_lock_for_task(
+        &mut self,
+        task_source: TaskSource,
+        task: Task,
+        on_success: impl Fn(&Task),
+    ) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let lock_count = Self::attempt_lock_for_execution(
