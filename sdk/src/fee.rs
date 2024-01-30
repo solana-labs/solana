@@ -80,10 +80,35 @@ impl FeeStructure {
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
+<<<<<<< HEAD
         _lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
+=======
+        lamports_per_signature: u64,
+        budget_limits: &FeeBudgetLimits,
+        include_loaded_account_data_size_in_fee: bool,
+    ) -> u64 {
+        self.calculate_fee_details(
+            message,
+            lamports_per_signature,
+            budget_limits,
+            include_loaded_account_data_size_in_fee,
+        )
+        .total_fee()
+    }
+
+    /// Calculate fee details for `SanitizedMessage`
+    #[cfg(not(target_os = "solana"))]
+    pub fn calculate_fee_details(
+        &self,
+        message: &SanitizedMessage,
+        _lamports_per_signature: u64,
+        budget_limits: &FeeBudgetLimits,
+        include_loaded_account_data_size_in_fee: bool,
+    ) -> FeeDetails {
+>>>>>>> 15423928c1 (Revert "refactor unused parameter (#34970)")
         let signature_fee = message
             .num_signatures()
             .saturating_mul(self.lamports_per_signature);
