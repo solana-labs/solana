@@ -233,25 +233,23 @@ impl PageInner {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
+    fn heaviest_blocked_writing_task(&self) -> Option<&(UniqueWeight, Task)> {
         self.writable_blocked_tasks
             .last_key_value()
-            .map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
+    fn heaviest_blocked_readonly_task(&self) -> Option<&(UniqueWeight, Task)> {
         self.readonly_blocked_tasks
             .last_key_value()
-            .map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_task(&self) -> Option<&Task> {
+    fn heaviest_blocked_task(&self) -> Option<&(UniqueWeight, Task)> {
         Self::heavier_task(self.heaviest_blocked_writing_task(), self.heaviest_blocked_readonly_task())
     }
 
-    fn heavier_task<'a>(x: Option<&'a Task>, y: Option<&'a Task>) -> Option<&'a Task> {
+    fn heavier_task<'a>(x: Option<&'a (UniqueWeight, Task)>, y: Option<&'a (UniqueWeight, Task)>) -> Option<&'a (UniqueWeight, Task)> {
         cmp::max_by(x, y, |x, y| {
-            x.map(|x| x.unique_weight).cmp(&y.map(|y| y.unique_weight))
+            x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight))
         })
     }
 }
