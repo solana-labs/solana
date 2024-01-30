@@ -10998,7 +10998,6 @@ fn test_rent_state_list_len() {
         RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
-        true,
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
