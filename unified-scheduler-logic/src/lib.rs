@@ -242,11 +242,11 @@ impl PageInner {
             .r_blocked_tasks
             .first_key_value();
         //std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).unwrap_or(&UniqueWeight::max_value()).cmp(&y.map(|y| y.0).unwrap_or(&UniqueWeight::max_value()))).map(|x| x.1)
-        match (d, e) {
+        (match (d, e) {
             (None, None) => None,
             (None, Some(a)) | (Some(a), None) => Some(a),
             (Some(x), Some(y)) => std::cmp::min_by(x, y, |xx, yy| x.0.cmp(yy.0)),
-        }
+        }).map(|z| z.1)
     }
 }
 
