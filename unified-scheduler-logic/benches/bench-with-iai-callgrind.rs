@@ -167,9 +167,10 @@ fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
     let d = black_box(b.first_key_value()).map(|(_, task)| task);
     let e = black_box(c.first_key_value()).map(|(_, task)| task);
+    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.unique_weight).cmp(&y.map(|y| y.unique_weight)));
     toggle_collect();
 
-    drop((d, e));
+    drop((d, e, f));
     drop(b);
 }
 
