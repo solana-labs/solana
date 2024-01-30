@@ -407,7 +407,7 @@ impl SchedulingStateMachine {
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
                 (PageInner::heavier_task(w, r)
-                    .map(|(e_unique_weight, _)| this_unique_weight >= e_unique_weight)
+                    .map(|(&e_unique_weight, _)| this_unique_weight >= e_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) &&
