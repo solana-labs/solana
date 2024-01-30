@@ -311,12 +311,12 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.clear()
     }
 
-    pub fn schedule_retryable_task(&mut self) -> Option<Task> {
+    pub fn schedule_retryable_task<R>(&mut self, f: impl Fn(Task) -> R) -> Option<R> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
-                self.try_lock_for_task(TaskSource::Retryable, task)
+                self.try_lock_for_task(TaskSource::Retryable, task, f)
             })
             .map(|task| {
                 self.rescheduled_task_count.increment_self();
