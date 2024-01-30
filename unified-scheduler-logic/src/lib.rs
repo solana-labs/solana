@@ -239,8 +239,7 @@ impl PageInner {
         let heaviest_writable = self
             .w_blocked_tasks
             .first_key_value()
-            .map(|(_, task)| (task, RequestedUsage::Writable))
-            .map(|a| a.0);
+            .map(|(_, task)| task);
         let heaviest_readonly = self
             .r_blocked_tasks
             .first_key_value()
