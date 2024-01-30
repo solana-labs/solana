@@ -240,14 +240,11 @@ impl PageInner {
         let d = self
             .w_blocked_tasks
             .first_key_value().map(|x| x.1);
-        d
-        /*
         let e = self
             .r_blocked_tasks
             .first_key_value();
         //heaviest_writable
         std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
-        */
     }
 }
 
