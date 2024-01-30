@@ -63,7 +63,6 @@ fn bench_schedule_task(account_count: usize) {
             toggle_collect();
         })
         .unwrap();
-    drop(task);
 }
 
 #[library_benchmark]
@@ -179,7 +178,6 @@ fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
     dbg!(f);
 
-    drop((d, e, f));
     drop(b);
 }
 
