@@ -244,9 +244,6 @@ impl PageInner {
             .r_blocked_tasks
             .first_key_value()
             .map(|(_, task)| task);
-        heaviest_writable
-            /*
-
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a),
@@ -254,7 +251,6 @@ impl PageInner {
                 Some(std::cmp::min_by(a, b, |w, r| w.unique_weight.cmp(&r.unique_weight)))
             }
         }
-        */
     }
 }
 
