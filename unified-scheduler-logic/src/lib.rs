@@ -298,10 +298,10 @@ impl SchedulingStateMachine {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_task_for_test(&mut self, task: Task) -> Option<Task> {
-        self.do_schedule_task(task, |_task| ())
+        self.schedule_task(task, |_task| ())
     }
 
-    pub fn do_schedule_task(&mut self, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
+    pub fn schedule_task(&mut self, task: Task, on_success: impl Fn(&Task)) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         self.try_lock_for_task(TaskSource::Runnable, task, on_success)
@@ -317,10 +317,10 @@ impl SchedulingStateMachine {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
-        self.do_schedule_retryable_task(|_task| ())
+        self.schedule_retryable_task(|_task| ())
     }
 
-    pub fn do_schedule_retryable_task(&mut self, on_success: impl Fn(&Task)) -> Option<Task> {
+    pub fn schedule_retryable_task(&mut self, on_success: impl Fn(&Task)) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
