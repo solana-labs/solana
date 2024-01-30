@@ -318,7 +318,7 @@ impl SchedulingStateMachine {
         self.do_schedule_retryable_task(|_task| ())
     }
 
-    pub fn do_schedule_retryable_task(&mut self, on_success: impl Fn(&Task) -> ()) -> Option<Task> {
+    pub fn do_schedule_retryable_task(&mut self, on_success: impl Fn(&Task)) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
