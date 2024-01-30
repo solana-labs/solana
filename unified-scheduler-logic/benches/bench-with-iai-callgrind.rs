@@ -60,7 +60,6 @@ fn bench_schedule_task(account_count: usize) {
     toggle_collect();
     let task = scheduler.do_schedule_task(task, |task| {
         toggle_collect();
-        task
     }).unwrap();
     drop(task);
 }
