@@ -32,8 +32,12 @@ use std::hint::black_box;
 fn bench_schedule_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..account_count {
-        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    for i in 0..account_count {
+        if i % 2 == 0 {
+            accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+        } else {
+            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        }
     }
 
     let payer = Keypair::new();
