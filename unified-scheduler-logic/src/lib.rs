@@ -236,10 +236,11 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let heaviest_writable = self
+        self
             .w_blocked_tasks
             .first_key_value()
-            .map(|(_, task)| task);
+            .map(|(_, task)| task)
+            /*
         let heaviest_readonly = self
             .r_blocked_tasks
             .first_key_value()
@@ -252,6 +253,7 @@ impl PageInner {
                 Some(std::cmp::min_by(a, b, |w, r| w.unique_weight.cmp(&r.unique_weight)))
             }
         }
+        */
     }
 }
 
