@@ -254,7 +254,7 @@ impl PageInner {
                 Some(a)
             }
         };
-        c.take()
+        c.take().copied()
     }
 }
 
