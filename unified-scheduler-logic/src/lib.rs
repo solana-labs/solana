@@ -233,7 +233,7 @@ impl PageInner {
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_blocked_writing_task(&self) -> Option<(&UniqueWeight, &Task)> {
+    fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
         self.writable_blocked_tasks.last_key_value()
     }
 
@@ -243,7 +243,7 @@ impl PageInner {
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         Self::heavier_task(
-            self.heaviest_blocked_writing_task(),
+            self.heaviest_blocked_writable_task(),
             self.heaviest_blocked_readonly_task(),
         ).map(|x| x.1)
     }
@@ -400,7 +400,7 @@ impl SchedulingStateMachine {
         };
 
         if matches!(lock_status, LockStatus::Succeded(_)) {
-            let w = page.heaviest_blocked_writing_task();
+            let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
 
             let no_heavier_other_tasks =
