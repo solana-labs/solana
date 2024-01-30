@@ -236,16 +236,17 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        self
+        let heaviest_writable = self
             .w_blocked_tasks
             .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Writable))
             .map(|a| a.0)
-            /*
         let heaviest_readonly = self
             .r_blocked_tasks
             .first_key_value()
             .map(|(_, task)| task);
+        heaviest_writable
+            /*
 
         match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
