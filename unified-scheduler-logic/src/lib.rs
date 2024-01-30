@@ -240,13 +240,13 @@ impl PageInner {
         let d = self
             .w_blocked_tasks
             .first_key_value()
-            .map(|(_, task)| task);
+            .map(|(_, task)| (task, RequestedUsage::Writable));
         let e = self
             .r_blocked_tasks
             .first_key_value()
-            .map(|(_, task)| task);
+            .map(|(_, task)| (task, RequestedUsage::Readonly));
         //heaviest_writable
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.unique_weight).cmp(&y.map(|y| y.unique_weight)))
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight)))
     }
 }
 
