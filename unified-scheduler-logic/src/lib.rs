@@ -145,9 +145,7 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        UniqueWeight::max_value()
-            .checked_sub(self.unique_weight)
-            .unwrap() as usize
+        self.unique_weight
     }
 }
 
@@ -536,12 +534,8 @@ impl SchedulingStateMachine {
             })
             .collect();
 
-        let unique_weight = UniqueWeight::max_value()
-            .checked_sub(index as UniqueWeight)
-            .unwrap();
-
         Task::new(TaskInner {
-            unique_weight,
+            unique_weight: index,
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
