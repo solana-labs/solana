@@ -169,9 +169,9 @@ fn bench_heaviest_task(account_count: usize) {
     c.insert(task.unique_weight + 5, task.clone());
 
     toggle_collect();
-    let d = b.first_key_value().map(|(_, task)| task);
-    let e = c.first_key_value().map(|(_, task)| task);
-    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.unique_weight).cmp(&y.map(|y| y.unique_weight)));
+    let d = b.first_key_value();
+    let e = c.first_key_value();
+    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)));
     assert_matches!(f.map(|f| f.task_index()), Some(0));
     toggle_collect();
     dbg!(f);
