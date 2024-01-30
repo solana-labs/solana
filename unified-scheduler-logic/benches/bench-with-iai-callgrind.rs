@@ -383,7 +383,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
 fn bench_deschedule_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
-    for _ in 0..account_count {
+    for i in 0..account_count {
         if i % 2 == 0 {
             accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
         } else {
