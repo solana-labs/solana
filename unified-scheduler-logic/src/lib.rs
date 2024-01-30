@@ -255,7 +255,7 @@ impl PageInner {
             } else {
                 Some(w)
             }
-        );
+        )
 
 
 //                                   heaviest_readonly)
