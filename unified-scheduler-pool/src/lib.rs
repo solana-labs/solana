@@ -1037,7 +1037,7 @@ where
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        state_machine.schedule_task(task, |task| {
+                                        state_machine.do_schedule_task(task, |task| {
                                             idle_task_sender.send(task).unwrap();
                                             task
                                         });
