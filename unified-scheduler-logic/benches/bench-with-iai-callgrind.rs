@@ -160,9 +160,9 @@ fn bench_heaviest_task(account_count: usize) {
     b.insert(task.unique_weight + 1, task.clone());
     b.insert(task.unique_weight + 2, task.clone());
     let mut c = std::collections::BTreeMap::new();
-    c.insert(task.unique_weight, task.clone());
-    c.insert(task.unique_weight + 1, task.clone());
-    c.insert(task.unique_weight + 2, task.clone());
+    c.insert(task.unique_weight + 3, task.clone());
+    c.insert(task.unique_weight + 4, task.clone());
+    c.insert(task.unique_weight + 5, task.clone());
 
     toggle_collect();
     let d = black_box(b.last_key_value()).map(|(_, task)| task);
