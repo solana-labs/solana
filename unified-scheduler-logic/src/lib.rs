@@ -145,7 +145,7 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        self.unique_weight
+        self.unique_weight as usize
     }
 }
 
