@@ -315,7 +315,11 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.clear()
     }
 
-    pub fn schedule_retryable_task<R>(&mut self, f: impl Fn(Task) -> R) -> Option<R> {
+    pub fn schedule_retryable_task(&mut self) -> Option<Task> {
+        self.do_schedule_retryable_task(|task| task)
+    }
+
+    pub fn do_schedule_retryable_task<R>(&mut self, f: impl Fn(Task) -> R) -> Option<R> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
