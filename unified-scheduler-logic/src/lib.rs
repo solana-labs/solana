@@ -250,8 +250,8 @@ impl PageInner {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a),
             (Some(a), Some(b)) => {
-                //Some(std::cmp::min_by(a, b, |w, r| w.unique_weight.cmp(&r.unique_weight)))
-                Some(a)
+                Some(std::cmp::min_by(a, b, |w, r| w.unique_weight.cmp(&r.unique_weight)))
+                //Some(a)
             }
         };
         c.take().copied()
