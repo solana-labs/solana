@@ -658,7 +658,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-    ) {
+    ) -> StoredAccountsInfo {
         let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
             res,
@@ -669,6 +669,13 @@ impl Accounts {
         );
         self.accounts_db
             .store_cached_inline_update_index((slot, &accounts_to_store[..]), Some(&transactions));
+        StoredAccountsInfo {
+            count: accounts_to_store.len() as u64,
+            data_bytes: accounts_to_store
+                .iter()
+                .map(|(_, account)| account.data().len() as u64)
+                .sum(),
+        }
     }
 
     pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
@@ -754,6 +761,15 @@ impl Accounts {
         }
         (accounts, transactions)
     }
+}
+
+/// Supplemental information gathered during store_cached()
+#[derive(Debug, Default)]
+pub struct StoredAccountsInfo {
+    /// The number of accounts stored
+    pub count: u64,
+    /// The sum of accounts data stored, in bytes
+    pub data_bytes: u64,
 }
 
 fn prepare_if_nonce_account(

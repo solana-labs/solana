@@ -38,6 +38,15 @@ use {
     std::{collections::HashMap, num::NonZeroUsize},
 };
 
+/// Supplemental information gathered during load_accounts()
+#[derive(Debug, Default)]
+pub struct LoadedAccountsInfo {
+    /// The number of accounts loaded
+    pub count: u64,
+    /// The sum of accounts data loaded, in bytes
+    pub data_bytes: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn load_accounts(
     accounts_db: &AccountsDb,
@@ -52,8 +61,10 @@ pub(crate) fn load_accounts(
     in_reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-) -> Vec<TransactionLoadResult> {
-    txs.iter()
+) -> (Vec<TransactionLoadResult>, LoadedAccountsInfo) {
+    let mut loaded_accounts_info = LoadedAccountsInfo::default();
+    let loaded_transaction_results = txs
+        .iter()
         .zip(lock_results)
         .map(|etx| match etx {
             (tx, (Ok(()), nonce, lamports_per_signature)) => {
@@ -74,22 +85,23 @@ pub(crate) fn load_accounts(
                 };
 
                 // load transactions
-                let loaded_transaction = match load_transaction_accounts(
-                    accounts_db,
-                    ancestors,
-                    tx,
-                    fee,
-                    error_counters,
-                    rent_collector,
-                    feature_set,
-                    account_overrides,
-                    in_reward_interval,
-                    program_accounts,
-                    loaded_programs,
-                ) {
-                    Ok(loaded_transaction) => loaded_transaction,
-                    Err(e) => return (Err(e), None),
-                };
+                let (loaded_transaction, loaded_transaction_accounts_info) =
+                    match load_transaction_accounts(
+                        accounts_db,
+                        ancestors,
+                        tx,
+                        fee,
+                        error_counters,
+                        rent_collector,
+                        feature_set,
+                        account_overrides,
+                        in_reward_interval,
+                        program_accounts,
+                        loaded_programs,
+                    ) {
+                        Ok(loaded_transaction) => loaded_transaction,
+                        Err(e) => return (Err(e), None),
+                    };
 
                 // Update nonce with fee-subtracted accounts
                 let nonce = if let Some(nonce) = nonce {
@@ -106,11 +118,22 @@ pub(crate) fn load_accounts(
                     None
                 };
 
+                loaded_accounts_info.count += loaded_transaction.accounts.len() as u64;
+                loaded_accounts_info.data_bytes += loaded_transaction_accounts_info.data_bytes;
                 (Ok(loaded_transaction), nonce)
             }
             (_, (Err(e), _nonce, _lamports_per_signature)) => (Err(e.clone()), None),
         })
-        .collect()
+        .collect();
+
+    (loaded_transaction_results, loaded_accounts_info)
+}
+
+/// Supplemental information gathered during load_transaction_accounts()
+#[derive(Debug, Default)]
+pub struct LoadedTransactionAccountsInfo {
+    /// The sum of accounts data loaded, in bytes
+    pub data_bytes: u64,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -126,7 +149,7 @@ fn load_transaction_accounts(
     reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-) -> Result<LoadedTransaction> {
+) -> Result<(LoadedTransaction, LoadedTransactionAccountsInfo)> {
     let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
     // NOTE: this check will never fail because `tx` is sanitized
@@ -150,6 +173,7 @@ fn load_transaction_accounts(
     let requested_loaded_accounts_data_size_limit =
         get_requested_loaded_accounts_data_size_limit(tx)?;
     let mut accumulated_accounts_data_size: usize = 0;
+    let mut loaded_transaction_accounts_info = LoadedTransactionAccountsInfo::default();
 
     let instruction_accounts = message
         .instructions()
@@ -235,6 +259,7 @@ fn load_transaction_accounts(
                     requested_loaded_accounts_data_size_limit,
                     error_counters,
                 )?;
+                loaded_transaction_accounts_info.data_bytes += account_size as u64;
 
                 if !validated_fee_payer && message.is_non_loader_key(i) {
                     if i != 0 {
@@ -340,6 +365,8 @@ fn load_transaction_accounts(
                         requested_loaded_accounts_data_size_limit,
                         error_counters,
                     )?;
+                    loaded_transaction_accounts_info.data_bytes +=
+                        owner_account.data().len() as u64;
                     accounts.push((*owner_id, owner_account));
                 } else {
                     error_counters.account_not_found += 1;
@@ -352,12 +379,15 @@ fn load_transaction_accounts(
         })
         .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
-    Ok(LoadedTransaction {
-        accounts,
-        program_indices,
-        rent: tx_rent,
-        rent_debits,
-    })
+    Ok((
+        LoadedTransaction {
+            accounts,
+            program_indices,
+            rent: tx_rent,
+            rent_debits,
+        },
+        loaded_transaction_accounts_info,
+    ))
 }
 
 /// Total accounts data a transaction can load is limited to
@@ -539,6 +569,7 @@ mod tests {
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )
+        .0
     }
 
     /// get a feature set with all features activated
@@ -1013,6 +1044,7 @@ mod tests {
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )
+        .0
     }
 
     #[test]

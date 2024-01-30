@@ -5357,7 +5357,7 @@ impl Bank {
         ));
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_transactions = load_accounts(
+        let (mut loaded_transactions, loaded_accounts_info) = load_accounts(
             &self.rc.accounts.accounts_db,
             &self.ancestors,
             sanitized_txs,
@@ -5455,6 +5455,11 @@ impl Bank {
         );
 
         timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::LoadCount, loaded_accounts_info.count);
+        timings.saturating_add_in_place(
+            ExecuteTimingType::LoadDataBytes,
+            loaded_accounts_info.data_bytes,
+        );
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         LoadAndExecuteSanitizedTransactionsOutput {
@@ -5631,7 +5636,7 @@ impl Bank {
 
         let mut write_time = Measure::start("write_time");
         let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
-        self.rc.accounts.store_cached(
+        let stored_accounts_info = self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
             &execution_results,
@@ -5689,6 +5694,11 @@ impl Bank {
         self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
+        timings.saturating_add_in_place(ExecuteTimingType::StoreCount, stored_accounts_info.count);
+        timings.saturating_add_in_place(
+            ExecuteTimingType::StoreDataBytes,
+            stored_accounts_info.data_bytes,
+        );
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateStakesCacheUs,
             update_stakes_cache_time.as_us(),
