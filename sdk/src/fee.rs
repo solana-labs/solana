@@ -81,6 +81,7 @@ impl FeeStructure {
         &self,
         message: &SanitizedMessage,
 <<<<<<< HEAD
+<<<<<<< HEAD
         _lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
@@ -109,6 +110,12 @@ impl FeeStructure {
         include_loaded_account_data_size_in_fee: bool,
     ) -> FeeDetails {
 >>>>>>> 15423928c1 (Revert "refactor unused parameter (#34970)")
+=======
+        _lamports_per_signature: u64,
+        budget_limits: &FeeBudgetLimits,
+        include_loaded_account_data_size_in_fee: bool,
+    ) -> u64 {
+>>>>>>> df2ee120e9 (Revert "separate priority fee and transaction fee from fee calculation (#34757)")
         let signature_fee = message
             .num_signatures()
             .saturating_mul(self.lamports_per_signature);
