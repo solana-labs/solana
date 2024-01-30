@@ -238,11 +238,11 @@ impl PageInner {
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let d = self
-            .w_blocked_tasks
+            .r_blocked_tasks
             .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Writable));
         let e = self
-            .r_blocked_tasks
+            .w_blocked_tasks
             .first_key_value()
             .map(|(_, task)| (task, RequestedUsage::Readonly));
         //heaviest_writable
