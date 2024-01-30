@@ -234,23 +234,25 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.writable_blocked_tasks
-            .last_key_value()
+        self.writable_blocked_tasks.last_key_value()
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.readonly_blocked_tasks
-            .last_key_value()
+        self.readonly_blocked_tasks.last_key_value()
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        Self::heavier_task(self.heaviest_blocked_writing_task(), self.heaviest_blocked_readonly_task())
+        Self::heavier_task(
+            self.heaviest_blocked_writing_task(),
+            self.heaviest_blocked_readonly_task(),
+        )
     }
 
-    fn heavier_task<'a>(x: Option<(&'a UniqueWeight, &'a Task)>, y: Option<(&'a UniqueWeight, &'a Task)>) -> Option<(&'a UniqueWeight, &'a Task)> {
-        cmp::max_by(x, y, |x, y| {
-            x.map(|x| x.0).cmp(&y.map(|y| y.0))
-        })
+    fn heavier_task<'a>(
+        x: Option<(&'a UniqueWeight, &'a Task)>,
+        y: Option<(&'a UniqueWeight, &'a Task)>,
+    ) -> Option<(&'a UniqueWeight, &'a Task)> {
+        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)))
     }
 }
 
@@ -493,9 +495,10 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some((&heaviest_readonly_unique_weight, heaviest_readonly_task)) = read_only_lock_attempt
-                            .page_mut(&mut self.page_token)
-                            .heaviest_blocked_readonly_task()
+                        if let Some((&heaviest_readonly_unique_weight, heaviest_readonly_task)) =
+                            read_only_lock_attempt
+                                .page_mut(&mut self.page_token)
+                                .heaviest_blocked_readonly_task()
                         {
                             self.retryable_task_queue
                                 .entry(heaviest_readonly_unique_weight)
