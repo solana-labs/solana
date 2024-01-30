@@ -449,7 +449,7 @@ impl SchedulingStateMachine {
 
             None
         } else {
-            let r = f(task);
+            let r = f(task.clone());
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
