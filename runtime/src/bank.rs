@@ -5370,7 +5370,6 @@ impl Bank {
             self.get_reward_interval(),
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
-            self.should_collect_rent(),
         );
         load_time.stop();
 
