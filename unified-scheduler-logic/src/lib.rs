@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
 
             None
         } else {
-            let r = on_success(&task);
+            let ret = on_success(&task);
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
@@ -488,7 +488,7 @@ impl SchedulingStateMachine {
                 }
                 TaskSource::Runnable => {}
             }
-            Some(r)
+            Some(ret)
         }
     }
 
