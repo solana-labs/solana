@@ -245,7 +245,7 @@ impl PageInner {
         (match (d, e) {
             (None, None) => None,
             (None, Some(a)) | (Some(a), None) => Some(a),
-            (Some(x), Some(y)) => std::cmp::min_by(x, y, |xx, yy| x.0.cmp(yy.0)),
+            (Some(x), Some(y)) => Some(std::cmp::min_by(x, y, |xx, yy| x.0.cmp(yy.0))),
         }).map(|z| z.1)
     }
 }
