@@ -92,12 +92,13 @@ impl FeeStructure {
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
-        _unused: u64,
+        lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
         self.calculate_fee_details(
             message,
+            lamports_per_signature,
             budget_limits,
             include_loaded_account_data_size_in_fee,
         )
@@ -109,6 +110,7 @@ impl FeeStructure {
     pub fn calculate_fee_details(
         &self,
         message: &SanitizedMessage,
+        _lamports_per_signature: u64,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
     ) -> FeeDetails {
