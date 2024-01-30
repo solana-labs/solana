@@ -171,7 +171,7 @@ fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
     let d = b.first_key_value();
     let e = c.first_key_value();
-    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).1;
+    let f = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1);
     assert_matches!(f.map(|f| f.task_index()), Some(0));
     toggle_collect();
     dbg!(f);
