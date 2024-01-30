@@ -249,7 +249,7 @@ impl PageInner {
 
     fn heavier_task<'a>(x: Option<(&'a UniqueWeight, &'a Task)>, y: Option<(&'a UniqueWeight, &'a Task)>) -> Option<(&'a UniqueWeight, &'a Task)> {
         cmp::max_by(x, y, |x, y| {
-            x.map(|x| x.0.unique_weight).cmp(&y.map(|y| y.0.unique_weight))
+            x.map(|x| x.0).cmp(&y.map(|y| y.0))
         })
     }
 }
