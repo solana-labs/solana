@@ -9,7 +9,6 @@ use {
     static_assertions::const_assert_eq,
     std::{collections::BTreeMap, mem, sync::Arc},
 };
-use iai_callgrind::client_requests::callgrind::toggle_collect;
 
 #[derive(Clone, Debug)]
 enum LockStatus {
@@ -238,17 +237,13 @@ impl PageInner {
 
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        toggle_collect();
         let d = self
             .w_blocked_tasks
             .first_key_value();
         let e = self
             .r_blocked_tasks
             .first_key_value();
-        //heaviest_writable
-        let r = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1);
-        toggle_collect();
-        r
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1);
     }
 }
 
