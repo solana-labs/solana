@@ -296,6 +296,7 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_task_for_test(&mut self, task: Task) -> Option<Task> {
         self.do_schedule_task(task, |_task| ())
     }
@@ -314,6 +315,7 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.clear()
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
         self.do_schedule_retryable_task(|_task| ())
     }
