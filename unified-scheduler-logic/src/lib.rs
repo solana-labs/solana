@@ -443,7 +443,7 @@ impl SchedulingStateMachine {
         task_source: TaskSource,
         task: Task,
         on_success: impl Fn(&Task) -> R,
-    ) -> Option<Task> {
+    ) -> Option<R> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let lock_count = Self::attempt_lock_for_execution(
