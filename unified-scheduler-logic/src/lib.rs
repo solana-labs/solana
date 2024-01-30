@@ -241,7 +241,7 @@ impl PageInner {
         self.readonly_blocked_tasks.last_key_value()
     }
 
-    fn heaviest_blocked_task(&self) -> Option<(&UniqueWeight, &Task)> {
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
         Self::heavier_task(
             self.heaviest_blocked_writing_task(),
             self.heaviest_blocked_readonly_task(),
