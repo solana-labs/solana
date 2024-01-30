@@ -300,10 +300,10 @@ impl SchedulingStateMachine {
         self.do_schedule_task(task, |task| task)
     }
 
-    pub fn do_schedule_task(&mut self, task: Task, f: impl Fn(Task) -> Task) -> Option<Task> {
+    pub fn do_schedule_task(&mut self, task: Task, on_success: impl Fn(Task) -> Task) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task(TaskSource::Runnable, task, f)
+        self.try_lock_for_task(TaskSource::Runnable, task, on_success)
     }
 
     pub fn has_retryable_task(&self) -> bool {
@@ -318,12 +318,12 @@ impl SchedulingStateMachine {
         self.do_schedule_retryable_task(|task| task)
     }
 
-    pub fn do_schedule_retryable_task(&mut self, f: impl Fn(Task) -> Task) -> Option<Task> {
+    pub fn do_schedule_retryable_task(&mut self, on_success: impl Fn(Task) -> Task) -> Option<Task> {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
-                self.try_lock_for_task(TaskSource::Retryable, task, f)
+                self.try_lock_for_task(TaskSource::Retryable, task, on_success)
             })
             .map(|task| {
                 self.rescheduled_task_count.increment_self();
@@ -438,7 +438,7 @@ impl SchedulingStateMachine {
         is_unused_now
     }
 
-    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task, f: impl Fn(Task) -> Task) -> Option<Task> {
+    fn try_lock_for_task(&mut self, task_source: TaskSource, task: Task, on_success: impl Fn(Task) -> Task) -> Option<Task> {
         let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
 
         let lock_count = Self::attempt_lock_for_execution(
@@ -456,7 +456,7 @@ impl SchedulingStateMachine {
 
             None
         } else {
-            let task = f(task);
+            let task = on_success(task);
             match task_source {
                 TaskSource::Retryable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
