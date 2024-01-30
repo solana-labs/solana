@@ -246,16 +246,13 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let heaviest_writable = self.writable_blocked_tasks.last_key_value();
-        let heaviest_readable = self.readonly_blocked_tasks.last_key_value();
-        Self::heavier_task(heaviest_writable, heaviest_readable)
+        Self::heavier_task(self.heaviest_blocked_writing_task(), self.heaviest_blocked_readonly_task())
     }
 
     fn heavier_task<'a>(x: Option<&'a Task>, y: Option<&'a Task>) -> Option<&'a Task> {
         cmp::max_by(x, y, |x, y| {
-            x.map(|x| x.0).cmp(&y.map(|y| y.0))
+            x.map(|x| x.unique_weight).cmp(&y.map(|y| y.unique_weight))
         })
-        .map(|x| x.1)
     }
 }
 
