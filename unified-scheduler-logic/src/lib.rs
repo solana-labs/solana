@@ -205,11 +205,11 @@ struct PageInner {
 }
 
 impl PageInner {
-    fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) {
+    fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) -> &mut BTreeMap<UniqueWeight, Task> {
         match requested_usage {
             RequestedUsage::Readonly => &mut self.r_blocked_tasks,
             RequestedUsage::Writable => &mut self.w_blocked_tasks,
-        };
+        }
     }
 
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
