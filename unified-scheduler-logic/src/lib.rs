@@ -145,7 +145,9 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        self.unique_weight as usize
+        UniqueWeight::max_value()
+            .checked_sub(self.unique_weight)
+            .unwrap() as usize
     }
 }
 
@@ -226,30 +228,22 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
-        self.w_blocked_tasks.first_key_value().map(|(_k, v)| v)
+        self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.first_key_value().map(|(_k, v)| v)
+        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        use std::cmp::Reverse;
         let d = self
             .w_blocked_tasks
-            .first_key_value().map(|(a, b)| (Reverse(a), b));
+            .last_key_value();
         let e = self
             .r_blocked_tasks
-            .first_key_value().map(|(a, b)| (Reverse(a), b));
+            .last_key_value();
         std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
-        /*
-        (match (d, e) {
-            (None, None) => None,
-            (None, Some(a)) | (Some(a), None) => Some(a.1),
-            (Some(x), Some(y)) => Some(std::cmp::min_by(x, y, |xx, yy| x.0.cmp(yy.0)).1),
-        })
-        */
     }
 }
 
@@ -386,14 +380,14 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|existing_task| this_unique_weight <= existing_task.unique_weight)
+                    .map(|existing_task| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|existing_task| this_unique_weight < existing_task.unique_weight)
+                    .map(|existing_task| this_unique_weight > existing_task.unique_weight)
                     .unwrap_or(true))
             ;
 
@@ -542,8 +536,12 @@ impl SchedulingStateMachine {
             })
             .collect();
 
+        let unique_weight = UniqueWeight::max_value()
+            .checked_sub(index as UniqueWeight)
+            .unwrap();
+
         Task::new(TaskInner {
-            unique_weight: index as UniqueWeight,
+            unique_weight,
             transaction,
             task_status: SchedulerCell::new(TaskStatus::new(locks)),
         })
