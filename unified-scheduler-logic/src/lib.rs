@@ -226,22 +226,22 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
-        self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.w_blocked_tasks.first_key_value().map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.r_blocked_tasks.first_key_value().map(|(_k, v)| v)
     }
 
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
         let d = self
             .w_blocked_tasks
-            .last_key_value();
+            .first_key_value();
         let e = self
             .r_blocked_tasks
-            .last_key_value();
-        std::cmp::max_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+            .first_key_value();
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
 
