@@ -484,7 +484,7 @@ impl SchedulingStateMachine {
                 }
                 TaskSource::Runnable => {}
             }
-            Some(r)
+            Some(task)
         }
     }
 
