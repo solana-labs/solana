@@ -200,15 +200,15 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    w_blocked_tasks: BTreeMap<UniqueWeight, Task>,
-    r_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    writable_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    readonly_blocked_tasks: BTreeMap<UniqueWeight, Task>,
 }
 
 impl PageInner {
     fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) -> &mut BTreeMap<UniqueWeight, Task> {
         match requested_usage {
-            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
-            RequestedUsage::Writable => &mut self.w_blocked_tasks,
+            RequestedUsage::Readonly => &mut self.readonly_blocked_tasks,
+            RequestedUsage::Writable => &mut self.writable_blocked_tasks,
         }
     }
 
@@ -227,16 +227,16 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
-        self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.writable_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
+        self.readonly_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        let heaviest_writable = self.w_blocked_tasks.last_key_value();
-        let heaviest_readable = self.r_blocked_tasks.last_key_value();
+        let heaviest_writable = self.writable_blocked_tasks.last_key_value();
+        let heaviest_readable = self.readonly_blocked_tasks.last_key_value();
         cmp::max_by(heaviest_writable, heaviest_readable, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
