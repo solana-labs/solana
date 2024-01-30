@@ -314,7 +314,7 @@ impl SchedulingStateMachine {
 
     #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
-        self.schedule_retryable_task(|_task| ())
+        self.schedule_retryable_task(|task| task).cloned()
     }
 
     pub fn schedule_retryable_task<R>(&mut self, on_success: impl Fn(&Task) -> R) -> Option<R> {
