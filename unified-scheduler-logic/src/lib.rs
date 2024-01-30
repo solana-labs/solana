@@ -245,14 +245,14 @@ impl PageInner {
         Self::heavier_task(
             self.heaviest_blocked_writing_task(),
             self.heaviest_blocked_readonly_task(),
-        )
+        ).map(|x| x.1)
     }
 
     fn heavier_task<'a>(
         x: Option<(&'a UniqueWeight, &'a Task)>,
         y: Option<(&'a UniqueWeight, &'a Task)>,
     ) -> Option<&'a Task> {
-        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)))
     }
 }
 
@@ -407,7 +407,7 @@ impl SchedulingStateMachine {
                 // this unique_weight is the heaviest one among all of other tasks blocked on this
                 // page.
                 (PageInner::heavier_task(w, r)
-                    .map(|e| this_unique_weight >= e.unique_weight)
+                    .map(|(e_unique_weight, _)| this_unique_weight >= e_unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) &&
