@@ -1075,7 +1075,7 @@ where
 
                                 state_machine.do_schedule_retryable_task(|task| {
                                     blocked_task_sender
-                                        .send_payload(task)
+                                        .send_payload(task.clone())
                                         .unwrap();
                                 });
                                 "step"
