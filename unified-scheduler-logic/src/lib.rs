@@ -237,6 +237,7 @@ impl PageInner {
 
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
+        toggle_collect();
         let d = self
             .w_blocked_tasks
             .first_key_value();
@@ -244,7 +245,9 @@ impl PageInner {
             .r_blocked_tasks
             .first_key_value();
         //heaviest_writable
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        let r = std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
+        toggle_collect();
+        r
     }
 }
 
