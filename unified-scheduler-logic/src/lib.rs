@@ -246,7 +246,7 @@ impl PageInner {
             .map(|(_, task)| task);
         //heaviest_writable
 
-        let c = match (heaviest_writable, heaviest_readonly) {
+        let mut c = match (heaviest_writable, heaviest_readonly) {
             (None, None) => None,
             (Some(a), None) | (None, Some(a)) => Some(a),
             (Some(a), Some(b)) => {
