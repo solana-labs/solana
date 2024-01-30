@@ -245,7 +245,8 @@ impl PageInner {
         Self::heavier_task(
             self.heaviest_blocked_writable_task(),
             self.heaviest_blocked_readonly_task(),
-        ).map(|x| x.1)
+        )
+        .map(|x| x.1)
     }
 
     fn heavier_task<'a>(
