@@ -10,6 +10,9 @@ extern crate solana_metrics;
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub use solana_sdk::vote::{
     authorized_voters, error as vote_error, instruction as vote_instruction,
     program::{check_id, id},

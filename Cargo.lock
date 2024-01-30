@@ -7638,6 +7638,7 @@ version = "1.18.0"
 dependencies = [
  "assert_matches",
  "bincode",
+ "lazy_static",
  "log",
  "num-derive 0.4.1",
  "num-traits",

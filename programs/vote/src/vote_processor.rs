@@ -3,6 +3,7 @@
 use {
     crate::vote_state,
     log::*,
+    solana_metrics::datapoint_info,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
         declare_process_instruction, invoke_context::InvokeContext,
@@ -12,9 +13,13 @@ use {
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        timing::AtomicInterval,
         transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
-    std::collections::HashSet,
+    std::{
+        collections::HashSet,
+        sync::atomic::{AtomicU64, Ordering},
+    },
 };
 
 fn process_authorize_with_seed_instruction(
@@ -47,6 +52,64 @@ fn process_authorize_with_seed_instruction(
         &clock,
         &invoke_context.feature_set,
     )
+}
+
+#[derive(Debug, Default)]
+struct VoteInstructionMetrics {
+    vote_count: AtomicU64,
+    vote_state_update_count: AtomicU64,
+    compact_vote_state_update_count: AtomicU64,
+    last_report_time: AtomicInterval,
+}
+
+enum VoteInstructionType {
+    Vote,
+    VoteStateUpdate,
+    CompactVoteStateUpdate,
+}
+
+impl VoteInstructionMetrics {
+    fn update_and_report(&self, vote_instruction_type: VoteInstructionType) {
+        const REPORT_INTERVAL_MS: u64 = 5_000;
+        match vote_instruction_type {
+            VoteInstructionType::Vote => {
+                self.vote_count.fetch_add(1, Ordering::Relaxed);
+            }
+            VoteInstructionType::VoteStateUpdate => {
+                self.vote_state_update_count.fetch_add(1, Ordering::Relaxed);
+            }
+            VoteInstructionType::CompactVoteStateUpdate => {
+                self.compact_vote_state_update_count
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        if self.last_report_time.should_update(REPORT_INTERVAL_MS) {
+            datapoint_info!(
+                "vote_instructions_processed",
+                (
+                    "vote_count",
+                    self.vote_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "vote_state_update_count",
+                    self.vote_state_update_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "compact_vote_state_update_count",
+                    self.compact_vote_state_update_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+            );
+        }
+    }
+}
+
+lazy_static! {
+    static ref VOTE_INSTRUCTION_METRICS: VoteInstructionMetrics = VoteInstructionMetrics::default();
 }
 
 // Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2100
@@ -151,6 +214,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::Vote);
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
@@ -166,6 +230,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
+            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::VoteStateUpdate);
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;
@@ -180,6 +245,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::CompactUpdateVoteState(vote_state_update)
         | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
+            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::CompactVoteStateUpdate);
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;

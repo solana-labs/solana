@@ -6602,6 +6602,7 @@ name = "solana-vote-program"
 version = "1.18.0"
 dependencies = [
  "bincode",
+ "lazy_static",
  "log",
  "num-derive 0.4.1",
  "num-traits",
