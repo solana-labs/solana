@@ -235,6 +235,7 @@ impl PageInner {
 
     #[inline(never)]
     fn heaviest_blocked_task(&self) -> Option<&Task> {
+        use std::cmp::Reverse;
         let d = self
             .w_blocked_tasks
             .first_key_value().map(|(a, b)| (Reverse(a), b));
