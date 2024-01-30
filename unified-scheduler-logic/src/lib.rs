@@ -200,25 +200,20 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    writable_blocked_tasks: BTreeMap<UniqueWeight, Task>,
-    readonly_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    w_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    r_blocked_tasks: BTreeMap<UniqueWeight, Task>,
 }
 
 impl PageInner {
-    fn blocked_tasks_mut(
-        &mut self,
-        requested_usage: RequestedUsage,
-    ) -> &mut BTreeMap<UniqueWeight, Task> {
+    fn blocked_tasks_mut(&mut self, requested_usage: RequestedUsage) -> &mut BTreeMap<UniqueWeight, Task> {
         match requested_usage {
-            RequestedUsage::Readonly => &mut self.readonly_blocked_tasks,
-            RequestedUsage::Writable => &mut self.writable_blocked_tasks,
+            RequestedUsage::Readonly => &mut self.r_blocked_tasks,
+            RequestedUsage::Writable => &mut self.w_blocked_tasks,
         }
     }
 
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self
-            .blocked_tasks_mut(requested_usage)
-            .insert(task.unique_weight, task);
+        let pre_existed = self.blocked_tasks_mut(requested_usage).insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
 
@@ -227,32 +222,22 @@ impl PageInner {
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let removed_entry = self
-            .blocked_tasks_mut(requested_usage)
-            .remove(&unique_weight);
+        let removed_entry = self.blocked_tasks_mut(requested_usage).remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
 
-    fn heaviest_blocked_writing_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.writable_blocked_tasks.last_key_value()
+    fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
+        self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_readonly_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.readonly_blocked_tasks.last_key_value()
+    fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
+        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
-    fn heaviest_blocked_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        Self::heavier_task(
-            self.heaviest_blocked_writing_task(),
-            self.heaviest_blocked_readonly_task(),
-        )
-    }
-
-    fn heavier_task<'a>(
-        x: Option<(&'a UniqueWeight, &'a Task)>,
-        y: Option<(&'a UniqueWeight, &'a Task)>,
-    ) -> Option<(&'a UniqueWeight, &'a Task)> {
-        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)))
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
+        let heaviest_writable = self.w_blocked_tasks.last_key_value();
+        let heaviest_readable = self.r_blocked_tasks.last_key_value();
+        cmp::max_by(heaviest_writable, heaviest_readable, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
 
@@ -311,11 +296,7 @@ impl SchedulingStateMachine {
         self.schedule_task(task, |task| task.clone())
     }
 
-    pub fn schedule_task<R>(
-        &mut self,
-        task: Task,
-        on_success: impl FnOnce(&Task) -> R,
-    ) -> Option<R> {
+    pub fn schedule_task<R>(&mut self, task: Task, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
         let ret = self.try_lock_for_task(TaskSource::Runnable, task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -405,14 +386,14 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|(&existing_unique_weight, _)| this_unique_weight >= existing_unique_weight)
+                    .map(|existing_task| this_unique_weight >= existing_task.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
                     .heaviest_blocked_writing_task()
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|(&existing_unique_weight, _)| this_unique_weight > existing_unique_weight)
+                    .map(|existing_task| this_unique_weight > existing_task.unique_weight)
                     .unwrap_or(true))
             ;
 
@@ -495,13 +476,12 @@ impl SchedulingStateMachine {
                         .iter()
                         .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
                     {
-                        if let Some((&heaviest_readonly_unique_weight, heaviest_readonly_task)) =
-                            read_only_lock_attempt
-                                .page_mut(&mut self.page_token)
-                                .heaviest_blocked_readonly_task()
+                        if let Some(heaviest_readonly_task) = read_only_lock_attempt
+                            .page_mut(&mut self.page_token)
+                            .heaviest_blocked_readonly_task()
                         {
                             self.retryable_task_queue
-                                .entry(heaviest_readonly_unique_weight)
+                                .entry(heaviest_readonly_task.unique_weight)
                                 .or_insert_with(|| heaviest_readonly_task.clone());
                         }
                     }
@@ -537,9 +517,9 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
-            if let Some((&uncontended_unique_weight, uncontended_task)) = heaviest_uncontended_now {
+            if let Some(uncontended_task) = heaviest_uncontended_now {
                 self.retryable_task_queue
-                    .entry(uncontended_unique_weight)
+                    .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
