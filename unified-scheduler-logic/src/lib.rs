@@ -226,11 +226,11 @@ impl PageInner {
     }
 
     fn heaviest_blocked_writing_task(&self) -> Option<&Task> {
-        self.w_blocked_tasks.first_key_value().map(|(_k, v)| v)
+        self.w_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     fn heaviest_blocked_readonly_task(&self) -> Option<&Task> {
-        self.r_blocked_tasks.first_key_value().map(|(_k, v)| v)
+        self.r_blocked_tasks.last_key_value().map(|(_k, v)| v)
     }
 
     #[inline(never)]
