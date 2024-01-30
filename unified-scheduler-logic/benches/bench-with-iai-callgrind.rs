@@ -213,10 +213,10 @@ fn bench_schedule_task_conflicting(account_count: usize) {
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
-    let task = scheduler.schedule_task(task).unwrap();
+    let task = scheduler.schedule_task_for_test(task).unwrap();
     let task2 = task.clone();
     toggle_collect();
-    assert_matches!(scheduler.schedule_task(task2), None);
+    assert_matches!(scheduler.schedule_task_for_test(task2), None);
     toggle_collect();
     drop(task);
 }
@@ -262,12 +262,12 @@ fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) 
     let task = SchedulingStateMachine::create_task(tx0.clone(), 0, &mut |address| {
         pages.entry(address).or_default().clone()
     });
-    scheduler.schedule_task(task).unwrap();
+    scheduler.schedule_task_for_test(task).unwrap();
     for i in 1..=task_count {
         let task = SchedulingStateMachine::create_task(tx0.clone(), i, &mut |address| {
             pages.entry(address).or_default().clone()
         });
-        assert_matches!(scheduler.schedule_task(task), None);
+        assert_matches!(scheduler.schedule_task_for_test(task), None);
     }
 
     let task = SchedulingStateMachine::create_task(tx0.clone(), task_count + 1, &mut |address| {
@@ -276,7 +276,7 @@ fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) 
     let task2 = task.clone();
 
     toggle_collect();
-    assert_matches!(scheduler.schedule_task(task2), None);
+    assert_matches!(scheduler.schedule_task_for_test(task2), None);
     toggle_collect();
 
     drop(task);
@@ -314,8 +314,8 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
-    let task = scheduler.schedule_task(task).unwrap();
-    assert_matches!(scheduler.schedule_task(task.clone()), None);
+    let task = scheduler.schedule_task_for_test(task).unwrap();
+    assert_matches!(scheduler.schedule_task_for_test(task.clone()), None);
 
     toggle_collect();
     scheduler.deschedule_task(&task);
@@ -363,8 +363,8 @@ fn bench_schedule_retryable_task(account_count: usize) {
         pages.entry(address).or_default().clone()
     });
     let mut scheduler = SchedulingStateMachine::default();
-    let task = scheduler.schedule_task(task).unwrap();
-    assert_matches!(scheduler.schedule_task(task2), None);
+    let task = scheduler.schedule_task_for_test(task).unwrap();
+    assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
     toggle_collect();
     let retried_task = scheduler.do_schedule_retryable_task(|_task| {
@@ -410,7 +410,7 @@ fn bench_deschedule_task(account_count: usize) {
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
-    let task = scheduler.schedule_task(task).unwrap();
+    let task = scheduler.schedule_task_for_test(task).unwrap();
     toggle_collect();
     scheduler.deschedule_task(&task);
     toggle_collect();
