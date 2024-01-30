@@ -314,7 +314,7 @@ impl SchedulingStateMachine {
         self.retryable_task_queue.clear()
     }
 
-    pub fn schedule_retryable_task(&mut self) -> Option<Task> {
+    pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
         self.do_schedule_retryable_task(|_task| ())
     }
 
@@ -724,14 +724,14 @@ mod tests {
         assert_eq!(state_machine.rescheduled_task_count(), 0);
         assert_eq!(
             state_machine
-                .schedule_retryable_task()
+                .schedule_retryable_task_for_test()
                 .unwrap()
                 .task_index(),
             task2.task_index()
         );
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
-        assert_matches!(state_machine.schedule_retryable_task(), None);
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
     }
@@ -756,16 +756,16 @@ mod tests {
 
         assert_eq!(state_machine.reschedule_count(), 0);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
-        assert_matches!(state_machine.schedule_retryable_task(), None);
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
-        assert_matches!(state_machine.schedule_retryable_task(), None);
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
         assert_eq!(state_machine.reschedule_count(), 1);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
 
         state_machine.deschedule_task(&task3);
 
-        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
         assert_eq!(state_machine.reschedule_count(), 2);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
 
@@ -886,7 +886,7 @@ mod tests {
         assert_eq!(state_machine.retryable_task_count(), 1);
         assert_matches!(
             state_machine
-                .schedule_retryable_task()
+                .schedule_retryable_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -906,7 +906,7 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
         state_machine.deschedule_task(&task2);
     }
 
@@ -927,8 +927,8 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
-        assert_matches!(state_machine.schedule_retryable_task(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
     }
 
     #[test]
