@@ -241,7 +241,7 @@ impl PageInner {
         self.readonly_blocked_tasks.last_key_value()
     }
 
-    fn heaviest_blocked_task(&self) -> Option<(&UniqueWeight, &Task)> {
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
         Self::heavier_task(
             self.heaviest_blocked_writing_task(),
             self.heaviest_blocked_readonly_task(),
@@ -251,8 +251,8 @@ impl PageInner {
     fn heavier_task<'a>(
         x: Option<(&'a UniqueWeight, &'a Task)>,
         y: Option<(&'a UniqueWeight, &'a Task)>,
-    ) -> Option<(&'a UniqueWeight, &'a Task)> {
-        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0)))
+    ) -> Option<&'a Task> {
+        cmp::max_by(x, y, |x, y| x.map(|x| x.0).cmp(&y.map(|y| y.0))).map(|x| x.1)
     }
 }
 
@@ -405,7 +405,7 @@ impl SchedulingStateMachine {
                 // page.
                 (page
                     .heaviest_blocked_task()
-                    .map(|(&existing_unique_weight, _)| this_unique_weight >= existing_unique_weight)
+                    .map(|e| this_unique_weight >= e.unique_weight)
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) && page
@@ -537,9 +537,9 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
-            if let Some((&uncontended_unique_weight, uncontended_task)) = heaviest_uncontended_now {
+            if let Some(uncontended_task) = heaviest_uncontended_now {
                 self.retryable_task_queue
-                    .entry(uncontended_unique_weight)
+                    .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
