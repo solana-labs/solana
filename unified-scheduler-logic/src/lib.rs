@@ -241,7 +241,7 @@ impl PageInner {
         let e = self
             .r_blocked_tasks
             .first_key_value();
-        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).unwrap_or(UniqueWeight::max_value()).cmp(&y.map(|y| y.0).unwrap_or(UniqueWeight::max_value()))).map(|x| x.1)
+        std::cmp::min_by(d, e, |x, y| x.map(|x| x.0).unwrap_or(&UniqueWeight::max_value()).cmp(&y.map(|y| y.0).unwrap_or(&UniqueWeight::max_value()))).map(|x| x.1)
     }
 }
 
