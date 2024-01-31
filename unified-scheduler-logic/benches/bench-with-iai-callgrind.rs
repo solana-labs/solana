@@ -62,7 +62,7 @@ struct B;
 unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        (*LOCAL_ALLOCATOR.0.get()).alloc2(layout.size)
+        (*LOCAL_ALLOCATOR.0.get()).alloc2(layout.size())
     }
 
     #[inline(always)]
