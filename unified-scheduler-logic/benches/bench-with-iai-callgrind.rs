@@ -32,7 +32,7 @@ impl BL {
         Self {
             bytes: [0; Self::BLOCK_SIZE],
             cursor: std::ptr::null_mut(),
-            limit: std::ptr::null_mut(),
+            limit: usize::max_value() as _,
         }
     }
 
@@ -45,14 +45,13 @@ impl BL {
     #[inline(always)]
     pub fn alloc2(&mut self, bytes: usize, align: usize) -> *mut u8 {
         //let start = Self::align_allocation(self.cursor, 32);
-        let start: *mut u8 = ((((self.cursor as usize) + 31) & !31) as _);
-        let new_cursor = unsafe { start.add(bytes) };
-        if new_cursor <= self.limit {
+        let new_cursor: *mut u8 = (((((self.cursor - bytes) as usize) - 31) & !31) as _);
+        if new_cursor >= self.limit {
             self.cursor = new_cursor;
             start
         } else if self.limit.is_null() {
-            self.cursor = self.bytes.as_ptr() as _;
-            self.limit = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
+            self.limit = self.bytes.as_ptr() as _;
+            self.cursor = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
             self.alloc2(bytes, align)
         } else {
             panic!("out of memory form BL");
