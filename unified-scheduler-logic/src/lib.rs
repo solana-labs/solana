@@ -393,13 +393,17 @@ impl SchedulingStateMachine {
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
+                    eprintln!("ok: {:?}", usage);
                     if direct_commit {
                         attempt.page_mut(page_token).usage = usage;
                     } else {
                         attempt.uncommited_usage = usage;
                     }
                 }
-                LockStatus::Failed => lock_count.increment_self()
+                LockStatus::Failed => {
+                    eprintln!("failed: {:?}", usage);
+                    lock_count.increment_self();
+                }
             }
         }
 
