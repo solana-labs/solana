@@ -546,7 +546,7 @@ impl SchedulingStateMachine {
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
-                    for attempt in uncontended_task.lock_attempts_mut(&self.task_token) {
+                    for attempt in uncontended_task.lock_attempts(&self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
                         page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                     }
