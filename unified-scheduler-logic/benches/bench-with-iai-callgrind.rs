@@ -47,9 +47,7 @@ unsafe impl GlobalAlloc for BL {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let (bytes, align) = (layout.size(), layout.align());
-        let ptr = LOCAL_ALLOCATOR.alloc2(bytes, align);
-        mem_zero(ptr, bytes);
-        ptr
+        LOCAL_ALLOCATOR.alloc2(bytes, align);
     }
 
     #[inline(always)]
