@@ -31,7 +31,7 @@ impl BL {
     const fn new() -> Self {
         Self {
             bytes: [0; Self::BLOCK_SIZE],
-            cursor: std::ptr::null_mut(),
+            cursor: usize::max_value() as _,
             limit: usize::max_value() as _,
         }
     }
