@@ -419,7 +419,7 @@ fn bench_end_to_end_worst(account_count: usize) {
 
     let task = scheduler.schedule_task_for_test(task).unwrap();
     for i in 1..128 {
-        let task2 = SchedulingStateMachine::create_task(tx0, i, &mut |address| {
+        let task2 = SchedulingStateMachine::create_task(tx0.clone(), i, &mut |address| {
             pages.entry(address).or_default().clone()
         });
         assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
