@@ -432,15 +432,21 @@ fn rebatch_and_execute_batches(
         })
         .collect::<Vec<_>>();
 
+    // NOTE: testing SIMD-0110, which requires replay to enable cost_tracker
+    // so it can EMA each account's CU utilization at end of block.
+    /*
     if bank
         .feature_set
         .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+    /// */
     {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         for tx_cost in &tx_costs {
             cost_tracker
                 .try_add(tx_cost)
-                .map_err(TransactionError::from)?;
+                .map_err(TransactionError::from);
+                // NOTE: testing SIMD-0110, cotinue tracking block costs
+                // .map_err(TransactionError::from)?;
         }
     }
 
