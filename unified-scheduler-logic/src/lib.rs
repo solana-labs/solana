@@ -254,8 +254,7 @@ impl PageInner {
         y: Option<(&'a UniqueWeight, &'a Task)>,
     ) -> Option<(&'a UniqueWeight, &'a Task)> {
         cmp::max_by(x, y, |entry1, entry2| {
-            let weight1 = entry1
-                .map(|(weight, _)| weight);
+            let weight1 = entry1.map(|(weight, _)| weight);
             let weight2 = entry2.map(|(weight, _)| weight);
             weight1.cmp(&weight2)
         })
