@@ -21,6 +21,19 @@ impl BL {
             limit: 0 as _,
         }
     }
+
+    #[inline(always)]
+    pub fn alloc(&mut self, bytes: usize, align: usize) -> *mut u8 {
+        debug_assert!(align != 0);
+        let start = Self::align_allocation(self.cursor, align);
+        let new_cursor = unsafe { start.add(bytes) };
+        if new_cursor <= self.limit {
+            self.cursor = new_cursor;
+            start
+        } else {
+            panic!();
+        }
+    }
 }
 
 
