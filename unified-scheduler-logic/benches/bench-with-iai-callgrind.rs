@@ -39,6 +39,7 @@ impl BL {
             start
         } else if self.limit == std::ptr::null_mut() {
             self.cursor = self.bytes.as_ptr() as _;
+            self.limit = unsafe { self.cursor.add(BLOCK_SIZE) };
             self.alloc2(bytes, align)
         } else {
             panic!();
