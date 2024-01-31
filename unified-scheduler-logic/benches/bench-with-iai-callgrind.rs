@@ -49,7 +49,9 @@ impl BL {
 
 use std::alloc::{Layout, GlobalAlloc};
 
-unsafe impl GlobalAlloc for BL {
+struct B;
+
+unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let (bytes, align) = (layout.size(), layout.align());
