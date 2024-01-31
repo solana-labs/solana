@@ -236,16 +236,7 @@ pub fn try_keypair_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Keypair>, Box<dyn error::Error>> {
-    if let Some(value) = matches.try_get_one::<String>(name)? {
-        if value == ASK_KEYWORD {
-            let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
-            keypair_from_seed_phrase(name, skip_validation, true, None, true).map(Some)
-        } else {
-            read_keypair_file(value).map(Some)
-        }
-    } else {
-        Ok(None)
-    }
+    Ok(try_keypairs_of(matches, name)?.and_then(|mut keypairs| keypairs.pop()))
 }
 
 pub fn try_keypairs_of(
