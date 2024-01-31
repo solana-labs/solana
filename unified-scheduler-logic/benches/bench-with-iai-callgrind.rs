@@ -17,7 +17,7 @@ struct BL {
 }
 
 impl BL {
-    const BLOCK_SIZE: usize = 10_000_000;
+    const BLOCK_SIZE: usize = 10;
 
     const fn new() -> Self {
         Self {
