@@ -566,6 +566,7 @@ impl SchedulingStateMachine {
                 eprintln!("aaa: {i}");
                 i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
+                    eprintln!("bbb: {i}");
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert_with(|| {
