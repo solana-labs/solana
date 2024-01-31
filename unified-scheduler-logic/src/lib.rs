@@ -364,6 +364,7 @@ impl SchedulingStateMachine {
                     &mut self.page_token,
                     task.unique_weight,
                     task.lock_attempts_mut(&mut self.task_token),
+                    true,
                 );
                 assert_eq!(provisional_lock_count.current(), 0);
                 self.reschedule_count.increment_self();
