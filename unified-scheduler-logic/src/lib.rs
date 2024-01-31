@@ -141,6 +141,11 @@ impl TaskInner {
         &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
+    fn provisional_lock_count_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Counter {
+        &mut self.task_status.borrow_mut(task_token).provisional_lock_count
+    }
+
+
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
         &self.task_status.borrow(task_token).lock_attempts
     }
@@ -365,21 +370,15 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        rollback_on_failure: bool,
-    ) -> usize {
+    ) -> Counter {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    if rollback_on_failure {
-                        attempt.page_mut(page_token).usage = usage;
-                    } else {
-                        attempt.uncommited_usage = usage;
-                    }
-                    lock_count.increment_self()
+                    attempt.uncommited_usage = usage;
                 }
-                LockStatus::Failed => break,
+                LockStatus::Failed => lock_count.increment_self()
             }
         }
 
@@ -470,21 +469,15 @@ impl SchedulingStateMachine {
         task: Task,
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
-        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
-
-        let lock_count = Self::attempt_lock_for_execution(
+        let provisional_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
-            rollback_on_failure,
         );
 
-        if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
-            if rollback_on_failure {
-                self.rollback_locking(&task, lock_count);
-                self.register_blocked_task_into_pages(&task);
-            }
-
+        if provisional_lock_count > 0 {
+            *task.provisional_lock_count_mut(&mut self.task_token) = provisional_lock_count;
+            self.register_blocked_task_into_pages(&task);
             None
         } else {
             let ret = on_success(&task);
@@ -514,7 +507,12 @@ impl SchedulingStateMachine {
                         }
                     }
                 }
-                TaskSource::Runnable => {}
+                TaskSource::Runnable => {
+                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
+                        let page = attempt.page_mut(&mut self.page_token);
+                        page.usage = attempt.uncommited_usage;
+                    }
+                }
             }
             Some(ret)
         }
