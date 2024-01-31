@@ -425,11 +425,10 @@ fn bench_end_to_end_worst(account_count: usize) {
     assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
     let retried_task = scheduler
-        .schedule_retryable_task(|task| {
-            toggle_collect();
-            task.clone()
-        })
+        .schedule_retryable_task_for_test()
         .unwrap();
+    scheduler.deschedule_task(&retried_task);
+    toggle_collect();
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
