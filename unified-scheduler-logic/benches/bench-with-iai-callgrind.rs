@@ -419,7 +419,7 @@ fn bench_end_to_end_worst(account_count: usize) {
 
     let task = scheduler.schedule_task_for_test(task).unwrap();
     for i in 1..account_count {
-        let mut accounts = vec![accounts[i]];
+        let mut accounts = vec![memo_ix.accounts[i]];
         for _ in 0..account_count {
             accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
         }
