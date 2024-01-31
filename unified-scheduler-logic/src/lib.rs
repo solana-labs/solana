@@ -559,11 +559,12 @@ impl SchedulingStateMachine {
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert_with(|| {
+                            let c = uncontended_task.clone();
                             for attempt in uncontended_task.lock_attempts(&self.task_token) {
-                                let page = attempt.page_mut_unchecked();
+                                let page = attempt.page_mut(&mut self.page_token);
                                 page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                             }
-                            uncontended_task.clone()
+                            c
                     });
                 }
             }
