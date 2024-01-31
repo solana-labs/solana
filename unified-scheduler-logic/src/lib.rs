@@ -360,6 +360,12 @@ impl SchedulingStateMachine {
             .pop_last()
             .and_then(|(_, task)| {
                 //let ret = self.try_lock_for_task(TaskSource::Retryable, task, on_success);
+                let provisional_lock_count = Self::attempt_lock_for_execution(
+                    &mut self.page_token,
+                    task.unique_weight,
+                    task.lock_attempts_mut(&mut self.task_token),
+                );
+                assert_eq!(provisional_lock_count.current(), 0);
                 self.reschedule_count.increment_self();
                 Some(on_success(&task))
             })
