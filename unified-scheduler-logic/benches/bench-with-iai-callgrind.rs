@@ -9,12 +9,16 @@ pub static mut LOCAL_ALLOCATOR: BL = BL::new();
 
 struct BL {
     bytes: [u8; 10_000_000],
+    cursor: *mut u8,
+    limit: *mut u8,
 }
 
 impl BL {
     const fn new() -> Self {
         Self {
             bytes: [0; 10_000_000],
+            cursor: 0 as _,
+            limit: 0 as _,
         }
     }
 }
