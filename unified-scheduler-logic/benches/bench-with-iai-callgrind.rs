@@ -224,10 +224,10 @@ fn bench_arc(account_count: usize) {
         toggle_collect();
         match account_count {
             1 => {
-                b = std::sync::Arc::new(3_u32);
+                b = std::sync::Arc::new(black_box(3_u32));
             },
             2 => {
-                b = black_box(std::sync::Arc::new(3_u32));
+                b = black_box(std::sync::Arc::new(black_box(3_u32)));
                 black_box(b.clone());
             },
             _ => {
