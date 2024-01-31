@@ -388,6 +388,60 @@ fn bench_schedule_retryable_task(account_count: usize) {
 #[bench::normal(32)]
 #[bench::large(64)]
 #[bench::max(128)]
+fn bench_end_to_end_worst(account_count: usize) {
+    toggle_collect();
+    let mut accounts = vec![];
+    for _ in 0..account_count {
+        accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+    }
+
+    let payer = Keypair::new();
+    let memo_ix = Instruction {
+        program_id: Pubkey::default(),
+        accounts,
+        data: vec![0x00],
+    };
+    let mut ixs = vec![];
+    for _ in 0..1 {
+        ixs.push(memo_ix.clone());
+    }
+    let msg = Message::new(&ixs, Some(&payer.pubkey()));
+    let txn = Transaction::new_unsigned(msg);
+    //panic!("{:?}", txn);
+    //assert_eq!(wire_txn.len(), 3);
+    let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+        std::collections::HashMap::new();
+    let task = SchedulingStateMachine::create_task(tx0.clone(), 0, &mut |address| {
+        pages.entry(address).or_default().clone()
+    });
+    let task2 = SchedulingStateMachine::create_task(tx0, 1, &mut |address| {
+        pages.entry(address).or_default().clone()
+    });
+    let mut scheduler = SchedulingStateMachine::default();
+    toggle_collect();
+
+    let task = scheduler.schedule_task_for_test(task).unwrap();
+    assert_matches!(scheduler.schedule_task_for_test(task2), None);
+    scheduler.deschedule_task(&task);
+    let retried_task = scheduler
+        .schedule_retryable_task(|task| {
+            toggle_collect();
+            task.clone()
+        })
+        .unwrap();
+    assert_eq!(task.transaction(), retried_task.transaction());
+    drop(task);
+}
+
+#[library_benchmark]
+#[bench::min(0)]
+#[bench::one(1)]
+#[bench::two(2)]
+#[bench::three(3)]
+#[bench::normal(32)]
+#[bench::large(64)]
+#[bench::max(128)]
 fn bench_deschedule_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
@@ -425,7 +479,8 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    //benchmarks = bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    benchmarks = bench_end_to_end_worst
 );
 
 main!(library_benchmark_groups = bench_scheduling_state_machine);
