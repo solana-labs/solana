@@ -19,8 +19,8 @@ impl BL {
     const fn new() -> Self {
         Self {
             bytes: [0; Self::BLOCK_SIZE],
-            cursor: 0 as ,
-            limit: 0 as ,
+            cursor: 0 as _,
+            limit: 0 as _,
         }
     }
 
