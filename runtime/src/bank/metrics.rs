@@ -42,6 +42,7 @@ pub(crate) struct NewBankTimings {
     pub(crate) recompilation_time_us: u64,
     pub(crate) update_sysvars_time_us: u64,
     pub(crate) fill_sysvar_cache_time_us: u64,
+    pub(crate) write_lock_fee_cache_time_us: u64,
 }
 
 pub(crate) fn report_new_epoch_metrics(
@@ -152,6 +153,7 @@ pub(crate) fn report_new_bank_metrics(
             timings.fill_sysvar_cache_time_us,
             i64
         ),
+        ("write_lock_fee_cache_us", timings.blockhash_queue_time_us, i64),
     );
 }
 

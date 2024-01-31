@@ -12,6 +12,7 @@ edition = { workspace = true }
 [dependencies]
 lazy_static = { workspace = true }
 log = { workspace = true }
+lru = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-compute-budget-program = { workspace = true }

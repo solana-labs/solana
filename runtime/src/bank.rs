@@ -110,7 +110,7 @@ use {
         },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
-    solana_cost_model::cost_tracker::CostTracker,
+    solana_cost_model::{cost_tracker::CostTracker, write_lock_fee_cache::WriteLockFeeCache},
     solana_loader_v4_program::create_program_runtime_environment_v2,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
@@ -585,6 +585,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             check_program_modification_slot: _,
             epoch_reward_status: _,
+            write_lock_fee_cache,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -618,6 +619,8 @@ impl PartialEq for Bank {
             && *stakes_cache.stakes() == *other.stakes_cache.stakes()
             && epoch_stakes == &other.epoch_stakes
             && is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
+            // TODO testing SIMD-0110, perhaps need to include cache in bank comparison
+            //&& *write_lock_fee_cache.read().unwrap() == *other.write_lock_fee_cache.read().unwrap()
     }
 }
 
@@ -847,6 +850,8 @@ pub struct Bank {
     pub check_program_modification_slot: bool,
 
     epoch_reward_status: EpochRewardStatus,
+
+    write_lock_fee_cache: RwLock<WriteLockFeeCache>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1037,6 +1042,7 @@ impl Bank {
             ))),
             check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            write_lock_fee_cache: RwLock::<WriteLockFeeCache>::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1272,6 +1278,9 @@ impl Bank {
 
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
+        let (write_lock_fee_cache, write_lock_fee_cache_time_us) =
+            measure_us!(RwLock::new(parent.write_lock_fee_cache.read().unwrap().clone()));
+
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
             skipped_rewrites: Mutex::default(),
@@ -1347,6 +1356,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
+            write_lock_fee_cache,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1472,6 +1482,7 @@ impl Bank {
                 recompilation_time_us,
                 update_sysvars_time_us,
                 fill_sysvar_cache_time_us,
+                write_lock_fee_cache_time_us,
             },
         );
 
@@ -1854,6 +1865,9 @@ impl Bank {
             ))),
             check_program_modification_slot: false,
             epoch_reward_status: fields.epoch_reward_status,
+            // TODO testing SIMD-0110, need to add write_lock_fee_cache to snapshots, and read from
+            // fields here.
+            write_lock_fee_cache: RwLock::new(WriteLockFeeCache::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -3733,12 +3747,25 @@ impl Bank {
             self.distribute_rent_fees();
             self.update_slot_history();
             self.run_incinerator();
+            self.update_write_lock_fee_cache();
 
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
+    }
+
+    // NOTE testing SIMD-0110, update cache at end of block
+    fn update_write_lock_fee_cache(&self) {
+        // for now, just pass all write lock and their CUs to update case, account exists in Cache
+        // need to be updated with this bank's CU utilization, adjusting for hogher or lower fee
+        // rate;
+        // newly minted "hot" account will need to be added to Cache, and evict cheaepest one if
+        // Cache is at capacity.
+        //let hot_accounts = self.read_cost_tracker().unwrap().find_hot_accounts();
+        let write_locks = self.read_cost_tracker().unwrap().get_write_lock_account_and_cu();
+        self.write_lock_fee_cache.write().unwrap().update(self.slot(), write_locks);
     }
 
     // dangerous; don't use this; this is only needed for ledger-tool's special command
