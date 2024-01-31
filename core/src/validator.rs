@@ -205,7 +205,6 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub account_snapshot_paths: Vec<PathBuf>,
-    pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
     pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -277,7 +276,6 @@ impl Default for ValidatorConfig {
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             account_snapshot_paths: Vec::new(),
-            account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             on_start_geyser_plugin_config_files: None,
             rpc_addrs: None,
@@ -1838,7 +1836,6 @@ fn load_blockstore(
             &genesis_config,
             &blockstore,
             config.account_paths.clone(),
-            config.account_shrink_paths.clone(),
             Some(&config.snapshot_config),
             &process_options,
             transaction_history_services
@@ -1865,11 +1862,6 @@ fn load_blockstore(
         let mut bank_forks = bank_forks.write().unwrap();
         bank_forks.set_snapshot_config(Some(config.snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            bank_forks
-                .working_bank()
-                .set_shrink_paths(shrink_paths.clone());
-        }
     }
 
     Ok((
@@ -2448,12 +2440,16 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 }
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
-    for accounts_path in &config.account_paths {
-        move_and_async_delete_path_contents(accounts_path);
+    for account_path in &config.account_paths {
+        move_and_async_delete_path_contents(account_path);
     }
-    if let Some(ref shrink_paths) = config.account_shrink_paths {
-        for accounts_path in shrink_paths {
-            move_and_async_delete_path_contents(accounts_path);
+    if let Some(shrink_paths) = config
+        .accounts_db_config
+        .as_ref()
+        .and_then(|config| config.shrink_paths.as_ref())
+    {
+        for shrink_path in shrink_paths {
+            move_and_async_delete_path_contents(shrink_path);
         }
     }
 }

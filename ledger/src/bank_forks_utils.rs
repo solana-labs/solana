@@ -80,7 +80,6 @@ pub fn load(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -93,7 +92,6 @@ pub fn load(
         genesis_config,
         blockstore,
         account_paths,
-        shrink_paths,
         snapshot_config,
         &process_options,
         cache_block_meta_sender,
@@ -121,7 +119,6 @@ pub fn load_bank_forks(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
@@ -181,7 +178,6 @@ pub fn load_bank_forks(
                 incremental_snapshot_archive_info,
                 genesis_config,
                 account_paths,
-                shrink_paths,
                 snapshot_config,
                 process_options,
                 accounts_update_notifier,
@@ -231,7 +227,6 @@ fn bank_forks_from_snapshot(
     incremental_snapshot_archive_info: Option<IncrementalSnapshotArchiveInfo>,
     genesis_config: &GenesisConfig,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -344,10 +339,6 @@ fn bank_forks_from_snapshot(
         })?;
         bank
     };
-
-    if let Some(shrink_paths) = shrink_paths {
-        bank.set_shrink_paths(shrink_paths);
-    }
 
     let full_snapshot_hash = FullSnapshotHash((
         full_snapshot_archive_info.slot(),
