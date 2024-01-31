@@ -49,7 +49,7 @@ impl BL {
         if new_cursor >= self.limit {
             self.cursor = new_cursor;
             new_cursor
-        } else if self.limit.is_null() {
+        } else if self.limit == usize::max_value() as _ {
             self.limit = self.bytes.as_ptr() as _;
             self.cursor = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
             self.alloc2(bytes, align)
