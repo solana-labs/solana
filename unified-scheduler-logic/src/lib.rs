@@ -481,7 +481,7 @@ impl SchedulingStateMachine {
         );
 
         if provisional_lock_count.current() > 0 {
-            *task.provisional_lock_count_mut(&mut self.task_token) = provisional_lock_count;
+            *task.provisional_lock_count_mut() = provisional_lock_count;
             self.register_blocked_task_into_pages(&task);
             None
         } else {
@@ -545,7 +545,7 @@ impl SchedulingStateMachine {
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
-                if uncontended_task.provisional_lock_count_mut(&mut self.task_token).decrement_self().current() == 0 {
+                if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert_with(|| uncontended_task.clone());
