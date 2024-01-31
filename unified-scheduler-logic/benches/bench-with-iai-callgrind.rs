@@ -37,7 +37,7 @@ impl BL {
     }
 
     #[inline(always)]
-    pub fn alloc2(&mut self, bytes: usize, align: usize) -> *mut u8 {
+    pub fn alloc2(&mut self, bytes: usize) -> *mut u8 {
         let new_cursor: *mut u8 = unsafe { ((((self.cursor.sub(bytes)) as usize) - 31) & !31) as _ };
         if new_cursor >= self.limit {
             self.cursor = new_cursor;
@@ -45,7 +45,7 @@ impl BL {
         } else if self.limit == usize::max_value() as _ {
             self.limit = self.bytes.as_ptr() as _;
             self.cursor = unsafe { self.limit.add(Self::BLOCK_SIZE) };
-            self.alloc2(bytes, align)
+            self.alloc2(bytes)
         } else {
             panic!("out of memory form BL");
         }
@@ -62,10 +62,7 @@ struct B;
 unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let (bytes, align) = (layout.size(), layout.align());
-        //LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
-        //LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
-        (*LOCAL_ALLOCATOR.0.get()).alloc2(bytes, align)
+        (*LOCAL_ALLOCATOR.0.get()).alloc2(layout.size)
     }
 
     #[inline(always)]
