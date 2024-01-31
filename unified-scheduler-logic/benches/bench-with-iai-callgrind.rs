@@ -45,7 +45,7 @@ impl BL {
             self.limit = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
             self.alloc2(bytes, align)
         } else {
-            panic!();
+            panic!("out of memory form BL");
         }
     }
 }
