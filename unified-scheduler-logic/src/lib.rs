@@ -245,7 +245,7 @@ impl PageInner {
         let removed_entry = self
             .blocked_tasks_mut(requested_usage)
             .remove(&unique_weight);
-        //assert!(removed_entry.is_some());
+        assert!(removed_entry.is_some());
     }
 
     fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
