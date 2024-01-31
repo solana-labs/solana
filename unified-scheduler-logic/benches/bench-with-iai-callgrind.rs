@@ -219,27 +219,38 @@ fn bench_insert_task(account_count: usize) {
 #[bench::rc_new(3)]
 #[bench::rc_new_and_clone(4)]
 fn bench_arc(account_count: usize) {
-    let b;
-    toggle_collect();
-    match account_count {
-        1 => {
-            b = std::sync::Arc::new(3_u32);
-        },
-        2 => {
-            b = std::rc::Rc::new(3_u32);
-            black_box(b.clone());
-        },
-        3 => {
-            b = std::sync::Arc::new(3_u32);
-        },
-        4 => {
-            b = std::rc::Rrc::new(3_u32);
-            black_box(b.clone());
-        },
-        _ => panic!(),
+    {
+        let b;
+        toggle_collect();
+        match account_count {
+            1 => {
+                b = std::sync::Arc::new(3_u32);
+            },
+            2 => {
+                b = std::rc::Rc::new(3_u32);
+                black_box(b.clone());
+            },
+            _ => {
+{
+        let b;
+        match account_count {
+            3 => {
+                b = std::sync::Arc::new(3_u32);
+            },
+            4 => {
+                b = std::rc::Rrc::new(3_u32);
+                black_box(b.clone());
+            },
+            _ => panic!(),
+        }
+        drop(b);
     }
-    toggle_collect();
-    drop(b);
+            }
+        }
+        toggle_collect();
+        drop(b);
+    }
+    
 }
 
 #[library_benchmark]
