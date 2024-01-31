@@ -475,7 +475,7 @@ impl SchedulingStateMachine {
             task.lock_attempts_mut(&mut self.task_token),
         );
 
-        if provisional_lock_count > 0 {
+        if provisional_lock_count.current() > 0 {
             *task.provisional_lock_count_mut(&mut self.task_token) = provisional_lock_count;
             self.register_blocked_task_into_pages(&task);
             None
