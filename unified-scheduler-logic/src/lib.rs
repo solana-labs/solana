@@ -429,6 +429,7 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
+        /*
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
@@ -452,6 +453,7 @@ impl SchedulingStateMachine {
                 lock_status = LockStatus::Failed
             }
         }
+        */
         lock_status
     }
 
