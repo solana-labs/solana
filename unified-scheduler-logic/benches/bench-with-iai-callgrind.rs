@@ -28,7 +28,7 @@ impl BL {
     }
 
     #[inline(always)]
-    pub fn alloc2(&mut self, bytes: usize) -> *mut u8 loop {
+    pub fn alloc2(&mut self, bytes: usize) -> *mut u8 {
         loop {
             self.cursor = unsafe { ((((self.cursor.sub(bytes)) as usize) - 31) & !31) as _ };
             if self.cursor >= self.limit {
