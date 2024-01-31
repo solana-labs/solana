@@ -232,6 +232,7 @@ fn bench_arc(account_count: usize) {
         },
         4 => {
         },
+        _ => panic!(),
     }
     toggle_collect();
     drop(b);
