@@ -415,13 +415,15 @@ fn bench_end_to_end_worst(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0.clone(), 0, &mut |address| {
         pages.entry(address).or_default().clone()
     });
-    let task2 = SchedulingStateMachine::create_task(tx0, 1, &mut |address| {
-        pages.entry(address).or_default().clone()
-    });
     let mut scheduler = SchedulingStateMachine::default();
 
     let task = scheduler.schedule_task_for_test(task).unwrap();
-    assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
+    for i in 1..128 {
+        let task2 = SchedulingStateMachine::create_task(tx0, i, &mut |address| {
+            pages.entry(address).or_default().clone()
+        });
+        assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
+    }
 
     toggle_collect();
     scheduler.deschedule_task(&task);
@@ -432,7 +434,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     scheduler.deschedule_task(&retried_task);
     toggle_collect();
 
-    assert_eq!(task2.task_index(), retried_task.task_index());
+    //assert_eq!(task2.task_index(), retried_task.task_index());
     drop(task);
 }
 
