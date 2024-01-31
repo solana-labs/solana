@@ -60,7 +60,7 @@ unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let (bytes, align) = (layout.size(), layout.align());
-        LOCAL_ALLOCATOR.alloc2(bytes, align)
+        LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
     }
 
     #[inline(always)]
