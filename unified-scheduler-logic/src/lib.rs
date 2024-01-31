@@ -562,6 +562,7 @@ impl SchedulingStateMachine {
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
+                eprintln!("aaa");
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
