@@ -41,6 +41,21 @@ impl BL {
     }
 }
 
+use std::alloc::{Layout, GlobalAlloc};
+
+unsafe impl GlobalAlloc for BL {
+    #[inline(always)]
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let (bytes, align) = (layout.size(), layout.align());
+        let ptr = LOCAL_ALLOCATOR.alloc(bytes, align);
+        mem_zero(ptr, bytes);
+        ptr
+    }
+
+    #[inline(always)]
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+}
+
 
 use {
     assert_matches::assert_matches,
