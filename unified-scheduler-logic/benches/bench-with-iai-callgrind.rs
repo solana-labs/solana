@@ -419,8 +419,8 @@ fn bench_end_to_end_worst(account_count: usize) {
         pages.entry(address).or_default().clone()
     });
     let mut scheduler = SchedulingStateMachine::default();
-    toggle_collect();
 
+    toggle_collect();
     let task = scheduler.schedule_task_for_test(task).unwrap();
     assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
@@ -429,6 +429,7 @@ fn bench_end_to_end_worst(account_count: usize) {
         .unwrap();
     scheduler.deschedule_task(&retried_task);
     toggle_collect();
+
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
