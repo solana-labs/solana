@@ -5951,6 +5951,7 @@ version = "1.18.0"
 dependencies = [
  "lazy_static",
  "log",
+ "lru",
  "rustc_version 0.4.0",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",

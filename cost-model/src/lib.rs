@@ -7,6 +7,7 @@ pub mod cost_model;
 pub mod cost_tracker;
 pub(crate) mod ema;
 pub mod transaction_cost;
+pub mod write_lock_fee_cache;
 
 #[macro_use]
 extern crate solana_frozen_abi_macro;

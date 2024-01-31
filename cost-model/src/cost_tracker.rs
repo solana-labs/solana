@@ -139,6 +139,20 @@ impl CostTracker {
         self.transaction_count
     }
 
+    // NOTE testing SIMD-0110, return "hot" account's pubkey and allocated CUs for it
+    // where "hot" is allocated CUs / MAX > 0.5
+    pub fn find_hot_accounts(&self) -> Vec<(Pubkey, u64)> {
+        self.cost_by_writable_accounts
+            .iter()
+            .filter_map(|(pubkey, cost)| if *cost > MAX_WRITABLE_ACCOUNT_UNITS.saturating_sub(*cost) { Some((*pubkey, *cost)) } else { None} )
+            .collect()
+    }
+
+    // NOTE testing SIMD-0110, return all writable accounts and their allocated CUs
+    pub fn get_write_lock_account_and_cu(&self) -> Vec<(Pubkey, u64)> {
+        self.cost_by_writable_accounts.iter().map(|(&pubkey, &cost)| (pubkey, cost)).collect()
+    }
+
     pub fn report_stats(&self, bank_slot: Slot) {
         // skip reporting if block is empty
         if self.transaction_count == 0 {
@@ -825,5 +839,41 @@ mod tests {
         assert_eq!(0, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
         assert_eq!(0, cost_tracker.account_data_size);
+    }
+
+    #[test]
+    fn test_find_hot_accounts() {
+        let acct1 = Pubkey::new_unique();
+        let acct2 = Pubkey::new_unique();
+        let acct3 = Pubkey::new_unique();
+        let cost = MAX_WRITABLE_ACCOUNT_UNITS / 2 - 1;
+
+        let tx_cost1 = TransactionCost::Transaction(UsageCostDetails {
+            writable_accounts: vec![acct1, acct2],
+            bpf_execution_cost: cost,
+            ..UsageCostDetails::default()
+        });
+
+        let tx_cost2 = TransactionCost::Transaction(UsageCostDetails {
+            writable_accounts: vec![acct2, acct3],
+            bpf_execution_cost: cost,
+            ..UsageCostDetails::default()
+        });
+
+        let tx_cost3 = TransactionCost::Transaction(UsageCostDetails {
+            writable_accounts: vec![acct1],
+            bpf_execution_cost: cost,
+            ..UsageCostDetails::default()
+        });
+
+        let mut cost_tracker = CostTracker::default();
+        assert!(cost_tracker.try_add(&tx_cost1).is_ok());
+        assert!(cost_tracker.try_add(&tx_cost2).is_ok());
+        assert!(cost_tracker.try_add(&tx_cost3).is_ok());
+
+        let hot_accounts = cost_tracker.find_hot_accounts();
+        assert_eq!(2, hot_accounts.len());
+        assert!(hot_accounts.contains(&(acct1, cost * 2)));
+        assert!(hot_accounts.contains(&(acct2, cost * 2)));
     }
 }
