@@ -60,7 +60,8 @@ mod counter {
         }
 
         pub(super) fn decrement_self(&mut self) -> &mut Self {
-            *self = self.decrement()
+            *self = self.decrement();
+            self
         }
     }
 }
