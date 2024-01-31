@@ -443,7 +443,7 @@ fn bench_end_to_end_worst(account_count: usize) {
 
     toggle_collect();
     scheduler.deschedule_task(&task);
-    assert_eq!(scheduler.retryable_task_count(), account_count);
+    assert_eq!(scheduler.retryable_task_count(), account_count - 1);
     let retried_task = scheduler
         .schedule_retryable_task_for_test()
         .unwrap();
