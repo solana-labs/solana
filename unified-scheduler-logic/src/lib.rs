@@ -510,6 +510,7 @@ impl SchedulingStateMachine {
             let ret = on_success(&task);
             match task_source {
                 TaskSource::Retryable => {
+                    panic!();
                     /*
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
