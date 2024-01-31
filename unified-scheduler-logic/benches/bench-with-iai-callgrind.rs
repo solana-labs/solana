@@ -15,6 +15,8 @@ thread_local! {
 */
 struct A<T>(T);
 
+unsafe impl<T> std::sync::Sync for A {};
+
 static LOCAL_ALLOCATOR: A(std::cell::UnsafeCell<BL>) = std::cell::UnsafeCell::new(BL::new());
 
 struct BL {
