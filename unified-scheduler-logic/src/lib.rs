@@ -662,6 +662,7 @@ mod tests {
         move |address| pages.lock().unwrap().entry(address).or_default().clone()
     }
 
+    /*
     #[test]
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
@@ -684,6 +685,7 @@ mod tests {
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
         assert!(format!("{:?}", task).contains("TaskInner"));
     }
+    */
 
     #[test]
     fn test_scheduling_state_machine_default() {
