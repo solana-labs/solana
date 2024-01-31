@@ -561,7 +561,7 @@ impl SchedulingStateMachine {
                         .or_insert_with(|| {
                             for attempt in uncontended_task.lock_attempts(&self.task_token) {
                                 let page = attempt.page_mut_unchecked();
-                                page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
+                                page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
                             }
                             uncontended_task.clone()
                     });
