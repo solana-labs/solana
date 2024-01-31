@@ -64,10 +64,10 @@ impl LastVotedForkSlotsAggregate {
 
     pub(crate) fn aggregate_from_record(
         &mut self,
-        from_string: &str,
+        key_string: &str,
         record: &LastVotedForkSlotsRecord,
     ) -> Result<Option<LastVotedForkSlotsRecord>, Box<dyn std::error::Error>> {
-        let from = Pubkey::from_str(from_string)?;
+        let from = Pubkey::from_str(key_string)?;
         let last_voted_hash = Hash::from_str(&record.last_vote_bankhash)?;
         let converted_record = RestartLastVotedForkSlots::new(
             from,
@@ -167,12 +167,14 @@ mod tests {
     const REPAIR_THRESHOLD: f64 = 0.42;
     const SHRED_VERSION: u16 = 52;
 
-    fn test_aggregate_init() -> (
-        LastVotedForkSlotsAggregate,
-        Vec<ValidatorVoteKeypairs>,
-        Slot,
-        Vec<Slot>,
-    ) {
+    struct TestAggregateInitResult {
+        pub slots_aggregate: LastVotedForkSlotsAggregate,
+        pub validator_voting_keypairs: Vec<ValidatorVoteKeypairs>,
+        pub root_slot: Slot,
+        pub last_voted_fork_slots: Vec<Slot>,
+    }
+
+    fn test_aggregate_init() -> TestAggregateInitResult {
         solana_logger::setup();
         let validator_voting_keypairs: Vec<_> = (0..TOTAL_VALIDATOR_COUNT)
             .map(|_| ValidatorVoteKeypairs::new_rand())
@@ -190,8 +192,8 @@ mod tests {
             root_slot.saturating_add(2),
             root_slot.saturating_add(3),
         ];
-        (
-            LastVotedForkSlotsAggregate::new(
+        TestAggregateInitResult {
+            slots_aggregate: LastVotedForkSlotsAggregate::new(
                 root_slot,
                 REPAIR_THRESHOLD,
                 root_bank.epoch_stakes(root_bank.epoch()).unwrap(),
@@ -201,75 +203,81 @@ mod tests {
             validator_voting_keypairs,
             root_slot,
             last_voted_fork_slots,
-        )
+        }
     }
 
     #[test]
     fn test_aggregate() {
-        let (mut slots_aggregate, validator_voting_keypairs, root_slot, last_voted_fork) =
-            test_aggregate_init();
+        let mut test_state = test_aggregate_init();
+        let root_slot = test_state.root_slot;
         let initial_num_active_validators = 3;
-        for validator_voting_keypair in validator_voting_keypairs
+        for validator_voting_keypair in test_state
+            .validator_voting_keypairs
             .iter()
             .take(initial_num_active_validators)
         {
             let pubkey = validator_voting_keypair.node_keypair.pubkey();
             let now = timestamp();
             assert_eq!(
-                slots_aggregate.aggregate(
+                test_state.slots_aggregate.aggregate(
                     RestartLastVotedForkSlots::new(
                         pubkey,
                         now,
-                        &last_voted_fork,
+                        &test_state.last_voted_fork_slots,
                         Hash::default(),
                         SHRED_VERSION,
                     )
                     .unwrap(),
                 ),
                 Some(LastVotedForkSlotsRecord {
-                    last_voted_fork_slots: last_voted_fork.clone(),
+                    last_voted_fork_slots: test_state.last_voted_fork_slots.clone(),
                     last_vote_bankhash: Hash::default().to_string(),
                     shred_version: SHRED_VERSION as u32,
                     wallclock: now,
                 }),
             );
         }
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         let mut expected_active_percent =
             (initial_num_active_validators + 1) as f64 / TOTAL_VALIDATOR_COUNT as f64 * 100.0;
         assert_eq!(result.active_percent, expected_active_percent);
         assert!(result.slots_to_repair.is_empty());
 
-        let new_active_validator = validator_voting_keypairs[initial_num_active_validators + 1]
+        let new_active_validator = test_state.validator_voting_keypairs
+            [initial_num_active_validators + 1]
             .node_keypair
             .pubkey();
         let now = timestamp();
         let new_active_validator_last_voted_slots = RestartLastVotedForkSlots::new(
             new_active_validator,
             now,
-            &last_voted_fork,
+            &test_state.last_voted_fork_slots,
             Hash::default(),
             SHRED_VERSION,
         )
         .unwrap();
         assert_eq!(
-            slots_aggregate.aggregate(new_active_validator_last_voted_slots),
+            test_state
+                .slots_aggregate
+                .aggregate(new_active_validator_last_voted_slots),
             Some(LastVotedForkSlotsRecord {
-                last_voted_fork_slots: last_voted_fork.clone(),
+                last_voted_fork_slots: test_state.last_voted_fork_slots.clone(),
                 last_vote_bankhash: Hash::default().to_string(),
                 shred_version: SHRED_VERSION as u32,
                 wallclock: now,
             }),
         );
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         expected_active_percent =
             (initial_num_active_validators + 2) as f64 / TOTAL_VALIDATOR_COUNT as f64 * 100.0;
         assert_eq!(result.active_percent, expected_active_percent);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
-        assert_eq!(actual_slots, last_voted_fork);
+        assert_eq!(actual_slots, test_state.last_voted_fork_slots);
 
-        let replace_message_validator = validator_voting_keypairs[2].node_keypair.pubkey();
+        let replace_message_validator = test_state.validator_voting_keypairs[2]
+            .node_keypair
+            .pubkey();
         // Allow specific validator to replace message.
         let now = timestamp();
         let replace_message_validator_last_fork = RestartLastVotedForkSlots::new(
@@ -281,7 +289,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            slots_aggregate.aggregate(replace_message_validator_last_fork),
+            test_state
+                .slots_aggregate
+                .aggregate(replace_message_validator_last_fork),
             Some(LastVotedForkSlotsRecord {
                 last_voted_fork_slots: vec![root_slot + 1, root_slot + 4, root_slot + 5],
                 last_vote_bankhash: Hash::default().to_string(),
@@ -289,7 +299,7 @@ mod tests {
                 wallclock: now,
             }),
         );
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, expected_active_percent);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
@@ -298,7 +308,7 @@ mod tests {
         // test that zero stake validator is ignored.
         let random_pubkey = Pubkey::new_unique();
         assert_eq!(
-            slots_aggregate.aggregate(
+            test_state.slots_aggregate.aggregate(
                 RestartLastVotedForkSlots::new(
                     random_pubkey,
                     timestamp(),
@@ -310,7 +320,7 @@ mod tests {
             ),
             None,
         );
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, expected_active_percent);
         let mut actual_slots = Vec::from_iter(result.slots_to_repair);
         actual_slots.sort();
@@ -319,22 +329,23 @@ mod tests {
 
     #[test]
     fn test_aggregate_from_record() {
-        let (mut slots_aggregate, validator_voting_keypairs, root_slot, last_voted_fork_slots) =
-            test_aggregate_init();
+        let mut test_state = test_aggregate_init();
+        let root_slot = test_state.root_slot;
         let last_vote_bankhash = Hash::new_unique();
         let time1 = timestamp();
         let record = LastVotedForkSlotsRecord {
             wallclock: time1,
-            last_voted_fork_slots: last_voted_fork_slots.clone(),
+            last_voted_fork_slots: test_state.last_voted_fork_slots.clone(),
             last_vote_bankhash: last_vote_bankhash.to_string(),
             shred_version: SHRED_VERSION as u32,
         };
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, 10.0);
         assert_eq!(
-            slots_aggregate
+            test_state
+                .slots_aggregate
                 .aggregate_from_record(
-                    &validator_voting_keypairs[0]
+                    &test_state.validator_voting_keypairs[0]
                         .node_keypair
                         .pubkey()
                         .to_string(),
@@ -343,15 +354,17 @@ mod tests {
                 .unwrap(),
             Some(record.clone()),
         );
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, 20.0);
         // Now if you get the same result from Gossip again, it should be ignored.
         assert_eq!(
-            slots_aggregate.aggregate(
+            test_state.slots_aggregate.aggregate(
                 RestartLastVotedForkSlots::new(
-                    validator_voting_keypairs[0].node_keypair.pubkey(),
+                    test_state.validator_voting_keypairs[0]
+                        .node_keypair
+                        .pubkey(),
                     time1,
-                    &last_voted_fork_slots,
+                    &test_state.last_voted_fork_slots,
                     last_vote_bankhash,
                     SHRED_VERSION,
                 )
@@ -366,9 +379,11 @@ mod tests {
             vec![root_slot + 1, root_slot + 2, root_slot + 3, root_slot + 4];
         let last_vote_bankhash2 = Hash::new_unique();
         assert_eq!(
-            slots_aggregate.aggregate(
+            test_state.slots_aggregate.aggregate(
                 RestartLastVotedForkSlots::new(
-                    validator_voting_keypairs[0].node_keypair.pubkey(),
+                    test_state.validator_voting_keypairs[0]
+                        .node_keypair
+                        .pubkey(),
                     time2,
                     &last_voted_fork_slots2,
                     last_vote_bankhash2,
@@ -384,12 +399,13 @@ mod tests {
             }),
         );
         // percentage doesn't change since it's a replace.
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, 20.0);
 
         // Record from validator with zero stake should be ignored.
         assert_eq!(
-            slots_aggregate
+            test_state
+                .slots_aggregate
                 .aggregate_from_record(
                     &Pubkey::new_unique().to_string(),
                     &LastVotedForkSlotsRecord {
@@ -403,27 +419,27 @@ mod tests {
             None,
         );
         // percentage doesn't change since the previous aggregate is ignored.
-        let result = slots_aggregate.get_aggregate_result();
+        let result = test_state.slots_aggregate.get_aggregate_result();
         assert_eq!(result.active_percent, 20.0);
     }
 
     #[test]
     fn test_aggregate_from_record_failures() {
         solana_logger::setup();
-        let (mut slots_aggregate, validator_voting_keypairs, _, last_voted_fork_slots) =
-            test_aggregate_init();
+        let mut test_state = test_aggregate_init();
         let last_vote_bankhash = Hash::new_unique();
         let mut last_voted_fork_slots_record = LastVotedForkSlotsRecord {
             wallclock: timestamp(),
-            last_voted_fork_slots,
+            last_voted_fork_slots: test_state.last_voted_fork_slots,
             last_vote_bankhash: last_vote_bankhash.to_string(),
             shred_version: SHRED_VERSION as u32,
         };
         // First test that this is a valid record.
         assert_eq!(
-            slots_aggregate
+            test_state
+                .slots_aggregate
                 .aggregate_from_record(
-                    &validator_voting_keypairs[0]
+                    &test_state.validator_voting_keypairs[0]
                         .node_keypair
                         .pubkey()
                         .to_string(),
@@ -432,18 +448,23 @@ mod tests {
                 .unwrap(),
             Some(last_voted_fork_slots_record.clone()),
         );
-        assert_matches!(slots_aggregate
+        // Then test that it fails if the record is invalid.
+
+        // Invalid pubkey.
+        assert_matches!(test_state.slots_aggregate
             .aggregate_from_record(
                 "invalid_pubkey",
                 &last_voted_fork_slots_record,
             ).err().unwrap().to_string(),
             message if message.contains("Invalid"));
 
+        // Invalid hash.
         last_voted_fork_slots_record.last_vote_bankhash.clear();
         assert_eq!(
-            slots_aggregate
+            test_state
+                .slots_aggregate
                 .aggregate_from_record(
-                    &validator_voting_keypairs[0]
+                    &test_state.validator_voting_keypairs[0]
                         .node_keypair
                         .pubkey()
                         .to_string(),
@@ -456,12 +477,14 @@ mod tests {
         );
         last_voted_fork_slots_record.last_vote_bankhash.pop();
 
+        // Empty last voted fork.
         last_voted_fork_slots_record.last_vote_bankhash = last_vote_bankhash.to_string();
         last_voted_fork_slots_record.last_voted_fork_slots.clear();
         assert_eq!(
-            slots_aggregate
+            test_state
+                .slots_aggregate
                 .aggregate_from_record(
-                    &validator_voting_keypairs[0]
+                    &test_state.validator_voting_keypairs[0]
                         .node_keypair
                         .pubkey()
                         .to_string(),
