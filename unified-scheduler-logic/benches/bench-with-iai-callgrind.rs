@@ -20,9 +20,9 @@ unsafe impl<T> std::marker::Sync for A<T> {}
 static LOCAL_ALLOCATOR: A<std::cell::UnsafeCell<BL>> = A(std::cell::UnsafeCell::new(BL::new()));
 
 struct BL {
-    bytes: [u8; Self::BLOCK_SIZE],
     cursor: *mut u8,
     limit: *mut u8,
+    bytes: [u8; Self::BLOCK_SIZE],
 }
 
 impl BL {
@@ -30,9 +30,9 @@ impl BL {
 
     const fn new() -> Self {
         Self {
-            bytes: [0; Self::BLOCK_SIZE],
             cursor: usize::max_value() as _,
             limit: usize::max_value() as _,
+            bytes: [0; Self::BLOCK_SIZE],
         }
     }
 
