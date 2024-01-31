@@ -146,8 +146,8 @@ impl TaskInner {
         &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
-    fn provisional_lock_count_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Counter {
-        &mut self.task_status.borrow_mut(task_token).provisional_lock_count
+    fn provisional_lock_count_mut(&self) -> &mut Counter {
+        &mut self.task_status.borrow_mut_unchecked(task_token).provisional_lock_count
     }
 
 
