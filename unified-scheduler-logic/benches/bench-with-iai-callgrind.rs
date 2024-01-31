@@ -38,7 +38,7 @@ impl BL {
             self.cursor = new_cursor;
             start
         } else if self.limit == std::ptr::null_mut() {
-            self.cursor = self.bytes.as_ptr();
+            self.cursor = self.bytes.as_ptr() as _;
         } else {
             panic!();
         }
