@@ -15,9 +15,10 @@ struct BL {
 
 impl BL {
     const BLOCK_SIZE: usize = 10_000_000;
+
     const fn new() -> Self {
         Self {
-            bytes: [0; 10_000_000],
+            bytes: [0; Self::BLOCK_SIZE],
             cursor: 0 as _,
             limit: 0 as _,
         }
