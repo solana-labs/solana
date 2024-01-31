@@ -497,6 +497,7 @@ impl SchedulingStateMachine {
             false,
         );
 
+        eprintln!("{:?}", provisional_lock_count);
         if provisional_lock_count.current() > 0 {
             *task.provisional_lock_count_mut() = provisional_lock_count;
             self.register_blocked_task_into_pages(&task);
