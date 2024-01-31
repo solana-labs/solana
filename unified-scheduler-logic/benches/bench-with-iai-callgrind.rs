@@ -420,9 +420,10 @@ fn bench_end_to_end_worst(account_count: usize) {
     });
     let mut scheduler = SchedulingStateMachine::default();
 
-    toggle_collect();
     let task = scheduler.schedule_task_for_test(task).unwrap();
     assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
+
+    toggle_collect();
     scheduler.deschedule_task(&task);
     assert_eq!(scheduler.retryable_task_count(), 1);
     let retried_task = scheduler
