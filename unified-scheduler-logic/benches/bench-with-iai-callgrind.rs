@@ -430,7 +430,7 @@ fn bench_end_to_end_worst(account_count: usize) {
             accounts,
             data: vec![0x00],
         };
-        let mut ixs = vec![memo_ix];
+        let ixs = vec![memo_ix];
         let msg = Message::new(&ixs, Some(&payer.pubkey()));
         let txn = Transaction::new_unsigned(msg);
         //panic!("{:?}", txn);
