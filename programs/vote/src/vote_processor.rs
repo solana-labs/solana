@@ -59,6 +59,7 @@ struct VoteInstructionMetrics {
     vote_count: AtomicU64,
     vote_state_update_count: AtomicU64,
     compact_vote_state_update_count: AtomicU64,
+    total: AtomicU64,
     last_report_time: AtomicInterval,
 }
 
@@ -69,6 +70,10 @@ enum VoteInstructionType {
 }
 
 impl VoteInstructionMetrics {
+    fn inc_total(&self) {
+        self.total.fetch_add(1, Ordering::Relaxed);
+    }
+
     fn update_and_report(&self, vote_instruction_type: VoteInstructionType) {
         const REPORT_INTERVAL_MS: u64 = 5_000;
         match vote_instruction_type {
@@ -103,6 +108,7 @@ impl VoteInstructionMetrics {
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
+                ("total", self.total.swap(0, Ordering::Relaxed), i64),
             );
         }
     }
@@ -122,6 +128,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
     let data = instruction_context.get_instruction_data();
 
     trace!("process_instruction: {:?}", data);
+    VOTE_INSTRUCTION_METRICS.inc_total();
 
     let mut me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if *me.get_owner() != id() {
