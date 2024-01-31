@@ -520,12 +520,6 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn rollback_locking(&mut self, task: &Task, lock_count: usize) {
-        for lock_attempt in &task.lock_attempts_mut(&mut self.task_token)[..lock_count] {
-            Self::unlock(&mut self.page_token, lock_attempt);
-        }
-    }
-
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
             let requested_usage = lock_attempt.requested_usage;
@@ -546,6 +540,7 @@ impl SchedulingStateMachine {
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
+                panic!("{:?}", uncontended_task.provisional_lock_count_mut(&mut self.task_token));
                 self.retryable_task_queue
                     .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
