@@ -72,7 +72,7 @@ unsafe impl GlobalAlloc for B {
         let (bytes, align) = (layout.size(), layout.align());
         //LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
         //LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
-        (&mut *LOCAL_ALLOCATOR.0.get()).alloc2(bytes, align)
+        (*LOCAL_ALLOCATOR.0.get()).alloc2(bytes, align)
     }
 
     #[inline(always)]
