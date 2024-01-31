@@ -67,15 +67,13 @@ enum VoteInstructionType {
     Vote,
     VoteStateUpdate,
     CompactVoteStateUpdate,
+    Other,
 }
 
 impl VoteInstructionMetrics {
-    fn inc_total(&self) {
-        self.total.fetch_add(1, Ordering::Relaxed);
-    }
-
     fn update_and_report(&self, vote_instruction_type: VoteInstructionType) {
         const REPORT_INTERVAL_MS: u64 = 5_000;
+        self.total.fetch_add(1, Ordering::Relaxed);
         match vote_instruction_type {
             VoteInstructionType::Vote => {
                 self.vote_count.fetch_add(1, Ordering::Relaxed);
@@ -87,6 +85,7 @@ impl VoteInstructionMetrics {
                 self.compact_vote_state_update_count
                     .fetch_add(1, Ordering::Relaxed);
             }
+            _ => {}
         }
 
         if self.last_report_time.should_update(REPORT_INTERVAL_MS) {
@@ -128,7 +127,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
     let data = instruction_context.get_instruction_data();
 
     trace!("process_instruction: {:?}", data);
-    VOTE_INSTRUCTION_METRICS.inc_total();
+    let mut vote_instr_type = VoteInstructionType::Other;
 
     let mut me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if *me.get_owner() != id() {
@@ -136,7 +135,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
     }
 
     let signers = instruction_context.get_signers(transaction_context)?;
-    match limited_deserialize(data)? {
+    let process_result = match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             if !rent.is_exempt(me.get_lamports(), me.get_data().len()) {
@@ -221,7 +220,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
-            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::Vote);
+            vote_instr_type = VoteInstructionType::Vote;
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
@@ -237,7 +236,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
-            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::VoteStateUpdate);
+            vote_instr_type = VoteInstructionType::VoteStateUpdate;
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;
@@ -252,7 +251,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::CompactUpdateVoteState(vote_state_update)
         | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
-            VOTE_INSTRUCTION_METRICS.update_and_report(VoteInstructionType::CompactVoteStateUpdate);
+            vote_instr_type = VoteInstructionType::CompactVoteStateUpdate;
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;
@@ -303,7 +302,9 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &invoke_context.feature_set,
             )
         }
-    }
+    };
+    VOTE_INSTRUCTION_METRICS.update_and_report(vote_instr_type);
+    process_result
 });
 
 #[cfg(test)]
