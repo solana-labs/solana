@@ -227,7 +227,7 @@ fn bench_arc(account_count: usize) {
                 b = std::sync::Arc::new(3_u32);
             },
             2 => {
-                b = std::rc::Rc::new(3_u32);
+                b = std::sync::Arc::new(3_u32);
                 black_box(b.clone());
             },
             _ => {
@@ -235,10 +235,10 @@ fn bench_arc(account_count: usize) {
         let b;
         match account_count {
             3 => {
-                b = std::sync::Arc::new(3_u32);
+                b = std::rc::Rc::new(3_u32);
             },
             4 => {
-                b = std::rc::Rrc::new(3_u32);
+                b = std::rc::Rc::new(3_u32);
                 black_box(b.clone());
             },
             _ => panic!(),
