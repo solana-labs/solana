@@ -439,6 +439,32 @@ mod tests {
         }
     }
 
+    const WAIT_FOR_THREAD_TIMEOUT: u64 = 10_000;
+
+    fn wait_on_expected_progress_with_timeout(
+        wen_restart_proto_path: PathBuf,
+        expected_progress: WenRestartProgress,
+    ) {
+        let start = timestamp();
+        let mut progress;
+        loop {
+            progress = read_wen_restart_records(&wen_restart_proto_path).unwrap();
+            if let Some(my_last_voted_fork_slots) = &expected_progress.my_last_voted_fork_slots {
+                if let Some(record) = progress.my_last_voted_fork_slots.as_mut() {
+                    record.wallclock = my_last_voted_fork_slots.wallclock;
+                }
+            }
+            if progress == expected_progress {
+                return;
+            }
+            if timestamp().saturating_sub(start) > WAIT_FOR_THREAD_TIMEOUT {
+                break;
+            }
+            sleep(Duration::from_millis(100));
+        }
+        assert_eq!(progress, expected_progress);
+    }
+
     fn wen_restart_test_succeed_after_failure(
         test_state: WenRestartTestInitResult,
         last_vote_bankhash: Hash,
@@ -464,14 +490,10 @@ mod tests {
                 );
             })
             .unwrap();
-        sleep(Duration::from_millis(200));
-        let mut progress = read_wen_restart_records(&test_state.wen_restart_proto_path).unwrap();
-        if let Some(my_last_voted_fork_slots) = &expected_progress.my_last_voted_fork_slots {
-            if let Some(record) = progress.my_last_voted_fork_slots.as_mut() {
-                record.wallclock = my_last_voted_fork_slots.wallclock;
-            }
-        }
-        assert_eq!(progress, expected_progress);
+        wait_on_expected_progress_with_timeout(
+            test_state.wen_restart_proto_path.clone(),
+            expected_progress,
+        );
         exit.store(true, Ordering::Relaxed);
         let _ = wen_restart_thread_handle.join();
         let _ = remove_file(&test_state.wen_restart_proto_path);
@@ -532,6 +554,8 @@ mod tests {
                 },
             );
         }
+
+        // Simulating successful repair of missing blocks.
         let mut parent_bank = test_state.bank_forks.read().unwrap().root_bank();
         for slot in expected_slots_to_repair {
             let mut my_bank_forks = test_state.bank_forks.write().unwrap();
@@ -543,6 +567,7 @@ mod tests {
             parent_bank = my_bank_forks.get(slot).unwrap();
             parent_bank.freeze();
         }
+
         let _ = wen_restart_thread_handle.join();
         let buffer = read(test_state.wen_restart_proto_path).unwrap();
         let progress = WenRestartProgress::decode(&mut std::io::Cursor::new(buffer)).unwrap();
@@ -745,13 +770,9 @@ mod tests {
                     wallclock: now,
                 },
             );
-            sleep(Duration::from_millis(200));
-            exit.store(true, Ordering::Relaxed);
-            let _ = wen_restart_thread_handle.join();
-            let buffer = read(&test_state.wen_restart_proto_path).unwrap();
-            let progress = WenRestartProgress::decode(&mut std::io::Cursor::new(buffer)).unwrap();
-            assert_eq!(
-                progress,
+            // Wait for the newly pushed message to be in written proto file.
+            wait_on_expected_progress_with_timeout(
+                test_state.wen_restart_proto_path.clone(),
                 WenRestartProgress {
                     state: RestartState::LastVotedForkSlots.into(),
                     my_last_voted_fork_slots: Some(LastVotedForkSlotsRecord {
@@ -763,8 +784,10 @@ mod tests {
                     last_voted_fork_slots_aggregate: Some(LastVotedForkSlotsAggregateRecord {
                         received: expected_messages.clone(),
                     }),
-                }
-            )
+                },
+            );
+            exit.store(true, Ordering::Relaxed);
+            let _ = wen_restart_thread_handle.join();
         }
         // Corrupt proto file, should fail.
         let mut record = read_wen_restart_records(&test_state.wen_restart_proto_path).unwrap();
