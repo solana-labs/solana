@@ -49,7 +49,7 @@ impl BL {
         if new_cursor <= self.limit {
             self.cursor = new_cursor;
             start
-        } else if self.limit == std::ptr::null_mut() {
+        } else if self.limit.is_null() {
             self.cursor = self.bytes.as_ptr() as _;
             self.limit = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
             self.alloc2(bytes, align)
