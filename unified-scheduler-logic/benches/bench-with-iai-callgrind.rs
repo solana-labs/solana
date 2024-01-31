@@ -48,7 +48,7 @@ impl BL {
         let new_cursor: *mut u8 = (((((self.cursor - bytes) as usize) - 31) & !31) as _);
         if new_cursor >= self.limit {
             self.cursor = new_cursor;
-            start
+            new_cursor
         } else if self.limit.is_null() {
             self.limit = self.bytes.as_ptr() as _;
             self.cursor = unsafe { self.cursor.add(Self::BLOCK_SIZE) };
