@@ -29,7 +29,7 @@ impl BL {
     }
 
     #[inline(always)]
-    pub fn alloc(&mut self, bytes: usize, align: usize) -> *mut u8 {
+    pub fn alloc2(&mut self, bytes: usize, align: usize) -> *mut u8 {
         let start = Self::align_allocation(self.cursor, align);
         let new_cursor = unsafe { start.add(bytes) };
         if new_cursor <= self.limit {
@@ -47,7 +47,7 @@ unsafe impl GlobalAlloc for BL {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let (bytes, align) = (layout.size(), layout.align());
-        let ptr = LOCAL_ALLOCATOR.alloc(bytes, align);
+        let ptr = LOCAL_ALLOCATOR.alloc2(bytes, align);
         mem_zero(ptr, bytes);
         ptr
     }
