@@ -3,7 +3,10 @@
 
 //#[global_allocator]
 //static GLOBAL: bump_allocator::BumpPointer = bump_allocator::BumpPointer;
-//
+
+#[global_allocator]
+static GLOBAL: B = B;
+
 #[thread_local]
 pub static mut LOCAL_ALLOCATOR: BL = BL::new();
 
