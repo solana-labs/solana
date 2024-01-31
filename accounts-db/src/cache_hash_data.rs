@@ -214,7 +214,7 @@ impl CacheHashData {
             cache_dir,
             pre_existing_cache_files: Arc::new(Mutex::new(HashSet::default())),
             deletion_policy,
-            stats: Arc::default(),
+            stats: Arc::new(CacheHashDataStats::default()),
         };
 
         result.get_cache_files();
