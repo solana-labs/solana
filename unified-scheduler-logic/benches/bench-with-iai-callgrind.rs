@@ -214,6 +214,16 @@ fn bench_insert_task(account_count: usize) {
 
 #[library_benchmark]
 #[bench::one(1)]
+fn bench_insert_task(account_count: usize) {
+    let b;
+    toggle_collect();
+    b = std::sync::Arc::new(3_usize);
+    toggle_collect();
+    drop(b);
+}
+
+#[library_benchmark]
+#[bench::one(1)]
 fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
