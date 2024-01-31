@@ -418,8 +418,25 @@ fn bench_end_to_end_worst(account_count: usize) {
     let mut scheduler = SchedulingStateMachine::default();
 
     let task = scheduler.schedule_task_for_test(task).unwrap();
-    for i in 1..128 {
-        let task2 = SchedulingStateMachine::create_task(tx0.clone(), i, &mut |address| {
+    for i in 1..account_count {
+        let mut accounts = vec![accounts[i]];
+        for _ in 0..account_count {
+            accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+        }
+
+        let payer = Keypair::new();
+        let memo_ix = Instruction {
+            program_id: Pubkey::default(),
+            accounts,
+            data: vec![0x00],
+        };
+        let mut ixs = vec![memo_ix];
+        let msg = Message::new(&ixs, Some(&payer.pubkey()));
+        let txn = Transaction::new_unsigned(msg);
+        //panic!("{:?}", txn);
+        //assert_eq!(wire_txn.len(), 3);
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+        let task2 = SchedulingStateMachine::create_task(tx0, i, &mut |address| {
             pages.entry(address).or_default().clone()
         });
         assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
