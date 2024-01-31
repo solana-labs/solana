@@ -1,18 +1,9 @@
 #![feature(thread_local)]
 #![allow(clippy::arithmetic_side_effects)]
 
-//#[global_allocator]
-//static GLOBAL: bump_allocator::BumpPointer = bump_allocator::BumpPointer;
-
 #[global_allocator]
 static GLOBAL: B = B;
 
-/*
-//#[thread_local]
-thread_local! {
-    pub static LOCAL_ALLOCATOR: std::cell::RefCell<BL> = const { std::cell::RefCell::new(BL::new()) };
-}
-*/
 struct A<T>(T);
 
 unsafe impl<T> std::marker::Sync for A<T> {}
