@@ -31,6 +31,18 @@ pub struct FeeStructure {
     pub compute_fee_bins: Vec<FeeBin>,
 }
 
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct FeeDetails {
+    transaction_fee: u64,
+    prioritization_fee: u64,
+}
+
+impl FeeDetails {
+    pub fn total_fee(&self) -> u64 {
+        self.transaction_fee.saturating_add(self.prioritization_fee)
+    }
+}
+
 pub const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
 
 impl FeeStructure {
@@ -91,6 +103,25 @@ impl FeeStructure {
             1.0 // multiplier that has no effect
         };
 
+        (self
+            .calculate_fee_details(
+                message,
+                budget_limits,
+                include_loaded_account_data_size_in_fee,
+            )
+            .total_fee() as f64
+            * congestion_multiplier)
+            .round() as u64
+    }
+
+    /// Calculate fee details for `SanitizedMessage`
+    #[cfg(not(target_os = "solana"))]
+    pub fn calculate_fee_details(
+        &self,
+        message: &SanitizedMessage,
+        budget_limits: &FeeBudgetLimits,
+        include_loaded_account_data_size_in_fee: bool,
+    ) -> FeeDetails {
         let signature_fee = message
             .num_signatures()
             .saturating_mul(self.lamports_per_signature);
@@ -122,13 +153,13 @@ impl FeeStructure {
                     .unwrap_or_default()
             });
 
-        ((budget_limits
-            .prioritization_fee
-            .saturating_add(signature_fee)
-            .saturating_add(write_lock_fee)
-            .saturating_add(compute_fee) as f64)
-            * congestion_multiplier)
-            .round() as u64
+        FeeDetails {
+            transaction_fee: (signature_fee
+                .saturating_add(write_lock_fee)
+                .saturating_add(compute_fee) as f64)
+                .round() as u64,
+            prioritization_fee: budget_limits.prioritization_fee,
+        }
     }
 }
 
