@@ -39,10 +39,9 @@ impl BL {
     #[inline(always)]
     pub fn alloc2(&mut self, bytes: usize) -> *mut u8 {
         loop {
-            let new_cursor: *mut u8 = unsafe { ((((self.cursor.sub(bytes)) as usize) - 31) & !31) as _ };
-            if new_cursor >= self.limit {
-                self.cursor = new_cursor;
-                return new_cursor
+            self.cursor = unsafe { ((((self.cursor.sub(bytes)) as usize) - 31) & !31) as _ };
+            if self.cursor >= self.limit {
+                return self.cursor;
             } else if self.limit == usize::max_value() as _ {
                 self.limit = self.bytes.as_ptr() as _;
                 self.cursor = unsafe { self.limit.add(Self::BLOCK_SIZE) };
