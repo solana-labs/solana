@@ -401,7 +401,7 @@ impl SchedulingStateMachine {
                     }
                 }
                 LockStatus::Failed => {
-                    eprintln!("failed: {:?}", usage);
+                    eprintln!("failed");
                     lock_count.increment_self();
                 }
             }
