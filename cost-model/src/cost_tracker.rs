@@ -58,6 +58,10 @@ pub struct CostTracker {
     vote_cost: u64,
     transaction_count: u64,
     account_data_size: u64,
+
+    // NOTE: cost_tracker is initialized into `default` for new bank, write-lock-fee-cache (that
+    // contains each write-lock pricer) is passed down from parent (or init from ledger fields)
+    // therefore, it'd better belong to bank directly instead of being part of cost-tracker.
 }
 
 impl Default for CostTracker {
