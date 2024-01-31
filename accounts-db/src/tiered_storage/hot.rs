@@ -598,8 +598,7 @@ impl HotStorageWriter {
                 // account meta, data, optional fields, its address, and AccountOffset).
                 // Storage size from those shared blocks like footer and owners block
                 // is not included.
-                size: stored_size
-                    + footer.index_block_format.entry_size::<HotAccountOffset>(),
+                size: stored_size + footer.index_block_format.entry_size::<HotAccountOffset>(),
             });
             index.push(index_entry);
         }
