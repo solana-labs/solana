@@ -13,7 +13,9 @@ thread_local! {
     pub static LOCAL_ALLOCATOR: std::cell::RefCell<BL> = const { std::cell::RefCell::new(BL::new()) };
 }
 */
-static LOCAL_ALLOCATOR: std::cell::UnsafeCell<BL> = std::cell::UnsafeCell::new(BL::new());
+static A<T>;
+
+static LOCAL_ALLOCATOR: A(std::cell::UnsafeCell<BL>) = std::cell::UnsafeCell::new(BL::new());
 
 struct BL {
     bytes: [u8; Self::BLOCK_SIZE],
