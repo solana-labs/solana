@@ -215,8 +215,8 @@ pub(crate) enum BlockhashStatus {
     /// No vote since restart
     #[default]
     Uninitialized,
-    /// Failed generation of last vote tx
-    Failed,
+    /// Non voting validator
+    NonVoting,
     /// Successfully generated vote tx with blockhash
     Blockhash(Hash),
 }
@@ -234,7 +234,7 @@ pub struct Tower {
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
     // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
     //  block 10, in  which case `last_vote_tx_blockhash` equals the blockhash of 10, not 5.
-    // For non voting validators this is Failed
+    // For non voting validators this is NonVoting
     last_vote_tx_blockhash: BlockhashStatus,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
@@ -544,8 +544,8 @@ impl Tower {
         self.last_vote_tx_blockhash = BlockhashStatus::Blockhash(new_vote_tx_blockhash);
     }
 
-    pub(crate) fn mark_last_vote_tx_blockhash_failed(&mut self) {
-        self.last_vote_tx_blockhash = BlockhashStatus::Failed;
+    pub(crate) fn mark_last_vote_tx_blockhash_non_voting(&mut self) {
+        self.last_vote_tx_blockhash = BlockhashStatus::NonVoting;
     }
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {

@@ -137,6 +137,20 @@ enum ConfirmationType {
     DuplicateConfirmed,
 }
 
+enum GenerateVoteTxResult {
+    // non voting validator, not eligible for refresh
+    NonVoting,
+    // failed generation, eligible for refresh
+    Failed,
+    Tx(Transaction),
+}
+
+impl GenerateVoteTxResult {
+    fn is_non_voting(&self) -> bool {
+        matches!(self, Self::NonVoting)
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 struct ConfirmedSlot {
     slot: Slot,
@@ -2321,18 +2335,18 @@ impl ReplayStage {
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
         wait_to_vote_slot: Option<Slot>,
-    ) -> Option<Transaction> {
+    ) -> GenerateVoteTxResult {
         if !bank.is_startup_verification_complete() {
             info!("startup verification incomplete, so unable to vote");
-            return None;
+            return GenerateVoteTxResult::Failed;
         }
 
         if authorized_voter_keypairs.is_empty() {
-            return None;
+            return GenerateVoteTxResult::NonVoting;
         }
         if let Some(slot) = wait_to_vote_slot {
             if bank.slot() < slot {
-                return None;
+                return GenerateVoteTxResult::Failed;
             }
         }
         let vote_account = match bank.get_vote_account(vote_account_pubkey) {
@@ -2341,7 +2355,7 @@ impl ReplayStage {
                     "Vote account {} does not exist.  Unable to vote",
                     vote_account_pubkey,
                 );
-                return None;
+                return GenerateVoteTxResult::Failed;
             }
             Some(vote_account) => vote_account,
         };
@@ -2352,7 +2366,7 @@ impl ReplayStage {
                     "Vote account {} is unreadable.  Unable to vote",
                     vote_account_pubkey,
                 );
-                return None;
+                return GenerateVoteTxResult::Failed;
             }
             Ok(vote_state) => vote_state,
         };
@@ -2363,7 +2377,7 @@ impl ReplayStage {
                 vote_state.node_pubkey,
                 node_keypair.pubkey()
             );
-            return None;
+            return GenerateVoteTxResult::Failed;
         }
 
         let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) else {
@@ -2372,7 +2386,7 @@ impl ReplayStage {
                 vote_account_pubkey,
                 bank.epoch()
             );
-            return None;
+            return GenerateVoteTxResult::Failed;
         };
 
         let authorized_voter_keypair = match authorized_voter_keypairs
@@ -2382,7 +2396,7 @@ impl ReplayStage {
             None => {
                 warn!("The authorized keypair {} for vote account {} is not available.  Unable to vote",
                       authorized_voter_pubkey, vote_account_pubkey);
-                return None;
+                return GenerateVoteTxResult::NonVoting;
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
@@ -2418,7 +2432,7 @@ impl ReplayStage {
             vote_signatures.clear();
         }
 
-        Some(vote_tx)
+        GenerateVoteTxResult::Tx(vote_tx)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2458,10 +2472,13 @@ impl ReplayStage {
         // If we are a non voting validator or have an incorrect setup preventing us from
         // generating vote txs, no need to refresh
         let last_vote_tx_blockhash = match tower.last_vote_tx_blockhash() {
-            // Since the checks in vote generation are deterministic there is no need
-            // to refresh a failed vote
-            BlockhashStatus::Failed => return,
-            BlockhashStatus::Uninitialized => None, // Have not voted after restart, eligible for refresh
+            // Since the checks in vote generation are deterministic, if we were non voting
+            // on the original vote, the refresh will also fail. No reason to refresh.
+            BlockhashStatus::NonVoting => return,
+            // In this case we have not voted since restart, it is unclear if we are non voting.
+            // Attempt to refresh.
+            BlockhashStatus::Uninitialized => None,
+            // Refresh if the blockhash is expired
             BlockhashStatus::Blockhash(blockhash) => Some(blockhash),
         };
 
@@ -2487,7 +2504,7 @@ impl ReplayStage {
         // Update timestamp for refreshed vote
         tower.refresh_last_vote_timestamp(heaviest_bank_on_same_fork.slot());
 
-        let vote_tx = Self::generate_vote_tx(
+        let vote_tx_result = Self::generate_vote_tx(
             identity_keypair,
             heaviest_bank_on_same_fork,
             vote_account_pubkey,
@@ -2499,7 +2516,7 @@ impl ReplayStage {
             wait_to_vote_slot,
         );
 
-        if let Some(vote_tx) = vote_tx {
+        if let GenerateVoteTxResult::Tx(vote_tx) = vote_tx_result {
             let recent_blockhash = vote_tx.message.recent_blockhash;
             tower.refresh_last_vote_tx_blockhash(recent_blockhash);
 
@@ -2518,8 +2535,8 @@ impl ReplayStage {
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
             last_vote_refresh_time.last_refresh_time = Instant::now();
-        } else {
-            tower.mark_last_vote_tx_blockhash_failed();
+        } else if vote_tx_result.is_non_voting() {
+            tower.mark_last_vote_tx_blockhash_non_voting();
         }
     }
 
@@ -2538,7 +2555,7 @@ impl ReplayStage {
         wait_to_vote_slot: Option<Slot>,
     ) {
         let mut generate_time = Measure::start("generate_vote");
-        let vote_tx = Self::generate_vote_tx(
+        let vote_tx_result = Self::generate_vote_tx(
             identity_keypair,
             bank,
             vote_account_pubkey,
@@ -2551,7 +2568,7 @@ impl ReplayStage {
         );
         generate_time.stop();
         replay_timing.generate_vote_us += generate_time.as_us();
-        if let Some(vote_tx) = vote_tx {
+        if let GenerateVoteTxResult::Tx(vote_tx) = vote_tx_result {
             tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
 
             let saved_tower = SavedTower::new(tower, identity_keypair).unwrap_or_else(|err| {
@@ -2567,8 +2584,8 @@ impl ReplayStage {
                     saved_tower: SavedTowerVersions::from(saved_tower),
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
-        } else {
-            tower.mark_last_vote_tx_blockhash_failed();
+        } else if vote_tx_result.is_non_voting() {
+            tower.mark_last_vote_tx_blockhash_non_voting();
         }
     }
 
