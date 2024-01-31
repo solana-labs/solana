@@ -11,7 +11,7 @@ struct BL {
 }
 
 impl BL {
-    const fn new() {
+    const fn new() -> Self {
         Self {
             bytes: [0; 10_000_000],
         }
