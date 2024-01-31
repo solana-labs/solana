@@ -37,14 +37,7 @@ impl BL {
     }
 
     #[inline(always)]
-    fn align_allocation(cursor: *mut u8, align: usize) -> *mut u8 {
-        let mask = align - 1;
-        (((cursor as usize) + mask) & !mask) as _
-    }
-
-    #[inline(always)]
     pub fn alloc2(&mut self, bytes: usize, align: usize) -> *mut u8 {
-        //let start = Self::align_allocation(self.cursor, 32);
         let new_cursor: *mut u8 = unsafe { (((((self.cursor.sub(bytes)) as usize) - 31) & !31) as _) };
         if new_cursor >= self.limit {
             self.cursor = new_cursor;
