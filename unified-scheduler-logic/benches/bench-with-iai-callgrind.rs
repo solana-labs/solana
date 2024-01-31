@@ -7,8 +7,10 @@
 #[global_allocator]
 static GLOBAL: B = B;
 
-#[thread_local]
-pub static mut LOCAL_ALLOCATOR: BL = BL::new();
+//#[thread_local]
+thread_local! {
+    pub static mut LOCAL_ALLOCATOR: BL = const { BL::new() };
+}
 
 struct BL {
     bytes: [u8; Self::BLOCK_SIZE],
