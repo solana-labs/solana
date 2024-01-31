@@ -552,6 +552,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
+        let mut i = 0;
         for unlock_attempt in task.lock_attempts(&self.task_token) {
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
@@ -562,7 +563,8 @@ impl SchedulingStateMachine {
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
-                eprintln!("aaa");
+                eprintln!("aaa: {i}");
+                i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
