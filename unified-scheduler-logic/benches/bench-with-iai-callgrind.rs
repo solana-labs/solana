@@ -13,7 +13,7 @@ thread_local! {
     pub static LOCAL_ALLOCATOR: std::cell::RefCell<BL> = const { std::cell::RefCell::new(BL::new()) };
 }
 */
-static A<T>;
+static A<T>(T);
 
 static LOCAL_ALLOCATOR: A(std::cell::UnsafeCell<BL>) = std::cell::UnsafeCell::new(BL::new());
 
