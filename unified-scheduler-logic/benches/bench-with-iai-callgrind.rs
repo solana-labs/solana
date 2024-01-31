@@ -9,7 +9,7 @@ static GLOBAL: B = B;
 
 //#[thread_local]
 thread_local! {
-    pub static mut LOCAL_ALLOCATOR: BL = const { BL::new() };
+    pub static LOCAL_ALLOCATOR: BL = const { BL::new() };
 }
 
 struct BL {
