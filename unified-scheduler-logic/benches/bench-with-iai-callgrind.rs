@@ -39,7 +39,7 @@ impl BL {
             start
         } else if self.limit == std::ptr::null_mut() {
             self.cursor = self.bytes.as_ptr() as _;
-            self.alloc2(bytes, align);
+            self.alloc2(bytes, align)
         } else {
             panic!();
         }
