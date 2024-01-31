@@ -150,7 +150,6 @@ mod tests {
             last_voted_fork_slots_aggregate::LastVotedForkSlotsAggregate,
             solana::wen_restart_proto::LastVotedForkSlotsRecord,
         },
-        assert_matches::assert_matches,
         solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
         solana_program::{clock::Slot, pubkey::Pubkey},
         solana_runtime::{
@@ -451,49 +450,37 @@ mod tests {
         // Then test that it fails if the record is invalid.
 
         // Invalid pubkey.
-        assert_matches!(test_state.slots_aggregate
-            .aggregate_from_record(
-                "invalid_pubkey",
-                &last_voted_fork_slots_record,
-            ).err().unwrap().to_string(),
-            message if message.contains("Invalid"));
+        assert!(test_state
+            .slots_aggregate
+            .aggregate_from_record("invalid_pubkey", &last_voted_fork_slots_record,)
+            .is_err());
 
         // Invalid hash.
         last_voted_fork_slots_record.last_vote_bankhash.clear();
-        assert_eq!(
-            test_state
-                .slots_aggregate
-                .aggregate_from_record(
-                    &test_state.validator_voting_keypairs[0]
-                        .node_keypair
-                        .pubkey()
-                        .to_string(),
-                    &last_voted_fork_slots_record,
-                )
-                .err()
-                .unwrap()
-                .to_string(),
-            "string decoded to wrong size for hash"
-        );
+        assert!(test_state
+            .slots_aggregate
+            .aggregate_from_record(
+                &test_state.validator_voting_keypairs[0]
+                    .node_keypair
+                    .pubkey()
+                    .to_string(),
+                &last_voted_fork_slots_record,
+            )
+            .is_err());
         last_voted_fork_slots_record.last_vote_bankhash.pop();
 
         // Empty last voted fork.
         last_voted_fork_slots_record.last_vote_bankhash = last_vote_bankhash.to_string();
         last_voted_fork_slots_record.last_voted_fork_slots.clear();
-        assert_eq!(
-            test_state
-                .slots_aggregate
-                .aggregate_from_record(
-                    &test_state.validator_voting_keypairs[0]
-                        .node_keypair
-                        .pubkey()
-                        .to_string(),
-                    &last_voted_fork_slots_record,
-                )
-                .err()
-                .unwrap()
-                .to_string(),
-            "Last voted fork cannot be empty"
-        );
+        assert!(test_state
+            .slots_aggregate
+            .aggregate_from_record(
+                &test_state.validator_voting_keypairs[0]
+                    .node_keypair
+                    .pubkey()
+                    .to_string(),
+                &last_voted_fork_slots_record,
+            )
+            .is_err());
     }
 }

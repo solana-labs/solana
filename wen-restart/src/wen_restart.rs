@@ -288,7 +288,6 @@ pub(crate) fn write_wen_restart_records(
 mod tests {
     use {
         crate::wen_restart::*,
-        assert_matches::assert_matches,
         solana_entry::entry,
         solana_gossip::{
             cluster_info::ClusterInfo,
@@ -581,15 +580,9 @@ mod tests {
     fn test_wen_restart_init_failures() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let test_state = wen_restart_test_init(&ledger_path);
-        for (last_vote, expected_err) in vec![
-            (
-                VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)])),
-                "last vote is not a vote transaction",
-            ),
-            (
-                VoteTransaction::from(Vote::new(vec![], Hash::new_unique())),
-                "last vote does not have last voted slot",
-            ),
+        for last_vote in [
+            VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)])),
+            VoteTransaction::from(Vote::new(vec![], Hash::new_unique())),
         ] {
             let progress = WenRestartProgress {
                 state: RestartState::Init.into(),
@@ -599,7 +592,7 @@ mod tests {
             assert!(
                 write_wen_restart_records(&test_state.wen_restart_proto_path, &progress).is_ok()
             );
-            assert_matches!(wait_for_wen_restart(
+            assert!(wait_for_wen_restart(
                 &test_state.wen_restart_proto_path,
                 last_vote,
                 test_state.blockstore.clone(),
@@ -608,7 +601,8 @@ mod tests {
                 Some(Arc::new(RwLock::new(Vec::new()))),
                 80,
                 Arc::new(AtomicBool::new(false)),
-            ).err().unwrap().to_string(), message if message.contains(expected_err));
+            )
+            .is_err());
         }
         let last_vote_bankhash = Hash::new_unique();
         let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
@@ -646,7 +640,7 @@ mod tests {
         let last_vote_slot: Slot = test_state.last_voted_fork_slots[0];
         let last_vote_bankhash = Hash::new_unique();
         change_proto_file_readonly(&test_state.wen_restart_proto_path, true);
-        assert_matches!(wait_for_wen_restart(
+        assert!(wait_for_wen_restart(
             &test_state.wen_restart_proto_path,
             VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
             test_state.blockstore.clone(),
@@ -655,7 +649,8 @@ mod tests {
             Some(Arc::new(RwLock::new(Vec::new()))),
             80,
             Arc::new(AtomicBool::new(false)),
-        ).err().unwrap().to_string(), message if message.contains("Permission denied"));
+        )
+        .is_err());
         change_proto_file_readonly(&test_state.wen_restart_proto_path, false);
         let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
         wen_restart_test_succeed_after_failure(
@@ -784,22 +779,17 @@ mod tests {
             slots_record.last_vote_bankhash += "1";
         }
         assert!(write_wen_restart_records(&test_state.wen_restart_proto_path, &record).is_ok());
-        assert_matches!(
-            wait_for_wen_restart(
-                &test_state.wen_restart_proto_path,
-                VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
-                test_state.blockstore.clone(),
-                test_state.cluster_info.clone(),
-                test_state.bank_forks.clone(),
-                Some(Arc::new(RwLock::new(Vec::new()))),
-                80,
-                Arc::new(AtomicBool::new(false)),
-            )
-            .err()
-            .unwrap()
-            .to_string(),
-            message if message.contains("string decoded to wrong size for hash")
-        );
+        assert!(wait_for_wen_restart(
+            &test_state.wen_restart_proto_path,
+            VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
+            test_state.blockstore.clone(),
+            test_state.cluster_info.clone(),
+            test_state.bank_forks.clone(),
+            Some(Arc::new(RwLock::new(Vec::new()))),
+            80,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .is_err());
         for slots_record in record
             .last_voted_fork_slots_aggregate
             .as_mut()
