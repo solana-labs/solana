@@ -7,7 +7,15 @@
 pub static mut LOCAL_ALLOCATOR: BL = BL::new();
 
 struct BL {
-    butes: [u8; 10_000_000];
+    bytes: [u8; 10_000_000];
+}
+
+impl BL {
+    const fn new() {
+        Self {
+            bytes: [0; _],
+        }
+    }
 }
 
 
