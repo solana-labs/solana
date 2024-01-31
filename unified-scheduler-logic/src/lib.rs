@@ -69,7 +69,7 @@ mod counter {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    provisional_lock_count: Count,
+    provisional_lock_count: Counter,
 }
 
 mod cell {
