@@ -34,7 +34,7 @@ impl BL {
             if self.cursor >= self.limit {
                 return self.cursor;
             } else if self.limit == usize::max_value() as _ {
-                self.limit = self.bytes.as_ptr();
+                self.limit = self.bytes.as_mut_ptr();
                 self.cursor = unsafe { self.limit.add(Self::BLOCK_SIZE) };
                 continue;
             } else {
