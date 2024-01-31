@@ -593,12 +593,13 @@ impl HotStorageWriter {
                 // is to store AccountOffset instead, which can further save
                 // one jump from the index block to the accounts block.
                 offset: index.len(),
-                // The size here might be slightly bigger than the actual
-                // storage size of one account as one owner address could be
-                // shared by multiple accounts.
+                // Here we only include the stored size that the account directly
+                // contribute (i.e., account entry + index entry that include the
+                // account meta, data, optional fields, its address, and AccountOffset).
+                // Storage size from those shared blocks like footer and owners block
+                // is not included.
                 size: stored_size
-                    + footer.index_block_format.entry_size::<HotAccountOffset>()
-                    + std::mem::size_of::<Pubkey>(),
+                    + footer.index_block_format.entry_size::<HotAccountOffset>(),
             });
             index.push(index_entry);
         }
