@@ -393,7 +393,7 @@ impl SchedulingStateMachine {
         for attempt in lock_attempts.iter_mut() {
             match Self::attempt_lock_address(page_token, unique_weight, attempt) {
                 LockStatus::Succeded(usage) => {
-                    eprintln!("ok: {:?}", usage);
+                    //eprintln!("ok: {:?}", usage);
                     if direct_commit {
                         attempt.page_mut(page_token).usage = usage;
                     } else {
@@ -401,7 +401,7 @@ impl SchedulingStateMachine {
                     }
                 }
                 LockStatus::Failed => {
-                    eprintln!("failed");
+                    //eprintln!("failed");
                     lock_count.increment_self();
                 }
             }
@@ -501,7 +501,7 @@ impl SchedulingStateMachine {
             false,
         );
 
-        eprintln!("{:?}", provisional_lock_count);
+        //eprintln!("{:?}", provisional_lock_count);
         if provisional_lock_count.current() > 0 {
             *task.provisional_lock_count_mut() = provisional_lock_count;
             self.register_blocked_task_into_pages(&task);
@@ -568,10 +568,10 @@ impl SchedulingStateMachine {
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
             if let Some(uncontended_task) = heaviest_uncontended_now {
-                eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
+                //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
-                    eprintln!("bbb: {i}");
+                    //eprintln!("bbb: {i}");
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert_with(|| {
