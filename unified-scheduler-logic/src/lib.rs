@@ -241,11 +241,12 @@ impl PageInner {
         self.readonly_blocked_tasks.last_key_value()
     }
 
-    fn heaviest_blocked_task(&self) -> Option<(&UniqueWeight, &Task)> {
+    fn heaviest_blocked_task(&self) -> Option<&Task> {
         Self::heavier_task(
             self.heaviest_blocked_writable_task(),
             self.heaviest_blocked_readonly_task(),
         )
+        .map(|x| x.1)
     }
 
     fn heavier_task<'a>(
@@ -539,9 +540,9 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
-            if let Some((&uw, uncontended_task)) = heaviest_uncontended_now {
+            if let Some(uncontended_task) = heaviest_uncontended_now {
                 self.retryable_task_queue
-                    .entry(uw)
+                    .entry(uncontended_task.unique_weight)
                     .or_insert_with(|| uncontended_task.clone());
             }
         }
