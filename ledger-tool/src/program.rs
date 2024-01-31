@@ -71,7 +71,7 @@ fn load_accounts(path: &Path) -> Result<Input> {
 
 fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank> {
     let process_options = parse_process_options(ledger_path, arg_matches);
-    let snapshot_archive_path = value_t!(arg_matches, "snapshot_archive_path", String)
+    let snapshot_archive_path = value_t!(arg_matches, "snapshots", String)
         .ok()
         .map(PathBuf::from);
     let incremental_snapshot_archive_path =
