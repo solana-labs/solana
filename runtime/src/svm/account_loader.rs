@@ -22,7 +22,7 @@ use {
             create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
             ReadableAccount, WritableAccount,
         },
-        feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
         fee::FeeStructure,
         message::SanitizedMessage,
         native_loader,
@@ -52,7 +52,6 @@ pub(crate) fn load_accounts(
     in_reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-    should_collect_rent: bool,
 ) -> Vec<TransactionLoadResult> {
     txs.iter()
         .zip(lock_results)
@@ -87,7 +86,6 @@ pub(crate) fn load_accounts(
                     in_reward_interval,
                     program_accounts,
                     loaded_programs,
-                    should_collect_rent,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
                     Err(e) => return (Err(e), None),
@@ -128,7 +126,6 @@ fn load_transaction_accounts(
     reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-    should_collect_rent: bool,
 ) -> Result<LoadedTransaction> {
     let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
 
@@ -190,7 +187,9 @@ fn load_transaction_accounts(
                         .load_with_fixed_root(ancestors, key)
                         .map(|(mut account, _)| {
                             if message.is_writable(i) {
-                                if should_collect_rent {
+                                if !feature_set
+                                    .is_active(&feature_set::disable_rent_fees_collection::id())
+                                {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(
                                             key,
@@ -514,7 +513,7 @@ mod tests {
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut TransactionErrorMetrics,
-        feature_set: &FeatureSet,
+        feature_set: &mut FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -524,6 +523,7 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        feature_set.deactivate(&feature_set::disable_rent_fees_collection::id());
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
         load_accounts(
             &accounts.accounts_db,
@@ -538,7 +538,6 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            true,
         )
     }
 
@@ -565,7 +564,7 @@ mod tests {
             lamports_per_signature,
             &RentCollector::default(),
             error_counters,
-            &all_features_except(exclude_features),
+            &mut all_features_except(exclude_features),
             &FeeStructure {
                 lamports_per_signature,
                 ..FeeStructure::default()
@@ -768,7 +767,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &all_features_except(None),
+            &mut all_features_except(None),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -784,7 +783,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &mut FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -801,7 +800,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &mut FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1013,7 +1012,6 @@ mod tests {
             RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            true,
         )
     }
 

@@ -819,12 +819,13 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("snapshot_archive_path")
-                .long("snapshot-archive-path")
+            Arg::with_name("snapshots")
+                .long("snapshots")
+                .alias("snapshot-archive-path")
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for snapshot location"),
+                .help("Use DIR for snapshot location [default: --ledger value]"),
         )
         .arg(
             Arg::with_name("incremental_snapshot_archive_path")
@@ -1420,7 +1421,7 @@ fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
 
     let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
-    let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
+    let snapshot_archive_path = value_t!(matches, "snapshots", String)
         .ok()
         .map(PathBuf::from);
     let incremental_snapshot_archive_path =

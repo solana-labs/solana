@@ -1,9 +1,12 @@
 use {
     crate::{
+        account_storage::meta::StoredAccountMeta,
+        accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
         tiered_storage::{
             footer::{AccountMetaFormat, TieredStorageFooter},
             hot::HotStorageReader,
+            index::IndexOffset,
             meta::TieredAccountMeta,
             TieredStorageResult,
         },
@@ -109,6 +112,40 @@ impl TieredStorageReader {
     pub fn num_accounts(&self) -> usize {
         match self {
             Self::Hot(hot) => hot.num_accounts(),
+        }
+    }
+
+    /// Returns the account located at the specified index offset.
+    pub fn get_account(
+        &self,
+        index_offset: u32,
+    ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, usize)>> {
+        match self {
+            Self::Hot(hot) => hot.get_account(IndexOffset(index_offset)),
+        }
+    }
+
+    /// Returns Ok(index_of_matching_owner) if the account owner at
+    /// `account_offset` is one of the pubkeys in `owners`.
+    ///
+    /// Returns Err(MatchAccountOwnerError::NoMatch) if the account has 0
+    /// lamports or the owner is not one of the pubkeys in `owners`.
+    ///
+    /// Returns Err(MatchAccountOwnerError::UnableToLoad) if there is any internal
+    /// error that causes the data unable to load, including `account_offset`
+    /// causes a data overrun.
+    pub fn account_matches_owners(
+        &self,
+        index_offset: u32,
+        owners: &[Pubkey],
+    ) -> Result<usize, MatchAccountOwnerError> {
+        match self {
+            Self::Hot(hot) => {
+                let account_offset = hot
+                    .get_account_offset(IndexOffset(index_offset))
+                    .map_err(|_| MatchAccountOwnerError::UnableToLoad)?;
+                hot.account_matches_owners(account_offset, owners)
+            }
         }
     }
 }
