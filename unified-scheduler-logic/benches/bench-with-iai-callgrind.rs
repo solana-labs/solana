@@ -7,10 +7,13 @@
 #[global_allocator]
 static GLOBAL: B = B;
 
+/*
 //#[thread_local]
 thread_local! {
     pub static LOCAL_ALLOCATOR: std::cell::RefCell<BL> = const { std::cell::RefCell::new(BL::new()) };
 }
+*/
+static LOCAL_ALLOCATOR: std::cell::UnsafeCell<BL> = std::cell::UnsafeCell::new(BL::new());
 
 struct BL {
     bytes: [u8; Self::BLOCK_SIZE],
@@ -60,6 +63,7 @@ unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let (bytes, align) = (layout.size(), layout.align());
+        //LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
         LOCAL_ALLOCATOR.with_borrow_mut(|a| a.alloc2(bytes, align))
     }
 
