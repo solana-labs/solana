@@ -424,6 +424,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     let task = scheduler.schedule_task_for_test(task).unwrap();
     assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
+    assert_eq!(scheduler.retryable_task_count(), 1);
     let retried_task = scheduler
         .schedule_retryable_task_for_test()
         .unwrap();
