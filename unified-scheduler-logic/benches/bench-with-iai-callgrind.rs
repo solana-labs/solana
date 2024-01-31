@@ -431,7 +431,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     scheduler.deschedule_task(&retried_task);
     toggle_collect();
 
-    assert_eq!(task.transaction(), retried_task.transaction());
+    assert_eq!(task2.task_index(), retried_task.task_index());
     drop(task);
 }
 
