@@ -446,7 +446,7 @@ fn bench_end_to_end_worst(account_count: usize) {
         assert_eq!(scheduler.retryable_task_count(), cc);
         let mut c = 0;
         while let Some(retried_task) = scheduler.schedule_retryable_task_for_test() {
-            c += 1
+            c += 1;
             scheduler.deschedule_task(&retried_task);
         }
         assert_eq!(c, cc);
