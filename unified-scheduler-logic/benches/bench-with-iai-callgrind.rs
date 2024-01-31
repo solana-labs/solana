@@ -19,8 +19,8 @@ impl BL {
     const fn new() -> Self {
         Self {
             bytes: [0; Self::BLOCK_SIZE],
-            cursor: 0 as _,
-            limit: 0 as _,
+            cursor: 0 as ,
+            limit: 0 as ,
         }
     }
 
@@ -37,6 +37,8 @@ impl BL {
         if new_cursor <= self.limit {
             self.cursor = new_cursor;
             start
+        } else if self.limit == 0 {
+            self.cursor = self.bytes.as_ptr();
         } else {
             panic!();
         }
