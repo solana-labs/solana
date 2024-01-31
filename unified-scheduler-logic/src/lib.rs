@@ -493,6 +493,7 @@ impl SchedulingStateMachine {
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
+            false,
         );
 
         if provisional_lock_count.current() > 0 {
