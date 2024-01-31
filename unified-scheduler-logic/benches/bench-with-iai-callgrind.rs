@@ -22,8 +22,8 @@ impl BL {
     const fn new() -> Self {
         Self {
             bytes: [0; Self::BLOCK_SIZE],
-            cursor: 0 as _,
-            limit: 0 as _,
+            cursor: std::ptr::null_mut(),
+            limit: std::ptr::null_mut(),
         }
     }
 
