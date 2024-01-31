@@ -59,7 +59,7 @@ mod counter {
             *self = self.increment()
         }
 
-        pub(super) fn decrement_self(&mut self) {
+        pub(super) fn decrement_self(&mut self) -> &mut Self {
             *self = self.decrement()
         }
     }
