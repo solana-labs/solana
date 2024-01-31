@@ -519,7 +519,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     });
     let mut scheduler = SchedulingStateMachine::default();
 
-    let task = scheduler.schedule_task_for_test(task).unwrap();
+    let task = scheduler.schedule_task_for_test(dbg!(task)).unwrap();
     for i in 1..account_count {
         let mut accounts = vec![memo_ix.accounts[i].clone()];
         for _ in 0..account_count {
@@ -541,7 +541,7 @@ fn bench_end_to_end_worst(account_count: usize) {
         let task2 = SchedulingStateMachine::create_task(tx0, i, &mut |address| {
             pages.entry(address).or_default().clone()
         });
-        assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(scheduler.schedule_task_for_test(dbg!(task2.clone())), None);
     }
 
     toggle_collect();
