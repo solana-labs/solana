@@ -219,6 +219,8 @@ fn bench_insert_task(account_count: usize) {
 #[bench::rc_new(3)]
 #[bench::rc_new_and_clone(4)]
 fn bench_arc(account_count: usize) {
+    toggle_collect();
+
     {
         let b;
         match account_count {
