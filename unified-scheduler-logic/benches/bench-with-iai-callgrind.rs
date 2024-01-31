@@ -60,6 +60,7 @@ impl BL {
 }
 
 use std::alloc::{Layout, GlobalAlloc};
+use std::hint::black_box;
 
 struct B;
 
