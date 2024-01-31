@@ -382,7 +382,7 @@ impl SchedulingStateMachine {
             }
         }
 
-        lock_count.current() as usize
+        lock_count
     }
 
     fn attempt_lock_address(
