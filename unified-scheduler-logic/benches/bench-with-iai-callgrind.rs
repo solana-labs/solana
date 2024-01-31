@@ -59,8 +59,10 @@ impl BL {
     }
 }
 
-use std::alloc::{Layout, GlobalAlloc};
-use std::hint::black_box;
+use std::{
+    alloc::{GlobalAlloc, Layout},
+    hint::black_box,
+};
 
 struct B;
 
@@ -76,7 +78,6 @@ unsafe impl GlobalAlloc for B {
     #[inline(always)]
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
 }
-
 
 use {
     assert_matches::assert_matches,
@@ -227,24 +228,24 @@ fn bench_arc(account_count: usize) {
             1 => {
                 toggle_collect();
                 b = black_box(std::sync::Arc::new(black_box(3_u32)));
-            },
+            }
             2 => {
                 toggle_collect();
                 b = black_box(std::sync::Arc::new(black_box(3_u32)));
                 black_box(b.clone());
-            },
+            }
             _ => {
                 let b;
                 match account_count {
                     3 => {
                         toggle_collect();
                         b = black_box(std::rc::Rc::new(black_box(3_u32)));
-                    },
+                    }
                     4 => {
                         toggle_collect();
                         b = black_box(std::rc::Rc::new(black_box(3_u32)));
                         black_box(b.clone());
-                    },
+                    }
                     _ => panic!(),
                 }
                 toggle_collect();
@@ -255,7 +256,6 @@ fn bench_arc(account_count: usize) {
         toggle_collect();
         drop(b);
     }
-    
 }
 
 #[library_benchmark]
