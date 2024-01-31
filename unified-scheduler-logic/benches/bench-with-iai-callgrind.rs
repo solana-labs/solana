@@ -2,6 +2,14 @@
 
 //#[global_allocator]
 //static GLOBAL: bump_allocator::BumpPointer = bump_allocator::BumpPointer;
+//
+#[thread_local]
+pub static mut LOCAL_ALLOCATOR: BL = BL::new();
+
+struct BL {
+    butes: [u8; 10_000_000];
+}
+
 
 use {
     assert_matches::assert_matches,
