@@ -40,7 +40,7 @@ impl BL {
     fn align_allocation(cursor: *mut u8, align: usize) -> *mut u8 {
         //let mask = align - 1;
         //(((cursor as usize) + mask) & !mask) as _
-        cursor.add(cursor.align_offset(align))
+        unsafe { cursor.add(cursor.align_offset(align)) }
     }
 
     #[inline(always)]
