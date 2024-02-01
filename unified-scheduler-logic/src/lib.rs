@@ -497,7 +497,7 @@ impl SchedulingStateMachine {
                     if new_count == 0 {
                         retryable_task = Some(uncontended_task.clone());
                     }
-                    Self::attempt_lock_address(page, r);
+                    Self::attempt_lock_address(page, *r);
                 }
                 if let Some(retryable_task) = retryable_task {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
