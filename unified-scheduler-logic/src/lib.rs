@@ -321,13 +321,11 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_retryable_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
-        self.unblocked_task_queue
-            .pop_last()
-            .map(|(_, task)| {
-                self.reschedule_count.increment_self();
-                self.rescheduled_task_count.increment_self();
-                on_success(&task)
-            })
+        self.unblocked_task_queue.pop_last().map(|(_, task)| {
+            self.reschedule_count.increment_self();
+            self.rescheduled_task_count.increment_self();
+            on_success(&task)
+        })
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
@@ -465,8 +463,12 @@ impl SchedulingStateMachine {
                     match Self::attempt_lock_address(page, requested_usage) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
-                            if matches!(usage, Usage::Readonly(_)) &&
-                                matches!( page.heaviest_blocked_task(), Some((_, RequestedUsage::Readonly))) {
+                            if matches!(usage, Usage::Readonly(_))
+                                && matches!(
+                                    page.heaviest_blocked_task(),
+                                    Some((_, RequestedUsage::Readonly))
+                                )
+                            {
                                 should_continue = true;
                             }
                             page.usage = usage;
