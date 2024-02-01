@@ -483,14 +483,15 @@ impl SchedulingStateMachine {
                 let page = unlock_attempt.page_mut(&mut self.page_token);
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut retryable_task = None;
-                if let Some((uncontended_task, r)) = heaviest_uncontended_now {
+                let mut should_continue = false;
+                if let Some((uncontended_task, &requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
                     if new_count == 0 {
-                        retryable_task = Some((uncontended_task.clone(), *r));
+                        retryable_task = Some(uncontended_task.clone());
                     }
-                    Self::attempt_lock_address(page, *r);
+                    Self::attempt_lock_address(page, requested_usage);
                 }
-                if let Some((retryable_task, r)) = retryable_task {
+                if let Some(retryable_task) = retryable_task {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut(&mut self.page_token);
@@ -499,8 +500,9 @@ impl SchedulingStateMachine {
                     }
                     //eprintln!("bbb: {i}");
                     self.unblocked_task_queue.insert(retryable_task.unique_weight, retryable_task);
-                } else {
-                    break;
+                }
+                if should_continue {
+                    continue;
                 }
             }
         }
