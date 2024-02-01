@@ -594,7 +594,7 @@ impl SchedulingStateMachine {
             if let Some(retryable_task) = retryable_task {
                 for attempt in retryable_task.lock_attempts(&self.task_token) {
                     if matches!(attempt.lock_status, LockStatus::Failed) {
-                        let page = attempt.page_mut_unchecked();
+                        let page = attempt.page_mut(&mut self.page_token);
                         page.pop_blocked_task(attempt.requested_usage);
                     }
                 }
