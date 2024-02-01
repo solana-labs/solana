@@ -321,14 +321,6 @@ impl SchedulingStateMachine {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
-                //let ret = self.try_lock_for_task(TaskSource::Retryable, task, on_success);
-                let provisional_lock_count = Self::attempt_lock_for_execution(
-                    &mut self.page_token,
-                    task.unique_weight,
-                    task.lock_attempts_mut(&mut self.task_token),
-                    true,
-                );
-                assert_eq!(provisional_lock_count.current(), 0);
                 self.reschedule_count.increment_self();
                 Some(on_success(&task))
             })
@@ -357,7 +349,9 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, from_blocked);
+            let requested_usage = attempt.requested_usage;
+            let page = attempt.page_mut(page_token);
+            let lock_status = Self::attempt_lock_address(page, unique_weight, requested_usage, from_blocked);
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
@@ -378,9 +372,6 @@ impl SchedulingStateMachine {
         attempt: &mut LockAttempt,
         from_blocked: bool,
     ) -> LockStatus {
-        let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(page_token);
-
         let mut lock_status = match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
