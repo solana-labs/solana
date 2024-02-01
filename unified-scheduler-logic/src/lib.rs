@@ -10,9 +10,10 @@ use {
     std::{cmp, collections::BTreeMap, mem, sync::Arc},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 enum LockStatus {
     Succeded(Usage),
+    #[default]
     Failed,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
