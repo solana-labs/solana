@@ -432,6 +432,10 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
+        if only_failed && matches!(lock_status, LockStatus::Failed) {
+            page.remove_blocked_task(attempt.requested_usage, this_unique_weight);
+        }
+
         if !only_failed && matches!(lock_status, LockStatus::Succeded(_)) {
             let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
@@ -580,12 +584,14 @@ impl SchedulingStateMachine {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 //i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
+                    /*
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut_unchecked();
                             page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
                         }
                     }
+                    */
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
