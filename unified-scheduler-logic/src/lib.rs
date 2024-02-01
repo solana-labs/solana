@@ -250,8 +250,6 @@ const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 pub struct Page(Arc<SchedulerCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
 
-type TaskQueue = BTreeMap<UniqueWeight, Task>;
-
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
     last_unique_weight: UniqueWeight,
