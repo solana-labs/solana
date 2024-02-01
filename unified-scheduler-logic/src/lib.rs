@@ -459,7 +459,7 @@ impl SchedulingStateMachine {
                         .current();
                     if new_count == 0 {
                         self.unblocked_task_queue
-                            .insert(uncontended_task.unique_weight, uncontended_task.clone());
+                            .pop_front(uncontended_task.clone());
                     }
                     page.pop_blocked_task(uncontended_task.unique_weight);
                     match Self::attempt_lock_address(page, requested_usage) {
