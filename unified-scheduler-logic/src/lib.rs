@@ -547,6 +547,7 @@ impl SchedulingStateMachine {
 impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
+            last_unique_weight: UniqueWeight::max_value(),
             unblocked_task_queue: TaskQueue::default(),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
