@@ -929,8 +929,8 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(4));
+        assert_matches!(state_machine.schedule_retryable_task_for_test().mao(|t| t.task_index()), Some(5));
     }
 
     #[test]
