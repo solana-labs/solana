@@ -944,7 +944,7 @@ mod tests {
             .unwrap();
         assert_matches!(
             page.0.borrow(&state_machine.page_token).usage,
-            Usage::Unused
+            Usage::Writable,
         );
     }
 
