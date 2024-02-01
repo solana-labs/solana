@@ -17,6 +17,7 @@ use {
         TOTAL_BUFFERED_PACKETS,
     },
     crossbeam_channel::RecvTimeoutError,
+    itertools::MinMaxResult,
     solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
@@ -95,10 +96,11 @@ impl SchedulerController {
             if !self.receive_and_buffer_packets(&decision) {
                 break;
             }
-
             // Report metrics only if there is data.
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
+            self.count_metrics
+                .update_prioritization_stats(self.container.get_min_max_prioritization_fees());
             self.count_metrics.maybe_report_and_reset(should_report);
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
@@ -419,6 +421,10 @@ struct SchedulerCountMetrics {
     num_dropped_on_age_and_status: usize,
     /// Number of transactions that were dropped due to exceeded capacity.
     num_dropped_on_capacity: usize,
+    /// Min prioritization fees in the transaction container
+    min_prioritization_fees: u64,
+    /// Max prioritization fees in the transaction container
+    max_prioritization_fees: u64,
 }
 
 impl SchedulerCountMetrics {
@@ -468,7 +474,17 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_age_and_status,
                 i64
             ),
-            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
+            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
+            (
+                "min_prioritization_fees",
+                self.get_min_prioritization_fees(),
+                i64
+            ),
+            (
+                "max_prioritization_fees",
+                self.get_max_prioritization_fees(),
+                i64
+            )
         );
     }
 
@@ -504,6 +520,38 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_age_and_status = 0;
         self.num_dropped_on_capacity = 0;
+        self.min_prioritization_fees = u64::MAX;
+        self.max_prioritization_fees = 0;
+    }
+
+    pub fn update_prioritization_stats(&mut self, min_max_fees: MinMaxResult<u64>) {
+        // update min/max priotization fees
+        match min_max_fees {
+            itertools::MinMaxResult::NoElements => {
+                // do nothing
+            }
+            itertools::MinMaxResult::OneElement(e) => {
+                self.min_prioritization_fees = e;
+                self.max_prioritization_fees = e;
+            }
+            itertools::MinMaxResult::MinMax(min, max) => {
+                self.min_prioritization_fees = min;
+                self.max_prioritization_fees = max;
+            }
+        }
+    }
+
+    pub fn get_min_prioritization_fees(&self) -> u64 {
+        // to avoid getting u64::max recorded by metrics / in case of edge cases
+        if self.min_prioritization_fees != u64::MAX {
+            self.min_prioritization_fees
+        } else {
+            0
+        }
+    }
+
+    pub fn get_max_prioritization_fees(&self) -> u64 {
+        self.max_prioritization_fees
     }
 }
 

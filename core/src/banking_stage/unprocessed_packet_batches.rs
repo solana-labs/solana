@@ -193,6 +193,14 @@ impl UnprocessedPacketBatches {
         self.packet_priority_queue.is_empty()
     }
 
+    pub fn get_min_priority(&self) -> Option<u64> {
+        self.packet_priority_queue.peek_min().map(|x| x.priority())
+    }
+
+    pub fn get_max_priority(&self) -> Option<u64> {
+        self.packet_priority_queue.peek_max().map(|x| x.priority())
+    }
+
     fn push_internal(&mut self, deserialized_packet: DeserializedPacket) {
         // Push into the priority queue
         self.packet_priority_queue
