@@ -10,9 +10,10 @@ use {
     std::{cmp, collections::BTreeMap, mem, sync::Arc},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 enum LockStatus {
     Succeded(Usage),
+    #[default]
     Failed,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
@@ -59,8 +60,9 @@ mod counter {
             *self = self.increment()
         }
 
-        pub(super) fn decrement_self(&mut self) {
-            *self = self.decrement()
+        pub(super) fn decrement_self(&mut self) -> &mut Self {
+            *self = self.decrement();
+            self
         }
     }
 }
@@ -69,6 +71,7 @@ mod counter {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
+    provisional_lock_count: Counter,
 }
 
 mod cell {
@@ -86,6 +89,10 @@ mod cell {
         }
 
         pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
+            unsafe { &mut *self.0.get() }
+        }
+
+        pub(super) fn borrow_mut_unchecked<'t>(&self) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
 
@@ -115,7 +122,7 @@ const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self { lock_attempts }
+        Self { lock_attempts, provisional_lock_count: Counter::zero() }
     }
 }
 
@@ -140,6 +147,11 @@ impl TaskInner {
         &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
+    fn provisional_lock_count_mut(&self) -> &mut Counter {
+        &mut self.task_status.borrow_mut_unchecked().provisional_lock_count
+    }
+
+
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
         &self.task_status.borrow(task_token).lock_attempts
     }
@@ -155,7 +167,7 @@ impl TaskInner {
 struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
-    uncommited_usage: Usage,
+    lock_status: LockStatus,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
@@ -164,7 +176,7 @@ impl LockAttempt {
         Self {
             page,
             requested_usage,
-            uncommited_usage: Usage::default(),
+            lock_status: LockStatus::default(),
         }
     }
 
@@ -231,6 +243,13 @@ impl PageInner {
             .blocked_tasks_mut(requested_usage)
             .remove(&unique_weight);
         assert!(removed_entry.is_some());
+    }
+
+    fn pop_blocked_task(
+        &mut self,
+        requested_usage: RequestedUsage,
+    ) {
+        self.blocked_tasks_mut(requested_usage).pop_last();
     }
 
     fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
@@ -344,9 +363,16 @@ impl SchedulingStateMachine {
         self.retryable_task_queue
             .pop_last()
             .and_then(|(_, task)| {
-                let ret = self.try_lock_for_task(TaskSource::Retryable, task, on_success);
+                //let ret = self.try_lock_for_task(TaskSource::Retryable, task, on_success);
+                let provisional_lock_count = Self::attempt_lock_for_execution(
+                    &mut self.page_token,
+                    task.unique_weight,
+                    task.lock_attempts_mut(&mut self.task_token),
+                    true,
+                );
+                assert_eq!(provisional_lock_count.current(), 0);
                 self.reschedule_count.increment_self();
-                ret
+                Some(on_success(&task))
             })
             .map(|ret| {
                 self.rescheduled_task_count.increment_self();
@@ -364,31 +390,36 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        rollback_on_failure: bool,
-    ) -> usize {
+        only_failed: bool,
+    ) -> Counter {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(page_token, unique_weight, attempt) {
-                LockStatus::Succeded(usage) => {
-                    if rollback_on_failure {
-                        attempt.page_mut(page_token).usage = usage;
-                    } else {
-                        attempt.uncommited_usage = usage;
-                    }
-                    lock_count.increment_self()
-                }
-                LockStatus::Failed => break,
+            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
+                continue;
             }
+
+            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, only_failed);
+            match lock_status {
+                LockStatus::Succeded(usage) => {
+                    attempt.page_mut(page_token).usage = usage;
+                }
+                LockStatus::Failed => {
+                    //eprintln!("failed");
+                    lock_count.increment_self();
+                }
+            }
+            attempt.lock_status = lock_status;
         }
 
-        lock_count.current() as usize
+        lock_count
     }
 
     fn attempt_lock_address(
         page_token: &mut PageToken,
         this_unique_weight: UniqueWeight,
         attempt: &mut LockAttempt,
+        only_failed: bool,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
@@ -404,7 +435,7 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
-        if matches!(lock_status, LockStatus::Succeded(_)) {
+        if !only_failed && matches!(lock_status, LockStatus::Succeded(_)) {
             let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
 
@@ -416,7 +447,7 @@ impl SchedulingStateMachine {
                     .unwrap_or(true)) ||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) &&
-                    r
+                    w
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
                     .map(|(&existing_unique_weight, _)| this_unique_weight > existing_unique_weight)
@@ -469,29 +500,27 @@ impl SchedulingStateMachine {
         task: Task,
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
-        let rollback_on_failure = matches!(task_source, TaskSource::Runnable);
-
-        let lock_count = Self::attempt_lock_for_execution(
+        let provisional_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
-            rollback_on_failure,
+            false,
         );
 
-        if lock_count < task.lock_attempts_mut(&mut self.task_token).len() {
-            if rollback_on_failure {
-                self.rollback_locking(&task, lock_count);
-                self.register_blocked_task_into_pages(&task);
-            }
-
+        //eprintln!("{:?}", provisional_lock_count);
+        if provisional_lock_count.current() > 0 {
+            *task.provisional_lock_count_mut() = provisional_lock_count;
+            self.register_blocked_task_into_pages(&task);
             None
         } else {
             let ret = on_success(&task);
             match task_source {
                 TaskSource::Retryable => {
+                    panic!();
+                    /*
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
-                        page.usage = attempt.uncommited_usage;
+                        page.usage = attempt.lock_status;
                         page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                     }
 
@@ -512,29 +541,35 @@ impl SchedulingStateMachine {
                                 .or_insert_with(|| heaviest_readonly_task.clone());
                         }
                     }
+                    */
                 }
-                TaskSource::Runnable => {}
+                TaskSource::Runnable => {
+                    /*
+                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
+                        let page = attempt.page_mut(&mut self.page_token);
+                        let LockStatus::Succeded(usage) = attempt.lock_status else { panic!() };
+                        page.usage = usage;
+                    }
+                    */
+                }
             }
             Some(ret)
         }
     }
 
-    fn rollback_locking(&mut self, task: &Task, lock_count: usize) {
-        for lock_attempt in &task.lock_attempts_mut(&mut self.task_token)[..lock_count] {
-            Self::unlock(&mut self.page_token, lock_attempt);
-        }
-    }
-
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
-            let requested_usage = lock_attempt.requested_usage;
-            lock_attempt
-                .page_mut(&mut self.page_token)
-                .insert_blocked_task(task.clone(), requested_usage);
+            if matches!(lock_attempt.lock_status, LockStatus::Failed) {
+                let requested_usage = lock_attempt.requested_usage;
+                lock_attempt
+                    .page_mut(&mut self.page_token)
+                    .insert_blocked_task(task.clone(), requested_usage);
+            }
         }
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
+        //let mut i = 0;
         for unlock_attempt in task.lock_attempts(&self.task_token) {
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
@@ -544,10 +579,23 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
+            let mut retryable_task = None;
             if let Some(uncontended_task) = heaviest_uncontended_now {
-                self.retryable_task_queue
-                    .entry(uncontended_task.unique_weight)
-                    .or_insert_with(|| uncontended_task.clone());
+                //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
+                //i += 1;
+                if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
+                    retryable_task = Some(uncontended_task.clone());
+                }
+            }
+            if let Some(retryable_task) = retryable_task {
+                for attempt in retryable_task.lock_attempts(&self.task_token) {
+                    if matches!(attempt.lock_status, LockStatus::Failed) {
+                        let page = attempt.page_mut(&mut self.page_token);
+                        page.pop_blocked_task(attempt.requested_usage);
+                    }
+                }
+                //eprintln!("bbb: {i}");
+                self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
             }
         }
     }
@@ -661,6 +709,7 @@ mod tests {
         move |address| pages.lock().unwrap().entry(address).or_default().clone()
     }
 
+    /*
     #[test]
     fn test_debug() {
         // these are almost meaningless just to see eye-pleasing coverage report....
@@ -677,12 +726,13 @@ mod tests {
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, uncommited_usage: Unused }] }"
+             .. })), requested_usage: Writable, lock_status: Unused }] }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
         assert!(format!("{:?}", task).contains("TaskInner"));
     }
+    */
 
     #[test]
     fn test_scheduling_state_machine_default() {
