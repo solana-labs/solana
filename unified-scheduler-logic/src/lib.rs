@@ -345,10 +345,9 @@ impl SchedulingStateMachine {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            let requested_usage = attempt.requested_usage;
             let page = attempt.page_mut(page_token);
             let lock_status = if page.no_blocked_tasks() {
-                Self::attempt_lock_address(page, requested_usage)
+                Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
                 LockStatus::Failed
             };
