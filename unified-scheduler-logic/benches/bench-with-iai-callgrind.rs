@@ -553,7 +553,7 @@ fn bench_end_to_end_worst(account_count: usize) {
             c += 1;
             //scheduler.deschedule_task(&retried_task);
             toggle_collect();
-            drop::<Task>(retried_task);
+            drop::<solana_unified_scheduler_logic::Task>(retried_task);
             toggle_collect();
         }
         assert_eq!(c, cc);
