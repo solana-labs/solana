@@ -367,9 +367,9 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        page_token: &mut PageToken,
+        page: &mut Page,
         this_unique_weight: UniqueWeight,
-        attempt: &mut LockAttempt,
+        requested_usage: RequestedUsage,
         from_blocked: bool,
     ) -> LockStatus {
         let mut lock_status = match page.usage {
