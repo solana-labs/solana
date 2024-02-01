@@ -69,33 +69,6 @@ pub enum AppendVecError {
     OffsetOutOfBounds(usize, usize),
 }
 
-pub struct AppendVecAccountsIter<'append_vec> {
-    append_vec: &'append_vec AppendVec,
-    offset: usize,
-}
-
-impl<'append_vec> AppendVecAccountsIter<'append_vec> {
-    pub fn new(append_vec: &'append_vec AppendVec) -> Self {
-        Self {
-            append_vec,
-            offset: 0,
-        }
-    }
-}
-
-impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
-    type Item = StoredAccountMeta<'append_vec>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
-            self.offset = next_offset;
-            Some(account)
-        } else {
-            None
-        }
-    }
-}
-
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
@@ -539,11 +512,6 @@ impl AppendVec {
 
     pub fn get_path(&self) -> PathBuf {
         self.path.clone()
-    }
-
-    /// Return iterator for account metadata
-    pub fn account_iter(&self) -> AppendVecAccountsIter {
-        AppendVecAccountsIter::new(self)
     }
 
     /// Return a vector of account metadata for each account, starting from `offset`.
