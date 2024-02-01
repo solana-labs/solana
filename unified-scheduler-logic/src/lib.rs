@@ -251,8 +251,6 @@ impl PageInner {
 
     fn pop_blocked_task(
         &mut self,
-        requested_usage: RequestedUsage,
-        unique_weight: UniqueWeight,
     ) {
         self.pop_last();
     }
