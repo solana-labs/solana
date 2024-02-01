@@ -353,7 +353,7 @@ impl SchedulingStateMachine {
             };
             match lock_status {
                 LockStatus::Succeded(usage) => {
-                    //attempt.page_mut(page_token).usage = usage;
+                    //attempt.page_mut(page_token).usage = usage; // micro-bench
                     page.usage = usage;
                 }
                 LockStatus::Failed => {
