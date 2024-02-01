@@ -248,7 +248,7 @@ type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
-    retryable_task_queue: TaskQueue,
+    unblocked_task_queue: TaskQueue,
     active_task_count: Counter,
     handled_task_count: Counter,
     reschedule_count: Counter,
@@ -264,7 +264,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn retryable_task_count(&self) -> usize {
-        self.retryable_task_queue.len()
+        self.unblocked_task_queue.len()
     }
 
     pub fn active_task_count(&self) -> u32 {
@@ -304,11 +304,11 @@ impl SchedulingStateMachine {
     }
 
     pub fn has_retryable_task(&self) -> bool {
-        !self.retryable_task_queue.is_empty()
+        !self.unblocked_task_queue.is_empty()
     }
 
     pub fn clear_retryable_tasks(&mut self) {
-        self.retryable_task_queue.clear()
+        self.unblocked_task_queue.clear()
     }
 
     #[cfg(feature = "dev-context-only-utils")]
@@ -317,7 +317,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_retryable_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
-        self.retryable_task_queue
+        self.unblocked_task_queue
             .pop_last()
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
@@ -452,7 +452,7 @@ impl SchedulingStateMachine {
                                 .page_mut(&mut self.page_token)
                                 .heaviest_blocked_readonly_task()
                         {
-                            self.retryable_task_queue
+                            self.unblocked_task_queue
                                 .entry(heaviest_readonly_unique_weight)
                                 .or_insert_with(|| heaviest_readonly_task.clone());
                         }
@@ -507,7 +507,7 @@ impl SchedulingStateMachine {
                         }
                     }
                     //eprintln!("bbb: {i}");
-                    self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
+                    self.unblocked_task_queue.insert(retryable_task.unique_weight, retryable_task);
                     break;
                 } else {
                     break;
@@ -554,7 +554,7 @@ impl SchedulingStateMachine {
 impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
-            retryable_task_queue: TaskQueue::default(),
+            unblocked_task_queue: TaskQueue::default(),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
             reschedule_count: Counter::zero(),
