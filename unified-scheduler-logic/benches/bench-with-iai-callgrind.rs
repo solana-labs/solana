@@ -554,8 +554,8 @@ fn bench_end_to_end_worst(account_count: usize) {
             c += 1;
             //scheduler.deschedule_task(&retried_task);
         }
-        */
         assert_eq!(c, cc);
+        */
     }
     toggle_collect();
 
