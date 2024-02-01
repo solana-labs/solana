@@ -7,7 +7,7 @@ use {
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
-    std::{cmp, collections::BTreeMap, mem, sync::Arc},
+    std::{collections::BTreeMap, mem, sync::Arc},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -225,7 +225,6 @@ impl PageInner {
 
     fn pop_blocked_task(
         &mut self,
-        requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
         let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
@@ -337,7 +336,6 @@ impl SchedulingStateMachine {
 
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
-        unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         from_blocked: bool,
     ) -> Counter {
@@ -369,7 +367,7 @@ impl SchedulingStateMachine {
         page: &mut PageInner,
         requested_usage: RequestedUsage,
     ) -> LockStatus {
-        let mut lock_status = match page.usage {
+        match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
@@ -378,9 +376,7 @@ impl SchedulingStateMachine {
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
-        };
-
-        lock_status
+        }
     }
 
     fn unlock(page_token: &mut PageToken, attempt: &LockAttempt) -> bool {
@@ -424,7 +420,6 @@ impl SchedulingStateMachine {
     ) -> Option<R> {
         let provisional_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
-            task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
             false,
         );
@@ -500,7 +495,7 @@ impl SchedulingStateMachine {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut(&mut self.page_token);
-                            page.pop_blocked_task(attempt.requested_usage, retryable_task.unique_weight);
+                            page.pop_blocked_task(retryable_task.unique_weight);
                         }
                     }
                     //eprintln!("bbb: {i}");
