@@ -389,7 +389,7 @@ impl SchedulingStateMachine {
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
-        lock_attempts.retain(|attempt| {
+        lock_attempts.retain_mut(|attempt| {
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
             match lock_status {
                 LockStatus::Succeded(usage) => {
