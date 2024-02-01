@@ -122,7 +122,10 @@ const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
-        Self { lock_attempts, provisional_lock_count: Counter::zero() }
+        Self {
+            lock_attempts,
+            provisional_lock_count: Counter::zero(),
+        }
     }
 }
 
@@ -148,9 +151,11 @@ impl TaskInner {
     }
 
     fn provisional_lock_count_mut(&self) -> &mut Counter {
-        &mut self.task_status.borrow_mut_unchecked().provisional_lock_count
+        &mut self
+            .task_status
+            .borrow_mut_unchecked()
+            .provisional_lock_count
     }
-
 
     fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
         &self.task_status.borrow(task_token).lock_attempts
@@ -227,10 +232,7 @@ impl PageInner {
         self.blocked_tasks.is_empty()
     }
 
-    fn pop_blocked_task(
-        &mut self,
-        unique_weight: UniqueWeight,
-    ) {
+    fn pop_blocked_task(&mut self, unique_weight: UniqueWeight) {
         let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
         assert_eq!(pre_existed, unique_weight);
     }
@@ -365,10 +367,7 @@ impl SchedulingStateMachine {
         lock_count
     }
 
-    fn attempt_lock_address(
-        page: &PageInner,
-        requested_usage: RequestedUsage,
-    ) -> LockStatus {
+    fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
         match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
@@ -457,17 +456,24 @@ impl SchedulingStateMachine {
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut should_continue = false;
                 if let Some(&(ref uncontended_task, requested_usage)) = heaviest_uncontended_now {
-                    let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
+                    let new_count = uncontended_task
+                        .provisional_lock_count_mut()
+                        .decrement_self()
+                        .current();
                     if new_count == 0 {
-                        self.unblocked_task_queue.insert(uncontended_task.unique_weight, uncontended_task.clone());
+                        self.unblocked_task_queue
+                            .insert(uncontended_task.unique_weight, uncontended_task.clone());
                     }
                     page.pop_blocked_task(uncontended_task.unique_weight);
                     match Self::attempt_lock_address(page, requested_usage) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
                             if matches!(usage, Usage::Readonly(_)) {
-                                if matches!(page.heaviest_blocked_task(), Some((_, RequestedUsage::Readonly))) {
-                                    should_continue = true; 
+                                if matches!(
+                                    page.heaviest_blocked_task(),
+                                    Some((_, RequestedUsage::Readonly))
+                                ) {
+                                    should_continue = true;
                                 }
                             }
                             page.usage = usage;
@@ -870,11 +876,21 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()).map(|t| t.task_index()), Some(3));
+        assert_matches!(
+            state_machine
+                .schedule_task_for_test(task1.clone())
+                .map(|t| t.task_index()),
+            Some(3)
+        );
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(4));
+        assert_matches!(
+            state_machine
+                .schedule_retryable_task_for_test()
+                .map(|t| t.task_index()),
+            Some(4)
+        );
         state_machine.deschedule_task(&task2);
     }
 
@@ -895,8 +911,18 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(4));
-        assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(5));
+        assert_matches!(
+            state_machine
+                .schedule_retryable_task_for_test()
+                .map(|t| t.task_index()),
+            Some(4)
+        );
+        assert_matches!(
+            state_machine
+                .schedule_retryable_task_for_test()
+                .map(|t| t.task_index()),
+            Some(5)
+        );
     }
 
     #[test]
