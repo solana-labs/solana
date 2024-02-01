@@ -8,6 +8,9 @@ use {
 /// = 2 * (128 accounts/tx * 48M/6M txs) = 2048
 const CACHE_CAPACITY: usize = 2048;
 
+/// Initial value for write lock fee_rate per account, denominated in millilamports-per-cu
+const INITIAL_FEE_RATE: u64 = 1;
+
 //TODO testing SIMD-0110, if it belongs to bank, it's abi
 //#[frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")]
 //#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
@@ -41,6 +44,23 @@ impl WriteLockFeeCache {
         WriteLockFeeCache{
             cache: LruCache::new(capacity),
         }
+    }
+
+    // param: pubkeys are all writable locks of a tx.
+    // If pubkey doesn't exist in Cache, it's assigned the default/init write lock fee;
+    // otherse the write-lock fee for that account is it's fee_rate times tx CU.
+    // Return the total write locks fee, in lamports
+    pub fn calculate_write_lock_fee(&self, pubkeys: &[Pubkey], cus: u32) -> u64 {
+        pubkeys.iter().map(|key| {
+            let fee_rate = if let Some(fee_rate) = self.get_write_lock_fee_rate(key) {
+                fee_rate
+            } else {
+                INITIAL_FEE_RATE
+            };
+            u64::from(cus) * fee_rate
+        })
+        .sum::<u64>()
+        .saturating_div(1_000) // convert millilamports to lamports
     }
 
     // search cache for fee_rate for given pubkey.

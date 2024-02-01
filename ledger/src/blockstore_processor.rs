@@ -442,7 +442,7 @@ fn rebatch_and_execute_batches(
     {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         for tx_cost in &tx_costs {
-            cost_tracker
+            let _ = cost_tracker
                 .try_add(tx_cost)
                 .map_err(TransactionError::from);
                 // NOTE: testing SIMD-0110, cotinue tracking block costs

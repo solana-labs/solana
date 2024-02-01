@@ -58,16 +58,38 @@ pub(crate) fn load_accounts(
         .map(|etx| match etx {
             (tx, (Ok(()), nonce, lamports_per_signature)) => {
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        tx.message(),
-                        *lamports_per_signature,
-                        &process_compute_budget_instructions(
-                            tx.message().program_instructions_iter(),
+                    let budget_limits =
+                        process_compute_budget_instructions(tx.message().program_instructions_iter()).unwrap_or_default().into();
+                    // NOTE: testing SIMD-0110, adding write lock fee to total fee for message.
+                    let mut write_locks_fee: u64 = 0;
+                    /* 
+                    // NOTE testing SIMD-0110, not using write-lock-fee since banking_stage already
+                    // did fee_payer check. For production, do need to account write-lock-fee, but
+                    // then perhaps can put total_fee in transaction_meta already
+                    let message = tx.message();
+                    let writable_accounts = message
+                        .account_keys()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, k)| {
+                            if message.is_writable(i) {
+                                Some(*k)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    write_locks_fee = bank.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(writable_accounts, budget_limits.cu_limit);
+                    // */
+
+                    write_locks_fee.saturating_add(
+                        fee_structure.calculate_fee(
+                            tx.message(),
+                            *lamports_per_signature,
+                            &budget_limits,
+                            feature_set
+                                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
-                        .unwrap_or_default()
-                        .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     )
                 } else {
                     return (Err(TransactionError::BlockhashNotFound), None);

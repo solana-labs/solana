@@ -743,11 +743,34 @@ impl Consumer {
     ) -> Result<(), TransactionError> {
         let fee_payer = message.fee_payer();
         let budget_limits =
-            process_compute_budget_instructions(message.program_instructions_iter())?.into();
+            process_compute_budget_instructions(message.program_instructions_iter())?;
+
+        // NOTE testing SIMD-0110, add write-lock-fee before fee_payer check. Enabling this
+        // would filter out (spam) invalidate transactions early, help scheduler to better
+        // pack block.
+        // In a sense, how many what transactions are fitered out here is the main purpose
+        // of SIMD-0110
+        let mut write_locks_fee = 0;
+        //*
+        let writable_accounts :Vec<solana_sdk::pubkey::Pubkey> = message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, k)| {
+                if message.is_writable(i) {
+                    Some(*k)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        write_locks_fee = bank.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(&writable_accounts, budget_limits.compute_unit_limit);
+        // */
+        //
         let fee = bank.fee_structure.calculate_fee(
             message,
             bank.get_lamports_per_signature(),
-            &budget_limits,
+            &budget_limits.into(),
             bank.feature_set.is_active(
                 &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
             ),
@@ -765,7 +788,7 @@ impl Consumer {
             0,
             error_counters,
             bank.rent_collector(),
-            fee,
+            fee.saturating_add(write_locks_fee),
         )
     }
 

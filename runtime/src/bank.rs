@@ -851,7 +851,7 @@ pub struct Bank {
 
     epoch_reward_status: EpochRewardStatus,
 
-    write_lock_fee_cache: RwLock<WriteLockFeeCache>,
+    pub write_lock_fee_cache: RwLock<WriteLockFeeCache>,
 }
 
 struct VoteWithStakeDelegations {
@@ -4099,14 +4099,37 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
     ) -> u64 {
-        self.fee_structure.calculate_fee(
-            message,
-            lamports_per_signature,
-            &process_compute_budget_instructions(message.program_instructions_iter())
-                .unwrap_or_default()
-                .into(),
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+        // NOTE: testing SIMD-0110, adding write lock fee to total fee for message.
+        let mut write_locks_fee = 0;
+        //*
+        let writable_accounts: Vec<Pubkey> = message
+            .account_keys()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, k)| {
+                if message.is_writable(i) {
+                    Some(*k)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        write_locks_fee = self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
+            &writable_accounts,
+            process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default().compute_unit_limit,
+            );
+        // */
+
+        write_locks_fee.saturating_add(
+            self.fee_structure.calculate_fee(
+                message,
+                lamports_per_signature,
+                &process_compute_budget_instructions(message.program_instructions_iter())
+                    .unwrap_or_default()
+                    .into(),
+                self.feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            )
         )
     }
 
