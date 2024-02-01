@@ -685,6 +685,7 @@ mod tests {
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
@@ -704,7 +705,7 @@ mod tests {
         assert_eq!(state_machine.retryable_task_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
     }
 
     #[test]
