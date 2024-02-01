@@ -463,6 +463,7 @@ impl SchedulingStateMachine {
                     }
                     page.pop_blocked_task(uncontended_task.unique_weight);
                     match Self::attempt_lock_address(page, requested_usage) {
+                        LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!()
                         LockStatus::Succeded(usage) => {
                             if matches!(usage, Usage::Readonly(_)) {
                                 if matches!(page.heaviest_blocked_task(), Some((_, RequestedUsage::Readonly))) {
@@ -471,7 +472,6 @@ impl SchedulingStateMachine {
                             }
                             page.usage = usage;
                         }
-                        LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!()
                     }
                 }
                 if should_continue {
