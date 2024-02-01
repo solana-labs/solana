@@ -251,6 +251,7 @@ type TaskQueue = BTreeMap<UniqueWeight, Task>;
 
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
+    last_unique_weight: UniqueWeight,
     unblocked_task_queue: TaskQueue,
     active_task_count: Counter,
     handled_task_count: Counter,
