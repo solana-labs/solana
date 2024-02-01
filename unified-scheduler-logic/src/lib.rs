@@ -492,7 +492,7 @@ impl SchedulingStateMachine {
                     match Self::attempt_lock_address(page, requested_usage) {
                         LockStatus::Succeded(Usage::Readonly(_)) => { should_continue = true; }
                         LockStatus::Succeded(Usage::Writable) => {},
-                        LockStatus::Failed => unreachable!();
+                        LockStatus::Failed => unreachable!()
                     }
                 }
                 if let Some(retryable_task) = retryable_task {
