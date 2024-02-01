@@ -233,7 +233,7 @@ impl PageInner {
         assert_eq!(pre_existed, unique_weight);
     }
 
-    fn heaviest_blocked_task(&self) -> Option<&Task> {
+    fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
         self.blocked_tasks.last_key_value().map(|(_weight, v)| v)
     }
 }
