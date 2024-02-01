@@ -321,11 +321,10 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_retryable_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
+        self.reschedule_count.increment_self();
+        self.rescheduled_task_count.increment_self();
         self.unblocked_task_queue.pop_last().map(|(_, task)| {
-            let ret = on_success(&task);
-            self.reschedule_count.increment_self();
-            self.rescheduled_task_count.increment_self();
-            ret
+            on_success(&task)
         })
     }
 
