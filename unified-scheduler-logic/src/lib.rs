@@ -251,8 +251,9 @@ impl PageInner {
 
     fn pop_blocked_task(
         &mut self,
+        requested_usage: RequestedUsage,
     ) {
-        self.pop_last();
+        self.blocked_tasks_mut(requested_usage).pop_last();
     }
 
     fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
@@ -589,7 +590,7 @@ impl SchedulingStateMachine {
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut_unchecked();
-                            page.pop_blocked_task();
+                            page.pop_blocked_task(attempt.requested_usage);
                         }
                     }
                     //eprintln!("bbb: {i}");
