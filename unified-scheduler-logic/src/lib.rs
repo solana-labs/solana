@@ -246,7 +246,7 @@ impl PageInner {
     }
 }
 
-const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 16);
+const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
