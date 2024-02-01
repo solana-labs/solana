@@ -431,7 +431,6 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
-        /*
         if matches!(lock_status, LockStatus::Succeded(_)) {
             let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
@@ -441,21 +440,20 @@ impl SchedulingStateMachine {
                 // page.
                 (PageInner::heavier_task(w, r)
                     .map(|(&e_unique_weight, _)| this_unique_weight >= e_unique_weight)
-                    .unwrap_or(true)) ||
+                    .unwrap_or(true)) /*||
                 // this _read-only_ unique_weight is heavier than any of contened write locks.
                 (matches!(requested_usage, RequestedUsage::Readonly) &&
                     w
                     // this_unique_weight is readonly and existing_unique_weight is writable here.
                     // so given unique_weight can't be same; thus > instead of >= is correct
                     .map(|(&existing_unique_weight, _)| this_unique_weight > existing_unique_weight)
-                    .unwrap_or(true))
+                    .unwrap_or(true))*/
             ;
 
             if !no_heavier_other_tasks {
                 lock_status = LockStatus::Failed
             }
         }
-        */
         lock_status
     }
 
