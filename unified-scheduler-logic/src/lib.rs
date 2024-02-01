@@ -234,7 +234,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        self.blocked_tasks.last_key_value().map(|(_weight, (task, _))| task)
+        self.blocked_tasks.last_key_value().map(|(_weight, v)| v)
     }
 }
 
