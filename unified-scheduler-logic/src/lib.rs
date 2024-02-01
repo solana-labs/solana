@@ -166,7 +166,7 @@ impl TaskInner {
 struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
-    uncommited_usage: Usage,
+    lock_status: LockStatus,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
@@ -175,7 +175,7 @@ impl LockAttempt {
         Self {
             page,
             requested_usage,
-            uncommited_usage: Usage::default(),
+            lock_status: LockStatus::default(),
         }
     }
 
@@ -391,13 +391,11 @@ impl SchedulingStateMachine {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            match Self::attempt_lock_address(page_token, unique_weight, attempt) {
+            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
+            match lock_status {
                 LockStatus::Succeded(usage) => {
-                    //eprintln!("ok: {:?}", usage);
                     if direct_commit {
                         attempt.page_mut(page_token).usage = usage;
-                    } else {
-                        attempt.uncommited_usage = usage;
                     }
                 }
                 LockStatus::Failed => {
@@ -405,6 +403,7 @@ impl SchedulingStateMachine {
                     lock_count.increment_self();
                 }
             }
+            attempt.lock_status = lock_status;
         }
 
         lock_count
@@ -516,7 +515,7 @@ impl SchedulingStateMachine {
                     /*
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
-                        page.usage = attempt.uncommited_usage;
+                        page.usage = attempt.lock_status;
                         page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
                     }
 
@@ -542,7 +541,8 @@ impl SchedulingStateMachine {
                 TaskSource::Runnable => {
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
-                        page.usage = attempt.uncommited_usage;
+                        let LockStatus::Succeded(usage) = attempt.lock_status else { panic!() };
+                        page.usage = usage;
                     }
                 }
             }
@@ -715,7 +715,7 @@ mod tests {
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, uncommited_usage: Unused }] }"
+             .. })), requested_usage: Writable, lock_status: Unused }] }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
