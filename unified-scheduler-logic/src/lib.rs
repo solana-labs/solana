@@ -322,7 +322,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_retryable_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
-        self.unblocked_task_queue.pop_back().map(|task| {
+        self.unblocked_task_queue.pop_front().map(|task| {
             let ret = on_success(&task);
             self.reschedule_count.increment_self();
             self.rescheduled_task_count.increment_self();
@@ -459,7 +459,7 @@ impl SchedulingStateMachine {
                         .current();
                     if new_count == 0 {
                         self.unblocked_task_queue
-                            .pop_front(uncontended_task.clone());
+                            .push_back(uncontended_task.clone());
                     }
                     page.pop_blocked_task(uncontended_task.unique_weight);
                     match Self::attempt_lock_address(page, requested_usage) {
