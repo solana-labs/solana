@@ -10989,7 +10989,7 @@ fn test_rent_state_list_len() {
         &bank.accounts().accounts_db,
         &bank.ancestors,
         &[sanitized_tx.clone()],
-        &[(Ok(()), None, Some(0))],
+        &[(Ok(()), None, Some(0), None)],
         &mut error_counters,
         &bank.rent_collector,
         &bank.feature_set,
@@ -13748,7 +13748,7 @@ fn test_filter_executable_program_accounts() {
     let programs = bank.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],
-        &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
+        &mut [(Ok(()), None, Some(0), None), (Ok(()), None, Some(0), None)],
         owners,
     );
 
@@ -13840,7 +13840,7 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
 
     let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
-    let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
+    let mut lock_results = vec![(Ok(()), None, Some(0), None), (Ok(()), None, None, None)];
     let programs = bank.filter_executable_program_accounts(
         &ancestors,
         &[sanitized_tx1, sanitized_tx2],

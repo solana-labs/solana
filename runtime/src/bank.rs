@@ -4139,8 +4139,24 @@ impl Bank {
         lamports_per_signature: u64,
     ) -> u64 {
         // NOTE: testing SIMD-0110, adding write lock fee to total fee for message.
-        let mut write_locks_fee = 0;
-        //*
+        self.calculate_write_lock_fee(message)
+            .saturating_add(
+                self.fee_structure.calculate_fee(
+                    message,
+                    lamports_per_signature,
+                    &process_compute_budget_instructions(message.program_instructions_iter())
+                        .unwrap_or_default()
+                        .into(),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            )
+        )
+    }
+
+    fn calculate_write_lock_fee(
+        &self,
+        message: &SanitizedMessage,
+    ) -> u64 {
         let writable_accounts: Vec<Pubkey> = message
             .account_keys()
             .iter()
@@ -4153,22 +4169,9 @@ impl Bank {
                 }
             })
             .collect();
-        write_locks_fee = self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
+        self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
             &writable_accounts,
             process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default().compute_unit_limit,
-            );
-        // */
-
-        write_locks_fee.saturating_add(
-            self.fee_structure.calculate_fee(
-                message,
-                lamports_per_signature,
-                &process_compute_budget_instructions(message.program_instructions_iter())
-                    .unwrap_or_default()
-                    .into(),
-                self.feature_set
-                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-            )
         )
     }
 
@@ -4525,6 +4528,43 @@ impl Bank {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
+    // NOTE testing SIMD-0110, calculate write lock fee for checked transactions
+    // piggy back to TransactionCheckResult for now, so write-lock-fee can be easily accessable 
+    // by load_accounts().
+    /*
+    fn check_write_lock_fee(
+        &self,
+        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        check_results: Vec<TransactionCheckResult>,
+    ) -> Vec<TransactionCheckResult> {
+        sanitized_txs
+            .iter()
+            .zip(check_results)
+            .map(|(tx, (result, nonce, lamports_per_signature, _))| match result {
+                Ok(()) => {
+                    let tx = tx.borrow();
+                    (result, nonce, lamports_per_signature, Some(self.calculate_write_lock_fee(tx.message())))
+                },
+                _ => (result, nonce, lamports_per_signature, None)
+            })
+            .collect()
+    }
+    // */
+    fn check_write_lock_fee(
+        &self,
+        sanitized_txs: &[SanitizedTransaction],
+        check_results: &mut [TransactionCheckResult],
+    ) {
+        check_results
+            .iter_mut()
+            .zip(sanitized_txs)
+            .for_each(|etx| {
+                if let ((Ok(()), nonce, lamports, _), tx) = etx {
+                    *etx.0 = (Ok(()), nonce.clone(), *lamports, Some(self.calculate_write_lock_fee(tx.message())));
+                }
+            });
+    }
+
     fn check_age(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
@@ -4547,7 +4587,7 @@ impl Bank {
                     &hash_queue,
                     error_counters,
                 ),
-                Err(e) => (Err(e.clone()), None, None),
+                Err(e) => (Err(e.clone()), None, None, None),
             })
             .collect()
     }
@@ -4566,16 +4606,17 @@ impl Bank {
                 Ok(()),
                 None,
                 hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
+                None,
             )
         } else if let Some((address, account)) =
             self.check_transaction_for_nonce(tx, next_durable_nonce)
         {
             let nonce = NoncePartial::new(address, account);
             let lamports_per_signature = nonce.lamports_per_signature();
-            (Ok(()), Some(nonce), lamports_per_signature)
+            (Ok(()), Some(nonce), lamports_per_signature, None)
         } else {
             error_counters.blockhash_not_found += 1;
-            (Err(TransactionError::BlockhashNotFound), None, None)
+            (Err(TransactionError::BlockhashNotFound), None, None, None)
         }
     }
 
@@ -4601,16 +4642,16 @@ impl Bank {
         sanitized_txs
             .iter()
             .zip(lock_results)
-            .map(|(sanitized_tx, (lock_result, nonce, lamports))| {
+            .map(|(sanitized_tx, (lock_result, nonce, lamports, _write_lock_fee))| {
                 let sanitized_tx = sanitized_tx.borrow();
                 if lock_result.is_ok()
                     && self.is_transaction_already_processed(sanitized_tx, &rcache)
                 {
                     error_counters.already_processed += 1;
-                    return (Err(TransactionError::AlreadyProcessed), None, None);
+                    return (Err(TransactionError::AlreadyProcessed), None, None, None);
                 }
 
-                (lock_result, nonce, lamports)
+                (lock_result, nonce, lamports, None)
             })
             .collect()
     }
@@ -5179,7 +5220,7 @@ impl Bank {
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
         lock_results.iter_mut().zip(txs).for_each(|etx| {
-            if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
+            if let ((Ok(()), _nonce, lamports_per_signature, _), tx) = etx {
                 if lamports_per_signature.is_some() {
                     tx.message()
                         .account_keys()
@@ -5206,7 +5247,7 @@ impl Bank {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
                     // transaction, and update the status of the transaction.
-                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None, None);
+                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None, None, None);
                 }
             }
         });
@@ -5443,6 +5484,10 @@ impl Bank {
             self.replenish_program_cache(&program_accounts_map),
         ));
 
+        // NOTE testing SIMD-0110, calculate and attach checked txs' write_lock_fee to
+        // check_results
+        self.check_write_lock_fee(sanitized_txs, check_results);
+
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
             &self.rc.accounts.accounts_db,
@@ -5639,22 +5684,7 @@ impl Bank {
                 // TODO can refactor self.get_fee_for_message_with_lamports_per_signature() out
                 let message = tx.message();
                 let budget_limits = process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default();
-                let writable_accounts: Vec<Pubkey> = message
-                    .account_keys()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, k)| {
-                        if message.is_writable(i) {
-                            Some(*k)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                let write_lock_fee = self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
-                    &writable_accounts,
-                    budget_limits.compute_unit_limit,
-                    );
+                let write_lock_fee = self.calculate_write_lock_fee(message);
                 // TODO, testing SIMD-0110, need to withdraw write-lock-fee for successful tx
                 // somewhere.
 

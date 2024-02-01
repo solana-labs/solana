@@ -56,32 +56,11 @@ pub(crate) fn load_accounts(
     txs.iter()
         .zip(lock_results)
         .map(|etx| match etx {
-            (tx, (Ok(()), nonce, lamports_per_signature)) => {
+            (tx, (Ok(()), nonce, lamports_per_signature, write_lock_fee)) => {
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                    let write_locks_fee = write_lock_fee.unwrap_or(0);
                     let budget_limits =
                         process_compute_budget_instructions(tx.message().program_instructions_iter()).unwrap_or_default().into();
-                    // NOTE: testing SIMD-0110, adding write lock fee to total fee for message.
-                    let mut write_locks_fee: u64 = 0;
-                    /* 
-                    // NOTE testing SIMD-0110, not using write-lock-fee since banking_stage already
-                    // did fee_payer check. For production, do need to account write-lock-fee, but
-                    // then perhaps can put total_fee in transaction_meta already
-                    let message = tx.message();
-                    let writable_accounts = message
-                        .account_keys()
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, k)| {
-                            if message.is_writable(i) {
-                                Some(*k)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    write_locks_fee = bank.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(writable_accounts, budget_limits.cu_limit);
-                    // */
-
                     write_locks_fee.saturating_add(
                         fee_structure.calculate_fee(
                             tx.message(),
@@ -130,7 +109,7 @@ pub(crate) fn load_accounts(
 
                 (Ok(loaded_transaction), nonce)
             }
-            (_, (Err(e), _nonce, _lamports_per_signature)) => (Err(e.clone()), None),
+            (_, (Err(e), _nonce, _lamports_per_signature, _write_lock_fee)) => (Err(e.clone()), None),
         })
         .collect()
 }
@@ -551,7 +530,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[sanitized_tx],
-            &[(Ok(()), None, Some(lamports_per_signature))],
+            &[(Ok(()), None, Some(lamports_per_signature), None)],
             error_counters,
             rent_collector,
             feature_set,
@@ -1025,7 +1004,7 @@ mod tests {
             &accounts.accounts_db,
             &ancestors,
             &[tx],
-            &[(Ok(()), None, Some(10))],
+            &[(Ok(()), None, Some(10), None)],
             &mut error_counters,
             &rent_collector,
             &FeatureSet::all_enabled(),

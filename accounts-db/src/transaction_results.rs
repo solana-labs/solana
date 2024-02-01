@@ -17,7 +17,7 @@ use {
     },
 };
 
-pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
+pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>, Option<u64> /*SIMD-0110 write_lock_fee*/);
 
 pub struct TransactionResults {
     pub fee_collection_results: Vec<transaction::Result<()>>,

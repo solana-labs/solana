@@ -418,7 +418,7 @@ impl Consumer {
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
         let check_results = check_results
             .into_iter()
-            .map(|(result, _nonce, _lamports)| result);
+            .map(|(result, _nonce, _lamports, _write_lock_fee)| result);
         let mut output = self.process_and_record_transactions_with_pre_results(
             bank,
             txs,
@@ -842,7 +842,7 @@ impl Consumer {
         valid_txs
             .iter()
             .enumerate()
-            .filter_map(|(index, (x, _h, _lamports))| if x.is_ok() { Some(index) } else { None })
+            .filter_map(|(index, (x, _h, _lamports, _write_lock_fee))| if x.is_ok() { Some(index) } else { None })
             .collect_vec()
     }
 }
@@ -2543,24 +2543,24 @@ mod tests {
     fn test_bank_filter_valid_transaction_indexes() {
         assert_eq!(
             Consumer::filter_valid_transaction_indexes(&[
-                (Err(TransactionError::BlockhashNotFound), None, None),
-                (Err(TransactionError::BlockhashNotFound), None, None),
-                (Ok(()), None, None),
-                (Err(TransactionError::BlockhashNotFound), None, None),
-                (Ok(()), None, None),
-                (Ok(()), None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None, None),
+                (Ok(()), None, None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None, None),
+                (Ok(()), None, None, None),
+                (Ok(()), None, None, None),
             ]),
             [2, 4, 5]
         );
 
         assert_eq!(
             Consumer::filter_valid_transaction_indexes(&[
-                (Ok(()), None, None),
-                (Err(TransactionError::BlockhashNotFound), None, None),
-                (Err(TransactionError::BlockhashNotFound), None, None),
-                (Ok(()), None, None),
-                (Ok(()), None, None),
-                (Ok(()), None, None),
+                (Ok(()), None, None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None, None),
+                (Ok(()), None, None, None),
+                (Ok(()), None, None, None),
+                (Ok(()), None, None, None),
             ]),
             [0, 3, 4, 5]
         );
