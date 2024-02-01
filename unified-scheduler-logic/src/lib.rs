@@ -523,7 +523,7 @@ impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
             last_unique_weight: UniqueWeight::max_value(),
-            unblocked_task_queue: VecDeque::with_capacity(100),
+            unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
             reschedule_count: Counter::zero(),
