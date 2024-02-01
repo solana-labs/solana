@@ -191,6 +191,7 @@ enum Usage {
     Unused,
     Readonly(Counter),
     Writable,
+    Provisioned,
 }
 const_assert_eq!(mem::size_of::<Usage>(), 8);
 
