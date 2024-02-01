@@ -9,6 +9,7 @@ use {
     static_assertions::const_assert_eq,
     std::{collections::BTreeMap, mem, sync::Arc},
 };
+use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Default)]
 enum LockStatus {
