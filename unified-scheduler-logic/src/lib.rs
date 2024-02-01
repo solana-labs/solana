@@ -218,15 +218,14 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    blocked_tasks: VecDeque<(Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self
+        self
             .blocked_tasks
-            .insert(task.unique_weight, (task, requested_usage));
-        assert!(pre_existed.is_none());
+            .push_back((task, requested_usage));
     }
 
     fn no_blocked_tasks(&self) -> bool {
@@ -234,12 +233,12 @@ impl PageInner {
     }
 
     fn pop_blocked_task(&mut self, unique_weight: UniqueWeight) {
-        let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
+        let (pre_existed, _) = self.blocked_tasks.pop_front().unwrap();
         assert_eq!(pre_existed, unique_weight);
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.last_key_value().map(|(_weight, v)| v)
+        self.blocked_tasks.back()
     }
 }
 
