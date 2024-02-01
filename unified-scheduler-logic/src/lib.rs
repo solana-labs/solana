@@ -362,7 +362,6 @@ impl SchedulingStateMachine {
                     attempt.page_mut(page_token).usage = usage;
                 }
                 LockStatus::Failed => {
-                    //eprintln!("failed");
                     lock_count.increment_self();
                 }
             }
@@ -497,14 +496,17 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let heaviest_uncontended_now = unlock_attempt
-                .page_mut(&mut self.page_token)
-                .heaviest_blocked_task();
+            let page = unlock_attempt
+                .page_mut(&mut self.page_token);
+            let heaviest_uncontended_now = page.heaviest_blocked_task();
             let mut retryable_task = None;
             if let Some(uncontended_task) = heaviest_uncontended_now {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 //i += 1;
-                if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
+                let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
+                page.usage = Usage::Provisioned;
+
+                if new_count == 0 {
                     retryable_task = Some(uncontended_task.clone());
                 }
             }
