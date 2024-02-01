@@ -465,13 +465,9 @@ impl SchedulingStateMachine {
                     match Self::attempt_lock_address(page, requested_usage) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
-                            if matches!(usage, Usage::Readonly(_)) {
-                                if matches!(
-                                    page.heaviest_blocked_task(),
-                                    Some((_, RequestedUsage::Readonly))
-                                ) {
-                                    should_continue = true;
-                                }
+                            if matches!(usage, Usage::Readonly(_)) &&
+                                matches!( page.heaviest_blocked_task(), Some((_, RequestedUsage::Readonly))) {
+                                should_continue = true;
                             }
                             page.usage = usage;
                         }
