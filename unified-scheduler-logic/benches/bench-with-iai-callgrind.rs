@@ -612,8 +612,8 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    //benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
-    benchmarks = bench_end_to_end_worst
+    benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    //benchmarks = bench_end_to_end_worst
 );
 
 main!(library_benchmark_groups = bench_scheduling_state_machine);
