@@ -583,25 +583,21 @@ impl SchedulingStateMachine {
             let heaviest_uncontended_now = unlock_attempt
                 .page_mut(&mut self.page_token)
                 .heaviest_blocked_task();
-            let mut retryable_task = None;
             if let Some(uncontended_task) = heaviest_uncontended_now {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 //i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
-                    retryable_task = Some(uncontended_task.clone());
-                }
-            }
-            if let Some(retryable_task) = retryable_task {
-                for attempt in retryable_task.lock_attempts(&self.task_token) {
-                    if matches!(attempt.lock_status, LockStatus::Failed) {
-                        let page = attempt.page_mut_unchecked();
-                        page.pop_blocked_task(attempt.requested_usage);
+                    for attempt in uncontended_task.lock_attempts(&self.task_token) {
+                        if matches!(attempt.lock_status, LockStatus::Failed) {
+                            let page = attempt.page_mut_unchecked();
+                            page.pop_blocked_task(attempt.requested_usage);
+                        }
                     }
+                    //eprintln!("bbb: {i}");
+                    self.retryable_task_queue
+                        .entry(uncontended_task.unique_weight)
+                        .or_insert_with(|| uncontended_task.clone());
                 }
-                //eprintln!("bbb: {i}");
-                self.retryable_task_queue
-                    .entry(retryable_task.unique_weight)
-                    .or_insert(retryable_task);
             }
         }
     }
