@@ -367,7 +367,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        page: &mut PageInner,
+        page: &PageInner,
         requested_usage: RequestedUsage,
     ) -> LockStatus {
         match page.usage {
