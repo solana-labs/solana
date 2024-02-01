@@ -326,7 +326,7 @@ impl SchedulingStateMachine {
             .and_then(|(_, task)| {
                 self.reschedule_count.increment_self();
                 self.rescheduled_task_count.increment_self();
-                Some(on_success(task))
+                Some(on_success(&task))
             })
     }
 
