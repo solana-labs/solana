@@ -191,7 +191,6 @@ enum Usage {
     Unused,
     Readonly(Counter),
     Writable,
-    Provisioned,
 }
 const_assert_eq!(mem::size_of::<Usage>(), 8);
 
@@ -351,7 +350,7 @@ impl SchedulingStateMachine {
 
             let requested_usage = attempt.requested_usage;
             let page = attempt.page_mut(page_token);
-            let lock_status = Self::attempt_lock_address(page, unique_weight, requested_usage, from_blocked);
+            let lock_status = Self::attempt_lock_address(page, requested_usage);
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
@@ -368,9 +367,7 @@ impl SchedulingStateMachine {
 
     fn attempt_lock_address(
         page: &mut PageInner,
-        this_unique_weight: UniqueWeight,
         requested_usage: RequestedUsage,
-        from_blocked: bool,
     ) -> LockStatus {
         let mut lock_status = match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
@@ -381,13 +378,6 @@ impl SchedulingStateMachine {
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
-            Usage::Provisioned => {
-                if from_blocked {
-                    LockStatus::Succeded(Usage::renew(requested_usage))
-                } else {
-                    LockStatus::Failed
-                }
-            }
         };
 
         lock_status
@@ -416,7 +406,7 @@ impl SchedulingStateMachine {
                 }
                 RequestedUsage::Readonly => unreachable!(),
             },
-            Usage::Unused | Usage::Provisioned => unreachable!(),
+            Usage::Unused => unreachable!(),
         }
 
         if is_unused_now {
@@ -507,7 +497,7 @@ impl SchedulingStateMachine {
                     if new_count == 0 {
                         retryable_task = Some(uncontended_task.clone());
                     }
-                    page.usage = Usage::Provisioned;
+                    Self::attempt_lock_address(page, r);
                 }
                 if let Some(retryable_task) = retryable_task {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
