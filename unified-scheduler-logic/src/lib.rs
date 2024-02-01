@@ -481,7 +481,7 @@ impl SchedulingStateMachine {
 
             loop {
                 let page = unlock_attempt.page_mut(&mut self.page_token);
-                let heaviest_uncontended_now = page.heaviest_blocked_task();
+                let mut heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut retryable_task = None;
                 let mut should_continue = false;
                 if let Some(&(ref uncontended_task, requested_usage)) = heaviest_uncontended_now {
@@ -490,8 +490,10 @@ impl SchedulingStateMachine {
                         retryable_task = Some(uncontended_task.clone());
                     }
                     match Self::attempt_lock_address(page, requested_usage) {
-                        LockStatus::Succeded(Usage::Readonly(_)) => { should_continue = true; 
-                            let heaviest_uncontended_now = page.heaviest_blocked_task();
+                        LockStatus::Succeded(Usage::Readonly(_)) => {
+                            heaviest_uncontended_now = page.heaviest_blocked_task();
+                            //if let Some(&(ref _, requested_usage)) = heaviest_uncontended_now
+                            should_continue = true; 
                         }
                         LockStatus::Succeded(Usage::Writable) => {},
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!()
