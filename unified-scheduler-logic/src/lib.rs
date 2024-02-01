@@ -601,7 +601,7 @@ impl SchedulingStateMachine {
                 //eprintln!("bbb: {i}");
                 self.retryable_task_queue
                     .entry(retryable_task.unique_weight)
-                    .or_insert(uncontended_task);
+                    .or_insert(retryable_task);
             }
         }
     }
