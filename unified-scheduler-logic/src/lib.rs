@@ -238,7 +238,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.back()
+        self.blocked_tasks.front()
     }
 }
 
