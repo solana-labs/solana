@@ -579,10 +579,8 @@ impl SchedulingStateMachine {
                 //i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
-                        if matches!(attempt.lock_status, LockStatus::Failed) {
-                            let page = attempt.page_mut_unchecked();
-                            page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
-                        }
+                        let page = attempt.page_mut_unchecked();
+                        page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
                     }
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue
