@@ -591,7 +591,7 @@ impl SchedulingStateMachine {
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut_unchecked();
-                            page.pop_last();
+                            page.pop_blocked_task();
                         }
                     }
                     //eprintln!("bbb: {i}");
