@@ -5,7 +5,7 @@ use {
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
-        collections::{BTreeMap, VecDeque},
+        collections::VecDeque,
         mem,
         sync::Arc,
     },
@@ -270,18 +270,26 @@ enum RequestedUsage {
     Writable,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct PageInner {
     usage: Usage,
-    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
+    blocked_tasks: VecDeque<(Task, RequestedUsage)>,
+}
+
+impl Default for PageInner {
+    fn default() -> Self {
+        Self {
+            usage: Usage::default(),
+            blocked_tasks: VecDeque::with_capacity(1000),
+        }
+    }
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        let pre_existed = self
+        self
             .blocked_tasks
-            .insert(task.unique_weight, (task, requested_usage));
-        assert!(pre_existed.is_none());
+            .push_back((task, requested_usage));
     }
 
     fn has_no_blocked_task(&self) -> bool {
@@ -289,13 +297,13 @@ impl PageInner {
     }
 
     fn pop_blocked_task(&mut self) {
-        self.blocked_tasks.pop_last().unwrap();
+        self.blocked_tasks.pop_front().unwrap();
     }
 
     fn heaviest_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
         self.blocked_tasks
-            .last_key_value()
-            .map(|(_weight, (task, requested_usage))| (task, *requested_usage))
+            .front()
+            .map(|(task, requested_usage)| (task, *requested_usage))
     }
 }
 
