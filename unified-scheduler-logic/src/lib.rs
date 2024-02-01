@@ -387,10 +387,15 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
+        only_failed: bool,
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
+            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded) {
+                continue;
+            }
+
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
             match lock_status {
                 LockStatus::Succeded(usage) => {
@@ -497,6 +502,7 @@ impl SchedulingStateMachine {
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
+            false,
         );
 
         //eprintln!("{:?}", provisional_lock_count);
