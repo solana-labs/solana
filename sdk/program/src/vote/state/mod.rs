@@ -1,7 +1,5 @@
 //! Vote state
 
-#[cfg(not(target_os = "solana"))]
-use bincode::deserialize;
 #[cfg(test)]
 use {
     crate::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
@@ -18,7 +16,7 @@ use {
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
-    bincode::{serialize_into, serialized_size, ErrorKind},
+    bincode::{serialize_into, ErrorKind},
     serde_derive::{Deserialize, Serialize},
     std::{collections::VecDeque, fmt::Debug, io::Cursor},
 };
@@ -374,27 +372,33 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    // we retain bincode deserialize for not(target_os = "solana")
-    // because the hand-written parser does not support V0_23_5
+    /// Deserializes the input buffer into a newly allocated `VoteState`
+    ///
+    /// This function is intended as a drop-in replacement for `bincode::deserialize()`.
+    /// V0_23_5 is not supported in a BPF context, but all versions are supported on non-BPF.
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        let mut vote_state = Self::default();
+        Self::deserialize_into(input, &mut vote_state)?;
+        Ok(vote_state)
+    }
+
+    // this only exists for the sake of the feature gated upgrade to the new parser; do not use it
+    #[doc(hidden)]
+    #[allow(clippy::used_underscore_binding)]
+    pub fn deserialize_with_bincode(_input: &[u8]) -> Result<Self, InstructionError> {
         #[cfg(not(target_os = "solana"))]
         {
-            deserialize::<VoteStateVersions>(input)
+            bincode::deserialize::<VoteStateVersions>(_input)
                 .map(|versioned| versioned.convert_to_current())
                 .map_err(|_| InstructionError::InvalidAccountData)
         }
         #[cfg(target_os = "solana")]
-        {
-            let mut vote_state = Self::default();
-            Self::deserialize_into(input, &mut vote_state)?;
-            Ok(vote_state)
-        }
+        unimplemented!()
     }
 
     /// Deserializes the input buffer into the provided `VoteState`
     ///
-    /// This function exists to deserialize `VoteState` in a BPF context without going above
-    /// the compute limit, and must be kept up to date with `bincode::deserialize`.
+    /// This function is exposed to allow deserialization in a BPF context directly into boxed memory.
     pub fn deserialize_into(
         input: &[u8],
         vote_state: &mut VoteState,
@@ -403,8 +407,20 @@ impl VoteState {
 
         let variant = read_u32(&mut cursor)?;
         match variant {
-            // V0_23_5. not supported; these should not exist on mainnet
-            0 => Err(InstructionError::InvalidAccountData),
+            // V0_23_5. not supported for bpf targets; these should not exist on mainnet
+            // supported for non-bpf targets for backwards compatibility
+            0 => {
+                #[cfg(not(target_os = "solana"))]
+                {
+                    *vote_state = bincode::deserialize::<VoteStateVersions>(input)
+                        .map(|versioned| versioned.convert_to_current())
+                        .map_err(|_| InstructionError::InvalidAccountData)?;
+
+                    Ok(())
+                }
+                #[cfg(target_os = "solana")]
+                Err(InstructionError::InvalidAccountData)
+            }
             // V1_14_11. substantially different layout and data from V0_23_5
             1 => deserialize_vote_state_into(&mut cursor, vote_state, false),
             // Current. the only difference from V1_14_11 is the addition of a slot-latency to each vote
@@ -412,6 +428,8 @@ impl VoteState {
             _ => Err(InstructionError::InvalidAccountData),
         }?;
 
+        // if cursor overruns the input, it produces 0 values and continues to advance `position`
+        // this check ensures we do not accept such a malformed input erroneously
         if cursor.position() > input.len() as u64 {
             return Err(InstructionError::InvalidAccountData);
         }
@@ -859,7 +877,7 @@ pub mod serde_compact_vote_state_update {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, itertools::Itertools, rand::Rng};
+    use {super::*, bincode::serialized_size, itertools::Itertools, rand::Rng};
 
     #[test]
     fn test_vote_serialize() {
@@ -879,14 +897,13 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_deserialize_into() {
+    fn test_vote_deserialize() {
         // base case
         let target_vote_state = VoteState::default();
         let vote_state_buf =
             bincode::serialize(&VoteStateVersions::new_current(target_vote_state.clone())).unwrap();
 
-        let mut test_vote_state = VoteState::default();
-        VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+        let test_vote_state = VoteState::deserialize(&vote_state_buf).unwrap();
 
         assert_eq!(target_vote_state, test_vote_state);
 
@@ -902,22 +919,20 @@ mod tests {
             let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
             let target_vote_state = target_vote_state_versions.convert_to_current();
 
-            let mut test_vote_state = VoteState::default();
-            VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+            let test_vote_state = VoteState::deserialize(&vote_state_buf).unwrap();
 
             assert_eq!(target_vote_state, test_vote_state);
         }
     }
 
     #[test]
-    fn test_vote_deserialize_into_nopanic() {
+    fn test_vote_deserialize_nopanic() {
         // base case
-        let mut test_vote_state = VoteState::default();
-        let e = VoteState::deserialize_into(&[], &mut test_vote_state).unwrap_err();
+        let e = VoteState::deserialize(&[]).unwrap_err();
         assert_eq!(e, InstructionError::InvalidAccountData);
 
         // variant
-        let serialized_len_x4 = serialized_size(&test_vote_state).unwrap() * 4;
+        let serialized_len_x4 = serialized_size(&VoteState::default()).unwrap() * 4;
         let mut rng = rand::thread_rng();
         for _ in 0..1000 {
             let raw_data_length = rng.gen_range(1..serialized_len_x4);
@@ -925,8 +940,7 @@ mod tests {
 
             // it is extremely improbable, though theoretically possible, for random bytes to be syntactically valid
             // so we only check that the deserialize function does not panic
-            let mut test_vote_state = VoteState::default();
-            let _ = VoteState::deserialize_into(&raw_data, &mut test_vote_state);
+            let _ = VoteState::deserialize(&raw_data);
         }
     }
 
