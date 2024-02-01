@@ -509,7 +509,7 @@ impl SchedulingStateMachine {
             loop {
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut retryable_task = None;
-                if let Some(uncontended_task, r) = heaviest_uncontended_now {
+                if let Some((uncontended_task, r)) = heaviest_uncontended_now {
                     //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                     //i += 1;
                     let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
