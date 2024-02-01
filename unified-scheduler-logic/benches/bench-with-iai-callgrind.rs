@@ -487,9 +487,10 @@ fn bench_schedule_retryable_task(account_count: usize) {
 #[bench::one(1)]
 #[bench::two(2)]
 #[bench::three(3)]
+#[bench::normal(16)]
 #[bench::normal(32)]
 #[bench::large(64)]
-#[bench::max(128)]
+//#[bench::max(128)]
 fn bench_end_to_end_worst(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
@@ -612,7 +613,7 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
     //benchmarks = bench_end_to_end_worst
 );
 
