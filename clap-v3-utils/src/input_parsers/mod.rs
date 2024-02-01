@@ -21,8 +21,10 @@ pub mod signer;
     since = "1.17.0",
     note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
 )]
+#[allow(deprecated)]
 pub use signer::{
-    pubkey_of_signer, pubkeys_of_multiple_signers, resolve_signer, signer_of, STDOUT_OUTFILE_TOKEN,
+    pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer, signer_of,
+    STDOUT_OUTFILE_TOKEN,
 };
 
 // Return parsed values from matches at `name`
