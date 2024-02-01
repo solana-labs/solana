@@ -7,9 +7,12 @@ use {
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
-    std::{collections::BTreeMap, mem, sync::Arc},
+    std::{
+        collections::{BTreeMap, VecDeque},
+        mem,
+        sync::Arc,
+    },
 };
-use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Default)]
 enum LockStatus {
