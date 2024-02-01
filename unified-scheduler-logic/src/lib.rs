@@ -254,7 +254,7 @@ type TaskQueue = BTreeMap<UniqueWeight, Task>;
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
     last_unique_weight: UniqueWeight,
-    unblocked_task_queue: TaskQueue,
+    unblocked_task_queue: VecDeque<Task>,
     active_task_count: Counter,
     handled_task_count: Counter,
     reschedule_count: Counter,
@@ -524,7 +524,7 @@ impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
             last_unique_weight: UniqueWeight::max_value(),
-            unblocked_task_queue: TaskQueue::default(),
+            unblocked_task_queue: VecDeque::with_capacity(100),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
             reschedule_count: Counter::zero(),
