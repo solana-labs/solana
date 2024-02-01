@@ -396,7 +396,7 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
+            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, only_failed);
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
@@ -416,6 +416,7 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         this_unique_weight: UniqueWeight,
         attempt: &mut LockAttempt,
+        only_failed: bool,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
@@ -431,7 +432,7 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
-        if matches!(lock_status, LockStatus::Succeded(_)) {
+        if !only_failed && matches!(lock_status, LockStatus::Succeded(_)) {
             let w = page.heaviest_blocked_writable_task();
             let r = page.heaviest_blocked_readonly_task();
 
