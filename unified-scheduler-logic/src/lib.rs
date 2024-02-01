@@ -223,22 +223,13 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
-    fn remove_blocked_task(
+    fn pop_blocked_task(
         &mut self,
         requested_usage: RequestedUsage,
         unique_weight: UniqueWeight,
     ) {
-        let removed_entry = self
-            .blocked_tasks
-            .remove(&unique_weight);
-        assert!(removed_entry.is_some());
-    }
-
-    fn pop_blocked_task(
-        &mut self,
-        requested_usage: RequestedUsage,
-    ) {
-        self.blocked_tasks.pop_last();
+        let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
+        assert_eq!(pre_existed, unique_weight);
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
@@ -461,12 +452,6 @@ impl SchedulingStateMachine {
                 TaskSource::Retryable => {
                     panic!();
                     /*
-                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        let page = attempt.page_mut(&mut self.page_token);
-                        page.usage = attempt.lock_status;
-                        page.remove_blocked_task(attempt.requested_usage, task.unique_weight);
-                    }
-
                     // as soon as `task` is succeeded in locking, trigger re-checks on read only
                     // addresses so that more readonly transactions can be executed
                     for read_only_lock_attempt in task
@@ -534,7 +519,7 @@ impl SchedulingStateMachine {
                 for attempt in retryable_task.lock_attempts(&self.task_token) {
                     if matches!(attempt.lock_status, LockStatus::Failed) {
                         let page = attempt.page_mut(&mut self.page_token);
-                        page.pop_blocked_task(attempt.requested_usage);
+                        page.pop_blocked_task(attempt.requested_usage, retryable_task.unique_weight);
                     }
                 }
                 //eprintln!("bbb: {i}");
