@@ -489,7 +489,11 @@ impl SchedulingStateMachine {
                     if new_count == 0 {
                         retryable_task = Some(uncontended_task.clone());
                     }
-                    Self::attempt_lock_address(page, requested_usage);
+                    match Self::attempt_lock_address(page, requested_usage) {
+                        LockStatus::Succeded(Readonly(_)) => should_continue = true;
+                        LockStatus::Succeded(Writable) => {},
+                        LockStatus::Failed => unreachable!();
+                    }
                 }
                 if let Some(retryable_task) = retryable_task {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
