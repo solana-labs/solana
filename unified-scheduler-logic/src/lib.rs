@@ -168,7 +168,7 @@ struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
 }
-const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
+const_assert_eq!(mem::size_of::<LockAttempt>(), 16);
 
 impl LockAttempt {
     fn new(page: Page, requested_usage: RequestedUsage) -> Self {
