@@ -1,9 +1,12 @@
 #![allow(clippy::arithmetic_side_effects)]
 use super::*;
+#[cfg(test)]
+use arbitrary::{Arbitrary, Unstructured};
 
 const MAX_ITEMS: usize = 32;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct VoteState0_23_5 {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -57,5 +60,61 @@ impl<I> CircBuf<I> {
         self.idx %= MAX_ITEMS;
 
         self.buf[self.idx] = item;
+    }
+}
+
+#[cfg(test)]
+impl<'a, I: Default + Copy> Arbitrary<'a> for CircBuf<I>
+where
+    I: Arbitrary<'a>,
+{
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut circbuf = Self::default();
+
+        let len = u.arbitrary_len::<I>()?;
+        for _ in 0..len {
+            circbuf.append(I::arbitrary(u)?);
+        }
+
+        Ok(circbuf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vote_deserialize_0_23_5() {
+        // base case
+        let target_vote_state = VoteState0_23_5::default();
+        let target_vote_state_versions = VoteStateVersions::V0_23_5(Box::new(target_vote_state));
+        let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
+
+        let test_vote_state = VoteState::deserialize(&vote_state_buf).unwrap();
+
+        assert_eq!(
+            target_vote_state_versions.convert_to_current(),
+            test_vote_state
+        );
+
+        // variant
+        // provide 4x the minimum struct size in bytes to ensure we typically touch every field
+        let struct_bytes_x4 = std::mem::size_of::<VoteState0_23_5>() * 4;
+        for _ in 0..100 {
+            let raw_data: Vec<u8> = (0..struct_bytes_x4).map(|_| rand::random::<u8>()).collect();
+            let mut unstructured = Unstructured::new(&raw_data);
+
+            let arbitrary_vote_state = VoteState0_23_5::arbitrary(&mut unstructured).unwrap();
+            let target_vote_state_versions =
+                VoteStateVersions::V0_23_5(Box::new(arbitrary_vote_state));
+
+            let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
+            let target_vote_state = target_vote_state_versions.convert_to_current();
+
+            let test_vote_state = VoteState::deserialize(&vote_state_buf).unwrap();
+
+            assert_eq!(target_vote_state, test_vote_state);
+        }
     }
 }
