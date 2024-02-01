@@ -605,7 +605,7 @@ mod tests {
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, lock_status: Unused }], provisional_lock_count: \
+             .. })), requested_usage: Writable, lock_status: Failed }], provisional_lock_count: \
              Counter(0) }"
         );
         let sanitized = simplest_transaction();
