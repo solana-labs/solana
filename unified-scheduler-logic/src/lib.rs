@@ -390,6 +390,13 @@ impl SchedulingStateMachine {
                 RequestedUsage::Writable => LockStatus::Failed,
             },
             Usage::Writable => LockStatus::Failed,
+            Usage::Provisioned => {
+                if from_blocked {
+                    LockStatus::Succeded(Usage::renew(requested_usage))
+                } else {
+                    LockStatus::Failed
+                }
+            }
         };
 
         lock_status
