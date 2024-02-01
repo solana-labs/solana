@@ -387,7 +387,6 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        direct_commit: bool,
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
@@ -395,9 +394,7 @@ impl SchedulingStateMachine {
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
             match lock_status {
                 LockStatus::Succeded(usage) => {
-                    if direct_commit {
-                        attempt.page_mut(page_token).usage = usage;
-                    }
+                    attempt.page_mut(page_token).usage = usage;
                 }
                 LockStatus::Failed => {
                     //eprintln!("failed");
@@ -500,7 +497,6 @@ impl SchedulingStateMachine {
             &mut self.page_token,
             task.unique_weight,
             task.lock_attempts_mut(&mut self.task_token),
-            false,
         );
 
         //eprintln!("{:?}", provisional_lock_count);
@@ -540,11 +536,13 @@ impl SchedulingStateMachine {
                     */
                 }
                 TaskSource::Runnable => {
+                    /*
                     for attempt in task.lock_attempts_mut(&mut self.task_token) {
                         let page = attempt.page_mut(&mut self.page_token);
                         let LockStatus::Succeded(usage) = attempt.lock_status else { panic!() };
                         page.usage = usage;
                     }
+                    */
                 }
             }
             Some(ret)
@@ -553,10 +551,12 @@ impl SchedulingStateMachine {
 
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
-            let requested_usage = lock_attempt.requested_usage;
-            lock_attempt
-                .page_mut(&mut self.page_token)
-                .insert_blocked_task(task.clone(), requested_usage);
+            if matches!(lock_attempt.lock_status, LockStatus::Failed) {
+                let requested_usage = lock_attempt.requested_usage;
+                lock_attempt
+                    .page_mut(&mut self.page_token)
+                    .insert_blocked_task(task.clone(), requested_usage);
+            }
         }
     }
 
@@ -576,8 +576,10 @@ impl SchedulingStateMachine {
                 //i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
-                        let page = attempt.page_mut_unchecked();
-                        page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
+                        if matches!(attempt.lock_status, LockStatus::Failed) {
+                            let page = attempt.page_mut_unchecked();
+                            page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
+                        }
                     }
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue
