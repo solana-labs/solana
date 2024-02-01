@@ -5,9 +5,12 @@ use {
         serialize_utils::cursor::*,
         vote::state::{BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS},
     },
-    bincode::serialized_size,
     std::io::Cursor,
 };
+
+// hardcode this number to avoid calculating onchain; this is a fixed-size ringbuffer
+// `serialized_size()` must be used over `mem::size_of()` because of alignment
+const PRIOR_VOTERS_SERIALIZED_SIZE: u64 = 1545;
 
 pub(super) fn deserialize_vote_state_into(
     cursor: &mut Cursor<&[u8]>,
@@ -70,10 +73,8 @@ fn read_prior_voters_into<T: AsRef<[u8]>>(
     // record our position at the start of the struct
     let prior_voters_position = cursor.position();
 
-    // `serialized_size()` must be used over `mem::size_of()` because of alignment
-    let is_empty_position = serialized_size(&vote_state.prior_voters)
-        .ok()
-        .and_then(|v| v.checked_add(prior_voters_position))
+    let is_empty_position = PRIOR_VOTERS_SERIALIZED_SIZE
+        .checked_add(prior_voters_position)
         .and_then(|v| v.checked_sub(1))
         .ok_or(InstructionError::InvalidAccountData)?;
 
@@ -139,4 +140,18 @@ fn read_last_timestamp_into<T: AsRef<[u8]>>(
     vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, bincode::serialized_size};
+
+    #[test]
+    fn test_prior_voters_serialized_size() {
+        let vote_state = VoteState::default();
+        assert_eq!(
+            serialized_size(&vote_state.prior_voters).unwrap(),
+            PRIOR_VOTERS_SERIALIZED_SIZE
+        );
+    }
 }

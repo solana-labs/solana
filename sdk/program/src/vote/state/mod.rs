@@ -399,12 +399,6 @@ impl VoteState {
         input: &[u8],
         vote_state: &mut VoteState,
     ) -> Result<(), InstructionError> {
-        let minimum_size =
-            serialized_size(vote_state).map_err(|_| InstructionError::InvalidAccountData)?;
-        if (input.len() as u64) < minimum_size {
-            return Err(InstructionError::InvalidAccountData);
-        }
-
         let mut cursor = Cursor::new(input);
 
         let variant = read_u32(&mut cursor)?;
