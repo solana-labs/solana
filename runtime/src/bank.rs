@@ -2680,7 +2680,7 @@ impl Bank {
             // vote_accounts_cache_miss_count is shown to be always zero.
             let account = self.get_account_with_fixed_root(vote_pubkey)?;
             if account.owner() == &solana_vote_program
-                && VoteState::deserialize(account.data()).is_ok()
+                && VoteState::deserialize_with_bincode(account.data()).is_ok()
             {
                 vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
             }

@@ -65,11 +65,13 @@ impl VoteAccount {
     }
 
     pub fn vote_state(&self) -> Result<&VoteState, &Error> {
-        // VoteState::deserialize deserializes a VoteStateVersions and then
+        // VoteState::deserialize_with_bincode deserializes a VoteStateVersions and then
         // calls VoteStateVersions::convert_to_current.
         self.0
             .vote_state
-            .get_or_init(|| VoteState::deserialize(self.0.account.data()).map_err(Error::from))
+            .get_or_init(|| {
+                VoteState::deserialize_with_bincode(self.0.account.data()).map_err(Error::from)
+            })
             .as_ref()
     }
 
