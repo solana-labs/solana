@@ -303,7 +303,7 @@ impl SchedulingStateMachine {
     ) -> Option<R> {
         assert!(task.unique_weight < self.last_unique_weight);
         self.last_unique_weight = task.unique_weight;
-        let ret = self.try_lock_for_task(TaskSource::Runnable, task, on_success);
+        let ret = self.try_lock_for_task(task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         ret
@@ -416,7 +416,6 @@ impl SchedulingStateMachine {
 
     fn try_lock_for_task<R>(
         &mut self,
-        task_source: TaskSource,
         task: Task,
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
@@ -431,34 +430,7 @@ impl SchedulingStateMachine {
             self.register_blocked_task_into_pages(&task);
             None
         } else {
-            let ret = on_success(&task);
-            match task_source {
-                TaskSource::Retryable => {
-                    panic!();
-                    /*
-                    // as soon as `task` is succeeded in locking, trigger re-checks on read only
-                    // addresses so that more readonly transactions can be executed
-                    for read_only_lock_attempt in task
-                        .lock_attempts(&self.task_token)
-                        .iter()
-                        .filter(|l| matches!(l.requested_usage, RequestedUsage::Readonly))
-                    {
-                        if let Some((&heaviest_readonly_unique_weight, heaviest_readonly_task)) =
-                            read_only_lock_attempt
-                                .page_mut(&mut self.page_token)
-                                .heaviest_blocked_readonly_task()
-                        {
-                            self.unblocked_task_queue
-                                .entry(heaviest_readonly_unique_weight)
-                                .or_insert_with(|| heaviest_readonly_task.clone());
-                        }
-                    }
-                    */
-                }
-                TaskSource::Runnable => {
-                }
-            }
-            Some(ret)
+            Some(on_success(&task))
         }
     }
 
@@ -560,11 +532,6 @@ impl Default for SchedulingStateMachine {
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
-}
-
-enum TaskSource {
-    Runnable,
-    Retryable,
 }
 
 type UniqueWeight = u64;
