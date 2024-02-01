@@ -249,6 +249,14 @@ impl PageInner {
         assert!(removed_entry.is_some());
     }
 
+    fn pop_blocked_task(
+        &mut self,
+        requested_usage: RequestedUsage,
+        unique_weight: UniqueWeight,
+    ) {
+        self.pop_last();
+    }
+
     fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
         self.writable_blocked_tasks.last_key_value()
     }
@@ -583,7 +591,7 @@ impl SchedulingStateMachine {
                     for attempt in uncontended_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut_unchecked();
-                            page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
+                            page.pop_last();
                         }
                     }
                     //eprintln!("bbb: {i}");
