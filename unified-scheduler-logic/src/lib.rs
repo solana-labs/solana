@@ -500,7 +500,6 @@ impl SchedulingStateMachine {
                     }
                     //eprintln!("bbb: {i}");
                     self.unblocked_task_queue.insert(retryable_task.unique_weight, retryable_task);
-                    break;
                 } else {
                     break;
                 }
