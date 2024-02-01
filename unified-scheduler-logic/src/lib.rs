@@ -215,26 +215,18 @@ enum RequestedUsage {
     Writable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    blocked_tasks: VecDeque<(Task, RequestedUsage)>,
-}
-
-impl Default for PageInner {
-    fn default() -> Self {
-        Self {
-            usage: Usage::default(),
-            blocked_tasks: VecDeque::with_capacity(1000),
-        }
-    }
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        self
+        let pre_existed = self
             .blocked_tasks
-            .push_back((task, requested_usage));
+            .insert(task.unique_weight, (task, requested_usage));
+        assert!(pre_existed.is_none());
     }
 
     fn no_blocked_tasks(&self) -> bool {
@@ -242,16 +234,16 @@ impl PageInner {
     }
 
     fn pop_blocked_task(&mut self, unique_weight: UniqueWeight) {
-        let (pre_existed, _) = self.blocked_tasks.pop_front().unwrap();
-        assert_eq!(pre_existed.unique_weight, unique_weight);
+        let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
+        assert_eq!(pre_existed, unique_weight);
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
-        self.blocked_tasks.front()
+        self.blocked_tasks.last_key_value().map(|(_weight, v)| v)
     }
 }
 
-//const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
