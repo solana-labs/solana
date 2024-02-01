@@ -183,10 +183,6 @@ impl LockAttempt {
     fn page_mut<'t>(&self, page_token: &'t mut PageToken) -> &'t mut PageInner {
         self.page.0.borrow_mut(page_token)
     }
-
-    fn page_mut_unchecked(&self) -> &mut PageInner {
-        self.page.0.borrow_mut_unchecked()
-    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
