@@ -398,11 +398,11 @@ impl SchedulingStateMachine {
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
-        for attempt in lock_attempts.iter_mut() {
-            if only_failed {
-                continue;
-            }
+        if only_failed {
+            return lock_count;
+        }
 
+        for attempt in lock_attempts.iter_mut() {
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, only_failed);
             match lock_status {
                 LockStatus::Succeded(usage) => {
