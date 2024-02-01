@@ -234,7 +234,7 @@ impl PageInner {
 
     fn pop_blocked_task(&mut self, unique_weight: UniqueWeight) {
         let (pre_existed, _) = self.blocked_tasks.pop_front().unwrap();
-        assert_eq!(pre_existed, unique_weight);
+        assert_eq!(pre_existed.unique_weight, unique_weight);
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
