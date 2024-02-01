@@ -225,7 +225,7 @@ impl Default for PageInner {
     fn default() -> Self {
         Self {
             usage: Usage::default(),
-            blocked_tasks: VecDeque::with_capacity(2048),
+            blocked_tasks: VecDeque::with_capacity(1024),
         }
     }
 }
