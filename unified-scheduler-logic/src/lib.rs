@@ -255,7 +255,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
 pub struct SchedulingStateMachine {
-    last_unique_weight: UniqueWeight,
+    //last_unique_weight: UniqueWeight,
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: Counter,
     handled_task_count: Counter,
@@ -306,7 +306,7 @@ impl SchedulingStateMachine {
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
         //assert!(task.unique_weight < self.last_unique_weight);
-        self.last_unique_weight = task.unique_weight;
+        //self.last_unique_weight = task.unique_weight;
         let ret = self.try_lock_for_task(task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -525,7 +525,7 @@ impl SchedulingStateMachine {
 impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
-            last_unique_weight: UniqueWeight::max_value(),
+            //last_unique_weight: UniqueWeight::max_value(),
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
