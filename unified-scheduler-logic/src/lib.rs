@@ -310,10 +310,6 @@ impl SchedulingStateMachine {
         !self.unblocked_task_queue.is_empty()
     }
 
-    pub fn clear_retryable_tasks(&mut self) {
-        self.unblocked_task_queue.clear()
-    }
-
     #[cfg(feature = "dev-context-only-utils")]
     pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
         self.schedule_retryable_task(|task| task.clone())
@@ -693,9 +689,16 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert!(state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 1);
-        state_machine.clear_retryable_tasks();
+        assert_eq!(
+            state_machine
+                .schedule_retryable_task_for_test()
+                .unwrap()
+                .task_index(),
+            task2.task_index()
+        );
         assert!(!state_machine.has_retryable_task());
         assert_eq!(state_machine.retryable_task_count(), 0);
+        state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), Some(_));
     }
