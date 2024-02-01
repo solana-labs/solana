@@ -392,7 +392,7 @@ impl SchedulingStateMachine {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded) {
+            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
                 continue;
             }
 
