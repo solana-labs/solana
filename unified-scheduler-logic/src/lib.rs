@@ -10,9 +10,10 @@ use {
     std::{cmp, collections::BTreeMap, mem, sync::Arc},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 enum LockStatus {
     Succeded(Usage),
+    #[default]
     Failed,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
@@ -588,9 +589,7 @@ impl SchedulingStateMachine {
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
-                        .or_insert_with(|| {
-                            uncontended_task.clone()
-                    });
+                        .or_insert_with(|| uncontended_task.clone());
                 }
             }
         }
