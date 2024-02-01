@@ -212,24 +212,13 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    writable_blocked_tasks: BTreeMap<UniqueWeight, Task>,
-    readonly_blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    blocked_tasks: BTreeMap<UniqueWeight, Task>,
 }
 
 impl PageInner {
-    fn blocked_tasks_mut(
-        &mut self,
-        requested_usage: RequestedUsage,
-    ) -> &mut BTreeMap<UniqueWeight, Task> {
-        match requested_usage {
-            RequestedUsage::Readonly => &mut self.readonly_blocked_tasks,
-            RequestedUsage::Writable => &mut self.writable_blocked_tasks,
-        }
-    }
-
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
-            .blocked_tasks_mut(requested_usage)
+            .blocked_tasks
             .insert(task.unique_weight, task);
         assert!(pre_existed.is_none());
     }
@@ -240,7 +229,7 @@ impl PageInner {
         unique_weight: UniqueWeight,
     ) {
         let removed_entry = self
-            .blocked_tasks_mut(requested_usage)
+            .blocked_tasks
             .remove(&unique_weight);
         assert!(removed_entry.is_some());
     }
@@ -249,34 +238,11 @@ impl PageInner {
         &mut self,
         requested_usage: RequestedUsage,
     ) {
-        self.blocked_tasks_mut(requested_usage).pop_last();
-    }
-
-    fn heaviest_blocked_writable_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.writable_blocked_tasks.last_key_value()
-    }
-
-    fn heaviest_blocked_readonly_task(&self) -> Option<(&UniqueWeight, &Task)> {
-        self.readonly_blocked_tasks.last_key_value()
+        self.blocked_tasks.pop_last();
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        Self::heavier_task(
-            self.heaviest_blocked_writable_task(),
-            self.heaviest_blocked_readonly_task(),
-        )
-        .map(|(_weight, task)| task)
-    }
-
-    fn heavier_task<'a>(
-        x: Option<(&'a UniqueWeight, &'a Task)>,
-        y: Option<(&'a UniqueWeight, &'a Task)>,
-    ) -> Option<(&'a UniqueWeight, &'a Task)> {
-        cmp::max_by(x, y, |entry1, entry2| {
-            let weight1 = entry1.map(|(weight, _task)| weight);
-            let weight2 = entry2.map(|(weight, _task)| weight);
-            weight1.cmp(&weight2)
-        })
+        self.blocked_tasks.last_key_value().map(|(_weight, task)| task)
     }
 }
 
