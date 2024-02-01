@@ -484,7 +484,7 @@ impl SchedulingStateMachine {
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut retryable_task = None;
                 let mut should_continue = false;
-                if let Some((uncontended_task, &requested_usage)) = heaviest_uncontended_now {
+                if let Some(&(uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
                     if new_count == 0 {
                         retryable_task = Some(uncontended_task.clone());
