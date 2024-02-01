@@ -506,26 +506,29 @@ impl SchedulingStateMachine {
 
             let page = unlock_attempt
                 .page_mut(&mut self.page_token);
-            let heaviest_uncontended_now = page.heaviest_blocked_task();
-            let mut retryable_task = None;
-            if let Some(uncontended_task) = heaviest_uncontended_now {
-                //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
-                //i += 1;
-                let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
-                if new_count == 0 {
-                    retryable_task = Some(uncontended_task.clone());
-                }
-                page.usage = Usage::Provisioned;
-            }
-            if let Some(retryable_task) = retryable_task {
-                for attempt in retryable_task.lock_attempts(&self.task_token) {
-                    if matches!(attempt.lock_status, LockStatus::Failed) {
-                        let page = attempt.page_mut(&mut self.page_token);
-                        page.pop_blocked_task(attempt.requested_usage, retryable_task.unique_weight);
+            loop {
+                let heaviest_uncontended_now = page.heaviest_blocked_task();
+                let mut retryable_task = None;
+                if let Some(uncontended_task) = heaviest_uncontended_now {
+                    //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
+                    //i += 1;
+                    let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
+                    if new_count == 0 {
+                        retryable_task = Some(uncontended_task.clone());
                     }
+                    page.usage = Usage::Provisioned;
                 }
-                //eprintln!("bbb: {i}");
-                self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
+                if let Some(retryable_task) = retryable_task {
+                    for attempt in retryable_task.lock_attempts(&self.task_token) {
+                        if matches!(attempt.lock_status, LockStatus::Failed) {
+                            let page = attempt.page_mut(&mut self.page_token);
+                            page.pop_blocked_task(attempt.requested_usage, retryable_task.unique_weight);
+                        }
+                    }
+                    //eprintln!("bbb: {i}");
+                    self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
+                }
+                break;
             }
         }
     }
