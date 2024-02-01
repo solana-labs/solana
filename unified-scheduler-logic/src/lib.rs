@@ -215,10 +215,19 @@ enum RequestedUsage {
     Writable,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct PageInner {
     usage: Usage,
     blocked_tasks: VecDeque<(Task, RequestedUsage)>,
+}
+
+impl Default for PageInner {
+    fn default() -> Self {
+        Self {
+            usage: Usage::default(),
+            blocked_tasks: VecDeque::with_capacity(1000),
+        }
+    }
 }
 
 impl PageInner {
