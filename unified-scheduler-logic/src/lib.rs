@@ -400,7 +400,7 @@ impl SchedulingStateMachine {
                 }
                 RequestedUsage::Readonly => unreachable!(),
             },
-            Usage::Unused => unreachable!("{:?}", requested_usage),
+            Usage::Unused => unreachable!(),
         }
 
         if is_unused_now {
