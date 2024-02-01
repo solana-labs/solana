@@ -471,15 +471,6 @@ impl SchedulingStateMachine {
                     }
                     */
                 }
-                TaskSource::Runnable => {
-                    /*
-                    for attempt in task.lock_attempts_mut(&mut self.task_token) {
-                        let page = attempt.page_mut(&mut self.page_token);
-                        let LockStatus::Succeded(usage) = attempt.lock_status else { panic!() };
-                        page.usage = usage;
-                    }
-                    */
-                }
             }
             Some(ret)
         }
