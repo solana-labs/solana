@@ -390,16 +390,16 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        only_failed: bool,
+        from_blocked: bool,
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
+            if from_blocked && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
                 continue;
             }
 
-            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, only_failed);
+            let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, from_blocked);
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
@@ -419,7 +419,7 @@ impl SchedulingStateMachine {
         page_token: &mut PageToken,
         this_unique_weight: UniqueWeight,
         attempt: &mut LockAttempt,
-        only_failed: bool,
+        from_blocked: bool,
     ) -> LockStatus {
         let requested_usage = attempt.requested_usage;
         let page = attempt.page_mut(page_token);
@@ -435,29 +435,6 @@ impl SchedulingStateMachine {
             Usage::Writable => LockStatus::Failed,
         };
 
-        if !only_failed && matches!(lock_status, LockStatus::Succeded(_)) {
-            let w = page.heaviest_blocked_writable_task();
-            let r = page.heaviest_blocked_readonly_task();
-
-            let no_heavier_other_tasks =
-                // this unique_weight is the heaviest one among all of other tasks blocked on this
-                // page.
-                (PageInner::heavier_task(w, r)
-                    .map(|(&e_unique_weight, _)| this_unique_weight >= e_unique_weight)
-                    .unwrap_or(true)) ||
-                // this _read-only_ unique_weight is heavier than any of contened write locks.
-                (matches!(requested_usage, RequestedUsage::Readonly) &&
-                    w
-                    // this_unique_weight is readonly and existing_unique_weight is writable here.
-                    // so given unique_weight can't be same; thus > instead of >= is correct
-                    .map(|(&existing_unique_weight, _)| this_unique_weight > existing_unique_weight)
-                    .unwrap_or(true))
-            ;
-
-            if !no_heavier_other_tasks {
-                lock_status = LockStatus::Failed
-            }
-        }
         lock_status
     }
 
