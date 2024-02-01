@@ -512,11 +512,11 @@ impl SchedulingStateMachine {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 //i += 1;
                 let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
-                page.usage = Usage::Provisioned;
 
                 if new_count == 0 {
                     retryable_task = Some(uncontended_task.clone());
                 }
+                page.usage = Usage::Provisioned;
             }
             if let Some(retryable_task) = retryable_task {
                 for attempt in retryable_task.lock_attempts(&self.task_token) {
