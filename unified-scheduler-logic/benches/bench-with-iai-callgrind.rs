@@ -542,7 +542,9 @@ fn bench_end_to_end_worst(account_count: usize) {
         let task2 = SchedulingStateMachine::create_task(tx0, i, &mut |address| {
             pages.entry(address).or_default().clone()
         });
-        assert_matches!(scheduler.schedule_task_for_test(task2.clone()), None);
+        toggle_collect();
+        scheduler.schedule_task_for_test(task2.clone());
+        toggle_collect();
     }
 
     toggle_collect();
