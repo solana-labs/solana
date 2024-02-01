@@ -551,7 +551,7 @@ fn bench_end_to_end_worst(account_count: usize) {
         let mut c = 0;
         while let Some(retried_task) = scheduler.schedule_retryable_task_for_test() {
             c += 1;
-            //scheduler.deschedule_task(&retried_task);
+            scheduler.deschedule_task(&retried_task);
             toggle_collect();
             drop::<solana_unified_scheduler_logic::Task>(retried_task);
             toggle_collect();
