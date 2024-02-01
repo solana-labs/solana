@@ -930,7 +930,7 @@ mod tests {
 
         state_machine.deschedule_task(&task1);
         assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(4));
-        assert_matches!(state_machine.schedule_retryable_task_for_test().mao(|t| t.task_index()), Some(5));
+        assert_matches!(state_machine.schedule_retryable_task_for_test().map(|t| t.task_index()), Some(5));
     }
 
     #[test]
