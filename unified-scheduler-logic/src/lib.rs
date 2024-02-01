@@ -367,7 +367,7 @@ impl SchedulingStateMachine {
     }
 
     fn attempt_lock_address(
-        page: &mut Page,
+        page: &mut PageInner,
         this_unique_weight: UniqueWeight,
         requested_usage: RequestedUsage,
         from_blocked: bool,
