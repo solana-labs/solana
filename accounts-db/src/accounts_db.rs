@@ -494,6 +494,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     base_working_path: None,
     accounts_hash_cache_path: None,
+    shrink_paths: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -506,6 +507,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     base_working_path: None,
     accounts_hash_cache_path: None,
+    shrink_paths: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -547,6 +549,7 @@ pub struct AccountsDbConfig {
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
+    pub shrink_paths: Option<Vec<PathBuf>>,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
@@ -1396,7 +1399,7 @@ pub struct AccountsDb {
 
     accounts_hash_cache_path: PathBuf,
 
-    pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
+    shrink_paths: Vec<PathBuf>,
 
     /// Directory of paths this accounts_db needs to hold/remove
     #[allow(dead_code)]
@@ -2433,7 +2436,7 @@ impl AccountsDb {
             base_working_path,
             base_working_temp_dir,
             accounts_hash_cache_path,
-            shrink_paths: RwLock::new(None),
+            shrink_paths: Vec::default(),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
@@ -2570,6 +2573,10 @@ impl AccountsDb {
             new.paths = paths;
             new.temp_paths = Some(temp_dirs);
         };
+        new.shrink_paths = accounts_db_config
+            .as_ref()
+            .and_then(|config| config.shrink_paths.clone())
+            .unwrap_or_else(|| new.paths.clone());
 
         new.start_background_hasher();
         {
@@ -2578,15 +2585,6 @@ impl AccountsDb {
             }
         }
         new
-    }
-
-    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
-        assert!(!paths.is_empty());
-        let mut shrink_paths = self.shrink_paths.write().unwrap();
-        for path in &paths {
-            std::fs::create_dir_all(path).expect("Create directory failed.");
-        }
-        *shrink_paths = Some(paths);
     }
 
     pub fn file_size(&self) -> u64 {
@@ -4153,12 +4151,7 @@ impl AccountsDb {
         let shrunken_store = self
             .try_recycle_store(slot, aligned_total, aligned_total + 1024)
             .unwrap_or_else(|| {
-                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-                let (shrink_paths, from) = maybe_shrink_paths
-                    .as_ref()
-                    .map(|paths| (paths, "shrink-w-path"))
-                    .unwrap_or_else(|| (&self.paths, "shrink"));
-                self.create_store(slot, aligned_total, from, shrink_paths)
+                self.create_store(slot, aligned_total, "shrink", self.shrink_paths.as_slice())
             });
         self.storage.shrinking_in_progress(slot, shrunken_store)
     }

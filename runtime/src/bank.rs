@@ -4436,10 +4436,6 @@ impl Bank {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
-    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
-        self.rc.accounts.accounts_db.set_shrink_paths(paths);
-    }
-
     fn check_age(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
