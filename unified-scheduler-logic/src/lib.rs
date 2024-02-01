@@ -490,7 +490,7 @@ impl SchedulingStateMachine {
                         retryable_task = Some(uncontended_task.clone());
                     }
                     match Self::attempt_lock_address(page, requested_usage) {
-                        LockStatus::Succeded(Usage::Readonly(_)) => should_continue = true;
+                        LockStatus::Succeded(Usage::Readonly(_)) => { should_continue = true; }
                         LockStatus::Succeded(Usage::Writable) => {},
                         LockStatus::Failed => unreachable!();
                     }
