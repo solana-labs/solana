@@ -487,7 +487,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
 #[bench::one(1)]
 #[bench::two(2)]
 #[bench::three(3)]
-#[bench::normal(16)]
+#[bench::small(16)]
 #[bench::normal(32)]
 #[bench::large(64)]
 //#[bench::max(128)]
