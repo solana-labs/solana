@@ -556,12 +556,10 @@ impl SchedulingStateMachine {
 
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
-            if matches!(lock_attempt.lock_status, LockStatus::Failed) {
-                let requested_usage = lock_attempt.requested_usage;
-                lock_attempt
-                    .page_mut(&mut self.page_token)
-                    .insert_blocked_task(task.clone(), requested_usage);
-            }
+            let requested_usage = lock_attempt.requested_usage;
+            lock_attempt
+                .page_mut(&mut self.page_token)
+                .insert_blocked_task(task.clone(), requested_usage);
         }
     }
 
