@@ -481,33 +481,23 @@ impl SchedulingStateMachine {
 
             loop {
                 let page = unlock_attempt.page_mut(&mut self.page_token);
-                let mut heaviest_uncontended_now = page.heaviest_blocked_task();
-                let mut retryable_task = None;
+                let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut should_continue = false;
                 if let Some(&(ref uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
                     if new_count == 0 {
-                        retryable_task = Some(uncontended_task.clone());
+                        self.unblocked_task_queue.insert(uncontended_task.unique_weight, uncontended_task.clone());
                     }
+                    page.pop_blocked_task(uncontended_task.unique_weight);
                     match Self::attempt_lock_address(page, requested_usage) {
                         LockStatus::Succeded(Usage::Readonly(_)) => {
-                            heaviest_uncontended_now = page.heaviest_blocked_task();
-                            //if let Some(&(ref _, requested_usage)) = heaviest_uncontended_now
-                            should_continue = true; 
+                            if matches!(page.heaviest_blocked_task(), Some((_, RequestedUsage::Readonly))) {
+                                should_continue = true; 
+                            }
                         }
                         LockStatus::Succeded(Usage::Writable) => {},
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!()
                     }
-                }
-                if let Some(retryable_task) = retryable_task {
-                    for attempt in retryable_task.lock_attempts(&self.task_token) {
-                        if matches!(attempt.lock_status, LockStatus::Failed) {
-                            let page = attempt.page_mut(&mut self.page_token);
-                            page.pop_blocked_task(retryable_task.unique_weight);
-                        }
-                    }
-                    //eprintln!("bbb: {i}");
-                    self.unblocked_task_queue.insert(retryable_task.unique_weight, retryable_task);
                 }
                 if should_continue {
                     continue;
