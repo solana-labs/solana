@@ -479,7 +479,6 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-
             loop {
                 let page = unlock_attempt.page_mut(&mut self.page_token);
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
@@ -487,11 +486,11 @@ impl SchedulingStateMachine {
                 if let Some((uncontended_task, r)) = heaviest_uncontended_now {
                     let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
                     if new_count == 0 {
-                        retryable_task = Some(uncontended_task.clone());
+                        retryable_task = Some((uncontended_task.clone(), *r));
                     }
                     Self::attempt_lock_address(page, *r);
                 }
-                if let Some(retryable_task) = retryable_task {
+                if let Some((retryable_task, r)) = retryable_task {
                     for attempt in retryable_task.lock_attempts(&self.task_token) {
                         if matches!(attempt.lock_status, LockStatus::Failed) {
                             let page = attempt.page_mut(&mut self.page_token);
