@@ -384,7 +384,7 @@ impl SchedulingStateMachine {
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
         unique_weight: UniqueWeight,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &mut Vec<LockAttempt>,
         only_failed: bool,
     ) -> Counter {
         let mut lock_count = Counter::zero();
