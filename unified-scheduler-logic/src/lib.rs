@@ -574,14 +574,14 @@ impl SchedulingStateMachine {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 i += 1;
                 if uncontended_task.provisional_lock_count_mut().decrement_self().current() == 0 {
+                    for attempt in uncontended_task.lock_attempts(&self.task_token) {
+                        let page = attempt.page_mut_unchecked();
+                        page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
+                    }
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue
                         .entry(uncontended_task.unique_weight)
                         .or_insert_with(|| {
-                            for attempt in uncontended_task.lock_attempts(&self.task_token) {
-                                let page = attempt.page_mut_unchecked();
-                                page.remove_blocked_task(attempt.requested_usage, uncontended_task.unique_weight);
-                            }
                             uncontended_task.clone()
                     });
                 }
