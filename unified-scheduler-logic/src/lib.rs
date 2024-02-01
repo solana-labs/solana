@@ -512,7 +512,6 @@ impl SchedulingStateMachine {
                 //eprintln!("aaa: {i} {:?}", uncontended_task.provisional_lock_count_mut());
                 //i += 1;
                 let new_count = uncontended_task.provisional_lock_count_mut().decrement_self().current();
-
                 if new_count == 0 {
                     retryable_task = Some(uncontended_task.clone());
                 }
