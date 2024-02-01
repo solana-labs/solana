@@ -304,8 +304,8 @@ impl SchedulingStateMachine {
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
         //assert!(task.unique_weight < self.last_unique_weight);
-        let ret = self.try_lock_for_task(task, on_success);
         self.last_unique_weight = task.unique_weight;
+        let ret = self.try_lock_for_task(task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         ret
