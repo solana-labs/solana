@@ -472,7 +472,6 @@ impl SchedulingStateMachine {
                     */
                 }
                 TaskSource::Runnable => {
-                    panic!();
                 }
             }
             Some(ret)
