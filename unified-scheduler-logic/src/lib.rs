@@ -748,24 +748,24 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.retryable_task_count(), 1);
 
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.reschedule_count(), 0);
         assert_eq!(state_machine.rescheduled_task_count(), 0);
+        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
+        assert_eq!(state_machine.reschedule_count(), 1);
+        assert_eq!(state_machine.rescheduled_task_count(), 1);
         assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
         assert_eq!(state_machine.reschedule_count(), 1);
-        assert_eq!(state_machine.rescheduled_task_count(), 0);
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
-        assert_eq!(state_machine.reschedule_count(), 1);
-        assert_eq!(state_machine.rescheduled_task_count(), 0);
+        assert_eq!(state_machine.rescheduled_task_count(), 1);
 
-        state_machine.deschedule_task(&task3);
+        state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
         assert_eq!(state_machine.reschedule_count(), 2);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
 
-        state_machine.deschedule_task(&task2);
+        state_machine.deschedule_task(&task3);
         assert!(state_machine.is_empty());
     }
 
