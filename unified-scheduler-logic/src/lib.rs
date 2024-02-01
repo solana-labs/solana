@@ -479,9 +479,9 @@ impl SchedulingStateMachine {
                 continue;
             }
 
-            let page = unlock_attempt.page_mut(&mut self.page_token);
 
             loop {
+                let page = unlock_attempt.page_mut(&mut self.page_token);
                 let heaviest_uncontended_now = page.heaviest_blocked_task();
                 let mut retryable_task = None;
                 if let Some((uncontended_task, r)) = heaviest_uncontended_now {
