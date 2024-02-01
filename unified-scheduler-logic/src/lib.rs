@@ -167,7 +167,6 @@ impl TaskInner {
 struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
-    lock_status: LockStatus,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
@@ -176,7 +175,6 @@ impl LockAttempt {
         Self {
             page,
             requested_usage,
-            lock_status: LockStatus::default(),
         }
     }
 
@@ -392,21 +390,22 @@ impl SchedulingStateMachine {
         let mut lock_count = Counter::zero();
 
         lock_attempts.retain(|attempt| {
-            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
-                continue;
-            }
-
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt);
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
+                    false
                 }
                 LockStatus::Failed => {
                     //eprintln!("failed");
-                    lock_count.increment_self();
+                    if only_failed {
+                        panic!();
+                    } else {
+                        lock_count.increment_self();
+                        true
+                    }
                 }
             }
-            attempt.lock_status = lock_status;
         });
 
         lock_count
