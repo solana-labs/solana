@@ -337,15 +337,10 @@ impl SchedulingStateMachine {
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
         lock_attempts: &mut [LockAttempt],
-        from_blocked: bool,
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            if from_blocked && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
-                continue;
-            }
-
             let requested_usage = attempt.requested_usage;
             let page = attempt.page_mut(page_token);
             let lock_status = Self::attempt_lock_address(page, requested_usage);
@@ -421,7 +416,6 @@ impl SchedulingStateMachine {
         let provisional_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.lock_attempts_mut(&mut self.task_token),
-            false,
         );
 
         //eprintln!("{:?}", provisional_lock_count);
