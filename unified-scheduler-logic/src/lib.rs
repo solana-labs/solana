@@ -606,7 +606,7 @@ mod tests {
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
              .. })), requested_usage: Writable, lock_status: Unused }], provisional_lock_count: \
-             Counter(0)}"
+             Counter(0) }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
