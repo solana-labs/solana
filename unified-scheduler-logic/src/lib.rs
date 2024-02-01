@@ -213,14 +213,14 @@ enum RequestedUsage {
 #[derive(Debug, Default)]
 struct PageInner {
     usage: Usage,
-    blocked_tasks: BTreeMap<UniqueWeight, Task>,
+    blocked_tasks: BTreeMap<UniqueWeight, (Task, RequestedUsage)>,
 }
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         let pre_existed = self
             .blocked_tasks
-            .insert(task.unique_weight, task);
+            .insert(task.unique_weight, (task, requested_usage));
         assert!(pre_existed.is_none());
     }
 
@@ -234,7 +234,7 @@ impl PageInner {
     }
 
     fn heaviest_blocked_task(&self) -> Option<&Task> {
-        self.blocked_tasks.last_key_value().map(|(_weight, task)| task)
+        self.blocked_tasks.last_key_value().map(|(_weight, (task, _))| task)
     }
 }
 
@@ -527,8 +527,9 @@ impl SchedulingStateMachine {
                     }
                     //eprintln!("bbb: {i}");
                     self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
+                } else {
+                    break;
                 }
-                break;
             }
         }
     }
