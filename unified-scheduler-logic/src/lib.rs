@@ -503,7 +503,8 @@ impl SchedulingStateMachine {
                     }
                 }
                 if should_continue {
-                    continue;
+                    //continue;
+                    break;
                 } else {
                     break;
                 }
