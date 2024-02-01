@@ -595,9 +595,7 @@ impl SchedulingStateMachine {
                     }
                 }
                 //eprintln!("bbb: {i}");
-                self.retryable_task_queue
-                    .entry(retryable_task.unique_weight)
-                    .or_insert(retryable_task);
+                self.retryable_task_queue.insert(retryable_task.unique_weight, retryable_task);
             }
         }
     }
