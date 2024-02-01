@@ -223,6 +223,10 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
+    fn no_blocked_tasks(&self) -> bool {
+        self.blocked_tasks.is_empty()
+    }
+
     fn pop_blocked_task(
         &mut self,
         unique_weight: UniqueWeight,
@@ -343,7 +347,11 @@ impl SchedulingStateMachine {
         for attempt in lock_attempts.iter_mut() {
             let requested_usage = attempt.requested_usage;
             let page = attempt.page_mut(page_token);
-            let lock_status = Self::attempt_lock_address(page, requested_usage);
+            let lock_status = if page.no_blocked_tasks() {
+                Self::attempt_lock_address(page, requested_usage)
+            } else {
+                LockStatus::Failed
+            };
             match lock_status {
                 LockStatus::Succeded(usage) => {
                     attempt.page_mut(page_token).usage = usage;
