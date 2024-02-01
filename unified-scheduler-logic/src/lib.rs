@@ -368,7 +368,6 @@ impl SchedulingStateMachine {
             .pop_last()
             .and_then(|(_, task)| {
                 //let ret = self.try_lock_for_task(TaskSource::Retryable, task, on_success);
-                /*
                 let provisional_lock_count = Self::attempt_lock_for_execution(
                     &mut self.page_token,
                     task.unique_weight,
@@ -377,7 +376,6 @@ impl SchedulingStateMachine {
                 );
                 assert_eq!(provisional_lock_count.current(), 0);
                 self.reschedule_count.increment_self();
-                */
                 Some(on_success(&task))
             })
             .map(|ret| {
@@ -400,11 +398,11 @@ impl SchedulingStateMachine {
     ) -> Counter {
         let mut lock_count = Counter::zero();
 
-        if only_failed {
-            return lock_count;
-        }
-
         for attempt in lock_attempts.iter_mut() {
+            if only_failed && matches!(attempt.lock_status, LockStatus::Succeded(_)) {
+                continue;
+            }
+
             let lock_status = Self::attempt_lock_address(page_token, unique_weight, attempt, only_failed);
             match lock_status {
                 LockStatus::Succeded(usage) => {
