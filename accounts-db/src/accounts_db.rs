@@ -3997,11 +3997,26 @@ impl AccountsDb {
 
             self.accounts_index.scan(
                 shrink_collect.unrefed_pubkeys.into_iter(),
-                |_pubkey, _slot_refs, entry| {
+                |pubkey, _slot_refs, entry| {
                     // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
                     // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                    // We also expect that the account index entry must be present in the index.
-                    entry.expect("account index entry must exist").addref();
+                    if let Some(entry) = entry {
+                        entry.addref();
+                    } else {
+                        // We also expect that the account index entry must be
+                        // present in the index. Log a warning for now. In
+                        // future, we will panic when this happens.
+                        warn!(
+                            "pubkey {} in slot {} is NOT found in account index. \
+                        Likely a bug in account index",
+                            pubkey, slot
+                        );
+                        datapoint_warn!(
+                            "accounts_db-shink_pubkey_missing_from_index",
+                            ("store_slot", slot, i64),
+                            ("pubkey", pubkey.to_string(), String),
+                        )
+                    }
                     AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
                 None,
