@@ -88,6 +88,12 @@ impl TransactionInfo {
             last_sent_time,
         }
     }
+
+    fn get_max_retries(&self, config: &Config) -> Option<usize> {
+        self.max_retries
+            .or(config.default_max_retries)
+            .map(|max_retries| max_retries.min(config.service_max_retries))
+    }
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -473,6 +479,11 @@ impl SendTransactionService {
                         let transactions_to_retry = transactions.len();
                         let mut transactions_added_to_retry: usize = 0;
                         for (signature, mut transaction_info) in transactions.drain() {
+                            let max_retries = transaction_info.get_max_retries(&config);
+                            if max_retries == Some(0) {
+                                continue;
+                            }
+
                             let retry_len = retry_transactions.len();
                             let entry = retry_transactions.entry(signature);
                             if let Entry::Vacant(_) = entry {
@@ -636,11 +647,7 @@ impl SendTransactionService {
                 return false;
             }
 
-            let max_retries = transaction_info
-                .max_retries
-                .or(config.default_max_retries)
-                .map(|max_retries| max_retries.min(config.service_max_retries));
-
+            let max_retries = transaction_info.get_max_retries(config);
             if let Some(max_retries) = max_retries {
                 if transaction_info.retries >= max_retries {
                     info!("Dropping transaction due to max retries: {}", signature);
