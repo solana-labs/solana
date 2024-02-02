@@ -13,10 +13,7 @@ use {
         signature::Signature, timing::AtomicInterval, transport::TransportError,
     },
     std::{
-        collections::{
-            hash_map::{Entry, HashMap},
-            HashSet,
-        },
+        collections::hash_map::{Entry, HashMap},
         net::SocketAddr,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -602,7 +599,7 @@ impl SendTransactionService {
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
-        let mut batched_transactions = HashSet::new();
+        let mut batched_transactions = Vec::new();
         let retry_rate = Duration::from_millis(config.retry_rate_ms);
 
         transactions.retain(|signature, transaction_info| {
@@ -673,7 +670,7 @@ impl SendTransactionService {
                             stats.retries.fetch_add(1, Ordering::Relaxed);
                         }
 
-                        batched_transactions.insert(*signature);
+                        batched_transactions.push(*signature);
                         transaction_info.last_sent_time = Some(now);
                     }
                     true
@@ -694,10 +691,10 @@ impl SendTransactionService {
 
         if !batched_transactions.is_empty() {
             // Processing the transactions in batch
-            let wire_transactions = transactions
+            let wire_transactions = batched_transactions
                 .iter()
-                .filter(|(signature, _)| batched_transactions.contains(signature))
-                .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
+                .filter_map(|signature| transactions.get(signature))
+                .map(|transaction_info| transaction_info.wire_transaction.as_ref())
                 .collect::<Vec<&[u8]>>();
 
             let iter = wire_transactions.chunks(config.batch_size);
