@@ -1,5 +1,7 @@
 ---
-title: File System Wallets
+title: File System Wallets using the CLI
+pagination_label: File System Wallets using the CLI
+sidebar_label: File System Wallets
 sidebar_position: 2
 ---
 

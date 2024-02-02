@@ -1,6 +1,8 @@
 ---
-title: Gossip Service
+title: Gossip Service in a Solana Validator
 sidebar_position: 5
+sidebar_label: Gossip Service
+pagination_label: Validator Gossip Service
 ---
 
 The Gossip Service acts as a gateway to nodes in the
