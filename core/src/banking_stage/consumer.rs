@@ -750,23 +750,7 @@ impl Consumer {
         // pack block.
         // In a sense, how many what transactions are fitered out here is the main purpose
         // of SIMD-0110
-        let mut write_locks_fee = 0;
-        //*
-        let writable_accounts :Vec<solana_sdk::pubkey::Pubkey> = message
-            .account_keys()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, k)| {
-                if message.is_writable(i) {
-                    Some(*k)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        write_locks_fee = bank.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(&writable_accounts, budget_limits.compute_unit_limit);
-        // */
-        //
+        let write_locks_fee = bank.calculate_write_lock_fee(message);
         let fee = bank.fee_structure.calculate_fee(
             message,
             bank.get_lamports_per_signature(),

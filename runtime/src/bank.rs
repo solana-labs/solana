@@ -4153,7 +4153,7 @@ impl Bank {
         )
     }
 
-    fn calculate_write_lock_fee(
+    pub fn calculate_write_lock_fee(
         &self,
         message: &SanitizedMessage,
     ) -> u64 {
