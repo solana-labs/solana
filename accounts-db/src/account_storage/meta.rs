@@ -142,7 +142,7 @@ impl<'storage> StoredAccountMeta<'storage> {
     pub fn offset(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.offset(),
-            Self::Hot(hot) => hot.index(),
+            Self::Hot(hot) => hot.index().0 as usize,
         }
     }
 
