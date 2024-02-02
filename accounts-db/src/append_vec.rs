@@ -44,6 +44,14 @@ pub mod test_utils;
 /// we need to add data len and align it to get the actual stored size
 pub const STORE_META_OVERHEAD: usize = 136;
 
+// Ensure the STORE_META_OVERHEAD constant remains accurate
+const _: () = assert!(
+    STORE_META_OVERHEAD
+        == mem::size_of::<StoredMeta>()
+            + mem::size_of::<AccountMeta>()
+            + mem::size_of::<AccountHash>()
+);
+
 /// Returns the size this item will take to store plus possible alignment padding bytes before the next entry.
 /// fixed-size portion of per-account data written
 /// plus 'data_len', aligned to next boundary
