@@ -38,7 +38,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         debug_keys: config.debug_keys.clone(),
         contact_debug_interval: config.contact_debug_interval,
         contact_save_interval: config.contact_save_interval,
-        send_transaction_service_config: config.send_transaction_service_config.clone(),
+        send_transaction_service_config: config.send_transaction_service_config,
         no_poh_speed_test: config.no_poh_speed_test,
         no_os_memory_stats_reporting: config.no_os_memory_stats_reporting,
         no_os_network_stats_reporting: config.no_os_network_stats_reporting,

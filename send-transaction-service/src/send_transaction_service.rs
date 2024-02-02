@@ -103,7 +103,7 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub retry_rate_ms: u64,
     pub leader_forward_count: u64,
@@ -375,7 +375,7 @@ impl SendTransactionService {
             receiver,
             leader_info_provider.clone(),
             connection_cache.clone(),
-            config.clone(),
+            config,
             retry_transactions.clone(),
             stats_report.clone(),
             exit.clone(),

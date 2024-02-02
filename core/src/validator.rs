@@ -996,7 +996,7 @@ impl Validator {
                 rpc_override_health_check.clone(),
                 startup_verification_complete,
                 optimistically_confirmed_bank.clone(),
-                config.send_transaction_service_config.clone(),
+                config.send_transaction_service_config,
                 max_slots.clone(),
                 leader_schedule_cache.clone(),
                 connection_cache.clone(),
