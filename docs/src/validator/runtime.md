@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD
 title: The Runtime
+=======
+title: Solana Runtime on a Solana Validator
+sidebar_position: 6
+sidebar_label: Runtime
+pagination_label: Validator Runtime
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059))
 ---
 
 ## The Runtime

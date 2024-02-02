@@ -1,6 +1,7 @@
 ---
-title: Validator Security Best Practices
+title: Solana Validator Security Best Practices
 sidebar_label: Security
+pagination_label: "Best Practices: Validator Security"
 ---
 
 Being a system administrator for an Ubuntu computer requires technical knowledge of the system and best security practices. The following list should help you get started and is considered the bare minimum for keeping your system safe.

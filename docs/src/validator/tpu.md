@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD
 title: TPU
+=======
+title: Transaction Processing Unit in a Solana Validator
+sidebar_position: 2
+sidebar_label: TPU
+pagination_label: Validator's Transaction Processing Unit (TPU)
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059))
 ---
 
 TPU (Transaction Processing Unit) is the logic of the validator

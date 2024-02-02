@@ -1,5 +1,10 @@
 ---
 title: Solana Test Validator
+<<<<<<< HEAD:docs/src/developing/test-validator.md
+=======
+pagination_label: "Solana CLI: Test Validator"
+sidebar_label: Test Validator
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/examples/test-validator.md
 ---
 
 During early stage development, it is often convenient to target a cluster with

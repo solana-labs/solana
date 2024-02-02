@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/wallet-guide/paper-wallet.md
 title: Paper Wallet
+=======
+title: Paper Wallets using the Solana CLI
+pagination_label: Paper Wallets using the CLI
+sidebar_label: Paper Wallets
+sidebar_position: 1
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/wallets/paper.md
 ---
 
 This document describes how to create and use a paper wallet with the Solana CLI

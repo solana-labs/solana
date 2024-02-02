@@ -1,6 +1,7 @@
 ---
-title: Validator Monitoring Best Practices
+title: Solana Validator Monitoring Best Practices
 sidebar_label: Monitoring
+pagination_label: "Best Practices: Validator Monitoring"
 ---
 
 It is essential that you have monitoring in place on your validator. In the event that your validator is delinquent (behind the rest of the network) you want to respond immediately to fix the issue. One very useful tool to monitor your validator is [`solana-watchtower`](#solana-watchtower).

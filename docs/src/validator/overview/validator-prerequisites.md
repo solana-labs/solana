@@ -1,6 +1,12 @@
 ---
 title: Solana Validator Prerequisites
+<<<<<<< HEAD:docs/src/validator/overview/validator-prerequisites.md
 sidebar_label: Validator Prerequisites
+=======
+sidebar_position: 2
+sidebar_label: Prerequisites
+pagination_label: Prerequisites to run a Validator
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/operations/prerequisites.md
 ---
 
 Operating a Solana validator is an interesting and rewarding task. Generally speaking, it requires someone with a technical background but also involves community engagement and marketing.

@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/running-validator/validator-reqs.md
 title: Validator Requirements
+=======
+title: Solana Validator Requirements
+sidebar_position: 3
+sidebar_label: Requirements
+pagination_label: Requirements to Operate a Validator
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/operations/requirements.md
 ---
 
 ## Minimum SOL requirements

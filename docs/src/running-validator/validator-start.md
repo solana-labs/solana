@@ -1,5 +1,8 @@
 ---
-title: Starting a Validator
+title: "Validator Guide: Starting a Validator"
+sidebar_position: 0
+sidebar_label: Starting a Validator
+pagination_label: "Validator Guides: Starting a Validator"
 ---
 
 ## Configure Solana CLI

@@ -1,5 +1,7 @@
 ---
-title: Deploy a Program
+title: Deploy a Solana Program with the CLI
+pagination_label: "Solana CLI: Deploy a Program"
+sidebar_label: Deploy a Program
 ---
 
 Developers can deploy on-chain [programs](terminology.md#program) (often called
@@ -20,9 +22,7 @@ to:
 Once deployed, anyone can execute the program by sending transactions that
 reference it to the cluster.
 
-## Usage
-
-### Deploy a program
+## How to deploy a program
 
 To deploy a program, you will need the location of the program's shared object
 (the program binary .so)
@@ -57,7 +57,7 @@ generated automatically by the program build tools:
 ./path-to-program/program-keypair.json
 ```
 
-### Showing a program account
+## Showing a program account
 
 To get information about a deployed program:
 
@@ -86,7 +86,7 @@ Data Length: 5216 (0x1460) bytes
 - `Data Length` is the size of the space reserved for deployments. The actual
   space used by the currently deployed program may be less.
 
-### Redeploy a program
+## Redeploy a Solana program
 
 A program can be redeployed to the same address to facilitate rapid development,
 bug fixes, or upgrades. Matching keypair files are generated once so that
@@ -109,12 +109,24 @@ to become (plus some wiggle room).
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 ```
 
+<<<<<<< HEAD:docs/src/cli/deploy-a-program.md
 Note that program accounts are required to be
 [rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the
 `max-len` is fixed after initial deployment, so any SOL in the program accounts
 is locked up permanently.
+=======
+## Extend a program
 
-### Resuming a failed deploy
+If a program has already been deployed, and a redeployment goes beyond the
+`max_len` of the account, it's possible to extend the program to fit the larger
+redeployment:
+
+```bash
+solana program extend <PROGRAM_ID> <ADDITIONAL_BYTES>
+```
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/examples/deploy-a-program.md
+
+## Resuming a failed deploy
 
 If program deployment fails, there will be a hanging intermediate buffer account
 that contains a non-zero balance. In order to recoup that balance you may
@@ -152,7 +164,7 @@ Then issue a new `deploy` command and specify the buffer:
 solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
 ```
 
-### Closing program and buffer accounts, and reclaiming their lamports
+## Closing program and buffer accounts, and reclaiming their lamports
 
 Both program and buffer accounts can be closed and their lamport balances
 transferred to a recipient's account.
@@ -207,7 +219,7 @@ To show all buffer accounts regardless of the authority
 solana program show --buffers --all
 ```
 
-### Set a program's upgrade authority
+## Set a program's upgrade authority
 
 The program's upgrade authority must to be present to deploy a program. If no
 authority is specified during program deployment, the default keypair is used as
@@ -232,7 +244,17 @@ Or after deployment and specifying the current authority:
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --upgrade-authority <UPGRADE_AUTHORITY_SIGNER> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
 ```
 
+<<<<<<< HEAD:docs/src/cli/deploy-a-program.md
 ### Immutable programs
+=======
+By default, `set-upgrade-authority` requires a signature from the new authority.
+This behavior prevents a developer from giving upgrade authority to a key that
+they do not have access to. The `--skip-new-upgrade-authority-signer-check`
+option relaxes the signer check. This can be useful for situations where the new
+upgrade authority is an offline signer or a multisig.
+
+## Immutable programs
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/examples/deploy-a-program.md
 
 A program can be marked immutable, which prevents all further redeployments, by
 specifying the `--final` flag during deployment:
@@ -247,7 +269,7 @@ Or anytime after:
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --final
 ```
 
-### Dumping a program to a file
+## Dumping a program to a file
 
 The deployed program may be dumped back to a local file:
 
@@ -270,7 +292,7 @@ $ truncate -r dump.so extended.so
 $ sha256sum extended.so dump.so
 ```
 
-### Using an intermediary Buffer account
+## Using an intermediary Buffer account
 
 Instead of deploying directly to the program account, the program can be written
 to an intermediary buffer account. Intermediary accounts can be useful for things
@@ -300,3 +322,55 @@ solana program deploy --program-id <PROGRAM_ADDRESS> --buffer <BUFFER_ADDRESS>
 Note, the buffer's authority must match the program's upgrade authority.
 
 Buffers also support `show` and `dump` just like programs do.
+<<<<<<< HEAD:docs/src/cli/deploy-a-program.md
+=======
+
+## Upgrading program using offline signer as authority
+
+Some security models require separating the signing process from the transaction broadcast, such that the signing keys can be completely disconnected from any network, also known as [offline signing](offline-signing.md).
+
+This section describes how a program developer can use offline signing to upgrade their program, unlike the [previous section](deploy-a-program.md#redeploy-a-program), which assumes the machine is connected to the internet, aka online signing.
+
+Note that only the `upgrade` command can be performed in offline mode. The initial program deployment **must** be performed from an online machine, and only subsequent program upgrades can leverage offline signing.
+
+Assuming your program has been deployed and its upgrade authority has been changed to an
+offline signer,
+a typical setup would consist of 2 different signers:
+- online signer (fee payer for uploading program buffer and upgrading program)
+- offline signer (program upgrade authority)
+
+The general process is as follows:
+1. (online) create buffer and write new program to it
+2. (online) set buffer authority to offline signer
+3. (optional, online) verify the buffer's on-chain contents
+4. (offline) sign a transaction to upgrade the program
+5. (online) use this signature to broadcast the upgrade transaction
+
+```bash
+# (1) (use online machine) create buffer
+solana program write-buffer <PROGRAM_FILEPATH>
+
+# (2) (use online machine) set buffer authority to offline signer
+solana program set-buffer-authority <BUFFER_PUBKEY> --new-buffer-authority <OFFLINE_SIGNER_PUBKEY>
+```
+
+(3) (optional) You may verify that the uploaded program matches the built binary. See
+[dumping a program to a file](deploy-a-program.md#dumping-a-program-to-a-file) for more information and details.
+
+```bash
+# (4) (use offline machine) get a signature for your intent to upgrade program
+solana program upgrade <BUFFER_PUBKEY> <PROGRAM_ID> --sign-only --fee-payer <ONLINE_SIGNER_PUBKEY> --upgrade-authority <OFFLINE_SIGNER> --blockhash <VALUE>
+
+# (5) (use online machine) use this signature to build and broadcast the upgrade transaction on-chain
+solana program upgrade <BUFFER_PUBKEY> <PROGRAM_ID> --fee-payer <ONLINE_SIGNER> --upgrade-authority <OFFLINE_SIGNER_PUBKEY> --blockhash <VALUE> --signer <OFFLINE_SIGNER_PUBKEY>:<OFFLINE_SIGNER_SIGNATURE>
+```
+Note:
+- typically, the output of the previous command(s) will contain some values useful in subsequent commands, e.g.
+  `--program-id`, `--buffer`, `--signer`
+- you need to specify matching (or corresponding) values for params with same names (`--fee-payer`, `--program-id`,
+  `--upgrade-authority`, `--buffer`, `--blockhash`) in offline/online modes
+- you should pre-fill every value except for `blockhash` ahead of time, and once you are ready to act - you'll need to
+  look up a recent `blockhash` and paste it in to generate the offline transaction signature. The `blockhash` expires
+  after ~60 seconds. If you didn't make it in time - just get another fresh hash and repeat until you succeed, or
+  consider using [durable transaction nonces](durable-nonce.md).
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/examples/deploy-a-program.md

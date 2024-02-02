@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD
 title: Gossip Service
+=======
+title: Gossip Service in a Solana Validator
+sidebar_position: 5
+sidebar_label: Gossip Service
+pagination_label: Validator Gossip Service
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059))
 ---
 
 The Gossip Service acts as a gateway to nodes in the [control plane](terminology.md#control-plane). Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a [gossip protocol](https://en.wikipedia.org/wiki/Gossip_protocol).

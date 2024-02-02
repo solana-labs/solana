@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD
 title: CLI Usage Reference
+=======
+title: Solana CLI Reference and Usage
+pagination_label: Solana CLI Reference and Usage
+sidebar_label: Reference & Usage
+sidebar_position: 3
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059))
 ---
 
 The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-line interface tool for Solana

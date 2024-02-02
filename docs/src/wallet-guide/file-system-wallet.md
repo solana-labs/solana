@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/wallet-guide/file-system-wallet.md
 title: File System Wallet
+=======
+title: File System Wallets using the CLI
+pagination_label: File System Wallets using the CLI
+sidebar_label: File System Wallets
+sidebar_position: 2
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/wallets/file-system.md
 ---
 
 This document describes how to create and use a file system wallet with the

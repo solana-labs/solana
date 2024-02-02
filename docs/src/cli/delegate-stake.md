@@ -1,10 +1,17 @@
 ---
+<<<<<<< HEAD:docs/src/cli/delegate-stake.md
 title: Staking
 ---
 For an overview of staking, read first the
 [Staking and Inflation FAQ](https://solana.com/staking).
 
 ------
+=======
+title: Staking SOL with the Solana CLI
+pagination_label: "Solana CLI: Staking"
+sidebar_label: Staking
+---
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/examples/delegate-stake.md
 
 After you have [received SOL](transfer-tokens.md), you might consider putting
 it to use by delegating _stake_ to a validator. Stake is what we call tokens
@@ -13,6 +20,11 @@ delegated to them, which gives those validators more influence in determining
 then next valid block of transactions in the blockchain. Solana then generates
 new SOL periodically to reward stakers and validators. You earn more rewards
 the more stake you delegate.
+
+:::info
+For an overview of staking, read first the
+[Staking and Inflation FAQ](https://solana.com/staking).
+:::
 
 ## Create a Stake Account
 

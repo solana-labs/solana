@@ -1,5 +1,11 @@
 ---
+<<<<<<< HEAD:docs/src/wallet-guide/hardware-wallets/ledger.md
 title: Ledger Nano
+=======
+title: Using Ledger Nano Hardware Wallets in the Solana CLI
+pagination_label: "Hardware Wallets in the Solana CLI: Ledger Nano"
+sidebar_label: Ledger Nano
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/wallets/hardware/ledger.md
 ---
 
 This page describes how to use a Ledger Nano S, Nano S Plus, or Nano X to interact with Solana

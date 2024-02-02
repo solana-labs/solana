@@ -1,5 +1,7 @@
 ---
-title: Off-Chain Message Signing
+title: Off-Chain Message Signing with the Solana CLI
+pagination_label: "Solana CLI: Off-Chain Message Signing"
+sidebar_label: Off-Chain Message Signing
 ---
 
 Off-chain message signing is a method of signing non-transaction messages with

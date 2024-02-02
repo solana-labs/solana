@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/cli/conventions.md
 title: Using Solana CLI
+=======
+title: Introduction to the Solana CLI
+pagination_label: Introduction to the Solana CLI
+sidebar_label: Introduction
+sidebar_position: 2
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/intro.md
 ---
 
 Before running any Solana CLI commands, let's go over some conventions that
@@ -43,7 +50,7 @@ solana-keygen pubkey <KEYPAIR>
 Below, we show how to resolve what you should put in `<KEYPAIR>` depending
 on your wallet type.
 
-#### Paper Wallet
+## Paper Wallet
 
 In a paper wallet, the keypair is securely derived from the seed words and
 optional passphrase you entered when the wallet was created. To use a paper
@@ -57,7 +64,7 @@ To display the wallet address of a Paper Wallet:
 solana-keygen pubkey prompt://
 ```
 
-#### File System Wallet
+## File System Wallet
 
 With a file system wallet, the keypair is stored in a file on your computer.
 Replace `<KEYPAIR>` with the complete file path to the keypair file.
@@ -69,7 +76,7 @@ For example, if the file system keypair file location is
 solana-keygen pubkey /home/solana/my_wallet.json
 ```
 
-#### Hardware Wallet
+## Hardware Wallet
 
 If you chose a hardware wallet, use your
 [keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),

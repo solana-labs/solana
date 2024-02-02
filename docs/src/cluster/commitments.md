@@ -1,6 +1,15 @@
 ---
+<<<<<<< HEAD:docs/src/cluster/commitments.md
 title: Commitment Status
 description: "Processed, confirmed, and finalized. Learn the differences between the different commitment statuses on the Solana blockchain."
+=======
+title: Solana Commitment Status
+sidebar_label: Commitment Status
+pagination_label: Consensus Commitment Status
+description:
+  "Processed, confirmed, and finalized. Learn the differences between the
+  different commitment statuses on the Solana blockchain."
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/consensus/commitments.md
 keywords:
   - processed
   - confirmed

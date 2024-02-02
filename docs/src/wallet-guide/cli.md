@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/wallet-guide/cli.md
 title: Command Line Wallets
+=======
+title: Solana Wallets with the CLI
+pagination_label: Command Line Wallets
+sidebar_label: Overview
+sidebar_position: 0
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/wallets/index.md
 ---
 
 Solana supports several different types of wallets that can be used to interface

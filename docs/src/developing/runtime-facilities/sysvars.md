@@ -1,5 +1,7 @@
 ---
-title: Sysvar Cluster Data
+title: Solana Sysvar Cluster Data
+pagination_label: Runtime Sysvar Cluster Data
+sidebar_label: Sysvar Cluster Data
 ---
 
 Solana exposes a variety of cluster state data to programs via

@@ -1,5 +1,11 @@
 ---
 title: Anatomy of a Validator
+<<<<<<< HEAD
+=======
+sidebar_position: 1
+sidebar_label: Anatomy
+pagination_label: Anatomy of a Validator
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059))
 ---
 
 ![Validator block diagrams](/img/validator.svg)

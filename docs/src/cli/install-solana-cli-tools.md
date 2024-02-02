@@ -1,5 +1,12 @@
 ---
+<<<<<<< HEAD:docs/src/cli/install-solana-cli-tools.md
 title: Install the Solana Tool Suite
+=======
+title: Install the Solana CLI
+pagination_label: Install the Solana CLI
+sidebar_label: Installation
+sidebar_position: 1
+>>>>>>> 919b306733 ([docs] updated page metadata and minor fixes (#35059)):docs/src/cli/install.md
 ---
 
 There are multiple ways to install the Solana tools on your computer
