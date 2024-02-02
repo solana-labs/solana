@@ -66,6 +66,8 @@ pub enum Error {
     Blockstore(#[from] solana_ledger::blockstore::BlockstoreError),
     #[error(transparent)]
     ClusterInfo(#[from] solana_gossip::cluster_info::ClusterInfoError),
+    #[error("Invalid Merkle root, slot: {slot}, index: {index}")]
+    InvalidMerkleRoot { slot: Slot, index: u64 },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -76,8 +78,14 @@ pub enum Error {
     Send,
     #[error(transparent)]
     Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
+    #[error("Shred not found, slot: {slot}, index: {index}")]
+    ShredNotFound { slot: Slot, index: u64 },
     #[error(transparent)]
     TransportError(#[from] solana_sdk::transport::TransportError),
+    #[error("Unknown last index, slot: {0}")]
+    UnknownLastIndex(Slot),
+    #[error("Unknown slot meta, slot: {0}")]
+    UnknownSlotMeta(Slot),
 }
 
 type Result<T> = std::result::Result<T, Error>;
