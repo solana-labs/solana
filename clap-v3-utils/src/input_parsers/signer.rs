@@ -237,12 +237,7 @@ pub fn try_keypair_of(
     name: &str,
 ) -> Result<Option<Keypair>, Box<dyn error::Error>> {
     if let Some(value) = matches.try_get_one::<String>(name)? {
-        if value == ASK_KEYWORD {
-            let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
-            keypair_from_seed_phrase(name, skip_validation, true, None, true).map(Some)
-        } else {
-            read_keypair_file(value).map(Some)
-        }
+        extract_keypair(matches, name, value)
     } else {
         Ok(None)
     }
@@ -254,18 +249,22 @@ pub fn try_keypairs_of(
 ) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
     Ok(matches.try_get_many::<String>(name)?.map(|values| {
         values
-            .filter_map(|value| {
-                if value == ASK_KEYWORD {
-                    let skip_validation = matches
-                        .try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
-                        .unwrap();
-                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
-                } else {
-                    read_keypair_file(value).ok()
-                }
-            })
+            .filter_map(|value| extract_keypair(matches, name, value).ok().flatten())
             .collect()
     }))
+}
+
+fn extract_keypair(
+    matches: &ArgMatches,
+    name: &str,
+    path: &str,
+) -> Result<Option<Keypair>, Box<dyn error::Error>> {
+    if path == ASK_KEYWORD {
+        let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+        keypair_from_seed_phrase(name, skip_validation, true, None, true).map(Some)
+    } else {
+        read_keypair_file(path).map(Some)
+    }
 }
 
 // Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
