@@ -163,10 +163,20 @@ pub fn cat_file(path: &PathBuf) -> io::Result<()> {
 
 pub fn parse_and_format_bench_tps_args(bench_tps_args: Option<&str>) -> Option<Vec<String>> {
     bench_tps_args.map(|args| {
-        args.split_whitespace()
+        let mut val_args: Vec<_> = args
+            .split_whitespace()
             .filter_map(|arg| arg.split_once('='))
             .flat_map(|(key, value)| vec![format!("--{}", key), value.to_string()])
-            .collect()
+            .collect();
+        let flag_args_iter = args
+            .split_whitespace()
+            .filter_map(|arg| match arg.split_once('=') {
+                Some(_) => None,
+                None => Some(arg),
+            })
+            .map(|flag| format!("--{}", flag));
+        val_args.extend(flag_args_iter);
+        val_args
     })
 }
 
