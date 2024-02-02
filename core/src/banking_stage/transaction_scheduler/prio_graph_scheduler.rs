@@ -491,7 +491,7 @@ mod tests {
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
         solana_cost_model::cost_model::CostModel,
-        solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+        solana_runtime::compute_budget_details::ComputeBudgetDetails,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, hash::Hash,
             message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
@@ -580,7 +580,7 @@ mod tests {
             container.insert_new_transaction(
                 id,
                 transaction_ttl,
-                TransactionPriorityDetails {
+                ComputeBudgetDetails {
                     compute_unit_price,
                     compute_unit_limit: 1,
                 },
