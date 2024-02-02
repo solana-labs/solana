@@ -9,7 +9,7 @@ use {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransactionPriorityDetails {
-    pub priority: u64,
+    pub compute_unit_price: u64,
     pub compute_unit_limit: u64,
 }
 
@@ -25,7 +25,7 @@ pub trait GetTransactionPriorityDetails {
     ) -> Option<TransactionPriorityDetails> {
         let compute_budget_limits = process_compute_budget_instructions(instructions).ok()?;
         Some(TransactionPriorityDetails {
-            priority: compute_budget_limits.compute_unit_price,
+            compute_unit_price: compute_budget_limits.compute_unit_price,
             compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
         })
     }
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(
             sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: 0,
+                compute_unit_price: 0,
                 compute_unit_limit:
                     solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: 0,
+                compute_unit_price: 0,
                 compute_unit_limit:
                     solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(
             sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: 0,
+                compute_unit_price: 0,
                 compute_unit_limit: requested_cu as u64,
             })
         );
@@ -138,7 +138,7 @@ mod tests {
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: 0,
+                compute_unit_price: 0,
                 compute_unit_limit: requested_cu as u64,
             })
         );
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(
             sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: requested_price,
+                compute_unit_price: requested_price,
                 compute_unit_limit:
                     solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
@@ -176,7 +176,7 @@ mod tests {
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
-                priority: requested_price,
+                compute_unit_price: requested_price,
                 compute_unit_limit:
                     solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,

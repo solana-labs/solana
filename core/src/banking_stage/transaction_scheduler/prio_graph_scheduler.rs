@@ -562,12 +562,16 @@ mod tests {
         >,
     ) -> TransactionStateContainer {
         let mut container = TransactionStateContainer::with_capacity(10 * 1024);
-        for (index, (from_keypair, to_pubkeys, lamports, priority)) in
+        for (index, (from_keypair, to_pubkeys, lamports, compute_unit_price)) in
             tx_infos.into_iter().enumerate()
         {
             let id = TransactionId::new(index as u64);
-            let transaction =
-                prioritized_tranfers(from_keypair.borrow(), to_pubkeys, lamports, priority);
+            let transaction = prioritized_tranfers(
+                from_keypair.borrow(),
+                to_pubkeys,
+                lamports,
+                compute_unit_price,
+            );
             let transaction_cost = CostModel::calculate_cost(&transaction, &FeatureSet::default());
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
@@ -577,7 +581,7 @@ mod tests {
                 id,
                 transaction_ttl,
                 TransactionPriorityDetails {
-                    priority,
+                    compute_unit_price,
                     compute_unit_limit: 1,
                 },
                 transaction_cost,

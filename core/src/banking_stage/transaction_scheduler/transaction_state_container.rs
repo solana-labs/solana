@@ -102,8 +102,10 @@ impl TransactionStateContainer {
         transaction_priority_details: TransactionPriorityDetails,
         transaction_cost: TransactionCost,
     ) -> bool {
-        let priority_id =
-            TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
+        let priority_id = TransactionPriorityId::new(
+            transaction_priority_details.compute_unit_price,
+            transaction_id,
+        );
         self.id_to_transaction_state.insert(
             transaction_id,
             TransactionState::new(
@@ -210,7 +212,7 @@ mod tests {
         (
             transaction_ttl,
             TransactionPriorityDetails {
-                priority,
+                compute_unit_price: priority,
                 compute_unit_limit: 0,
             },
             transaction_cost,

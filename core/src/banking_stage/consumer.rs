@@ -587,7 +587,7 @@ impl Consumer {
                 let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
                 transaction
                     .get_transaction_priority_details(round_compute_unit_price_enabled)
-                    .map(|details| details.priority)
+                    .map(|details| details.compute_unit_price)
             })
             .minmax();
         let (min_prioritization_fees, max_prioritization_fees) =

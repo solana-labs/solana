@@ -49,8 +49,8 @@ impl PartialOrd for DeserializedPacket {
 impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
         self.immutable_section()
-            .priority()
-            .cmp(&other.immutable_section().priority())
+            .compute_unit_price()
+            .cmp(&other.immutable_section().compute_unit_price())
     }
 }
 
@@ -193,12 +193,16 @@ impl UnprocessedPacketBatches {
         self.packet_priority_queue.is_empty()
     }
 
-    pub fn get_min_priority(&self) -> Option<u64> {
-        self.packet_priority_queue.peek_min().map(|x| x.priority())
+    pub fn get_min_compute_unit_price(&self) -> Option<u64> {
+        self.packet_priority_queue
+            .peek_min()
+            .map(|x| x.compute_unit_price())
     }
 
-    pub fn get_max_priority(&self) -> Option<u64> {
-        self.packet_priority_queue.peek_max().map(|x| x.priority())
+    pub fn get_max_compute_unit_price(&self) -> Option<u64> {
+        self.packet_priority_queue
+            .peek_max()
+            .map(|x| x.compute_unit_price())
     }
 
     fn push_internal(&mut self, deserialized_packet: DeserializedPacket) {

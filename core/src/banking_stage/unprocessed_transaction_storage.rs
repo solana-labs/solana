@@ -286,7 +286,7 @@ impl UnprocessedTransactionStorage {
         match self {
             Self::VoteStorage(_) => None,
             Self::LocalTransactionStorage(transaction_storage) => {
-                transaction_storage.get_min_priority()
+                transaction_storage.get_min_compute_unit_price()
             }
         }
     }
@@ -295,7 +295,7 @@ impl UnprocessedTransactionStorage {
         match self {
             Self::VoteStorage(_) => None,
             Self::LocalTransactionStorage(transaction_storage) => {
-                transaction_storage.get_max_priority()
+                transaction_storage.get_max_compute_unit_price()
             }
         }
     }
@@ -547,12 +547,12 @@ impl ThreadLocalUnprocessedPackets {
         self.unprocessed_packet_batches.len()
     }
 
-    pub fn get_min_priority(&self) -> Option<u64> {
-        self.unprocessed_packet_batches.get_min_priority()
+    pub fn get_min_compute_unit_price(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_min_compute_unit_price()
     }
 
-    pub fn get_max_priority(&self) -> Option<u64> {
-        self.unprocessed_packet_batches.get_max_priority()
+    pub fn get_max_compute_unit_price(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_max_compute_unit_price()
     }
 
     fn max_receive_size(&self) -> usize {

@@ -89,7 +89,7 @@ impl TransactionState {
 
     /// Returns the priority of the transaction.
     pub(crate) fn priority(&self) -> u64 {
-        self.transaction_priority_details().priority
+        self.transaction_priority_details().compute_unit_price
     }
 
     /// Returns whether or not the transaction has already been forwarded.
@@ -180,7 +180,7 @@ impl TransactionState {
             self,
             Self::Pending {
                 transaction_priority_details: TransactionPriorityDetails {
-                    priority: 0,
+                    compute_unit_price: 0,
                     compute_unit_limit: 0,
                 },
                 transaction_cost: TransactionCost::SimpleVote {
@@ -203,7 +203,7 @@ mod tests {
         },
     };
 
-    fn create_transaction_state(priority: u64) -> TransactionState {
+    fn create_transaction_state(compute_unit_price: u64) -> TransactionState {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -211,7 +211,7 @@ mod tests {
                 &solana_sdk::pubkey::new_rand(),
                 1,
             ),
-            ComputeBudgetInstruction::set_compute_unit_price(priority),
+            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[&from_keypair], message, Hash::default());
@@ -228,7 +228,7 @@ mod tests {
         TransactionState::new(
             transaction_ttl,
             TransactionPriorityDetails {
-                priority,
+                compute_unit_price,
                 compute_unit_limit: 0,
             },
             transaction_cost,

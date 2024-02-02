@@ -60,7 +60,7 @@ impl ImmutableDeserializedPacket {
 
         // set priority to zero for vote transactions
         if is_simple_vote {
-            priority_details.priority = 0;
+            priority_details.compute_unit_price = 0;
         };
 
         Ok(Self {
@@ -88,8 +88,8 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn priority(&self) -> u64 {
-        self.priority_details.priority
+    pub fn compute_unit_price(&self) -> u64 {
+        self.priority_details.compute_unit_price
     }
 
     pub fn compute_unit_limit(&self) -> u64 {
@@ -131,7 +131,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.priority().cmp(&other.priority())
+        self.compute_unit_price().cmp(&other.compute_unit_price())
     }
 }
 

@@ -251,7 +251,7 @@ impl PrioritizationFeeCache {
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
                             bank_id: bank.bank_id(),
-                            transaction_fee: priority_details.priority,
+                            transaction_fee: priority_details.compute_unit_price,
                             writable_accounts,
                         })
                         .unwrap_or_else(|err| {
