@@ -46,6 +46,59 @@ impl Bank {
     // still being stake-weighted.
     // Ref: distribute_rent_to_validators
     pub(super) fn distribute_transaction_fees(&self) {
+        if crate::bank::SIMD_0110_SIMULATION{
+            // if in simulatino mode, take original code path, just report metrics
+            self.distribute_transaction_fees_original();
+        } else {
+            self.distribute_transaction_fees_simd_0110();
+        }
+    }
+
+    fn distribute_transaction_fees_original(&self) {
+        let collector_fees = self.collector_fees.load(Relaxed);
+        if collector_fees != 0 {
+            let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
+            if deposit > 0 {
+                let validate_fee_collector = self.validate_fee_collector_account();
+                match self.deposit_fees(
+                    &self.collector_id,
+                    deposit,
+                    DepositFeeOptions {
+                        check_account_owner: validate_fee_collector,
+                        check_rent_paying: validate_fee_collector,
+                    },
+                ) {
+                    Ok(post_balance) => {
+                        self.rewards.write().unwrap().push((
+                            self.collector_id,
+                            RewardInfo {
+                                reward_type: RewardType::Fee,
+                                lamports: deposit as i64,
+                                post_balance,
+                                commission: None,
+                            },
+                        ));
+                    }
+                    Err(err) => {
+                        debug!(
+                            "Burned {} lamport tx fee instead of sending to {} due to {}",
+                            deposit, self.collector_id, err
+                        );
+                        datapoint_warn!(
+                            "bank-burned_fee",
+                            ("slot", self.slot(), i64),
+                            ("num_lamports", deposit, i64),
+                            ("error", err.to_string(), String),
+                        );
+                        burn += deposit;
+                    }
+                }
+            }
+            self.capitalization.fetch_sub(burn, Relaxed);
+        }
+    }
+
+    fn distribute_transaction_fees_simd_0110(&self) {
         let CollectorFeeDetails {
             transaction_fee,
             priority_fee,

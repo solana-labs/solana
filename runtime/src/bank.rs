@@ -238,6 +238,10 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+// NOTE: if SIMULATION is true, then no consensus breaking changes are applied to bank,
+//       it only calculates and reports metrics for "would-be" scenarios 
+const SIMD_0110_SIMULATION: bool = true;
+
 #[derive(Default)]
 struct RentMetrics {
     hold_range_us: AtomicU64,
@@ -4531,25 +4535,6 @@ impl Bank {
     // NOTE testing SIMD-0110, calculate write lock fee for checked transactions
     // piggy back to TransactionCheckResult for now, so write-lock-fee can be easily accessable 
     // by load_accounts().
-    /*
-    fn check_write_lock_fee(
-        &self,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
-        check_results: Vec<TransactionCheckResult>,
-    ) -> Vec<TransactionCheckResult> {
-        sanitized_txs
-            .iter()
-            .zip(check_results)
-            .map(|(tx, (result, nonce, lamports_per_signature, _))| match result {
-                Ok(()) => {
-                    let tx = tx.borrow();
-                    (result, nonce, lamports_per_signature, Some(self.calculate_write_lock_fee(tx.message())))
-                },
-                _ => (result, nonce, lamports_per_signature, None)
-            })
-            .collect()
-    }
-    // */
     fn check_write_lock_fee(
         &self,
         sanitized_txs: &[SanitizedTransaction],
@@ -4560,7 +4545,12 @@ impl Bank {
             .zip(sanitized_txs)
             .for_each(|etx| {
                 if let ((Ok(()), nonce, lamports, _), tx) = etx {
-                    *etx.0 = (Ok(()), nonce.clone(), *lamports, Some(self.calculate_write_lock_fee(tx.message())));
+                    let write_lock_fee = self.calculate_write_lock_fee(tx.message());
+                    if SIMD_0110_SIMULATION {
+                        println!("=== sig {:?} wlf {}", tx.signature(), write_lock_fee);
+                    } else {
+                        *etx.0 = (Ok(()), nonce.clone(), *lamports, Some(write_lock_fee));
+                    }
                 }
             });
     }
@@ -5665,6 +5655,7 @@ impl Bank {
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
+        let mut fees = 0;
         let mut accumulated_fee_details = FeeDetails::default();
         let mut accumulated_write_lock_fees: u64 = 0;
 
@@ -5703,16 +5694,21 @@ impl Bank {
                 // post-load, fee deducted, pre-execute account state
                 // stored
                 if execution_status.is_err() && !is_nonce {
-                    let total_fee = write_lock_fee.saturating_add(fee_details.total_fee());
+                    let mut total_fee = fee_details.total_fee();
+                    if !SIMD_0110_SIMULATION {
+                        total_fee = total_fee.saturating_add(write_lock_fee);
+                    }
                     self.withdraw(tx.message().fee_payer(), total_fee)?;
                 }
 
+                fees += fee_details.total_fee();
                 accumulated_write_lock_fees = accumulated_write_lock_fees.saturating_add(write_lock_fee);
                 accumulated_fee_details.accumulate(&fee_details);
                 Ok(())
             })
             .collect();
 
+        self.collector_fees.fetch_add(fees, Relaxed);
         self.collector_fee_details
             .write()
             .unwrap()
