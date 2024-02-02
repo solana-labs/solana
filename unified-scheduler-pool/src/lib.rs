@@ -751,7 +751,10 @@ mod tests {
             system_transaction,
             transaction::{SanitizedTransaction, TransactionError},
         },
-        std::{sync::Arc, thread::JoinHandle},
+        std::{
+            sync::{Arc, RwLock},
+            thread::JoinHandle,
+        },
     };
 
     #[test]
@@ -898,15 +901,15 @@ mod tests {
         assert!(!child_bank.has_installed_scheduler());
     }
 
-    fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
+    fn setup_dummy_fork_graph(bank: Bank) -> (Arc<Bank>, Arc<RwLock<BankForks>>) {
         let slot = bank.slot();
         let bank_fork = BankForks::new_rw_arc(bank);
         let bank = bank_fork.read().unwrap().get(slot).unwrap();
         bank.loaded_programs_cache
             .write()
             .unwrap()
-            .set_fork_graph(bank_fork);
-        bank
+            .set_fork_graph(bank_fork.clone());
+        (bank, bank_fork)
     }
 
     #[test]
@@ -925,7 +928,7 @@ mod tests {
             genesis_config.hash(),
         ));
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
@@ -949,7 +952,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
@@ -1150,7 +1153,7 @@ mod tests {
                 slot.checked_add(1).unwrap(),
             );
         }
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let context = SchedulingContext::new(bank.clone());
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
