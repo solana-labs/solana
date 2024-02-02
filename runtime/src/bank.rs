@@ -139,10 +139,6 @@ use {
             UPDATED_HASHES_PER_TICK4, UPDATED_HASHES_PER_TICK5, UPDATED_HASHES_PER_TICK6,
         },
         epoch_info::EpochInfo,
-        epoch_rewards_partition_data::{
-            get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion, HasherKind,
-            PartitionData,
-        },
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
@@ -894,7 +890,6 @@ struct PartitionedRewardsCalculation {
     foundation_rate: f64,
     prev_epoch_duration_in_years: f64,
     capitalization: u64,
-    parent_blockhash: Hash,
 }
 
 /// result of calculating the stake rewards at beginning of new epoch
@@ -912,8 +907,6 @@ struct CalculateRewardsAndDistributeVoteRewardsResult {
     distributed_rewards: u64,
     /// stake rewards that still need to be distributed, grouped by partition
     stake_rewards_by_partition: Vec<StakeRewards>,
-    /// blockhash of parent, used to create EpochRewardsHasher
-    parent_blockhash: Hash,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -1602,7 +1595,6 @@ impl Bank {
             total_rewards,
             distributed_rewards,
             stake_rewards_by_partition,
-            parent_blockhash,
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
             reward_calc_tracer,
@@ -1610,19 +1602,15 @@ impl Bank {
             rewards_metrics,
         );
 
-        let num_partitions = stake_rewards_by_partition.len();
-
         let slot = self.slot();
         let credit_start = self.block_height() + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive = credit_start + num_partitions as u64;
+        let credit_end_exclusive = credit_start + stake_rewards_by_partition.len() as u64;
 
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
-
-        self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -2389,7 +2377,6 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            parent_blockhash,
         }
     }
 
@@ -2410,7 +2397,6 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            parent_blockhash,
         } = self.calculate_rewards_for_partitioning(
             prev_epoch,
             reward_calc_tracer,
@@ -2480,7 +2466,6 @@ impl Bank {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
             stake_rewards_by_partition,
-            parent_blockhash,
         }
     }
 
@@ -3594,6 +3579,7 @@ impl Bank {
         self.log_epoch_rewards_sysvar("update");
     }
 
+<<<<<<< HEAD
     /// Create the persistent PDA containing the epoch-rewards data
     fn create_epoch_rewards_partition_data_account(
         &self,
@@ -3618,6 +3604,8 @@ impl Bank {
         self.store_account_and_update_capitalization(&address, &new_account);
     }
 
+=======
+>>>>>>> 57bbd3363c (Revert "Populate partitioned-rewards PDA during calculation (#34624)")
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
