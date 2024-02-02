@@ -745,7 +745,6 @@ pub fn test_process_blockstore(
         blockstore,
         Vec::new(),
         None,
-        None,
         opts,
         None,
         None,

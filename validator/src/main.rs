@@ -1205,10 +1205,30 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
+    let account_shrink_paths: Option<Vec<PathBuf>> =
+        values_t!(matches, "account_shrink_path", String)
+            .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
+            .ok();
+    let account_shrink_paths = account_shrink_paths.as_ref().map(|paths| {
+        create_and_canonicalize_directories(paths).unwrap_or_else(|err| {
+            eprintln!("Unable to access account shrink path: {err}");
+            exit(1);
+        })
+    });
+    let (account_shrink_run_paths, account_shrink_snapshot_paths) = account_shrink_paths
+        .map(|paths| {
+            create_all_accounts_run_and_snapshot_dirs(&paths).unwrap_or_else(|err| {
+                eprintln!("Error: {err}");
+                exit(1);
+            })
+        })
+        .unzip();
+
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_path.clone()),
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
+        shrink_paths: account_shrink_run_paths,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
@@ -1452,35 +1472,14 @@ pub fn main() {
         exit(1);
     });
 
-    let account_shrink_paths: Option<Vec<PathBuf>> =
-        values_t!(matches, "account_shrink_path", String)
-            .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
-            .ok();
-    let account_shrink_paths = account_shrink_paths.as_ref().map(|paths| {
-        create_and_canonicalize_directories(paths).unwrap_or_else(|err| {
-            eprintln!("Unable to access account shrink path: {err}");
-            exit(1);
-        })
-    });
-
     let (account_run_paths, account_snapshot_paths) =
         create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
             eprintln!("Error: {err}");
             exit(1);
         });
 
-    let (account_shrink_run_paths, account_shrink_snapshot_paths) = account_shrink_paths
-        .map(|paths| {
-            create_all_accounts_run_and_snapshot_dirs(&paths).unwrap_or_else(|err| {
-                eprintln!("Error: {err}");
-                exit(1);
-            })
-        })
-        .unzip();
-
     // From now on, use run/ paths in the same way as the previous account_paths.
     validator_config.account_paths = account_run_paths;
-    validator_config.account_shrink_paths = account_shrink_run_paths;
 
     // These snapshot paths are only used for initial clean up, add in shrink paths if they exist.
     validator_config.account_snapshot_paths =

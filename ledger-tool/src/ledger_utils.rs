@@ -274,7 +274,6 @@ pub fn load_and_process_ledger(
             genesis_config,
             blockstore.as_ref(),
             account_paths,
-            None,
             snapshot_config.as_ref(),
             &process_options,
             None,

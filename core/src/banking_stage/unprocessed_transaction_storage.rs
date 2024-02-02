@@ -282,6 +282,24 @@ impl UnprocessedTransactionStorage {
         }
     }
 
+    pub fn get_min_priority(&self) -> Option<u64> {
+        match self {
+            Self::VoteStorage(_) => None,
+            Self::LocalTransactionStorage(transaction_storage) => {
+                transaction_storage.get_min_priority()
+            }
+        }
+    }
+
+    pub fn get_max_priority(&self) -> Option<u64> {
+        match self {
+            Self::VoteStorage(_) => None,
+            Self::LocalTransactionStorage(transaction_storage) => {
+                transaction_storage.get_max_priority()
+            }
+        }
+    }
+
     /// Returns the maximum number of packets a receive should accept
     pub fn max_receive_size(&self) -> usize {
         match self {
@@ -527,6 +545,14 @@ impl ThreadLocalUnprocessedPackets {
 
     fn len(&self) -> usize {
         self.unprocessed_packet_batches.len()
+    }
+
+    pub fn get_min_priority(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_min_priority()
+    }
+
+    pub fn get_max_priority(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_max_priority()
     }
 
     fn max_receive_size(&self) -> usize {
