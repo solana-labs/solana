@@ -1,6 +1,7 @@
 ---
-title: Validator Operations Best Practices
+title: Solana Validator Operations Best Practices
 sidebar_label: General Operations
+pagination_label: "Best Practices: Validator Operations"
 ---
 
 After you have successfully setup and started a

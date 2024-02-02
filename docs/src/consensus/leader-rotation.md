@@ -1,5 +1,7 @@
 ---
-title: Leader Rotation
+title: Solana Leader Rotation
+sidebar_label: Leader Rotation
+pagination_label: Leader Rotation
 ---
 
 At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
