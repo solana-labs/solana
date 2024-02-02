@@ -132,7 +132,7 @@ use {
         },
         epoch_info::EpochInfo,
         epoch_rewards_partition_data::{
-            get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion,
+            get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion, HasherKind,
             PartitionData,
         },
         epoch_schedule::EpochSchedule,
@@ -3601,6 +3601,7 @@ impl Bank {
         let epoch_rewards_partition_data = EpochRewardsPartitionDataVersion::V0(PartitionData {
             num_partitions,
             parent_blockhash,
+            hasher_kind: HasherKind::Sip13,
         });
         let address = get_epoch_rewards_partition_data_address(self.epoch());
 
