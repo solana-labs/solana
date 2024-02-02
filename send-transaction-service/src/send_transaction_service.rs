@@ -611,6 +611,7 @@ impl SendTransactionService {
         let mut result = ProcessTransactionsResult::default();
 
         let mut batched_transactions = Vec::new();
+        let mut exceeded_retries_transactions = Vec::new();
         let retry_rate = Duration::from_millis(config.retry_rate_ms);
 
         transactions.retain(|signature, transaction_info| {
@@ -647,18 +648,6 @@ impl SendTransactionService {
                 return false;
             }
 
-            let max_retries = transaction_info.get_max_retries(config);
-            if let Some(max_retries) = max_retries {
-                if transaction_info.retries >= max_retries {
-                    info!("Dropping transaction due to max retries: {}", signature);
-                    result.max_retries_elapsed += 1;
-                    stats
-                        .transactions_exceeding_max_retries
-                        .fetch_add(1, Ordering::Relaxed);
-                    return false;
-                }
-            }
-
             match signature_status {
                 None => {
                     let now = Instant::now();
@@ -678,6 +667,13 @@ impl SendTransactionService {
 
                         batched_transactions.push(*signature);
                         transaction_info.last_sent_time = Some(now);
+
+                        let max_retries = transaction_info.get_max_retries(config);
+                        if let Some(max_retries) = max_retries {
+                            if transaction_info.retries >= max_retries {
+                                exceeded_retries_transactions.push(*signature);
+                            }
+                        }
                     }
                     true
                 }
@@ -721,6 +717,16 @@ impl SendTransactionService {
                 }
             }
         }
+
+        result.max_retries_elapsed += exceeded_retries_transactions.len() as u64;
+        stats
+            .transactions_exceeding_max_retries
+            .fetch_add(result.max_retries_elapsed, Ordering::Relaxed);
+        for signature in exceeded_retries_transactions {
+            info!("Dropping transaction due to max retries: {signature}");
+            transactions.remove(&signature);
+        }
+
         result
     }
 
@@ -1109,17 +1115,6 @@ mod test {
 
         info!("Transactions are only retried until max_retries");
         transactions.insert(
-            Signature::from([1; 64]),
-            TransactionInfo::new(
-                Signature::default(),
-                vec![],
-                working_bank.block_height(),
-                None,
-                Some(0),
-                Some(Instant::now()),
-            ),
-        );
-        transactions.insert(
             Signature::from([2; 64]),
             TransactionInfo::new(
                 Signature::default(),
@@ -1140,29 +1135,11 @@ mod test {
             &config,
             &stats,
         );
-        assert_eq!(transactions.len(), 1);
-        assert_eq!(
-            result,
-            ProcessTransactionsResult {
-                retried: 1,
-                max_retries_elapsed: 1,
-                ..ProcessTransactionsResult::default()
-            }
-        );
-        let result = SendTransactionService::process_transactions::<NullTpuInfo>(
-            &working_bank,
-            &root_bank,
-            &tpu_address,
-            &mut transactions,
-            &leader_info_provider,
-            &connection_cache,
-            &config,
-            &stats,
-        );
         assert!(transactions.is_empty());
         assert_eq!(
             result,
             ProcessTransactionsResult {
+                retried: 1,
                 max_retries_elapsed: 1,
                 ..ProcessTransactionsResult::default()
             }
