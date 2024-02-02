@@ -662,12 +662,11 @@ impl SendTransactionService {
                     if need_send {
                         if transaction_info.last_sent_time.is_some() {
                             // Transaction sent before is unknown to the working bank, it might have been
-                            // dropped or landed in another fork.  Re-send it
+                            // dropped or landed in another fork. Re-send it.
 
                             info!("Retrying transaction: {}", signature);
                             result.retried += 1;
                             transaction_info.retries += 1;
-                            stats.retries.fetch_add(1, Ordering::Relaxed);
                         }
 
                         batched_transactions.push(*signature);
@@ -688,6 +687,8 @@ impl SendTransactionService {
                 }
             }
         });
+
+        stats.retries.fetch_add(result.retried, Ordering::Relaxed);
 
         if !batched_transactions.is_empty() {
             // Processing the transactions in batch
