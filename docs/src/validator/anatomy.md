@@ -1,7 +1,8 @@
 ---
 title: Anatomy of a Validator
-sidebar_label: Anatomy
 sidebar_position: 1
+sidebar_label: Anatomy
+pagination_label: Anatomy of a Validator
 ---
 
 ![Validator block diagrams](/img/validator.svg)
