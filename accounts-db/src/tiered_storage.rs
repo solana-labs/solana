@@ -20,6 +20,7 @@ use {
     },
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat},
+    hot::{HotStorageWriter, HOT_FORMAT},
     index::IndexBlockFormat,
     owners::OwnersBlockFormat,
     readable::TieredStorageReader,
@@ -30,14 +31,13 @@ use {
         path::{Path, PathBuf},
         sync::OnceLock,
     },
-    writer::TieredStorageWriter,
 };
 
 pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
 
 /// The struct that defines the formats of all building blocks of a
 /// TieredStorage.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TieredStorageFormat {
     pub meta_entry_size: usize,
     pub account_meta_format: AccountMetaFormat,
@@ -115,19 +115,23 @@ impl TieredStorage {
             ));
         }
 
-        let result = {
-            let writer = TieredStorageWriter::new(&self.path, format)?;
-            writer.write_accounts(accounts, skip)
-        };
+        if format == &HOT_FORMAT {
+            let result = {
+                let writer = HotStorageWriter::new(&self.path)?;
+                writer.write_accounts(accounts, skip)
+            };
 
-        // panic here if self.reader.get() is not None as self.reader can only be
-        // None since we have passed `is_read_only()` check previously, indicating
-        // self.reader is not yet set.
-        self.reader
-            .set(TieredStorageReader::new_from_path(&self.path)?)
-            .unwrap();
+            // panic here if self.reader.get() is not None as self.reader can only be
+            // None since we have passed `is_read_only()` check previously, indicating
+            // self.reader is not yet set.
+            self.reader
+                .set(TieredStorageReader::new_from_path(&self.path)?)
+                .unwrap();
 
-        result
+            return result;
+        }
+
+        Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
     }
 
     /// Returns the underlying reader of the TieredStorage.  None will be
@@ -156,9 +160,11 @@ impl TieredStorage {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::{StoredMeta, StoredMetaWriteVersion},
+        crate::account_storage::meta::{StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
+        index::IndexOffset,
+        owners::OWNER_NO_OWNER,
         solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
         solana_sdk::{
             account::{Account, AccountSharedData},
@@ -167,7 +173,10 @@ mod tests {
             pubkey::Pubkey,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
-        std::mem::ManuallyDrop,
+        std::{
+            collections::{HashMap, HashSet},
+            mem::ManuallyDrop,
+        },
         tempfile::tempdir,
     };
 
@@ -201,6 +210,7 @@ mod tests {
                 Err(TieredStorageError::AttemptToUpdateReadOnly(_)),
             ) => {}
             (Err(TieredStorageError::Unsupported()), Err(TieredStorageError::Unsupported())) => {}
+            (Ok(_), Ok(_)) => {}
             // we don't expect error type mis-match or other error types here
             _ => {
                 panic!("actual: {result:?}, expected: {expected_result:?}");
@@ -229,10 +239,7 @@ mod tests {
             assert_eq!(tiered_storage.path(), tiered_storage_path);
             assert_eq!(tiered_storage.file_size().unwrap(), 0);
 
-            // Expect the result to be TieredStorageError::Unsupported as the feature
-            // is not yet fully supported, but we can still check its partial results
-            // in the test.
-            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+            write_zero_accounts(&tiered_storage, Ok(vec![]));
         }
 
         let tiered_storage_readonly = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
@@ -257,10 +264,7 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
 
         let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
-        // Expect the result to be TieredStorageError::Unsupported as the feature
-        // is not yet fully supported, but we can still check its partial results
-        // in the test.
-        write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+        write_zero_accounts(&tiered_storage, Ok(vec![]));
         // Expect AttemptToUpdateReadOnly error as write_accounts can only
         // be invoked once.
         write_zero_accounts(
@@ -278,7 +282,7 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
         {
             let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
-            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+            write_zero_accounts(&tiered_storage, Ok(vec![]));
         }
         // expect the file does not exists as it has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
@@ -286,7 +290,7 @@ mod tests {
         {
             let tiered_storage =
                 ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
-            write_zero_accounts(&tiered_storage, Err(TieredStorageError::Unsupported()));
+            write_zero_accounts(&tiered_storage, Ok(vec![]));
         }
         // expect the file exists as we have ManuallyDrop this time.
         assert!(tiered_storage_path.try_exists().unwrap());
@@ -329,6 +333,35 @@ mod tests {
         (stored_meta, AccountSharedData::from(account))
     }
 
+    fn verify_account(
+        stored_meta: &StoredAccountMeta<'_>,
+        account: Option<&impl ReadableAccount>,
+        account_hash: &AccountHash,
+    ) {
+        let (lamports, owner, data, executable, account_hash) = account
+            .map(|acc| {
+                (
+                    acc.lamports(),
+                    acc.owner(),
+                    acc.data(),
+                    acc.executable(),
+                    // only persist rent_epoch for those rent-paying accounts
+                    Some(*account_hash),
+                )
+            })
+            .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
+
+        assert_eq!(stored_meta.lamports(), lamports);
+        assert_eq!(stored_meta.data().len(), data.len());
+        assert_eq!(stored_meta.data(), data);
+        assert_eq!(stored_meta.executable(), executable);
+        assert_eq!(stored_meta.owner(), owner);
+        assert_eq!(
+            *stored_meta.hash(),
+            account_hash.unwrap_or(AccountHash(Hash::default()))
+        );
+    }
+
     /// The helper function for all write_accounts tests.
     /// Currently only supports hot accounts.
     fn do_test_write_accounts(
@@ -368,34 +401,27 @@ mod tests {
         let tiered_storage = TieredStorage::new_writable(tiered_storage_path);
         _ = tiered_storage.write_accounts(&storable_accounts, 0, &format);
 
-        verify_hot_storage(&tiered_storage, &accounts, format);
-    }
-
-    /// Verify the generated tiered storage in the test.
-    fn verify_hot_storage(
-        tiered_storage: &TieredStorage,
-        expected_accounts: &[(StoredMeta, AccountSharedData)],
-        expected_format: TieredStorageFormat,
-    ) {
         let reader = tiered_storage.reader().unwrap();
-        assert_eq!(reader.num_accounts(), expected_accounts.len());
+        let num_accounts = storable_accounts.len();
+        assert_eq!(reader.num_accounts(), num_accounts);
 
-        let footer = reader.footer();
-        let expected_footer = TieredStorageFooter {
-            account_meta_format: expected_format.account_meta_format,
-            owners_block_format: expected_format.owners_block_format,
-            index_block_format: expected_format.index_block_format,
-            account_block_format: expected_format.account_block_format,
-            account_entry_count: expected_accounts.len() as u32,
-            // Hash is not yet implemented, so we bypass the check
-            hash: footer.hash,
-            ..TieredStorageFooter::default()
-        };
+        let mut expected_accounts_map = HashMap::new();
+        for i in 0..num_accounts {
+            let (account, address, account_hash, _write_version) = storable_accounts.get(i);
+            expected_accounts_map.insert(address, (account, account_hash));
+        }
 
-        // TODO(yhchiang): verify account meta and data once the reader side
-        // is implemented in a separate PR.
-
-        assert_eq!(*footer, expected_footer);
+        let mut index_offset = IndexOffset(0);
+        let mut verified_accounts = HashSet::new();
+        while let Some((stored_meta, next)) = reader.get_account(index_offset).unwrap() {
+            if let Some((account, account_hash)) = expected_accounts_map.get(stored_meta.pubkey()) {
+                verify_account(&stored_meta, *account, account_hash);
+                verified_accounts.insert(stored_meta.pubkey());
+            }
+            index_offset = next;
+        }
+        assert!(!verified_accounts.is_empty());
+        assert_eq!(verified_accounts.len(), expected_accounts_map.len())
     }
 
     #[test]
