@@ -3985,20 +3985,29 @@ impl AccountsDb {
             shrink_collect.alive_total_bytes as u64,
             shrink_collect.capacity,
         ) {
+            warn!(
+                "Unexpected shrink for slot {} alive {} capacity {}, \
+                likely caused by a bug for calculating alive bytes.",
+                slot, shrink_collect.alive_total_bytes, shrink_collect.capacity
+            );
+
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
-            for pubkey in shrink_collect.unrefed_pubkeys {
-                let lock = self.accounts_index.get_bin(pubkey);
-                lock.get_internal(pubkey, |entry| {
-                    if let Some(locked_entry) = entry {
-                        // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
-                        // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                        locked_entry.addref();
+
+            self.accounts_index.scan(
+                shrink_collect.unrefed_pubkeys.into_iter(),
+                |_pubkey, _slot_refs, entry| {
+                    // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
+                    // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
+                    if let Some(entry) = entry {
+                        entry.addref();
                     }
-                    (false, ())
-                });
-            }
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                },
+                None,
+                true,
+            );
             return;
         }
 
