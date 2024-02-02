@@ -692,7 +692,7 @@ pub mod layout {
         Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
     }
 
-    pub(crate) fn get_merkle_root(shred: &[u8]) -> Option<Hash> {
+    pub fn get_merkle_root(shred: &[u8]) -> Option<Hash> {
         match get_shred_variant(shred).ok()? {
             ShredVariant::LegacyCode | ShredVariant::LegacyData => None,
             ShredVariant::MerkleCode(proof_size, chained) => {
