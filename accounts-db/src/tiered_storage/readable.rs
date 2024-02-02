@@ -148,4 +148,15 @@ impl TieredStorageReader {
             }
         }
     }
+
+    /// Return a vector of account metadata for each account, starting from
+    /// `index_offset`
+    pub fn accounts(
+        &self,
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<Vec<StoredAccountMeta>> {
+        match self {
+            Self::Hot(hot) => hot.accounts(index_offset),
+        }
+    }
 }

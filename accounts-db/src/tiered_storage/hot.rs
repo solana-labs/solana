@@ -458,6 +458,24 @@ impl HotStorageReader {
             IndexOffset(index_offset.0.saturating_add(1)),
         )))
     }
+
+    /// Return a vector of account metadata for each account, starting from
+    /// `index_offset`
+    pub fn accounts(
+        &self,
+        mut index_offset: IndexOffset,
+    ) -> TieredStorageResult<Vec<StoredAccountMeta>> {
+        let mut accounts = Vec::with_capacity(
+            self.footer
+                .account_entry_count
+                .saturating_sub(index_offset.0) as usize,
+        );
+        while let Some((account, next)) = self.get_account(index_offset)? {
+            accounts.push(account);
+            index_offset = next;
+        }
+        Ok(accounts)
+    }
 }
 
 fn write_optional_fields(
@@ -1401,6 +1419,22 @@ pub mod tests {
             let (account, address, account_hash, _write_version) =
                 storable_accounts.get(stored_info.offset);
             verify_account(&stored_meta, account, address, account_hash);
+        }
+
+        // verify get_accounts
+        let accounts = hot_storage.accounts(IndexOffset(0)).unwrap();
+
+        // first, we verify everything
+        for (i, stored_meta) in accounts.iter().enumerate() {
+            let (account, address, account_hash, _write_version) = storable_accounts.get(i);
+            verify_account(stored_meta, account, address, account_hash);
+        }
+
+        // second, we verify various initial position
+        let total_stored_accounts = accounts.len();
+        for i in 0..total_stored_accounts {
+            let partial_accounts = hot_storage.accounts(IndexOffset(i as u32)).unwrap();
+            assert_eq!(&partial_accounts, &accounts[i..]);
         }
     }
 }
