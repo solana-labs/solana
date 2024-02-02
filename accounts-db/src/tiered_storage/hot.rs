@@ -435,7 +435,7 @@ impl HotStorageReader {
     pub fn get_account(
         &self,
         index_offset: IndexOffset,
-    ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, usize)>> {
+    ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, IndexOffset)>> {
         if index_offset.0 >= self.footer.account_entry_count {
             return Ok(None);
         }
@@ -452,10 +452,10 @@ impl HotStorageReader {
                 meta,
                 address,
                 owner,
-                index: index_offset.0 as usize,
+                index: index_offset,
                 account_block,
             }),
-            index_offset.0.saturating_add(1) as usize,
+            IndexOffset(index_offset.0.saturating_add(1)),
         )))
     }
 }
@@ -1244,7 +1244,7 @@ pub mod tests {
             );
             assert_eq!(*stored_meta.pubkey(), addresses[i]);
 
-            assert_eq!(i + 1, next);
+            assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
@@ -1383,7 +1383,7 @@ pub mod tests {
             let (account, address, account_hash, _write_version) = storable_accounts.get(i);
             verify_account(&stored_meta, account, address, account_hash);
 
-            assert_eq!(i + 1, next);
+            assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
