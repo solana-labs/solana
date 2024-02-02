@@ -12,31 +12,21 @@ if [[ "$benchTpsExtraArgs" == "thin-client" || "$benchTpsExtraArgs" == "tpu-clie
 else
     clientType="${3:-thin-client}"
     shift 3
+    # Convert string to array
+    IFS=' ' read -r -a argsArray <<< "$benchTpsExtraArgs"
+
+    # Loop through the array and check for the specific flag
+    for arg in "${argsArray[@]}"; do
+        if [ "$arg" == "--use-rpc-client" ]; then
+            clientType="rpc-client"
+            break
+        elif [ "$arg" == "--use-tpu-client" ]; then
+            clientType="tpu-client"
+            break
+        fi
+    done
 fi
 
-runtime_args=()
-while [[ -n $1 ]]; do
-  if [[ ${1:0:1} = - ]]; then
-    if [[ $1 = --target-node ]]; then
-      echo "WARNING: --target-node not supported yet...not included"
-      shift 2
-    elif [[ $1 = --duration ]]; then
-      runtime_args+=("$1" "$2")
-      shift 2
-    elif [[ $1 = --num-nodes ]]; then
-      runtime_args+=("$1" "$2")
-      shift 2
-    else
-      echo "Unknown argument: $1"
-      solana-bench-tps --help
-      exit 1
-    fi
-  else
-    echo "Unknown argument: $1"
-    solana-bench-tps --help
-    exit 1
-  fi
-done
 
 missing() {
   echo "Error: $1 not specified"
@@ -76,11 +66,9 @@ bench-tps)
   args=()
 
   if ${TPU_CLIENT}; then
-    args+=(--use-tpu-client)
-    args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
+    args+=(--url "http://$LOAD_BALANCER_RPC_ADDRESS")
   elif ${RPC_CLIENT}; then
-    args+=(--use-rpc-client)
-    args+=(--url "$LOAD_BALANCER_RPC_ADDRESS")
+    args+=(--url "http://$LOAD_BALANCER_RPC_ADDRESS")
   else
     args+=(--entrypoint "$BOOTSTRAP_GOSSIP_ADDRESS")
   fi
