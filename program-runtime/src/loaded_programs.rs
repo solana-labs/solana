@@ -150,22 +150,24 @@ pub struct LoadedProgram {
 /// Global cache statistics for [LoadedPrograms].
 #[derive(Debug, Default)]
 pub struct Stats {
-    /// a program was requested
+    /// a program was already in the cache
     pub hits: AtomicU64,
-    /// a program was polled during cooperative loading
+    /// a program was not found and loaded instead
     pub misses: AtomicU64,
     /// a compiled executable was unloaded
     pub evictions: HashMap<Pubkey, u64>,
-    /// a program was loaded
+    /// an unloaded program was loaded again (opposite of eviction)
+    pub reloads: AtomicU64,
+    /// a program was loaded or un/re/deployed
     pub insertions: AtomicU64,
-    /// a program was reloaded or redeployed
+    /// a program was loaded but can not be extracted on its own fork anymore
+    pub lost_insertions: AtomicU64,
+    /// a program which was already in the cache was reloaded by mistake
     pub replacements: AtomicU64,
     /// a program was only used once before being unloaded
     pub one_hit_wonders: AtomicU64,
     /// a program became unreachable in the fork graph because of rerooting
     pub prunes_orphan: AtomicU64,
-    /// a program got pruned because its expiration slot passed
-    pub prunes_expired: AtomicU64,
     /// a program got pruned because it was not recompiled for the next epoch
     pub prunes_environment: AtomicU64,
     /// the [SecondLevel] was empty because all slot versions got pruned
@@ -177,12 +179,13 @@ impl Stats {
     pub fn submit(&self, slot: Slot) {
         let hits = self.hits.load(Ordering::Relaxed);
         let misses = self.misses.load(Ordering::Relaxed);
+        let evictions: u64 = self.evictions.values().sum();
+        let reloads = self.reloads.load(Ordering::Relaxed);
         let insertions = self.insertions.load(Ordering::Relaxed);
+        let lost_insertions = self.insertions.load(Ordering::Relaxed);
         let replacements = self.replacements.load(Ordering::Relaxed);
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
-        let evictions: u64 = self.evictions.values().sum();
         let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
-        let prunes_expired = self.prunes_expired.load(Ordering::Relaxed);
         let prunes_environment = self.prunes_environment.load(Ordering::Relaxed);
         let empty_entries = self.empty_entries.load(Ordering::Relaxed);
         datapoint_info!(
@@ -191,17 +194,18 @@ impl Stats {
             ("hits", hits, i64),
             ("misses", misses, i64),
             ("evictions", evictions, i64),
+            ("reloads", reloads, i64),
             ("insertions", insertions, i64),
+            ("lost_insertions", lost_insertions, i64),
             ("replacements", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
             ("prunes_orphan", prunes_orphan, i64),
-            ("prunes_expired", prunes_expired, i64),
             ("prunes_environment", prunes_environment, i64),
             ("empty_entries", empty_entries, i64),
         );
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Expired: {}, Prunes-Environment: {}, Empty: {}",
-            hits, misses, evictions, insertions, replacements, one_hit_wonders, prunes_orphan, prunes_expired, prunes_environment, empty_entries
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Reloads: {}, Insertions: {} Lost-Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Environment: {}, Empty: {}",
+            hits, misses, evictions, reloads, insertions, lost_insertions, replacements, one_hit_wonders, prunes_orphan, prunes_environment, empty_entries
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -716,9 +720,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let index = slot_versions
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
-        if let Some((existing, entry_index)) =
-            index.and_then(|index| slot_versions.get(index).map(|value| (value, index)))
-        {
+        if let Some(existing) = index.and_then(|index| slot_versions.get_mut(index)) {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
@@ -733,17 +735,19 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
-                    slot_versions.remove(entry_index);
+                    self.stats.reloads.fetch_add(1, Ordering::Relaxed);
                 } else if existing.is_tombstone() != entry.is_tombstone() {
                     // Either the old entry is tombstone and the new one is not.
                     // (Let's give the new entry a chance).
                     // Or, the old entry is not a tombstone and the new one is a tombstone.
                     // (Remove the old entry, as the tombstone makes it obsolete).
-                    slot_versions.remove(entry_index);
+                    self.stats.insertions.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
                 }
+                *existing = entry.clone();
+                return (false, entry);
             }
         }
         self.stats.insertions.fetch_add(1, Ordering::Relaxed);
@@ -833,7 +837,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     // Remove expired
                     if let Some(expiration) = entry.maybe_expiration_slot {
                         if expiration <= new_root_slot {
-                            self.stats.prunes_expired.fetch_add(1, Ordering::Relaxed);
                             return false;
                         }
                     }
@@ -906,6 +909,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         &mut self,
         search_for: &mut Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))>,
         loaded_programs_for_tx_batch: &mut LoadedProgramsForTxBatch,
+        is_first_round: bool,
     ) -> Option<(Pubkey, u64)> {
         debug_assert!(self.fork_graph.is_some());
         let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
@@ -913,15 +917,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         search_for.retain(|(key, (match_criteria, usage_count))| {
             if let Some(second_level) = self.entries.get_mut(key) {
                 for entry in second_level.slot_versions.iter().rev() {
-                    let is_ancestor = matches!(
-                        locked_fork_graph
-                            .relationship(entry.deployment_slot, loaded_programs_for_tx_batch.slot),
-                        BlockRelation::Ancestor
-                    );
-
                     if entry.deployment_slot <= self.latest_root_slot
-                        || entry.deployment_slot == loaded_programs_for_tx_batch.slot
-                        || is_ancestor
+                        || matches!(
+                            locked_fork_graph.relationship(
+                                entry.deployment_slot,
+                                loaded_programs_for_tx_batch.slot
+                            ),
+                            BlockRelation::Equal | BlockRelation::Ancestor
+                        )
                     {
                         let entry_to_return = if loaded_programs_for_tx_batch.slot
                             >= entry.effective_slot
@@ -980,13 +983,15 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             true
         });
         drop(locked_fork_graph);
-        self.stats
-            .misses
-            .fetch_add(search_for.len() as u64, Ordering::Relaxed);
-        self.stats.hits.fetch_add(
-            loaded_programs_for_tx_batch.entries.len() as u64,
-            Ordering::Relaxed,
-        );
+        if is_first_round {
+            self.stats
+                .misses
+                .fetch_add(search_for.len() as u64, Ordering::Relaxed);
+            self.stats.hits.fetch_add(
+                loaded_programs_for_tx_batch.entries.len() as u64,
+                Ordering::Relaxed,
+            );
+        }
         cooperative_loading_task
     }
 
@@ -1003,6 +1008,20 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             Some((slot, std::thread::current().id()))
         );
         second_level.cooperative_loading_lock = None;
+        // Check that it will be visible to our own fork once inserted
+        if loaded_program.deployment_slot > self.latest_root_slot
+            && !matches!(
+                self.fork_graph
+                    .as_ref()
+                    .unwrap()
+                    .read()
+                    .unwrap()
+                    .relationship(loaded_program.deployment_slot, slot),
+                BlockRelation::Equal | BlockRelation::Ancestor
+            )
+        {
+            self.stats.lost_insertions.fetch_add(1, Ordering::Relaxed);
+        }
         self.assign_program(key, loaded_program);
         self.loading_task_waiter.notify();
     }
@@ -2080,7 +2099,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 4)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(22, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 20, 22));
         assert!(match_slot(&extracted, &program4, 0, 22));
@@ -2096,7 +2115,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(15, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 15));
         assert!(match_slot(&extracted, &program2, 11, 15));
@@ -2119,7 +2138,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(18, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 18));
         assert!(match_slot(&extracted, &program2, 11, 18));
@@ -2137,7 +2156,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(23, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 23));
         assert!(match_slot(&extracted, &program2, 11, 23));
@@ -2155,7 +2174,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(11, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 11));
         // program2 was updated at slot 11, but is not effective till slot 12. The result should contain a tombstone.
@@ -2189,7 +2208,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(19, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 19));
         assert!(match_slot(&extracted, &program2, 11, 19));
@@ -2207,7 +2226,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(21, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 21));
         assert!(match_slot(&extracted, &program2, 11, 21));
@@ -2245,7 +2264,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(21, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         // Since the fork was pruned, we should not find the entry deployed at slot 20.
         assert!(match_slot(&extracted, &program1, 0, 21));
@@ -2262,7 +2281,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(27, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 27));
         assert!(match_slot(&extracted, &program2, 11, 27));
@@ -2294,7 +2313,7 @@ mod tests {
             (program4, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(23, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 23));
         assert!(match_slot(&extracted, &program2, 11, 23));
@@ -2349,7 +2368,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(12, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 12));
         assert!(match_slot(&extracted, &program2, 11, 12));
@@ -2369,7 +2388,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(12, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program2, 11, 12));
 
@@ -2439,7 +2458,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(19, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 19));
         assert!(match_slot(&extracted, &program2, 11, 19));
@@ -2453,7 +2472,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(27, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 27));
         assert!(match_slot(&extracted, &program2, 11, 27));
@@ -2467,7 +2486,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(22, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 20, 22));
 
@@ -2532,7 +2551,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(12, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         // Program1 deployed at slot 11 should not be expired yet
         assert!(match_slot(&extracted, &program1, 11, 12));
@@ -2548,7 +2567,7 @@ mod tests {
             (program3, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(15, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program2, 11, 15));
 
@@ -2614,7 +2633,7 @@ mod tests {
 
         let mut missing = vec![(program1, (LoadedProgramMatchCriteria::NoCriteria, 1))];
         let mut extracted = LoadedProgramsForTxBatch::new(20, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         // The cache should have the program deployed at slot 0
         assert_eq!(
@@ -2658,7 +2677,7 @@ mod tests {
             (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(20, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 20));
         assert!(match_slot(&extracted, &program2, 10, 20));
@@ -2668,7 +2687,7 @@ mod tests {
             (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(6, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 5, 6));
         assert!(match_missing(&missing, &program2, false));
@@ -2682,7 +2701,7 @@ mod tests {
             (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(20, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 20));
         assert!(match_slot(&extracted, &program2, 10, 20));
@@ -2692,7 +2711,7 @@ mod tests {
             (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(6, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 6));
         assert!(match_missing(&missing, &program2, false));
@@ -2706,7 +2725,7 @@ mod tests {
             (program2, (LoadedProgramMatchCriteria::NoCriteria, 1)),
         ];
         let mut extracted = LoadedProgramsForTxBatch::new(20, cache.environments.clone());
-        cache.extract(&mut missing, &mut extracted);
+        cache.extract(&mut missing, &mut extracted, true);
 
         assert!(match_slot(&extracted, &program1, 0, 20));
         assert!(match_missing(&missing, &program2, false));

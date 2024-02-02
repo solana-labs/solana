@@ -5032,7 +5032,8 @@ impl Bank {
                 // Lock the global cache.
                 let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
                 // Initialize our local cache.
-                if loaded_programs_for_txs.is_none() {
+                let is_first_round = loaded_programs_for_txs.is_none();
+                if is_first_round {
                     loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
                         self.slot,
                         loaded_programs_cache
@@ -5052,6 +5053,7 @@ impl Bank {
                 let program_to_load = loaded_programs_cache.extract(
                     &mut missing_programs,
                     loaded_programs_for_txs.as_mut().unwrap(),
+                    is_first_round,
                 );
                 let task_waiter = Arc::clone(&loaded_programs_cache.loading_task_waiter);
                 (program_to_load, task_waiter.cookie(), task_waiter)
