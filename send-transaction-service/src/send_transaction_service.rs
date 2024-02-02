@@ -574,8 +574,8 @@ impl SendTransactionService {
         );
 
         let wire_transactions = transactions
-            .iter()
-            .map(|(_, transaction_info)| {
+            .values()
+            .map(|transaction_info| {
                 debug!(
                     "Sending transacation {} to (address, slot): {:?}",
                     transaction_info.signature, addresses,
