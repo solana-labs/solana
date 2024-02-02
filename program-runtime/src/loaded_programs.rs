@@ -25,7 +25,7 @@ use {
         fmt::{Debug, Formatter},
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc, Condvar, Mutex, RwLock,
+            Arc, Condvar, Mutex, RwLock, Weak,
         },
     },
 };
@@ -590,7 +590,7 @@ pub struct LoadedPrograms<FG: ForkGraph> {
     /// Statistics counters
     pub stats: Stats,
     /// Reference to the block store
-    pub fork_graph: Option<Arc<RwLock<FG>>>,
+    pub fork_graph: Weak<RwLock<FG>>,
     /// Coordinates TX batches waiting for others to complete their task during cooperative loading
     pub loading_task_waiter: Arc<LoadingTaskWaiter>,
 }
@@ -689,13 +689,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             upcoming_environments: None,
             programs_to_recompile: Vec::default(),
             stats: Stats::default(),
-            fork_graph: None,
+            fork_graph: Weak::new(),
             loading_task_waiter: Arc::new(LoadingTaskWaiter::default()),
         }
     }
 
     pub fn set_fork_graph(&mut self, fork_graph: Arc<RwLock<FG>>) {
-        self.fork_graph = Some(fork_graph);
+        self.fork_graph = Arc::downgrade(&fork_graph);
     }
 
     /// Returns the current environments depending on the given epoch
@@ -776,7 +776,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     /// Before rerooting the blockstore this removes all superfluous entries
     pub fn prune(&mut self, new_root_slot: Slot, new_root_epoch: Epoch) {
-        let Some(fork_graph) = self.fork_graph.clone() else {
+        let Some(fork_graph) = self.fork_graph.upgrade() else {
             error!("Program cache doesn't have fork graph.");
             return;
         };
@@ -911,8 +911,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         loaded_programs_for_tx_batch: &mut LoadedProgramsForTxBatch,
         is_first_round: bool,
     ) -> Option<(Pubkey, u64)> {
-        debug_assert!(self.fork_graph.is_some());
-        let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
+        debug_assert!(self.fork_graph.upgrade().is_some());
+        let fork_graph = self.fork_graph.upgrade().unwrap();
+        let locked_fork_graph = fork_graph.read().unwrap();
         let mut cooperative_loading_task = None;
         search_for.retain(|(key, (match_criteria, usage_count))| {
             if let Some(second_level) = self.entries.get_mut(key) {
@@ -1012,6 +1013,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         if loaded_program.deployment_slot > self.latest_root_slot
             && !matches!(
                 self.fork_graph
+                    .upgrade()
                     .as_ref()
                     .unwrap()
                     .read()
@@ -1882,7 +1884,7 @@ mod tests {
             relation: BlockRelation::Ancestor,
         }));
 
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         let loaded_program = new_test_loaded_program(10, 10);
@@ -2039,7 +2041,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
@@ -2348,7 +2350,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
@@ -2421,7 +2423,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
@@ -2518,7 +2520,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
@@ -2623,7 +2625,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 10, 20]);
         fork_graph.insert_fork(&[0, 5]);
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
@@ -2663,7 +2665,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 10, 20]);
         fork_graph.insert_fork(&[0, 5, 6]);
         let fork_graph = Arc::new(RwLock::new(fork_graph));
-        cache.set_fork_graph(fork_graph);
+        cache.set_fork_graph(fork_graph.clone());
 
         let program1 = Pubkey::new_unique();
         assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
