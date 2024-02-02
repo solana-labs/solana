@@ -465,10 +465,14 @@ impl HotStorageReader {
         &self,
         mut index_offset: IndexOffset,
     ) -> TieredStorageResult<Vec<StoredAccountMeta>> {
-        let mut accounts = vec![];
+        let mut accounts = Vec::with_capacity(
+            self.footer
+                .account_entry_count
+                .saturating_sub(index_offset.0) as usize,
+        );
         while let Some((account, next)) = self.get_account(index_offset)? {
             accounts.push(account);
-            index_offset = IndexOffset(next as u32);
+            index_offset = next;
         }
         Ok(accounts)
     }
