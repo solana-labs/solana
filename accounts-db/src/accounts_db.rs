@@ -4000,9 +4000,8 @@ impl AccountsDb {
                 |_pubkey, _slot_refs, entry| {
                     // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
                     // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                    if let Some(entry) = entry {
-                        entry.addref();
-                    }
+                    // We also expect that the account index entry must be present in the index.
+                    entry.expect("account index entry must exist").addref();
                     AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
                 None,
