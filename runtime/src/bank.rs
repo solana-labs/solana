@@ -131,10 +131,6 @@ use {
             UPDATED_HASHES_PER_TICK4, UPDATED_HASHES_PER_TICK5, UPDATED_HASHES_PER_TICK6,
         },
         epoch_info::EpochInfo,
-        epoch_rewards_partition_data::{
-            get_epoch_rewards_partition_data_address, EpochRewardsPartitionDataVersion, HasherKind,
-            PartitionData,
-        },
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
@@ -864,7 +860,6 @@ struct PartitionedRewardsCalculation {
     foundation_rate: f64,
     prev_epoch_duration_in_years: f64,
     capitalization: u64,
-    parent_blockhash: Hash,
 }
 
 /// result of calculating the stake rewards at beginning of new epoch
@@ -882,8 +877,6 @@ struct CalculateRewardsAndDistributeVoteRewardsResult {
     distributed_rewards: u64,
     /// stake rewards that still need to be distributed, grouped by partition
     stake_rewards_by_partition: Vec<StakeRewards>,
-    /// blockhash of parent, used to create EpochRewardsHasher
-    parent_blockhash: Hash,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -1591,7 +1584,6 @@ impl Bank {
             total_rewards,
             distributed_rewards,
             stake_rewards_by_partition,
-            parent_blockhash,
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
             reward_calc_tracer,
@@ -1599,19 +1591,15 @@ impl Bank {
             rewards_metrics,
         );
 
-        let num_partitions = stake_rewards_by_partition.len();
-
         let slot = self.slot();
         let credit_start = self.block_height() + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive = credit_start + num_partitions as u64;
+        let credit_end_exclusive = credit_start + stake_rewards_by_partition.len() as u64;
 
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
         self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
-
-        self.create_epoch_rewards_partition_data_account(num_partitions, parent_blockhash);
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -2387,7 +2375,6 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            parent_blockhash,
         }
     }
 
@@ -2408,7 +2395,6 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            parent_blockhash,
         } = self.calculate_rewards_for_partitioning(
             prev_epoch,
             reward_calc_tracer,
@@ -2478,7 +2464,6 @@ impl Bank {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
             stake_rewards_by_partition,
-            parent_blockhash,
         }
     }
 
@@ -3590,41 +3575,6 @@ impl Bank {
         });
 
         self.log_epoch_rewards_sysvar("update");
-    }
-
-    /// Create the persistent PDA containing the epoch-rewards data
-    fn create_epoch_rewards_partition_data_account(
-        &self,
-        num_partitions: usize,
-        parent_blockhash: Hash,
-    ) {
-        let epoch_rewards_partition_data = EpochRewardsPartitionDataVersion::V0(PartitionData {
-            num_partitions,
-            parent_blockhash,
-            hasher_kind: HasherKind::Sip13,
-        });
-        let address = get_epoch_rewards_partition_data_address(self.epoch());
-
-        let data_len = bincode::serialized_size(&epoch_rewards_partition_data).unwrap() as usize;
-        let account_balance = self.get_minimum_balance_for_rent_exemption(data_len);
-        let new_account = AccountSharedData::new_data(
-            account_balance,
-            &epoch_rewards_partition_data,
-            &solana_sdk::stake::program::id(),
-        )
-        .unwrap();
-
-        info!(
-            "create epoch rewards partition data account {} {address} \
-            {epoch_rewards_partition_data:?}",
-            self.slot
-        );
-
-        // Skip storing data account when we are testing partitioned
-        // rewards but feature is not yet active
-        if !self.force_partition_rewards_in_first_block_of_epoch() {
-            self.store_account_and_update_capitalization(&address, &new_account);
-        }
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
