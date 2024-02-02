@@ -3611,7 +3611,7 @@ impl Bank {
         let new_account = AccountSharedData::new_data(
             account_balance,
             &epoch_rewards_partition_data,
-            &solana_sdk::sysvar::id(),
+            &solana_sdk::stake::program::id(),
         )
         .unwrap();
         self.store_account_and_update_capitalization(&address, &new_account);
