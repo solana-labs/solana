@@ -284,17 +284,15 @@ pub fn try_pubkeys_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
-    Ok(matches.try_get_many::<String>(name)?.map(|values| {
-        values
-            .map(|value| {
-                value.parse::<Pubkey>().unwrap_or_else(|_| {
-                    read_keypair_file(value)
-                        .expect("read_keypair_file failed")
-                        .pubkey()
-                })
-            })
-            .collect()
-    }))
+    if let Some(pubkey_strings) = matches.try_get_many::<String>(name)? {
+        let mut pubkeys = Vec::with_capacity(pubkey_strings.len());
+        for pubkey_string in pubkey_strings {
+            pubkeys.push(pubkey_string.parse::<Pubkey>()?);
+        }
+        Ok(Some(pubkeys))
+    } else {
+        Ok(None)
+    }
 }
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
@@ -319,16 +317,20 @@ pub fn try_pubkeys_sigs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
-    Ok(matches.try_get_many::<String>(name)?.map(|values| {
-        values
-            .map(|pubkey_signer_string| {
-                let mut signer = pubkey_signer_string.split('=');
-                let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-                let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-                (key, sig)
-            })
-            .collect()
-    }))
+    if let Some(pubkey_signer_strings) = matches.try_get_many::<String>(name)? {
+        let mut pubkey_sig_pairs = Vec::with_capacity(pubkey_signer_strings.len());
+        for pubkey_signer_string in pubkey_signer_strings {
+            let (pubkey_string, sig_string) = pubkey_signer_string
+                .split_once('=')
+                .ok_or("failed to parse `pubkey=signature` pair")?;
+            let pubkey = Pubkey::from_str(pubkey_string)?;
+            let sig = Signature::from_str(sig_string)?;
+            pubkey_sig_pairs.push((pubkey, sig));
+        }
+        Ok(Some(pubkey_sig_pairs))
+    } else {
+        Ok(None)
+    }
 }
 
 // Return a signer from matches at `name`
