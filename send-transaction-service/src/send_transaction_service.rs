@@ -104,6 +104,7 @@ struct ProcessTransactionsResult {
     max_retries_elapsed: u64,
     failed: u64,
     retained: u64,
+    last_sent_time: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -136,10 +137,10 @@ impl Default for Config {
 
 /// The maximum duration the retry thread may be configured to sleep before
 /// processing the transactions that need to be retried.
-pub const MAX_RETRY_SLEEP_MS: u64 = 1000;
+pub const MAX_RETRY_SLEEP_MS: u64 = 1_000;
 
 /// The leader info refresh rate.
-pub const LEADER_INFO_REFRESH_RATE_MS: u64 = 1000;
+pub const LEADER_INFO_REFRESH_RATE_MS: u64 = 1_000;
 
 /// A struct responsible for holding up-to-date leader information
 /// used for sending transactions.
@@ -528,19 +529,21 @@ impl SendTransactionService {
             "Starting send-transaction-service::retry_thread with config {:?}",
             config
         );
+
+        let retry_interval_ms_default = MAX_RETRY_SLEEP_MS.min(config.retry_rate_ms);
+        let mut retry_interval_ms = retry_interval_ms_default;
         Builder::new()
             .name("solStxRetry".to_string())
             .spawn(move || loop {
-                let retry_interval_ms = config.retry_rate_ms;
-                let stats = &stats_report.stats;
-                sleep(Duration::from_millis(
-                    MAX_RETRY_SLEEP_MS.min(retry_interval_ms),
-                ));
+                sleep(Duration::from_millis(retry_interval_ms));
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 let mut transactions = retry_transactions.lock().unwrap();
-                if !transactions.is_empty() {
+                if transactions.is_empty() {
+                    retry_interval_ms = retry_interval_ms_default;
+                } else {
+                    let stats = &stats_report.stats;
                     stats
                         .retry_queue_size
                         .store(transactions.len() as u64, Ordering::Relaxed);
@@ -549,7 +552,7 @@ impl SendTransactionService {
                         (bank_forks.root_bank(), bank_forks.working_bank())
                     };
 
-                    let _result = Self::process_transactions(
+                    let result = Self::process_transactions(
                         &working_bank,
                         &root_bank,
                         &tpu_address,
@@ -560,6 +563,13 @@ impl SendTransactionService {
                         stats,
                     );
                     stats_report.report();
+
+                    retry_interval_ms = retry_interval_ms_default
+                        - result
+                            .last_sent_time
+                            .and_then(|last| Instant::now().checked_duration_since(last))
+                            .and_then(|interval| interval.as_millis().try_into().ok())
+                            .unwrap_or(0);
                 }
             })
             .unwrap()
@@ -677,6 +687,13 @@ impl SendTransactionService {
                                 exceeded_retries_transactions.push(*signature);
                             }
                         }
+                    } else if let Some(last) = transaction_info.last_sent_time {
+                        result.last_sent_time = Some(
+                            result
+                                .last_sent_time
+                                .map(|result_last| result_last.max(last))
+                                .unwrap_or(last),
+                        );
                     }
                     true
                 }
