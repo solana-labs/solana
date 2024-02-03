@@ -167,7 +167,8 @@ where
             let now = Instant::now();
             let need_refresh = self
                 .last_leader_refresh
-                .map(|last| now.duration_since(last) >= self.refresh_rate)
+                .and_then(|last| now.checked_duration_since(last))
+                .map(|elapsed| elapsed >= self.refresh_rate)
                 .unwrap_or(true);
 
             if need_refresh {
@@ -630,7 +631,8 @@ impl SendTransactionService {
                 let now = Instant::now();
                 let expired = transaction_info
                     .last_sent_time
-                    .map(|last| now.duration_since(last) >= retry_rate)
+                    .and_then(|last| now.checked_duration_since(last))
+                    .map(|elapsed| elapsed >= retry_rate)
                     .unwrap_or(false);
                 let verify_nonce_account =
                     nonce_account::verify_nonce_account(&nonce_account, &durable_nonce);
@@ -653,7 +655,8 @@ impl SendTransactionService {
                     let now = Instant::now();
                     let need_send = transaction_info
                         .last_sent_time
-                        .map(|last| now.duration_since(last) >= retry_rate)
+                        .and_then(|last| now.checked_duration_since(last))
+                        .map(|elapsed| elapsed >= retry_rate)
                         .unwrap_or(true);
                     if need_send {
                         if transaction_info.last_sent_time.is_some() {
