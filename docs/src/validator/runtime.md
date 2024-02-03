@@ -1,6 +1,8 @@
 ---
-title: Runtime
+title: Solana Runtime on a Solana Validator
 sidebar_position: 6
+sidebar_label: Runtime
+pagination_label: Validator Runtime
 ---
 
 The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.

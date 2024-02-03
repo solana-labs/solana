@@ -62,7 +62,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/wallet-guide/file-system-wallet", "destination": "/cli/wallets/file-system" },
     { "source": "/wallet-guide/hardware-wallet", "destination": "/cli/wallets/hardware-wallet" },
     { "source": "/wallet-guide/hardware-wallet/ledger", "destination": "/cli/wallets/hardware-wallet/ledger" },
-    { "source": "/cluster/overview", "destination": "/clusters/index" },
+    { "source": "/cluster/overview", "destination": "/clusters" },
     { "source": "/cluster/bench-tps", "destination": "/clusters/benchmark" },
     { "source": "/cluster/performance-metrics", "destination": "/clusters/metrics" },
     { "source": "/running-validator", "destination": "/operations" },

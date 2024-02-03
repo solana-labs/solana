@@ -1,4 +1,10 @@
-## Restarting a cluster
+---
+title: "Restarting a Solana Cluster"
+# really high number to ensure it is listed last in the sidebar
+sidebar_position: 999
+sidebar_label: Restart a Cluster
+pagination_label: "Validator Guides: Restart a Cluster"
+---
 
 ### Step 1. Identify the latest optimistically confirmed slot for the cluster
 

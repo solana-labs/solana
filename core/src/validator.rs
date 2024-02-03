@@ -35,6 +35,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        utils::{move_and_async_delete_path, move_and_async_delete_path_contents},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
@@ -100,9 +101,7 @@ use {
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-        },
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
     },
     solana_sdk::{
         clock::Slot,
@@ -623,7 +622,7 @@ impl Validator {
         ];
         for old_accounts_hash_cache_dir in old_accounts_hash_cache_dirs {
             if old_accounts_hash_cache_dir.exists() {
-                snapshot_utils::move_and_async_delete_path(old_accounts_hash_cache_dir);
+                move_and_async_delete_path(old_accounts_hash_cache_dir);
             }
         }
 
