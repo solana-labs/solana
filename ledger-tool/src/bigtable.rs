@@ -19,11 +19,14 @@ use {
         display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
         OutputFormat,
     },
+    solana_entry::entry::Entry,
     solana_ledger::{
-        bigtable_upload::ConfirmedBlockUploadConfig, blockstore::Blockstore,
+        bigtable_upload::ConfirmedBlockUploadConfig,
+        blockstore::Blockstore,
         blockstore_options::AccessType,
+        shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, signer::keypair::Keypair},
     solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, EncodeError, EncodedConfirmedBlock,
@@ -175,6 +178,63 @@ async fn entries(
         slot,
     };
     println!("{}", output_format.formatted_string(&cli_entries));
+    Ok(())
+}
+
+async fn shreds(
+    blockstore: Arc<Blockstore>,
+    starting_slot: Slot,
+    ending_slot: Slot,
+    config: solana_storage_bigtable::LedgerStorageConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
+        .await
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
+
+    // Make the range inclusive of both starting and ending slot
+    let limit = (ending_slot - starting_slot + 1) as usize;
+    let mut slots = bigtable.get_confirmed_blocks(starting_slot, limit).await?;
+    slots.retain(|&slot| slot <= ending_slot);
+
+    let keypair = Keypair::from_bytes(&[0; 64]).unwrap();
+    // TODO: parse this / allow command line flag ?
+    let shred_version = 0;
+
+    for slot in slots.iter() {
+        let block = bigtable.get_confirmed_block(*slot).await?;
+        let entry_summaries = bigtable.get_entries(*slot).await?;
+        let entries: Vec<_> = entry_summaries
+            .map(|entry_summary| {
+                let num_hashes = entry_summary.num_hashes;
+                let hash = entry_summary.hash;
+                let transactions = block.transactions[entry_summary.starting_transaction_index
+                    ..entry_summary.starting_transaction_index
+                        + entry_summary.num_transactions as usize]
+                    .iter()
+                    .map(|tx_with_meta| tx_with_meta.get_transaction())
+                    .collect();
+                Entry {
+                    num_hashes,
+                    hash,
+                    transactions,
+                }
+            })
+            .collect();
+
+        let shredder = Shredder::new(*slot, block.parent_slot, 0, shred_version)?;
+        let (data_shreds, _coding_shreds) = shredder.entries_to_shreds(
+            &keypair,
+            &entries,
+            true,  // last_in_slot
+            None,  // chained_merkle_root
+            0,     // next_shred_index
+            0,     // next_code_index
+            false, // merkle_variant
+            &ReedSolomonCache::default(),
+            &mut ProcessShredsStats::default(),
+        );
+        blockstore.insert_shreds(data_shreds, None, false)?;
+    }
     Ok(())
 }
 
@@ -863,6 +923,31 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("shreds")
+                        .about(
+                            "Get confirmed blocks, shred them and insert the shreds into the \
+                            local Blockstore",
+                        )
+                        .arg(
+                            Arg::with_name("starting_slot")
+                                .long("starting-slot")
+                                .validator(is_slot)
+                                .value_name("SLOT")
+                                .takes_value(true)
+                                .required(true)
+                                .help("Reconstruct starting from this slot (inclusive)"),
+                        )
+                        .arg(
+                            Arg::with_name("ending_slot")
+                                .long("ending-slot")
+                                .validator(is_slot)
+                                .value_name("SLOT")
+                                .takes_value(true)
+                                .required(true)
+                                .help("Reconstruct ending with this slot (inclusive)"),
+                        ),
+                )
+                .subcommand(
                     SubCommand::with_name("confirm")
                         .about("Confirm transaction by signature")
                         .arg(
@@ -1155,6 +1240,23 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
             runtime.block_on(entries(slot, output_format, config))
+        }
+        ("shreds", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let blockstore = Arc::new(crate::open_blockstore(
+                &canonicalize_ledger_path(ledger_path),
+                arg_matches,
+                AccessType::Primary,
+            ));
+
+            let config = solana_storage_bigtable::LedgerStorageConfig {
+                read_only: true,
+                instance_name,
+                app_profile_id,
+                ..solana_storage_bigtable::LedgerStorageConfig::default()
+            };
+            runtime.block_on(shreds(blockstore, starting_slot, ending_slot, config))
         }
         ("blocks", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
