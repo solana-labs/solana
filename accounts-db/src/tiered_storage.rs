@@ -49,6 +49,7 @@ pub struct TieredStorageFormat {
 #[derive(Debug)]
 pub struct TieredStorage {
     reader: OnceLock<TieredStorageReader>,
+    read_only: OnceLock<bool>,
     path: PathBuf,
 }
 
@@ -72,6 +73,7 @@ impl TieredStorage {
     pub fn new_writable(path: impl Into<PathBuf>) -> Self {
         Self {
             reader: OnceLock::<TieredStorageReader>::new(),
+            read_only: OnceLock::<bool>::new(),
             path: path.into(),
         }
     }
@@ -80,8 +82,11 @@ impl TieredStorage {
     /// specified path.
     pub fn new_readonly(path: impl Into<PathBuf>) -> TieredStorageResult<Self> {
         let path = path.into();
+        let read_only = OnceLock::new();
+        read_only.set(true).unwrap();
         Ok(Self {
             reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
+            read_only,
             path,
         })
     }
@@ -124,9 +129,7 @@ impl TieredStorage {
             // panic here if self.reader.get() is not None as self.reader can only be
             // None since we have passed `is_read_only()` check previously, indicating
             // self.reader is not yet set.
-            self.reader
-                .set(TieredStorageReader::new_from_path(&self.path)?)
-                .unwrap();
+            self.read_only.set(true).unwrap();
 
             return result;
         }
@@ -137,12 +140,27 @@ impl TieredStorage {
     /// Returns the underlying reader of the TieredStorage.  None will be
     /// returned if it's is_read_only() returns false.
     pub fn reader(&self) -> Option<&TieredStorageReader> {
-        self.reader.get()
+        let result = self.reader.get();
+        if result.is_some() {
+            return result;
+        }
+
+        // In case it is in read-only mode but reader.get() returns None,
+        // it means we need to lazy initialize it.
+        if self.is_read_only() {
+            self.reader
+                .set(TieredStorageReader::new_from_path(&self.path).unwrap())
+                .unwrap();
+            return self.reader.get();
+        }
+
+        // Otherwise, we simply return the result (which is None here).
+        result
     }
 
     /// Returns true if the TieredStorage instance is read-only.
     pub fn is_read_only(&self) -> bool {
-        self.reader.get().is_some()
+        self.read_only.get().is_some()
     }
 
     /// Returns the size of the underlying accounts file.
