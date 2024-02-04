@@ -66,8 +66,24 @@ impl AccountsFile {
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
     pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
-        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
-        Ok((Self::AppendVec(av), num_accounts))
+        match TieredStorage::new_readonly(path.as_ref()) {
+            Ok(tiered_storage) => {
+                // we are doing unwrap here because TieredStorage::new_readonly() is
+                // guaranteed to have a valid reader instance when opening with
+                // new_readonly.
+                let num_accounts = tiered_storage.reader().unwrap().num_accounts();
+                Ok((Self::TieredHot(tiered_storage), num_accounts))
+            },
+            Err(TieredStorageError::MagicNumberMismatch(_, _)) => {
+                // In case of MagicNumberMismatch, we can assume that this is not
+                // a tiered-storage file.
+                let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
+                Ok((Self::AppendVec(av), num_accounts))
+            },
+            Err(e) => {
+                return Err(AccountsFileError::TieredStorageError(e));
+            }
+        }
     }
 
     pub fn flush(&self) -> Result<()> {
