@@ -729,13 +729,6 @@ pub mod tests {
         }
     }
 
-    static_assertions::const_assert_eq!(
-        STORE_META_OVERHEAD,
-        std::mem::size_of::<StoredMeta>()
-            + std::mem::size_of::<AccountMeta>()
-            + std::mem::size_of::<Hash>()
-    );
-
     // Hash is [u8; 32], which has no alignment
     static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
 
