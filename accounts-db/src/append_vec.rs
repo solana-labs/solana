@@ -586,7 +586,11 @@ impl AppendVec {
         let mut offset = self.len();
 
         let len = accounts.accounts.len();
-        let mut offsets = Vec::with_capacity(len);
+        // Here we have `len - skip` number of accounts.  The +1 extra capacity
+        // is for storing the aligned offset of the last entry to that is used
+        // to compute the StoredAccountInfo of the last entry.
+        let offsets_len = len - skip + 1;
+        let mut offsets = Vec::with_capacity(offsets_len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
@@ -629,10 +633,11 @@ impl AppendVec {
         if offsets.is_empty() {
             None
         } else {
+            let mut rv = Vec::with_capacity(offsets.len());
+
             // The last entry in this offset needs to be the u64 aligned offset, because that's
             // where the *next* entry will begin to be stored.
             offsets.push(u64_align!(offset));
-            let mut rv = Vec::with_capacity(len);
             for offsets in offsets.windows(2) {
                 rv.push(StoredAccountInfo {
                     offset: offsets[0],
