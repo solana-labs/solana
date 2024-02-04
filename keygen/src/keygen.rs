@@ -488,7 +488,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let derivation_path = acquire_derivation_path(matches)?;
 
             let mnemonic = Mnemonic::new(mnemonic_type, language);
-            let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
+            let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches)?;
 
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = match derivation_path {
