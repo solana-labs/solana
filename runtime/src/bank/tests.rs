@@ -10987,16 +10987,12 @@ fn test_rent_state_list_len() {
     let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
     let mut error_counters = TransactionErrorMetrics::default();
     let loaded_txs = load_accounts(
-        &bank.accounts().accounts_db,
-        &bank.ancestors,
+        &bank,
         &[sanitized_tx.clone()],
         &[(Ok(()), None, Some(0))],
         &mut error_counters,
-        &bank.rent_collector,
-        &bank.feature_set,
         &FeeStructure::default(),
         None,
-        RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
     );
@@ -13744,10 +13740,10 @@ fn test_filter_executable_program_accounts() {
     );
     let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
-    let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
-    let programs = bank.filter_executable_program_accounts(
-        &ancestors,
+    let transaction_processor = TransactionBatchProcessor::new(&bank);
+    let programs = transaction_processor.filter_executable_program_accounts(
+        &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
         owners,
@@ -13839,11 +13835,11 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
     // Let's not register blockhash from tx2. This should cause the tx2 to fail
     let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
-    let ancestors = vec![(0, 0)].into_iter().collect();
     let owners = &[program1_pubkey, program2_pubkey];
     let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
-    let programs = bank.filter_executable_program_accounts(
-        &ancestors,
+    let transaction_processor = TransactionBatchProcessor::new(&bank);
+    let programs = transaction_processor.filter_executable_program_accounts(
+        &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut lock_results,
         owners,

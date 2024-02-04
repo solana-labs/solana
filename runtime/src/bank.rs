@@ -86,6 +86,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
         },
+        accounts_file::MatchAccountOwnerError,
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
@@ -576,15 +577,14 @@ impl PartialEq for Bank {
             freeze_started: _,
             vote_only_bank: _,
             cost_tracker: _,
-            sysvar_cache: _,
             accounts_data_size_initial: _,
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
-            check_program_modification_slot: _,
             epoch_reward_status: _,
+            transaction_processor: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -824,8 +824,6 @@ pub struct Bank {
 
     cost_tracker: RwLock<CostTracker>,
 
-    sysvar_cache: RwLock<SysvarCache>,
-
     /// The initial accounts data size at the start of this Bank, before processing any transactions/etc
     accounts_data_size_initial: u64,
     /// The change to accounts data size in this Bank, due on-chain events (i.e. transactions)
@@ -844,9 +842,9 @@ pub struct Bank {
 
     pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
 
-    pub check_program_modification_slot: bool,
-
     epoch_reward_status: EpochRewardStatus,
+
+    transaction_processor: TransactionBatchProcessor,
 }
 
 struct VoteWithStakeDelegations {
@@ -1026,7 +1024,6 @@ impl Bank {
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
-            sysvar_cache: RwLock::<SysvarCache>::default(),
             accounts_data_size_initial: 0,
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
@@ -1035,9 +1032,11 @@ impl Bank {
                 Slot::default(),
                 Epoch::default(),
             ))),
-            check_program_modification_slot: false,
             epoch_reward_status: EpochRewardStatus::default(),
+            transaction_processor: TransactionBatchProcessor::default(),
         };
+
+        bank.transaction_processor = TransactionBatchProcessor::new(&bank);
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
@@ -1339,15 +1338,16 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
-            sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_size_initial,
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            check_program_modification_slot: false,
             epoch_reward_status: parent.epoch_reward_status.clone(),
+            transaction_processor: TransactionBatchProcessor::default(),
         };
+
+        new.transaction_processor = TransactionBatchProcessor::new(&new);
 
         let (_, ancestors_time_us) = measure_us!({
             let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -1843,7 +1843,6 @@ impl Bank {
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
-            sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_size_initial,
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
@@ -1852,9 +1851,12 @@ impl Bank {
                 fields.slot,
                 fields.epoch,
             ))),
-            check_program_modification_slot: false,
             epoch_reward_status: fields.epoch_reward_status,
+            transaction_processor: TransactionBatchProcessor::default(),
         };
+
+        bank.transaction_processor = TransactionBatchProcessor::new(&bank);
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -3340,7 +3342,7 @@ impl Bank {
                     let pre_lamport = curr_stake_account.lamports();
                     let post_lamport = post_stake_account.lamports();
                     assert_eq!(pre_lamport + u64::try_from(reward_amount).unwrap(), post_lamport,
-                        "stake account balance has changed since the reward calculation! account: {stake_pubkey}, pre balance: {pre_lamport}, post balance: {post_lamport}, rewards: {reward_amount}");
+                               "stake account balance has changed since the reward calculation! account: {stake_pubkey}, pre balance: {pre_lamport}, post balance: {post_lamport}, rewards: {reward_amount}");
                 }
             }
         }
@@ -4588,18 +4590,24 @@ impl Bank {
         }
         balances
     }
+}
 
-    fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
-        let program = self
-            .get_account_with_fixed_root(pubkey)
+impl TransactionBatchProcessor {
+    fn program_modification_slot<CB: TransactionProcessingCallback>(
+        &self,
+        callbacks: &CB,
+        pubkey: &Pubkey,
+    ) -> Result<Slot> {
+        let program = callbacks
+            .get_account_shared_data(pubkey)
             .ok_or(TransactionError::ProgramAccountNotFound)?;
         if bpf_loader_upgradeable::check_id(program.owner()) {
             if let Ok(UpgradeableLoaderState::Program {
                 programdata_address,
             }) = program.state()
             {
-                let programdata = self
-                    .get_account_with_fixed_root(&programdata_address)
+                let programdata = callbacks
+                    .get_account_shared_data(&programdata_address)
                     .ok_or(TransactionError::ProgramAccountNotFound)?;
                 if let Ok(UpgradeableLoaderState::ProgramData {
                     slot,
@@ -4619,12 +4627,13 @@ impl Bank {
         }
     }
 
-    fn load_program_accounts(
+    fn load_program_accounts<CB: TransactionProcessingCallback>(
         &self,
+        callbacks: &CB,
         pubkey: &Pubkey,
         environments: &ProgramRuntimeEnvironments,
     ) -> ProgramAccountLoadResult {
-        let program_account = match self.get_account_with_fixed_root(pubkey) {
+        let program_account = match callbacks.get_account_shared_data(pubkey) {
             None => return ProgramAccountLoadResult::AccountNotFound,
             Some(account) => account,
         };
@@ -4653,7 +4662,8 @@ impl Bank {
             programdata_address,
         }) = program_account.state()
         {
-            let programdata_account = match self.get_account_with_fixed_root(&programdata_address) {
+            let programdata_account = match callbacks.get_account_shared_data(&programdata_address)
+            {
                 None => return ProgramAccountLoadResult::AccountNotFound,
                 Some(account) => account,
             };
@@ -4710,8 +4720,9 @@ impl Bank {
         }
     }
 
-    pub fn load_program(
+    pub fn load_program<CB: TransactionProcessingCallback>(
         &self,
+        callbacks: &CB,
         pubkey: &Pubkey,
         reload: bool,
         recompile: Option<Arc<LoadedProgram>>,
@@ -4728,100 +4739,107 @@ impl Bank {
             ..LoadProgramMetrics::default()
         };
 
-        let mut loaded_program = match self.load_program_accounts(pubkey, environments) {
-            ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
-                self.slot,
-                LoadedProgramType::Closed,
-            )),
+        let mut loaded_program =
+            match self.load_program_accounts(callbacks, pubkey, environments) {
+                ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
+                    self.slot,
+                    LoadedProgramType::Closed,
+                )),
 
-            ProgramAccountLoadResult::InvalidAccountData(env) => Err((self.slot, env)),
+                ProgramAccountLoadResult::InvalidAccountData(env) => Err((self.slot, env)),
 
-            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
-                Self::load_program_from_bytes(
-                    &mut load_program_metrics,
-                    program_account.data(),
-                    program_account.owner(),
-                    program_account.data().len(),
-                    0,
-                    environments.program_runtime_v1.clone(),
-                    reload,
-                )
-                .map_err(|_| (0, environments.program_runtime_v1.clone()))
-            }
-
-            ProgramAccountLoadResult::ProgramOfLoaderV3(
-                program_account,
-                programdata_account,
-                slot,
-            ) => programdata_account
-                .data()
-                .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
-                .ok_or(Box::new(InstructionError::InvalidAccountData).into())
-                .and_then(|programdata| {
+                ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                     Self::load_program_from_bytes(
                         &mut load_program_metrics,
-                        programdata,
+                        program_account.data(),
                         program_account.owner(),
-                        program_account
-                            .data()
-                            .len()
-                            .saturating_add(programdata_account.data().len()),
-                        slot,
+                        program_account.data().len(),
+                        0,
                         environments.program_runtime_v1.clone(),
                         reload,
                     )
-                })
-                .map_err(|_| (slot, environments.program_runtime_v1.clone())),
+                    .map_err(|_| (0, environments.program_runtime_v1.clone()))
+                }
 
-            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => program_account
-                .data()
-                .get(LoaderV4State::program_data_offset()..)
-                .ok_or(Box::new(InstructionError::InvalidAccountData).into())
-                .and_then(|elf_bytes| {
-                    Self::load_program_from_bytes(
-                        &mut load_program_metrics,
-                        elf_bytes,
-                        &loader_v4::id(),
-                        program_account.data().len(),
-                        slot,
-                        environments.program_runtime_v2.clone(),
-                        reload,
-                    )
-                })
-                .map_err(|_| (slot, environments.program_runtime_v2.clone())),
-        }
-        .unwrap_or_else(|(slot, env)| {
-            LoadedProgram::new_tombstone(slot, LoadedProgramType::FailedVerification(env))
-        });
+                ProgramAccountLoadResult::ProgramOfLoaderV3(
+                    program_account,
+                    programdata_account,
+                    slot,
+                ) => programdata_account
+                    .data()
+                    .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                    .ok_or(Box::new(InstructionError::InvalidAccountData).into())
+                    .and_then(|programdata| {
+                        Self::load_program_from_bytes(
+                            &mut load_program_metrics,
+                            programdata,
+                            program_account.owner(),
+                            program_account
+                                .data()
+                                .len()
+                                .saturating_add(programdata_account.data().len()),
+                            slot,
+                            environments.program_runtime_v1.clone(),
+                            reload,
+                        )
+                    })
+                    .map_err(|_| (slot, environments.program_runtime_v1.clone())),
+
+                ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                    program_account
+                        .data()
+                        .get(LoaderV4State::program_data_offset()..)
+                        .ok_or(Box::new(InstructionError::InvalidAccountData).into())
+                        .and_then(|elf_bytes| {
+                            Self::load_program_from_bytes(
+                                &mut load_program_metrics,
+                                elf_bytes,
+                                &loader_v4::id(),
+                                program_account.data().len(),
+                                slot,
+                                environments.program_runtime_v2.clone(),
+                                reload,
+                            )
+                        })
+                        .map_err(|_| (slot, environments.program_runtime_v2.clone()))
+                }
+            }
+            .unwrap_or_else(|(slot, env)| {
+                LoadedProgram::new_tombstone(slot, LoadedProgramType::FailedVerification(env))
+            });
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
         if let Some(recompile) = recompile {
-            loaded_program.effective_slot = loaded_program.effective_slot.max(
-                self.epoch_schedule()
-                    .get_first_slot_in_epoch(effective_epoch),
-            );
+            loaded_program.effective_slot = loaded_program
+                .effective_slot
+                .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
             loaded_program.tx_usage_counter =
                 AtomicU64::new(recompile.tx_usage_counter.load(Ordering::Relaxed));
             loaded_program.ix_usage_counter =
                 AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
         }
-        loaded_program.update_access_slot(self.slot());
+        loaded_program.update_access_slot(self.slot);
         Arc::new(loaded_program)
     }
+}
 
+impl Bank {
     pub fn clear_program_cache(&self) {
         self.loaded_programs_cache
             .write()
             .unwrap()
             .unload_all_programs();
     }
+}
 
+impl TransactionBatchProcessor {
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     #[allow(clippy::too_many_arguments)]
-    fn execute_loaded_transaction(
+    fn execute_loaded_transaction<CB: TransactionProcessingCallback>(
         &self,
+        callback: &CB,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
         compute_budget: ComputeBudget,
@@ -4853,7 +4871,7 @@ impl Bank {
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
-            self.rent_collector.rent.clone(),
+            callback.get_rent_collector().rent.clone(),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
@@ -4861,7 +4879,7 @@ impl Bank {
         transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info = TransactionAccountStateInfo::new(
-            &self.rent_collector.rent,
+            &callback.get_rent_collector().rent,
             &transaction_context,
             tx.message(),
         );
@@ -4877,7 +4895,8 @@ impl Bank {
             None
         };
 
-        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
+        let (blockhash, lamports_per_signature) =
+            callback.get_last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
@@ -4892,7 +4911,7 @@ impl Bank {
             log_collector.clone(),
             programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            self.feature_set.clone(),
+            callback.get_feature_set(),
             compute_budget,
             timings,
             &self.sysvar_cache.read().unwrap(),
@@ -4910,7 +4929,7 @@ impl Bank {
         let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info = TransactionAccountStateInfo::new(
-                    &self.rent_collector.rent,
+                    &callback.get_rent_collector().rent,
                     &transaction_context,
                     tx.message(),
                 );
@@ -4995,8 +5014,9 @@ impl Bank {
         }
     }
 
-    fn replenish_program_cache(
+    fn replenish_program_cache<CB: TransactionProcessingCallback>(
         &self,
+        callback: &CB,
         program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
     ) -> LoadedProgramsForTxBatch {
         let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
@@ -5007,7 +5027,7 @@ impl Bank {
                         (
                             *pubkey,
                             (
-                                self.program_modification_slot(pubkey)
+                                self.program_modification_slot(callback, pubkey)
                                     .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
                                         LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
                                     }),
@@ -5043,11 +5063,7 @@ impl Bank {
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
-                    loaded_programs_cache.finish_cooperative_loading_task(
-                        self.slot(),
-                        key,
-                        program,
-                    );
+                    loaded_programs_cache.finish_cooperative_loading_task(self.slot, key, program);
                 }
                 // Figure out which program needs to be loaded next.
                 let program_to_load = loaded_programs_cache.extract(
@@ -5062,7 +5078,7 @@ impl Bank {
 
             if let Some((key, count)) = program_to_load {
                 // Load, verify and compile one program.
-                let program = self.load_program(&key, false, None);
+                let program = self.load_program(callback, &key, false, None);
                 program.tx_usage_counter.store(count, Ordering::Relaxed);
                 program_to_store = Some((key, program));
             } else if missing_programs.is_empty() {
@@ -5081,9 +5097,9 @@ impl Bank {
     /// Returns a hash map of executable program accounts (program accounts that are not writable
     /// in the given transactions), and their owners, for the transactions with a valid
     /// blockhash or nonce.
-    fn filter_executable_program_accounts<'a>(
+    fn filter_executable_program_accounts<'a, CB: TransactionProcessingCallback>(
         &self,
-        ancestors: &Ancestors,
+        callbacks: &CB,
         txs: &[SanitizedTransaction],
         lock_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
@@ -5101,11 +5117,8 @@ impl Bank {
                                 saturating_add_assign!(*count, 1);
                             }
                             Entry::Vacant(entry) => {
-                                if let Ok(index) = self
-                                    .rc
-                                    .accounts
-                                    .accounts_db
-                                    .account_matches_owners(ancestors, key, program_owners)
+                                if let Ok(index) =
+                                    callbacks.account_matches_owners(key, program_owners)
                                 {
                                     program_owners
                                         .get(index)
@@ -5123,7 +5136,9 @@ impl Bank {
         });
         result
     }
+}
 
+impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -5187,17 +5202,21 @@ impl Bank {
         debug!("check: {}us", check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
 
-        let sanitized_output = self.load_and_execute_sanitized_transactions(
-            sanitized_txs,
-            &mut check_results,
-            &mut error_counters,
-            enable_cpi_recording,
-            enable_log_recording,
-            enable_return_data_recording,
-            timings,
-            account_overrides,
-            log_messages_bytes_limit,
-        );
+        let sanitized_output = self
+            .transaction_processor
+            .load_and_execute_sanitized_transactions(
+                self,
+                sanitized_txs,
+                &mut check_results,
+                &mut error_counters,
+                enable_cpi_recording,
+                enable_log_recording,
+                enable_return_data_recording,
+                timings,
+                account_overrides,
+                self.builtin_programs.iter(),
+                log_messages_bytes_limit,
+            );
 
         let mut signature_count = 0;
 
@@ -5325,10 +5344,13 @@ impl Bank {
             error_counters,
         }
     }
+}
 
+impl TransactionBatchProcessor {
     #[allow(clippy::too_many_arguments)]
-    fn load_and_execute_sanitized_transactions(
+    fn load_and_execute_sanitized_transactions<'a, CB: TransactionProcessingCallback>(
         &self,
+        callbacks: &CB,
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
         error_counters: &mut TransactionErrorMetrics,
@@ -5337,35 +5359,32 @@ impl Bank {
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
+        builtin_programs: impl Iterator<Item = &'a Pubkey>,
         log_messages_bytes_limit: Option<usize>,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = self.filter_executable_program_accounts(
-            &self.ancestors,
+            callbacks,
             sanitized_txs,
             check_results,
             PROGRAM_OWNERS,
         );
         let native_loader = native_loader::id();
-        for builtin_program in self.builtin_programs.iter() {
+        for builtin_program in builtin_programs {
             program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
-            self.replenish_program_cache(&program_accounts_map),
+            self.replenish_program_cache(callbacks, &program_accounts_map),
         ));
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
-            &self.rc.accounts.accounts_db,
-            &self.ancestors,
+            callbacks,
             sanitized_txs,
             check_results,
             error_counters,
-            &self.rent_collector,
-            &self.feature_set,
             &self.fee_structure,
             account_overrides,
-            self.get_reward_interval(),
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
         );
@@ -5402,6 +5421,7 @@ impl Bank {
                         };
 
                     let result = self.execute_loaded_transaction(
+                        callbacks,
                         tx,
                         loaded_transaction,
                         compute_budget,
@@ -5442,7 +5462,7 @@ impl Bank {
             .unwrap()
             .evict_using_2s_random_selection(
                 Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
-                self.slot(),
+                self.slot,
             );
 
         debug!(
@@ -5460,7 +5480,9 @@ impl Bank {
             execution_results,
         }
     }
+}
 
+impl Bank {
     /// Load the accounts data size, in bytes
     pub fn load_accounts_data_size(&self) -> u64 {
         self.accounts_data_size_initial
@@ -8190,13 +8212,163 @@ impl Bank {
 
     pub fn is_in_slot_hashes_history(&self, slot: &Slot) -> bool {
         if slot < &self.slot {
-            if let Ok(sysvar_cache) = self.sysvar_cache.read() {
+            if let Ok(sysvar_cache) = self.transaction_processor.sysvar_cache.read() {
                 if let Ok(slot_hashes) = sysvar_cache.get_slot_hashes() {
                     return slot_hashes.get(slot).is_some();
                 }
             }
         }
         false
+    }
+
+    pub fn check_program_modification_slot(&mut self) {
+        self.transaction_processor.check_program_modification_slot = true;
+    }
+
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        reload: bool,
+        recompile: Option<Arc<LoadedProgram>>,
+    ) -> Arc<LoadedProgram> {
+        self.transaction_processor
+            .load_program(self, pubkey, reload, recompile)
+    }
+}
+
+pub trait TransactionProcessingCallback {
+    fn account_matches_owners(
+        &self,
+        account: &Pubkey,
+        owners: &[Pubkey],
+    ) -> std::result::Result<usize, MatchAccountOwnerError>;
+
+    fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData>;
+
+    fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64);
+
+    fn get_rent_collector(&self) -> &RentCollector;
+
+    fn get_feature_set(&self) -> Arc<FeatureSet>;
+
+    fn check_account_access(
+        &self,
+        _tx: &SanitizedTransaction,
+        _account_index: usize,
+        _account: &AccountSharedData,
+        _error_counters: &mut TransactionErrorMetrics,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl TransactionProcessingCallback for Bank {
+    fn account_matches_owners(
+        &self,
+        account: &Pubkey,
+        owners: &[Pubkey],
+    ) -> std::result::Result<usize, MatchAccountOwnerError> {
+        self.rc
+            .accounts
+            .accounts_db
+            .account_matches_owners(&self.ancestors, account, owners)
+    }
+
+    fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
+        self.rc
+            .accounts
+            .accounts_db
+            .load_with_fixed_root(&self.ancestors, pubkey)
+            .map(|(acc, _)| acc)
+    }
+
+    fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
+        self.last_blockhash_and_lamports_per_signature()
+    }
+
+    fn get_rent_collector(&self) -> &RentCollector {
+        &self.rent_collector
+    }
+
+    fn get_feature_set(&self) -> Arc<FeatureSet> {
+        self.feature_set.clone()
+    }
+
+    fn check_account_access(
+        &self,
+        tx: &SanitizedTransaction,
+        account_index: usize,
+        account: &AccountSharedData,
+        error_counters: &mut TransactionErrorMetrics,
+    ) -> Result<()> {
+        if self.get_reward_interval() == RewardInterval::InsideInterval
+            && tx.message().is_writable(account_index)
+            && solana_stake_program::check_id(account.owner())
+        {
+            error_counters.program_execution_temporarily_restricted += 1;
+            Err(TransactionError::ProgramExecutionTemporarilyRestricted {
+                account_index: account_index as u8,
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[derive(AbiExample, Debug)]
+struct TransactionBatchProcessor {
+    /// Bank slot (i.e. block)
+    slot: Slot,
+
+    /// Bank epoch
+    epoch: Epoch,
+
+    /// initialized from genesis
+    epoch_schedule: EpochSchedule,
+
+    /// Transaction fee structure
+    fee_structure: FeeStructure,
+
+    pub check_program_modification_slot: bool,
+
+    /// Optional config parameters that can override runtime behavior
+    runtime_config: Arc<RuntimeConfig>,
+
+    sysvar_cache: RwLock<SysvarCache>,
+
+    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
+}
+
+impl Default for TransactionBatchProcessor {
+    fn default() -> Self {
+        Self {
+            slot: Slot::default(),
+            epoch: Epoch::default(),
+            epoch_schedule: EpochSchedule::default(),
+            fee_structure: FeeStructure::default(),
+            check_program_modification_slot: false,
+            runtime_config: Arc::<RuntimeConfig>::default(),
+            sysvar_cache: RwLock::<SysvarCache>::default(),
+            loaded_programs_cache: Arc::new(RwLock::new(LoadedPrograms::new(
+                Slot::default(),
+                Epoch::default(),
+            ))),
+        }
+    }
+}
+
+impl TransactionBatchProcessor {
+    fn new(bank: &Bank) -> Self {
+        Self {
+            slot: bank.slot(),
+            epoch: bank.epoch(),
+            epoch_schedule: bank.epoch_schedule.clone(),
+            fee_structure: bank.fee_structure.clone(),
+            check_program_modification_slot: false,
+            runtime_config: bank.runtime_config.clone(),
+            sysvar_cache: RwLock::<SysvarCache>::default(),
+            loaded_programs_cache: bank.loaded_programs_cache.clone(),
+        }
     }
 }
 
