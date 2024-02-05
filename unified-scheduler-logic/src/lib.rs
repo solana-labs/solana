@@ -486,24 +486,24 @@ impl SchedulingStateMachine {
         for unlock_attempt in task.lock_attempts(&self.lock_attempt_token) {
             let page = unlock_attempt.page_mut(&mut self.page_token);
 
-            let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
+            let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
-            while let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
-                let new_count = uncontended_task
+            while let Some((unblocked_task, requested_usage)) = heaviest_unblocked {
+                let new_count = unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                     .decrement_self()
                     .current();
                 if new_count == 0 {
                     self.unblocked_task_queue
-                        .push_back(uncontended_task.clone());
+                        .push_back(unblocked_task.clone());
                 }
-                let (unique_weight, requested_usage) = (uncontended_task.unique_weight, *requested_usage);
+                let (unique_weight, requested_usage) = (unblocked_task.unique_weight, *requested_usage);
                 page.pop_blocked_task(unique_weight);
                 match Self::attempt_lock_address(page, requested_usage) {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
-                        heaviest_uncontended_now = if matches!(usage, Usage::Readonly(_)) {
+                        heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
                             page.heaviest_blocked_task()
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
