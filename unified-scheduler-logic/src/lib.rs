@@ -488,13 +488,11 @@ impl SchedulingStateMachine {
 
             while let Some(mut heaviest_uncontended_now) = heaviest_uncontended_now {
                 let (uncontended_task, requested_usage) = heaviest_uncontended_now;
-                //if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
-                //}
-                /*
                     let new_count = uncontended_task
                         .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                         .decrement_self()
                         .current();
+                /*
                     if new_count == 0 {
                         self.unblocked_task_queue
                             .push_back(uncontended_task.clone());
