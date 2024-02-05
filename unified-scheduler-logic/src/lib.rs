@@ -484,8 +484,8 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             //let mut should_continue = true;
 
-            let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
-            while /*should_continue && */ let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
+            while /*should_continue && */ let Some(mut heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
+                let (uncontended_task, requested_usage) = heaviest_uncontended_now;
                 //if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
                 //}
                     let new_count = uncontended_task
@@ -498,13 +498,14 @@ impl SchedulingStateMachine {
                     }
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
+                    drop((uncontended_task, heaviest_uncontended_now));
                     page.pop_blocked_task(uw);
                     match Self::attempt_lock_address(page, ru) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
                             page.usage = usage;
                             if matches!(usage, Usage::Readonly(_)) {
-                                heaviest_uncontended_now = page.heaviest_blocked_task();
+                                heaviest_uncontended_now = page.heaviest_blocked_task().unwrap();
                                 /*
                                 if !matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
                                     //should_continue = false;
