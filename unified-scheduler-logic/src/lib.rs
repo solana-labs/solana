@@ -480,7 +480,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        for unlock_attempt in task.lock_attempts(&self.task_token) {
+        for unlock_attempt in task.lock_attempts(&self.lock_attempt_token) {
             let is_unused_now = Self::unlock(&mut self.page_token, unlock_attempt);
             if !is_unused_now {
                 continue;
