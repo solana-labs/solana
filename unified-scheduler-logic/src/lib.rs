@@ -489,11 +489,10 @@ impl SchedulingStateMachine {
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
             while let Some((unblocked_task, requested_usage)) = heaviest_unblocked {
-                let new_count = unblocked_task
+                if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                     .decrement_self()
-                    .current();
-                if new_count == 0 {
+                    .is_zero() {
                     self.unblocked_task_queue
                         .push_back(unblocked_task.clone());
                 }
