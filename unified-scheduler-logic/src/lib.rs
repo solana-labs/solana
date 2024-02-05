@@ -115,6 +115,10 @@ mod cell {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
+
+        fn borrow_partially(&V, &F) -> &F {
+            panic!();
+        }
     }
 }
 
