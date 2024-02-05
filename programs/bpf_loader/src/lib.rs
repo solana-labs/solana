@@ -1787,6 +1787,7 @@ mod tests {
             },
             account_utils::StateMut,
             clock::Clock,
+            feature_set::FeatureSet,
             instruction::{AccountMeta, InstructionError},
             pubkey::Pubkey,
             rent::Rent,
@@ -1825,6 +1826,9 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                invoke_context.feature_set = Arc::new(features);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
@@ -2044,6 +2048,9 @@ mod tests {
             Err(InstructionError::ProgramFailedToComplete),
             Entrypoint::vm,
             |invoke_context| {
+                let mut features = FeatureSet::all_enabled();
+                features.deactivate(&disable_bpf_loader_instructions::id());
+                invoke_context.feature_set = Arc::new(features);
                 invoke_context.mock_set_remaining(0);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
@@ -2589,7 +2596,11 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 Entrypoint::vm,
-                |_invoke_context| {},
+                |invoke_context| {
+                    let mut features = FeatureSet::all_enabled();
+                    features.deactivate(&disable_bpf_loader_instructions::id());
+                    invoke_context.feature_set = Arc::new(features);
+                },
                 |_invoke_context| {},
             )
         }
