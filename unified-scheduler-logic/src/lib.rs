@@ -415,7 +415,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn try_lock_for_task<R>(
+    fn try_lock_for_task(
         &mut self,
         task: Task,
     ) -> Option<Task> {
