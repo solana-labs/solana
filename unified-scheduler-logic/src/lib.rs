@@ -492,11 +492,11 @@ impl SchedulingStateMachine {
                         .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                         .decrement_self()
                         .current();
-                /*
                     if new_count == 0 {
                         self.unblocked_task_queue
                             .push_back(uncontended_task.clone());
                     }
+                /*
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
                     drop((uncontended_task, heaviest_uncontended_now));
