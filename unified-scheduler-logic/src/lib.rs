@@ -486,33 +486,33 @@ impl SchedulingStateMachine {
             let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
 
             while let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
-                    let new_count = uncontended_task
-                        .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
-                        .decrement_self()
-                        .current();
-                    if new_count == 0 {
-                        self.unblocked_task_queue
-                            .push_back(uncontended_task.clone());
-                    }
-                    let uw = uncontended_task.unique_weight;
-                    let ru = *requested_usage;
-                    page.pop_blocked_task(uw);
-                    match Self::attempt_lock_address(page, ru) {
-                        LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
-                        LockStatus::Succeded(usage) => {
-                            page.usage = usage;
-                            heaviest_uncontended_now = 
-                            if matches!(usage, Usage::Readonly(_)) {
-                                page
-                                    .heaviest_blocked_task()
-                                    .filter(|t| {
-                                        matches!(t, (_, RequestedUsage::Readonly))
-                                    })
-                            } else {
-                                None
-                            }
+                let new_count = uncontended_task
+                    .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
+                    .decrement_self()
+                    .current();
+                if new_count == 0 {
+                    self.unblocked_task_queue
+                        .push_back(uncontended_task.clone());
+                }
+                let uw = uncontended_task.unique_weight;
+                let ru = *requested_usage;
+                page.pop_blocked_task(uw);
+                match Self::attempt_lock_address(page, ru) {
+                    LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
+                    LockStatus::Succeded(usage) => {
+                        page.usage = usage;
+                        heaviest_uncontended_now = 
+                        if matches!(usage, Usage::Readonly(_)) {
+                            page
+                                .heaviest_blocked_task()
+                                .filter(|t| {
+                                    matches!(t, (_, RequestedUsage::Readonly))
+                                })
+                        } else {
+                            None
                         }
                     }
+                }
             }
         }
     }
