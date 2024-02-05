@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{ShortCounter, Token, TokenCell, TokenTrait},
+    crate::utils::{ShortCounter, Token, TokenCell, PartialBorrow},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -72,14 +72,14 @@ mod utils {
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
-            Token<V, F>: TokenTrait<V, F>,
+            Token<V, F>: PartialBorrow<V, F>,
         {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
 
         pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t F
         where
-            Token<V, F>: TokenTrait<V, F>,
+            Token<V, F>: PartialBorrow<V, F>,
         {
             Token::partial_borrow(unsafe { &*self.0.get() })
         }
@@ -91,7 +91,7 @@ mod utils {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
-    pub trait TokenTrait<V, F> {
+    pub trait PartialBorrow<V, F> {
         fn partial_borrow(v: &V) -> &F;
 
         fn partial_borrow_mut(v: &mut V) -> &mut F;
@@ -104,7 +104,7 @@ mod utils {
     }
 
     // generic identity conversion impl
-    impl<T> TokenTrait<T, T> for Token<T, T> {
+    impl<T> PartialBorrow<T, T> for Token<T, T> {
         fn partial_borrow(t: &T) -> &T {
             t
         }
@@ -133,7 +133,7 @@ struct TaskStatus {
     blocked_lock_count: ShortCounter,
 }
 
-impl TokenTrait<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
+impl PartialBorrow<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
     fn partial_borrow(v: &TaskStatus) -> &ShortCounter {
         &v.blocked_lock_count
     }
@@ -143,7 +143,7 @@ impl TokenTrait<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
     }
 }
 
-impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
+impl PartialBorrow<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
     fn partial_borrow(v: &TaskStatus) -> &Vec<LockAttempt> {
         &v.lock_attempts
     }
