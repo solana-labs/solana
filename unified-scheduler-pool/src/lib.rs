@@ -1033,6 +1033,16 @@ where
                                 }
                                 "step"
                             },
+                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> dummy_result => {
+                                assert_matches!(dummy_result, Err(RecvError));
+
+                                state_machine.schedule_retryable_task(|task| {
+                                    blocked_task_sender
+                                        .send_payload(task.clone())
+                                        .unwrap();
+                                });
+                                "step"
+                            },
                             recv(new_task_receiver) -> message => {
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
@@ -1069,16 +1079,6 @@ where
                                         "T:suspending"
                                     }
                                 }
-                            },
-                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> dummy_result => {
-                                assert_matches!(dummy_result, Err(RecvError));
-
-                                state_machine.schedule_retryable_task(|task| {
-                                    blocked_task_sender
-                                        .send_payload(task.clone())
-                                        .unwrap();
-                                });
-                                "step"
                             },
                             recv(finished_idle_task_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
