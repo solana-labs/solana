@@ -495,7 +495,7 @@ impl SchedulingStateMachine {
                 let mut should_continue = false;
                 if let Some(&(ref uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task
-                        .blocked_lock_count_mut()
+                        .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                         .decrement_self()
                         .current();
                     if new_count == 0 {
