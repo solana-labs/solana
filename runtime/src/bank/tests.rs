@@ -6497,33 +6497,7 @@ fn test_bank_hash_consistency(set_rent_epoch_max: bool) {
     assert_eq!(bank.get_slots_in_epoch(0), 32);
     loop {
         goto_end_of_slot(bank.clone());
-        if set_rent_epoch_max {
-            if bank.slot == 0 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
-                );
-            }
-            if bank.slot == 32 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
-                );
-            }
-            if bank.slot == 64 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
-                );
-            }
-            if bank.slot == 128 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
-                );
-                break;
-            }
-        } else {
+        if !set_rent_epoch_max {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
@@ -6546,6 +6520,32 @@ fn test_bank_hash_consistency(set_rent_epoch_max: bool) {
                 assert_eq!(
                     bank.hash().to_string(),
                     "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
+                );
+                break;
+            }
+        } else {
+            if bank.slot == 0 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
+                );
+            }
+            if bank.slot == 32 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
+                );
+            }
+            if bank.slot == 64 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
+                );
+            }
+            if bank.slot == 128 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
                 );
                 break;
             }
