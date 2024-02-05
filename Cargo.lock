@@ -7698,6 +7698,7 @@ dependencies = [
  "solana-streamer",
  "solana-vote-program",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]

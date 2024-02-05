@@ -21,6 +21,7 @@ solana-program = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-vote-program = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

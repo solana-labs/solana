@@ -6634,6 +6634,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
+ "thiserror",
 ]
 
 [[package]]
