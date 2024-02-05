@@ -264,6 +264,7 @@ pub struct SchedulingStateMachine {
     unblocked_task_count: Counter,
     total_task_count: Counter,
     task_token: TaskToken,
+    lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
 }
 
