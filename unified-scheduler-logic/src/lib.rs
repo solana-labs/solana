@@ -652,7 +652,7 @@ mod tests {
 
         state_machine.deschedule_task(&task1);
         assert!(state_machine.has_unblocked_task());
-        assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_eq!(
             state_machine
                 .schedule_unblocked_task_for_test()
@@ -661,7 +661,7 @@ mod tests {
             task2.task_index()
         );
         assert!(!state_machine.has_unblocked_task());
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
@@ -705,9 +705,9 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
@@ -738,9 +738,9 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
     }
@@ -760,11 +760,11 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.handled_task_count(), 2);
@@ -798,15 +798,15 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
-        assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
     }
 
     #[test]
@@ -832,11 +832,11 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.unblocked_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_matches!(
             state_machine
                 .schedule_unblocked_task_for_test()
