@@ -436,7 +436,7 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
 #[bench::normal(32)]
 #[bench::large(64)]
 #[bench::max(128)]
-fn bench_schedule_retryable_task(account_count: usize) {
+fn bench_schedule_unblocked_task(account_count: usize) {
     toggle_collect();
     let mut accounts = vec![];
     for _ in 0..account_count {
@@ -472,7 +472,7 @@ fn bench_schedule_retryable_task(account_count: usize) {
     scheduler.deschedule_task(&task);
     toggle_collect();
     let retried_task = scheduler
-        .schedule_retryable_task(|task| {
+        .schedule_unblocked_task(|task| {
             toggle_collect();
             task.clone()
         })
@@ -550,9 +550,9 @@ fn bench_end_to_end_worst(account_count: usize) {
     toggle_collect();
     scheduler.deschedule_task(&task);
     if let Some(_cc) = account_count.checked_sub(1) {
-        //assert_eq!(scheduler.retryable_task_count(), cc);
+        //assert_eq!(scheduler.unblocked_task_count(), cc);
         //let mut c = 0;
-        while let Some(retried_task) = scheduler.schedule_retryable_task_for_test() {
+        while let Some(retried_task) = scheduler.schedule_unblocked_task_for_test() {
             //c += 1;
             //scheduler.deschedule_task(&retried_task);
             toggle_collect();
@@ -612,7 +612,7 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_retryable_task
+    benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_unblocked_task
     //benchmarks = bench_end_to_end_worst
 );
 
