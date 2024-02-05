@@ -1011,7 +1011,7 @@ mod tests {
         page.0.borrow_mut(&mut state_machine.page_token).usage =
             Usage::Readonly(ShortCounter::one());
         SchedulingStateMachine::unlock(
-            &mut page.0,
+            &mut Arc::get_mut(page.0),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
     }
