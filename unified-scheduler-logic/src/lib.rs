@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{ShortCounter, SchedulerCell, Token, TokenTrait},
+    crate::utils::{SchedulerCell, ShortCounter, Token, TokenTrait},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -1008,7 +1008,8 @@ mod tests {
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Readonly(ShortCounter::one());
+        page.0.borrow_mut(&mut state_machine.page_token).usage =
+            Usage::Readonly(ShortCounter::one());
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Writable),
