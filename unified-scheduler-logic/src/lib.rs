@@ -937,14 +937,14 @@ mod tests {
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).usage,
+            page.0.borrow_mut(&mut state_machine.page_token).usage,
             Usage::Writable
         );
         let page = pages
             .get(task2.transaction().message().fee_payer())
             .unwrap();
         assert_matches!(
-            page.0.borrow(&state_machine.page_token).usage,
+            page.0.borrow_mut(&mut state_machine.page_token).usage,
             Usage::Writable
         );
     }
