@@ -486,7 +486,7 @@ impl SchedulingStateMachine {
 
             let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
 
-            while let Some(mut heaviest_uncontended_now) = heaviest_uncontended_now {
+            while let Some(mut heaviest_uncontended_now) = heaviest_uncontended_now.take() {
                 let (uncontended_task, requested_usage) = heaviest_uncontended_now;
                     let new_count = uncontended_task
                         .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
