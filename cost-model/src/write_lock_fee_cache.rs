@@ -1,6 +1,7 @@
 use {
     crate::compute_unit_pricer::{MICRO_LAMPORTS_PER_LAMPORT, ComputeUnitPricer},
     lru::LruCache,
+    solana_metrics::datapoint_info,
     solana_sdk::{clock::Slot, pubkey::Pubkey,},
 };
 
@@ -81,15 +82,38 @@ impl WriteLockFeeCache {
     // then add new hot account to Cache
     pub fn update(&mut self, slot: Slot, accounts: Vec<(Pubkey, u64)>) {
         accounts.iter().for_each(|(pubkey, cost)| {
-            if self.has_account(pubkey) {
+            let (cache_changed, original_fee_rate) = if self.has_account(pubkey) {
+                let original_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
                 self.update_account(slot, pubkey, cost);
+                (true, original_fee_rate)
             } else if self.is_hot_account(*cost) {
                 if self.at_capacity() {
                     self.evict();
                 }
                 self.add_account(slot, pubkey, cost);
+                (true, 0)
+            } else {
+                (false, 0)
+            };
+
+            if cache_changed {
+                // report account per slot fee_rate
+                let current_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
+                let current_ema = self.cache.peek(pubkey).unwrap().get_ema();
+                datapoint_info!("simd-0110_account-stats",
+                                ("slot", slot, i64),
+                                ("pubkey", pubkey.to_string(), String),
+                                ("parent_fee_rate", original_fee_rate, i64),
+                                ("current_fee_rate", current_fee_rate, i64),
+                                ("current_ema", current_ema, i64),
+                                );
             }
         });
+
+        // cache stats
+        datapoint_info!("simd-0110-cache-stats", 
+                        ("slot", slot, i64),
+                        ("length", self.cache.len(), i64));
     }
 
     fn has_account(&self, pubkey: &Pubkey) -> bool {
@@ -99,7 +123,8 @@ impl WriteLockFeeCache {
     fn update_account(&mut self, slot: Slot, pubkey: &Pubkey, cost: &u64) {
         let pricer = self.cache.peek_mut(pubkey);
         if pricer.is_some() {
-            pricer.unwrap().update(slot, *cost, crate::block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS);
+            pricer.unwrap().update(slot, *cost, crate::block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS)
+                .report_metrics(pubkey);
         }
     }
 
@@ -113,7 +138,8 @@ impl WriteLockFeeCache {
 
     fn add_account(&mut self, slot: Slot, pubkey: &Pubkey, cost: &u64) {
         let mut pricer = ComputeUnitPricer::default();
-        pricer.update(slot, *cost, crate::block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS);
+        pricer.update(slot, *cost, crate::block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS)
+            .report_metrics(pubkey);
         self.cache.push(*pubkey, pricer);
     }
 

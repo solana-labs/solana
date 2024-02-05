@@ -3809,6 +3809,21 @@ impl Bank {
         //let hot_accounts = self.read_cost_tracker().unwrap().find_hot_accounts();
         let write_locks = self.read_cost_tracker().unwrap().get_write_lock_account_and_cu();
         self.write_lock_fee_cache.write().unwrap().update(self.slot(), write_locks);
+
+        // report cost_tracker
+        self.read_cost_tracker().unwrap().report_stats(self.slot());
+        
+        // reports fees collected in this block
+        {
+            let collector_fee_details = self.collector_fee_details.read().unwrap();
+            datapoint_info!("simd-0110_collector_fees",
+                            ("slot", self.slot, i64),
+                            ("transaction_fee", collector_fee_details.transaction_fee, i64),
+                            ("priority_fee", collector_fee_details.priority_fee, i64),
+                            ("write_lock_fee", collector_fee_details.write_lock_fee, i64),
+                            ("mnb_fees", self.collector_fees.load(Relaxed), i64),
+                            );
+        }
     }
 
     // dangerous; don't use this; this is only needed for ledger-tool's special command
@@ -4173,9 +4188,10 @@ impl Bank {
                 }
             })
             .collect();
+        let budget_limits = process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default();
         self.write_lock_fee_cache.read().unwrap().calculate_write_lock_fee(
             &writable_accounts,
-            process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default().compute_unit_limit,
+            budget_limits.compute_unit_limit,
         )
     }
 
@@ -4546,9 +4562,9 @@ impl Bank {
             .for_each(|etx| {
                 if let ((Ok(()), nonce, lamports, _), tx) = etx {
                     let write_lock_fee = self.calculate_write_lock_fee(tx.message());
-                    if SIMD_0110_SIMULATION {
-                        println!("=== sig {:?} wlf {}", tx.signature(), write_lock_fee);
-                    } else {
+                    if !SIMD_0110_SIMULATION {
+                        // if not just simulation, append write-lock-fee then passing into
+                        // load_accounts()
                         *etx.0 = (Ok(()), nonce.clone(), *lamports, Some(write_lock_fee));
                     }
                 }
@@ -5663,9 +5679,9 @@ impl Bank {
             .iter()
             .zip(execution_results)
             .map(|(tx, execution_result)| {
-                let (execution_status, durable_nonce_fee) = match &execution_result {
+                let (execution_status, durable_nonce_fee, executed_units) = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => {
-                        Ok((&details.status, details.durable_nonce_fee.as_ref()))
+                        Ok((&details.status, details.durable_nonce_fee.as_ref(), details.executed_units))
                     }
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
@@ -5676,6 +5692,8 @@ impl Bank {
                 let message = tx.message();
                 let budget_limits = process_compute_budget_instructions(message.program_instructions_iter()).unwrap_or_default();
                 let write_lock_fee = self.calculate_write_lock_fee(message);
+                let compute_unit_limit = budget_limits.compute_unit_limit;
+
                 // TODO, testing SIMD-0110, need to withdraw write-lock-fee for successful tx
                 // somewhere.
 
@@ -5685,6 +5703,30 @@ impl Bank {
                     self.feature_set
                         .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
+
+                // report each *executed* non-vote transaction's fee details in this batch
+                if !tx.is_simple_vote_transaction() {
+                    let fee_payer_account_balance = self
+                        .rc
+                        .accounts
+                        .accounts_db
+                        .load_with_fixed_root(&self.ancestors, tx.message().fee_payer())
+                        .map(|(fee_payer_account, _slot)| fee_payer_account.lamports())
+                        .unwrap_or(0);
+
+                    datapoint_info!("simd-0110_transaction-fee-details",
+                                    ("sig", tx.signature().to_string(), String),
+                                    ("fee_payer_balance", fee_payer_account_balance, i64),
+                                    ("transaction_fee", fee_details.transaction_fee, i64),
+                                    ("priority_fee", fee_details.prioritization_fee, i64),
+                                    ("write_lock_fee", write_lock_fee, i64),
+                                    ("requested_units", compute_unit_limit, i64),
+                                    ("exeucted_units", executed_units, i64),
+                                    ("num_write_locks", message.num_write_locks(), i64),
+                                    ("num_signatures", message.num_signatures(), i64),
+                                    ("execution_succeeded", execution_status.is_err(), bool),
+                    );
+                }
 
                 // In case of instruction error, even though no accounts
                 // were stored we still need to charge the payer the
@@ -5713,6 +5755,7 @@ impl Bank {
             .write()
             .unwrap()
             .add(&accumulated_fee_details, accumulated_write_lock_fees);
+
         results
     }
 

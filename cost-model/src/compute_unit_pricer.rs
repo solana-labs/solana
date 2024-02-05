@@ -1,6 +1,7 @@
 use{
     crate::ema::AggregatedVarianceStats,
-    solana_sdk::clock::Slot,
+    solana_metrics::datapoint_info,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
 };
 
 #[derive(Clone, Debug)]
@@ -55,6 +56,9 @@ impl ComputeUnitPricer {
     pub fn get_fee_rate_micro_lamports_per_cu(&self) -> u64 {
         self.cu_price
     }
+    pub fn get_ema(&self) -> u64 {
+        self.cu_utilization.get_ema()
+    }
 
     // use currently cu_price to calculate total fee in lamports
     #[allow(dead_code)]
@@ -67,7 +71,8 @@ impl ComputeUnitPricer {
         .unwrap_or(u64::MAX)
     }
 
-    pub fn update(&mut self, slot: Slot, cu_cost: u64, cu_cost_limit: u64) {
+    pub fn update(&mut self, slot: Slot, cu_cost: u64, cu_cost_limit: u64
+    ) -> PricerDetails {
         let prev_cu_utilization_ema = self.cu_utilization.get_ema();
         let prev_cu_utilization_stddev = self.cu_utilization.get_stddev();
         let prev_cu_price = self.cu_price;
@@ -91,7 +96,7 @@ impl ComputeUnitPricer {
         } else {
             // mean reversion, if ema is within "band", cu-price should revert back to "normal",
             // some kind of elasticity to cu_price
-            /* letit be free while testing
+            /* let it be free while testing
             match self.cu_price.cmp(&NORMAL_CU_PRICE) {
                 Ordering::Equal => (),
                 Ordering::Greater => {
@@ -112,11 +117,8 @@ impl ComputeUnitPricer {
             // */
         }
 
-        println!("=== slot {} cu_cost {} cu_cost_limit {} this_cu_util {} \
-                 prev_cu_util_ems {} prev_cu_util_stddev {} \
-                 post_cu_util_ema {} post_cu_util_stddev {} \
-                 prev_cu_price {} post_cu_price {}",
-                 self.slot,
+        PricerDetails {
+                 slot: self.slot,
                  cu_cost,
                  cu_cost_limit,
                  this_cu_utilization,
@@ -125,8 +127,39 @@ impl ComputeUnitPricer {
                  post_cu_utilization_ema,
                  post_cu_utilization_stddev,
                  prev_cu_price,
-                 self.cu_price,
-                 );
+                 post_cu_price: self.cu_price,
+        }
     }
 }
 
+pub struct PricerDetails {
+    pub slot: u64,
+    pub cu_cost: u64,
+    pub cu_cost_limit: u64,
+    pub this_cu_utilization: u64,
+    pub prev_cu_utilization_ema: u64,
+    pub prev_cu_utilization_stddev: u64,
+    pub post_cu_utilization_ema: u64,
+    pub post_cu_utilization_stddev: u64,
+    pub prev_cu_price: u64,
+    pub post_cu_price: u64,
+}
+
+impl PricerDetails {
+
+    pub fn report_metrics(&self, pubkey: &Pubkey) {
+        datapoint_info!("simd-0110_compurte-unit-pricer-details",
+                        ("pubkey", pubkey.to_string(), String),
+                        ("slot", self.slot, i64),
+                        ("cu_cost", self.cu_cost, i64),
+                        ("cu_cost_limit", self.cu_cost_limit, i64),
+                        ("this_cu_utilization", self.this_cu_utilization, i64),
+                        ("prev_cu_utilization_ema", self.prev_cu_utilization_ema, i64),
+                        ("prev_cu_utilization_stddev", self.prev_cu_utilization_stddev, i64),
+                        ("post_cu_utilization_ema", self.post_cu_utilization_ema, i64),
+                        ("post_cu_utilization_stddev", self.post_cu_utilization_stddev, i64),
+                        ("prev_cu_price", self.prev_cu_price, i64),
+                        ("post_cu_price", self.post_cu_price, i64),
+                        );
+    }
+}
