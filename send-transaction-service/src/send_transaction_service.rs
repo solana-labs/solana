@@ -114,7 +114,7 @@ pub struct Config {
     pub batch_size: usize,
     /// How frequently batches are sent
     pub batch_send_rate_ms: u64,
-    /// On exceeding max transaction pool size new transactions would be dropped
+    /// When the retry pool exceeds this max size, new transactions are dropped after their first broadcast attempt
     pub transaction_retry_pool_max_size: usize,
 }
 
