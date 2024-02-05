@@ -1,7 +1,5 @@
 use {
     crate::{
-        bank::Bank,
-        bank_forks::BankForks,
         runtime_config::RuntimeConfig,
         svm::{
             account_loader::load_accounts,
@@ -25,8 +23,8 @@ use {
     solana_program_runtime::{
         compute_budget::ComputeBudget,
         loaded_programs::{
-            LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            ForkGraph, LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria,
+            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
             ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
@@ -55,6 +53,7 @@ use {
     std::{
         cell::RefCell,
         collections::{hash_map::Entry, HashMap},
+        fmt::{Debug, Formatter},
         rc::Rc,
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -107,8 +106,8 @@ enum ProgramAccountLoadResult {
     ProgramOfLoaderV4(AccountSharedData, Slot),
 }
 
-#[derive(AbiExample, Debug)]
-pub struct TransactionBatchProcessor {
+#[derive(AbiExample)]
+pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Bank slot (i.e. block)
     slot: Slot,
 
@@ -128,10 +127,28 @@ pub struct TransactionBatchProcessor {
 
     pub sysvar_cache: RwLock<SysvarCache>,
 
-    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
+    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
 }
 
-impl Default for TransactionBatchProcessor {
+impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransactionBatchProcessor")
+            .field("slot", &self.slot)
+            .field("epoch", &self.epoch)
+            .field("epoch_schedule", &self.epoch_schedule)
+            .field("fee_structure", &self.fee_structure)
+            .field(
+                "check_program_modification_slot",
+                &self.check_program_modification_slot,
+            )
+            .field("runtime_config", &self.runtime_config)
+            .field("sysvar_cache", &self.sysvar_cache)
+            .field("loaded_programs_cache", &self.loaded_programs_cache)
+            .finish()
+    }
+}
+
+impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
     fn default() -> Self {
         Self {
             slot: Slot::default(),
@@ -149,17 +166,24 @@ impl Default for TransactionBatchProcessor {
     }
 }
 
-impl TransactionBatchProcessor {
-    pub fn new(bank: &Bank) -> Self {
+impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
+    pub fn new(
+        slot: Slot,
+        epoch: Epoch,
+        epoch_schedule: EpochSchedule,
+        fee_structure: FeeStructure,
+        runtime_config: Arc<RuntimeConfig>,
+        loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
+    ) -> Self {
         Self {
-            slot: bank.slot(),
-            epoch: bank.epoch(),
-            epoch_schedule: bank.epoch_schedule.clone(),
-            fee_structure: bank.fee_structure.clone(),
+            slot,
+            epoch,
+            epoch_schedule,
+            fee_structure,
             check_program_modification_slot: false,
-            runtime_config: bank.runtime_config.clone(),
+            runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            loaded_programs_cache: bank.loaded_programs_cache.clone(),
+            loaded_programs_cache,
         }
     }
 
