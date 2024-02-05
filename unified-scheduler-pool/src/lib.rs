@@ -1046,7 +1046,7 @@ where
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        let Some(task) = state_machine.schedule_task(task) {
+                                        if let Some(task) = state_machine.schedule_task(task) {
                                             idle_task_sender.send(task).unwrap();
                                         }
                                         "step"
