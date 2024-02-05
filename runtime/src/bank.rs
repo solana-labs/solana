@@ -5240,15 +5240,12 @@ impl Bank {
                 .accounts
                 .accounts_db
                 .test_skip_rewrites_but_include_in_bank_hash;
-        let set_exempt_rent_epoch_max: bool = self
-            .feature_set
-            .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let rent_collected_info = if self.should_collect_rent() {
                 let (rent_collected_info, measure) = measure!(self
                     .rent_collector
-                    .collect_from_existing_account(pubkey, account, set_exempt_rent_epoch_max,));
+                    .collect_from_existing_account(pubkey, account));
                 time_collecting_rent_us += measure.as_us();
                 rent_collected_info
             } else {
@@ -5256,9 +5253,8 @@ impl Bank {
                 // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
                 // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                 // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
-                if set_exempt_rent_epoch_max
-                    && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
-                        && self.rent_collector.get_rent_due(account) == RentDue::Exempt)
+                if account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                    && self.rent_collector.get_rent_due(account) == RentDue::Exempt
                 {
                     account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                 }
