@@ -258,7 +258,7 @@ pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: Counter,
     handled_task_count: Counter,
-    rescheduled_task_count: Counter,
+    unblocked_task_count: Counter,
     total_task_count: Counter,
     task_token: TaskToken,
     page_token: PageToken,
@@ -281,8 +281,8 @@ impl SchedulingStateMachine {
         self.handled_task_count.current()
     }
 
-    pub fn rescheduled_task_count(&self) -> u32 {
-        self.rescheduled_task_count.current()
+    pub fn unblocked_task_count(&self) -> u32 {
+        self.unblocked_task_count.current()
     }
 
     pub fn total_task_count(&self) -> u32 {
@@ -317,7 +317,7 @@ impl SchedulingStateMachine {
     pub fn schedule_unblocked_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
         self.unblocked_task_queue.pop_front().map(|task| {
             let ret = on_success(&task);
-            self.rescheduled_task_count.increment_self();
+            self.unblocked_task_count.increment_self();
             ret
         })
     }
@@ -518,7 +518,7 @@ impl Default for SchedulingStateMachine {
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: Counter::zero(),
             handled_task_count: Counter::zero(),
-            rescheduled_task_count: Counter::zero(),
+            unblocked_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
             task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
@@ -680,7 +680,7 @@ mod tests {
 
         state_machine.deschedule_task(&task1);
 
-        assert_eq!(state_machine.rescheduled_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_eq!(
             state_machine
                 .schedule_unblocked_task_for_test()
@@ -688,9 +688,9 @@ mod tests {
                 .task_index(),
             task2.task_index()
         );
-        assert_eq!(state_machine.rescheduled_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
-        assert_eq!(state_machine.rescheduled_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
     }
 
     #[test]
@@ -711,16 +711,16 @@ mod tests {
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
-        assert_eq!(state_machine.rescheduled_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
-        assert_eq!(state_machine.rescheduled_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
-        assert_eq!(state_machine.rescheduled_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
-        assert_eq!(state_machine.rescheduled_task_count(), 2);
+        assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
         assert!(state_machine.is_empty());
