@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{TokenCell, ShortCounter, Token, TokenTrait},
+    crate::utils::{ShortCounter, Token, TokenCell, TokenTrait},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
