@@ -206,8 +206,8 @@ impl TaskInner {
             .provisional_lock_count
     }
 
-    fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.borrow(task_token).lock_attempts
+    fn lock_attempts<'t>(&self, task_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
+        &self.task_status.borrow(task_token)
     }
 
     pub fn task_index(&self) -> usize {
