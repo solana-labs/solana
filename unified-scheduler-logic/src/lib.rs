@@ -498,7 +498,7 @@ impl SchedulingStateMachine {
                     }
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
-                    //drop((uncontended_task, heaviest_uncontended_now));
+                    drop((uncontended_task, heaviest_uncontended_now));
                     page.pop_blocked_task(uw);
                     /*
                     match Self::attempt_lock_address(page, ru) {
