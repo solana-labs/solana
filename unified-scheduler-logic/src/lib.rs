@@ -98,14 +98,14 @@ mod cell {
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
-          Token<V, F>: TokenTrait<V, F>,
+            Token<V, F>: TokenTrait<V, F>,
         {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
 
         pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t F
         where
-          Token<V, F>: TokenTrait<V, F>,
+            Token<V, F>: TokenTrait<V, F>,
         {
             Token::partial_borrow(unsafe { &*self.0.get() })
         }
@@ -195,14 +195,18 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(&self, lock_attempt_token: &'t mut LockAttemptToken) -> &'t mut Vec<LockAttempt> {
+    fn lock_attempts_mut<'t>(
+        &self,
+        lock_attempt_token: &'t mut LockAttemptToken,
+    ) -> &'t mut Vec<LockAttempt> {
         self.task_status.borrow_mut(lock_attempt_token)
     }
 
-    fn blocked_lock_count_mut<'t>(&self, blocked_lock_count_token: &'t mut BlockedLockCountToken) -> &'t mut Counter {
-        self
-            .task_status
-            .borrow_mut(blocked_lock_count_token)
+    fn blocked_lock_count_mut<'t>(
+        &self,
+        blocked_lock_count_token: &'t mut BlockedLockCountToken,
+    ) -> &'t mut Counter {
+        self.task_status.borrow_mut(blocked_lock_count_token)
     }
 
     fn lock_attempts<'t>(&self, lock_attempt_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
@@ -297,7 +301,10 @@ const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 pub struct Page(Arc<SchedulerCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
 
-#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(blocked_lock_count_token(pub)))]
+#[cfg_attr(
+    feature = "dev-context-only-utils",
+    field_qualifiers(blocked_lock_count_token(pub))
+)]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: Counter,
@@ -566,7 +573,9 @@ impl Default for SchedulingStateMachine {
             handled_task_count: Counter::zero(),
             unblocked_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
-            blocked_lock_count_token: unsafe { BlockedLockCountToken::assume_on_the_scheduler_thread() },
+            blocked_lock_count_token: unsafe {
+                BlockedLockCountToken::assume_on_the_scheduler_thread()
+            },
             lock_attempt_token: unsafe { LockAttemptToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
