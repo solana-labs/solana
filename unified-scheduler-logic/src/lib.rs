@@ -981,7 +981,7 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
         let _ = SchedulingStateMachine::unlock(
-            &mut page.0.borrow_mut(&mut state_machine.page_token),
+            page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
     }
@@ -993,7 +993,7 @@ mod tests {
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
         let _ =SchedulingStateMachine::unlock(
-            &mut page.0.borrow_mut(&mut state_machine.page_token),
+            page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Readonly),
         );
     }
@@ -1006,7 +1006,7 @@ mod tests {
         page.0.borrow_mut(&mut state_machine.page_token).usage =
             Usage::Readonly(ShortCounter::one());
         let _ = SchedulingStateMachine::unlock(
-            &mut page.0.borrow_mut(&mut state_machine.page_token),
+            page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
     }
