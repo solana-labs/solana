@@ -150,6 +150,16 @@ impl TokenTrait<TaskStatus, TaskStatus> for Token<TaskStatus, TaskStatus> {
     }
 }
 
+impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
+    fn partial_borrow<'a>(v: &'a TaskStatus) -> &'a Vec<LockAttempt> {
+        v
+    }
+
+    fn partial_borrow_mut<'a>(v: &'a mut TaskStatus) -> &'a mut Vec<LockAttempt> {
+        v
+    }
+}
+
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
