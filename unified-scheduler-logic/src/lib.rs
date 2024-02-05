@@ -503,6 +503,7 @@ impl SchedulingStateMachine {
                     match Self::attempt_lock_address(page, ru) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
+                            /*
                             page.usage = usage;
                             if matches!(usage, Usage::Readonly(_)) {
                                 heaviest_uncontended_now = page.heaviest_blocked_task();
@@ -512,6 +513,7 @@ impl SchedulingStateMachine {
                                 }
                                 */
                             }
+                        */
                         }
                     }
             }
