@@ -98,17 +98,11 @@ mod utils {
     }
 
     pub trait PartialBorrow<V, F> {
-        fn partial_borrow(v: &V) -> &F;
-
         fn partial_borrow_mut(v: &mut V) -> &mut F;
     }
 
     // generic identity conversion impl
     impl<T> PartialBorrow<T, T> for Token<T, T> {
-        fn partial_borrow(t: &T) -> &T {
-            t
-        }
-
         fn partial_borrow_mut(t: &mut T) -> &mut T {
             t
         }
@@ -134,20 +128,12 @@ struct TaskStatus {
 }
 
 impl PartialBorrow<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
-    fn partial_borrow(v: &TaskStatus) -> &ShortCounter {
-        &v.blocked_lock_count
-    }
-
     fn partial_borrow_mut(v: &mut TaskStatus) -> &mut ShortCounter {
         &mut v.blocked_lock_count
     }
 }
 
 impl PartialBorrow<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
-    fn partial_borrow(v: &TaskStatus) -> &Vec<LockAttempt> {
-        &v.lock_attempts
-    }
-
     fn partial_borrow_mut(v: &mut TaskStatus) -> &mut Vec<LockAttempt> {
         &mut v.lock_attempts
     }
