@@ -204,7 +204,7 @@ impl TaskInner {
     }
 
     fn blocked_lock_count_mut<'t>(&self, blocked_lock_count_token: &'t mut BlockedLockCountToken) -> &'t mut Counter {
-        &mut self
+        self
             .task_status
             .borrow_mut(blocked_lock_count_token)
     }
