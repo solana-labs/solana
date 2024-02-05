@@ -415,11 +415,10 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock<'t>(page_token: &'t mut PageToken, attempt: &LockAttempt) -> Option<&'t (Task, RequestedUsage)> {
+    fn unlock<'t>(page: &'t mut PageInner, attempt: &LockAttempt) -> Option<&'t (Task, RequestedUsage)> {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
-        let page = attempt.page_mut(page_token);
 
         match &mut page.usage {
             Usage::Readonly(ref mut count) => match requested_usage {
