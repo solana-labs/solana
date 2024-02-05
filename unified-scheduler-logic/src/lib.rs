@@ -484,7 +484,7 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             //let mut should_continue = true;
 
-            while /*should_continue && */ let Some(heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
+            while /*should_continue && */ let Some(mut heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
                 let (uncontended_task, requested_usage) = heaviest_uncontended_now;
                 //if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
                 //}
