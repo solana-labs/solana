@@ -195,8 +195,8 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(&self, task_token: &'t mut LockAttemptToken) -> &'t mut Vec<LockAttempt> {
-        self.task_status.borrow_mut(task_token)
+    fn lock_attempts_mut<'t>(&self, lock_attempt_token: &'t mut LockAttemptToken) -> &'t mut Vec<LockAttempt> {
+        self.task_status.borrow_mut(lock_attempt_token)
     }
 
     fn provisional_lock_count_mut(&self) -> &mut Counter {
@@ -206,8 +206,8 @@ impl TaskInner {
             .provisional_lock_count
     }
 
-    fn lock_attempts<'t>(&self, task_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.borrow(task_token)
+    fn lock_attempts<'t>(&self, lock_attempt_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
+        &self.task_status.borrow(lock_attempt_token)
     }
 
     pub fn task_index(&self) -> usize {
