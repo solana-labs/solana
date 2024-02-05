@@ -152,11 +152,11 @@ impl TokenTrait<TaskStatus, TaskStatus> for Token<TaskStatus, TaskStatus> {
 
 impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
     fn partial_borrow<'a>(v: &'a TaskStatus) -> &'a Vec<LockAttempt> {
-        v.lock_attempts
+        &v.lock_attempts
     }
 
     fn partial_borrow_mut<'a>(v: &'a mut TaskStatus) -> &'a mut Vec<LockAttempt> {
-        v.lock_attempts
+        &mut v.lock_attempts
     }
 }
 
