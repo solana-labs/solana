@@ -775,7 +775,6 @@ impl ThreadLocalUnprocessedPackets {
                 })
                 .unzip();
 
-        inc_new_counter_info!("banking_stage-packet_conversion", 1);
         let filtered_count = packets_to_process.len().saturating_sub(transactions.len());
         saturating_add_assign!(*total_dropped_packets, filtered_count);
 
