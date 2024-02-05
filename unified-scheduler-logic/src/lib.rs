@@ -92,8 +92,8 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut V {
-            unsafe { &mut *self.0.get() }
+        pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F {
+            Token::borrow_partially(unsafe { &mut *self.0.get() })
         }
 
         pub(super) fn borrow_mut_unchecked<'t>(&self) -> &'t mut V {
