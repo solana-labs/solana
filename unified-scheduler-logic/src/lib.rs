@@ -267,6 +267,7 @@ pub struct SchedulingStateMachine {
     lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
 }
+const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 40);
 
 impl SchedulingStateMachine {
     pub fn is_empty(&self) -> bool {
