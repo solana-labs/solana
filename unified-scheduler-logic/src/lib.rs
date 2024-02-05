@@ -163,7 +163,7 @@ impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAtte
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-type BlockedLockCountToken = Token<TaskStatus, TaskStatus>;
+type BlockedLockCountToken = Token<TaskStatus, Counter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 type LockAttemptToken = Token<TaskStatus, Vec<LockAttempt>>;
