@@ -552,7 +552,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     if let Some(_cc) = account_count.checked_sub(1) {
         //assert_eq!(scheduler.unblocked_task_count(), cc);
         //let mut c = 0;
-        while let Some(retried_task) = scheduler.schedule_unblocked_task_for_test() {
+        while let Some(retried_task) = scheduler.schedule_unblocked_task() {
             //c += 1;
             //scheduler.deschedule_task(&retried_task);
             toggle_collect();
