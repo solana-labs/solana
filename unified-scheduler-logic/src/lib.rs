@@ -443,7 +443,7 @@ impl SchedulingStateMachine {
 
         if is_unused_now {
             page.usage = Usage::Unused;
-            page.heaviest_uncontended_now()
+            page.heaviest_blocked_task()
         } else {
             None
         }
