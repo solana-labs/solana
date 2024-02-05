@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
-            // pacify brrowck with this map
+            // seemingly needless map is needed to pacify brrowck
             while let Some((unblocked_task, requested_usage)) =
                 heaviest_unblocked.map(|(t, u)| (t, *u))
             {
