@@ -484,7 +484,7 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
 
-            loop {
+            //loop {
                 let mut should_continue = false;
                 if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task
@@ -512,12 +512,14 @@ impl SchedulingStateMachine {
                         }
                     }
                 }
+                /*
                 if should_continue {
                     continue;
                 } else {
                     break;
                 }
             }
+            */
         }
     }
 
