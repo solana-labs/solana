@@ -87,7 +87,7 @@ impl TransactionState {
         }
     }
 
-    /// Returns the priority of the transaction.
+    /// Returns the compute unit price of the transaction.
     pub(crate) fn compute_unit_price(&self) -> u64 {
         self.compute_budget_details().compute_unit_price
     }
@@ -294,16 +294,16 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_budget_details() {
-        let priority = 15;
-        let mut transaction_state = create_transaction_state(priority);
-        assert_eq!(transaction_state.compute_unit_price(), priority);
+    fn test_compute_unit_price() {
+        let compute_unit_price = 15;
+        let mut transaction_state = create_transaction_state(compute_unit_price);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
 
-        // ensure priority is not lost through state transitions
+        // ensure compute unit price is not lost through state transitions
         let transaction_ttl = transaction_state.transition_to_pending();
-        assert_eq!(transaction_state.compute_unit_price(), priority);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
         transaction_state.transition_to_unprocessed(transaction_ttl);
-        assert_eq!(transaction_state.compute_unit_price(), priority);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
     }
 
     #[test]
