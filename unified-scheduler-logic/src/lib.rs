@@ -134,7 +134,7 @@ mod cell {
             t
         }
 
-        fn partial_borrow_mut(v: &mut T) -> &mut T {
+        fn partial_borrow_mut(t: &mut T) -> &mut T {
             t
         }
     }
