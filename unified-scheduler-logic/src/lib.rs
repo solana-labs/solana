@@ -118,7 +118,7 @@ mod cell {
     }
 }
 
-type PageToken = Token<PageInner>;
+type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
 type TaskToken = Token<TaskStatus>;
