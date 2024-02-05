@@ -4003,14 +4003,10 @@ impl AccountsDb {
                     if let Some(entry) = entry {
                         entry.addref();
                     } else {
-                        // We also expect that the account index entry must be
-                        // present in the index. Log a warning for now. In
-                        // future, we will panic when this happens.
-                        warn!(
-                            "pubkey {} in slot {} is NOT found in account index. \
-                        Likely a bug in account index",
-                            pubkey, slot
-                        );
+                        // We also expect that the accounts index must contain an
+                        // entry for `pubkey`. Log a warning for now. In future,
+                        // we will panic when this happens.
+                        warn!("pubkey {pubkey} in slot {slot} was NOT found in accounts index during shrink");
                         datapoint_warn!(
                             "accounts_db-shink_pubkey_missing_from_index",
                             ("store_slot", slot, i64),
