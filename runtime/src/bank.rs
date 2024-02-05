@@ -804,7 +804,7 @@ pub struct Bank {
 
     epoch_reward_status: EpochRewardStatus,
 
-    transaction_processor: TransactionBatchProcessor,
+    transaction_processor: TransactionBatchProcessor<BankForks>,
 }
 
 struct VoteWithStakeDelegations {
@@ -996,7 +996,14 @@ impl Bank {
             transaction_processor: TransactionBatchProcessor::default(),
         };
 
-        bank.transaction_processor = TransactionBatchProcessor::new(&bank);
+        bank.transaction_processor = TransactionBatchProcessor::new(
+            bank.slot,
+            bank.epoch,
+            bank.epoch_schedule.clone(),
+            bank.fee_structure.clone(),
+            bank.runtime_config.clone(),
+            bank.loaded_programs_cache.clone(),
+        );
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
@@ -1307,7 +1314,14 @@ impl Bank {
             transaction_processor: TransactionBatchProcessor::default(),
         };
 
-        new.transaction_processor = TransactionBatchProcessor::new(&new);
+        new.transaction_processor = TransactionBatchProcessor::new(
+            new.slot,
+            new.epoch,
+            new.epoch_schedule.clone(),
+            new.fee_structure.clone(),
+            new.runtime_config.clone(),
+            new.loaded_programs_cache.clone(),
+        );
 
         let (_, ancestors_time_us) = measure_us!({
             let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -1815,7 +1829,14 @@ impl Bank {
             transaction_processor: TransactionBatchProcessor::default(),
         };
 
-        bank.transaction_processor = TransactionBatchProcessor::new(&bank);
+        bank.transaction_processor = TransactionBatchProcessor::new(
+            bank.slot,
+            bank.epoch,
+            bank.epoch_schedule.clone(),
+            bank.fee_structure.clone(),
+            bank.runtime_config.clone(),
+            bank.loaded_programs_cache.clone(),
+        );
 
         bank.finish_init(
             genesis_config,

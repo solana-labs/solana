@@ -13749,7 +13749,7 @@ fn test_filter_executable_program_accounts() {
     let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
     let owners = &[program1_pubkey, program2_pubkey];
-    let programs = TransactionBatchProcessor::filter_executable_program_accounts(
+    let programs = TransactionBatchProcessor::<BankForks>::filter_executable_program_accounts(
         &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
@@ -13844,7 +13844,7 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
 
     let owners = &[program1_pubkey, program2_pubkey];
     let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
-    let programs = TransactionBatchProcessor::filter_executable_program_accounts(
+    let programs = TransactionBatchProcessor::<BankForks>::filter_executable_program_accounts(
         &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut lock_results,
