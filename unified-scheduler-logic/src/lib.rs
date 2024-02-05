@@ -508,7 +508,7 @@ impl SchedulingStateMachine {
                                 page
                                     .heaviest_blocked_task()
                                     .filter(|t| {
-                                        matches!(t, Some((_, RequestedUsage::Readonly)))
+                                        matches!(t, (_, RequestedUsage::Readonly))
                                     })
                             } else {
                                 None
