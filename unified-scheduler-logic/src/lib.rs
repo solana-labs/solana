@@ -504,13 +504,13 @@ impl SchedulingStateMachine {
                 match Self::attempt_lock_address(page, requested_usage) {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
+                        page.usage = usage;
                         heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
                             page.heaviest_blocked_task()
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
                             None
                         };
-                        page.usage = usage;
                     }
                 }
             }
