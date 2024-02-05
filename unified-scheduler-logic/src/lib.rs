@@ -126,6 +126,9 @@ mod cell {
             Self(PhantomData)
         }
     }
+
+    impl<V, F> TokenTrait<V, F> for Token<V, F> {
+    }
 }
 
 type PageToken = Token<PageInner, PageInner>;
