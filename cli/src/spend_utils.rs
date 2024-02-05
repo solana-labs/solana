@@ -2,13 +2,17 @@ use {
     crate::{
         checks::{check_account_for_balance_with_commitment, get_fee_for_messages},
         cli::CliError,
+        stake,
     },
     clap::ArgMatches,
     solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        commitment_config::CommitmentConfig, hash::Hash, message::Message,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        commitment_config::CommitmentConfig,
+        hash::Hash,
+        message::Message,
+        native_token::lamports_to_sol,
+        pubkey::Pubkey,
     },
 };
 
@@ -96,15 +100,39 @@ where
         )?;
         Ok((message, spend))
     } else {
-        let from_balance = rpc_client
-            .get_balance_with_commitment(from_pubkey, commitment)?
-            .value;
         let from_rent_exempt_minimum = if amount == SpendAmount::RentExempt {
             let data = rpc_client.get_account_data(from_pubkey)?;
             rpc_client.get_minimum_balance_for_rent_exemption(data.len())?
         } else {
             0
         };
+
+        let mut from_balance: u64 = 0;
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(from_pubkey, commitment)?
+            .value
+        {
+            if account.owner == solana_sdk::stake::program::id() {
+                let state = stake::get_account_stake_state(
+                    rpc_client,
+                    from_pubkey,
+                    account,
+                    true,
+                    None,
+                    false,
+                )?;
+                from_balance = state.account_balance;
+                if let Some(active_stake) = state.active_stake {
+                    from_balance = from_balance.saturating_sub(active_stake);
+                }
+            }
+        }
+        if from_balance == 0 {
+            from_balance = rpc_client
+                .get_balance_with_commitment(from_pubkey, commitment)?
+                .value;
+        }
+
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
             rpc_client,
             amount,
