@@ -148,7 +148,7 @@ impl CostTracker {
             .collect()
     }
 
-    // NOTE testing SIMD-0110, return all writable accounts and their allocated CUs
+    // NOTE testing SIMD-0110, return all writable accounts pubkey and their allocated CUs
     pub fn get_write_lock_account_and_cu(&self) -> Vec<(Pubkey, u64)> {
         self.cost_by_writable_accounts.iter().map(|(&pubkey, &cost)| (pubkey, cost)).collect()
     }

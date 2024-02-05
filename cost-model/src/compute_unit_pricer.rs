@@ -1,7 +1,6 @@
 use{
     crate::ema::AggregatedVarianceStats,
     solana_sdk::clock::Slot,
-    std::cmp::Ordering,
 };
 
 #[derive(Clone, Debug)]
@@ -16,11 +15,14 @@ pub struct ComputeUnitPricer {
     /// milli-lamports per CU. The rate dynamically floats based on cu_utilization. In general,
     ///    if cu_utilization > target_utilization, increase the cu_price by 1.01x
     ///    if cu_utilization < target_utilization, decrease the cu_price by 0.99x
-    /// it starts w 1 milli-lamport/cu
+    /// it starts w 1 milli-lamport/cu, stored as 1_000 microlamports internally for integer
+    /// arithmatic.
     pub cu_price: u64,
 }
 
-const NORMAL_CU_PRICE: u64 = 1; // milli_lamports/CU
+const NORMAL_CU_PRICE: u64 = 1_000; // micro_lamports/CU
+pub const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
+
 const PRICE_CHANGE_RATE: u64 = 10;    // = 10/1_000 = 1%
 const PRICE_CHANGE_SCALE: u64 = 1_000;
 
@@ -49,14 +51,20 @@ impl Default for ComputeUnitPricer {
 }
 
 impl ComputeUnitPricer {
-    // return fee_rate in millilamports/cu
-    pub fn get_fee_rate(&self) -> u64 {
+    // return fee_rate in micro-lamports/cu
+    pub fn get_fee_rate_micro_lamports_per_cu(&self) -> u64 {
         self.cu_price
     }
 
     // use currently cu_price to calculate total fee in lamports
+    #[allow(dead_code)]
     pub fn calculate_fee(&self, compute_units: u64) -> u64 {
-        compute_units.saturating_mul(self.cu_price).saturating_div(1_000)
+        (compute_units as u128)
+        .saturating_mul(self.cu_price as u128)
+        .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+        .checked_div(MICRO_LAMPORTS_PER_LAMPORT as u128)
+        .and_then(|fee| u64::try_from(fee).ok())
+        .unwrap_or(u64::MAX)
     }
 
     pub fn update(&mut self, slot: Slot, cu_cost: u64, cu_cost_limit: u64) {
@@ -73,7 +81,7 @@ impl ComputeUnitPricer {
         if post_cu_utilization_ema > CU_UTILIZATION_UPPER_BOUND {
             self.cu_price = PRICE_CHANGE_SCALE
                 .saturating_add(PRICE_CHANGE_RATE)
-                .saturating_mul(self.cu_price.max(10)) // quick hack for in case cu_priced reduced to `0`,
+                .saturating_mul(self.cu_price)
                 .saturating_div(PRICE_CHANGE_SCALE);
         } else if post_cu_utilization_ema < CU_UTILIZATION_LOWER_BOUND {
             self.cu_price = PRICE_CHANGE_SCALE

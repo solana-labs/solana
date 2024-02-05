@@ -1,5 +1,5 @@
 use {
-    crate::compute_unit_pricer::ComputeUnitPricer,
+    crate::compute_unit_pricer::{MICRO_LAMPORTS_PER_LAMPORT, ComputeUnitPricer},
     lru::LruCache,
     solana_sdk::{clock::Slot, pubkey::Pubkey,},
 };
@@ -9,7 +9,7 @@ use {
 const CACHE_CAPACITY: usize = 2048;
 
 /// Initial value for write lock fee_rate per account, denominated in millilamports-per-cu
-const INITIAL_FEE_RATE: u64 = 1;
+const DEFAULT_FEE_RATE: u64 = 0;
 
 //TODO testing SIMD-0110, if it belongs to bank, it's abi
 //#[frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")]
@@ -47,27 +47,32 @@ impl WriteLockFeeCache {
     }
 
     // param: pubkeys are all writable locks of a tx.
-    // If pubkey doesn't exist in Cache, it's assigned the default/init write lock fee;
+    // If pubkey doesn't exist in Cache, then no write-lock-fee is charged for iti (default);
     // otherse the write-lock fee for that account is it's fee_rate times tx CU.
     // Return the total write locks fee, in lamports
     pub fn calculate_write_lock_fee(&self, pubkeys: &[Pubkey], cus: u32) -> u64 {
-        pubkeys.iter().map(|key| {
-            let fee_rate = if let Some(fee_rate) = self.get_write_lock_fee_rate(key) {
+        let micro_lamports_fee = pubkeys.iter().map(|key| {
+            let fee_rate_micro_lamports_per_cu = if let Some(fee_rate) = self.get_write_lock_fee_rate_micro_lamports_per_cu(key) {
                 fee_rate
             } else {
-                INITIAL_FEE_RATE
+                DEFAULT_FEE_RATE
             };
-            u64::from(cus) * fee_rate
+            u128::from(cus) * u128::from(fee_rate_micro_lamports_per_cu)
         })
-        .sum::<u64>()
-        .saturating_div(1_000) // convert millilamports to lamports
+        .sum::<u128>();
+
+        micro_lamports_fee
+            .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+            .checked_div(MICRO_LAMPORTS_PER_LAMPORT as u128)
+            .and_then(|fee| u64::try_from(fee).ok())
+            .unwrap_or(u64::MAX)
     }
 
     // search cache for fee_rate for given pubkey.
-    // return current fee_rate, in lamports_per_cu, if accout is in cache
+    // return current fee_rate, in micro_lamports_per_cu if accout is in cache
     // return None otherwise
-    pub fn get_write_lock_fee_rate(&self, pubkey: &Pubkey) -> Option<u64> {
-        self.cache.peek(pubkey).map(|pricer| pricer.get_fee_rate())
+    pub fn get_write_lock_fee_rate_micro_lamports_per_cu(&self, pubkey: &Pubkey) -> Option<u64> {
+        self.cache.peek(pubkey).map(|pricer| pricer.get_fee_rate_micro_lamports_per_cu())
     }
 
     // Update Cache with write locked accounts from just-frozen bank.

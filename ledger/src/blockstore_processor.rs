@@ -46,7 +46,8 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
+        // TODO SIMD-0110
+        // feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,

@@ -1,6 +1,5 @@
 // N is number of datapoints used in exponential weighted moving average calculoation.
-// default to 128 blocks per SIMD-0110
-const N: i128 = 128;
+const N: i128 = 8;  // trying 2 leaders slots, 128 slots as specified in simd was too slow to react
 // The EMA_ALPHA represents the degree of weighting decrease in EMA,
 // a constant smoothing factor between 0 and 1. A higher alpha
 // discounts older observations faster.
