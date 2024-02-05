@@ -103,10 +103,6 @@ mod cell {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
 
-        pub(super) fn borrow_mut_unchecked<'t>(&self) -> &'t mut V {
-            unsafe { &mut *self.0.get() }
-        }
-
         pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t F
         where
           Token<V, F>: TokenTrait<V, F>,
