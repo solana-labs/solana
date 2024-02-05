@@ -118,22 +118,15 @@ mod cell {
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
     trait TokenTrait<V, F> {
-        fn partial_borrow<'a>(v: &'a V) -> &'a F {
-            panic!();
-        }
+        fn partial_borrow<'a>(v: &'a V) -> &'a F;
 
-        fn partial_borrow_mut<'a>(v: &'a mut V) -> &'a mut F {
-            panic!();
-        }
+        fn partial_borrow_mut<'a>(v: &'a mut V) -> &'a mut F;
     }
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
-    }
-
-    impl<V, F> TokenTrait<V, F> for Token<V, F> {
     }
 }
 
