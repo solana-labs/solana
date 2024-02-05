@@ -117,7 +117,7 @@ mod cell {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
-    trait TokenTrait<V, F> {
+    pub trait TokenTrait<V, F> {
         fn partial_borrow<'a>(v: &'a V) -> &'a F;
 
         fn partial_borrow_mut<'a>(v: &'a mut V) -> &'a mut F;
