@@ -252,9 +252,8 @@ impl PageInner {
         self.blocked_tasks.is_empty()
     }
 
-    fn pop_blocked_task(&mut self, unique_weight: UniqueWeight) {
-        let (pre_existed, _) = self.blocked_tasks.pop_last().unwrap();
-        assert_eq!(pre_existed, unique_weight);
+    fn pop_blocked_task(&mut self) {
+        self.blocked_tasks.pop_last().unwrap();
     }
 
     fn heaviest_blocked_task(&self) -> Option<&(Task, RequestedUsage)> {
@@ -462,6 +461,8 @@ impl SchedulingStateMachine {
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
             while let Some((unblocked_task, requested_usage)) = heaviest_unblocked {
+                let requested_usage = *requested_usage;
+
                 if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                     .decrement_self()
@@ -469,10 +470,7 @@ impl SchedulingStateMachine {
                 {
                     self.unblocked_task_queue.push_back(unblocked_task.clone());
                 }
-                let unique_weight = unblocked_task.unique_weight;
-                let requested_usage = *requested_usage;
-
-                page.pop_blocked_task(unique_weight);
+                page.pop_blocked_task();
 
                 match Self::attempt_lock_address(page, requested_usage) {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
