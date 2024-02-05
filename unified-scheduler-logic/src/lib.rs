@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{PartialBorrow, ShortCounter, Token, TokenCell},
+    crate::utils::{PartialBorrowMut, ShortCounter, Token, TokenCell},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -72,7 +72,7 @@ mod utils {
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
-            Token<V, F>: PartialBorrow<V, F>,
+            Token<V, F>: PartialBorrowMut<V, F>,
         {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
@@ -90,12 +90,12 @@ mod utils {
         }
     }
 
-    pub trait PartialBorrow<V, F> {
+    pub trait PartialBorrowMut<V, F> {
         fn partial_borrow_mut(v: &mut V) -> &mut F;
     }
 
     // generic identity conversion impl
-    impl<T> PartialBorrow<T, T> for Token<T, T> {
+    impl<T> PartialBorrowMut<T, T> for Token<T, T> {
         fn partial_borrow_mut(t: &mut T) -> &mut T {
             t
         }
@@ -120,13 +120,13 @@ struct TaskStatus {
     blocked_lock_count: ShortCounter,
 }
 
-impl PartialBorrow<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
+impl PartialBorrowMut<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
     fn partial_borrow_mut(v: &mut TaskStatus) -> &mut ShortCounter {
         &mut v.blocked_lock_count
     }
 }
 
-impl PartialBorrow<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
+impl PartialBorrowMut<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
     fn partial_borrow_mut(v: &mut TaskStatus) -> &mut Vec<LockAttempt> {
         &mut v.lock_attempts
     }
