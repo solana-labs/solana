@@ -129,6 +129,7 @@ mod cell {
         }
     }
 
+    // generic identity conversion impl
     impl<T> TokenTrait<T, T> for Token<T, T> {
         fn partial_borrow(t: &T) -> &T {
             t
