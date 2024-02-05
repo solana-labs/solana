@@ -507,7 +507,7 @@ impl SchedulingStateMachine {
                         LockStatus::Succeded(usage) => {
                             page.usage = usage;
                             if matches!(usage, Usage::Readonly(_)) {
-                                heaviest_uncontended_now = page.heaviest_blocked_task().unwrap();
+                                heaviest_uncontended_now = page.heaviest_blocked_task();
                                 /*
                                 if !matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
                                     //should_continue = false;
