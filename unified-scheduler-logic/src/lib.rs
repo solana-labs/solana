@@ -195,8 +195,8 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
-        &mut self.task_status.borrow_mut(task_token).lock_attempts
+    fn lock_attempts_mut<'t>(&self, task_token: &'t mut LockAttemptToken) -> &'t mut Vec<LockAttempt> {
+        &mut self.task_status.borrow_mut(task_token)
     }
 
     fn provisional_lock_count_mut(&self) -> &mut Counter {
@@ -455,7 +455,7 @@ impl SchedulingStateMachine {
     ) -> Option<R> {
         let provisional_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
-            task.lock_attempts_mut(&mut self.task_token),
+            task.lock_attempts_mut(&mut self.lock_attempt_token),
         );
 
         //eprintln!("{:?}", provisional_lock_count);
@@ -469,7 +469,7 @@ impl SchedulingStateMachine {
     }
 
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
-        for lock_attempt in task.lock_attempts_mut(&mut self.task_token) {
+        for lock_attempt in task.lock_attempts_mut(&mut self.lock_attempt_token) {
             if matches!(lock_attempt.lock_status, LockStatus::Failed) {
                 let requested_usage = lock_attempt.requested_usage;
                 lock_attempt
