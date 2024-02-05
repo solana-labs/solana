@@ -11,17 +11,6 @@ use {
     },
 };
 
-#[derive(Clone, Debug, Default)]
-enum LockStatus {
-    Succeded(Usage),
-    #[default]
-    Failed,
-}
-const_assert_eq!(mem::size_of::<LockStatus>(), 8);
-
-pub type Task = Arc<TaskInner>;
-const_assert_eq!(mem::size_of::<Task>(), 8);
-
 mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
@@ -125,6 +114,17 @@ mod utils {
         }
     }
 }
+
+#[derive(Clone, Debug, Default)]
+enum LockStatus {
+    Succeded(Usage),
+    #[default]
+    Failed,
+}
+const_assert_eq!(mem::size_of::<LockStatus>(), 8);
+
+pub type Task = Arc<TaskInner>;
+const_assert_eq!(mem::size_of::<Task>(), 8);
 
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
