@@ -988,7 +988,7 @@ where
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
                             (if session_ending {"S"} else {"-"}), (if thread_suspending {"T"} else {"-"}),
-                            state_machine.active_task_count(), state_machine.retryable_task_count(), state_machine.handled_task_count(),
+                            state_machine.active_task_count(), state_machine.unblocked_task_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.rescheduled_task_count(),
                             new_task_receiver.len(),
@@ -1032,10 +1032,10 @@ where
                                 }
                                 "step"
                             },
-                            recv(if state_machine.has_retryable_task() { do_now } else { dont_now }) -> dummy_result => {
+                            recv(if state_machine.has_unblocked_task() { do_now } else { dont_now }) -> dummy_result => {
                                 assert_matches!(dummy_result, Err(RecvError));
 
-                                state_machine.schedule_retryable_task(|task| {
+                                state_machine.schedule_unblocked_task(|task| {
                                     blocked_task_sender
                                         .send_payload(task.clone())
                                         .unwrap();

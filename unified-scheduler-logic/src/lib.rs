@@ -270,7 +270,7 @@ impl SchedulingStateMachine {
         self.active_task_count.is_zero()
     }
 
-    pub fn retryable_task_count(&self) -> usize {
+    pub fn unblocked_task_count(&self) -> usize {
         self.unblocked_task_queue.len()
     }
 
@@ -308,16 +308,16 @@ impl SchedulingStateMachine {
         ret
     }
 
-    pub fn has_retryable_task(&self) -> bool {
+    pub fn has_unblocked_task(&self) -> bool {
         !self.unblocked_task_queue.is_empty()
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub fn schedule_retryable_task_for_test(&mut self) -> Option<Task> {
-        self.schedule_retryable_task(|task| task.clone())
+    pub fn schedule_unblocked_task_for_test(&mut self) -> Option<Task> {
+        self.schedule_unblocked_task(|task| task.clone())
     }
 
-    pub fn schedule_retryable_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
+    pub fn schedule_unblocked_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
         self.unblocked_task_queue.pop_front().map(|task| {
             let ret = on_success(&task);
             self.rescheduled_task_count.increment_self();
@@ -655,24 +655,24 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
-        assert!(state_machine.has_retryable_task());
-        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert!(state_machine.has_unblocked_task());
+        assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_eq!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .unwrap()
                 .task_index(),
             task2.task_index()
         );
-        assert!(!state_machine.has_retryable_task());
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert!(!state_machine.has_unblocked_task());
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
     }
 
     #[test]
-    fn test_schedule_retryable_task() {
+    fn test_schedule_unblocked_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -687,18 +687,18 @@ mod tests {
         assert_eq!(state_machine.rescheduled_task_count(), 0);
         assert_eq!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .unwrap()
                 .task_index(),
             task2.task_index()
         );
         assert_eq!(state_machine.rescheduled_task_count(), 1);
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
     }
 
     #[test]
-    fn test_schedule_retryable_task2() {
+    fn test_schedule_unblocked_task2() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -709,21 +709,21 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.rescheduled_task_count(), 0);
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
         assert_eq!(state_machine.rescheduled_task_count(), 1);
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), None);
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
         assert_eq!(state_machine.rescheduled_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_retryable_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
         assert_eq!(state_machine.rescheduled_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_retryable_task3() {
+    fn test_schedule_unblocked_task3() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -742,9 +742,9 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
 
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
     }
@@ -764,11 +764,11 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.handled_task_count(), 2);
@@ -802,15 +802,15 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
-        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
     }
 
     #[test]
@@ -836,14 +836,14 @@ mod tests {
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.retryable_task_count(), 0);
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.retryable_task_count(), 1);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -870,7 +870,7 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -896,13 +896,13 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
         assert_matches!(
             state_machine
-                .schedule_retryable_task_for_test()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(5)
         );
