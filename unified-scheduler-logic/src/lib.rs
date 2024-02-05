@@ -311,20 +311,14 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn schedule_task_for_test(&mut self, task: Task) -> Option<Task> {
-        self.schedule_task(task, |task| task.clone())
-    }
-
     pub fn schedule_task<R>(
         &mut self,
         task: Task,
-        on_success: impl FnOnce(&Task) -> R,
-    ) -> Option<R> {
-        let ret = self.try_lock_for_task(task, on_success);
+    ) -> Option<Task> {
+        let task = self.try_lock_for_task(task);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        ret
+        task
     }
 
     pub fn has_unblocked_task(&self) -> bool {
@@ -424,8 +418,7 @@ impl SchedulingStateMachine {
     fn try_lock_for_task<R>(
         &mut self,
         task: Task,
-        on_success: impl FnOnce(&Task) -> R,
-    ) -> Option<R> {
+    ) -> Option<Task> {
         let blocked_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.lock_attempts_mut(&mut self.lock_attempt_token),
@@ -436,7 +429,7 @@ impl SchedulingStateMachine {
             self.register_blocked_task_into_pages(&task);
             None
         } else {
-            Some(on_success(&task))
+            Some(task)
         }
     }
 
