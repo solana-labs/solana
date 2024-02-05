@@ -25,7 +25,7 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
-mod counter {
+mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
 
