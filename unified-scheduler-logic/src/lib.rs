@@ -26,6 +26,9 @@ pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
 mod counter {
+    #[cfg(feature = "dev-context-only-utils")]
+    use qualifier_attr::qualifiers;
+
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     #[derive(Debug, Clone, Copy)]
     pub(super) struct Counter(u32);
