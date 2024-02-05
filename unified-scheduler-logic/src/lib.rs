@@ -1,9 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::{
-        utils::{Counter, SchedulerCell, Token, TokenTrait},
-    },
+    crate::utils::{Counter, SchedulerCell, Token, TokenTrait},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -27,6 +25,7 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
+    use std::{cell::UnsafeCell, marker::PhantomData};
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     #[derive(Debug, Clone, Copy)]
@@ -72,8 +71,6 @@ mod utils {
             self
         }
     }
-
-    use std::{cell::UnsafeCell, marker::PhantomData};
 
     #[derive(Debug, Default)]
     pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
