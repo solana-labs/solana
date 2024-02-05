@@ -82,7 +82,7 @@ struct TaskStatus {
     blocked_lock_count: Counter,
 }
 
-mod cell {
+mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
     use std::{cell::UnsafeCell, marker::PhantomData};
