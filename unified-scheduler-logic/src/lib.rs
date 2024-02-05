@@ -505,7 +505,7 @@ impl SchedulingStateMachine {
                         page.usage = usage;
                         heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
                             page.heaviest_blocked_task()
-                                .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
+                                //.filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
                             None
                         }
