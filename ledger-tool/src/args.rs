@@ -12,7 +12,7 @@ use {
         blockstore_processor::ProcessOptions,
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
-    solana_runtime::runtime_config::RuntimeConfig,
+    solana_runtime::svm::runtime_config::RuntimeConfig,
     solana_sdk::clock::Slot,
     std::{
         collections::HashSet,

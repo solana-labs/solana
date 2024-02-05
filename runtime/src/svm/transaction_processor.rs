@@ -1,10 +1,7 @@
 use {
-    crate::{
-        runtime_config::RuntimeConfig,
-        svm::{
-            account_loader::load_accounts,
-            transaction_account_state_info::TransactionAccountStateInfo,
-        },
+    crate::svm::{
+        account_loader::load_accounts, runtime_config::RuntimeConfig,
+        transaction_account_state_info::TransactionAccountStateInfo,
     },
     log::debug,
     percentage::Percentage,
