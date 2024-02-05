@@ -298,14 +298,14 @@ const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
 pub struct Page(Arc<SchedulerCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
 
-#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(task_token(pub)))]
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(blocked_lock_count_token(pub)))]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: Counter,
     handled_task_count: Counter,
     unblocked_task_count: Counter,
     total_task_count: Counter,
-    task_token: BlockedLockCountToken,
+    blocked_lock_count_token: BlockedLockCountToken,
     lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
 }
@@ -567,7 +567,7 @@ impl Default for SchedulingStateMachine {
             handled_task_count: Counter::zero(),
             unblocked_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
-            task_token: unsafe { BlockedLockCountToken::assume_on_the_scheduler_thread() },
+            blocked_lock_count_token: unsafe { BlockedLockCountToken::assume_on_the_scheduler_thread() },
             lock_attempt_token: unsafe { LockAttemptToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
