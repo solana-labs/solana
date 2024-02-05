@@ -56,7 +56,7 @@ impl ImmutableDeserializedPacket {
             .get_compute_budget_details(packet.meta().round_compute_unit_price())
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
-        // set priority to zero for vote transactions
+        // set compute unit price to zero for vote transactions
         if is_simple_vote {
             compute_budget_details.compute_unit_price = 0;
         };
