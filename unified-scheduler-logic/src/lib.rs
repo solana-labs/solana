@@ -415,7 +415,10 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock<'t>(page: &'t mut PageInner, attempt: &LockAttempt) -> Option<&'t (Task, RequestedUsage)> {
+    fn unlock<'t>(
+        page: &'t mut PageInner,
+        attempt: &LockAttempt,
+    ) -> Option<&'t (Task, RequestedUsage)> {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
@@ -501,13 +504,9 @@ impl SchedulingStateMachine {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
-                        heaviest_uncontended_now = 
-                        if matches!(usage, Usage::Readonly(_)) {
-                            page
-                                .heaviest_blocked_task()
-                                .filter(|t| {
-                                    matches!(t, (_, RequestedUsage::Readonly))
-                                })
+                        heaviest_uncontended_now = if matches!(usage, Usage::Readonly(_)) {
+                            page.heaviest_blocked_task()
+                                .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
                             None
                         }
@@ -992,7 +991,7 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
-        let _ =SchedulingStateMachine::unlock(
+        let _ = SchedulingStateMachine::unlock(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Readonly),
         );
