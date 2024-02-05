@@ -114,8 +114,9 @@ fn bench_schedule_task(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
     let mut scheduler = SchedulingStateMachine::default();
     toggle_collect();
-    scheduler.schedule_task(task).unwrap();
+    let task = scheduler.schedule_task(task)
     toggle_collect();
+    task.unwrap();
 }
 
 #[library_benchmark]
@@ -468,8 +469,9 @@ fn bench_schedule_unblocked_task(account_count: usize) {
     assert_matches!(scheduler.schedule_task(task2), None);
     scheduler.deschedule_task(&task);
     toggle_collect();
-    let retried_task = scheduler.schedule_unblocked_task().unwrap();
+    let retried_task = scheduler.schedule_unblocked_task();
     toggle_collect();
+    let task = retried_task.unwrap();
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
