@@ -311,7 +311,7 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
-    pub fn schedule_task<R>(
+    pub fn schedule_task(
         &mut self,
         task: Task,
     ) -> Option<Task> {
