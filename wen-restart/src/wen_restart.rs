@@ -314,11 +314,7 @@ mod tests {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::{
-            fs::remove_file,
-            sync::Arc,
-            thread::Builder,
-        },
+        std::{fs::remove_file, sync::Arc, thread::Builder},
         tempfile::TempDir,
     };
 
@@ -500,7 +496,9 @@ mod tests {
     }
 
     fn insert_and_freeze_slots(
-        bank_forks: Arc<RwLock<BankForks>>, expected_slots_to_repair: Vec<Slot>){
+        bank_forks: Arc<RwLock<BankForks>>,
+        expected_slots_to_repair: Vec<Slot>,
+    ) {
         let mut parent_bank = bank_forks.read().unwrap().root_bank();
         for slot in expected_slots_to_repair {
             let mut bank_forks_rw = bank_forks.write().unwrap();
