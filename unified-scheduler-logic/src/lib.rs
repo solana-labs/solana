@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{SchedulerCell, ShortCounter, Token, TokenTrait},
+    crate::utils::{TokenCell, ShortCounter, Token, TokenTrait},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -73,9 +73,9 @@ mod utils {
     }
 
     #[derive(Debug, Default)]
-    pub(super) struct SchedulerCell<V>(UnsafeCell<V>);
+    pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
-    impl<V> SchedulerCell<V> {
+    impl<V> TokenCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
             Self(UnsafeCell::new(value))
@@ -96,8 +96,8 @@ mod utils {
         }
     }
 
-    unsafe impl<V> Send for SchedulerCell<V> {}
-    unsafe impl<V> Sync for SchedulerCell<V> {}
+    unsafe impl<V> Send for TokenCell<V> {}
+    unsafe impl<V> Sync for TokenCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
@@ -180,7 +180,7 @@ pub struct TaskInner {
     // put this field out of this struct for maximum space efficiency?
     unique_weight: UniqueWeight,
     transaction: SanitizedTransaction, // actually should be Bundle
-    task_status: SchedulerCell<TaskStatus>,
+    task_status: TokenCell<TaskStatus>,
 }
 
 impl TaskInner {
@@ -287,11 +287,11 @@ impl PageInner {
     }
 }
 
-const_assert_eq!(mem::size_of::<SchedulerCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 32);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
-pub struct Page(Arc<SchedulerCell<PageInner>>);
+pub struct Page(Arc<TokenCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
 
 #[cfg_attr(
@@ -553,7 +553,7 @@ impl SchedulingStateMachine {
         Task::new(TaskInner {
             unique_weight,
             transaction,
-            task_status: SchedulerCell::new(TaskStatus::new(locks)),
+            task_status: TokenCell::new(TaskStatus::new(locks)),
         })
     }
 }
@@ -645,7 +645,7 @@ mod tests {
         };
         assert_eq!(
             format!("{:?}", task_status),
-            "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
+            "TaskStatus { lock_attempts: [LockAttempt { page: Page(TokenCell(UnsafeCell { \
              .. })), requested_usage: Writable, lock_status: Failed }], blocked_lock_count: \
              ShortCounter(0) }"
         );
