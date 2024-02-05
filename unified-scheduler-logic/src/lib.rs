@@ -491,11 +491,11 @@ impl SchedulingStateMachine {
                 if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                     .decrement_self()
-                    .is_zero() {
-                    self.unblocked_task_queue
-                        .push_back(unblocked_task.clone());
+                    .is_zero()
+                {
+                    self.unblocked_task_queue.push_back(unblocked_task.clone());
                 }
-                let unique_weight= unblocked_task.unique_weight;
+                let unique_weight = unblocked_task.unique_weight;
                 let requested_usage = *requested_usage;
 
                 page.pop_blocked_task(unique_weight);
@@ -521,6 +521,7 @@ impl SchedulingStateMachine {
         index: usize,
         page_loader: &mut impl FnMut(Pubkey) -> Page,
     ) -> Task {
+        // this is safe bla bla
         let locks = transaction.get_account_locks_unchecked();
 
         let writable_locks = locks
