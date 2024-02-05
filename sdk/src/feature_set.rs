@@ -744,6 +744,10 @@ pub mod index_erasure_conflict_duplicate_proofs {
     solana_sdk::declare_id!("dupPajaLy2SSn8ko42aZz4mHANDNrLe8Nw8VQgFecLa");
 }
 
+pub mod disable_bpf_loader_instructions {
+    solana_sdk::declare_id!("7WeS1vfPRgeeoXArLh7879YcB9mgE9ktjPDtajXeWfXn");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -925,6 +929,7 @@ lazy_static! {
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
         (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
+        (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -36,9 +36,10 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
+            disable_bpf_loader_instructions, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -509,7 +510,20 @@ pub fn process_instruction_inner(
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
-            process_loader_instruction(invoke_context)
+            // Return `UnsupportedProgramId` error for bpf_loader when
+            // `disable_bpf_loader_instruction` feature is activated.
+            if invoke_context
+                .feature_set
+                .is_active(&disable_bpf_loader_instructions::id())
+            {
+                ic_logger_msg!(
+                    log_collector,
+                    "BPF loader management instructions are no longer supported"
+                );
+                Err(InstructionError::UnsupportedProgramId)
+            } else {
+                process_loader_instruction(invoke_context)
+            }
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
