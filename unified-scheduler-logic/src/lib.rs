@@ -124,7 +124,7 @@ const_assert_eq!(mem::size_of::<PageToken>(), 0);
 type TaskToken = Token<TaskStatus>;
 const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
-type LockAttemptToken = Token<LockAttemptToken>;
+type LockAttemptToken = Token<LockAttempt>;
 const_assert_eq!(mem::size_of::<LockAttemptToken>(), 0);
 
 impl TaskStatus {
