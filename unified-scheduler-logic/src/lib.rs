@@ -503,15 +503,16 @@ impl SchedulingStateMachine {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                         LockStatus::Succeded(usage) => {
                             page.usage = usage;
+                            heaviest_uncontended_now = 
                             if matches!(usage, Usage::Readonly(_)) {
-                                heaviest_uncontended_now = page.heaviest_blocked_task();
+                                page.heaviest_blocked_task()
                                 /*
                                 if !matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
                                     //should_continue = false;
                                 }
                                 */
                             } else {
-                                heaviest_uncontended_now = None;
+                                None
                             }
                         }
                     }
