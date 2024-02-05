@@ -331,16 +331,10 @@ impl SchedulingStateMachine {
         !self.unblocked_task_queue.is_empty()
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn schedule_unblocked_task_for_test(&mut self) -> Option<Task> {
-        self.schedule_unblocked_task(|task| task.clone())
-    }
-
-    pub fn schedule_unblocked_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
+    pub fn schedule_unblocked_task(&mut self) -> Option<Task> {
         self.unblocked_task_queue.pop_front().map(|task| {
-            let ret = on_success(&task);
             self.unblocked_task_count.increment_self();
-            ret
+            task
         })
     }
 
