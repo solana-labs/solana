@@ -97,9 +97,15 @@ impl WriteLockFeeCache {
             };
 
             if cache_changed {
-                // report account per slot fee_rate
                 let current_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
                 let current_ema = self.cache.peek(pubkey).unwrap().get_ema();
+                // once a account's fee rate is dropped to `0`, it must be removed from cache,
+                // otherwise future update will be = 0 * in[de]crease = 0;
+                if current_fee_rate == 0 {
+                    let _ = self.cache.pop(pubkey);
+                }
+
+                // report account per slot fee_rate
                 datapoint_info!("simd-0110_account-stats",
                                 ("slot", slot, i64),
                                 ("pubkey", pubkey.to_string(), String),
