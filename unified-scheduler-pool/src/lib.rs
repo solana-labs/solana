@@ -1035,10 +1035,11 @@ where
                             recv(if state_machine.has_unblocked_task() { do_now } else { dont_now }) -> dummy_result => {
                                 assert_matches!(dummy_result, Err(RecvError));
 
-                                state_machine.schedule_unblocked_task().map(|task|
-                                blocked_task_sender
-                                    .send_payload(task)
-                                    .unwrap());
+                                if let Some(task) = state_machine.schedule_unblocked_task() {
+                                    blocked_task_sender
+                                        .send_payload(task)
+                                        .unwrap());
+                                }
                                 "step"
                             },
                             recv(new_task_receiver) -> message => {
