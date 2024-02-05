@@ -2,8 +2,7 @@
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
     crate::{
-        utils::{SchedulerCell, Token, TokenTrait},
-        counter::Counter,
+        utils::{Counter, SchedulerCell, Token, TokenTrait},
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
@@ -74,8 +73,6 @@ mod utils {
         }
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
-    use qualifier_attr::qualifiers;
     use std::{cell::UnsafeCell, marker::PhantomData};
 
     #[derive(Debug, Default)]
