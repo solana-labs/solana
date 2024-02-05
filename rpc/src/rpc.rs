@@ -111,7 +111,7 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         time::Duration,
     },
@@ -205,7 +205,7 @@ pub struct JsonRpcRequestProcessor {
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
-    transaction_sender: Arc<Mutex<Sender<TransactionInfo>>>,
+    transaction_sender: Sender<TransactionInfo>,
     bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
@@ -322,7 +322,7 @@ impl JsonRpcRequestProcessor {
         max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> (Self, Receiver<TransactionInfo>) {
-        let (sender, receiver) = unbounded();
+        let (transaction_sender, transaction_receiver) = unbounded();
         (
             Self {
                 config,
@@ -334,7 +334,7 @@ impl JsonRpcRequestProcessor {
                 health,
                 cluster_info,
                 genesis_hash,
-                transaction_sender: Arc::new(Mutex::new(sender)),
+                transaction_sender,
                 bigtable_ledger_storage,
                 optimistically_confirmed_bank,
                 largest_accounts_cache,
@@ -344,7 +344,7 @@ impl JsonRpcRequestProcessor {
                 max_complete_rewards_slot,
                 prioritization_fee_cache,
             },
-            receiver,
+            transaction_receiver,
         )
     }
 
@@ -408,7 +408,7 @@ impl JsonRpcRequestProcessor {
             )),
             cluster_info,
             genesis_hash,
-            transaction_sender: Arc::new(Mutex::new(sender)),
+            transaction_sender: sender,
             bigtable_ledger_storage: None,
             optimistically_confirmed_bank,
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
@@ -2579,8 +2579,6 @@ fn _send_transaction(
         None,
     );
     meta.transaction_sender
-        .lock()
-        .unwrap()
         .send(transaction_info)
         .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
 
