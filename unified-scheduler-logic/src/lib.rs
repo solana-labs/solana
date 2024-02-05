@@ -130,16 +130,6 @@ mod cell {
     }
 }
 
-impl TokenTrait<PageInner, PageInner> for Token<PageInner, PageInner> {
-    fn partial_borrow(v: &PageInner) -> &PageInner {
-        v
-    }
-
-    fn partial_borrow_mut(v: &mut PageInner) -> &mut PageInner {
-        v
-    }
-}
-
 impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
     fn partial_borrow(v: &TaskStatus) -> &Counter {
         &v.blocked_lock_count
