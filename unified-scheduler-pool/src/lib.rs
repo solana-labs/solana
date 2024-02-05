@@ -988,7 +988,7 @@ where
                             scheduler_id, slot,
                             (if ($prefix) == "step" { "interval" } else { $prefix }),
                             (if session_ending {"S"} else {"-"}), (if thread_suspending {"T"} else {"-"}),
-                            state_machine.active_task_count(), state_machine.active_unblocked_task_count(), state_machine.handled_task_count(),
+                            state_machine.active_task_count(), state_machine.unblocked_task_queue_count(), state_machine.handled_task_count(),
                             state_machine.total_task_count(),
                             state_machine.unblocked_task_count(),
                             new_task_receiver.len(),

@@ -269,7 +269,7 @@ impl SchedulingStateMachine {
         self.active_task_count.is_zero()
     }
 
-    pub fn active_unblocked_task_count(&self) -> usize {
+    pub fn unblocked_task_queue_count(&self) -> usize {
         self.unblocked_task_queue.len()
     }
 
