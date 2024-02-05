@@ -128,6 +128,16 @@ mod cell {
             Self(PhantomData)
         }
     }
+
+    impl TokenTrait<T, T> for Token<T, T> {
+        fn partial_borrow(t: &T) -> &T {
+            t
+        }
+
+        fn partial_borrow_mut(v: &mut T) -> &mut T {
+            t
+        }
+    }
 }
 
 impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
