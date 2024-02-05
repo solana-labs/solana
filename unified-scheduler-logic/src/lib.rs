@@ -311,20 +311,36 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
-    pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn schedule_task_for_test(&mut self, task: Task) -> Option<Task> {
+        self.schedule_task(task, |task| task.clone())
+    }
+
+    pub fn schedule_task<R>(
+        &mut self,
+        task: Task,
+        on_success: impl FnOnce(&Task) -> R,
+    ) -> Option<R> {
+        let ret = self.try_lock_for_task(task, on_success);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task(task)
+        ret
     }
 
     pub fn has_unblocked_task(&self) -> bool {
         !self.unblocked_task_queue.is_empty()
     }
 
-    pub fn schedule_unblocked_task(&mut self) -> Option<Task> {
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn schedule_unblocked_task_for_test(&mut self) -> Option<Task> {
+        self.schedule_unblocked_task(|task| task.clone())
+    }
+
+    pub fn schedule_unblocked_task<R>(&mut self, on_success: impl FnOnce(&Task) -> R) -> Option<R> {
         self.unblocked_task_queue.pop_front().map(|task| {
+            let ret = on_success(&task);
             self.unblocked_task_count.increment_self();
-            task
+            ret
         })
     }
 
@@ -411,7 +427,11 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
+    fn try_lock_for_task<R>(
+        &mut self,
+        task: Task,
+        on_success: impl FnOnce(&Task) -> R,
+    ) -> Option<R> {
         let blocked_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.lock_attempts_mut(&mut self.lock_attempt_token),
@@ -422,7 +442,7 @@ impl SchedulingStateMachine {
             self.register_blocked_task_into_pages(&task);
             None
         } else {
-            Some(task)
+            Some(on_success(&task))
         }
     }
 
@@ -625,7 +645,7 @@ mod tests {
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        let task = state_machine.schedule_task(task).unwrap();
+        let task = state_machine.schedule_task_for_test(task).unwrap();
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.total_task_count(), 1);
         state_machine.deschedule_task(&task);
@@ -643,15 +663,15 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert!(state_machine.has_unblocked_task());
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_eq!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .unwrap()
                 .task_index(),
             task2.task_index()
@@ -660,7 +680,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
     }
 
     #[test]
@@ -671,21 +691,21 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_eq!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .unwrap()
                 .task_index(),
             task2.task_index()
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task(), None);
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
     }
 
@@ -698,24 +718,24 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
         assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task(), None);
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
@@ -731,14 +751,14 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
     }
 
     #[test]
@@ -751,8 +771,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), Some(_));
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -780,17 +800,17 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task(task1.clone())
+                .schedule_task_for_test(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
         assert_matches!(
             state_machine
-                .schedule_task(task2.clone())
+                .schedule_task_for_test(task2.clone())
                 .map(|t| t.task_index()),
             Some(4)
         );
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -819,12 +839,12 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task(task1.clone())
+                .schedule_task_for_test(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -835,7 +855,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -853,16 +873,16 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task(task1.clone())
+                .schedule_task_for_test(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -881,20 +901,20 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
-        assert_matches!(state_machine.schedule_task(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(4)
         );
         assert_matches!(
             state_machine
-                .schedule_unblocked_task()
+                .schedule_unblocked_task_for_test()
                 .map(|t| t.task_index()),
             Some(5)
         );
@@ -911,8 +931,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
