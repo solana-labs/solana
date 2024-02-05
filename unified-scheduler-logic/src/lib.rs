@@ -501,6 +501,7 @@ impl SchedulingStateMachine {
                 let ru = *requested_usage;
                 page.pop_blocked_task(uw);
                 match Self::attempt_lock_address(page, ru) {
+                    LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
                         heaviest_uncontended_now = if matches!(usage, Usage::Readonly(_)) {
@@ -510,7 +511,6 @@ impl SchedulingStateMachine {
                             None
                         }
                     }
-                    LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                 }
             }
         }
