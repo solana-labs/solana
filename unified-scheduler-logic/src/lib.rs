@@ -118,9 +118,9 @@ mod cell {
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
     pub trait TokenTrait<V, F> {
-        fn partial_borrow<'a>(v: &'a V) -> &'a F;
+        fn partial_borrow(v: &V) -> &F;
 
-        fn partial_borrow_mut<'a>(v: &'a mut V) -> &'a mut F;
+        fn partial_borrow_mut(v: &mut V) -> &mut F;
     }
 
     impl<V, F> Token<V, F> {
