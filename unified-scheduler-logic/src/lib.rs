@@ -93,7 +93,7 @@ mod cell {
         }
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut V {
-            unsafe { &mut *self.0.get() }
+            Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
 
         pub(super) fn borrow_mut_unchecked<'t>(&self) -> &'t mut V {
@@ -101,7 +101,7 @@ mod cell {
         }
 
         pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t V {
-            Token::borrow_partially(unsafe { &*self.0.get() })
+            Token::partial_borrow(unsafe { &*self.0.get() })
         }
     }
 
@@ -116,7 +116,11 @@ mod cell {
             Self(PhantomData)
         }
 
-        fn borrow_partially<'a>(v: &'a V) -> &'a F {
+        fn partial_borrow<'a>(v: &'a V) -> &'a F {
+            panic!();
+        }
+
+        fn partial_borrow_mut<'a>(v: &mut 'a V) -> &mut 'a F {
             panic!();
         }
     }
