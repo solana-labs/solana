@@ -1038,7 +1038,7 @@ where
                                 if let Some(task) = state_machine.schedule_unblocked_task() {
                                     blocked_task_sender
                                         .send_payload(task)
-                                        .unwrap());
+                                        .unwrap();
                                 }
                                 "step"
                             },
