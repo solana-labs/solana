@@ -314,7 +314,7 @@ impl SchedulingStateMachine {
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task(task);
+        self.try_lock_for_task(task)
     }
 
     pub fn has_unblocked_task(&self) -> bool {
