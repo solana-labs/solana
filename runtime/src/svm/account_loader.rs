@@ -1,5 +1,7 @@
 use {
-    crate::{bank::TransactionProcessingCallback, svm::account_rent_state::RentState},
+    crate::svm::{
+        account_rent_state::RentState, transaction_processor::TransactionProcessingCallback,
+    },
     itertools::Itertools,
     log::warn,
     solana_accounts_db::{

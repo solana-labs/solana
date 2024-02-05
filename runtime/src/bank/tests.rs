@@ -18,6 +18,10 @@ use {
         },
         snapshot_bank_utils, snapshot_utils,
         status_cache::MAX_CACHE_ENTRIES,
+        svm::{
+            account_loader::load_accounts,
+            transaction_account_state_info::TransactionAccountStateInfo,
+        },
     },
     assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
@@ -38,6 +42,7 @@ use {
         partitioned_rewards::TestPartitionedEpochRewards,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_results::DurableNonceFee,
     },
     solana_logger,
     solana_program_runtime::{
@@ -45,7 +50,10 @@ use {
         compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
         invoke_context::mock_process_instruction,
-        loaded_programs::{LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch,
+            DELAY_VISIBILITY_SLOT_OFFSET,
+        },
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -13741,8 +13749,7 @@ fn test_filter_executable_program_accounts() {
     let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
     let owners = &[program1_pubkey, program2_pubkey];
-    let transaction_processor = TransactionBatchProcessor::new(&bank);
-    let programs = transaction_processor.filter_executable_program_accounts(
+    let programs = TransactionBatchProcessor::filter_executable_program_accounts(
         &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
@@ -13837,8 +13844,7 @@ fn test_filter_executable_program_accounts_invalid_blockhash() {
 
     let owners = &[program1_pubkey, program2_pubkey];
     let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
-    let transaction_processor = TransactionBatchProcessor::new(&bank);
-    let programs = transaction_processor.filter_executable_program_accounts(
+    let programs = TransactionBatchProcessor::filter_executable_program_accounts(
         &bank,
         &[sanitized_tx1, sanitized_tx2],
         &mut lock_results,
