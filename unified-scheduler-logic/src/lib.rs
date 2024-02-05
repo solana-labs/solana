@@ -460,8 +460,10 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
-            while let Some((unblocked_task, requested_usage)) = heaviest_unblocked.map(|(t, requested_usage)| (t, *requested_usage)) {
-
+            // pacify brrowck with this map
+            while let Some((unblocked_task, requested_usage)) =
+                heaviest_unblocked.map(|(t, u)| (t, *u))
+            {
                 if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                     .decrement_self()
