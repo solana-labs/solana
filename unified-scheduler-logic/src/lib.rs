@@ -461,7 +461,6 @@ impl SchedulingStateMachine {
             task.lock_attempts_mut(&mut self.lock_attempt_token),
         );
 
-        //eprintln!("{:?}", blocked_lock_count);
         if blocked_lock_count.current() > 0 {
             *task.blocked_lock_count_mut(&mut self.blocked_lock_count_token) = blocked_lock_count;
             self.register_blocked_task_into_pages(&task);
