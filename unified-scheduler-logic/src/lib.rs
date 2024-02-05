@@ -130,6 +130,10 @@ mod cell {
     }
 }
 
+impl TokenTrait<PageInner, PageInner> for Token<PageInner, PageInner> {
+}
+
+
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
