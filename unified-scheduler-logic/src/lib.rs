@@ -163,8 +163,8 @@ impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAtte
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-type TaskToken = Token<TaskStatus, TaskStatus>;
-const_assert_eq!(mem::size_of::<TaskToken>(), 0);
+type BlockedLockCountToken = Token<TaskStatus, TaskStatus>;
+const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 type LockAttemptToken = Token<TaskStatus, Vec<LockAttempt>>;
 const_assert_eq!(mem::size_of::<LockAttemptToken>(), 0);
@@ -305,7 +305,7 @@ pub struct SchedulingStateMachine {
     handled_task_count: Counter,
     unblocked_task_count: Counter,
     total_task_count: Counter,
-    task_token: TaskToken,
+    task_token: BlockedLockCountToken,
     lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
 }
@@ -567,7 +567,7 @@ impl Default for SchedulingStateMachine {
             handled_task_count: Counter::zero(),
             unblocked_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
-            task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
+            task_token: unsafe { BlockedLockCountToken::assume_on_the_scheduler_thread() },
             lock_attempt_token: unsafe { LockAttemptToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
