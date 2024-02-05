@@ -210,7 +210,7 @@ impl TaskInner {
     }
 
     fn lock_attempts<'t>(&self, lock_attempt_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
-        &self.task_status.borrow(lock_attempt_token)
+        self.task_status.borrow(lock_attempt_token)
     }
 
     pub fn task_index(&self) -> usize {
