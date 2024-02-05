@@ -2,7 +2,7 @@
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
     crate::{
-        cell::{SchedulerCell, Token, TokenTrait},
+        utils::{SchedulerCell, Token, TokenTrait},
         counter::Counter,
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
