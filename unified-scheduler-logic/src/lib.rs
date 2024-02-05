@@ -311,10 +311,7 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
-    pub fn schedule_task(
-        &mut self,
-        task: Task,
-    ) -> Option<Task> {
+    pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         let task = self.try_lock_for_task(task);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -415,10 +412,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn try_lock_for_task(
-        &mut self,
-        task: Task,
-    ) -> Option<Task> {
+    fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
         let blocked_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.lock_attempts_mut(&mut self.lock_attempt_token),
