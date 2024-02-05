@@ -203,11 +203,10 @@ impl TaskInner {
         self.task_status.borrow_mut(lock_attempt_token)
     }
 
-    fn blocked_lock_count_mut(&self) -> &mut Counter {
+    fn blocked_lock_count_mut(&self, blocked_lock_count_token: &'t mut BlockedLockCountToken) -> &mut Counter {
         &mut self
             .task_status
-            .borrow_mut_unchecked()
-            .blocked_lock_count
+            .borrow_mut(blocked_lock_count_token)
     }
 
     fn lock_attempts<'t>(&self, lock_attempt_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
