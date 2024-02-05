@@ -76,13 +76,6 @@ mod utils {
         {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
-
-        pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t F
-        where
-            Token<V, F>: PartialBorrow<V, F>,
-        {
-            Token::partial_borrow(unsafe { &*self.0.get() })
-        }
     }
 
     unsafe impl<V> Send for TokenCell<V> {}
