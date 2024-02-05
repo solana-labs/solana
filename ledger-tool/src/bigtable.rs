@@ -187,7 +187,7 @@ async fn shreds(
     blockstore: Arc<Blockstore>,
     starting_slot: Slot,
     ending_slot: Slot,
-    allow_dummy_poh: bool,
+    allow_mock_poh: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
@@ -212,14 +212,14 @@ async fn shreds(
         let entry_summaries = match bigtable.get_entries(*slot).await {
             Ok(summaries) => Some(summaries),
             Err(err) => {
-                let err_msg = format!("Failed to get PoH entry data for {slot}: {err}");
+                let err_msg = format!("Failed to get PoH entries for {slot}: {err}");
 
-                if allow_dummy_poh {
-                    warn!("{err_msg}. Will create dummy PoH data instead.");
+                if allow_mock_poh {
+                    warn!("{err_msg}. Will create mock PoH entries instead.");
                 } else {
                     return Err(format!(
-                        "{err_msg}. Try passing --allow-dummy-poh to allow \
-                        creation of shreds with dummy PoH data"
+                        "{err_msg}. Try passing --allow-mock-poh to allow \
+                        creation of shreds with mocked PoH entries"
                     ))?;
                 }
                 None
@@ -1005,8 +1005,9 @@ impl BigTableSubCommand for App<'_, '_> {
                 .subcommand(
                     SubCommand::with_name("shreds")
                         .about(
-                            "Get confirmed blocks, shred them and insert the shreds into the \
-                            local Blockstore",
+                            "Get confirmed blocks from BigTable, reassemble the transactions \
+                            and entries, shred the block and then insert the shredded blocks into \
+                            the local Blockstore",
                         )
                         .arg(
                             Arg::with_name("starting_slot")
@@ -1015,7 +1016,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("SLOT")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Reconstruct starting from this slot (inclusive)"),
+                                .help("Start shred creation at this slot (inclusive)"),
                         )
                         .arg(
                             Arg::with_name("ending_slot")
@@ -1024,7 +1025,18 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("SLOT")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Reconstruct ending with this slot (inclusive)"),
+                                .help("Stop shred creation at this slot (inclusive)"),
+                        )
+                        .arg(
+                            Arg::with_name("allow_mock_poh")
+                                .long("allow-mock-poh")
+                                .takes_value(false)
+                                .help(
+                                    "For slots where PoH entries are unavailable, allow the \
+                                    generation of mock PoH entries. The mock PoH entries enable \
+                                    the shredded block(s) to be replayable if PoH verification is \
+                                    disabled.",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -1324,6 +1336,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("shreds", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let allow_mock_poh = arg_matches.is_present("allow_mock_poh");
             let blockstore = Arc::new(crate::open_blockstore(
                 &canonicalize_ledger_path(ledger_path),
                 arg_matches,
@@ -1340,7 +1353,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 blockstore,
                 starting_slot,
                 ending_slot,
-                false,
+                allow_mock_poh,
                 config,
             ))
         }
