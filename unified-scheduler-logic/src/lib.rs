@@ -112,8 +112,6 @@ mod cell {
     pub(super) struct Token<T>(PhantomData<*mut T>);
 
     impl<T> Token<T> {
-        type Target = T;
-
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
@@ -126,7 +124,7 @@ const_assert_eq!(mem::size_of::<PageToken>(), 0);
 type TaskToken = Token<TaskStatus>;
 const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
-type LockAttemptToken = Token<TaskStatus>;
+type LockAttemptToken = Token<LockAttemptToken>;
 const_assert_eq!(mem::size_of::<LockAttemptToken>(), 0);
 
 impl TaskStatus {
@@ -155,7 +153,7 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(&self, task_token: &'t mut TaskToken) -> &'t mut Vec<LockAttempt> {
+    fn lock_attempts_mut<'t>(&self, task_token: &'t mut LockAttemptToken) -> &'t mut Vec<LockAttempt> {
         &mut self.task_status.borrow_mut(task_token).lock_attempts
     }
 
@@ -166,7 +164,7 @@ impl TaskInner {
             .provisional_lock_count
     }
 
-    fn lock_attempts<'t>(&self, task_token: &'t TaskToken) -> &'t Vec<LockAttempt> {
+    fn lock_attempts<'t>(&self, task_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
         &self.task_status.borrow(task_token).lock_attempts
     }
 
