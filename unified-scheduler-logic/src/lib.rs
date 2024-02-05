@@ -131,31 +131,31 @@ mod cell {
 }
 
 impl TokenTrait<PageInner, PageInner> for Token<PageInner, PageInner> {
-    fn partial_borrow<'a>(v: &'a PageInner) -> &'a PageInner {
+    fn partial_borrow(v: &PageInner) -> &PageInner {
         v
     }
 
-    fn partial_borrow_mut<'a>(v: &'a mut PageInner) -> &'a mut PageInner {
+    fn partial_borrow_mut(v: &mut PageInner) -> &mut PageInner {
         v
     }
 }
 
 impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
-    fn partial_borrow<'a>(v: &'a TaskStatus) -> &'a Counter {
+    fn partial_borrow(v: &TaskStatus) -> &Counter {
         &v.blocked_lock_count
     }
 
-    fn partial_borrow_mut<'a>(v: &'a mut TaskStatus) -> &'a mut Counter {
+    fn partial_borrow_mut(v: &mut TaskStatus) -> &mut Counter {
         &mut v.blocked_lock_count
     }
 }
 
 impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAttempt>> {
-    fn partial_borrow<'a>(v: &'a TaskStatus) -> &'a Vec<LockAttempt> {
+    fn partial_borrow(v: &TaskStatus) -> &Vec<LockAttempt> {
         &v.lock_attempts
     }
 
-    fn partial_borrow_mut<'a>(v: &'a mut TaskStatus) -> &'a mut Vec<LockAttempt> {
+    fn partial_borrow_mut(v: &mut TaskStatus) -> &mut Vec<LockAttempt> {
         &mut v.lock_attempts
     }
 }
