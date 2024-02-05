@@ -505,12 +505,11 @@ impl SchedulingStateMachine {
                             page.usage = usage;
                             heaviest_uncontended_now = 
                             if matches!(usage, Usage::Readonly(_)) {
-                                page.heaviest_blocked_task()
-                                /*
-                                if !matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
-                                    //should_continue = false;
-                                }
-                                */
+                                page
+                                    .heaviest_blocked_task()
+                                    .filter(|t| {
+                                        matches!(t, Some((_, RequestedUsage::Readonly)))
+                                    })
                             } else {
                                 None
                             }
