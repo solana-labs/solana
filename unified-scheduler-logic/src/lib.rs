@@ -496,7 +496,6 @@ impl SchedulingStateMachine {
                         self.unblocked_task_queue
                             .push_back(uncontended_task.clone());
                     }
-                                heaviest_uncontended_now = page.heaviest_blocked_task().unwrap();
                 /*
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
