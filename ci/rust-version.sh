@@ -39,6 +39,8 @@ export rust_stable_docker_image=solanalabs/rust:"$stable_version"
 export rust_nightly=nightly-"$nightly_version"
 export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
+export ci_docker_image="solanalabs/ci:rust_${rust_stable}_${rust_nightly}"
+
 [[ -z $1 ]] || (
 
   rustup_install() {
