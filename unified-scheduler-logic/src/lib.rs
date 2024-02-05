@@ -91,16 +91,16 @@ mod utils {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
-    pub trait PartialBorrow<V, F> {
-        fn partial_borrow(v: &V) -> &F;
-
-        fn partial_borrow_mut(v: &mut V) -> &mut F;
-    }
-
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
+    }
+
+    pub trait PartialBorrow<V, F> {
+        fn partial_borrow(v: &V) -> &F;
+
+        fn partial_borrow_mut(v: &mut V) -> &mut F;
     }
 
     // generic identity conversion impl
