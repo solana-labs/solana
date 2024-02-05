@@ -124,6 +124,9 @@ const_assert_eq!(mem::size_of::<PageToken>(), 0);
 type TaskToken = Token<TaskStatus>;
 const_assert_eq!(mem::size_of::<TaskToken>(), 0);
 
+type LockAttemptToken = Token<TaskStatus>;
+const_assert_eq!(mem::size_of::<LockAttemptToken>(), 0);
+
 impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
@@ -521,6 +524,7 @@ impl Default for SchedulingStateMachine {
             unblocked_task_count: Counter::zero(),
             total_task_count: Counter::zero(),
             task_token: unsafe { TaskToken::assume_on_the_scheduler_thread() },
+            lock_attempt_token: unsafe { LockAttemptToken::assume_on_the_scheduler_thread() },
             page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
         }
     }
