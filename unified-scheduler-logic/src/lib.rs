@@ -1,7 +1,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{Counter, SchedulerCell, Token, TokenTrait},
+    crate::utils::{ShortCounter, SchedulerCell, Token, TokenTrait},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{
@@ -29,9 +29,9 @@ mod utils {
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     #[derive(Debug, Clone, Copy)]
-    pub(super) struct Counter(u32);
+    pub(super) struct ShortCounter(u32);
 
-    impl Counter {
+    impl ShortCounter {
         pub(super) fn zero() -> Self {
             Self(0)
         }
@@ -130,15 +130,15 @@ mod utils {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    blocked_lock_count: Counter,
+    blocked_lock_count: ShortCounter,
 }
 
-impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
-    fn partial_borrow(v: &TaskStatus) -> &Counter {
+impl TokenTrait<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
+    fn partial_borrow(v: &TaskStatus) -> &ShortCounter {
         &v.blocked_lock_count
     }
 
-    fn partial_borrow_mut(v: &mut TaskStatus) -> &mut Counter {
+    fn partial_borrow_mut(v: &mut TaskStatus) -> &mut ShortCounter {
         &mut v.blocked_lock_count
     }
 }
@@ -156,7 +156,7 @@ impl TokenTrait<TaskStatus, Vec<LockAttempt>> for Token<TaskStatus, Vec<LockAtte
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-type BlockedLockCountToken = Token<TaskStatus, Counter>;
+type BlockedLockCountToken = Token<TaskStatus, ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 type LockAttemptToken = Token<TaskStatus, Vec<LockAttempt>>;
@@ -166,7 +166,7 @@ impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
             lock_attempts,
-            blocked_lock_count: Counter::zero(),
+            blocked_lock_count: ShortCounter::zero(),
         }
     }
 }
@@ -198,7 +198,7 @@ impl TaskInner {
     fn blocked_lock_count_mut<'t>(
         &self,
         blocked_lock_count_token: &'t mut BlockedLockCountToken,
-    ) -> &'t mut Counter {
+    ) -> &'t mut ShortCounter {
         self.task_status.borrow_mut(blocked_lock_count_token)
     }
 
@@ -239,7 +239,7 @@ impl LockAttempt {
 enum Usage {
     #[default]
     Unused,
-    Readonly(Counter),
+    Readonly(ShortCounter),
     Writable,
 }
 const_assert_eq!(mem::size_of::<Usage>(), 8);
@@ -247,7 +247,7 @@ const_assert_eq!(mem::size_of::<Usage>(), 8);
 impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => Usage::Readonly(Counter::one()),
+            RequestedUsage::Readonly => Usage::Readonly(ShortCounter::one()),
             RequestedUsage::Writable => Usage::Writable,
         }
     }
@@ -300,10 +300,10 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 )]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
-    active_task_count: Counter,
-    handled_task_count: Counter,
-    unblocked_task_count: Counter,
-    total_task_count: Counter,
+    active_task_count: ShortCounter,
+    handled_task_count: ShortCounter,
+    unblocked_task_count: ShortCounter,
+    total_task_count: ShortCounter,
     blocked_lock_count_token: BlockedLockCountToken,
     lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
@@ -377,8 +377,8 @@ impl SchedulingStateMachine {
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
         lock_attempts: &mut [LockAttempt],
-    ) -> Counter {
-        let mut lock_count = Counter::zero();
+    ) -> ShortCounter {
+        let mut lock_count = ShortCounter::zero();
 
         for attempt in lock_attempts.iter_mut() {
             let page = attempt.page_mut(page_token);
@@ -562,10 +562,10 @@ impl Default for SchedulingStateMachine {
     fn default() -> Self {
         Self {
             unblocked_task_queue: VecDeque::with_capacity(1024),
-            active_task_count: Counter::zero(),
-            handled_task_count: Counter::zero(),
-            unblocked_task_count: Counter::zero(),
-            total_task_count: Counter::zero(),
+            active_task_count: ShortCounter::zero(),
+            handled_task_count: ShortCounter::zero(),
+            unblocked_task_count: ShortCounter::zero(),
+            total_task_count: ShortCounter::zero(),
             blocked_lock_count_token: unsafe {
                 BlockedLockCountToken::assume_on_the_scheduler_thread()
             },
@@ -635,19 +635,19 @@ mod tests {
         assert_eq!(
             format!(
                 "{:?}",
-                LockStatus::Succeded(Usage::Readonly(Counter::one()))
+                LockStatus::Succeded(Usage::Readonly(ShortCounter::one()))
             ),
-            "Succeded(Readonly(Counter(1)))"
+            "Succeded(Readonly(ShortCounter(1)))"
         );
         let task_status = TaskStatus {
             lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            blocked_lock_count: Counter::zero(),
+            blocked_lock_count: ShortCounter::zero(),
         };
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
              .. })), requested_usage: Writable, lock_status: Failed }], blocked_lock_count: \
-             Counter(0) }"
+             ShortCounter(0) }"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
@@ -1008,7 +1008,7 @@ mod tests {
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
-        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Readonly(Counter::one());
+        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Readonly(ShortCounter::one());
         SchedulingStateMachine::unlock(
             &mut state_machine.page_token,
             &LockAttempt::new(page, RequestedUsage::Writable),
