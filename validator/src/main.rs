@@ -45,10 +45,10 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        runtime_config::RuntimeConfig,
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},

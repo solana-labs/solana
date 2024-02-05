@@ -48,7 +48,6 @@ use {
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
-        runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         stake_account::StakeAccount,
@@ -59,8 +58,11 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
-        svm::transaction_processor::{
-            TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+        svm::{
+            runtime_config::RuntimeConfig,
+            transaction_processor::{
+                TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+            },
         },
         transaction_batch::TransactionBatch,
     },
