@@ -482,10 +482,10 @@ impl SchedulingStateMachine {
     fn unlock_after_execution(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts(&self.lock_attempt_token) {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut heaviest_uncontended_now = Self::unlock(page, unlock_attempt);
+            let mut heaviest_uncontended_now = ;
+            let mut should_continue = true;
 
-            //loop {
-                let mut should_continue = false;
+            while should_continue && let Some(heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
                 if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task
                         .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
@@ -497,7 +497,7 @@ impl SchedulingStateMachine {
                     }
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
-                    //drop((uncontended_task, heaviest_uncontended_now));
+                    drop((uncontended_task, heaviest_uncontended_now));
                     page.pop_blocked_task(uw);
                     match Self::attempt_lock_address(page, ru) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
@@ -505,21 +505,14 @@ impl SchedulingStateMachine {
                             page.usage = usage;
                             if matches!(usage, Usage::Readonly(_)) {
                                 heaviest_uncontended_now = page.heaviest_blocked_task();
-                                if matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
-                                    should_continue = true;
+                                if !matches!(heaviest_uncontended_now, Some((_, RequestedUsage::Readonly))) {
+                                    should_continue = false;
                                 }
                             }
                         }
                     }
                 }
-                /*
-                if should_continue {
-                    continue;
-                } else {
-                    break;
-                }
             }
-            */
         }
     }
 
