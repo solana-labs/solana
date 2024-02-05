@@ -94,6 +94,7 @@ mod cell {
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
+          Token<V, F>: Sized
         {
             Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
