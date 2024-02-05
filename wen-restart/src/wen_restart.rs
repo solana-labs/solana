@@ -315,7 +315,7 @@ mod tests {
         },
         solana_streamer::socket::SocketAddrSpace,
         std::{
-            fs::{read, remove_file},
+            fs::remove_file,
             sync::Arc,
             thread::Builder,
         },
@@ -460,7 +460,7 @@ mod tests {
             if timestamp().saturating_sub(start) > WAIT_FOR_THREAD_TIMEOUT {
                 break;
             }
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(10));
         }
         assert_eq!(progress, expected_progress);
     }
@@ -497,6 +497,21 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         let _ = wen_restart_thread_handle.join();
         let _ = remove_file(&test_state.wen_restart_proto_path);
+    }
+
+    fn insert_and_freeze_slots(
+        bank_forks: Arc<RwLock<BankForks>>, expected_slots_to_repair: Vec<Slot>){
+        let mut parent_bank = bank_forks.read().unwrap().root_bank();
+        for slot in expected_slots_to_repair {
+            let mut bank_forks_rw = bank_forks.write().unwrap();
+            bank_forks_rw.insert(Bank::new_from_parent(
+                parent_bank.clone(),
+                &Pubkey::default(),
+                slot,
+            ));
+            parent_bank = bank_forks_rw.get(slot).unwrap();
+            parent_bank.freeze();
+        }
     }
 
     #[test]
@@ -556,21 +571,10 @@ mod tests {
         }
 
         // Simulating successful repair of missing blocks.
-        let mut parent_bank = test_state.bank_forks.read().unwrap().root_bank();
-        for slot in expected_slots_to_repair {
-            let mut my_bank_forks = test_state.bank_forks.write().unwrap();
-            my_bank_forks.insert(Bank::new_from_parent(
-                parent_bank.clone(),
-                &Pubkey::default(),
-                slot,
-            ));
-            parent_bank = my_bank_forks.get(slot).unwrap();
-            parent_bank.freeze();
-        }
+        insert_and_freeze_slots(test_state.bank_forks.clone(), expected_slots_to_repair);
 
         let _ = wen_restart_thread_handle.join();
-        let buffer = read(test_state.wen_restart_proto_path).unwrap();
-        let progress = WenRestartProgress::decode(&mut std::io::Cursor::new(buffer)).unwrap();
+        let progress = read_wen_restart_records(&test_state.wen_restart_proto_path).unwrap();
         let progress_start_time = progress
             .my_last_voted_fork_slots
             .as_ref()
