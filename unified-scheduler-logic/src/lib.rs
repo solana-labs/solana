@@ -75,7 +75,7 @@ mod counter {
 #[derive(Debug)]
 struct TaskStatus {
     lock_attempts: Vec<LockAttempt>,
-    provisional_lock_count: Counter,
+    blocked_lock_count: Counter,
 }
 
 mod cell {
@@ -173,7 +173,7 @@ impl TaskStatus {
     fn new(lock_attempts: Vec<LockAttempt>) -> Self {
         Self {
             lock_attempts,
-            provisional_lock_count: Counter::zero(),
+            blocked_lock_count: Counter::zero(),
         }
     }
 }
@@ -199,11 +199,11 @@ impl TaskInner {
         self.task_status.borrow_mut(lock_attempt_token)
     }
 
-    fn provisional_lock_count_mut(&self) -> &mut Counter {
+    fn blocked_lock_count_mut(&self) -> &mut Counter {
         &mut self
             .task_status
             .borrow_mut_unchecked()
-            .provisional_lock_count
+            .blocked_lock_count
     }
 
     fn lock_attempts<'t>(&self, lock_attempt_token: &'t LockAttemptToken) -> &'t Vec<LockAttempt> {
@@ -453,14 +453,14 @@ impl SchedulingStateMachine {
         task: Task,
         on_success: impl FnOnce(&Task) -> R,
     ) -> Option<R> {
-        let provisional_lock_count = Self::attempt_lock_for_execution(
+        let blocked_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
             task.lock_attempts_mut(&mut self.lock_attempt_token),
         );
 
-        //eprintln!("{:?}", provisional_lock_count);
-        if provisional_lock_count.current() > 0 {
-            *task.provisional_lock_count_mut() = provisional_lock_count;
+        //eprintln!("{:?}", blocked_lock_count);
+        if blocked_lock_count.current() > 0 {
+            *task.blocked_lock_count_mut() = blocked_lock_count;
             self.register_blocked_task_into_pages(&task);
             None
         } else {
@@ -492,7 +492,7 @@ impl SchedulingStateMachine {
                 let mut should_continue = false;
                 if let Some(&(ref uncontended_task, requested_usage)) = heaviest_uncontended_now {
                     let new_count = uncontended_task
-                        .provisional_lock_count_mut()
+                        .blocked_lock_count_mut()
                         .decrement_self()
                         .current();
                     if new_count == 0 {
@@ -640,12 +640,12 @@ mod tests {
         );
         let task_status = TaskStatus {
             lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
-            provisional_lock_count: Counter::zero(),
+            blocked_lock_count: Counter::zero(),
         };
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(SchedulerCell(UnsafeCell { \
-             .. })), requested_usage: Writable, lock_status: Failed }], provisional_lock_count: \
+             .. })), requested_usage: Writable, lock_status: Failed }], blocked_lock_count: \
              Counter(0) }"
         );
         let sanitized = simplest_transaction();
