@@ -509,7 +509,7 @@ impl SchedulingStateMachine {
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
                             None
-                        }
+                        };
                         page.usage = usage;
                     }
                 }
