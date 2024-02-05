@@ -8,8 +8,7 @@ use {
 };
 
 pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
-    let mut vote_state =
-        VoteState::deserialize_with_bincode(data).map_err(ParseAccountError::from)?;
+    let mut vote_state = VoteState::deserialize(data).map_err(ParseAccountError::from)?;
     let epoch_credits = vote_state
         .epoch_credits()
         .iter()

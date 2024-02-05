@@ -73,9 +73,9 @@ impl VoteStateVersions {
                 vote_state.authorized_voter == Pubkey::default()
             }
 
-            VoteStateVersions::V1_14_11(vote_state) => vote_state.authorized_voters.is_empty(),
+            VoteStateVersions::V1_14_11(vote_state) => vote_state.is_uninitialized(),
 
-            VoteStateVersions::Current(vote_state) => vote_state.authorized_voters.is_empty(),
+            VoteStateVersions::Current(vote_state) => vote_state.is_uninitialized(),
         }
     }
 

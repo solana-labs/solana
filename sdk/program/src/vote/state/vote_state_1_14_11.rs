@@ -57,6 +57,10 @@ impl VoteState1_14_11 {
         data.len() == VoteState1_14_11::size_of()
             && data[VERSION_OFFSET..DEFAULT_PRIOR_VOTERS_END] != [0; DEFAULT_PRIOR_VOTERS_OFFSET]
     }
+
+    pub fn is_uninitialized(&self) -> bool {
+        self.authorized_voters.is_uninitialized()
+    }
 }
 
 impl From<VoteState> for VoteState1_14_11 {

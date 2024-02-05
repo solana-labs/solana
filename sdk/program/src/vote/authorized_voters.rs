@@ -64,6 +64,11 @@ impl AuthorizedVoters {
         self.authorized_voters.is_empty()
     }
 
+    // when an uninitialized V0_23_5 account is converted to current, it inserts a null voter
+    pub fn is_uninitialized(&self) -> bool {
+        self.is_empty() || (self.len() == 1 && self.first() == Some((&0, &Pubkey::default())))
+    }
+
     pub fn first(&self) -> Option<(&u64, &Pubkey)> {
         self.authorized_voters.iter().next()
     }

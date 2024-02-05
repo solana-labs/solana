@@ -382,20 +382,6 @@ impl VoteState {
         Ok(vote_state)
     }
 
-    // this only exists for the sake of the feature gated upgrade to the new parser; do not use it
-    #[doc(hidden)]
-    #[allow(clippy::used_underscore_binding)]
-    pub fn deserialize_with_bincode(_input: &[u8]) -> Result<Self, InstructionError> {
-        #[cfg(not(target_os = "solana"))]
-        {
-            bincode::deserialize::<VoteStateVersions>(_input)
-                .map(|versioned| versioned.convert_to_current())
-                .map_err(|_| InstructionError::InvalidAccountData)
-        }
-        #[cfg(target_os = "solana")]
-        unimplemented!()
-    }
-
     /// Deserializes the input buffer into the provided `VoteState`
     ///
     /// This function is exposed to allow deserialization in a BPF context directly into boxed memory.
@@ -777,6 +763,10 @@ impl VoteState {
         data.len() == VoteState::size_of()
             && data[VERSION_OFFSET..DEFAULT_PRIOR_VOTERS_END] != [0; DEFAULT_PRIOR_VOTERS_OFFSET]
     }
+
+    pub fn is_uninitialized(&self) -> bool {
+        self.authorized_voters.is_uninitialized()
+    }
 }
 
 pub mod serde_compact_vote_state_update {
@@ -936,11 +926,23 @@ mod tests {
         let mut rng = rand::thread_rng();
         for _ in 0..1000 {
             let raw_data_length = rng.gen_range(1..serialized_len_x4);
-            let raw_data: Vec<u8> = (0..raw_data_length).map(|_| rng.gen::<u8>()).collect();
+            let mut raw_data: Vec<u8> = (0..raw_data_length).map(|_| rng.gen::<u8>()).collect();
+
+            // pure random data will ~never have a valid enum tag, so lets help it out
+            if raw_data_length >= 4 && rng.gen::<bool>() {
+                let tag = rng.gen::<u8>() % 3;
+                raw_data[0] = tag;
+                raw_data[1] = 0;
+                raw_data[2] = 0;
+                raw_data[3] = 0;
+            }
 
             // it is extremely improbable, though theoretically possible, for random bytes to be syntactically valid
-            // so we only check that the deserialize function does not panic
-            let _ = VoteState::deserialize(&raw_data);
+            // so we only check that the parser does not panic and that it succeeds or fails exactly in line with bincode
+            let test_res = VoteState::deserialize(&raw_data);
+            let bincode_res = bincode::deserialize::<VoteStateVersions>(&raw_data);
+
+            assert_eq!(test_res.is_ok(), bincode_res.is_ok());
         }
     }
 

@@ -1,7 +1,6 @@
 use {
     crate::{
         instruction::InstructionError,
-        pubkey::Pubkey,
         serialize_utils::cursor::*,
         vote::state::{BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS},
     },
@@ -87,21 +86,12 @@ fn read_prior_voters_into<T: AsRef<[u8]>>(
     if !is_empty {
         cursor.set_position(prior_voters_position);
 
-        let mut encountered_null_voter = false;
         for i in 0..MAX_ITEMS {
             let prior_voter = read_pubkey(cursor)?;
             let from_epoch = read_u64(cursor)?;
             let until_epoch = read_u64(cursor)?;
-            let item = (prior_voter, from_epoch, until_epoch);
 
-            if item == (Pubkey::default(), 0, 0) {
-                encountered_null_voter = true;
-            } else if encountered_null_voter {
-                // `prior_voters` should never be sparse
-                return Err(InstructionError::InvalidAccountData);
-            } else {
-                vote_state.prior_voters.buf[i] = item;
-            }
+            vote_state.prior_voters.buf[i] = (prior_voter, from_epoch, until_epoch);
         }
 
         vote_state.prior_voters.idx = read_u64(cursor)? as usize;
