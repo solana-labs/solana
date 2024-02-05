@@ -1046,9 +1046,9 @@ where
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        state_machine.schedule_task(task, |task| {
-                                            idle_task_sender.send(task.clone()).unwrap();
-                                        });
+                                        let Some(task) = state_machine.schedule_task(task) {
+                                            idle_task_sender.send(task).unwrap();
+                                        }
                                         "step"
                                     }
                                     Ok(NewTaskPayload::OpenSubchannel(context)) => {
