@@ -471,7 +471,7 @@ fn bench_schedule_unblocked_task(account_count: usize) {
     toggle_collect();
     let retried_task = scheduler.schedule_unblocked_task();
     toggle_collect();
-    let task = retried_task.unwrap();
+    let retried_task = retried_task.unwrap();
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
