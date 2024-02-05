@@ -462,7 +462,7 @@ impl SchedulingStateMachine {
 
             // pacify brrowck with this map
             while let Some((unblocked_task, requested_usage)) =
-                heaviest_unblocked.map(|(t, u)| (t, *u))
+                heaviest_unblocked.map(|(t, u)| (t, u.copied()))
             {
                 if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
