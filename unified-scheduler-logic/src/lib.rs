@@ -204,7 +204,7 @@ impl TaskInner {
     }
 
     fn blocked_lock_count_mut(&self, blocked_lock_count_token: &'t mut BlockedLockCountToken) -> &mut Counter {
-        self
+        &mut self
             .task_status
             .borrow_mut(blocked_lock_count_token)
     }
@@ -463,7 +463,7 @@ impl SchedulingStateMachine {
 
         //eprintln!("{:?}", blocked_lock_count);
         if blocked_lock_count.current() > 0 {
-            *task.blocked_lock_count_mut() = blocked_lock_count;
+            *task.blocked_lock_count_mut(&mut self.blocked_lock_count_token) = blocked_lock_count;
             self.register_blocked_task_into_pages(&task);
             None
         } else {
