@@ -1358,10 +1358,24 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.storage.get_startup_remaining_items_to_flush_estimate()
     }
 
-    /// For each pubkey, find the slot list in the accounts index
-    ///   apply 'avoid_callback_result' if specified.
-    ///   otherwise, call `callback`
-    /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
+    /// Scan AccountsIndex for a given iterator of Pubkeys.
+    ///
+    /// This fn takes 4 arguments.
+    ///  - an iterator of pubkeys to scan
+    ///  - callback fn to run for each pubkey in the accounts index
+    ///  - avoid_callback_result. If it is Some(default), then callback is ignored and
+    ///    default is returned instead.
+    ///  - provide_entry_in_callback. If true, populate the ref of the Arc of the
+    ///    index entry to `callback` fn. Otherwise, provide None.
+    ///
+    /// The `callback` fn must return `AccountsIndexScanResult`, which is
+    /// used to indicates whether the AccountIndex Entry should be added to
+    /// in-memory cache. The `callback` fn takes in 3 arguments:
+    ///   - the first an immutable ref of the pubkey,
+    ///   - the second an option of the SlotList and RefCount
+    ///   - the third an option of the AccountMapEntry, which is only populated
+    ///     when `provide_entry_in_callback` is true. Otherwise, it will be
+    ///     None.
     pub(crate) fn scan<'a, F, I>(
         &self,
         pubkeys: I,
@@ -1369,15 +1383,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         avoid_callback_result: Option<AccountsIndexScanResult>,
         provide_entry_in_callback: bool,
     ) where
-        // params:
-        //  pubkey looked up
-        //  slots_refs is Option<(slot_list, ref_count)>
-        //    None if 'pubkey' is not in accounts index.
-        //   slot_list: comes from accounts index for 'pubkey'
-        //   ref_count: refcount of entry in index
-        //   entry, if 'provide_entry_in_callback' is true
-        // if 'avoid_callback_result' is Some(_), then callback is NOT called
-        //  and _ is returned as if callback were called.
         F: FnMut(
             &'a Pubkey,
             Option<(&SlotList<T>, RefCount)>,
