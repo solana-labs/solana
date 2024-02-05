@@ -73,16 +73,7 @@ mod utils {
             self
         }
     }
-}
 
-#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-#[derive(Debug)]
-struct TaskStatus {
-    lock_attempts: Vec<LockAttempt>,
-    blocked_lock_count: Counter,
-}
-
-mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
     use std::{cell::UnsafeCell, marker::PhantomData};
@@ -139,6 +130,13 @@ mod utils {
             t
         }
     }
+}
+
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+#[derive(Debug)]
+struct TaskStatus {
+    lock_attempts: Vec<LockAttempt>,
+    blocked_lock_count: Counter,
 }
 
 impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
