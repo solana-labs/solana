@@ -120,7 +120,7 @@ mod cell {
             panic!();
         }
 
-        fn partial_borrow_mut<'a>(v: &mut 'a V) -> &mut 'a F {
+        fn partial_borrow_mut<'a>(v: &'a mut V) -> &'a mut F {
             panic!();
         }
     }
