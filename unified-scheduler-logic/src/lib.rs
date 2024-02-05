@@ -414,7 +414,8 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn unlock(page_token: &mut PageToken, attempt: &LockAttempt) -> bool {
+    #[must_use]
+    fn unlock(page_token: &mut PageToken, attempt: &LockAttempt) -> Option<&(Task, RequestedUsage)> {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
@@ -442,9 +443,10 @@ impl SchedulingStateMachine {
 
         if is_unused_now {
             page.usage = Usage::Unused;
+            page.heaviest_uncontended_now()
+        } else {
+            None
         }
-
-        is_unused_now
     }
 
     fn try_lock_for_task<R>(
