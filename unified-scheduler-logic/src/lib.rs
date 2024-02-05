@@ -131,6 +131,13 @@ mod cell {
 }
 
 impl TokenTrait<PageInner, PageInner> for Token<PageInner, PageInner> {
+    fn partial_borrow<'a>(v: &'a PageInner) -> &'a PageInner {
+        v
+    }
+
+    fn partial_borrow_mut<'a>(v: &'a mut PageInner) -> &'a mut PageInner {
+        v
+    }
 }
 
 
