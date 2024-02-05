@@ -471,7 +471,7 @@ impl SchedulingStateMachine {
                 }
                 page.pop_blocked_task();
 
-                match Self::attempt_lock_address(page, requested_usage) {
+                match Self::attempt_lock_address(page, *requested_usage) {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
