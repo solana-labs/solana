@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
-            while let Some((unblocked_task, requested_usage)) = heaviest_unblocked.map(|(t, requested_usage)| (t, requested_usage)) {
+            while let Some((unblocked_task, requested_usage)) = heaviest_unblocked.map(|(t, requested_usage)| (t, *requested_usage)) {
 
                 if unblocked_task
                     .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
@@ -471,7 +471,7 @@ impl SchedulingStateMachine {
                 }
                 page.pop_blocked_task();
 
-                match Self::attempt_lock_address(page, *requested_usage) {
+                match Self::attempt_lock_address(page, requested_usage) {
                     LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
