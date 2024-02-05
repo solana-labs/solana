@@ -471,12 +471,8 @@ fn bench_schedule_unblocked_task(account_count: usize) {
     assert_matches!(scheduler.schedule_task_for_test(task2), None);
     scheduler.deschedule_task(&task);
     toggle_collect();
-    let retried_task = scheduler
-        .schedule_unblocked_task(|task| {
-            toggle_collect();
-            task.clone()
-        })
-        .unwrap();
+    let retried_task = scheduler.schedule_unblocked_task().unwrap();
+    toggle_collect();
     assert_eq!(task.transaction(), retried_task.transaction());
     drop(task);
 }
