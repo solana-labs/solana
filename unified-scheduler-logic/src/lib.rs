@@ -665,7 +665,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_eq!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .unwrap()
                 .task_index(),
             task2.task_index()
@@ -693,13 +693,13 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_eq!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .unwrap()
                 .task_index(),
             task2.task_index()
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
     }
 
@@ -722,14 +722,14 @@ mod tests {
         assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
         assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task_for_test(), None);
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_unblocked_task_for_test(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
@@ -849,7 +849,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -876,7 +876,7 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .map(|t| t.task_index()),
             Some(4)
         );
@@ -902,13 +902,13 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .map(|t| t.task_index()),
             Some(4)
         );
         assert_matches!(
             state_machine
-                .schedule_unblocked_task_for_test()
+                .schedule_unblocked_task()
                 .map(|t| t.task_index()),
             Some(5)
         );
