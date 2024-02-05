@@ -92,7 +92,7 @@ mod cell {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
+        pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V, F>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
 
@@ -100,7 +100,7 @@ mod cell {
             unsafe { &mut *self.0.get() }
         }
 
-        pub(super) fn borrow<'t>(&self, _token: &'t Token<V>) -> &'t V {
+        pub(super) fn borrow<'t>(&self, _token: &'t Token<V, F>) -> &'t V {
             unsafe { &*self.0.get() }
         }
     }
@@ -109,9 +109,9 @@ mod cell {
     unsafe impl<V> Sync for SchedulerCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    pub(super) struct Token<T>(PhantomData<*mut T>);
+    pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
-    impl<T> Token<T> {
+    impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
             Self(PhantomData)
         }
