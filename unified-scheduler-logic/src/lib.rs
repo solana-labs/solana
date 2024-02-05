@@ -116,7 +116,7 @@ mod cell {
             Self(PhantomData)
         }
 
-        fn borrow_partially<'a>(v: &a V) -> &'a F {
+        fn borrow_partially<'a>(v: &'a V) -> &'a F {
             panic!();
         }
     }
