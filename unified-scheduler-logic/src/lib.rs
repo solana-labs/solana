@@ -482,9 +482,7 @@ impl SchedulingStateMachine {
 
     fn unlock_after_execution(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts(&self.lock_attempt_token) {
-            let Some(heaviest_uncontended_now) = Self::unlock(&mut self.page_token, unlock_attempt) else {
-                continue;
-            }
+            let mut heaviest_uncontended_now = Self::unlock(&mut self.page_token, unlock_attempt);
 
             loop {
                 let page = unlock_attempt.page_mut(&mut self.page_token);
