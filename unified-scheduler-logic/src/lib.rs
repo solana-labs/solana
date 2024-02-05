@@ -632,7 +632,7 @@ mod tests {
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        let task = state_machine.schedule_task_for_test(task).unwrap();
+        let task = state_machine.schedule_task(task).unwrap();
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.total_task_count(), 1);
         state_machine.deschedule_task(&task);
@@ -650,8 +650,8 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert!(state_machine.has_unblocked_task());
@@ -667,7 +667,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task3.clone()), Some(_));
     }
 
     #[test]
@@ -678,8 +678,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
 
@@ -705,14 +705,14 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
@@ -738,14 +738,14 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
     }
 
     #[test]
@@ -758,8 +758,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -787,17 +787,17 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task_for_test(task1.clone())
+                .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
         assert_matches!(
             state_machine
-                .schedule_task_for_test(task2.clone())
+                .schedule_task(task2.clone())
                 .map(|t| t.task_index()),
             Some(4)
         );
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -826,12 +826,12 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task_for_test(task1.clone())
+                .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.active_task_count(), 3);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -860,11 +860,11 @@ mod tests {
         let mut state_machine = SchedulingStateMachine::default();
         assert_matches!(
             state_machine
-                .schedule_task_for_test(task1.clone())
+                .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
             Some(3)
         );
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert_matches!(
@@ -888,9 +888,9 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
-        assert_matches!(state_machine.schedule_task_for_test(task3.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         state_machine.deschedule_task(&task1);
         assert_matches!(
@@ -918,8 +918,8 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
         let mut state_machine = SchedulingStateMachine::default();
-        assert_matches!(state_machine.schedule_task_for_test(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task_for_test(task2.clone()), None);
+        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task2.clone()), None);
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
