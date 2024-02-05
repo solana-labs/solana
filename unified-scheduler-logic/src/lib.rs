@@ -146,11 +146,11 @@ impl TokenTrait<PageInner, PageInner> for Token<PageInner, PageInner> {
 
 impl TokenTrait<TaskStatus, Counter> for Token<TaskStatus, Counter> {
     fn partial_borrow<'a>(v: &'a TaskStatus) -> &'a Counter {
-        &v.unblocked_task_count
+        &v.blocked_lock_count
     }
 
     fn partial_borrow_mut<'a>(v: &'a mut TaskStatus) -> &'a mut Counter {
-        &mut v.unblocked_task_count
+        &mut v.blocked_lock_count
     }
 }
 
