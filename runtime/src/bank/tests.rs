@@ -1653,8 +1653,9 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     solana_logger::setup();
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
-        if !should_collect_rent
-            || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id()
+        if feature_id != solana_sdk::feature_set::skip_rent_rewrites::id()
+            && (!should_collect_rent
+                || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
         {
             activate_feature(&mut genesis_config, feature_id);
         }
@@ -1734,11 +1735,9 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
         bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
         large_lamports
     );
-    // Once preserve_rent_epoch_for_rent_exempt_accounts is activated,
-    // rent_epoch of rent-exempt accounts will no longer advance.
     assert_eq!(
         bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch(),
-        0
+        RENT_EXEMPT_RENT_EPOCH
     );
     assert_eq!(
         bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
