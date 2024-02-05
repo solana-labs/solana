@@ -496,11 +496,11 @@ impl SchedulingStateMachine {
                         self.unblocked_task_queue
                             .push_back(uncontended_task.clone());
                     }
-                                heaviest_uncontended_now = Some(page.heaviest_blocked_task().unwrap());
-                /*
                     let uw = uncontended_task.unique_weight;
                     let ru = *requested_usage;
                     drop((uncontended_task, heaviest_uncontended_now));
+                                heaviest_uncontended_now = Some(page.heaviest_blocked_task().unwrap());
+                /*
                     page.pop_blocked_task(uw);
                     match Self::attempt_lock_address(page, ru) {
                         LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
