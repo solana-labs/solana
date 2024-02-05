@@ -101,7 +101,7 @@ mod cell {
         }
 
         pub(super) fn borrow<'t, F>(&self, _token: &'t Token<V, F>) -> &'t V {
-            Self::borrow_partially(unsafe { &*self.0.get() })
+            Token::borrow_partially(unsafe { &*self.0.get() })
         }
     }
 
