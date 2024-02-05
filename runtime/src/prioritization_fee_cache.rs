@@ -205,8 +205,8 @@ impl PrioritizationFeeCache {
         }
     }
 
-    /// Update with a list of non-vote transactions' tx_compute_budget_details and tx_account_locks; Only
-    /// transactions have both valid priority_detail and account_locks will be used to update
+    /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
+    /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
     pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let (_, send_updates_time) = measure!(
