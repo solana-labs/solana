@@ -9,7 +9,7 @@ use {
     },
     crossbeam_channel::unbounded,
     futures::stream::FuturesUnordered,
-    log::{debug, error, info},
+    log::{debug, error, info, warn},
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
@@ -19,14 +19,16 @@ use {
         display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
         OutputFormat,
     },
-    solana_entry::entry::Entry,
+    solana_entry::entry::{create_ticks, Entry},
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
         blockstore::Blockstore,
         blockstore_options::AccessType,
         shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, signer::keypair::Keypair},
+    solana_sdk::{
+        clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature, signer::keypair::Keypair,
+    },
     solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, EncodeError, EncodedConfirmedBlock,
@@ -185,6 +187,7 @@ async fn shreds(
     blockstore: Arc<Blockstore>,
     starting_slot: Slot,
     ending_slot: Slot,
+    allow_dummy_poh: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
@@ -196,30 +199,107 @@ async fn shreds(
     let mut slots = bigtable.get_confirmed_blocks(starting_slot, limit).await?;
     slots.retain(|&slot| slot <= ending_slot);
 
-    let keypair = Keypair::from_bytes(&[0; 64]).unwrap();
-    // TODO: parse this / allow command line flag ?
+    let keypair = Keypair::from_bytes(&[0; 64])?;
+    // TODO: parse this from CLI ?
     let shred_version = 0;
+    // TODO: parse from CLI OR extract from genesis
+    let num_ticks_per_slot = 64;
+    // TODO: parse from CLI OR extract from Bank; tick rate changed recently
+    let num_hashes_per_tick = 12500;
 
     for slot in slots.iter() {
         let block = bigtable.get_confirmed_block(*slot).await?;
-        let entry_summaries = bigtable.get_entries(*slot).await?;
-        let entries: Vec<_> = entry_summaries
-            .map(|entry_summary| {
-                let num_hashes = entry_summary.num_hashes;
-                let hash = entry_summary.hash;
-                let transactions = block.transactions[entry_summary.starting_transaction_index
-                    ..entry_summary.starting_transaction_index
-                        + entry_summary.num_transactions as usize]
-                    .iter()
-                    .map(|tx_with_meta| tx_with_meta.get_transaction())
-                    .collect();
-                Entry {
-                    num_hashes,
-                    hash,
-                    transactions,
+        let entry_summaries = match bigtable.get_entries(*slot).await {
+            Ok(summaries) => Some(summaries),
+            Err(err) => {
+                let err_msg = format!("Failed to get PoH entry data for {slot}: {err}");
+
+                if allow_dummy_poh {
+                    warn!("{err_msg}. Will create dummy PoH data instead.");
+                } else {
+                    return Err(format!(
+                        "{err_msg}. Try passing --allow-dummy-poh to allow \
+                        creation of shreds with dummy PoH data"
+                    ))?;
                 }
-            })
-            .collect();
+                None
+            }
+        };
+
+        let entries = match entry_summaries {
+            Some(entry_summaries) => entry_summaries
+                .map(|entry_summary| {
+                    let num_hashes = entry_summary.num_hashes;
+                    let hash = entry_summary.hash;
+                    let transactions = block.transactions[entry_summary.starting_transaction_index
+                        ..entry_summary.starting_transaction_index
+                            + entry_summary.num_transactions as usize]
+                        .iter()
+                        .map(|tx_with_meta| tx_with_meta.get_transaction())
+                        .collect();
+                    Entry {
+                        num_hashes,
+                        hash,
+                        transactions,
+                    }
+                })
+                .collect(),
+            None => {
+                let num_total_ticks = ((slot - block.parent_slot) * num_ticks_per_slot) as usize;
+                let num_total_entries = num_total_ticks + block.transactions.len();
+                let mut entries = Vec::with_capacity(num_total_entries);
+
+                // Create virtual tick entries for any skipped slots
+                //
+                // These ticks are necessary so that the tick height is
+                // advanced to the proper value when this block is processed.
+                //
+                // Additionally, a blockhash will still be inserted into the
+                // recent blockhashes sysvar for skipped slots. So, these
+                // virtual ticks will have the proper PoH
+                let num_skipped_slots = slot - block.parent_slot - 1;
+                if num_skipped_slots > 0 {
+                    let num_virtual_ticks = num_skipped_slots * num_ticks_per_slot;
+                    let parent_blockhash = Hash::from_str(&block.previous_blockhash)?;
+                    let virtual_ticks_entries =
+                        create_ticks(num_virtual_ticks, num_hashes_per_tick, parent_blockhash);
+                    entries.extend(virtual_ticks_entries.into_iter());
+                }
+
+                // Create transaction entries
+                //
+                // Keep it simple and just do one transaction per Entry
+                let transaction_entries = block.transactions.iter().map(|tx_with_meta| Entry {
+                    num_hashes: 0,
+                    hash: Hash::default(),
+                    transactions: vec![tx_with_meta.get_transaction()],
+                });
+                entries.extend(transaction_entries.into_iter());
+
+                // Create the tick entries for this slot
+                //
+                // We do not know the intermediate hashes, so just use default
+                // hash for all ticks. The exception is the final tick; the
+                // final tick determines the blockhash so set it the known
+                // blockhash from the bigtable block
+                let blockhash = Hash::from_str(&block.blockhash)?;
+                let tick_entries = (0..num_ticks_per_slot).map(|idx| {
+                    let hash = if idx == num_ticks_per_slot - 1 {
+                        blockhash
+                    } else {
+                        Hash::default()
+                    };
+                    Entry {
+                        num_hashes: 0,
+                        hash,
+                        transactions: vec![],
+                    }
+                });
+                entries.extend(tick_entries.into_iter());
+
+                entries
+            }
+        };
 
         let shredder = Shredder::new(*slot, block.parent_slot, 0, shred_version)?;
         let (data_shreds, _coding_shreds) = shredder.entries_to_shreds(
@@ -1256,7 +1336,13 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 app_profile_id,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
-            runtime.block_on(shreds(blockstore, starting_slot, ending_slot, config))
+            runtime.block_on(shreds(
+                blockstore,
+                starting_slot,
+                ending_slot,
+                false,
+                config,
+            ))
         }
         ("blocks", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
