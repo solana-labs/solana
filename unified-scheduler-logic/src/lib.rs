@@ -312,10 +312,9 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        let task = self.try_lock_for_task(task);
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        task
+        self.try_lock_for_task(task);
     }
 
     pub fn has_unblocked_task(&self) -> bool {
@@ -323,10 +322,8 @@ impl SchedulingStateMachine {
     }
 
     pub fn schedule_unblocked_task(&mut self) -> Option<Task> {
-        self.unblocked_task_queue.pop_front().map(|task| {
-            self.unblocked_task_count.increment_self();
-            task
-        })
+        self.unblocked_task_count.increment_self();
+        self.unblocked_task_queue.pop_front()
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
