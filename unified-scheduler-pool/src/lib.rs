@@ -1035,20 +1035,20 @@ where
                             recv(if state_machine.has_unblocked_task() { do_now } else { dont_now }) -> dummy_result => {
                                 assert_matches!(dummy_result, Err(RecvError));
 
-                                state_machine.schedule_unblocked_task(|task| {
+                                if let Some(task) = state_machine.schedule_unblocked_task() {
                                     blocked_task_sender
-                                        .send_payload(task.clone())
+                                        .send_payload(task)
                                         .unwrap();
-                                });
+                                }
                                 "step"
                             },
                             recv(new_task_receiver) -> message => {
                                 assert!(message.is_err() || (!session_ending && !thread_suspending));
                                 match message {
                                     Ok(NewTaskPayload::Payload(task)) => {
-                                        state_machine.schedule_task(task, |task| {
-                                            idle_task_sender.send(task.clone()).unwrap();
-                                        });
+                                        if let Some(task) = state_machine.schedule_task(task) {
+                                            idle_task_sender.send(task).unwrap();
+                                        }
                                         "step"
                                     }
                                     Ok(NewTaskPayload::OpenSubchannel(context)) => {
