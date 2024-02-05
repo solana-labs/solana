@@ -482,10 +482,12 @@ impl SchedulingStateMachine {
     fn unlock_after_execution(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts(&self.lock_attempt_token) {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut should_continue = true;
+            //let mut should_continue = true;
 
-            while should_continue && let Some(heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
-                if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
+            while /*should_continue && */ let Some(heaviest_uncontended_now) = Self::unlock(page, unlock_attempt) {
+                let (uncontended_task, requested_usage) = heaviest_uncontended_now;
+                //if let Some((uncontended_task, requested_usage)) = heaviest_uncontended_now {
+                //}
                     let new_count = uncontended_task
                         .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
                         .decrement_self()
@@ -510,7 +512,6 @@ impl SchedulingStateMachine {
                             }
                         }
                     }
-                }
             }
         }
     }
