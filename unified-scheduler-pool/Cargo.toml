@@ -46,3 +46,5 @@ criterion = "0.5.1"
 name = "lib"
 harness = false
 
+[[features]]
+dev-context-only-utils
