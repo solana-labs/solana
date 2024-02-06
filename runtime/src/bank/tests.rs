@@ -18,11 +18,6 @@ use {
         },
         snapshot_bank_utils, snapshot_utils,
         status_cache::MAX_CACHE_ENTRIES,
-        svm::{
-            account_loader::load_accounts,
-            transaction_account_state_info::TransactionAccountStateInfo,
-            transaction_error_metrics::TransactionErrorMetrics,
-        },
     },
     assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
@@ -113,6 +108,10 @@ use {
         transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
+    solana_svm::{
+        account_loader::load_accounts, transaction_account_state_info::TransactionAccountStateInfo,
+        transaction_error_metrics::TransactionErrorMetrics,
+    },
     solana_vote_program::{
         vote_instruction,
         vote_state::{

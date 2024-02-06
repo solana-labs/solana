@@ -20,13 +20,12 @@ use {
     itertools::MinMaxResult,
     solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
-    solana_runtime::{
-        bank::Bank, bank_forks::BankForks, svm::transaction_error_metrics::TransactionErrorMetrics,
-    },
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::MAX_PROCESSING_AGE, saturating_add_assign, timing::AtomicInterval,
         transaction::SanitizedTransaction,
     },
+    solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
         sync::{Arc, RwLock},
         time::Duration,

@@ -22,9 +22,6 @@ use {
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         compute_budget_details::GetComputeBudgetDetails,
-        svm::{
-            account_loader::validate_fee_payer, transaction_error_metrics::TransactionErrorMetrics,
-        },
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -34,6 +31,9 @@ use {
         saturating_add_assign,
         timing::timestamp,
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+    },
+    solana_svm::{
+        account_loader::validate_fee_payer, transaction_error_metrics::TransactionErrorMetrics,
     },
     std::{
         sync::{atomic::Ordering, Arc},

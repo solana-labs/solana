@@ -6,8 +6,8 @@ use {
         },
     },
     solana_poh::poh_recorder::BankStart,
-    solana_runtime::svm::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
+    solana_svm::transaction_error_metrics::*,
     std::time::Instant,
 };
 
