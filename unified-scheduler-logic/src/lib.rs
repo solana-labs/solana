@@ -72,7 +72,7 @@ mod utils {
     }
 
     #[derive(Debug, Default)]
-    pub(super) struct TokenCell<V>(UnsafeCell<V>);
+    pub(super) struct TokenCell<V>(std::sync::Mutex<UnsafeCell<V>>);
 
     impl<V> TokenCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
