@@ -100,7 +100,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
-    let mut txn = Transaction::new_unsigned(msg);
+    let txn = Transaction::new_unsigned(msg);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let bank = Bank::new_for_tests(&genesis_config);
