@@ -880,7 +880,7 @@ mod tests {
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         assert_matches!(
             state_machine
                 .schedule_task(task1.clone())
