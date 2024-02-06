@@ -539,7 +539,7 @@ impl SchedulingStateMachine {
         })
     }
 
-    pub fn reset(&mut self) {
+    pub fn finalize(&mut self) {
         assert!(self.is_empty());
         assert_eq!(self.unblocked_task_queue.len(), 0);
         self.active_task_count.reset_to_zero();
@@ -656,13 +656,13 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduling_state_machine_reset() {
+    fn test_scheduling_state_machine_reinitialization() {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         state_machine.total_task_count.increment_self();
         assert_eq!(state_machine.total_task_count(), 1);
-        state_machine.reset();
+        state_machine.reinitialize();
         assert_eq!(state_machine.total_task_count(), 0);
     }
 
