@@ -6,8 +6,6 @@ cd "$(dirname "$0")"
 # shellcheck source=ci/env.sh
 source ../ci/env.sh
 
-: "${rust_stable_docker_image:=}" # Pacify shellcheck
-
 # shellcheck source=ci/rust-version.sh
 source ../ci/rust-version.sh
 ../ci/docker-run-default-image.sh docs/build-cli-usage.sh
