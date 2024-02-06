@@ -89,7 +89,7 @@ mod utils {
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TLS_TOKENS.with_borrow_mut(|a| a.insert(std::any::TypeId::of::<Self>())), false);
+            assert_eq!(TLS_TOKENS.with_borrow_mut(|a| a.insert(std::any::TypeId::of::<Self>())), true);
             Self(PhantomData)
         }
     }
