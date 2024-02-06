@@ -94,7 +94,7 @@ mod utils {
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true);
+            assert_eq!(TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true, "{:?}", any::type_name::<Self>());
             Self(PhantomData)
         }
     }
