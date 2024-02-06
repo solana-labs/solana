@@ -77,10 +77,12 @@ use {
 fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     solana_logger::setup();
 
+    /*
     let GenesisConfigInfo {
         genesis_config,
         ..
     } = create_genesis_config(10_000);
+    */
     let payer = Keypair::new();
 
     let mut accounts = vec![];
