@@ -6609,6 +6609,7 @@ dependencies = [
  "derivative",
  "log",
  "procfs",
+ "qualifier_attr",
  "rustix",
  "serde_json",
  "solana-ledger",
