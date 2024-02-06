@@ -540,7 +540,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn reinitialize(&mut self) {
-        assert!(self.is_empty());
+        assert!(self.is_ready_to_reinitialize());
         assert_eq!(self.unblocked_task_queue.len(), 0);
         self.active_task_count.reset_to_zero();
         self.handled_task_count.reset_to_zero();
