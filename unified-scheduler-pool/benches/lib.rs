@@ -84,13 +84,23 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
         ..
     } = create_genesis_config(10_000);
     let payer = Keypair::new();
+
+    let mut accounts = vec![];
+    for i in 0..50 {
+        if i % 2 == 0 {
+            accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
+        } else {
+            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        }
+    }
+
     let memo_ix = Instruction {
         program_id: Pubkey::default(),
-        accounts: vec![AccountMeta::new(payer.pubkey(), true)],
+        accounts,
         data: vec![0x00],
     };
     let mut ixs = vec![];
-    for _ in 0..0 {
+    for _ in 0..1 {
         ixs.push(memo_ix.clone());
     }
     let msg = Message::new(&ixs, Some(&payer.pubkey()));
@@ -112,7 +122,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
-    for _ in 0..3 {
+    for _ in 0..5 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
             .spawn({
