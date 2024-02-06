@@ -156,7 +156,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let mut scheduler =
         unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
 
-    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
+    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx0.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
         pages.lock().unwrap().entry(address).or_default().clone()
     })).take(100).collect::<Vec<_>>();
 
