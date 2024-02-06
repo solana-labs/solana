@@ -732,7 +732,7 @@ where
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn restart_session(&mut self) {
-        self.inner.thread_manager.start_session(&self.context);
+        self.inner.thread_manager.write().unwrap().start_session(&self.context);
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
