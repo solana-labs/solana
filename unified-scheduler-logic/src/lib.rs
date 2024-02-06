@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_scheduling_state_machine_reset() {
-        let state_machine = unsafe {
+        let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         state_machine.active_task_count.increment_self();
