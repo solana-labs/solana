@@ -119,7 +119,8 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
-    let p = Page::default();
+    let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
+        std::collections::HashMap::new();
     for _ in 0..5 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
