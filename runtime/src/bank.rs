@@ -3606,12 +3606,13 @@ impl Bank {
 
         let data_len = bincode::serialized_size(&epoch_rewards_partition_data).unwrap() as usize;
         let account_balance = self.get_minimum_balance_for_rent_exemption(data_len);
-        let new_account = AccountSharedData::new_data(
+        let mut new_account = AccountSharedData::new_data(
             account_balance,
             &epoch_rewards_partition_data,
             &solana_sdk::sysvar::id(),
         )
         .unwrap();
+        new_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
 
         info!(
             "create epoch rewards partition data account {} {address} \
