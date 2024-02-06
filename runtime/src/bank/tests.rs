@@ -1656,7 +1656,6 @@ impl Bank {
 #[test_case(false; "disable rent fees collection")]
 fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     solana_logger::setup();
-
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
         if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
@@ -6481,49 +6480,83 @@ fn test_fuzz_instructions() {
     info!("results: {:?}", results);
 }
 
-#[test]
-fn test_bank_hash_consistency() {
+#[test_case(true; "set_rent_epoch_max")]
+#[test_case(false; "disable_set_rent_epoch_max")]
+fn test_bank_hash_consistency(set_rent_epoch_max: bool) {
     solana_logger::setup();
 
-    let mut genesis_config = GenesisConfig::new(
-        &[(
-            Pubkey::from([42; 32]),
-            AccountSharedData::new(1_000_000_000_000, 0, &system_program::id()),
-        )],
-        &[],
-    );
+    let account = AccountSharedData::new(1_000_000_000_000, 0, &system_program::id());
+    if !set_rent_epoch_max {
+        assert_eq!(account.rent_epoch(), 0);
+    }
+    let mut genesis_config = GenesisConfig::new(&[(Pubkey::from([42; 32]), account)], &[]);
     genesis_config.creation_time = 0;
     genesis_config.cluster_type = ClusterType::MainnetBeta;
     genesis_config.rent.burn_percent = 100;
+    if set_rent_epoch_max {
+        activate_feature(
+            &mut genesis_config,
+            solana_sdk::feature_set::set_exempt_rent_epoch_max::id(),
+        );
+    }
+
     let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
     // Check a few slots, cross an epoch boundary
     assert_eq!(bank.get_slots_in_epoch(0), 32);
     loop {
         goto_end_of_slot(bank.clone());
-        if bank.slot == 0 {
-            assert_eq!(
-                bank.hash().to_string(),
-                "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
-            );
-        }
-        if bank.slot == 32 {
-            assert_eq!(
-                bank.hash().to_string(),
-                "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
-            );
-        }
-        if bank.slot == 64 {
-            assert_eq!(
-                bank.hash().to_string(),
-                "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
-            );
-        }
-        if bank.slot == 128 {
-            assert_eq!(
-                bank.hash().to_string(),
-                "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
-            );
-            break;
+        if !set_rent_epoch_max {
+            if bank.slot == 0 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
+                );
+            }
+            if bank.slot == 32 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
+                );
+            }
+            if bank.slot == 64 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
+                );
+            }
+            if bank.slot == 128 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
+                );
+                break;
+            }
+        } else {
+            if bank.slot == 0 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
+                );
+            }
+            if bank.slot == 32 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
+                );
+            }
+            if bank.slot == 64 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
+                );
+            }
+            if bank.slot == 128 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
+                );
+                break;
+            }
         }
         bank = Arc::new(new_from_parent(bank));
     }
