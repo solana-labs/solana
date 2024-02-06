@@ -190,12 +190,6 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         ..
     } = create_genesis_config(50);
 
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and benched.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
     genesis_config
         .accounts
         .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());

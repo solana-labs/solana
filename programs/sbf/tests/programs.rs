@@ -28,9 +28,8 @@ use {
     solana_runtime::{
         bank::TransactionBalancesSet,
         loader_utils::{
-            create_program, load_and_finalize_program, load_program, load_program_from_file,
-            load_upgradeable_buffer, load_upgradeable_program, set_upgrade_authority,
-            upgrade_program,
+            create_program, load_program_from_file, load_upgradeable_buffer,
+            load_upgradeable_program, set_upgrade_authority, upgrade_program,
         },
     },
     solana_sbf_rust_invoke::instructions::*,
@@ -45,12 +44,11 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         feature_set::{self, FeatureSet},
         fee::FeeStructure,
-        loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
         signature::keypair_from_seed,
         stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
-        sysvar::{self, clock, rent},
+        sysvar::{self, clock},
         transaction::VersionedTransaction,
     },
     solana_transaction_status::{
@@ -248,22 +246,6 @@ fn execute_transactions(
     .collect()
 }
 
-fn load_program_and_advance_slot(
-    bank_client: &mut BankClient,
-    bank_forks: &RwLock<BankForks>,
-    loader_id: &Pubkey,
-    payer_keypair: &Keypair,
-    name: &str,
-) -> (Arc<Bank>, Pubkey) {
-    let pubkey = load_program(bank_client, loader_id, payer_keypair, name);
-    (
-        bank_client
-            .advance_slot(1, bank_forks, &Pubkey::default())
-            .expect("Failed to advance the slot"),
-        pubkey,
-    )
-}
-
 fn load_upgradeable_program_wrapper(
     bank_client: &BankClient,
     mint_keypair: &Keypair,
@@ -436,66 +418,6 @@ fn test_program_sbf_loader_deprecated() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert!(result.is_ok());
     }
-}
-
-/// This test is written with bpf_loader v2 specific instructions, which will be
-/// deprecated when `disable_bpf_loader_instructions` feature is activated.
-///
-/// The same test has been migrated to
-/// `test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader`  with a new version
-/// of bpf_upgradeable_loader!
-#[test]
-#[cfg(feature = "sbf_rust")]
-fn test_sol_alloc_free_no_longer_deployable() {
-    solana_logger::setup();
-
-    let program_keypair = Keypair::new();
-    let program_address = program_keypair.pubkey();
-
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
-    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-
-    let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
-    let mut program_account = AccountSharedData::new(1, elf.len(), &bpf_loader::id());
-    program_account
-        .data_as_mut_slice()
-        .get_mut(..)
-        .unwrap()
-        .copy_from_slice(&elf);
-    bank.store_account(&program_address, &program_account);
-
-    let finalize_tx = Transaction::new(
-        &[&mint_keypair, &program_keypair],
-        Message::new(
-            &[loader_instruction::finalize(
-                &program_keypair.pubkey(),
-                &bpf_loader::id(),
-            )],
-            Some(&mint_keypair.pubkey()),
-        ),
-        bank.last_blockhash(),
-    );
-
-    // Try and deploy a program that depends on _sol_alloc_free
-    assert_eq!(
-        bank.process_transaction(&finalize_tx).unwrap_err(),
-        TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
-    );
 }
 
 #[test]
@@ -1626,97 +1548,6 @@ fn test_program_sbf_instruction_introspection() {
         TransactionError::InstructionError(0, InstructionError::NotEnoughAccountKeys)
     );
     assert!(bank.get_account(&sysvar::instructions::id()).is_none());
-}
-
-/// This test is to test bpf_loader v2 `Finalize` instruction with different
-/// programs. It is going to be deprecated once we activate
-/// `disable_bpf_loader_instructions`.
-#[test]
-#[cfg(feature = "sbf_rust")]
-fn test_program_sbf_test_use_latest_executor() {
-    solana_logger::setup();
-
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
-    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new_shared(bank);
-    let panic_id = load_program(
-        &bank_client,
-        &bpf_loader::id(),
-        &mint_keypair,
-        "solana_sbf_rust_panic",
-    );
-
-    // Write the panic program into the program account
-    let (program_keypair, instruction) = load_and_finalize_program(
-        &bank_client,
-        &bpf_loader::id(),
-        None,
-        &mint_keypair,
-        "solana_sbf_rust_panic",
-    );
-
-    // Finalize the panic program, but fail the tx
-    let message = Message::new(
-        &[
-            instruction,
-            Instruction::new_with_bytes(panic_id, &[0], vec![]),
-        ],
-        Some(&mint_keypair.pubkey()),
-    );
-
-    bank_client
-        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
-        .expect("Failed to advance the slot");
-
-    assert!(bank_client
-        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
-        .is_err());
-
-    // Write the noop program into the same program account
-    let (program_keypair, instruction) = load_and_finalize_program(
-        &bank_client,
-        &bpf_loader::id(),
-        Some(program_keypair),
-        &mint_keypair,
-        "solana_sbf_rust_noop",
-    );
-    bank_client
-        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
-        .expect("Failed to advance the slot");
-    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
-    bank_client
-        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
-        .unwrap();
-
-    // Call the noop program, should get noop not panic
-    let message = Message::new(
-        &[Instruction::new_with_bytes(
-            program_keypair.pubkey(),
-            &[0],
-            vec![],
-        )],
-        Some(&mint_keypair.pubkey()),
-    );
-    bank_client
-        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
-        .expect("Failed to advance the slot");
-    assert!(bank_client
-        .send_and_confirm_message(&[&mint_keypair], message)
-        .is_ok());
 }
 
 #[test]
@@ -2885,67 +2716,6 @@ fn test_program_upgradeable_locks() {
         })
     ));
     assert_eq!(results2[1], Err(TransactionError::AccountInUse));
-}
-
-/// This test is to test bpf_loader v2 `Finalize` instruction. It is going to be
-/// deprecated once we activate `disable_bpf_loader_instructions`.
-#[test]
-#[cfg(feature = "sbf_rust")]
-fn test_program_sbf_finalize() {
-    solana_logger::setup();
-
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
-    let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new_shared(bank.clone());
-
-    let (_, program_pubkey) = load_program_and_advance_slot(
-        &mut bank_client,
-        bank_forks.as_ref(),
-        &bpf_loader::id(),
-        &mint_keypair,
-        "solana_sbf_rust_finalize",
-    );
-
-    // Write the noop program into the same program account
-    let (program_keypair, _instruction) = load_and_finalize_program(
-        &bank_client,
-        &bpf_loader::id(),
-        None,
-        &mint_keypair,
-        "solana_sbf_rust_noop",
-    );
-
-    bank_client
-        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
-        .expect("Failed to advance the slot");
-
-    let account_metas = vec![
-        AccountMeta::new(program_keypair.pubkey(), true),
-        AccountMeta::new_readonly(bpf_loader::id(), false),
-        AccountMeta::new(rent::id(), false),
-    ];
-    let instruction = Instruction::new_with_bytes(program_pubkey, &[], account_metas.clone());
-    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
-    let result = bank_client.send_and_confirm_message(&[&mint_keypair, &program_keypair], message);
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
-    );
 }
 
 #[test]
