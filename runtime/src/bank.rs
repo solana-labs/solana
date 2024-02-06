@@ -61,6 +61,7 @@ use {
         svm::{
             account_overrides::AccountOverrides,
             runtime_config::RuntimeConfig,
+            transaction_error_metrics::TransactionErrorMetrics,
             transaction_processor::{
                 TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
             },
@@ -100,7 +101,6 @@ use {
         sorted_storages::SortedStorages,
         stake_rewards::{RewardInfo, StakeReward},
         storable_accounts::StorableAccounts,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::{
             TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
             TransactionResults,
