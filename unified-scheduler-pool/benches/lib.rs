@@ -83,12 +83,12 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let payer = Keypair::new();
 
     let mut accounts = vec![];
-    for _i in 0..1 {
-        //if i % 2 == 0 {
+    for i in 0..51 {
+        if i % 2 == 0 {
             accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
-        //} else {
-        //    accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
-        //}
+        } else {
+            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        }
     }
 
     let memo_ix = Instruction {
