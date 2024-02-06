@@ -536,7 +536,7 @@ impl SchedulingStateMachine {
         })
     }
 
-    unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
+    unsafe pub fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: ShortCounter::zero(),
