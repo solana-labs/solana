@@ -51,6 +51,7 @@ impl TaskHandler<DefaultScheduleExecutionArg> for DummyTaskHandler {
     }
 }
 
+#[allow(dead_code)]
 fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
     let slot = bank.slot();
     let bank_fork = BankForks::new_rw_arc(bank);
