@@ -38,6 +38,8 @@ rand = { workspace = true }
 solana-logger = { workspace = true }
 solana-nohash-hasher = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-unified-scheduler-pool = { path = ".", features = ["dev-context-only-utils"] }
 criterion = "0.5.1"
 
 [[bench]]
