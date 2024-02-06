@@ -109,6 +109,13 @@ mod utils {
             t
         }
     }
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        #[should_panic(expected = "internal error: entered unreachable code")]
+        fn test_second_creation_of_tokens_in_a_thread() {
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
