@@ -119,6 +119,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
+    use std::sync::Mutex;
     let mut pages: Arc<Mutex<std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page>>> =
         Arc::new(Mutex::new(std::collections::HashMap::new()));
     for _ in 0..5 {
