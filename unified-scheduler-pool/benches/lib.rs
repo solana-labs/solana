@@ -166,6 +166,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 }
             }
             scheduler.deschedule_task(&first_task.unwrap());
+            std::mem::forget(first_task);
             while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
                 scheduler.deschedule_task(&unblocked_task);
             }
