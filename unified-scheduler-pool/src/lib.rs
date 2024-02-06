@@ -722,6 +722,24 @@ where
         )
     }
 
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn clear_session_result_with_timings(&mut self) {
+        assert_matches!(
+            self.inner.thread_manager.take_session_result_with_timings(),
+            (Ok(_), _)
+        );
+    }
+
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn restart_session(&mut self) {
+        self.inner.thread_manager.start_session(&self.context);
+    }
+
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn schedule_task(&self, task: Task) {
+        self.inner.thread_manager.send_task(task);
+    }
+
     fn ensure_thread_manager_resumed(
         &self,
         context: &SchedulingContext,
