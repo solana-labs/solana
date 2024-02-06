@@ -200,10 +200,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 }
 
 fn bench_entrypoint(bencher: &mut Criterion) {
-    do_bench_tx_throughput(
-        "bench_tx_throughput_drop_in_accumulator_conflicting",
-        bencher,
-    )
+    do_bench_tx_throughput("bench_tx_throughput", bencher)
 }
 
 use criterion::{criterion_group, criterion_main, Criterion};
