@@ -132,7 +132,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 let s = s.clone();
                 move || loop {
                     let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
-        pages.entry(address).or_default().clone()
+        pages.lock().unwrap().entry(address).or_default().clone()
     })).take(100).collect::<Vec<_>>();
                     if s.send(tasks).is_err() {
                         break;
