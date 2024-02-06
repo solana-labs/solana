@@ -1238,6 +1238,16 @@ fn main() {
                         .help("List of feature gates to deactivate while creating the snapshot"),
                 )
                 .arg(
+                    Arg::with_name("feature_gates_to_activate")
+                        .required(false)
+                        .long("activate-feature-gate")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .multiple(true)
+                        .help("List of feature gates to activate while creating the snapshot"),
+                )
+                .arg(
                     Arg::with_name("vote_accounts_to_destake")
                         .required(false)
                         .long("destake-vote-account")
@@ -1702,6 +1712,8 @@ fn main() {
                         pubkeys_of(arg_matches, "accounts_to_remove").unwrap_or_default();
                     let feature_gates_to_deactivate =
                         pubkeys_of(arg_matches, "feature_gates_to_deactivate").unwrap_or_default();
+                    let feature_gates_to_activate =
+                        pubkeys_of(arg_matches, "feature_gates_to_activate").unwrap_or_default();
                     let vote_accounts_to_destake: HashSet<_> =
                         pubkeys_of(arg_matches, "vote_accounts_to_destake")
                             .unwrap_or_default()
@@ -1820,6 +1832,7 @@ fn main() {
                         || remove_stake_accounts
                         || !accounts_to_remove.is_empty()
                         || !feature_gates_to_deactivate.is_empty()
+                        || !feature_gates_to_activate.is_empty()
                         || !vote_accounts_to_destake.is_empty()
                         || faucet_pubkey.is_some()
                         || bootstrap_validator_pubkeys.is_some();
@@ -1900,6 +1913,16 @@ fn main() {
                         account.set_lamports(0);
                         bank.store_account(&address, &account);
                         debug!("Feature gate deactivated: {address}");
+                    }
+
+                    for address in feature_gates_to_activate {
+                        let mut account =
+                            AccountSharedData::new(1, Feature::size_of(), &feature::id());
+                        let feature = Feature {
+                            activated_at: Some(bank.slot()),
+                        };
+                        account.set_data_from_slice(&bincode::serialize(&feature).unwrap());
+                        bank.store_account(&address, &account);
                     }
 
                     if !vote_accounts_to_destake.is_empty() {

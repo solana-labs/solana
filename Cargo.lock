@@ -6350,6 +6350,7 @@ name = "solana-ledger-tool"
 version = "1.18.0"
 dependencies = [
  "assert_cmd",
+ "bincode",
  "bs58",
  "bytecount",
  "chrono",
