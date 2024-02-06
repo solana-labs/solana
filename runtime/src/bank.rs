@@ -3579,33 +3579,6 @@ impl Bank {
         self.log_epoch_rewards_sysvar("update");
     }
 
-<<<<<<< HEAD
-    /// Create the persistent PDA containing the epoch-rewards data
-    fn create_epoch_rewards_partition_data_account(
-        &self,
-        num_partitions: usize,
-        parent_blockhash: Hash,
-    ) {
-        let epoch_rewards_partition_data = EpochRewardsPartitionDataVersion::V0(PartitionData {
-            num_partitions,
-            parent_blockhash,
-            hasher_kind: HasherKind::Sip13,
-        });
-        let address = get_epoch_rewards_partition_data_address(self.epoch());
-
-        let data_len = bincode::serialized_size(&epoch_rewards_partition_data).unwrap() as usize;
-        let account_balance = self.get_minimum_balance_for_rent_exemption(data_len);
-        let new_account = AccountSharedData::new_data(
-            account_balance,
-            &epoch_rewards_partition_data,
-            &solana_sdk::stake::program::id(),
-        )
-        .unwrap();
-        self.store_account_and_update_capitalization(&address, &new_account);
-    }
-
-=======
->>>>>>> 57bbd3363c (Revert "Populate partitioned-rewards PDA during calculation (#34624)")
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
