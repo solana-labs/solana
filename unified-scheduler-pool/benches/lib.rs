@@ -173,7 +173,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 }
             }
             scheduler.deschedule_task(&first_task.as_ref().unwrap());
-            new_tasks.push(first_task);
+            new_tasks.push(first_task.unwrap());
             while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
                 scheduler.deschedule_task(&unblocked_task);
                 new_tasks.push(unblocked_task);
