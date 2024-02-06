@@ -1412,6 +1412,11 @@ pub fn main() {
             ),
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
+            retry_pool_max_size: value_t_or_exit!(
+                matches,
+                "rpc_send_transaction_retry_pool_max_size",
+                usize
+            ),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
