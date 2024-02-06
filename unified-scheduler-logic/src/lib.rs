@@ -965,6 +965,7 @@ mod tests {
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions3() {
         let mut state_machine = SchedulingStateMachine::default();
+        let mut state_machine = SchedulingStateMachine::default();
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage =
             Usage::Readonly(ShortCounter::one());
@@ -972,6 +973,5 @@ mod tests {
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
-        let mut state_machine = SchedulingStateMachine::default();
     }
 }
