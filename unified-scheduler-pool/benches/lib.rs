@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, dead_code)]
 #![feature(test)]
 
 extern crate test;
@@ -27,7 +27,7 @@ use {
 };
 
 use solana_runtime::installed_scheduler_pool::DefaultScheduleExecutionArg;
-//use solana_sdk::scheduling::SchedulingMode;
+use solana_sdk::scheduling::SchedulingMode;
 use solana_unified_scheduler_logic::SchedulingStateMachine;
 use solana_unified_scheduler_pool::SpawnableScheduler;
 use solana_unified_scheduler_logic::Page;
@@ -52,7 +52,6 @@ impl TaskHandler<DefaultScheduleExecutionArg> for DummyTaskHandler {
     }
 }
 
-#[allow(dead_code)]
 fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
     let slot = bank.slot();
     let bank_fork = BankForks::new_rw_arc(bank);
