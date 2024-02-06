@@ -59,6 +59,7 @@ use {
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         svm::{
+            account_overrides::AccountOverrides,
             runtime_config::RuntimeConfig,
             transaction_processor::{
                 TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
@@ -77,7 +78,6 @@ use {
     },
     serde::Serialize,
     solana_accounts_db::{
-        account_overrides::AccountOverrides,
         accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot, TransactionLoadResult},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
