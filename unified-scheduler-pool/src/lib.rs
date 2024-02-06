@@ -737,7 +737,7 @@ where
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn schedule_task(&self, task: Task) {
-        self.inner.thread_manager.send_task(task);
+        self.inner.thread_manager.read().unwrap().send_task(task);
     }
 
     fn ensure_thread_manager_resumed(
