@@ -726,7 +726,7 @@ where
         )
     }
 
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    #[cfg(feature = "dev-context-only-utils")]
     fn clear_session_result_with_timings(&mut self) {
         assert_matches!(
             self.inner
@@ -738,7 +738,7 @@ where
         );
     }
 
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    #[cfg(feature = "dev-context-only-utils")]
     fn restart_session(&mut self) {
         self.inner
             .thread_manager
@@ -747,7 +747,7 @@ where
             .start_session(&self.context);
     }
 
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    #[cfg(feature = "dev-context-only-utils")]
     fn schedule_task(&self, task: Task) {
         self.inner.thread_manager.read().unwrap().send_task(task);
     }
