@@ -117,6 +117,7 @@ mod utils {
         #[should_panic(expected = "internal error: entered unreachable code")]
         fn test_second_creation_of_tokens_in_a_thread() {
             unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() }; 
+            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() }; 
         }
     }
 }
