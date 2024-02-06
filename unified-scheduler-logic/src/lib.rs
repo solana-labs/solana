@@ -83,6 +83,9 @@ mod utils {
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
+    thread_local! {
+        pub static TLS_TOKENS: std::cell::RefCell<std::collections::HashMap<usize, bool>> = const { std::collections::HashMap::new() };
+    }
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
