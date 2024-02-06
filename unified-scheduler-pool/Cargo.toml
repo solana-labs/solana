@@ -47,4 +47,4 @@ name = "lib"
 harness = false
 
 [[features]]
-dev-context-only-utils
+dev-context-only-utils = []
