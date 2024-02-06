@@ -457,10 +457,8 @@ impl SchedulingStateMachine {
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
                         heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
-                            // write test which fails if the filter() is commented out.
                             page.heaviest_blocked_task()
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
-                            //None
                         } else {
                             None
                         };
