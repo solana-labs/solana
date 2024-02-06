@@ -725,7 +725,7 @@ where
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn clear_session_result_with_timings(&mut self) {
         assert_matches!(
-            self.inner.thread_manager.take_session_result_with_timings(),
+            self.inner.thread_manager.write().unwrap().take_session_result_with_timings(),
             (Ok(_), _)
         );
     }
