@@ -164,7 +164,6 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 if let Some(task) = scheduler.schedule_task(t) {
                     first_task = Some(task);
                 }
-                i += 1;
             }
             scheduler.deschedule_task(first_task);
             while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
