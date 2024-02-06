@@ -84,7 +84,7 @@ mod utils {
         where
             Token<V, F>: PartialBorrowMut<V, F>,
         {
-            Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
+            Token::partial_borrow_mut(unsafe { &mut *self.0.lock().unwrap().get() })
         }
     }
 
