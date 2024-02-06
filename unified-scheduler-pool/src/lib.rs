@@ -1118,7 +1118,7 @@ where
                                 "step"
                             },
                         };
-                        if state_change != "step" || log_interval.increment() {
+                        if state_change != "step" || (log_interval.increment() && false) {
                             log_scheduler!(state_change);
                         }
 
