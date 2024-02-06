@@ -83,7 +83,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let payer = Keypair::new();
 
     let mut accounts = vec![];
-    for i in 0..1 {
+    for _i in 0..1 {
         //if i % 2 == 0 {
             accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
         //} else {
