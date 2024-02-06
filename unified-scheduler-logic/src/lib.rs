@@ -85,7 +85,7 @@ mod utils {
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
 
     impl<V, F> Token<V, F> {
-        pub(super) unsafe fn assume_on_the_scheduler_thread() -> Self {
+        pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
             Self(PhantomData)
         }
     }
@@ -512,10 +512,10 @@ impl Default for SchedulingStateMachine {
             unblocked_task_count: ShortCounter::zero(),
             total_task_count: ShortCounter::zero(),
             blocked_lock_count_token: unsafe {
-                BlockedLockCountToken::assume_on_the_scheduler_thread()
+                BlockedLockCountToken::assume_exclusive_mutating_thread()
             },
-            lock_attempt_token: unsafe { LockAttemptToken::assume_on_the_scheduler_thread() },
-            page_token: unsafe { PageToken::assume_on_the_scheduler_thread() },
+            lock_attempt_token: unsafe { LockAttemptToken::assume_exclusive_mutating_thread() },
+            page_token: unsafe { PageToken::assume_exclusive_mutating_thread() },
         }
     }
 }
