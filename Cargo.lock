@@ -7673,6 +7673,7 @@ dependencies = [
  "derivative",
  "log",
  "procfs",
+ "qualifier_attr",
  "rand 0.8.5",
  "rustix",
  "serde_json",
