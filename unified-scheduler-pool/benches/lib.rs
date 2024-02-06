@@ -145,15 +145,24 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     assert_eq!(bank.transaction_count(), 0);
     let mut scheduler = pool.do_take_scheduler(context);
+
+    let mut scheduler =
+        unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
+
     bencher.bench_function(label, |b| b.iter(|| {
         for _ in 0..60 {
             for t in r.recv().unwrap() {
+                /*
+                scheduler.schedule_task(t);
+                */
                 scheduler.schedule_task(t);
             }
         }
+        /*
         scheduler.pause_for_recent_blockhash();
         scheduler.clear_session_result_with_timings();
         scheduler.restart_session();
+        */
     }));
 }
 
