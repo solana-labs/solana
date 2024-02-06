@@ -104,6 +104,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let txn = Transaction::new_unsigned(msg);
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
+    /*
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = setup_dummy_fork_graph(bank);
     let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -114,6 +115,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
         ignored_prioritization_fee_cache,
     );
     let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+    */ 
 
     let (s, r) = crossbeam_channel::bounded(1000);
 
@@ -143,8 +145,8 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     }
     std::thread::sleep(std::time::Duration::from_secs(5));
 
-    assert_eq!(bank.transaction_count(), 0);
-    let mut scheduler = pool.do_take_scheduler(context);
+    //assert_eq!(bank.transaction_count(), 0);
+    //let mut scheduler = pool.do_take_scheduler(context);
 
     let mut scheduler =
         unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
