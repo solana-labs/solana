@@ -7667,6 +7667,7 @@ dependencies = [
  "assert_matches",
  "bincode",
  "cpu-time",
+ "criterion",
  "crossbeam-channel",
  "dashmap",
  "derivative",
