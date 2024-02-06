@@ -120,7 +120,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
     */ 
 
-    //let (s, r) = crossbeam_channel::bounded(1000);
+    let (s, r) = crossbeam_channel::bounded(1000);
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
@@ -159,12 +159,13 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx0.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
         pages.lock().unwrap().entry(address).or_default().clone()
     })).take(100).collect::<Vec<_>>();
+    s.send(tasks).unwrap();
 
     bencher.bench_function(label, |b| b.iter(|| {
         for _ in 0..60 {
             let mut new_tasks = Vec::with_capacity(tasks.len());
             let mut first_task = None;
-            for t in tasks {
+            for t in r.recv().unwrap() {
                 /*
                 scheduler.schedule_task(t);
                 */
@@ -179,7 +180,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 new_tasks.push(unblocked_task);
             }
             assert!(scheduler.has_no_active_task());
-            tasks = new_tasks;
+            s.send(new_tasks).unwrap();
         }
         /*
         scheduler.pause_for_recent_blockhash();
