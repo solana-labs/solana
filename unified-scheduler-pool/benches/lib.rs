@@ -119,8 +119,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 let tx1 = tx0.clone();
                 let s = s.clone();
                 move || loop {
-                    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i, &mut |_| Default::default())).take(100).collect::<Vec<_>>();
-                    i += 1;
+                    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |_| Default::default())).take(100).collect::<Vec<_>>();
                     if s.send(tasks).is_err() {
                         break;
                     }
