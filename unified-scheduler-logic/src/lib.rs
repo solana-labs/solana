@@ -284,7 +284,7 @@ impl PageInner {
         assert!(pre_existed.is_none());
     }
 
-    fn has_no_blocked_tasks(&self) -> bool {
+    fn has_no_blocked_task(&self) -> bool {
         self.blocked_tasks.is_empty()
     }
 
@@ -378,7 +378,7 @@ impl SchedulingStateMachine {
 
         for attempt in lock_attempts.iter_mut() {
             let page = attempt.page_mut(page_token);
-            let lock_status = if page.has_no_blocked_tasks() {
+            let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
                 LockStatus::Failed
