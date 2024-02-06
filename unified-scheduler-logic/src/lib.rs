@@ -84,12 +84,12 @@ mod utils {
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
     thread_local! {
-        pub static TLS_TOKENS: std::cell::RefCell<std::collections::BTreeMap<usize, bool>> = const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+        pub static TLS_TOKENS: std::cell::RefCell<std::collections::BTreeSet<usize> = const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
     }
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TLS_TOKENS.with_borrow_mut(|a| a.insert(3)), false);
+            assert_eq!(TLS_TOKENS.with_borrow_mut(|a| a.insert(3)), true);
             Self(PhantomData)
         }
     }
