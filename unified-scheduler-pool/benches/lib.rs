@@ -77,7 +77,6 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     let GenesisConfigInfo {
         genesis_config,
-        mint_keypair,
         ..
     } = create_genesis_config(10_000);
     let payer = Keypair::new();
