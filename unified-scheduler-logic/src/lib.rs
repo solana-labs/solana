@@ -14,7 +14,13 @@ use {
 mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
-    use std::{cell::UnsafeCell, marker::PhantomData};
+    use std::{
+        any::{self, TypeId},
+        cell::{RefCell, UnsafeCell},
+        collections::BTreeSet,
+        marker::PhantomData,
+        thread,
+    };
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     #[derive(Debug, Clone, Copy)]
@@ -81,11 +87,6 @@ mod utils {
     unsafe impl<V> Send for TokenCell<V> {}
     unsafe impl<V> Sync for TokenCell<V> {}
 
-    use std::cell::RefCell;
-    use std::collections::BTreeSet;
-    use std::any::{self, TypeId};
-    use std::thread;
-
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
 
@@ -95,7 +96,13 @@ mod utils {
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true, "{:?} is wrongly initialized twice on {:?}", any::type_name::<Self>(), thread::current());
+            assert_eq!(
+                TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())),
+                true,
+                "{:?} is wrongly initialized twice on {:?}",
+                any::type_name::<Self>(),
+                thread::current()
+            );
             Self(PhantomData)
         }
     }
@@ -110,15 +117,18 @@ mod utils {
             t
         }
     }
+
     #[cfg(test)]
     mod tests {
         use super::Token;
 
         #[test]
-        #[should_panic(expected = "\"solana_unified_scheduler_logic::utils::Token<usize, usize>\" is wrongly initialized twice on Thread")]
+        #[should_panic(
+            expected = "\"solana_unified_scheduler_logic::utils::Token<usize, usize>\" is wrongly initialized twice on Thread"
+        )]
         fn test_second_creation_of_tokens_in_a_thread() {
-            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() }; 
-            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() }; 
+            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() };
+            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() };
         }
     }
 }
@@ -920,11 +930,7 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(5)
         );
-        assert_matches!(
-            state_machine
-                .schedule_unblocked_task(),
-            None
-        );
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
     }
 
     #[test]
