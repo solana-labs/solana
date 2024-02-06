@@ -45,7 +45,7 @@ impl TaskHandler<DefaultScheduleExecutionArg> for DummyTaskHandler {
     ) {
     }
 
-    fn create<T: SpawnableScheduler<Self, DefaultScheduleExecutionArg>>(pool: &SchedulerPool<T, Self, DefaultScheduleExecutionArg>) -> Self {
+    fn create<T: SpawnableScheduler<Self, DefaultScheduleExecutionArg>>(_pool: &SchedulerPool<T, Self, DefaultScheduleExecutionArg>) -> Self {
         Self
     }
 }
