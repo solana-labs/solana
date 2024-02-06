@@ -110,8 +110,8 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     let (s, r) = crossbeam_channel::bounded(1000);
 
-    let mut i = 0;
-    //for _ in 0..1 {
+    let i = AtomicUsize::new();
+    for _ in 0..3 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
             .spawn({
@@ -126,7 +126,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 }
             })
             .unwrap();
-    //}
+    }
     std::thread::sleep(std::time::Duration::from_secs(5));
 
     assert_eq!(bank.transaction_count(), 0);
