@@ -7,7 +7,6 @@ mod tests {
                 StartBlockHeightAndRewards,
             },
             genesis_utils::activate_all_features,
-            runtime_config::RuntimeConfig,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
                 SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
@@ -18,6 +17,7 @@ mod tests {
                 StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
             status_cache::StatusCache,
+            svm::runtime_config::RuntimeConfig,
         },
         assert_matches::assert_matches,
         solana_accounts_db::{

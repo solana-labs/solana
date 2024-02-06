@@ -3,12 +3,12 @@ use {
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         builtins::BuiltinPrototype,
         epoch_stakes::EpochStakes,
-        runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
             self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
         },
         stakes::Stakes,
+        svm::runtime_config::RuntimeConfig,
     },
     bincode::{self, config::Options, Error},
     log::*,

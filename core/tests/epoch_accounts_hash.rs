@@ -23,11 +23,11 @@ use {
         bank::{epoch_accounts_hash_utils, Bank},
         bank_forks::BankForks,
         genesis_utils::{self, GenesisConfigInfo},
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
+        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::Slot,

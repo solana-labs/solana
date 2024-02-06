@@ -96,12 +96,12 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
+        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::Slot,

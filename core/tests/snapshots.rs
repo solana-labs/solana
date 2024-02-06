@@ -25,7 +25,6 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
@@ -36,6 +35,7 @@ use {
             SnapshotVersion::{self, V1_2_0},
         },
         status_cache::MAX_CACHE_ENTRIES,
+        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::Slot,

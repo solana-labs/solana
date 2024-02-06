@@ -1,6 +1,6 @@
 use {
     solana_cost_model::transaction_cost::TransactionCost,
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+    solana_runtime::compute_budget_details::ComputeBudgetDetails,
     solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
 };
 
@@ -34,13 +34,13 @@ pub(crate) enum TransactionState {
     /// The transaction is available for scheduling.
     Unprocessed {
         transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
+        compute_budget_details: ComputeBudgetDetails,
         transaction_cost: TransactionCost,
         forwarded: bool,
     },
     /// The transaction is currently scheduled or being processed.
     Pending {
-        transaction_priority_details: TransactionPriorityDetails,
+        compute_budget_details: ComputeBudgetDetails,
         transaction_cost: TransactionCost,
         forwarded: bool,
     },
@@ -50,28 +50,28 @@ impl TransactionState {
     /// Creates a new `TransactionState` in the `Unprocessed` state.
     pub(crate) fn new(
         transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
+        compute_budget_details: ComputeBudgetDetails,
         transaction_cost: TransactionCost,
     ) -> Self {
         Self::Unprocessed {
             transaction_ttl,
-            transaction_priority_details,
+            compute_budget_details,
             transaction_cost,
             forwarded: false,
         }
     }
 
-    /// Returns a reference to the priority details of the transaction.
-    pub(crate) fn transaction_priority_details(&self) -> &TransactionPriorityDetails {
+    /// Returns a reference to the compute budget details of the transaction.
+    pub(crate) fn compute_budget_details(&self) -> &ComputeBudgetDetails {
         match self {
             Self::Unprocessed {
-                transaction_priority_details,
+                compute_budget_details,
                 ..
-            } => transaction_priority_details,
+            } => compute_budget_details,
             Self::Pending {
-                transaction_priority_details,
+                compute_budget_details,
                 ..
-            } => transaction_priority_details,
+            } => compute_budget_details,
         }
     }
 
@@ -87,9 +87,9 @@ impl TransactionState {
         }
     }
 
-    /// Returns the priority of the transaction.
-    pub(crate) fn priority(&self) -> u64 {
-        self.transaction_priority_details().priority
+    /// Returns the compute unit price of the transaction.
+    pub(crate) fn compute_unit_price(&self) -> u64 {
+        self.compute_budget_details().compute_unit_price
     }
 
     /// Returns whether or not the transaction has already been forwarded.
@@ -119,12 +119,12 @@ impl TransactionState {
         match self.take() {
             TransactionState::Unprocessed {
                 transaction_ttl,
-                transaction_priority_details,
+                compute_budget_details,
                 transaction_cost,
                 forwarded,
             } => {
                 *self = TransactionState::Pending {
-                    transaction_priority_details,
+                    compute_budget_details,
                     transaction_cost,
                     forwarded,
                 };
@@ -146,13 +146,13 @@ impl TransactionState {
         match self.take() {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
             TransactionState::Pending {
-                transaction_priority_details,
+                compute_budget_details,
                 transaction_cost,
                 forwarded,
             } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
-                    transaction_priority_details,
+                    compute_budget_details,
                     transaction_cost,
                     forwarded,
                 }
@@ -179,8 +179,8 @@ impl TransactionState {
         core::mem::replace(
             self,
             Self::Pending {
-                transaction_priority_details: TransactionPriorityDetails {
-                    priority: 0,
+                compute_budget_details: ComputeBudgetDetails {
+                    compute_unit_price: 0,
                     compute_unit_limit: 0,
                 },
                 transaction_cost: TransactionCost::SimpleVote {
@@ -203,7 +203,7 @@ mod tests {
         },
     };
 
-    fn create_transaction_state(priority: u64) -> TransactionState {
+    fn create_transaction_state(compute_unit_price: u64) -> TransactionState {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -211,7 +211,7 @@ mod tests {
                 &solana_sdk::pubkey::new_rand(),
                 1,
             ),
-            ComputeBudgetInstruction::set_compute_unit_price(priority),
+            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[&from_keypair], message, Hash::default());
@@ -227,8 +227,8 @@ mod tests {
 
         TransactionState::new(
             transaction_ttl,
-            TransactionPriorityDetails {
-                priority,
+            ComputeBudgetDetails {
+                compute_unit_price,
                 compute_unit_limit: 0,
             },
             transaction_cost,
@@ -294,16 +294,16 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_priority_details() {
-        let priority = 15;
-        let mut transaction_state = create_transaction_state(priority);
-        assert_eq!(transaction_state.priority(), priority);
+    fn test_compute_unit_price() {
+        let compute_unit_price = 15;
+        let mut transaction_state = create_transaction_state(compute_unit_price);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
 
-        // ensure priority is not lost through state transitions
+        // ensure compute unit price is not lost through state transitions
         let transaction_ttl = transaction_state.transition_to_pending();
-        assert_eq!(transaction_state.priority(), priority);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
         transaction_state.transition_to_unprocessed(transaction_ttl);
-        assert_eq!(transaction_state.priority(), priority);
+        assert_eq!(transaction_state.compute_unit_price(), compute_unit_price);
     }
 
     #[test]

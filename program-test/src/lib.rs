@@ -25,7 +25,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
-        runtime_config::RuntimeConfig,
+        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},

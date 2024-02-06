@@ -41,7 +41,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
-        runtime_config::RuntimeConfig,
+        svm::runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
