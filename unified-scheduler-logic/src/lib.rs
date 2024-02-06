@@ -77,14 +77,14 @@ mod utils {
     impl<V> TokenCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
-            Self(std::sync::Mutex::new(UnsafeCell::new(value)))
+            Self(UnsafeCell::new(value))
         }
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
             Token<V, F>: PartialBorrowMut<V, F>,
         {
-            Token::partial_borrow_mut(unsafe { &mut *self.0.lock().unwrap().get() })
+            Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
         }
     }
 
