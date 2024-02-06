@@ -535,10 +535,8 @@ impl SchedulingStateMachine {
             task_status: TokenCell::new(TaskStatus::new(locks)),
         })
     }
-}
 
-impl Default for SchedulingStateMachine {
-    fn default() -> Self {
+    unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: ShortCounter::zero(),
