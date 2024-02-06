@@ -102,7 +102,7 @@ impl SchedulerController {
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
             self.count_metrics
-                .update_prioritization_stats(self.container.get_min_max_prioritization_fees());
+                .update_priority_stats(self.container.get_min_max_priority());
             self.count_metrics.maybe_report_and_reset(should_report);
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
@@ -526,16 +526,8 @@ impl SchedulerCountMetrics {
                 i64
             ),
             ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
-            (
-                "min_prioritization_fees",
-                self.get_min_prioritization_fees(),
-                i64
-            ),
-            (
-                "max_prioritization_fees",
-                self.get_max_prioritization_fees(),
-                i64
-            )
+            ("min_priority", self.get_min_priority(), i64),
+            ("max_priority", self.get_max_priority(), i64)
         );
     }
 
@@ -575,8 +567,8 @@ impl SchedulerCountMetrics {
         self.max_prioritization_fees = 0;
     }
 
-    pub fn update_prioritization_stats(&mut self, min_max_fees: MinMaxResult<u64>) {
-        // update min/max priotization fees
+    pub fn update_priority_stats(&mut self, min_max_fees: MinMaxResult<u64>) {
+        // update min/max priority
         match min_max_fees {
             itertools::MinMaxResult::NoElements => {
                 // do nothing
@@ -592,7 +584,7 @@ impl SchedulerCountMetrics {
         }
     }
 
-    pub fn get_min_prioritization_fees(&self) -> u64 {
+    pub fn get_min_priority(&self) -> u64 {
         // to avoid getting u64::max recorded by metrics / in case of edge cases
         if self.min_prioritization_fees != u64::MAX {
             self.min_prioritization_fees
@@ -601,7 +593,7 @@ impl SchedulerCountMetrics {
         }
     }
 
-    pub fn get_max_prioritization_fees(&self) -> u64 {
+    pub fn get_max_priority(&self) -> u64 {
         self.max_prioritization_fees
     }
 }
