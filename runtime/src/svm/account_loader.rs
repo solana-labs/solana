@@ -1,6 +1,7 @@
 use {
     crate::svm::{
         account_overrides::AccountOverrides, account_rent_state::RentState,
+        transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::TransactionProcessingCallback,
     },
     itertools::Itertools,
@@ -10,7 +11,6 @@ use {
         nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::TransactionCheckResult,
     },
     solana_program_runtime::{

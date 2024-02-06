@@ -5,9 +5,8 @@ use {
         scheduler_messages::{ConsumeWork, FinishedConsumeWork},
     },
     crossbeam_channel::{Receiver, RecvError, SendError, Sender},
-    solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_poh::leader_bank_notifier::LeaderBankNotifier,
-    solana_runtime::bank::Bank,
+    solana_runtime::{bank::Bank, svm::transaction_error_metrics::TransactionErrorMetrics},
     solana_sdk::timing::AtomicInterval,
     std::{
         sync::{

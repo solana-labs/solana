@@ -21,6 +21,7 @@ use {
         svm::{
             account_loader::load_accounts,
             transaction_account_state_info::TransactionAccountStateInfo,
+            transaction_error_metrics::TransactionErrorMetrics,
         },
     },
     assert_matches::assert_matches,
@@ -41,7 +42,6 @@ use {
         nonce_info::NonceFull,
         partitioned_rewards::TestPartitionedEpochRewards,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::DurableNonceFee,
     },
     solana_logger,
