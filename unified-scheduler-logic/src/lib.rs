@@ -111,9 +111,12 @@ mod utils {
     }
     #[cfg(test)]
     mod tests {
+        use super::Token;
+
         #[test]
         #[should_panic(expected = "internal error: entered unreachable code")]
         fn test_second_creation_of_tokens_in_a_thread() {
+            Token::<usize, usize>::assume_exclusive_mutating_thread();
         }
     }
 }
