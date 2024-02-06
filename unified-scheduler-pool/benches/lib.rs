@@ -19,12 +19,10 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
-        system_transaction,
         transaction::{Result, SanitizedTransaction},
     },
     solana_unified_scheduler_pool::{HandlerContext, PooledScheduler, SchedulerPool, TaskHandler},
     std::sync::Arc,
-    test::Bencher,
 };
 
 use solana_runtime::installed_scheduler_pool::DefaultScheduleExecutionArg;
@@ -72,7 +70,6 @@ use {
         signer::keypair::Keypair,
         transaction::Transaction,
     },
-    solana_unified_scheduler_logic::{Task},
 };
 
 fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
