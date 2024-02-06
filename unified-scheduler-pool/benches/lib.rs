@@ -162,7 +162,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     s.send(tasks).unwrap();
 
     bencher.bench_function(label, |b| b.iter(|| {
-        for _ in 0..60 {
+        for _ in 0..600 {
             let mut first_task = None;
             let tt = r.recv().unwrap();
             let mut new_tasks = Vec::with_capacity(tt.len());
