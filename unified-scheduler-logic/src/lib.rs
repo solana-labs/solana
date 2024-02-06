@@ -83,7 +83,7 @@ mod utils {
 
     use std::cell::RefCell;
     use std::collections::BTreeSet;
-    use std::any::TypeId;
+    use std::any::{self, TypeId};
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
