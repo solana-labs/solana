@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_scheduling_state_machine_default() {
-        let state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
         assert!(state_machine.is_empty());
@@ -654,7 +654,7 @@ mod tests {
         let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         let task = state_machine.schedule_task(task).unwrap();
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.total_task_count(), 1);
@@ -672,7 +672,7 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
@@ -700,7 +700,7 @@ mod tests {
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
@@ -727,7 +727,7 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
@@ -760,7 +760,7 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
@@ -780,7 +780,7 @@ mod tests {
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
 
@@ -807,7 +807,7 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(
             state_machine
                 .schedule_task(task1.clone())
@@ -846,7 +846,7 @@ mod tests {
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe {SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
         assert_matches!(
             state_machine
                 .schedule_task(task1.clone())
