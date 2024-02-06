@@ -88,6 +88,9 @@ mod utils {
         }
     }
 
+    unsafe impl<V> Send for TokenCell<V> {}
+    unsafe impl<V> Sync for TokenCell<V> {}
+
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
 
