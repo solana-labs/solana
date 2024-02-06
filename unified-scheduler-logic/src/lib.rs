@@ -82,7 +82,7 @@ mod utils {
     unsafe impl<V> Sync for TokenCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    pub(super) struct Token<V, F>(PhantomData<(*mut V, *mut F)>);
+    pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
     thread_local! {
         pub static TLS_TOKENS: std::cell::RefCell<std::collections::BTreeSet<std::any::TypeId>> = const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
     }
