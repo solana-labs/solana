@@ -82,12 +82,12 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let payer = Keypair::new();
 
     let mut accounts = vec![];
-    for i in 0..50 {
-        if i % 2 == 0 {
+    for i in 0..1 {
+        //if i % 2 == 0 {
             accounts.push(AccountMeta::new(Keypair::new().pubkey(), true));
-        } else {
-            accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
-        }
+        //} else {
+        //    accounts.push(AccountMeta::new_readonly(Keypair::new().pubkey(), true));
+        //}
     }
 
     let memo_ix = Instruction {
@@ -118,15 +118,17 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
+    let p = Page::default();
     for _ in 0..5 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
             .spawn({
+                let p = p.clone();
                 let i = i.clone();
                 let tx1 = tx0.clone();
                 let s = s.clone();
                 move || loop {
-                    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |_| Default::default())).take(100).collect::<Vec<_>>();
+                    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |_| p.clone())).take(100).collect::<Vec<_>>();
                     if s.send(tasks).is_err() {
                         break;
                     }
