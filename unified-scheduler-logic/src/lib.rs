@@ -66,7 +66,7 @@ mod utils {
             self
         }
 
-        fn reset_to_zero(&mut self) {
+        pub(super) fn reset_to_zero(&mut self) {
             self.0 = 0;
         }
     }
