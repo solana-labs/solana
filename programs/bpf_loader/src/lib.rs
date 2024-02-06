@@ -36,10 +36,9 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
-            disable_bpf_loader_instructions, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -510,20 +509,11 @@ pub fn process_instruction_inner(
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
-            // Return `UnsupportedProgramId` error for bpf_loader when
-            // `disable_bpf_loader_instruction` feature is activated.
-            if invoke_context
-                .feature_set
-                .is_active(&disable_bpf_loader_instructions::id())
-            {
-                ic_logger_msg!(
-                    log_collector,
-                    "BPF loader management instructions are no longer supported"
-                );
-                Err(InstructionError::UnsupportedProgramId)
-            } else {
-                process_loader_instruction(invoke_context)
-            }
+            ic_logger_msg!(
+                log_collector,
+                "BPF loader management instructions are no longer supported"
+            );
+            Err(InstructionError::UnsupportedProgramId)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
@@ -1486,7 +1476,7 @@ fn common_close_account(
     Ok(())
 }
 
-fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+fn _process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -1787,7 +1777,6 @@ mod tests {
             },
             account_utils::StateMut,
             clock::Clock,
-            feature_set::FeatureSet,
             instruction::{AccountMeta, InstructionError},
             pubkey::Pubkey,
             rent::Rent,
@@ -1826,9 +1815,6 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
-                let mut features = FeatureSet::all_enabled();
-                features.deactivate(&disable_bpf_loader_instructions::id());
-                invoke_context.feature_set = Arc::new(features);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
@@ -1847,6 +1833,7 @@ mod tests {
         program_account
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_write() {
         let loader_id = bpf_loader::id();
@@ -1914,6 +1901,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_finalize() {
         let loader_id = bpf_loader::id();
@@ -1978,6 +1966,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_invoke_main() {
         let loader_id = bpf_loader::id();
@@ -2048,9 +2037,6 @@ mod tests {
             Err(InstructionError::ProgramFailedToComplete),
             Entrypoint::vm,
             |invoke_context| {
-                let mut features = FeatureSet::all_enabled();
-                features.deactivate(&disable_bpf_loader_instructions::id());
-                invoke_context.feature_set = Arc::new(features);
                 invoke_context.mock_set_remaining(0);
                 test_utils::load_all_invoked_programs(invoke_context);
             },
@@ -2596,11 +2582,7 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 Entrypoint::vm,
-                |invoke_context| {
-                    let mut features = FeatureSet::all_enabled();
-                    features.deactivate(&disable_bpf_loader_instructions::id());
-                    invoke_context.feature_set = Arc::new(features);
-                },
+                |_invoke_context| {},
                 |_invoke_context| {},
             )
         }
