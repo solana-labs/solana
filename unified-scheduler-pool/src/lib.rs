@@ -1106,7 +1106,8 @@ where
 
                     if session_ending {
                         log_scheduler!("S:ended");
-                        (state_machine, log_interval) = <_>::default();
+                        state_machine.reset();
+                        log_interval = LogInterval::default();
                         executed_task_sender
                             .send(ExecutedTaskPayload::CloseSubchannel)
                             .unwrap();
