@@ -8,6 +8,9 @@
 //! and commits any side-effects (i.e. on-chain state changes) into the associated `Bank` via
 //! `solana-ledger`'s helper function called `execute_batch()`.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
+
 use {
     assert_matches::assert_matches,
     cpu_time::ThreadTime,
@@ -18,7 +21,6 @@ use {
     dashmap::DashMap,
     derivative::Derivative,
     log::*,
-    qualifier_attr::qualifiers,
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
@@ -209,7 +211,8 @@ where
 {
     // Some internal impl and test code want an actual concrete type, NOT the
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
-    pub fn new(
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn new(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
@@ -323,7 +326,8 @@ where
             .push(scheduler);
     }
 
-    pub fn do_take_scheduler(&self, context: SchedulingContext) -> S {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn do_take_scheduler(&self, context: SchedulingContext) -> S {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some(pooled_inner) = self.scheduler_inners.lock().expect("not poisoned").pop() {
