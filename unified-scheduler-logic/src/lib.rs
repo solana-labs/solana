@@ -912,7 +912,7 @@ mod tests {
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
         let task4 = SchedulingStateMachine::create_task(sanitized4, 6, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
