@@ -120,7 +120,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
     */ 
 
-    let (s, r) = crossbeam_channel::bounded(1000);
+    //let (s, r) = crossbeam_channel::bounded(1000);
 
     use std::sync::atomic::AtomicUsize;
     let i = Arc::new(AtomicUsize::default());
@@ -162,7 +162,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     bencher.bench_function(label, |b| b.iter(|| {
         for _ in 0..60 {
-            let new_tasks = Vec::with_capacity(tasks.len());
+            let mut new_tasks = Vec::with_capacity(tasks.len());
             let mut first_task = None;
             for t in tasks {
                 /*
