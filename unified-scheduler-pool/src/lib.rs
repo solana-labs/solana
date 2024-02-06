@@ -978,7 +978,9 @@ where
             // by design or by means of offloading at the last resort.
             move || {
                 const BITS_PER_HEX_DIGIT: usize = 4;
-                let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
+                let mut state_machine = unsafe {
+                    SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+                };
                 let mut log_interval = LogInterval::default();
                 // hint compiler about inline[never] and unlikely?
                 macro_rules! log_scheduler {
