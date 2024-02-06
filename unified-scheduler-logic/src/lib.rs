@@ -89,6 +89,7 @@ mod utils {
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
+            TLS_TOKENS.with_borrow_mut(|a| {});
             Self(PhantomData)
         }
     }
