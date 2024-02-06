@@ -944,7 +944,7 @@ mod tests {
         let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
 
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         let pages = pages.lock().unwrap();
@@ -965,7 +965,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions() {
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         let page = Page::default();
         let _ = SchedulingStateMachine::unlock(
             page.0.borrow_mut(&mut state_machine.page_token),
