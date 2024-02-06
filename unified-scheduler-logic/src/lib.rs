@@ -81,15 +81,20 @@ mod utils {
     unsafe impl<V> Send for TokenCell<V> {}
     unsafe impl<V> Sync for TokenCell<V> {}
 
+    use std::cell::RefCell;
+    use std::collections::BTreeSet;
+    use std::any::TypeId;
+
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
+
     thread_local! {
-        pub static TLS_TOKENS: std::cell::RefCell<std::collections::BTreeSet<std::any::TypeId>> = const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
+        pub static TLS_TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
     }
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TLS_TOKENS.with_borrow_mut(|tokens| tokens.insert(std::any::TypeId::of::<Self>())), true);
+            assert_eq!(TLS_TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true);
             Self(PhantomData)
         }
     }
