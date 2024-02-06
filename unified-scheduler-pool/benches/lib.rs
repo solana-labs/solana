@@ -127,6 +127,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     use std::sync::Mutex;
     let pages: Arc<Mutex<std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page>>> =
         Arc::new(Mutex::new(std::collections::HashMap::new()));
+    /*
     for _ in 0..5 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
@@ -147,6 +148,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
             .unwrap();
     }
     std::thread::sleep(std::time::Duration::from_secs(5));
+    */
 
     //assert_eq!(bank.transaction_count(), 0);
     //let mut scheduler = pool.do_take_scheduler(context);
@@ -154,10 +156,14 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let mut scheduler =
         unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
 
+    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx1.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
+        pages.lock().unwrap().entry(address).or_default().clone()
+    })).take(100).collect::<Vec<_>>();
+
     bencher.bench_function(label, |b| b.iter(|| {
         for _ in 0..60 {
             let mut first_task = None;
-            for t in r.recv().unwrap() {
+            for t in tasks {
                 /*
                 scheduler.schedule_task(t);
                 */
