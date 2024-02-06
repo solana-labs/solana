@@ -1046,6 +1046,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("The size of transactions to be sent in batch."),
         )
         .arg(
+            Arg::with_name("rpc_send_transaction_retry_pool_max_size")
+                .long("rpc-send-transaction-retry-pool-max-size")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_args.rpc_send_transaction_retry_pool_max_size)
+                .help("The maximum size of transactions retry pool.")
+        )
+        .arg(
             Arg::with_name("rpc_scan_and_fix_roots")
                 .long("rpc-scan-and-fix-roots")
                 .takes_value(false)
@@ -1957,6 +1966,7 @@ pub struct DefaultArgs {
     pub rpc_send_transaction_leader_forward_count: String,
     pub rpc_send_transaction_service_max_retries: String,
     pub rpc_send_transaction_batch_size: String,
+    pub rpc_send_transaction_retry_pool_max_size: String,
     pub rpc_threads: String,
     pub rpc_niceness_adjustment: String,
     pub rpc_bigtable_timeout: String,
@@ -2041,6 +2051,9 @@ impl DefaultArgs {
                 .to_string(),
             rpc_send_transaction_batch_size: default_send_transaction_service_config
                 .batch_size
+                .to_string(),
+            rpc_send_transaction_retry_pool_max_size: default_send_transaction_service_config
+                .retry_pool_max_size
                 .to_string(),
             rpc_threads: num_cpus::get().to_string(),
             rpc_niceness_adjustment: "0".to_string(),
