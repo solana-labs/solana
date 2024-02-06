@@ -126,7 +126,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
             .spawn({
-                let p = p.clone();
+                let pages = pages.clone();
                 let i = i.clone();
                 let tx1 = tx0.clone();
                 let s = s.clone();
