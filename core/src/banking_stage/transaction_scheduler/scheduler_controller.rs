@@ -355,8 +355,8 @@ impl SchedulerController {
                 if self.container.insert_new_transaction(
                     transaction_id,
                     transaction_ttl,
-                    compute_budget_details,
-                    transaction_cost,
+                    compute_budget_details.compute_unit_price,
+                    transaction_cost.sum(),
                 ) {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
                 }
