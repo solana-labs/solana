@@ -112,7 +112,7 @@ fn bench_schedule_task(account_count: usize) {
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
     toggle_collect();
     let task = scheduler.schedule_task(task);
     toggle_collect();
@@ -314,7 +314,7 @@ fn bench_schedule_task_conflicting(account_count: usize) {
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
     let task = scheduler.schedule_task(task).unwrap();
     let task2 = task.clone();
     toggle_collect();
@@ -357,7 +357,7 @@ fn bench_schedule_task_conflicting_hot(account_count: usize, task_count: usize) 
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
 
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
 
     let mut pages: std::collections::HashMap<solana_sdk::pubkey::Pubkey, Page> =
         std::collections::HashMap::new();
@@ -415,7 +415,7 @@ fn bench_deschedule_task_conflicting(account_count: usize) {
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
     let task = scheduler.schedule_task(task).unwrap();
     assert_matches!(scheduler.schedule_task(task.clone()), None);
 
@@ -464,7 +464,7 @@ fn bench_schedule_unblocked_task(account_count: usize) {
     let task2 = SchedulingStateMachine::create_task(tx0, 1, &mut |address| {
         pages.entry(address).or_default().clone()
     });
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
     let task = scheduler.schedule_task(task).unwrap();
     assert_matches!(scheduler.schedule_task(task2), None);
     scheduler.deschedule_task(&task);
@@ -512,7 +512,7 @@ fn bench_end_to_end_worst(account_count: usize) {
     let task = SchedulingStateMachine::create_task(tx0.clone(), 0, &mut |address| {
         pages.entry(address).or_default().clone()
     });
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
 
     let task = scheduler.schedule_task(task).unwrap();
     for i in 1..account_count {
@@ -597,7 +597,7 @@ fn bench_deschedule_task(account_count: usize) {
     //assert_eq!(wire_txn.len(), 3);
     let tx0 = SanitizedTransaction::from_transaction_for_tests(txn);
     let task = SchedulingStateMachine::create_task(tx0, 0, &mut |_| Page::default());
-    let mut scheduler = SchedulingStateMachine::default();
+    let mut scheduler = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
     let task = scheduler.schedule_task(task).unwrap();
     toggle_collect();
     scheduler.deschedule_task(&task);
