@@ -976,7 +976,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions2() {
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
         let _ = SchedulingStateMachine::unlock(
@@ -988,7 +988,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "internal error: entered unreachable code")]
     fn test_unreachable_unlock_conditions3() {
-        let mut state_machine = SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling();
+        let mut state_machine = unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()} ;
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage =
             Usage::Readonly(ShortCounter::one());
