@@ -652,7 +652,7 @@ mod tests {
         };
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
-        assert!(state_machine.is_empty());
+        assert!(state_machine.is_ready_to_reinitialize());
     }
 
     #[test]
