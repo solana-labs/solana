@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
+    solana_ledger::shred::{self, ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -45,6 +45,21 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .expect("Database error")
             .map(|meta| meta.consumed)
             .unwrap_or(0) as u32;
+        let chained_merkle_root = match next_shred_index.checked_sub(1) {
+            None => broadcast_utils::get_chained_merkle_root_from_parent(
+                bank.slot(),
+                bank.parent_slot(),
+                blockstore,
+            )
+            .unwrap(),
+            Some(index) => {
+                let shred = blockstore
+                    .get_data_shred(bank.slot(), u64::from(index))
+                    .unwrap()
+                    .unwrap();
+                shred::layout::get_merkle_root(&shred).unwrap()
+            }
+        };
 
         let num_entries = receive_results.entries.len();
 
@@ -60,7 +75,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
-            None, // chained_merkle_root
+            Some(chained_merkle_root),
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant
@@ -82,7 +97,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),
-            None, // chained_merkle_root
+            Some(chained_merkle_root),
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant
