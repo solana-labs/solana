@@ -4,11 +4,7 @@ use {
     crate::utils::{PartialBorrowMut, ShortCounter, Token, TokenCell},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
-    std::{
-        collections::VecDeque,
-        mem,
-        sync::Arc,
-    },
+    std::{collections::VecDeque, mem, sync::Arc},
 };
 
 mod utils {
@@ -287,9 +283,7 @@ impl Default for PageInner {
 
 impl PageInner {
     fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
-        self
-            .blocked_tasks
-            .push_back((task, requested_usage));
+        self.blocked_tasks.push_back((task, requested_usage));
     }
 
     fn has_no_blocked_task(&self) -> bool {

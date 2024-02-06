@@ -10,7 +10,6 @@
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
-
 use {
     assert_matches::assert_matches,
     cpu_time::ThreadTime,
