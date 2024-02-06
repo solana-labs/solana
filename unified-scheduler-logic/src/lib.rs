@@ -535,6 +535,12 @@ impl SchedulingStateMachine {
         })
     }
 
+    fn reset(&mut self) {
+        assert!(self.is_empty());
+        assert_eq!(self.unblocked_task_queue.len(), 0);
+
+    }
+
     /// # Safety
     /// Call this exactly once for each thread.
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
