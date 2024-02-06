@@ -2053,7 +2053,7 @@ impl DefaultArgs {
                 .batch_size
                 .to_string(),
             rpc_send_transaction_retry_pool_max_size: default_send_transaction_service_config
-                .transaction_retry_pool_max_size
+                .retry_pool_max_size
                 .to_string(),
             rpc_threads: num_cpus::get().to_string(),
             rpc_niceness_adjustment: "0".to_string(),

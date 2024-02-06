@@ -1412,7 +1412,7 @@ pub fn main() {
             ),
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
-            transaction_retry_pool_max_size: value_t_or_exit!(
+            retry_pool_max_size: value_t_or_exit!(
                 matches,
                 "rpc_send_transaction_retry_pool_max_size",
                 usize

@@ -115,7 +115,7 @@ pub struct Config {
     /// How frequently batches are sent
     pub batch_send_rate_ms: u64,
     /// When the retry pool exceeds this max size, new transactions are dropped after their first broadcast attempt
-    pub transaction_retry_pool_max_size: usize,
+    pub retry_pool_max_size: usize,
 }
 
 impl Default for Config {
@@ -127,7 +127,7 @@ impl Default for Config {
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
-            transaction_retry_pool_max_size: MAX_TRANSACTION_RETRY_POOL_SIZE,
+            retry_pool_max_size: MAX_TRANSACTION_RETRY_POOL_SIZE,
         }
     }
 }
@@ -480,7 +480,7 @@ impl SendTransactionService {
                             let retry_len = retry_transactions.len();
                             let entry = retry_transactions.entry(signature);
                             if let Entry::Vacant(_) = entry {
-                                if retry_len >= config.transaction_retry_pool_max_size {
+                                if retry_len >= config.retry_pool_max_size {
                                     datapoint_warn!("send_transaction_service-queue-overflow");
                                     break;
                                 } else {
