@@ -16,21 +16,21 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        installed_scheduler_pool::{InstalledScheduler, SchedulingContext},
+        installed_scheduler_pool::{
+            DefaultScheduleExecutionArg, InstalledScheduler, SchedulingContext,
+        },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
+        scheduling::SchedulingMode,
         transaction::{Result, SanitizedTransaction},
     },
-    solana_unified_scheduler_pool::{HandlerContext, PooledScheduler, SchedulerPool, TaskHandler},
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine},
+    solana_unified_scheduler_pool::{
+        HandlerContext, PooledScheduler, SchedulerPool, SpawnableScheduler, TaskHandler,
+    },
     std::sync::Arc,
 };
-
-use solana_runtime::installed_scheduler_pool::DefaultScheduleExecutionArg;
-use solana_sdk::scheduling::SchedulingMode;
-use solana_unified_scheduler_logic::SchedulingStateMachine;
-use solana_unified_scheduler_pool::SpawnableScheduler;
-use solana_unified_scheduler_logic::Page;
 
 #[derive(Debug, Clone)]
 struct DummyTaskHandler;
@@ -47,7 +47,9 @@ impl TaskHandler<DefaultScheduleExecutionArg> for DummyTaskHandler {
     ) {
     }
 
-    fn create<T: SpawnableScheduler<Self, DefaultScheduleExecutionArg>>(_pool: &SchedulerPool<T, Self, DefaultScheduleExecutionArg>) -> Self {
+    fn create<T: SpawnableScheduler<Self, DefaultScheduleExecutionArg>>(
+        _pool: &SchedulerPool<T, Self, DefaultScheduleExecutionArg>,
+    ) -> Self {
         Self
     }
 }
@@ -63,15 +65,13 @@ fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
     bank
 }
 
-use {
-    solana_sdk::{
-        instruction::{AccountMeta, Instruction},
-        message::Message,
-        pubkey::Pubkey,
-        signature::Signer,
-        signer::keypair::Keypair,
-        transaction::Transaction,
-    },
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    message::Message,
+    pubkey::Pubkey,
+    signature::Signer,
+    signer::keypair::Keypair,
+    transaction::Transaction,
 };
 
 fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
@@ -118,7 +118,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
         ignored_prioritization_fee_cache,
     );
     let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-    */ 
+    */
 
     let (s, r) = crossbeam_channel::bounded(1000);
 
@@ -156,43 +156,54 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let mut scheduler =
         unsafe { SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling() };
 
-    let tasks = std::iter::repeat_with(|| SchedulingStateMachine::create_task(tx0.clone(), i.fetch_add(1, std::sync::atomic::Ordering::Relaxed), &mut |address| {
-        pages.lock().unwrap().entry(address).or_default().clone()
-    })).take(100).collect::<Vec<_>>();
+    let tasks = std::iter::repeat_with(|| {
+        SchedulingStateMachine::create_task(
+            tx0.clone(),
+            i.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            &mut |address| pages.lock().unwrap().entry(address).or_default().clone(),
+        )
+    })
+    .take(100)
+    .collect::<Vec<_>>();
     s.send(tasks).unwrap();
 
-    bencher.bench_function(label, |b| b.iter(|| {
-        for _ in 0..600 {
-            let mut first_task = None;
-            let tt = r.recv().unwrap();
-            let mut new_tasks = Vec::with_capacity(tt.len());
-            for t in tt {
-                /*
-                scheduler.schedule_task(t);
-                */
-                if let Some(task) = scheduler.schedule_task(t) {
-                    first_task = Some(task);
+    bencher.bench_function(label, |b| {
+        b.iter(|| {
+            for _ in 0..600 {
+                let mut first_task = None;
+                let tt = r.recv().unwrap();
+                let mut new_tasks = Vec::with_capacity(tt.len());
+                for t in tt {
+                    /*
+                    scheduler.schedule_task(t);
+                    */
+                    if let Some(task) = scheduler.schedule_task(t) {
+                        first_task = Some(task);
+                    }
                 }
+                scheduler.deschedule_task(&first_task.as_ref().unwrap());
+                new_tasks.push(first_task.unwrap());
+                while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
+                    scheduler.deschedule_task(&unblocked_task);
+                    new_tasks.push(unblocked_task);
+                }
+                assert!(scheduler.has_no_active_task());
+                s.send(new_tasks).unwrap();
             }
-            scheduler.deschedule_task(&first_task.as_ref().unwrap());
-            new_tasks.push(first_task.unwrap());
-            while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
-                scheduler.deschedule_task(&unblocked_task);
-                new_tasks.push(unblocked_task);
-            }
-            assert!(scheduler.has_no_active_task());
-            s.send(new_tasks).unwrap();
-        }
-        /*
-        scheduler.pause_for_recent_blockhash();
-        scheduler.clear_session_result_with_timings();
-        scheduler.restart_session();
-        */
-    }));
+            /*
+            scheduler.pause_for_recent_blockhash();
+            scheduler.clear_session_result_with_timings();
+            scheduler.restart_session();
+            */
+        })
+    });
 }
 
 fn bench_entrypoint(bencher: &mut Criterion) {
-    do_bench_tx_throughput("bench_tx_throughput_drop_in_accumulator_conflicting", bencher)
+    do_bench_tx_throughput(
+        "bench_tx_throughput_drop_in_accumulator_conflicting",
+        bencher,
+    )
 }
 
 use criterion::{criterion_group, criterion_main, Criterion};

@@ -18,6 +18,7 @@ use {
     dashmap::DashMap,
     derivative::Derivative,
     log::*,
+    qualifier_attr::qualifiers,
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
@@ -53,8 +54,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-
-use qualifier_attr::qualifiers;
 
 type AtomicSchedulerId = AtomicU64;
 
@@ -727,14 +726,22 @@ where
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn clear_session_result_with_timings(&mut self) {
         assert_matches!(
-            self.inner.thread_manager.write().unwrap().take_session_result_with_timings(),
+            self.inner
+                .thread_manager
+                .write()
+                .unwrap()
+                .take_session_result_with_timings(),
             (Ok(_), _)
         );
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn restart_session(&mut self) {
-        self.inner.thread_manager.write().unwrap().start_session(&self.context);
+        self.inner
+            .thread_manager
+            .write()
+            .unwrap()
+            .start_session(&self.context);
     }
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
