@@ -65,6 +65,10 @@ mod utils {
             *self = self.decrement();
             self
         }
+
+        fn reset_to_zero(&mut self) {
+            self.0 = 0;
+        }
     }
 
     #[derive(Debug, Default)]
@@ -538,10 +542,10 @@ impl SchedulingStateMachine {
     fn reset(&mut self) {
         assert!(self.is_empty());
         assert_eq!(self.unblocked_task_queue.len(), 0);
-        self.active_task_count.reset();
-        self.handled_task_count.reset();
-        self.unblocked_task_count.reset();
-        self.total_task_count.reset();
+        self.active_task_count.reset_to_zero();
+        self.handled_task_count.reset_to_zero();
+        self.unblocked_task_count.reset_to_zero();
+        self.total_task_count.reset_to_zero();
     }
 
     /// # Safety
