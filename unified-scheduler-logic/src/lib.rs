@@ -899,6 +899,11 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(5)
         );
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task(),
+            None
+        );
     }
 
     #[test]
