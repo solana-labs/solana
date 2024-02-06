@@ -89,12 +89,12 @@ mod utils {
     pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
 
     thread_local! {
-        pub static TLS_TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
+        pub static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
     }
 
     impl<V, F> Token<V, F> {
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
-            assert_eq!(TLS_TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true);
+            assert_eq!(TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())), true);
             Self(PhantomData)
         }
     }
