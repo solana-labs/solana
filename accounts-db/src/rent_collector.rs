@@ -236,7 +236,7 @@ mod tests {
             let mut account_clone = account.clone();
             assert_eq!(
                 rent_collector
-                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone,),
+                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone),
                 CollectedInfo::default()
             );
             assert_eq!(account_clone, account);
@@ -253,7 +253,7 @@ mod tests {
             account_expected.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
             assert_eq!(
                 rent_collector
-                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone,),
+                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone),
                 CollectedInfo::default()
             );
             assert_eq!(account_clone, account_expected);
@@ -270,7 +270,7 @@ mod tests {
             account_expected.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
             assert_eq!(
                 rent_collector
-                    .collect_from_existing_account(&incinerator::id(), &mut account_clone,),
+                    .collect_from_existing_account(&incinerator::id(), &mut account_clone),
                 CollectedInfo::default()
             );
             assert_eq!(account_clone, account_expected);
@@ -295,7 +295,7 @@ mod tests {
                 let mut account_clone = account.clone();
                 assert_eq!(
                     rent_collector
-                        .collect_from_existing_account(&Pubkey::default(), &mut account_clone,),
+                        .collect_from_existing_account(&Pubkey::default(), &mut account_clone),
                     CollectedInfo {
                         rent_amount: rent_due_expected,
                         account_data_len_reclaimed: 0
@@ -318,7 +318,7 @@ mod tests {
             account_expected.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
             assert_eq!(
                 rent_collector
-                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone,),
+                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone),
                 CollectedInfo::default()
             );
             assert_eq!(account_clone, account_expected);
@@ -336,7 +336,7 @@ mod tests {
             let mut account_clone = account.clone();
             assert_eq!(
                 rent_collector
-                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone,),
+                    .collect_from_existing_account(&Pubkey::default(), &mut account_clone),
                 CollectedInfo::default()
             );
             assert_eq!(account_clone, account);
