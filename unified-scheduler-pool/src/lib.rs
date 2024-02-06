@@ -54,6 +54,8 @@ use {
     },
 };
 
+use qualifier_attr::qualifiers;
+
 type AtomicSchedulerId = AtomicU64;
 
 // SchedulerPool must be accessed as a dyn trait from solana-runtime, because SchedulerPool
