@@ -128,8 +128,10 @@ mod utils {
                         initialized twice on Thread"
         )]
         fn test_second_creation_of_tokens_in_a_thread() {
-            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() };
-            unsafe { Token::<usize, usize>::assume_exclusive_mutating_thread() };
+            unsafe { 
+                Token::<usize, usize>::assume_exclusive_mutating_thread();
+                Token::<usize, usize>::assume_exclusive_mutating_thread();
+            }
         }
     }
 }
