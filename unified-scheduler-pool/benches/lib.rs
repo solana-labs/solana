@@ -29,6 +29,7 @@ use solana_runtime::installed_scheduler_pool::DefaultScheduleExecutionArg;
 use solana_sdk::scheduling::SchedulingMode;
 use solana_unified_scheduler_logic::SchedulingStateMachine;
 use solana_unified_scheduler_pool::SpawnableScheduler;
+use solana_unified_scheduler_logic::Page;
 
 #[derive(Debug, Clone)]
 struct DummyTaskHandler;
