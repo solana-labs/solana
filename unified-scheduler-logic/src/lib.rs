@@ -72,19 +72,19 @@ mod utils {
     }
 
     #[derive(Debug, Default)]
-    pub(super) struct TokenCell<V>(UnsafeCell<V>);
+    pub(super) struct TokenCell<V>(std::sync::Mutex<UnsafeCell<V>>);
 
     impl<V> TokenCell<V> {
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
-            Self(UnsafeCell::new(value))
+            Self(std::sync::Mutex::new(UnsafeCell::new(value)))
         }
 
         pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
         where
             Token<V, F>: PartialBorrowMut<V, F>,
         {
-            Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
+            Token::partial_borrow_mut(unsafe { &mut *self.0.lock().unwrap().get() })
         }
     }
 
@@ -299,7 +299,7 @@ impl PageInner {
     }
 }
 
-//const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
+const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
