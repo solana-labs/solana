@@ -784,7 +784,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
-        assert!(state_machine.is_empty());
+        assert!(state_machine.is_ready_to_reinitialize());
     }
 
     #[test]
