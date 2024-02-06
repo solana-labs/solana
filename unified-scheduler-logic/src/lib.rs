@@ -972,5 +972,6 @@ mod tests {
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
+        let mut state_machine = SchedulingStateMachine::default();
     }
 }
