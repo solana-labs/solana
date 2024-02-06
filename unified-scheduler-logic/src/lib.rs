@@ -535,6 +535,8 @@ impl SchedulingStateMachine {
         })
     }
 
+    /// # Safety
+    /// Call this exactly once for each thread.
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
             unblocked_task_queue: VecDeque::with_capacity(1024),
