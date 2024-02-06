@@ -1102,8 +1102,8 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        is_finished =
-                            state_machine.is_ready_to_reinitialize() && (session_ending || thread_suspending);
+                        is_finished = state_machine.is_inacitve()
+                            && (session_ending || thread_suspending);
                     }
 
                     if session_ending {
