@@ -323,7 +323,7 @@ pub struct SchedulingStateMachine {
 const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
 
 impl SchedulingStateMachine {
-    pub fn is_empty(&self) -> bool {
+    pub fn is_ready_to_reinitialize(&self) -> bool {
         self.active_task_count.is_zero()
     }
 
