@@ -111,7 +111,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     let (s, r) = crossbeam_channel::bounded(1000);
 
     use std::sync::atomic::AtomicUsize;
-    let i = AtomicUsize::default();
+    let i = Arc::new(AtomicUsize::default());
     for _ in 0..3 {
         std::thread::Builder::new()
             .name("solScGen".to_owned())
