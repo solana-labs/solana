@@ -727,7 +727,7 @@ where
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    fn clear_session_result_with_timings(&mut self) {
+    pub fn clear_session_result_with_timings(&mut self) {
         assert_matches!(
             self.inner
                 .thread_manager
@@ -739,7 +739,7 @@ where
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    fn restart_session(&mut self) {
+    pub fn restart_session(&mut self) {
         self.inner
             .thread_manager
             .write()
@@ -748,7 +748,7 @@ where
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    fn schedule_task(&self, task: Task) {
+    pub fn schedule_task(&self, task: Task) {
         self.inner.thread_manager.read().unwrap().send_task(task);
     }
 
