@@ -323,7 +323,7 @@ pub struct SchedulingStateMachine {
 const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
 
 impl SchedulingStateMachine {
-    pub fn is_inacitve(&self) -> bool {
+    pub fn has_no_active_task(&self) -> bool {
         self.active_task_count.is_zero()
     }
 
@@ -540,7 +540,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn reinitialize(&mut self) {
-        assert!(self.is_inacitve());
+        assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
         self.active_task_count.reset_to_zero();
         self.handled_task_count.reset_to_zero();
@@ -652,7 +652,7 @@ mod tests {
         };
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
-        assert!(state_machine.is_inacitve());
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
@@ -784,7 +784,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
-        assert!(state_machine.is_inacitve());
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]

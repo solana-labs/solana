@@ -1102,7 +1102,7 @@ where
                             log_scheduler!(state_change);
                         }
 
-                        is_finished = state_machine.is_inacitve()
+                        is_finished = state_machine.has_no_active_task()
                             && (session_ending || thread_suspending);
                     }
 
