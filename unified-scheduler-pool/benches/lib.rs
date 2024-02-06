@@ -146,7 +146,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
     assert_eq!(bank.transaction_count(), 0);
     let mut scheduler = pool.do_take_scheduler(context);
     bencher.bench_function(label, |b| b.iter(|| {
-        for _ in 0..600 {
+        for _ in 0..60 {
             for t in r.recv().unwrap() {
                 scheduler.schedule_task(t);
             }
