@@ -11,6 +11,7 @@ pub mod bank_forks;
 pub mod bank_utils;
 pub mod builtins;
 pub mod commitment;
+pub mod compute_budget_details;
 mod epoch_rewards_hasher;
 pub mod epoch_stakes;
 pub mod genesis_utils;
@@ -37,7 +38,6 @@ pub mod static_ids;
 pub mod status_cache;
 pub mod svm;
 pub mod transaction_batch;
-pub mod transaction_priority_details;
 
 #[macro_use]
 extern crate solana_metrics;

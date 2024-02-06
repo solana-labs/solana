@@ -311,12 +311,12 @@ impl SchedulerController {
         let mut error_counts = TransactionErrorMetrics::default();
         for chunk in packets.chunks(CHUNK_SIZE) {
             let mut post_sanitization_count: usize = 0;
-            let (transactions, priority_details): (Vec<_>, Vec<_>) = chunk
+            let (transactions, compute_budget_details): (Vec<_>, Vec<_>) = chunk
                 .iter()
                 .filter_map(|packet| {
                     packet
                         .build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
-                        .map(|tx| (tx, packet.priority_details()))
+                        .map(|tx| (tx, packet.compute_budget_details()))
                 })
                 .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
                 .filter(|(tx, _)| {
@@ -337,9 +337,9 @@ impl SchedulerController {
             let post_lock_validation_count = transactions.len();
 
             let mut post_transaction_check_count: usize = 0;
-            for ((transaction, priority_details), _) in transactions
+            for ((transaction, compute_budget_details), _) in transactions
                 .into_iter()
-                .zip(priority_details)
+                .zip(compute_budget_details)
                 .zip(check_results)
                 .filter(|(_, check_result)| check_result.0.is_ok())
             {
@@ -355,7 +355,7 @@ impl SchedulerController {
                 if self.container.insert_new_transaction(
                     transaction_id,
                     transaction_ttl,
-                    priority_details,
+                    compute_budget_details,
                     transaction_cost,
                 ) {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);

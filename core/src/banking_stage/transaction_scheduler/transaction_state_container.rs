@@ -7,7 +7,7 @@ use {
     itertools::MinMaxResult,
     min_max_heap::MinMaxHeap,
     solana_cost_model::transaction_cost::TransactionCost,
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+    solana_runtime::compute_budget_details::ComputeBudgetDetails,
     std::collections::HashMap,
 };
 
@@ -99,18 +99,14 @@ impl TransactionStateContainer {
         &mut self,
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
+        compute_budget_details: ComputeBudgetDetails,
         transaction_cost: TransactionCost,
     ) -> bool {
         let priority_id =
-            TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
+            TransactionPriorityId::new(compute_budget_details.compute_unit_price, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(
-                transaction_ttl,
-                transaction_priority_details,
-                transaction_cost,
-            ),
+            TransactionState::new(transaction_ttl, compute_budget_details, transaction_cost),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -125,7 +121,8 @@ impl TransactionStateContainer {
         let transaction_state = self
             .get_mut_transaction_state(&transaction_id)
             .expect("transaction must exist");
-        let priority_id = TransactionPriorityId::new(transaction_state.priority(), transaction_id);
+        let priority_id =
+            TransactionPriorityId::new(transaction_state.compute_unit_price(), transaction_id);
         transaction_state.transition_to_unprocessed(transaction_ttl);
         self.push_id_into_queue(priority_id);
     }
@@ -184,7 +181,7 @@ mod tests {
         priority: u64,
     ) -> (
         SanitizedTransactionTTL,
-        TransactionPriorityDetails,
+        ComputeBudgetDetails,
         TransactionCost,
     ) {
         let from_keypair = Keypair::new();
@@ -209,8 +206,8 @@ mod tests {
         };
         (
             transaction_ttl,
-            TransactionPriorityDetails {
-                priority,
+            ComputeBudgetDetails {
+                compute_unit_price: priority,
                 compute_unit_limit: 0,
             },
             transaction_cost,
@@ -220,12 +217,12 @@ mod tests {
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, transaction_priority_details, transaction_cost) =
+            let (transaction_ttl, compute_budget_details, transaction_cost) =
                 test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
-                transaction_priority_details,
+                compute_budget_details,
                 transaction_cost,
             );
         }
@@ -251,7 +248,7 @@ mod tests {
             container
                 .id_to_transaction_state
                 .iter()
-                .map(|ts| ts.1.priority())
+                .map(|ts| ts.1.compute_unit_price())
                 .next()
                 .unwrap(),
             4

@@ -24,9 +24,9 @@ use {
     },
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
+        compute_budget_details::GetComputeBudgetDetails,
         svm::account_loader::validate_fee_payer,
         transaction_batch::TransactionBatch,
-        transaction_priority_details::GetTransactionPriorityDetails,
     },
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
@@ -586,8 +586,8 @@ impl Consumer {
             .filter_map(|transaction| {
                 let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
                 transaction
-                    .get_transaction_priority_details(round_compute_unit_price_enabled)
-                    .map(|details| details.priority)
+                    .get_compute_budget_details(round_compute_unit_price_enabled)
+                    .map(|details| details.compute_unit_price)
             })
             .minmax();
         let (min_prioritization_fees, max_prioritization_fees) =
