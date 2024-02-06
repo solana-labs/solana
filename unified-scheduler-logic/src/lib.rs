@@ -646,10 +646,21 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduling_state_machine_default() {
+    fn test_scheduling_state_machine_creation() {
         let state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
+        assert_eq!(state_machine.active_task_count(), 0);
+        assert_eq!(state_machine.total_task_count(), 0);
+        assert!(state_machine.is_empty());
+    }
+
+    #[test]
+    fn test_scheduling_state_machine_reset() {
+        let state_machine = unsafe {
+            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+        };
+        state_machine.active_task_count.increment_self();
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 0);
         assert!(state_machine.is_empty());
