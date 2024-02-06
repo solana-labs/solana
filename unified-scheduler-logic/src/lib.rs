@@ -538,7 +538,10 @@ impl SchedulingStateMachine {
     fn reset(&mut self) {
         assert!(self.is_empty());
         assert_eq!(self.unblocked_task_queue.len(), 0);
-
+        self.active_task_count.reset();
+        self.handled_task_count.reset();
+        self.unblocked_task_count.reset();
+        self.total_task_count.reset();
     }
 
     /// # Safety
