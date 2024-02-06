@@ -162,6 +162,7 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
 
     bencher.bench_function(label, |b| b.iter(|| {
         for _ in 0..60 {
+            let new_tasks = Vec::with_capacity(tasks.len());
             let mut first_task = None;
             for t in tasks {
                 /*
@@ -172,12 +173,13 @@ fn do_bench_tx_throughput(label: &str, bencher: &mut Criterion) {
                 }
             }
             scheduler.deschedule_task(&first_task.as_ref().unwrap());
-            std::mem::forget(first_task);
+            new_tasks.push(first_task);
             while let Some(unblocked_task) = scheduler.schedule_unblocked_task() {
                 scheduler.deschedule_task(&unblocked_task);
-                std::mem::forget(unblocked_task);
+                new_tasks.push(unblocked_task);
             }
             assert!(scheduler.has_no_active_task());
+            tasks = new_tasks;
         }
         /*
         scheduler.pause_for_recent_blockhash();
