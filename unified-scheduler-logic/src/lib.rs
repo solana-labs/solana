@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
                             // write test which fails if the filter() is commented out.
                             page.heaviest_blocked_task()
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
-                            None
+                            //None
                         } else {
                             None
                         };
