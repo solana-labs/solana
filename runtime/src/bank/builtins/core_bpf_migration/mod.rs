@@ -1,4 +1,14 @@
+#![allow(dead_code)] // Removed in later commit
+mod builtin;
+mod error;
+
 use solana_sdk::pubkey::Pubkey;
+
+/// Sets up a Core BPF migration for a built-in program.
+pub enum CoreBpfMigration {
+    Builtin,
+    Ephemeral,
+}
 
 /// Configurations for migrating a built-in program to Core BPF.
 pub struct CoreBpfMigrationConfig {
