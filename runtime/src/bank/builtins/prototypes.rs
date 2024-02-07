@@ -36,3 +36,21 @@ impl solana_frozen_abi::abi_example::AbiExample for BuiltinPrototype {
         }
     }
 }
+
+/// Transitions of ephemeral built-in programs at epoch boundaries when
+/// features are activated.
+/// These are built-in programs that don't actually exist, but their address
+/// is reserved.
+pub struct EphemeralBuiltinPrototype {
+    pub program_id: Pubkey,
+    pub name: &'static str,
+}
+
+impl std::fmt::Debug for EphemeralBuiltinPrototype {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut builder = f.debug_struct("EphemeralBuiltinPrototype");
+        builder.field("program_id", &self.program_id);
+        builder.field("name", &self.name);
+        builder.finish()
+    }
+}

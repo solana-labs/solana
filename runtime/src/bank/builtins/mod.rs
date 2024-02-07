@@ -1,6 +1,6 @@
 pub mod prototypes;
 
-pub use prototypes::BuiltinPrototype;
+pub use prototypes::{BuiltinPrototype, EphemeralBuiltinPrototype};
 use solana_sdk::{bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, feature_set};
 
 pub static BUILTINS: &[BuiltinPrototype] = &[
@@ -69,5 +69,16 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         program_id: solana_sdk::loader_v4::id(),
         name: "loader_v4",
         entrypoint: solana_loader_v4_program::Entrypoint::vm,
+    },
+];
+
+pub static EPHEMERAL_BUILTINS: &[EphemeralBuiltinPrototype] = &[
+    EphemeralBuiltinPrototype {
+        program_id: solana_sdk::feature::id(),
+        name: "feature_gate_program",
+    },
+    EphemeralBuiltinPrototype {
+        program_id: solana_sdk::native_loader::id(),
+        name: "native_loader_program",
     },
 ];
