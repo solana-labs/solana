@@ -445,6 +445,14 @@ impl LoadedProgram {
             && slot < self.effective_slot
     }
 
+    fn matches_environment(&self, environments: &ProgramRuntimeEnvironments) -> bool {
+        let Some(environment) = self.program.get_environment() else {
+            return true;
+        };
+        Arc::ptr_eq(environment, &environments.program_runtime_v1)
+            || Arc::ptr_eq(environment, &environments.program_runtime_v2)
+    }
+
     pub fn update_access_slot(&self, slot: Slot) {
         let _ = self.latest_access_slot.fetch_max(slot, Ordering::Relaxed);
     }
@@ -823,9 +831,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                 })
                 .filter(|entry| {
                     // Remove outdated environment of previous feature set
-                    if recompilation_phase_ends
-                        && !Self::matches_environment(entry, &self.environments)
-                    {
+                    if recompilation_phase_ends && !entry.matches_environment(&self.environments) {
                         self.stats
                             .prunes_environment
                             .fetch_add(1, Ordering::Relaxed);
@@ -840,17 +846,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.remove_programs_with_no_entries();
         debug_assert!(self.latest_root_slot <= new_root_slot);
         self.latest_root_slot = new_root_slot;
-    }
-
-    fn matches_environment(
-        entry: &Arc<LoadedProgram>,
-        environments: &ProgramRuntimeEnvironments,
-    ) -> bool {
-        let Some(environment) = entry.program.get_environment() else {
-            return true;
-        };
-        Arc::ptr_eq(environment, &environments.program_runtime_v1)
-            || Arc::ptr_eq(environment, &environments.program_runtime_v2)
     }
 
     fn matches_loaded_program_criteria(
@@ -891,10 +886,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     {
                         let entry_to_return = if loaded_programs_for_tx_batch.slot
                             >= entry.effective_slot
-                            && Self::matches_environment(
-                                entry,
-                                &loaded_programs_for_tx_batch.environments,
-                            ) {
+                            && entry.matches_environment(&loaded_programs_for_tx_batch.environments)
+                        {
                             if !Self::matches_loaded_program_criteria(entry, match_criteria) {
                                 break;
                             }
