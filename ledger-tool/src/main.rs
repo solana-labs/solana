@@ -878,6 +878,15 @@ fn main() {
                 .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .value_name("METHOD")
+                .takes_value(true)
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .help(DefaultSchedulerPool::cli_message()),
+        )
+        .arg(
             Arg::with_name("output_format")
                 .long("output")
                 .value_name("FORMAT")
