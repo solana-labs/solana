@@ -81,7 +81,22 @@ impl WriteLockFeeCache {
     // else, if account is "hot", evict cheapest account from Cache is at capacity, 
     // then add new hot account to Cache
     pub fn update(&mut self, slot: Slot, accounts: Vec<(Pubkey, u64)>) {
-        accounts.iter().for_each(|(pubkey, cost)| {
+        // for accounts in cache but not in just-frozen bank's saturated accounts list
+        // treat them as have `0` CU in current bank, so their ema can be updated/reduced quicker
+        let (accounts, cus): (Vec<_>, Vec<_>) = accounts.into_iter().unzip();
+        let mut cached_saturated_accounts: Vec<_> = self.cache.iter().filter_map(|(k, _)| {
+            if accounts.contains(k) {
+                None
+            } else {
+                Some((k.clone(), 0u64))
+            }
+        }).collect();
+        
+        let current_saturated_accounts = accounts.into_iter().zip(cus.into_iter());
+
+        cached_saturated_accounts.extend(current_saturated_accounts);
+
+        cached_saturated_accounts.iter().for_each(|(pubkey, cost)| {
             let (cache_changed, original_fee_rate) = if self.has_account(pubkey) {
                 let original_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
                 self.update_account(slot, pubkey, cost);
