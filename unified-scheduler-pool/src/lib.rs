@@ -1704,7 +1704,7 @@ mod tests {
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, None, ignored_prioritization_fee_cache);
 
         let bank = Bank::default_for_tests();
         let bank_forks = BankForks::new_rw_arc(bank);
