@@ -56,6 +56,7 @@ impl ComputeUnitPricer {
     pub fn get_fee_rate_micro_lamports_per_cu(&self) -> u64 {
         self.cu_price
     }
+    #[allow(dead_code)]
     pub fn get_ema(&self) -> u64 {
         self.cu_utilization.get_ema()
     }

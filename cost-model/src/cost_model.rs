@@ -57,7 +57,7 @@ impl CostModel {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
 
-    fn get_writable_accounts(transaction: &SanitizedTransaction) -> Vec<Pubkey> {
+    pub fn get_writable_accounts(transaction: &SanitizedTransaction) -> Vec<Pubkey> {
         let message = transaction.message();
         message
             .account_keys()

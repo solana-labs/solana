@@ -91,53 +91,56 @@ impl WriteLockFeeCache {
                 Some((k.clone(), 0u64))
             }
         }).collect();
-        
         let current_saturated_accounts = accounts.into_iter().zip(cus.into_iter());
-
         cached_saturated_accounts.extend(current_saturated_accounts);
 
         cached_saturated_accounts.iter().for_each(|(pubkey, cost)| {
-            let (cache_changed, original_fee_rate) = if self.has_account(pubkey) {
-                let original_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
+            let cache_changed = if self.has_account(pubkey) {
                 self.update_account(slot, pubkey, cost);
-                (true, original_fee_rate)
+                true
             } else if self.is_hot_account(*cost) {
                 if self.at_capacity() {
                     self.evict();
                 }
                 self.add_account(slot, pubkey, cost);
-                (true, 0)
+                true
             } else {
-                (false, 0)
+                false
             };
 
             if cache_changed {
                 let current_fee_rate = self.cache.peek(pubkey).unwrap().get_fee_rate_micro_lamports_per_cu();
-                let current_ema = self.cache.peek(pubkey).unwrap().get_ema();
                 // once a account's fee rate is dropped to `0`, it must be removed from cache,
                 // otherwise future update will be = 0 * in[de]crease = 0;
                 if current_fee_rate == 0 {
                     let _ = self.cache.pop(pubkey);
                 }
-
-                // report account per slot fee_rate
-                datapoint_info!("simd-0110_account-stats",
-                                ("slot", slot, i64),
-                                ("pubkey", pubkey.to_string(), String),
-                                ("parent_fee_rate", original_fee_rate, i64),
-                                ("current_fee_rate", current_fee_rate, i64),
-                                ("current_ema", current_ema, i64),
-                                );
             }
         });
 
-        // cache stats
+        // cache stats reported at bank frozen.
+        let mut key_and_fee_rate: Vec<_> = self.cache.iter().map(|(key, pricer)| {
+            (key.clone(), pricer.get_fee_rate_micro_lamports_per_cu())
+        }).collect();
+        key_and_fee_rate.sort_by_key(|entry| entry.1);
+        let len = key_and_fee_rate.len();
+        let (max_fee_rate_account, max_fee_rate) = if len == 0 {(Pubkey::new_unique(), 0)} else {key_and_fee_rate[len-1]};
+        let (min_fee_rate_account, min_fee_rate) = if len == 0 {(Pubkey::new_unique(), 0)} else {key_and_fee_rate[0]};
+        let (median_fee_rate_account, median_fee_rate) = if len == 0 {(Pubkey::new_unique(), 0)} else {key_and_fee_rate[len/2]};
+
         datapoint_info!("simd-0110-cache-stats", 
                         ("slot", slot, i64),
-                        ("length", self.cache.len(), i64));
+                        ("length", len, i64),
+                        ("min_fee_rate_account", min_fee_rate_account.to_string(), String),
+                        ("min_fee_rate", min_fee_rate, i64),
+                        ("max_fee_rate_account", max_fee_rate_account.to_string(), String),
+                        ("max_fee_rate", max_fee_rate, i64),
+                        ("median_fee_rate_account", median_fee_rate_account.to_string(), String),
+                        ("median_fee_rate", median_fee_rate, i64),
+                        );
     }
 
-    fn has_account(&self, pubkey: &Pubkey) -> bool {
+    pub fn has_account(&self, pubkey: &Pubkey) -> bool {
         self.cache.contains(pubkey)
     }
 

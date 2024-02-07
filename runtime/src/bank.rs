@@ -5716,6 +5716,7 @@ impl Bank {
 
                     datapoint_info!("simd-0110_transaction-fee-details",
                                     ("sig", tx.signature().to_string(), String),
+                                    ("slot", self.slot(), i64),
                                     ("fee_payer_balance", fee_payer_account_balance, i64),
                                     ("transaction_fee", fee_details.transaction_fee, i64),
                                     ("priority_fee", fee_details.prioritization_fee, i64),
@@ -5726,6 +5727,33 @@ impl Bank {
                                     ("num_signatures", message.num_signatures(), i64),
                                     ("execution_succeeded", execution_status.is_err(), bool),
                     );
+
+                    let mut failed_tx_write_non_saturated_account_count: u64 = 0;
+                    let write_accounts = solana_cost_model::cost_model::CostModel::get_writable_accounts(tx);
+                    write_accounts.iter().for_each(|account_pubkey| {
+                        if self.write_lock_fee_cache.read().unwrap().has_account(account_pubkey) {
+                            // report some of this tx details to saturated account
+                            datapoint_info!("simd-0110_saturated-accounts-tx-details",
+                                    ("sig", tx.signature().to_string(), String),
+                                    ("slot", self.slot(), i64),
+                                    ("pubkey", account_pubkey.to_string(), String),
+                                    ("transaction_fee", fee_details.transaction_fee, i64),
+                                    ("priority_fee", fee_details.prioritization_fee, i64),
+                                    ("write_lock_fee", write_lock_fee, i64),
+                                    ("exeucted_units", executed_units, i64),
+                                    ("execution_succeeded", execution_status.is_err(), bool),
+                                            );
+                        } else {
+                            // count failed tx that write to non-saturated account
+                            if execution_status.is_err() {
+                                failed_tx_write_non_saturated_account_count += 1;
+                            }
+                        }
+                    });
+                    datapoint_info!("simd-0110_failed-tx-write-non-saturated-accounts",
+                                    ("slot", self.slot(), i64),
+                                    ("count", failed_tx_write_non_saturated_account_count, i64),
+                        );
                 }
 
                 // In case of instruction error, even though no accounts
