@@ -213,6 +213,7 @@ where
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn new(
+        handler_count: usize,
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
@@ -276,6 +277,7 @@ where
 
         let scheduler_pool = Arc::new_cyclic(|weak_self| Self {
             scheduler_inners: Mutex::default(),
+            handler_count,
             handler_context: HandlerContext {
                 log_messages_bytes_limit,
                 transaction_status_sender,
