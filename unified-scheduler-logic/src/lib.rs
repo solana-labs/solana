@@ -139,7 +139,7 @@ mod utils {
 enum LockStatus {
     Succeded(Usage),
     #[default]
-    Failed,
+    Blocked,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 
@@ -383,14 +383,14 @@ impl SchedulingStateMachine {
             let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
-                LockStatus::Failed
+                LockStatus::Blocked
             };
             match lock_status {
                 LockStatus::Succeded(Usage::Unused) => unreachable!(),
                 LockStatus::Succeded(usage) => {
                     page.usage = usage;
                 }
-                LockStatus::Failed => {
+                LockStatus::Blocked => {
                     lock_count.increment_self();
                 }
             }
@@ -407,9 +407,9 @@ impl SchedulingStateMachine {
                 RequestedUsage::Readonly => {
                     LockStatus::Succeded(Usage::Readonly(count.increment()))
                 }
-                RequestedUsage::Writable => LockStatus::Failed,
+                RequestedUsage::Writable => LockStatus::Blocked,
             },
-            Usage::Writable => LockStatus::Failed,
+            Usage::Writable => LockStatus::Blocked,
         }
     }
 
@@ -468,7 +468,7 @@ impl SchedulingStateMachine {
 
     fn register_blocked_task_into_pages(&mut self, task: &Task) {
         for lock_attempt in task.lock_attempts_mut(&mut self.lock_attempt_token) {
-            if matches!(lock_attempt.lock_status, LockStatus::Failed) {
+            if matches!(lock_attempt.lock_status, LockStatus::Blocked) {
                 let requested_usage = lock_attempt.requested_usage;
                 lock_attempt
                     .page_mut(&mut self.page_token)
@@ -493,7 +493,7 @@ impl SchedulingStateMachine {
                 page.pop_blocked_task();
 
                 match Self::attempt_lock_address(page, requested_usage) {
-                    LockStatus::Failed | LockStatus::Succeded(Usage::Unused) => unreachable!(),
+                    LockStatus::Blocked | LockStatus::Succeded(Usage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
                         heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
@@ -641,7 +641,7 @@ mod tests {
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(TokenCell(UnsafeCell { \
-             .. })), requested_usage: Writable, lock_status: Failed }], blocked_lock_count: \
+             .. })), requested_usage: Writable, lock_status: Blocked }], blocked_lock_count: \
              ShortCounter(0) }"
         );
         let sanitized = simplest_transaction();
