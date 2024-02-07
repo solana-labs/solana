@@ -25,7 +25,6 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         blockhash_queue::BlockhashQueue,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
     },
     solana_measure::measure::Measure,
     solana_sdk::{
@@ -38,6 +37,7 @@ use {
         hash::Hash,
         inflation::Inflation,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
     },
     solana_svm::runtime_config::RuntimeConfig,
     std::{

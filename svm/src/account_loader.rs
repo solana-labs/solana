@@ -9,7 +9,6 @@ use {
     solana_accounts_db::{
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         nonce_info::NonceFull,
-        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         transaction_results::TransactionCheckResult,
     },
     solana_program_runtime::{
@@ -28,6 +27,7 @@ use {
         nonce::State as NonceState,
         pubkey::Pubkey,
         rent::RentDue,
+        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
@@ -453,7 +453,7 @@ mod tests {
         nonce::state::Versions as NonceVersions,
         solana_accounts_db::{
             accounts::Accounts, accounts_db::AccountsDb, accounts_file::MatchAccountOwnerError,
-            ancestors::Ancestors, rent_collector::RentCollector,
+            ancestors::Ancestors,
         },
         solana_program_runtime::{
             compute_budget_processor,
@@ -470,6 +470,7 @@ mod tests {
             message::{Message, SanitizedMessage},
             nonce,
             rent::Rent,
+            rent_collector::RentCollector,
             signature::{Keypair, Signer},
             system_program, sysvar,
             transaction::{Result, Transaction, TransactionError},

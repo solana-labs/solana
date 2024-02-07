@@ -1,3 +1,5 @@
+#![cfg(feature = "full")]
+
 //! calculate and collect rent from Accounts
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -87,7 +89,10 @@ impl RentCollector {
         } else {
             let account_rent_epoch = account.rent_epoch();
             let slots_elapsed: u64 = (account_rent_epoch..=self.epoch)
-                .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
+                .map(|epoch| {
+                    self.epoch_schedule
+                        .get_slots_in_epoch(epoch.saturating_add(1))
+                })
                 .sum();
 
             // avoid infinite rent in rust 1.45
@@ -165,7 +170,7 @@ impl RentCollector {
             RentDue::Paying(0) => RentResult::NoRentCollectionNow,
             // Rent is collected for next epoch.
             RentDue::Paying(rent_due) => RentResult::CollectRent {
-                new_rent_epoch: self.epoch + 1,
+                new_rent_epoch: self.epoch.saturating_add(1),
                 rent_due,
             },
         }
@@ -185,14 +190,16 @@ impl std::ops::Add for CollectedInfo {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         Self {
-            rent_amount: self.rent_amount + other.rent_amount,
-            account_data_len_reclaimed: self.account_data_len_reclaimed
-                + other.account_data_len_reclaimed,
+            rent_amount: self.rent_amount.saturating_add(other.rent_amount),
+            account_data_len_reclaimed: self
+                .account_data_len_reclaimed
+                .saturating_add(other.account_data_len_reclaimed),
         }
     }
 }
 
 impl std::ops::AddAssign for CollectedInfo {
+    #![allow(clippy::arithmetic_side_effects)]
     fn add_assign(&mut self, other: Self) {
         *self = *self + other;
     }
