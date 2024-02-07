@@ -347,7 +347,7 @@ where
     }
 
     pub fn default_handler_count() -> usize {
-        thread::available_parallelism()
+        thread::available_parallelism().into()
     }
 }
 
