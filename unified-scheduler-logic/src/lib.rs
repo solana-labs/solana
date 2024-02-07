@@ -53,8 +53,9 @@ mod utils {
             Self(self.0.checked_sub(1).unwrap())
         }
 
-        pub(super) fn increment_self(&mut self) {
-            *self = self.increment()
+        pub(super) fn increment_self(&mut self) -> &mut Self {
+            *self = self.increment();
+            self
         }
 
         pub(super) fn decrement_self(&mut self) -> &mut Self {
