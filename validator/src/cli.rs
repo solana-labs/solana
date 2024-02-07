@@ -1387,7 +1387,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .default_value(default_unified_scheduler_hanlder_threads)
+                .default_value(&default_args.unified_scheduler_hanlder_threads)
                 .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
@@ -2012,7 +2012,7 @@ pub struct DefaultArgs {
 
     pub wen_restart_path: String,
 
-    pub default_unified_scheduler_hanlder_threads: String,
+    pub unified_scheduler_hanlder_threads: String,
 }
 
 impl DefaultArgs {
@@ -2092,7 +2092,7 @@ impl DefaultArgs {
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
             wen_restart_path: "wen_restart_progress.proto".to_string(),
-            default_unified_scheduler_hanlder_threads: DefaultSchedulerPool::default_handler_count().to_string(),
+            unified_scheduler_hanlder_threads: DefaultSchedulerPool::default_handler_count().to_string(),
         }
     }
 }
