@@ -213,7 +213,7 @@ where
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn new(
-        handler_count: usize,
+        handler_count: Option<usize>,
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
@@ -297,7 +297,7 @@ where
     // This apparently-meaningless wrapper is handy, because some callers explicitly want
     // `dyn InstalledSchedulerPool` to be returned for type inference convenience.
     pub fn new_dyn(
-        handler_count: usize,
+        handler_count: Option<usize>,
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
@@ -2003,7 +2003,7 @@ mod tests {
             AsyncScheduler<TRIGGER_RACE_CONDITION>,
             DefaultTaskHandler,
             DefaultScheduleExecutionArg,
-        >::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+        >::new_dyn(None, None, None, None, ignored_prioritization_fee_cache);
         let scheduler = pool.take_scheduler(context);
 
         let bank = BankWithScheduler::new(bank, Some(scheduler));
