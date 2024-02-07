@@ -222,7 +222,7 @@ where
         let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
         let (watchdog_sender, watchdog_receiver) = unbounded();
         let (watchdog_exit_signal_sender, watchdog_exit_signal_receiver) = unbounded();
-        let handler_count = handler_count.unwrap_or_default();
+        let handler_count = handler_count.unwrap_or(Self::default_handler_count());
 
         let watchdog_main_loop = || {
             move || {
