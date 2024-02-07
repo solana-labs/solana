@@ -782,7 +782,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    fn new(pool: Arc<SchedulerPool<S, TH, SEA>>, handler_count: usize, handler: TH) -> Self {
+    fn new(pool: Arc<SchedulerPool<S, TH, SEA>>, handler: TH) -> Self {
         let (new_task_sender, new_task_receiver) = unbounded();
         let (session_result_sender, session_result_receiver) = unbounded();
 
@@ -796,7 +796,7 @@ where
             session_result_receiver,
             session_result_with_timings: None,
             scheduler_thread_and_tid: None,
-            handler_threads: Vec::with_capacity(handler_count),
+            handler_threads: Vec::with_capacity(pool.handler_count()),
             accumulator_thread: None,
         }
     }
