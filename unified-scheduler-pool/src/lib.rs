@@ -345,6 +345,10 @@ where
     fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) {
         self.watchdog_sender.send(thread_manager).unwrap();
     }
+
+    fn default_handler_count() -> usize {
+        3
+    }
 }
 
 impl<S, TH, SEA> InstalledSchedulerPool<SEA> for SchedulerPool<S, TH, SEA>
