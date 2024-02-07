@@ -588,8 +588,9 @@ fn bench_end_to_end_worst(account_count: usize) {
             pages.entry(address).or_default().clone()
         });
         toggle_collect();
-        scheduler.schedule_task(task2.clone());
+        let scheduled_task = scheduler.schedule_task(task2.clone());
         toggle_collect();
+        drop(scheduled_task);
     }
 
     toggle_collect();
