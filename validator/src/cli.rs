@@ -2012,7 +2012,7 @@ pub struct DefaultArgs {
 
     pub wen_restart_path: String,
 
-    let default_unified_scheduler_hanlder_threads = String,
+    pub default_unified_scheduler_hanlder_threads: String,
 }
 
 impl DefaultArgs {
