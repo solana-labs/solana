@@ -5970,7 +5970,7 @@ impl Bank {
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
             {
-                if builtin.feature_id.is_none() {
+                if builtin.enable_feature_id.is_none() {
                     self.add_builtin(
                         builtin.program_id,
                         builtin.name.to_string(),
@@ -7316,7 +7316,7 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         for builtin in BUILTINS.iter() {
-            if let Some(feature_id) = builtin.feature_id {
+            if let Some(feature_id) = builtin.enable_feature_id {
                 let should_apply_action_for_feature_transition =
                     if only_apply_transitions_for_new_features {
                         new_feature_activations.contains(&feature_id)
