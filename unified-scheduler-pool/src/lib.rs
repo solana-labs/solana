@@ -356,7 +356,7 @@ where
     }
 
     pub fn cli_message() -> &'static str {
-        "aaa"
+        "The number of threads to execute transactions to process a block by the unified scheduler"
     }
 }
 
