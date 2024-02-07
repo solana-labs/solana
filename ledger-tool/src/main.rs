@@ -84,6 +84,7 @@ use {
         },
     },
 };
+use solana_unified_scheduler_pool::DefaultSchedulerPool;
 
 mod args;
 mod bigtable;
