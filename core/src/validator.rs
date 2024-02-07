@@ -335,6 +335,7 @@ impl Default for ValidatorConfig {
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
             wen_restart_proto_path: None,
+            unified_scheduler_handler_threads: None,
         }
     }
 }
