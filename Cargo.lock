@@ -7756,6 +7756,7 @@ dependencies = [
  "solana-streamer",
  "solana-test-validator",
  "solana-tpu-client",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote-program",
  "spl-token-2022",
