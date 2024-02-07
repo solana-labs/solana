@@ -1659,7 +1659,7 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
+        let pool = DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
         let old_bank = &Arc::new(Bank::default_for_tests());
         let new_bank = &Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(old_bank, new_bank));
