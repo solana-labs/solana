@@ -1366,6 +1366,8 @@ impl Validator {
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
             ("cluster_type", genesis_config.cluster_type as u32, i64),
+            ("waited_for_supermajority", waited_for_supermajority, bool),
+            ("expected_shred_version", config.expected_shred_version, Option<i64>),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
