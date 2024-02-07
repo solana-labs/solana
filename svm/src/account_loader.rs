@@ -132,9 +132,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     let mut rent_debits = RentDebits::default();
     let rent_collector = callbacks.get_rent_collector();
 
-    let set_exempt_rent_epoch_max =
-        feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
-
     let requested_loaded_accounts_data_size_limit =
         get_requested_loaded_accounts_data_size_limit(tx)?;
     let mut accumulated_accounts_data_size: usize = 0;
@@ -179,11 +176,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                                     .is_active(&feature_set::disable_rent_fees_collection::id())
                                 {
                                     let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            set_exempt_rent_epoch_max,
-                                        )
+                                        .collect_from_existing_account(key, &mut account)
                                         .rent_amount;
 
                                     (account.data().len(), account, rent_due)
@@ -192,10 +185,8 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                                     // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
                                     // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                                     // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
-                                    if set_exempt_rent_epoch_max
-                                        && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
-                                            && rent_collector.get_rent_due(&account)
-                                                == RentDue::Exempt)
+                                    if account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                                        && rent_collector.get_rent_due(&account) == RentDue::Exempt
                                     {
                                         account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                                     }
@@ -208,12 +199,10 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                         .unwrap_or_else(|| {
                             account_found = false;
                             let mut default_account = AccountSharedData::default();
-                            if set_exempt_rent_epoch_max {
-                                // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
-                                // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
-                                // with this field already set would allow us to skip rent collection for these accounts.
-                                default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
-                            }
+                            // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                            // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                            // with this field already set would allow us to skip rent collection for these accounts.
+                            default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                             (default_account.data().len(), default_account, 0)
                         })
                 };

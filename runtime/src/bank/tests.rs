@@ -454,124 +454,120 @@ fn rent_with_exemption_threshold(exemption_threshold: f64) -> Rent {
 /// one thing being tested here is that a failed tx (due to rent collection using up all lamports) followed by rent collection
 /// results in the same state as if just rent collection ran (and emptied the accounts that have too few lamports)
 fn test_credit_debit_rent_no_side_effect_on_hash() {
-    for set_exempt_rent_epoch_max in [false, true] {
-        solana_logger::setup();
+    solana_logger::setup();
 
-        let (mut genesis_config, _mint_keypair) = create_genesis_config_no_tx_fee(10);
+    let (mut genesis_config, _mint_keypair) = create_genesis_config_no_tx_fee(10);
 
-        genesis_config.rent = rent_with_exemption_threshold(21.0);
+    genesis_config.rent = rent_with_exemption_threshold(21.0);
 
-        let slot = years_as_slots(
-            2.0,
-            &genesis_config.poh_config.target_tick_duration,
-            genesis_config.ticks_per_slot,
-        ) as u64;
-        let (root_bank, bank_forks_1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let bank = new_bank_from_parent_with_bank_forks(
-            bank_forks_1.as_ref(),
-            root_bank,
-            &Pubkey::default(),
-            slot,
-        );
+    let slot = years_as_slots(
+        2.0,
+        &genesis_config.poh_config.target_tick_duration,
+        genesis_config.ticks_per_slot,
+    ) as u64;
+    let (root_bank, bank_forks_1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let bank = new_bank_from_parent_with_bank_forks(
+        bank_forks_1.as_ref(),
+        root_bank,
+        &Pubkey::default(),
+        slot,
+    );
 
-        let (root_bank_2, bank_forks_2) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let bank_with_success_txs = new_bank_from_parent_with_bank_forks(
-            bank_forks_2.as_ref(),
-            root_bank_2,
-            &Pubkey::default(),
-            slot,
-        );
+    let (root_bank_2, bank_forks_2) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let bank_with_success_txs = new_bank_from_parent_with_bank_forks(
+        bank_forks_2.as_ref(),
+        root_bank_2,
+        &Pubkey::default(),
+        slot,
+    );
 
-        assert_eq!(bank.last_blockhash(), genesis_config.hash());
+    assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
-        let plenty_of_lamports = 264;
-        let too_few_lamports = 10;
-        // Initialize credit-debit and credit only accounts
-        let accounts = [
-            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
-            // Transaction between these two accounts will fail
-            AccountSharedData::new(too_few_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(too_few_lamports, 1, &Pubkey::default()),
-        ];
+    let plenty_of_lamports = 264;
+    let too_few_lamports = 10;
+    // Initialize credit-debit and credit only accounts
+    let accounts = [
+        AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+        AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+        AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+        AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+        // Transaction between these two accounts will fail
+        AccountSharedData::new(too_few_lamports, 0, &Pubkey::default()),
+        AccountSharedData::new(too_few_lamports, 1, &Pubkey::default()),
+    ];
 
-        let keypairs = accounts.iter().map(|_| Keypair::new()).collect::<Vec<_>>();
-        {
-            // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
-            let mut account_copy = accounts[4].clone();
-            let expected_rent = bank.rent_collector().collect_from_existing_account(
-                &keypairs[4].pubkey(),
-                &mut account_copy,
-                set_exempt_rent_epoch_max,
-            );
-            assert_eq!(expected_rent.rent_amount, too_few_lamports);
-            assert_eq!(account_copy.lamports(), 0);
-        }
-
-        for i in 0..accounts.len() {
-            let account = &accounts[i];
-            bank.store_account(&keypairs[i].pubkey(), account);
-            bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
-        }
-
-        // Make builtin instruction loader rent exempt
-        let system_program_id = system_program::id();
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.set_lamports(
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len()),
-        );
-        bank.store_account(&system_program_id, &system_program_account);
-        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
-
-        let t1 = system_transaction::transfer(
-            &keypairs[0],
-            &keypairs[1].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-        let t2 = system_transaction::transfer(
-            &keypairs[2],
-            &keypairs[3].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-        // the idea is this transaction will result in both accounts being drained of all lamports due to rent collection
-        let t3 = system_transaction::transfer(
-            &keypairs[4],
-            &keypairs[5].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-
-        let txs = vec![t1.clone(), t2.clone(), t3];
-        let res = bank.process_transactions(txs.iter());
-
-        assert_eq!(res.len(), 3);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
-        assert_eq!(res[2], Err(TransactionError::AccountNotFound));
-
-        bank.freeze();
-
-        let rwlockguard_bank_hash = bank.hash.read().unwrap();
-        let bank_hash = rwlockguard_bank_hash.as_ref();
-
-        let txs = vec![t2, t1];
-        let res = bank_with_success_txs.process_transactions(txs.iter());
-
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
-
-        bank_with_success_txs.freeze();
-
-        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
-        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
-
-        assert_eq!(bank_with_success_txs_hash, bank_hash);
+    let keypairs = accounts.iter().map(|_| Keypair::new()).collect::<Vec<_>>();
+    {
+        // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
+        let mut account_copy = accounts[4].clone();
+        let expected_rent = bank
+            .rent_collector()
+            .collect_from_existing_account(&keypairs[4].pubkey(), &mut account_copy);
+        assert_eq!(expected_rent.rent_amount, too_few_lamports);
+        assert_eq!(account_copy.lamports(), 0);
     }
+
+    for i in 0..accounts.len() {
+        let account = &accounts[i];
+        bank.store_account(&keypairs[i].pubkey(), account);
+        bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
+    }
+
+    // Make builtin instruction loader rent exempt
+    let system_program_id = system_program::id();
+    let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+    system_program_account.set_lamports(
+        bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len()),
+    );
+    bank.store_account(&system_program_id, &system_program_account);
+    bank_with_success_txs.store_account(&system_program_id, &system_program_account);
+
+    let t1 = system_transaction::transfer(
+        &keypairs[0],
+        &keypairs[1].pubkey(),
+        1,
+        genesis_config.hash(),
+    );
+    let t2 = system_transaction::transfer(
+        &keypairs[2],
+        &keypairs[3].pubkey(),
+        1,
+        genesis_config.hash(),
+    );
+    // the idea is this transaction will result in both accounts being drained of all lamports due to rent collection
+    let t3 = system_transaction::transfer(
+        &keypairs[4],
+        &keypairs[5].pubkey(),
+        1,
+        genesis_config.hash(),
+    );
+
+    let txs = vec![t1.clone(), t2.clone(), t3];
+    let res = bank.process_transactions(txs.iter());
+
+    assert_eq!(res.len(), 3);
+    assert_eq!(res[0], Ok(()));
+    assert_eq!(res[1], Ok(()));
+    assert_eq!(res[2], Err(TransactionError::AccountNotFound));
+
+    bank.freeze();
+
+    let rwlockguard_bank_hash = bank.hash.read().unwrap();
+    let bank_hash = rwlockguard_bank_hash.as_ref();
+
+    let txs = vec![t2, t1];
+    let res = bank_with_success_txs.process_transactions(txs.iter());
+
+    assert_eq!(res.len(), 2);
+    assert_eq!(res[0], Ok(()));
+    assert_eq!(res[1], Ok(()));
+
+    bank_with_success_txs.freeze();
+
+    let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
+    let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
+
+    assert_eq!(bank_with_success_txs_hash, bank_hash);
 }
 
 fn store_accounts_for_rent_test(
@@ -1657,7 +1653,7 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     solana_logger::setup();
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
     for feature_id in FeatureSet::default().inactive {
-        if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
+        if feature_id != solana_sdk::feature_set::skip_rent_rewrites::id()
             && (!should_collect_rent
                 || feature_id != solana_sdk::feature_set::disable_rent_fees_collection::id())
         {
@@ -1739,11 +1735,9 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
         bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
         large_lamports
     );
-    // Once preserve_rent_epoch_for_rent_exempt_accounts is activated,
-    // rent_epoch of rent-exempt accounts will no longer advance.
     assert_eq!(
         bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch(),
-        0
+        RENT_EXEMPT_RENT_EPOCH
     );
     assert_eq!(
         bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
@@ -6479,83 +6473,51 @@ fn test_fuzz_instructions() {
     info!("results: {:?}", results);
 }
 
-#[test_case(true; "set_rent_epoch_max")]
-#[test_case(false; "disable_set_rent_epoch_max")]
-fn test_bank_hash_consistency(set_rent_epoch_max: bool) {
+#[test]
+fn test_bank_hash_consistency() {
     solana_logger::setup();
 
     let account = AccountSharedData::new(1_000_000_000_000, 0, &system_program::id());
-    if !set_rent_epoch_max {
-        assert_eq!(account.rent_epoch(), 0);
-    }
+    assert_eq!(account.rent_epoch(), 0);
     let mut genesis_config = GenesisConfig::new(&[(Pubkey::from([42; 32]), account)], &[]);
     genesis_config.creation_time = 0;
     genesis_config.cluster_type = ClusterType::MainnetBeta;
     genesis_config.rent.burn_percent = 100;
-    if set_rent_epoch_max {
-        activate_feature(
-            &mut genesis_config,
-            solana_sdk::feature_set::set_exempt_rent_epoch_max::id(),
-        );
-    }
+    activate_feature(
+        &mut genesis_config,
+        solana_sdk::feature_set::set_exempt_rent_epoch_max::id(),
+    );
 
     let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
     // Check a few slots, cross an epoch boundary
     assert_eq!(bank.get_slots_in_epoch(0), 32);
     loop {
         goto_end_of_slot(bank.clone());
-        if !set_rent_epoch_max {
-            if bank.slot == 0 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "trdzvRDTAXAqo1i2GX4JfK9ReixV1NYNG7DRaVq43Do",
-                );
-            }
-            if bank.slot == 32 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "2rdj8QEnDnBSyMv81rCmncss4UERACyXXB3pEvkep8eS",
-                );
-            }
-            if bank.slot == 64 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "7g3ofXVQB3reFt9ki8zLA8S4w1GdmEWsWuWrwkPN3SSv"
-                );
-            }
-            if bank.slot == 128 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "4uX1AZFbqwjwWBACWbAW3V8rjbWH4N3ZRTbNysSLAzj2"
-                );
-                break;
-            }
-        } else {
-            if bank.slot == 0 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
-                );
-            }
-            if bank.slot == 32 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
-                );
-            }
-            if bank.slot == 64 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
-                );
-            }
-            if bank.slot == 128 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
-                );
-                break;
-            }
+
+        if bank.slot == 0 {
+            assert_eq!(
+                bank.hash().to_string(),
+                "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
+            );
+        }
+        if bank.slot == 32 {
+            assert_eq!(
+                bank.hash().to_string(),
+                "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
+            );
+        }
+        if bank.slot == 64 {
+            assert_eq!(
+                bank.hash().to_string(),
+                "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
+            );
+        }
+        if bank.slot == 128 {
+            assert_eq!(
+                bank.hash().to_string(),
+                "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
+            );
+            break;
         }
         bank = Arc::new(new_from_parent(bank));
     }
@@ -11635,57 +11597,53 @@ fn test_get_rent_paying_pubkeys() {
 #[test_case(true; "enable rent fees collection")]
 #[test_case(false; "disable rent fees collection")]
 fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
-    for set_exempt_rent_epoch_max in [false, true] {
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
-        genesis_config.rent = Rent::default();
-        if should_collect_rent {
-            genesis_config
-                .accounts
-                .remove(&solana_sdk::feature_set::disable_rent_fees_collection::id());
-        }
-
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-        let slot = bank.slot() + bank.slot_count_per_normal_epoch();
-        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-
-        // make another bank so that any reclaimed accounts from the previous bank do not impact
-        // this test
-        let slot = bank.slot() + bank.slot_count_per_normal_epoch();
-        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-
-        // Store an account into the bank that is rent-paying and has data
-        let data_size = 123;
-        let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
-        let keypair = Keypair::new();
-        bank.store_account(&keypair.pubkey(), &account);
-
-        // Ensure if we collect rent from the account that it will be reclaimed
-        {
-            let info = bank.rent_collector.collect_from_existing_account(
-                &keypair.pubkey(),
-                &mut account,
-                set_exempt_rent_epoch_max,
-            );
-            assert_eq!(info.account_data_len_reclaimed, data_size as u64);
-        }
-
-        // Collect rent for real
-        assert_eq!(should_collect_rent, bank.should_collect_rent());
-        let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
-        bank.collect_rent_eagerly();
-        let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
-
-        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
-            - accounts_data_size_delta_before_collecting_rent;
-        assert!(!should_collect_rent || accounts_data_size_delta_delta < 0);
-        let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
-
-        // Ensure the account is reclaimed by rent collection
-        assert!(!should_collect_rent || reclaimed_data_size == data_size);
+    let GenesisConfigInfo {
+        mut genesis_config, ..
+    } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
+    genesis_config.rent = Rent::default();
+    if should_collect_rent {
+        genesis_config
+            .accounts
+            .remove(&solana_sdk::feature_set::disable_rent_fees_collection::id());
     }
+
+    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    let slot = bank.slot() + bank.slot_count_per_normal_epoch();
+    let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+
+    // make another bank so that any reclaimed accounts from the previous bank do not impact
+    // this test
+    let slot = bank.slot() + bank.slot_count_per_normal_epoch();
+    let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+
+    // Store an account into the bank that is rent-paying and has data
+    let data_size = 123;
+    let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
+    let keypair = Keypair::new();
+    bank.store_account(&keypair.pubkey(), &account);
+
+    // Ensure if we collect rent from the account that it will be reclaimed
+    {
+        let info = bank
+            .rent_collector
+            .collect_from_existing_account(&keypair.pubkey(), &mut account);
+        assert_eq!(info.account_data_len_reclaimed, data_size as u64);
+    }
+
+    // Collect rent for real
+    assert_eq!(should_collect_rent, bank.should_collect_rent());
+    let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
+    bank.collect_rent_eagerly();
+    let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
+
+    let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
+        - accounts_data_size_delta_before_collecting_rent;
+    assert!(!should_collect_rent || accounts_data_size_delta_delta < 0);
+    let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
+
+    // Ensure the account is reclaimed by rent collection
+    assert!(!should_collect_rent || reclaimed_data_size == data_size);
 }
 
 #[test]
@@ -11893,87 +11851,6 @@ fn test_feature_hashes_per_tick() {
     );
     bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
     assert_eq!(bank.hashes_per_tick, Some(UPDATED_HASHES_PER_TICK6));
-}
-
-#[test_case(true)]
-#[test_case(false)]
-fn test_stake_account_consistency_with_rent_epoch_max_feature(
-    rent_epoch_max_enabled_initially: bool,
-) {
-    // this test can be removed once set_exempt_rent_epoch_max gets activated
-    solana_logger::setup();
-    let (mut genesis_config, _mint_keypair) = create_genesis_config(100 * LAMPORTS_PER_SOL);
-    genesis_config.rent = Rent::default();
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    let expected_initial_rent_epoch = if rent_epoch_max_enabled_initially {
-        bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
-        RENT_EXEMPT_RENT_EPOCH
-    } else {
-        Epoch::default()
-    };
-
-    let mut pubkey_bytes_early = [0u8; 32];
-    pubkey_bytes_early[31] = 2;
-    let stake_id1 = Pubkey::from(pubkey_bytes_early);
-    let vote_id = solana_sdk::pubkey::new_rand();
-    let stake_account1 = crate::stakes::tests::create_stake_account(12300000, &vote_id, &stake_id1);
-
-    // set up accounts
-    bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
-
-    // create banks at a few slots
-    assert_eq!(
-        bank.load_slow(&bank.ancestors, &stake_id1)
-            .unwrap()
-            .0
-            .rent_epoch(),
-        0 // manually created, so default is 0
-    );
-    let slot = 1;
-    let slots_per_epoch = bank.epoch_schedule().get_slots_in_epoch(0);
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), slot);
-    if !rent_epoch_max_enabled_initially {
-        bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
-    }
-    let bank = Arc::new(bank);
-
-    let slot = slots_per_epoch - 1;
-    assert_eq!(
-        bank.load_slow(&bank.ancestors, &stake_id1)
-            .unwrap()
-            .0
-            .rent_epoch(),
-        // rent has been collected, so if rent epoch is max is activated, this will be max by now
-        expected_initial_rent_epoch
-    );
-    let mut bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-
-    let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(1);
-    let slot = last_slot_in_epoch - 2;
-    assert_eq!(
-        bank.load_slow(&bank.ancestors, &stake_id1)
-            .unwrap()
-            .0
-            .rent_epoch(),
-        expected_initial_rent_epoch
-    );
-    bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-    assert_eq!(
-        bank.load_slow(&bank.ancestors, &stake_id1)
-            .unwrap()
-            .0
-            .rent_epoch(),
-        expected_initial_rent_epoch
-    );
-    let slot = last_slot_in_epoch - 1;
-    bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
-    assert_eq!(
-        bank.load_slow(&bank.ancestors, &stake_id1)
-            .unwrap()
-            .0
-            .rent_epoch(),
-        RENT_EXEMPT_RENT_EPOCH
-    );
 }
 
 #[test]
