@@ -346,7 +346,7 @@ where
         self.watchdog_sender.send(thread_manager).unwrap();
     }
 
-    fn default_handler_count() -> usize {
+    pub fn default_handler_count() -> usize {
         3
     }
 }
