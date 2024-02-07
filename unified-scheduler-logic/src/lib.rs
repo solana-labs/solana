@@ -130,8 +130,8 @@ mod utils {
         )]
         fn test_second_creation_of_tokens_in_a_thread() {
             unsafe {
-                Token::<usize, usize>::assume_exclusive_mutating_thread();
-                Token::<usize, usize>::assume_exclusive_mutating_thread();
+                let _ = Token::<usize, usize>::assume_exclusive_mutating_thread();
+                let _ = Token::<usize, usize>::assume_exclusive_mutating_thread();
             }
         }
     }
