@@ -258,6 +258,25 @@ impl SanitizedTransaction {
         Ok(())
     }
 
+    /// Verify the precompiled programs in this transaction
+    pub fn verify_precompiles_with_reporting(
+        &self,
+        feature_set: &feature_set::FeatureSet,
+        f: fn(&Pubkey, u64, usize, u128, bool),
+    ) -> Result<()> {
+        for (program_id, instruction) in self.message.program_instructions_iter() {
+            crate::precompiles::verify_if_precompile_with_reporting(
+                program_id,
+                instruction,
+                self.message().instructions(),
+                feature_set,
+                f,
+            )
+            .map_err(|_| TransactionError::InvalidAccountIndex)?;
+        }
+        Ok(())
+    }
+
     /// Validate a transaction message against locked accounts
     pub fn validate_account_locks(
         message: &SanitizedMessage,

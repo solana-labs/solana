@@ -1030,6 +1030,31 @@ impl Transaction {
         Ok(())
     }
 
+    /// Verify the precompiled programs in this transaction.
+    pub fn verify_precompiles_with_reporting(
+        &self,
+        feature_set: &feature_set::FeatureSet,
+        f: fn(&Pubkey, u64, usize, u128, bool),
+    ) -> Result<()> {
+        for instruction in &self.message().instructions {
+            // The Transaction may not be sanitized at this point
+            if instruction.program_id_index as usize >= self.message().account_keys.len() {
+                return Err(TransactionError::AccountNotFound);
+            }
+            let program_id = &self.message().account_keys[instruction.program_id_index as usize];
+
+            crate::precompiles::verify_if_precompile_with_reporting(
+                program_id,
+                instruction,
+                &self.message().instructions,
+                feature_set,
+                f,
+            )
+            .map_err(|_| TransactionError::InvalidAccountIndex)?;
+        }
+        Ok(())
+    }
+
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs.
     ///
     /// [`account_keys`]: Message::account_keys

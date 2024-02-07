@@ -6555,7 +6555,23 @@ impl Bank {
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
             || verification_mode == TransactionVerificationMode::FullVerification
         {
-            sanitized_tx.verify_precompiles(&self.feature_set)?;
+            fn report(
+                program_id: &Pubkey,
+                num_verifies: u64,
+                ix_size: usize,
+                elapse: u128,
+                result: bool,
+            ) {
+                datapoint_info!(
+                    "precompile_verify_stats",
+                    ("program_id", program_id.to_string(), String),
+                    ("num_verifies", num_verifies, i64),
+                    ("ix_size", ix_size, i64),
+                    ("elapse", elapse, i64),
+                    ("result", result, bool),
+                );
+            }
+            sanitized_tx.verify_precompiles_with_reporting(&self.feature_set, report)?;
         }
 
         Ok(sanitized_tx)
