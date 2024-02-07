@@ -307,6 +307,7 @@ pub fn load_and_process_ledger(
                 .write()
                 .unwrap()
                 .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
+                    unified_scheduler_handler_threads,
                     process_options.runtime_config.log_messages_bytes_limit,
                     no_transaction_status_sender,
                     no_replay_vote_sender,
