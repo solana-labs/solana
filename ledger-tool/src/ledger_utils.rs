@@ -303,9 +303,9 @@ pub fn load_and_process_ledger(
             let unified_scheduler_handler_threads = value_t!(
                 arg_matches,
                 "unified_scheduler_handler_threads",
-                Option<usize>
+                usize
             )
-            .unwrap_or_default();
+            .ok();
             let no_transaction_status_sender = None;
             let no_replay_vote_sender = None;
             let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
