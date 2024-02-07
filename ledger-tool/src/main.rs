@@ -881,10 +881,11 @@ fn main() {
         .arg(
             Arg::with_name("block_verification_method")
                 .long("block-verification-method")
-                .value_name("METHOD")
+                .value_name("THREADS")
                 .takes_value(true)
                 .global(true)
                 .hidden(hidden_unless_forced())
+                .default_value(DefaultSchedulerPool::default_handler_count())
                 .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
