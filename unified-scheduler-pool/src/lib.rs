@@ -355,7 +355,7 @@ where
         thread::available_parallelism().ok().map(|system_core_count| system_core_count.get() / 4).unwrap_or(4)
     }
 
-    pub fn cli_message() -> &str {
+    pub fn cli_message() -> &'static str {
         "aaa"
     }
 }
