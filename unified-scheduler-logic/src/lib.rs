@@ -96,6 +96,7 @@ mod utils {
     }
 
     impl<V, F> Token<V, F> {
+        #[must_use]
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
             assert!(
                 TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())),
