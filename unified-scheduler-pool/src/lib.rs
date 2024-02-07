@@ -1641,7 +1641,7 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = DefaultSchedulerPool::new(None, None, None, ignored_prioritization_fee_cache);
+        let pool = DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let mut scheduler = pool.do_take_scheduler(context.clone());
