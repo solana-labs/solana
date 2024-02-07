@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Removed in later commit
 use {
     super::{error::CoreBpfMigrationError, CoreBpfMigration},
     crate::bank::Bank,
