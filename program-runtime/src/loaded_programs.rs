@@ -1195,8 +1195,8 @@ mod tests {
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
-            ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadedProgramUsability, LoadedPrograms, LoadedProgramsForTxBatch,
+            ProgramRuntimeEnvironment, ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
@@ -2538,5 +2538,107 @@ mod tests {
 
         assert!(match_slot(&extracted, &program1, 0, 20));
         assert!(match_missing(&missing, &program2, false));
+    }
+
+    #[test]
+    fn test_usability_in_slot_with_criteria() {
+        let cache = new_mock_cache::<TestForkGraphSpecific>();
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20]);
+        fork_graph.insert_fork(&[0, 5, 6]);
+        let fork_graph = Arc::new(RwLock::new(fork_graph));
+
+        let usability = new_test_loaded_program(5, 6).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            10,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::NoCriteria,
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::SkipOnDifferentFork
+        ));
+
+        let usability = new_test_loaded_program(5, 10).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            5,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::NoCriteria,
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::SkipNotEffectiveYet
+        ));
+
+        let usability = new_test_loaded_program(0, 1).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            5,
+            &ProgramRuntimeEnvironments::default(),
+            &LoadedProgramMatchCriteria::NoCriteria,
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::SkipEnvironmentMismatch
+        ));
+
+        let usability = new_test_loaded_program(0, 1).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            5,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5),
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::RejectMatchCriteria
+        ));
+
+        let usability = new_test_loaded_program(0, 1).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            5,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::Tombstone,
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::RejectMatchCriteria
+        ));
+
+        let usability = new_test_loaded_program(0, 1)
+            .to_unloaded()
+            .unwrap()
+            .usability_in_slot_with_criteria(
+                &fork_graph.read().unwrap(),
+                0,
+                5,
+                &cache.environments,
+                &LoadedProgramMatchCriteria::NoCriteria,
+            );
+        assert!(matches!(usability, LoadedProgramUsability::RejectUnloaded));
+
+        let usability = new_test_loaded_program(0, 1).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            0,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::NoCriteria,
+        );
+        assert!(matches!(
+            usability,
+            LoadedProgramUsability::AcceptDelayVisibility
+        ));
+
+        let usability = new_test_loaded_program(0, 1).usability_in_slot_with_criteria(
+            &fork_graph.read().unwrap(),
+            0,
+            5,
+            &cache.environments,
+            &LoadedProgramMatchCriteria::NoCriteria,
+        );
+        assert!(matches!(usability, LoadedProgramUsability::AcceptOther));
     }
 }
