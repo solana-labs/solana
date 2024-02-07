@@ -1651,7 +1651,7 @@ pub fn main() {
     validator_config.unified_scheduler_handler_threads = value_t!(
         matches,
         "unified_scheduler_handler_threads",
-        usize,
+        usize
     )
     .unwrap_or_default();
 
