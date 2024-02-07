@@ -687,7 +687,6 @@ where
     scheduler_id: SchedulerId,
     pool: Arc<SchedulerPool<S, TH, SEA>>,
     handler: TH,
-    handler_count: usize,
     new_task_sender: Sender<NewTaskPayload>,
     new_task_receiver: Option<Receiver<NewTaskPayload>>,
     session_result_sender: Sender<Option<ResultWithTimings>>,
