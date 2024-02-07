@@ -1757,7 +1757,7 @@ mod tests {
         let bank = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
-            DefaultSchedulerPool::new_dyn(None, None, None, ignored_prioritization_fee_cache);
+            DefaultSchedulerPool::new_dyn(None, None, None, None, ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
