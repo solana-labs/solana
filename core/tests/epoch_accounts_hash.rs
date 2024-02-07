@@ -27,7 +27,6 @@ use {
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
-        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::Slot,
@@ -39,6 +38,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         mem::ManuallyDrop,
         sync::{

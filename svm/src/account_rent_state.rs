@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum RentState {
+pub enum RentState {
     /// account.lamports == 0
     Uninitialized,
     /// 0 < account.lamports < rent-exempt-minimum

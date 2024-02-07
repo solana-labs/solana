@@ -5924,6 +5924,7 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-stake-program",
  "solana-streamer",
+ "solana-svm",
  "solana-tpu-client",
  "solana-transaction-status",
  "solana-turbine",
@@ -6328,6 +6329,7 @@ dependencies = [
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-storage-proto",
+ "solana-svm",
  "solana-transaction-status",
  "solana-vote",
  "solana-vote-program",
@@ -6386,6 +6388,7 @@ dependencies = [
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
+ "solana-svm",
  "solana-transaction-status",
  "solana-unified-scheduler-pool",
  "solana-version",
@@ -6743,6 +6746,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
+ "solana-svm",
  "solana-vote-program",
  "solana_rbpf",
  "test-case",
@@ -7046,6 +7050,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
+ "solana-svm",
  "solana-system-program",
  "solana-version",
  "solana-vote",
@@ -7292,6 +7297,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-svm"
+version = "1.18.0"
+dependencies = [
+ "itertools",
+ "log",
+ "percentage",
+ "rustc_version 0.4.0",
+ "solana-accounts-db",
+ "solana-bpf-loader-program",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-loader-v4-program",
+ "solana-logger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-program-runtime",
+ "solana-sdk",
+ "solana-system-program",
+]
+
+[[package]]
 name = "solana-system-program"
 version = "1.18.0"
 dependencies = [
@@ -7331,6 +7357,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-svm",
  "solana-tpu-client",
  "tokio",
 ]
@@ -7589,6 +7616,7 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
+ "solana-svm",
  "solana-test-validator",
  "solana-tpu-client",
  "solana-version",

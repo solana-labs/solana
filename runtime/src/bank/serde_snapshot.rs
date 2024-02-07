@@ -17,7 +17,6 @@ mod tests {
                 StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
             status_cache::StatusCache,
-            svm::runtime_config::RuntimeConfig,
         },
         assert_matches::assert_matches,
         solana_accounts_db::{
@@ -39,6 +38,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
         },
+        solana_svm::runtime_config::RuntimeConfig,
         std::{
             io::{Cursor, Read, Write},
             num::NonZeroUsize,

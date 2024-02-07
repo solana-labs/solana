@@ -6,8 +6,9 @@ use {
     },
     crossbeam_channel::{Receiver, RecvError, SendError, Sender},
     solana_poh::leader_bank_notifier::LeaderBankNotifier,
-    solana_runtime::{bank::Bank, svm::transaction_error_metrics::TransactionErrorMetrics},
+    solana_runtime::bank::Bank,
     solana_sdk::timing::AtomicInterval,
+    solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
