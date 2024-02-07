@@ -68,6 +68,7 @@ pub struct SchedulerPool<
     SEA: ScheduleExecutionArg,
 > {
     scheduler_inners: Mutex<Vec<S::Inner>>,
+    handler_count: usize,
     handler_context: HandlerContext,
     // weak_self could be elided by changing InstalledScheduler::take_scheduler()'s receiver to
     // Arc<Self> from &Self, because SchedulerPool is used as in the form of Arc<SchedulerPool>
