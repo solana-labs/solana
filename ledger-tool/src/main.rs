@@ -798,7 +798,7 @@ fn main() {
         .max(rent.minimum_balance(StakeStateV2::size_of()))
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
-    let default_unified_scheduler_hanlder_threads = DefaultSchedulerPool::default_handler_count();
+    let default_unified_scheduler_hanlder_threads = DefaultSchedulerPool::default_handler_count().to_string();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
@@ -886,7 +886,7 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .default_value(default_unified_scheduler_hanlder_threads)
+                .default_value(&default_unified_scheduler_hanlder_threads)
                 .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
