@@ -954,7 +954,7 @@ where
         // 8. the accumulator thread examines the executed task's result and accumulate its timing,
         //    finally dropping the transaction inside the executed task.
         let scheduler_main_loop = || {
-            let handler_count = self.handler_count;
+            let handler_count = self.pool.handler_count();
             let session_result_sender = self.session_result_sender.clone();
             let mut new_task_receiver = self.new_task_receiver.take().unwrap();
 
