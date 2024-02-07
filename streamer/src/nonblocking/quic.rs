@@ -1126,7 +1126,7 @@ impl ConnectionTable {
             });
             let new_size = e_ref.len();
             if e_ref.is_empty() {
-                e.remove_entry();
+                e.swap_remove_entry();
             }
             let connections_removed = old_size.saturating_sub(new_size);
             self.total_size = self.total_size.saturating_sub(connections_removed);
