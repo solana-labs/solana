@@ -347,7 +347,7 @@ where
     }
 
     pub fn default_handler_count() -> usize {
-        thread::available_parallelism().ok().map(|system_core_count| system_core_count.into::<usize>() / 4).unwrap_or(8_usize)
+        thread::available_parallelism().ok().map(|system_core_count| system_core_count / 4).unwrap_or(8_usize)
     }
 }
 
