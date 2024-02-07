@@ -303,7 +303,7 @@ pub fn load_and_process_ledger(
             let unified_scheduler_handler_threads = value_t!(
                 arg_matches,
                 "unified_scheduler_handler_threads",
-                usize,
+                usize
             )
             .unwrap_or_default();
             let no_transaction_status_sender = None;
