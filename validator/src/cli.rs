@@ -47,9 +47,9 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     std::{path::PathBuf, str::FromStr},
 };
-use solana_unified_scheduler_pool::DefaultSchedulerPool;
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
@@ -2093,7 +2093,8 @@ impl DefaultArgs {
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
             wen_restart_path: "wen_restart_progress.proto".to_string(),
-            unified_scheduler_hanlder_threads: DefaultSchedulerPool::default_handler_count().to_string(),
+            unified_scheduler_hanlder_threads: DefaultSchedulerPool::default_handler_count()
+                .to_string(),
         }
     }
 }

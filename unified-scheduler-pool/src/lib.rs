@@ -352,7 +352,10 @@ where
         // Also, if available_parallelism fails (which should be very rare), use 4 threads,
         // as a relatively conservatism assumption of modern multi-core systems ranging from
         // engineers' laptops to production servers.
-        thread::available_parallelism().ok().map(|system_core_count| system_core_count.get() / 4).unwrap_or(4)
+        thread::available_parallelism()
+            .ok()
+            .map(|system_core_count| system_core_count.get() / 4)
+            .unwrap_or(4)
     }
 
     pub fn cli_message() -> &'static str {
@@ -728,10 +731,7 @@ where
     ) -> Self {
         Self::from_inner(
             PooledSchedulerInner {
-                thread_manager: Arc::new(RwLock::new(ThreadManager::new(
-                    pool.clone(),
-                    handler,
-                ))),
+                thread_manager: Arc::new(RwLock::new(ThreadManager::new(pool.clone(), handler))),
                 address_book: AddressBook::default(),
                 pooled_at: Instant::now(),
             },
@@ -1626,7 +1626,8 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
+        let pool =
+            DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
@@ -1654,7 +1655,8 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
+        let pool =
+            DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let mut scheduler = pool.do_take_scheduler(context.clone());
@@ -1672,7 +1674,8 @@ mod tests {
         solana_logger::setup();
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        let pool = DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
+        let pool =
+            DefaultSchedulerPool::new(None, None, None, None, ignored_prioritization_fee_cache);
         let old_bank = &Arc::new(Bank::default_for_tests());
         let new_bank = &Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(old_bank, new_bank));

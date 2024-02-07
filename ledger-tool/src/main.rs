@@ -65,6 +65,7 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -84,7 +85,6 @@ use {
         },
     },
 };
-use solana_unified_scheduler_pool::DefaultSchedulerPool;
 
 mod args;
 mod bigtable;
@@ -798,7 +798,8 @@ fn main() {
         .max(rent.minimum_balance(StakeStateV2::size_of()))
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
-    let default_unified_scheduler_hanlder_threads = &DefaultSchedulerPool::default_handler_count().to_string();
+    let default_unified_scheduler_hanlder_threads =
+        &DefaultSchedulerPool::default_handler_count().to_string();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
