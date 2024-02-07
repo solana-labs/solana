@@ -1653,7 +1653,7 @@ pub fn main() {
         "unified_scheduler_handler_threads",
         usize
     )
-    .unwrap_or_default();
+    .ok();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
