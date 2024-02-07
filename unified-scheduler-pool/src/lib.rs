@@ -790,6 +790,7 @@ where
     fn new(pool: Arc<SchedulerPool<S, TH, SEA>>, handler: TH) -> Self {
         let (new_task_sender, new_task_receiver) = unbounded();
         let (session_result_sender, session_result_receiver) = unbounded();
+        let handler_count = pool.handler_count;
 
         Self {
             scheduler_id: pool.new_scheduler_id(),
@@ -801,7 +802,7 @@ where
             session_result_receiver,
             session_result_with_timings: None,
             scheduler_thread_and_tid: None,
-            handler_threads: Vec::with_capacity(pool.handler_count),
+            handler_threads: Vec::with_capacity(handler_count),
             accumulator_thread: None,
         }
     }
