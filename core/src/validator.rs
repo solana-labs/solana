@@ -822,6 +822,7 @@ impl Validator {
             }
             BlockVerificationMethod::UnifiedScheduler => {
                 let scheduler_pool = DefaultSchedulerPool::new_dyn(
+                    config.unified_scheduler_handler_threads,
                     config.runtime_config.log_messages_bytes_limit,
                     transaction_status_sender.clone(),
                     Some(replay_vote_sender.clone()),
