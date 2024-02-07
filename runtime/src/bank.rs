@@ -4911,7 +4911,6 @@ impl Bank {
             sanitized_txs,
             &execution_results,
             loaded_txs,
-            &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
         );
