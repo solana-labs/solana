@@ -278,7 +278,7 @@ impl Default for PageInner {
     fn default() -> Self {
         Self {
             usage: Usage::default(),
-            blocked_tasks: VecDeque::with_capacity(1000),
+            blocked_tasks: VecDeque::with_capacity(1024),
         }
     }
 }
@@ -351,6 +351,7 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
+    #[must_use]
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -361,6 +362,7 @@ impl SchedulingStateMachine {
         !self.unblocked_task_queue.is_empty()
     }
 
+    #[must_use]
     pub fn schedule_unblocked_task(&mut self) -> Option<Task> {
         self.unblocked_task_queue.pop_front().map(|task| {
             self.unblocked_task_count.increment_self();
@@ -374,6 +376,7 @@ impl SchedulingStateMachine {
         self.unlock_after_execution(task);
     }
 
+    #[must_use]
     fn attempt_lock_for_execution(
         page_token: &mut PageToken,
         lock_attempts: &mut [LockAttempt],
@@ -402,6 +405,7 @@ impl SchedulingStateMachine {
         lock_count
     }
 
+    #[must_use]
     fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
         match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
@@ -452,6 +456,7 @@ impl SchedulingStateMachine {
         }
     }
 
+    #[must_use]
     fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
         let blocked_lock_count = Self::attempt_lock_for_execution(
             &mut self.page_token,
@@ -556,6 +561,7 @@ impl SchedulingStateMachine {
 
     /// # Safety
     /// Call this exactly once for each thread.
+    #[must_use]
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
             unblocked_task_queue: VecDeque::with_capacity(1024),
