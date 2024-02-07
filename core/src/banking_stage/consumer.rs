@@ -9,10 +9,7 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
-    solana_accounts_db::{
-        transaction_error_metrics::TransactionErrorMetrics,
-        transaction_results::TransactionCheckResult,
-    },
+    solana_accounts_db::transaction_results::TransactionCheckResult,
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
@@ -25,7 +22,6 @@ use {
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         compute_budget_details::GetComputeBudgetDetails,
-        svm::account_loader::validate_fee_payer,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -35,6 +31,9 @@ use {
         saturating_add_assign,
         timing::timestamp,
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+    },
+    solana_svm::{
+        account_loader::validate_fee_payer, transaction_error_metrics::TransactionErrorMetrics,
     },
     std::{
         sync::{atomic::Ordering, Arc},

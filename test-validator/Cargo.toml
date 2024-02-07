@@ -32,6 +32,7 @@ solana-rpc-client = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
+solana-svm = { workspace = true }
 solana-tpu-client = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 

@@ -8,7 +8,6 @@ use {
             self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
         },
         stakes::Stakes,
-        svm::runtime_config::RuntimeConfig,
     },
     bincode::{self, config::Options, Error},
     log::*,
@@ -40,6 +39,7 @@ use {
         inflation::Inflation,
         pubkey::Pubkey,
     },
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         collections::{HashMap, HashSet},
         io::{self, BufReader, BufWriter, Read, Write},

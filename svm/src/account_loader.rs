@@ -1,6 +1,7 @@
 use {
-    crate::svm::{
+    crate::{
         account_overrides::AccountOverrides, account_rent_state::RentState,
+        transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::TransactionProcessingCallback,
     },
     itertools::Itertools,
@@ -10,7 +11,6 @@ use {
         nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::TransactionCheckResult,
     },
     solana_program_runtime::{
@@ -38,7 +38,7 @@ use {
     std::{collections::HashMap, num::NonZeroUsize},
 };
 
-pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
+pub fn load_accounts<CB: TransactionProcessingCallback>(
     callbacks: &CB,
     txs: &[SanitizedTransaction],
     lock_results: &[TransactionCheckResult],

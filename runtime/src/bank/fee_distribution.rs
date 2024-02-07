@@ -1,6 +1,5 @@
 use {
     super::Bank,
-    crate::svm::account_rent_state::RentState,
     log::{debug, warn},
     solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{
@@ -9,6 +8,7 @@ use {
         reward_type::RewardType,
         system_program,
     },
+    solana_svm::account_rent_state::RentState,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{result::Result, sync::atomic::Ordering::Relaxed},
     thiserror::Error,

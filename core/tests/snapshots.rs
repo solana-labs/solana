@@ -35,7 +35,6 @@ use {
             SnapshotVersion::{self, V1_2_0},
         },
         status_cache::MAX_CACHE_ENTRIES,
-        svm::runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         clock::Slot,
@@ -50,6 +49,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         collections::HashSet,
         fs,

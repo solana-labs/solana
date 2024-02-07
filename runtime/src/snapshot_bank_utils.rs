@@ -23,7 +23,6 @@ use {
             UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
         },
         status_cache,
-        svm::runtime_config::RuntimeConfig,
     },
     bincode::{config::Options, serialize_into},
     log::*,
@@ -46,6 +45,7 @@ use {
         pubkey::Pubkey,
         slot_history::{Check, SlotHistory},
     },
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         collections::HashSet,
         fs,

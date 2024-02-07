@@ -1,5 +1,5 @@
 use {
-    crate::svm::account_rent_state::RentState,
+    crate::account_rent_state::RentState,
     solana_sdk::{
         account::ReadableAccount,
         message::SanitizedMessage,
@@ -10,12 +10,12 @@ use {
     },
 };
 
-pub(crate) struct TransactionAccountStateInfo {
+pub struct TransactionAccountStateInfo {
     rent_state: Option<RentState>, // None: readonly account
 }
 
 impl TransactionAccountStateInfo {
-    pub(crate) fn new(
+    pub fn new(
         rent: &Rent,
         transaction_context: &TransactionContext,
         message: &SanitizedMessage,
