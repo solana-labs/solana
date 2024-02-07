@@ -1,4 +1,5 @@
 #![allow(dead_code)] // Removed in later commit
+mod bpf_upgradeable;
 mod builtin;
 mod error;
 
