@@ -42,9 +42,11 @@ use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
-        bank::metrics::*,
+        bank::{
+            builtins::{BuiltinPrototype, BUILTINS},
+            metrics::*,
+        },
         bank_forks::BankForks,
-        builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
@@ -207,6 +209,7 @@ struct VerifyAccountsHashConfig {
 mod address_lookup_table;
 pub mod bank_hash_details;
 mod builtin_programs;
+pub mod builtins;
 pub mod epoch_accounts_hash_utils;
 mod fee_distribution;
 mod metrics;
