@@ -8,7 +8,6 @@ use {
     log::warn,
     solana_accounts_db::{
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
-        nonce_info::NonceFull,
         transaction_results::TransactionCheckResult,
     },
     solana_program_runtime::{
@@ -25,6 +24,7 @@ use {
         message::SanitizedMessage,
         native_loader,
         nonce::State as NonceState,
+        nonce_info::NonceFull,
         pubkey::Pubkey,
         rent::RentDue,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},

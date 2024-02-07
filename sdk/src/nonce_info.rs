@@ -1,4 +1,5 @@
-use solana_sdk::{
+#![cfg(feature = "full")]
+use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     message::SanitizedMessage,
     nonce_account,
@@ -118,7 +119,7 @@ impl NonceInfo for NonceFull {
 mod tests {
     use {
         super::*,
-        solana_sdk::{
+        crate::{
             hash::Hash,
             instruction::Instruction,
             message::Message,
