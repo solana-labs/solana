@@ -2976,14 +2976,6 @@ pub mod rpc_accounts {
             block: Slot,
         ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
 
-        #[rpc(meta, name = "getStakeActivation")]
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation>;
-
         // SPL Token-specific RPC endpoints
         // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
         // program details
@@ -3054,20 +3046,6 @@ pub mod rpc_accounts {
         ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
             debug!("get_block_commitment rpc request received");
             Ok(meta.get_block_commitment(block))
-        }
-
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation> {
-            debug!(
-                "get_stake_activation rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_stake_activation(&pubkey, config)
         }
 
         fn get_token_account_balance(
@@ -4081,11 +4059,34 @@ pub mod rpc_deprecated_v1_18 {
     #[rpc]
     pub trait DeprecatedV1_18 {
         type Metadata;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getStakeActivation")]
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcEpochConfig>,
+        ) -> Result<RpcStakeActivation>;
     }
 
     pub struct DeprecatedV1_18Impl;
     impl DeprecatedV1_18 for DeprecatedV1_18Impl {
         type Metadata = JsonRpcRequestProcessor;
+
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcEpochConfig>,
+        ) -> Result<RpcStakeActivation> {
+            debug!(
+                "get_stake_activation rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.get_stake_activation(&pubkey, config)
+        }
     }
 }
 
