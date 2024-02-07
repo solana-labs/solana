@@ -509,7 +509,11 @@ pub fn process_instruction_inner(
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
             }
-            process_loader_instruction(invoke_context)
+            ic_logger_msg!(
+                log_collector,
+                "BPF loader management instructions are no longer supported"
+            );
+            Err(InstructionError::UnsupportedProgramId)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
@@ -1472,7 +1476,7 @@ fn common_close_account(
     Ok(())
 }
 
-fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+fn _process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -1829,6 +1833,7 @@ mod tests {
         program_account
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_write() {
         let loader_id = bpf_loader::id();
@@ -1896,6 +1901,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_finalize() {
         let loader_id = bpf_loader::id();
@@ -1960,6 +1966,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn test_bpf_loader_invoke_main() {
         let loader_id = bpf_loader::id();
