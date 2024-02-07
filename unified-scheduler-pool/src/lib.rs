@@ -297,12 +297,14 @@ where
     // This apparently-meaningless wrapper is handy, because some callers explicitly want
     // `dyn InstalledSchedulerPool` to be returned for type inference convenience.
     pub fn new_dyn(
+        handler_count: usize,
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> InstalledSchedulerPoolArc<SEA> {
         Self::new(
+            handler_count,
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
