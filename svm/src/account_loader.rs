@@ -10,7 +10,6 @@ use {
         accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
         nonce_info::NonceFull,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
-        rent_debits::RentDebits,
         transaction_results::TransactionCheckResult,
     },
     solana_program_runtime::{
@@ -29,6 +28,7 @@ use {
         nonce::State as NonceState,
         pubkey::Pubkey,
         rent::RentDue,
+        rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionError},

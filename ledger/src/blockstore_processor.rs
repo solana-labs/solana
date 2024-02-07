@@ -20,7 +20,6 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_debits::RentDebits,
         transaction_results::{
             TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
@@ -49,6 +48,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        rent_debits::RentDebits,
         saturating_add_assign,
         signature::{Keypair, Signature},
         timing,

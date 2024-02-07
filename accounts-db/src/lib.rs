@@ -35,7 +35,6 @@ pub mod partitioned_rewards;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
-pub mod rent_debits;
 mod rolling_bit_field;
 pub mod secondary_index;
 pub mod shared_buffer_reader;
