@@ -265,7 +265,7 @@ pub struct ValidatorConfig {
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
     pub wen_restart_proto_path: Option<PathBuf>,
-    pub unified_scheduler_handler_threads: usize,
+    pub unified_scheduler_handler_threads: Option<usize>,
 }
 
 impl Default for ValidatorConfig {
