@@ -347,9 +347,11 @@ where
     }
 
     pub fn default_handler_count() -> usize {
-        // divide by 4 just not to consume all available cpus with handler threads, sparing for
-        // another forks and other subsystems
-        // also, if available_parallelism fails, use 4 threads
+        // Divide by 4 just not to consume all available CPUs just with handler threads, sparing for
+        // other active forks and other subsystems.
+        // Also, if available_parallelism fails (which should be very rare), use 4 threads,
+        // as a relatively conservatism assumption of modern multi-core systems ranging from
+        // engineers' laptops to production servers.
         thread::available_parallelism().ok().map(|system_core_count| system_core_count.get() / 4).unwrap_or(4)
     }
 }
