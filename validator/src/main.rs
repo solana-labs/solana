@@ -1648,6 +1648,12 @@ pub fn main() {
         BlockProductionMethod
     )
     .unwrap_or_default();
+    validator_config.unified_scheduler_handler_threads = value_t!(
+        matches,
+        "unified_scheduler_handler_threads",
+        usize,
+    )
+    .unwrap_or_default();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
