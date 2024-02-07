@@ -1267,7 +1267,7 @@ where
                 .unwrap(),
         );
 
-        self.handler_threads = (0..self.handler_count)
+        self.handler_threads = (0..self.pool.handler_count())
             .map({
                 |thx| {
                     thread::Builder::new()
