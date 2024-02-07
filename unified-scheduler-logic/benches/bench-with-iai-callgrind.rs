@@ -239,6 +239,50 @@ fn bench_arc(account_count: usize) {
 }
 
 #[library_benchmark]
+#[bench::arc_new(1)]
+#[bench::arc_new_and_clone(2)]
+#[bench::rc_new(3)]
+#[bench::rc_new_and_clone(4)]
+fn bench_triomphe_arc(account_count: usize) {
+    toggle_collect();
+
+    {
+        let b;
+        match account_count {
+            1 => {
+                toggle_collect();
+                b = black_box(triomphe::Arc::new(black_box(3_u32)));
+            }
+            2 => {
+                toggle_collect();
+                b = black_box(triomphe::Arc::new(black_box(3_u32)));
+                black_box(b.clone());
+            }
+            _ => {
+                let b;
+                match account_count {
+                    3 => {
+                        toggle_collect();
+                        b = black_box(triomphe::Rc::new(black_box(3_u32)));
+                    }
+                    4 => {
+                        toggle_collect();
+                        b = black_box(triomphe::Rc::new(black_box(3_u32)));
+                        black_box(b.clone());
+                    }
+                    _ => panic!(),
+                }
+                toggle_collect();
+                drop(b);
+                return;
+            }
+        }
+        toggle_collect();
+        drop(b);
+    }
+}
+
+#[library_benchmark]
 #[bench::one(1)]
 fn bench_heaviest_task(account_count: usize) {
     toggle_collect();
@@ -614,7 +658,8 @@ fn bench_deschedule_task(account_count: usize) {
 
 library_benchmark_group!(
     name = bench_scheduling_state_machine;
-    benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_unblocked_task
+    //benchmarks = bench_end_to_end_worst, bench_arc, bench_drop_task, bench_insert_task, bench_heaviest_task, bench_schedule_task, bench_schedule_task_conflicting, bench_schedule_task_conflicting_hot, bench_deschedule_task, bench_deschedule_task_conflicting, bench_schedule_unblocked_task
+    benchmarks = bench_arc, bench_triomphe_arc
     //benchmarks = bench_end_to_end_worst
 );
 
