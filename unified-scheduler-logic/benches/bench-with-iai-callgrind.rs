@@ -254,8 +254,8 @@ fn bench_triomphe_arc(account_count: usize) {
                 b = black_box(triomphe::Arc::new(black_box(3_u32)));
             }
             2 => {
-                toggle_collect();
                 b = black_box(triomphe::Arc::new(black_box(3_u32)));
+                toggle_collect();
                 black_box(b.clone());
             }
             _ => {
