@@ -359,7 +359,8 @@ where
     }
 
     pub fn cli_message() -> &'static str {
-        "The number of threads to execute transactions to process a block by the unified scheduler"
+        "Override the default (system cpu cores / 4) with the specified number of threads to \
+         execute transactions to process a block by the unified scheduler"
     }
 }
 
