@@ -4090,7 +4090,7 @@ pub mod rpc_deprecated_v1_18 {
     }
 }
 
-// RPC methods deprecated in v1.8
+// RPC methods deprecated in v1.9
 pub mod rpc_deprecated_v1_9 {
     #![allow(deprecated)]
     use super::*;
