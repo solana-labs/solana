@@ -1381,6 +1381,16 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help(BlockProductionMethod::cli_message())
         )
         .arg(
+            Arg::with_name("unified_scheduler_handler_threads")
+                .long("unified-scheduler-handler-threads")
+                .value_name("THREADS")
+                .takes_value(true)
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .default_value(default_unified_scheduler_hanlder_threads)
+                .help(DefaultSchedulerPool::cli_message()),
+        )
+        .arg(
             Arg::with_name("wen_restart")
                 .long("wen-restart")
                 .hidden(hidden_unless_forced())
