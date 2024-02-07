@@ -91,7 +91,7 @@ use {
         rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         sorted_storages::SortedStorages,
-        stake_rewards::{RewardInfo, StakeReward},
+        stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
         transaction_results::{
             TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
@@ -143,6 +143,7 @@ use {
         precompiles::get_precompiles,
         pubkey::Pubkey,
         rent::RentDue,
+        reward_info::RewardInfo,
         saturating_add_assign,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
