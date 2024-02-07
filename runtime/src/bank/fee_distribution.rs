@@ -1,10 +1,10 @@
 use {
     super::Bank,
     log::{debug, warn},
-    solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         pubkey::Pubkey,
+        reward_info::RewardInfo,
         reward_type::RewardType,
         system_program,
     },
