@@ -708,15 +708,10 @@ where
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let handler_count = env::var("SOLANA_UNIFIED_SCHEDULER_HANDLER_COUNT")
-            .unwrap_or(format!("{}", 8))
-            .parse::<usize>()
-            .unwrap();
         Self::from_inner(
             PooledSchedulerInner {
                 thread_manager: Arc::new(RwLock::new(ThreadManager::new(
                     pool.clone(),
-                    handler_count,
                     handler,
                 ))),
                 address_book: AddressBook::default(),
@@ -796,7 +791,6 @@ where
             scheduler_id: pool.new_scheduler_id(),
             pool,
             handler,
-            handler_count,
             new_task_sender,
             new_task_receiver: Some(new_task_receiver),
             session_result_sender,
@@ -1428,7 +1422,7 @@ where
         initial_context: SchedulingContext,
         handler: TH,
     ) -> Self {
-        let scheduler = Self::do_spawn(pool.clone(), initial_context, handler);
+        let scheduler = Self::do_spawn(pool.clone(), initial_context, handler, handler_count);
         pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
         scheduler
     }
