@@ -2064,7 +2064,7 @@ mod tests {
     #[test]
     fn test_default_handler_count() {
         for (detected, expected) in [] {
-            assert_eq!(DefaultSchedulerPool::calculate_default_handler_count(system_core_count), expected);
+            assert_eq!(DefaultSchedulerPool::calculate_default_handler_count(detected), expected);
         }
     }
 }
