@@ -888,6 +888,7 @@ fn main() {
                 .global(true)
                 .hidden(hidden_unless_forced())
                 .default_value(default_unified_scheduler_hanlder_threads)
+                .validator(|s| is_within_range(s, 1..))
                 .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
