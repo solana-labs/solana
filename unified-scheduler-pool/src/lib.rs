@@ -357,7 +357,7 @@ where
         // as a relatively conservatism assumption of modern multi-core systems ranging from
         // engineers' laptops to production servers.
         detected_cpu_core_count
-            .map(|core_count| core_count / 4)
+            .map(|core_count| (core_count / 4).max(1))
             .unwrap_or(4)
     }
 
