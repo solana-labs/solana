@@ -6,6 +6,7 @@ on:
 
 jobs:
   comment-and-close:
+    runs-on: ubuntu-latest
     steps:
       - shell: bash
         env:
