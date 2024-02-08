@@ -115,12 +115,9 @@ impl TieredStorage {
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let was_written = self.already_written.compare_exchange(
-            false,
-            true,
-            Ordering::AcqRel,
-            Ordering::Relaxed,
-        );
+        let was_written =
+            self.already_written
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed);
 
         // If it was not previously written, and the current thread has
         // successfully updated the already_written flag, then the current
