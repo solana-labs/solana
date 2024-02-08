@@ -696,14 +696,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         &self.environments
     }
 
-    /// Refill the cache with a single entry. It's typically called during transaction loading,
+    /// Insert a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
-    /// The function dedupes the cache, in case some other thread replenished the entry in parallel.
-    pub fn replenish(
-        &mut self,
-        key: Pubkey,
-        entry: Arc<LoadedProgram>,
-    ) -> (bool, Arc<LoadedProgram>) {
+    pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> bool {
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
         let index = slot_versions
             .iter()
@@ -731,26 +726,17 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     // (Remove the old entry, as the tombstone makes it obsolete).
                     self.stats.insertions.fetch_add(1, Ordering::Relaxed);
                 } else {
+                    debug_assert!(false);
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                    return (true, existing.clone());
+                    return true;
                 }
                 *existing = entry.clone();
-                return (false, entry);
+                return false;
             }
         }
         self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-        slot_versions.insert(index.unwrap_or(slot_versions.len()), entry.clone());
-        (false, entry)
-    }
-
-    /// Assign the program `entry` to the given `key` in the cache.
-    /// This is typically called when a deployed program is managed (un-/re-/deployed) via
-    /// loader instructions. Because of the cooldown, entires can not have the same
-    /// deployment_slot and effective_slot.
-    pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> Arc<LoadedProgram> {
-        let (was_occupied, entry) = self.replenish(key, entry);
-        debug_assert!(!was_occupied);
-        entry
+        slot_versions.insert(index.unwrap_or(slot_versions.len()), entry);
+        false
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
@@ -1980,9 +1966,6 @@ mod tests {
         cache.assign_program(program1, new_test_loaded_program(0, 1));
         cache.assign_program(program1, new_test_loaded_program(10, 11));
         cache.assign_program(program1, new_test_loaded_program(20, 21));
-
-        // Test: inserting duplicate entry return pre existing entry from the cache
-        assert!(cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
         cache.assign_program(program2, new_test_loaded_program(5, 6));
