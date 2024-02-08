@@ -29,7 +29,10 @@ use {
         borrow::Borrow,
         fs::{self, OpenOptions},
         path::{Path, PathBuf},
-        sync::OnceLock,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            OnceLock,
+        },
     },
 };
 
@@ -49,6 +52,7 @@ pub struct TieredStorageFormat {
 #[derive(Debug)]
 pub struct TieredStorage {
     reader: OnceLock<TieredStorageReader>,
+    read_only: AtomicBool,
     path: PathBuf,
 }
 
@@ -72,6 +76,7 @@ impl TieredStorage {
     pub fn new_writable(path: impl Into<PathBuf>) -> Self {
         Self {
             reader: OnceLock::<TieredStorageReader>::new(),
+            read_only: false.into(),
             path: path.into(),
         }
     }
@@ -82,6 +87,7 @@ impl TieredStorage {
         let path = path.into();
         Ok(Self {
             reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
+            read_only: true.into(),
             path,
         })
     }
@@ -109,29 +115,36 @@ impl TieredStorage {
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        if self.is_read_only() {
-            return Err(TieredStorageError::AttemptToUpdateReadOnly(
+        let was_readonly =
+            self.read_only
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
+
+        // If it was not previously readonly, and the current thread has
+        // successfully updated the read_only flag, then the current
+        // thread will proceed and writes the input accounts.
+        if was_readonly == Ok(false) {
+            if format == &HOT_FORMAT {
+                let result = {
+                    let writer = HotStorageWriter::new(&self.path)?;
+                    writer.write_accounts(accounts, skip)
+                };
+
+                // panic here if self.reader.get() is not None as self.reader can only be
+                // None since we have passed `is_read_only()` check previously, indicating
+                // self.reader is not yet set.
+                self.reader
+                    .set(TieredStorageReader::new_from_path(&self.path)?)
+                    .unwrap();
+
+                return result;
+            }
+
+            Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
+        } else {
+            Err(TieredStorageError::AttemptToUpdateReadOnly(
                 self.path.to_path_buf(),
-            ));
+            ))
         }
-
-        if format == &HOT_FORMAT {
-            let result = {
-                let writer = HotStorageWriter::new(&self.path)?;
-                writer.write_accounts(accounts, skip)
-            };
-
-            // panic here if self.reader.get() is not None as self.reader can only be
-            // None since we have passed `is_read_only()` check previously, indicating
-            // self.reader is not yet set.
-            self.reader
-                .set(TieredStorageReader::new_from_path(&self.path)?)
-                .unwrap();
-
-            return result;
-        }
-
-        Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
     }
 
     /// Returns the underlying reader of the TieredStorage.  None will be
@@ -142,7 +155,7 @@ impl TieredStorage {
 
     /// Returns true if the TieredStorage instance is read-only.
     pub fn is_read_only(&self) -> bool {
-        self.reader.get().is_some()
+        self.read_only.load(Ordering::Relaxed)
     }
 
     /// Returns the size of the underlying accounts file.
