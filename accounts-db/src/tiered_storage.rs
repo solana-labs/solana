@@ -165,12 +165,12 @@ mod tests {
         hot::HOT_FORMAT,
         index::IndexOffset,
         owners::OWNER_NO_OWNER,
-        solana_accounts_db::rent_collector::RENT_EXEMPT_RENT_EPOCH,
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
             hash::Hash,
             pubkey::Pubkey,
+            rent_collector::RENT_EXEMPT_RENT_EPOCH,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
         std::{

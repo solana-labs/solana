@@ -5,7 +5,6 @@ use {
         account_storage::meta::{StoredAccountInfo, StoredAccountMeta},
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
-        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         tiered_storage::{
             byte_block,
             file::TieredStorageFile,
@@ -22,7 +21,10 @@ use {
     bytemuck::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{
+        account::ReadableAccount, pubkey::Pubkey, rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        stake_history::Epoch,
+    },
     std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
 };
 

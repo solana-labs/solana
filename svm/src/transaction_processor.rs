@@ -9,7 +9,6 @@ use {
     solana_accounts_db::{
         accounts::{LoadedTransaction, TransactionLoadResult},
         accounts_file::MatchAccountOwnerError,
-        rent_collector::RentCollector,
         transaction_results::{
             DurableNonceFee, TransactionCheckResult, TransactionExecutionDetails,
             TransactionExecutionResult,
@@ -43,6 +42,7 @@ use {
         message::SanitizedMessage,
         native_loader,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
