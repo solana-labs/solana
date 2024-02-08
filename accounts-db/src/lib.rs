@@ -30,7 +30,6 @@ pub mod hardened_unpack;
 pub mod in_mem_accounts_index;
 pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
-pub mod nonce_info;
 pub mod partitioned_rewards;
 mod pubkey_bins;
 mod read_only_accounts_cache;

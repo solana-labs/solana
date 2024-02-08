@@ -212,7 +212,6 @@ pub(crate) mod tests {
         crossbeam_channel::unbounded,
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
-        solana_accounts_db::nonce_info::{NonceFull, NoncePartial},
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path_auto_delete},
         solana_runtime::bank::{Bank, TransactionBalancesSet},
         solana_sdk::{
@@ -223,6 +222,7 @@ pub(crate) mod tests {
             message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce::{self, state::DurableNonce},
             nonce_account,
+            nonce_info::{NonceFull, NoncePartial},
             pubkey::Pubkey,
             rent_debits::RentDebits,
             signature::{Keypair, Signature, Signer},
