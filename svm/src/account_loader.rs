@@ -451,10 +451,7 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{
-            accounts::Accounts, accounts_db::AccountsDb, accounts_file::MatchAccountOwnerError,
-            ancestors::Ancestors,
-        },
+        solana_accounts_db::{accounts::Accounts, accounts_db::AccountsDb, ancestors::Ancestors},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -487,12 +484,8 @@ mod tests {
     }
 
     impl TransactionProcessingCallback for TestCallbacks {
-        fn account_matches_owners(
-            &self,
-            _account: &Pubkey,
-            _owners: &[Pubkey],
-        ) -> std::result::Result<usize, MatchAccountOwnerError> {
-            Err(MatchAccountOwnerError::UnableToLoad)
+        fn account_matches_owners(&self, _account: &Pubkey, _owners: &[Pubkey]) -> Option<usize> {
+            None
         }
 
         fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
