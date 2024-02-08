@@ -118,8 +118,8 @@ impl TieredStorage {
         let was_written = self.already_written.compare_exchange(
             false,
             true,
-            Ordering::Acquired,
-            Ordering::Released,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
         );
 
         // If it was not previously written, and the current thread has
