@@ -43,7 +43,7 @@ pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         bank::{
-            builtins::{BuiltinPrototype, BUILTINS},
+            builtins::{BuiltinPrototype, BUILTINS, EPHEMERAL_BUILTINS},
             metrics::*,
         },
         bank_forks::BankForks,
@@ -5970,7 +5970,16 @@ impl Bank {
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
             {
-                if builtin.enable_feature_id.is_none() {
+                let should_add_builtin = builtin.enable_feature_id.is_none() && {
+                    if let Some(core_bpf_migration) = &builtin.core_bpf_migration {
+                        // The built-in should be added if the feature to
+                        // migrate it to Core BPF is not active.
+                        !self.feature_set.is_active(&core_bpf_migration.feature_id)
+                    } else {
+                        true
+                    }
+                };
+                if should_add_builtin {
                     self.add_builtin(
                         builtin.program_id,
                         builtin.name.to_string(),
@@ -6066,6 +6075,10 @@ impl Bank {
 
     pub fn get_account_modified_slot(&self, pubkey: &Pubkey) -> Option<(AccountSharedData, Slot)> {
         self.load_slow(&self.ancestors, pubkey)
+    }
+
+    pub fn get_builtins(&self) -> &HashSet<Pubkey> {
+        &self.builtin_programs
     }
 
     fn load_slow(
@@ -7316,14 +7329,49 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         for builtin in BUILTINS.iter() {
+            // The `builtin_disabled` flag is used to handle the case where a
+            // built-in is scheduled to be enabled by one feature gate and
+            // later migrated to Core BPF by another.
+            // There should never be a case where a built-in is set to be
+            // migrated to Core BPF and is also set to be enabled on feature
+            // activation on the same feature gate. However, the
+            // `builtin_disabled` flag will handle this case as well, electing
+            // to first attempt the migration to Core BPF.
+            // This will fail gracefully, and the built-in will subsequently be
+            // enabled, but it will never be migrated to Core BPF.
+            // Using the same feature gate for both enabling and migrating a
+            // built-in to Core BPF should be strictly avoided.
+            let mut builtin_disabled = false;
+            if let Some(core_bpf_migration) = &builtin.core_bpf_migration {
+                // If the built-in is set to be migrated to Core BPF on feature
+                // activation, perform the migration and do not add the program
+                // to the bank's builtins. The migration will remove it from
+                // the builtins list and the cache.
+                if new_feature_activations.contains(&core_bpf_migration.feature_id) {
+                    if let Err(e) = builtin.migrate_to_core_bpf(self) {
+                        warn!(
+                            "Failed to migrate built-in {} to Core BPF: {}",
+                            builtin.name, e
+                        );
+                    } else {
+                        builtin_disabled = true;
+                    }
+                } else {
+                    // If the built-in has already been migrated to Core BPF, do not
+                    // add it to the bank's builtins.
+                    builtin_disabled = self.feature_set.is_active(&core_bpf_migration.feature_id);
+                }
+            };
+
             if let Some(feature_id) = builtin.enable_feature_id {
-                let should_apply_action_for_feature_transition =
-                    if only_apply_transitions_for_new_features {
+                let should_enable_builtin_on_feature_transition = !builtin_disabled
+                    && if only_apply_transitions_for_new_features {
                         new_feature_activations.contains(&feature_id)
                     } else {
                         self.feature_set.is_active(&feature_id)
                     };
-                if should_apply_action_for_feature_transition {
+
+                if should_enable_builtin_on_feature_transition {
                     self.add_builtin(
                         builtin.program_id,
                         builtin.name.to_string(),
@@ -7336,6 +7384,23 @@ impl Bank {
                 }
             }
         }
+
+        // Migrate any necessary ephemeral built-ins to core BPF.
+        // Ephemeral built-ins do not have an `enable_feature_id` since they
+        // do not exist on-chain.
+        for ephemeral_builtin in EPHEMERAL_BUILTINS.iter() {
+            if let Some(core_bpf_migration) = &ephemeral_builtin.core_bpf_migration {
+                if new_feature_activations.contains(&core_bpf_migration.feature_id) {
+                    if let Err(e) = ephemeral_builtin.migrate_to_core_bpf(self) {
+                        warn!(
+                            "Failed to migrate ephemeral built-in {} to Core BPF: {}",
+                            ephemeral_builtin.name, e
+                        );
+                    }
+                }
+            }
+        }
+
         for precompile in get_precompiles() {
             let should_add_precompile = precompile
                 .feature

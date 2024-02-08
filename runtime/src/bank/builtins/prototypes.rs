@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Removed in later commit
 use {
     super::core_bpf_migration::{
         error::CoreBpfMigrationError, CoreBpfMigration, CoreBpfMigrationConfig,

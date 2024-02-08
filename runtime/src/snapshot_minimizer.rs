@@ -1,10 +1,7 @@
 //! Used to create minimal snapshots - separated here to keep accounts_db simpler
 
 use {
-    crate::{
-        bank::{builtins::BUILTINS, Bank},
-        static_ids,
-    },
+    crate::{bank::Bank, static_ids},
     dashmap::DashSet,
     log::info,
     rayon::{
@@ -116,8 +113,10 @@ impl<'a> SnapshotMinimizer<'a> {
 
     /// Used to get builtin accounts in `minimize`
     fn get_builtins(&self) {
-        BUILTINS.iter().for_each(|e| {
-            self.minimized_account_set.insert(e.program_id);
+        // Use the bank's builtins, since some builtins from the static
+        // `BUILTINS` list may have been migrated to Core BPF.
+        self.bank.get_builtins().iter().for_each(|program_id| {
+            self.minimized_account_set.insert(*program_id);
         });
     }
 
