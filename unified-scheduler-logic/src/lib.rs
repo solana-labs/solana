@@ -187,11 +187,11 @@ impl TaskStatus {
 
 #[cfg_attr(
     feature = "dev-context-only-utils",
-    field_qualifiers(unique_weight(pub))
+    field_qualifiers(index(pub))
 )]
 #[derive(Debug)]
 pub struct TaskInner {
-    unique_weight: UniqueWeight,
+    index: usize,
     transaction: SanitizedTransaction,
     task_status: TokenCell<TaskStatus>,
 }
@@ -216,9 +216,7 @@ impl TaskInner {
     }
 
     pub fn task_index(&self) -> usize {
-        UniqueWeight::max_value()
-            .checked_sub(self.unique_weight)
-            .unwrap() as usize
+        self.index
     }
 }
 
@@ -539,12 +537,8 @@ impl SchedulingStateMachine {
             })
             .collect();
 
-        let unique_weight = UniqueWeight::max_value()
-            .checked_sub(index as UniqueWeight)
-            .unwrap();
-
         Task::new(TaskInner {
-            unique_weight,
+            index,
             transaction,
             task_status: TokenCell::new(TaskStatus::new(locks)),
         })
