@@ -347,14 +347,17 @@ where
     }
 
     pub fn default_handler_count() -> usize {
+        Self::calculate_default_handler_count(thread::available_parallelism().ok().map(|non_zero| non_zero.get()))
+    }
+
+    pub fn calculate_default_handler_count(detected_cpu_core_count: Option<usize>) -> usize {
         // Divide by 4 just not to consume all available CPUs just with handler threads, sparing for
         // other active forks and other subsystems.
         // Also, if available_parallelism fails (which should be very rare), use 4 threads,
         // as a relatively conservatism assumption of modern multi-core systems ranging from
         // engineers' laptops to production servers.
-        thread::available_parallelism()
-            .ok()
-            .map(|system_core_count| system_core_count.get() / 4)
+        detected_cpu_core_count
+            .map(|core_count| core_count / 4)
             .unwrap_or(4)
     }
 
@@ -2056,5 +2059,12 @@ mod tests {
     #[test]
     fn test_scheduler_schedule_execution_recent_blockhash_edge_case_without_race() {
         do_test_scheduler_schedule_execution_recent_blockhash_edge_case::<false>();
+    }
+
+    #[test]
+    fn test_default_handler_count() {
+        for (detected, expected) in [] {
+            assert_eq!(DefaultSchedulerPool::calculate_default_handler_count(system_core_count), expected);
+        }
     }
 }
