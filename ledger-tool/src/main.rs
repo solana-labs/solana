@@ -21,7 +21,7 @@ use {
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            validate_maximum_full_snapshot_archives_to_retain,
+            is_within_range, validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
@@ -85,7 +85,6 @@ use {
         },
     },
 };
-use solana_clap_utils::input_validators::is_within_range;
 
 mod args;
 mod bigtable;
