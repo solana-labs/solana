@@ -3,7 +3,6 @@
 use {
     crate::{
         account_storage::meta::{StoredAccountInfo, StoredAccountMeta},
-        accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
@@ -22,7 +21,9 @@ use {
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
     solana_sdk::{
-        account::ReadableAccount, pubkey::Pubkey, rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        account::{MatchAccountOwnerError, ReadableAccount},
+        pubkey::Pubkey,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         stake_history::Epoch,
     },
     std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},

@@ -10,7 +10,7 @@ use {
             AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
-        accounts_file::{AccountsFileError, MatchAccountOwnerError, Result, ALIGN_BOUNDARY_OFFSET},
+        accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
         accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
         u64_align,
@@ -18,7 +18,7 @@ use {
     log::*,
     memmap2::MmapMut,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, MatchAccountOwnerError, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
         stake_history::Epoch,

@@ -76,7 +76,6 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
         },
-        accounts_file::MatchAccountOwnerError,
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
@@ -110,8 +109,8 @@ use {
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, create_executable_meta,
-            from_account, Account, AccountSharedData, InheritableAccountFields, ReadableAccount,
-            WritableAccount,
+            from_account, Account, AccountSharedData, InheritableAccountFields,
+            MatchAccountOwnerError, ReadableAccount, WritableAccount,
         },
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,

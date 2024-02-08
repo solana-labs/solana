@@ -1,7 +1,6 @@
 use {
     crate::{
         account_storage::meta::StoredAccountMeta,
-        accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
         tiered_storage::{
             footer::{AccountMetaFormat, TieredStorageFooter},
@@ -11,7 +10,11 @@ use {
             TieredStorageResult,
         },
     },
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{
+        account::{MatchAccountOwnerError, ReadableAccount},
+        pubkey::Pubkey,
+        stake_history::Epoch,
+    },
     std::path::Path,
 };
 

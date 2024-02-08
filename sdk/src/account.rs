@@ -24,6 +24,7 @@ use {
         rc::Rc,
         sync::Arc,
     },
+    thiserror::Error,
 };
 
 /// An Account with data that is stored on chain
@@ -95,6 +96,14 @@ impl Serialize for Account {
     {
         crate::account::account_serialize::serialize_account(self, serializer)
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum MatchAccountOwnerError {
+    #[error("The account owner does not match with the provided list")]
+    NoMatch,
+    #[error("Unable to load the account")]
+    UnableToLoad,
 }
 
 impl Serialize for AccountSharedData {
