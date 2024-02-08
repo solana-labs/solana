@@ -382,6 +382,20 @@ impl LoadedProgram {
     }
 
     pub fn to_unloaded(&self) -> Option<Self> {
+        match &self.program {
+            LoadedProgramType::LegacyV0(_)
+            | LoadedProgramType::LegacyV1(_)
+            | LoadedProgramType::Typed(_) => {}
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded(_) => {}
+            LoadedProgramType::FailedVerification(_)
+            | LoadedProgramType::Closed
+            | LoadedProgramType::DelayVisibility
+            | LoadedProgramType::Unloaded(_)
+            | LoadedProgramType::Builtin(_) => {
+                return None;
+            }
+        }
         Some(Self {
             program: LoadedProgramType::Unloaded(self.program.get_environment()?.clone()),
             account_size: self.account_size,
@@ -1081,11 +1095,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         .entry(*id)
                         .and_modify(|c| saturating_add_assign!(*c, 1))
                         .or_insert(1);
-                } else {
-                    error!(
-                        "Failed to create an unloaded cache entry for a program type {:?}",
-                        entry.program
-                    );
                 }
             }
         }
