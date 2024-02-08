@@ -188,12 +188,16 @@ impl TaskStatus {
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
-    index: usize,
     transaction: SanitizedTransaction,
+    index: usize,
     task_status: TokenCell<TaskStatus>,
 }
 
 impl TaskInner {
+    pub fn task_index(&self) -> usize {
+        self.index
+    }
+
     pub fn transaction(&self) -> &SanitizedTransaction {
         &self.transaction
     }
@@ -210,10 +214,6 @@ impl TaskInner {
         blocked_lock_count_token: &'t mut BlockedLockCountToken,
     ) -> &'t mut ShortCounter {
         self.task_status.borrow_mut(blocked_lock_count_token)
-    }
-
-    pub fn task_index(&self) -> usize {
-        self.index
     }
 }
 
@@ -535,8 +535,8 @@ impl SchedulingStateMachine {
             .collect();
 
         Task::new(TaskInner {
-            index,
             transaction,
+            index,
             task_status: TokenCell::new(TaskStatus::new(locks)),
         })
     }
