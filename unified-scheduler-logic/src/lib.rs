@@ -572,8 +572,6 @@ impl SchedulingStateMachine {
     }
 }
 
-type UniqueWeight = u64;
-
 #[cfg(test)]
 mod tests {
     use {
