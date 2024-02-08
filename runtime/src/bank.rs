@@ -76,7 +76,6 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
         },
-        accounts_file::MatchAccountOwnerError,
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
@@ -7488,15 +7487,12 @@ impl Bank {
 }
 
 impl TransactionProcessingCallback for Bank {
-    fn account_matches_owners(
-        &self,
-        account: &Pubkey,
-        owners: &[Pubkey],
-    ) -> std::result::Result<usize, MatchAccountOwnerError> {
+    fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize> {
         self.rc
             .accounts
             .accounts_db
             .account_matches_owners(&self.ancestors, account, owners)
+            .ok()
     }
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
