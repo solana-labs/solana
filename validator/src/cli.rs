@@ -1389,6 +1389,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .global(true)
                 .hidden(hidden_unless_forced())
                 .default_value(&default_args.unified_scheduler_hanlder_threads)
+                .validator(|s| is_within_range(s, 1..))
                 .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
