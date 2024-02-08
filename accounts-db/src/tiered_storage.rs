@@ -52,7 +52,7 @@ pub struct TieredStorageFormat {
 #[derive(Debug)]
 pub struct TieredStorage {
     reader: OnceLock<TieredStorageReader>,
-    read_only: AtomicBool,
+    already_written: AtomicBool,
     path: PathBuf,
 }
 
@@ -76,7 +76,7 @@ impl TieredStorage {
     pub fn new_writable(path: impl Into<PathBuf>) -> Self {
         Self {
             reader: OnceLock::<TieredStorageReader>::new(),
-            read_only: false.into(),
+            already_written: false.into(),
             path: path.into(),
         }
     }
@@ -87,7 +87,7 @@ impl TieredStorage {
         let path = path.into();
         Ok(Self {
             reader: TieredStorageReader::new_from_path(&path).map(OnceLock::from)?,
-            read_only: true.into(),
+            already_written: true.into(),
             path,
         })
     }
@@ -115,14 +115,14 @@ impl TieredStorage {
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let was_readonly =
-            self.read_only
-                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
+        let was_written =
+            self.already_written
+                .compare_exchange(false, true, Ordering::Acquired, Ordering::Released);
 
-        // If it was not previously readonly, and the current thread has
-        // successfully updated the read_only flag, then the current
+        // If it was not previously written, and the current thread has
+        // successfully updated the already_written flag, then the current
         // thread will proceed and writes the input accounts.
-        if was_readonly == Ok(false) {
+        if was_written == Ok(false) {
             if format == &HOT_FORMAT {
                 let result = {
                     let writer = HotStorageWriter::new(&self.path)?;
@@ -155,7 +155,7 @@ impl TieredStorage {
 
     /// Returns true if the TieredStorage instance is read-only.
     pub fn is_read_only(&self) -> bool {
-        self.read_only.load(Ordering::Relaxed)
+        self.reader.get().is_some()
     }
 
     /// Returns the size of the underlying accounts file.
