@@ -348,7 +348,11 @@ where
     }
 
     pub fn default_handler_count() -> usize {
-        Self::calculate_default_handler_count(thread::available_parallelism().ok().map(|non_zero| non_zero.get()))
+        Self::calculate_default_handler_count(
+            thread::available_parallelism()
+                .ok()
+                .map(|non_zero| non_zero.get()),
+        )
     }
 
     pub fn calculate_default_handler_count(detected_cpu_core_count: Option<usize>) -> usize {
@@ -2065,8 +2069,14 @@ mod tests {
     #[test]
     fn test_default_handler_count() {
         for (detected, expected) in [(32, 8), (4, 1), (2, 1)] {
-            assert_eq!(DefaultSchedulerPool::calculate_default_handler_count(Some(detected)), expected);
+            assert_eq!(
+                DefaultSchedulerPool::calculate_default_handler_count(Some(detected)),
+                expected
+            );
         }
-        assert_eq!(DefaultSchedulerPool::calculate_default_handler_count(None), 4);
+        assert_eq!(
+            DefaultSchedulerPool::calculate_default_handler_count(None),
+            4
+        );
     }
 }

@@ -185,10 +185,7 @@ impl TaskStatus {
     }
 }
 
-#[cfg_attr(
-    feature = "dev-context-only-utils",
-    field_qualifiers(index(pub))
-)]
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
     index: usize,
