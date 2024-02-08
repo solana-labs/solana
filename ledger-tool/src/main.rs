@@ -85,6 +85,7 @@ use {
         },
     },
 };
+use solana_clap_utils::input_validators::is_within_range;
 
 mod args;
 mod bigtable;
