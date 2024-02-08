@@ -10,7 +10,7 @@ pub mod meta;
 pub mod mmap_utils;
 pub mod owners;
 pub mod readable;
-pub(super) mod test_utils;
+mod test_utils;
 pub mod writer;
 
 use {
