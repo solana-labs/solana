@@ -986,7 +986,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
         tx_batch_cache.entries.iter().for_each(|(key, entry)| {
-            self.replenish(*key, entry.clone());
+            self.assign_program(*key, entry.clone());
         })
     }
 
@@ -1233,7 +1233,9 @@ mod tests {
         slot: Slot,
         reason: LoadedProgramType,
     ) -> Arc<LoadedProgram> {
-        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot, reason)))
+        let program = Arc::new(LoadedProgram::new_tombstone(slot, reason));
+        cache.assign_program(key, program.clone());
+        program
     }
 
     fn insert_unloaded_program<FG: ForkGraph>(
@@ -1256,7 +1258,8 @@ mod tests {
             .to_unloaded()
             .expect("Failed to unload the program"),
         );
-        cache.replenish(key, unloaded).1
+        cache.assign_program(key, unloaded.clone());
+        unloaded
     }
 
     fn num_matching_entries<P, FG>(cache: &LoadedPrograms<FG>, predicate: P) -> usize
@@ -1323,7 +1326,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program1_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program1,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1356,7 +1359,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program2_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program2,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1388,7 +1391,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program3_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program3,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1470,7 +1473,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program1_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program1,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1503,7 +1506,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program2_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program2,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1535,7 +1538,7 @@ mod tests {
             .enumerate()
             .for_each(|(i, deployment_slot)| {
                 let usage_counter = *program3_usage_counters.get(i).unwrap_or(&0);
-                cache.replenish(
+                cache.assign_program(
                     program3,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
@@ -1628,7 +1631,7 @@ mod tests {
         let program = Pubkey::new_unique();
         let num_total_programs = 6;
         (0..num_total_programs).for_each(|i| {
-            cache.replenish(
+            cache.assign_program(
                 program,
                 new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i + 10)),
             );
@@ -1655,7 +1658,7 @@ mod tests {
 
         // Replenish the program that was just unloaded. Use 0 as the usage counter. This should be
         // updated with the usage counter from the unloaded program.
-        cache.replenish(
+        cache.assign_program(
             program,
             new_test_loaded_program_with_usage(0, 2, AtomicU64::new(0)),
         );
@@ -1685,10 +1688,7 @@ mod tests {
             LoadedProgramType::FailedVerification(env),
         );
 
-        let loaded_program = new_test_loaded_program(10, 10);
-        let (existing, program) = cache.replenish(program1, loaded_program.clone());
-        assert!(!existing);
-        assert_eq!(program, loaded_program);
+        cache.assign_program(program1, new_test_loaded_program(10, 10));
     }
 
     #[test]
@@ -1726,11 +1726,7 @@ mod tests {
 
         // Add a program at slot 50, and a tombstone for the program at slot 60
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_builtin_program(50, 51))
-                .0
-        );
+        cache.assign_program(program2, new_test_builtin_program(50, 51));
         let second_level = &cache
             .entries
             .get(&program2)
@@ -1830,10 +1826,7 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        let loaded_program = new_test_loaded_program(10, 10);
-        let (existing, program) = cache.replenish(program1, loaded_program.clone());
-        assert!(!existing);
-        assert_eq!(program, loaded_program);
+        cache.assign_program(program1, new_test_loaded_program(10, 10));
 
         let new_env = Arc::new(BuiltinProgram::new_mock());
         cache.upcoming_environments = Some(ProgramRuntimeEnvironments {
@@ -1849,9 +1842,7 @@ mod tests {
             ix_usage_counter: AtomicU64::default(),
             latest_access_slot: AtomicU64::default(),
         });
-        let (existing, program) = cache.replenish(program1, updated_program.clone());
-        assert!(!existing);
-        assert_eq!(program, updated_program);
+        cache.assign_program(program1, updated_program.clone());
 
         // Test that there are 2 entries for the program
         assert_eq!(
@@ -1986,38 +1977,30 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+        cache.assign_program(program1, new_test_loaded_program(0, 1));
+        cache.assign_program(program1, new_test_loaded_program(10, 11));
+        cache.assign_program(program1, new_test_loaded_program(20, 21));
 
         // Test: inserting duplicate entry return pre existing entry from the cache
         assert!(cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
-        assert!(
-            !cache
-                .replenish(
-                    program2,
-                    new_test_loaded_program(11, 11 + DELAY_VISIBILITY_SLOT_OFFSET)
-                )
-                .0
+        cache.assign_program(program2, new_test_loaded_program(5, 6));
+        cache.assign_program(
+            program2,
+            new_test_loaded_program(11, 11 + DELAY_VISIBILITY_SLOT_OFFSET),
         );
 
         let program3 = Pubkey::new_unique();
-        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
+        cache.assign_program(program3, new_test_loaded_program(25, 26));
 
         let program4 = Pubkey::new_unique();
-        assert!(!cache.replenish(program4, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program4, new_test_loaded_program(5, 6)).0);
+        cache.assign_program(program4, new_test_loaded_program(0, 1));
+        cache.assign_program(program4, new_test_loaded_program(5, 6));
         // The following is a special case, where effective slot is 3 slots in the future
-        assert!(
-            !cache
-                .replenish(
-                    program4,
-                    new_test_loaded_program(15, 15 + DELAY_VISIBILITY_SLOT_OFFSET)
-                )
-                .0
+        cache.assign_program(
+            program4,
+            new_test_loaded_program(15, 15 + DELAY_VISIBILITY_SLOT_OFFSET),
         );
 
         // Current fork graph
@@ -2243,15 +2226,15 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+        cache.assign_program(program1, new_test_loaded_program(0, 1));
+        cache.assign_program(program1, new_test_loaded_program(20, 21));
 
         let program2 = Pubkey::new_unique();
-        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
-        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+        cache.assign_program(program2, new_test_loaded_program(5, 6));
+        cache.assign_program(program2, new_test_loaded_program(11, 12));
 
         let program3 = Pubkey::new_unique();
-        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
+        cache.assign_program(program3, new_test_loaded_program(25, 26));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let mut missing = vec![
@@ -2316,12 +2299,12 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+        cache.assign_program(program1, new_test_loaded_program(0, 1));
+        cache.assign_program(program1, new_test_loaded_program(20, 21));
 
         let program2 = Pubkey::new_unique();
-        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
-        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+        cache.assign_program(program2, new_test_loaded_program(5, 6));
+        cache.assign_program(program2, new_test_loaded_program(11, 12));
 
         let program3 = Pubkey::new_unique();
         // Insert an unloaded program with correct/cache's environment at slot 25
@@ -2330,17 +2313,13 @@ mod tests {
         // Insert another unloaded program with a different environment at slot 20
         // Since this entry's environment won't match cache's environment, looking up this
         // entry should return missing instead of unloaded entry.
-        assert!(
-            !cache
-                .replenish(
-                    program3,
-                    Arc::new(
-                        new_test_loaded_program(20, 21)
-                            .to_unloaded()
-                            .expect("Failed to create unloaded program")
-                    )
-                )
-                .0
+        cache.assign_program(
+            program3,
+            Arc::new(
+                new_test_loaded_program(20, 21)
+                    .to_unloaded()
+                    .expect("Failed to create unloaded program"),
+            ),
         );
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
@@ -2407,8 +2386,8 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
+        cache.assign_program(program1, new_test_loaded_program(0, 1));
+        cache.assign_program(program1, new_test_loaded_program(5, 6));
 
         cache.prune(10, 0);
 
@@ -2447,11 +2426,11 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
-        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
+        cache.assign_program(program1, new_test_loaded_program(0, 1));
+        cache.assign_program(program1, new_test_loaded_program(5, 6));
 
         let program2 = Pubkey::new_unique();
-        assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
+        cache.assign_program(program2, new_test_loaded_program(10, 11));
 
         let mut missing = vec![
             (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
