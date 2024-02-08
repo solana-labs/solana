@@ -644,50 +644,18 @@ mod test {
         let (quic_endpoint_sender, _quic_endpoint_receiver) =
             tokio::sync::mpsc::channel(/*capacity:*/ 128);
 
-        let receive_results = {
-            let ticks = create_ticks(
-                genesis_config.ticks_per_slot, // num_ticks
-                0,                             // hashes_per_tick
-                genesis_config.hash(),
-            );
-            ReceiveResults {
-                entries: ticks.clone(),
-                time_elapsed: Duration::new(3, 0),
-                time_coalesced: Duration::new(2, 0),
-                bank: bank0.clone(),
-                last_tick_height: ticks.len() as u64,
-            }
-        };
-        let mut standard_broadcast_run = StandardBroadcastRun::new(/*shred_version:*/ 0);
-        standard_broadcast_run
-            .test_process_receive_results(
-                &leader_keypair,
-                &cluster_info,
-                &socket,
-                &blockstore,
-                receive_results,
-                &bank_forks,
-                &quic_endpoint_sender,
-            )
-            .unwrap();
-        assert!(blockstore.is_full(0));
-
-        let bank1 = Arc::new(Bank::new_from_parent(
-            bank0.clone(),
-            &leader_keypair.pubkey(),
-            1, // slot
-        ));
         // Insert 1 less than the number of ticks needed to finish the slot
         let ticks0 = create_ticks(genesis_config.ticks_per_slot - 1, 0, genesis_config.hash());
         let receive_results = ReceiveResults {
             entries: ticks0.clone(),
             time_elapsed: Duration::new(3, 0),
             time_coalesced: Duration::new(2, 0),
-            bank: bank1.clone(),
+            bank: bank0.clone(),
             last_tick_height: (ticks0.len() - 1) as u64,
         };
 
-        // Step 1: Make an incomplete transmission for slot 1
+        // Step 1: Make an incomplete transmission for slot 0
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         standard_broadcast_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -701,10 +669,10 @@ mod test {
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
         assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
-        assert_eq!(unfinished_slot.slot, 1);
+        assert_eq!(unfinished_slot.slot, 0);
         assert_eq!(unfinished_slot.parent, 0);
         // Make sure the slot is not complete
-        assert!(!blockstore.is_full(1));
+        assert!(!blockstore.is_full(0));
         // Modify the stats, should reset later
         standard_broadcast_run.process_shreds_stats.receive_elapsed = 10;
         // Broadcast stats should exist, and 2 batches should have been sent,
@@ -730,16 +698,9 @@ mod test {
             2
         );
         // Try to fetch ticks from blockstore, nothing should break
+        assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
         assert_eq!(
-            blockstore
-                .get_slot_entries(/*slot:*/ 1, /*shred_start_index:*/ 0)
-                .unwrap(),
-            ticks0
-        );
-        assert_eq!(
-            blockstore
-                .get_slot_entries(/*slot:*/ 1, num_shreds_per_slot)
-                .unwrap(),
+            blockstore.get_slot_entries(0, num_shreds_per_slot).unwrap(),
             vec![],
         );
 
@@ -802,16 +763,9 @@ mod test {
             .is_none());
 
         // Try to fetch the incomplete ticks from blockstore, should succeed
+        assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
         assert_eq!(
-            blockstore
-                .get_slot_entries(/*slot:*/ 1, /*shred_start_index:*/ 0)
-                .unwrap(),
-            ticks0
-        );
-        assert_eq!(
-            blockstore
-                .get_slot_entries(/*slot:*/ 1, num_shreds_per_slot)
-                .unwrap(),
+            blockstore.get_slot_entries(0, num_shreds_per_slot).unwrap(),
             vec![],
         );
     }
@@ -902,7 +856,7 @@ mod test {
         solana_logger::setup();
         let keypair = Keypair::new();
         let mut bs = StandardBroadcastRun::new(0);
-        bs.current_slot_and_parent = Some((0, 0));
+        bs.current_slot_and_parent = Some((1, 0));
         let entries = create_ticks(10_000, 1, solana_sdk::hash::Hash::default());
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
