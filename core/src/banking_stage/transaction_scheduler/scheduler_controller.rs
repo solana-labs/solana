@@ -393,7 +393,7 @@ impl SchedulerController {
 
     /// Calculate priority and cost for a transaction:
     ///
-    /// Cost is calculated throught the `CostModel`,
+    /// Cost is calculated through the `CostModel`,
     /// and priority is calculated through a formula here that attempts to sell
     /// blockspace to the highest bidder.
     ///
