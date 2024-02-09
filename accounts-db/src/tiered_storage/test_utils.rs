@@ -9,12 +9,10 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         hash::Hash,
-        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         pubkey::Pubkey,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
     },
 };
-
-
 
 /// Create a test account based on the specified seed.
 /// The created test account might have default rent_epoch
