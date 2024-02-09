@@ -115,14 +115,12 @@ impl TieredStorage {
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
-        let was_written =
-            self.already_written
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed);
+        let was_written = self.already_written.swap(true, Ordering::AcqRel);
 
         // If it was not previously written, and the current thread has
         // successfully updated the already_written flag, then the current
         // thread will proceed and writes the input accounts.
-        if was_written == Ok(false) {
+        if !was_written {
             if format == &HOT_FORMAT {
                 let result = {
                     let writer = HotStorageWriter::new(&self.path)?;
@@ -141,9 +139,7 @@ impl TieredStorage {
 
             Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
         } else {
-            Err(TieredStorageError::AttemptToUpdateReadOnly(
-                self.path.to_path_buf(),
-            ))
+            panic!("TieredStorage::write_accounts() is expected to be invoked once per file.");
         }
     }
 
@@ -271,6 +267,9 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "TieredStorage::write_accounts() is expected to be invoked once per file"
+    )]
     fn test_write_accounts_twice() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = tempdir().unwrap();
