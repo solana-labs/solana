@@ -42,48 +42,24 @@ const REPAIR_THRESHOLD: f64 = 0.42;
 pub enum WenRestartError {
     #[error("Protobuf Decode error: {0}")]
     DecodeError(#[from] prost::DecodeError),
+    #[error("Protobuf Encode error: {0}")]
+    EncodeError(#[from] prost::EncodeError),
     #[error("Exiting")]
     Exiting,
-    #[error("File IO error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Unexpected state: {0:?}")]
-    UnexpectedState(wen_restart_proto::State),
-    #[error("Write wen restart records error: {0}")]
-    WriteWenRestartRecordsError(#[from] WriteWenRestartRecordsError),
-}
-
-#[derive(Error, Debug)]
-pub enum SendLastVotedForkError {
     #[error("Invalid Last Vote Type: {0:?}")]
     InvalidLastVoteType(VoteTransaction),
     #[error("File IO error: {0}")]
-    IoError(std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("Missing last voted fork slots")]
     MissingLastVotedForkSlots,
-    #[error("Gossip push RestartLastVotedForkSlotsError: {0}")]
-    RestartLastVotedForkSlotsError(#[from] RestartLastVotedForkSlotsError),
-}
-
-#[derive(Error, Debug)]
-pub enum AggregateLastVotedForkSlotsError {
-    #[error("Exiting")]
-    Exiting,
     #[error("Hash parse error: {0}")]
     ParseHashError(#[from] solana_sdk::hash::ParseHashError),
     #[error("Pubkey parse error: {0}")]
     PubkeyParseError(#[from] solana_sdk::pubkey::ParsePubkeyError),
     #[error("Gossip push RestartLastVotedForkSlotsError: {0}")]
     RestartLastVotedForkSlotsError(#[from] RestartLastVotedForkSlotsError),
-    #[error("Write wen restart records error: {0}")]
-    WriteWenRestartRecordsError(#[from] WriteWenRestartRecordsError),
-}
-
-#[derive(Error, Debug)]
-pub enum WriteWenRestartRecordsError {
-    #[error("Protobuf Encode error: {0}")]
-    EncodeError(#[from] prost::EncodeError),
-    #[error("File IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    #[error("Unexpected state: {0:?}")]
+    UnexpectedState(wen_restart_proto::State),
 }
 
 fn send_restart_last_voted_fork_slots(
@@ -91,7 +67,7 @@ fn send_restart_last_voted_fork_slots(
     blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
     progress: &mut WenRestartProgress,
-) -> Result<(), SendLastVotedForkError> {
+) -> Result<(), WenRestartError> {
     let last_voted_fork_slots;
     let last_vote_hash;
     match &progress.my_last_voted_fork_slots {
@@ -109,10 +85,10 @@ fn send_restart_last_voted_fork_slots(
                             .take(RestartLastVotedForkSlots::MAX_SLOTS)
                             .collect();
                 } else {
-                    return Err(SendLastVotedForkError::MissingLastVotedForkSlots);
+                    return Err(WenRestartError::MissingLastVotedForkSlots);
                 }
             } else {
-                return Err(SendLastVotedForkError::InvalidLastVoteType(last_vote));
+                return Err(WenRestartError::InvalidLastVoteType(last_vote));
             }
         }
     }
@@ -138,7 +114,7 @@ fn aggregate_restart_last_voted_fork_slots(
     wen_restart_repair_slots: Arc<RwLock<Vec<Slot>>>,
     exit: Arc<AtomicBool>,
     progress: &mut WenRestartProgress,
-) -> Result<(), AggregateLastVotedForkSlotsError> {
+) -> Result<(), WenRestartError> {
     let root_bank;
     {
         root_bank = bank_forks.read().unwrap().root_bank().clone();
@@ -168,7 +144,7 @@ fn aggregate_restart_last_voted_fork_slots(
     }
     loop {
         if exit.load(Ordering::Relaxed) {
-            return Err(AggregateLastVotedForkSlotsError::Exiting);
+            return Err(WenRestartError::Exiting);
         }
         let start = timestamp();
         for new_last_voted_fork_slots in cluster_info.get_restart_last_voted_fork_slots(&mut cursor)
@@ -239,7 +215,7 @@ pub fn wait_for_wen_restart(
     wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     wait_for_supermajority_threshold_percent: u64,
     exit: Arc<AtomicBool>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), WenRestartError> {
     let mut progress = initialize(wen_restart_path)?;
     loop {
         match progress.state() {
@@ -264,7 +240,7 @@ pub fn wait_for_wen_restart(
             RestartState::FinishedSnapshot
             | RestartState::GeneratingSnapshot
             | RestartState::WaitingForSupermajority => {
-                return Err(Box::new(WenRestartError::UnexpectedState(progress.state())))
+                return Err(WenRestartError::UnexpectedState(progress.state()))
             }
             RestartState::Done => return Ok(()),
         }
@@ -322,7 +298,7 @@ fn read_wen_restart_records(records_path: &PathBuf) -> Result<WenRestartProgress
 pub(crate) fn write_wen_restart_records(
     records_path: &PathBuf,
     new_progress: &WenRestartProgress,
-) -> Result<(), WriteWenRestartRecordsError> {
+) -> Result<(), WenRestartError> {
     // overwrite anything if exists
     let mut file = File::create(records_path)?;
     info!("writing new record {:?}", new_progress);
@@ -656,22 +632,21 @@ mod tests {
     fn test_wen_restart_init_failures() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let test_state = wen_restart_test_init(&ledger_path);
-        let transaction = VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)]));
         assert_matches!(
-            *wait_for_wen_restart(
+            wait_for_wen_restart(
                 &test_state.wen_restart_proto_path,
-                transaction.clone(),
+                VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)])),
                 test_state.blockstore.clone(),
                 test_state.cluster_info.clone(),
                 test_state.bank_forks.clone(),
                 Some(Arc::new(RwLock::new(Vec::new()))),
                 80,
                 Arc::new(AtomicBool::new(false)),
-            ).err().unwrap().downcast::<SendLastVotedForkError>().unwrap(),
-            SendLastVotedForkError::InvalidLastVoteType(t) if t == transaction
+            ),
+            Err(WenRestartError::InvalidLastVoteType(_))
         );
         assert_matches!(
-            *wait_for_wen_restart(
+            wait_for_wen_restart(
                 &test_state.wen_restart_proto_path,
                 VoteTransaction::from(Vote::new(vec![], Hash::new_unique())),
                 test_state.blockstore.clone(),
@@ -680,12 +655,8 @@ mod tests {
                 Some(Arc::new(RwLock::new(Vec::new()))),
                 80,
                 Arc::new(AtomicBool::new(false)),
-            )
-            .err()
-            .unwrap()
-            .downcast::<SendLastVotedForkError>()
-            .unwrap(),
-            SendLastVotedForkError::MissingLastVotedForkSlots
+            ),
+            Err(WenRestartError::MissingLastVotedForkSlots)
         );
         let last_vote_bankhash = Hash::new_unique();
         let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
@@ -709,7 +680,6 @@ mod tests {
 
     #[test]
     fn test_wen_restart_send_last_voted_fork_failures() {
-        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let test_state = wen_restart_test_init(&ledger_path);
         assert!(write_wen_restart_records(
@@ -724,23 +694,16 @@ mod tests {
         let last_vote_slot: Slot = test_state.last_voted_fork_slots[0];
         let last_vote_bankhash = Hash::new_unique();
         change_proto_file_readonly(&test_state.wen_restart_proto_path, true);
-        assert_matches!(
-            *wait_for_wen_restart(
-                &test_state.wen_restart_proto_path,
-                VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
-                test_state.blockstore.clone(),
-                test_state.cluster_info.clone(),
-                test_state.bank_forks.clone(),
-                Some(Arc::new(RwLock::new(Vec::new()))),
-                80,
-                Arc::new(AtomicBool::new(false)),
-            )
-            .err()
-            .unwrap()
-            .downcast::<WenRestartError>()
-            .unwrap(),
-            WenRestartError::WriteWenRestartRecordsError(_)
-        );
+        assert_matches!(wait_for_wen_restart(
+            &test_state.wen_restart_proto_path,
+            VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
+            test_state.blockstore.clone(),
+            test_state.cluster_info.clone(),
+            test_state.bank_forks.clone(),
+            Some(Arc::new(RwLock::new(Vec::new()))),
+            80,
+            Arc::new(AtomicBool::new(false)),
+        ), Err(WenRestartError::IoError(e)) if e.kind() == std::io::ErrorKind::PermissionDenied);
         change_proto_file_readonly(&test_state.wen_restart_proto_path, false);
         let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
         wen_restart_test_succeed_after_failure(
@@ -801,15 +764,21 @@ mod tests {
             let wen_restart_thread_handle = Builder::new()
                 .name("solana-wen-restart".to_string())
                 .spawn(move || {
-                    let _ = wait_for_wen_restart(
-                        &wen_restart_proto_path_clone,
-                        VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
-                        blockstore_clone,
-                        cluster_info_clone,
-                        bank_forks_clone,
-                        Some(Arc::new(RwLock::new(Vec::new()))),
-                        80,
-                        exit_clone,
+                    assert_matches!(
+                        wait_for_wen_restart(
+                            &wen_restart_proto_path_clone,
+                            VoteTransaction::from(Vote::new(
+                                vec![last_vote_slot],
+                                last_vote_bankhash
+                            )),
+                            blockstore_clone,
+                            cluster_info_clone,
+                            bank_forks_clone,
+                            Some(Arc::new(RwLock::new(Vec::new()))),
+                            80,
+                            exit_clone,
+                        ),
+                        Err(WenRestartError::Exiting)
                     );
                 })
                 .unwrap();
@@ -867,7 +836,7 @@ mod tests {
         }
         assert!(write_wen_restart_records(&test_state.wen_restart_proto_path, &record).is_ok());
         assert_matches!(
-            *wait_for_wen_restart(
+            wait_for_wen_restart(
                 &test_state.wen_restart_proto_path,
                 VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
                 test_state.blockstore.clone(),
@@ -876,12 +845,8 @@ mod tests {
                 Some(Arc::new(RwLock::new(Vec::new()))),
                 80,
                 Arc::new(AtomicBool::new(false)),
-            )
-            .err()
-            .unwrap()
-            .downcast::<AggregateLastVotedForkSlotsError>()
-            .unwrap(),
-            AggregateLastVotedForkSlotsError::ParseHashError(_)
+            ),
+            Err(WenRestartError::ParseHashError(_))
         );
         for slots_record in record
             .last_voted_fork_slots_aggregate

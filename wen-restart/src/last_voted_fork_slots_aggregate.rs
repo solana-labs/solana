@@ -1,8 +1,5 @@
 use {
-    crate::{
-        solana::wen_restart_proto::LastVotedForkSlotsRecord,
-        wen_restart::AggregateLastVotedForkSlotsError,
-    },
+    crate::{solana::wen_restart_proto::LastVotedForkSlotsRecord, wen_restart::WenRestartError},
     log::*,
     solana_gossip::restart_crds_values::RestartLastVotedForkSlots,
     solana_runtime::epoch_stakes::EpochStakes,
@@ -69,7 +66,7 @@ impl LastVotedForkSlotsAggregate {
         &mut self,
         key_string: &str,
         record: &LastVotedForkSlotsRecord,
-    ) -> Result<Option<LastVotedForkSlotsRecord>, AggregateLastVotedForkSlotsError> {
+    ) -> Result<Option<LastVotedForkSlotsRecord>, WenRestartError> {
         let from = Pubkey::from_str(key_string)?;
         let last_voted_hash = Hash::from_str(&record.last_vote_bankhash)?;
         let converted_record = RestartLastVotedForkSlots::new(
