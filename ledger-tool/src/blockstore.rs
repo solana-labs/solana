@@ -601,7 +601,7 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
 
 pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     do_blockstore_process_command(ledger_path, matches).unwrap_or_else(|err| {
-        eprintln!("{err:?}");
+        eprintln!("Failed to complete command: {err:?}");
         std::process::exit(1);
     });
 }
@@ -879,9 +879,7 @@ fn do_blockstore_process_command(
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             let sst_file_name = arg_matches.value_of("file_name");
-            if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
-                eprintln!("{err}");
-            }
+            print_blockstore_file_metadata(&blockstore, &sst_file_name)?;
         }
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
@@ -905,16 +903,18 @@ fn do_blockstore_process_command(
                     let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
                     let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
                     if slots.is_empty() {
-                        eprintln!("Purge range is empty");
-                        std::process::exit(1);
+                        return Err("purge range is empty".into());
                     }
                     *slots.last().unwrap()
                 }
             };
 
             if end_slot < start_slot {
-                eprintln!("end slot {end_slot} is less than start slot {start_slot}");
-                std::process::exit(1);
+                return Err(format!(
+                    "starting slot {start_slot} should be less than or equal to \
+                    ending slot {end_slot}"
+                )
+                .into());
             }
             info!(
                 "Purging data from slots {} to {} ({} slots) (do compaction: {}) \
@@ -963,12 +963,9 @@ fn do_blockstore_process_command(
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let blockstore = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
             for slot in slots {
-                match blockstore.remove_dead_slot(slot) {
-                    Ok(_) => println!("Slot {slot} not longer marked dead"),
-                    Err(err) => {
-                        eprintln!("Failed to remove dead flag for slot {slot}, {err:?}")
-                    }
-                }
+                blockstore
+                    .remove_dead_slot(slot)
+                    .map(|_| println!("Slot {slot} not longer marked dead"))?;
             }
         }
         ("repair-roots", Some(arg_matches)) => {
@@ -980,31 +977,30 @@ fn do_blockstore_process_command(
             let end_root = value_t!(arg_matches, "end_root", Slot)
                 .unwrap_or_else(|_| start_root.saturating_sub(max_slots));
             assert!(start_root > end_root);
-            let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
+            // Adjust by one since start_root need not be checked
+            let num_slots = start_root - end_root - 1;
             if arg_matches.is_present("end_root") && num_slots > max_slots {
-                eprintln!(
+                return Err(format!(
                     "Requested range {num_slots} too large, max {max_slots}. Either adjust \
                  `--until` value, or pass a larger `--repair-limit` to override the limit",
-                );
-                std::process::exit(1);
+                )
+                .into());
             }
 
-            let num_repaired_roots = blockstore
-                .scan_and_fix_roots(Some(start_root), Some(end_root), &AtomicBool::new(false))
-                .unwrap_or_else(|err| {
-                    eprintln!("Unable to repair roots: {err}");
-                    std::process::exit(1);
-                });
+            let num_repaired_roots = blockstore.scan_and_fix_roots(
+                Some(start_root),
+                Some(end_root),
+                &AtomicBool::new(false),
+            )?;
             println!("Successfully repaired {num_repaired_roots} roots");
         }
         ("set-dead-slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let blockstore = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Primary);
             for slot in slots {
-                match blockstore.set_dead_slot(slot) {
-                    Ok(_) => println!("Slot {slot} dead"),
-                    Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
-                }
+                blockstore
+                    .set_dead_slot(slot)
+                    .map(|_| println!("Slot {slot} marked dead"))?;
             }
         }
         ("shred-meta", Some(arg_matches)) => {
