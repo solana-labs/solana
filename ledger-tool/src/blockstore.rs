@@ -703,9 +703,9 @@ fn do_blockstore_process_command(
                     break;
                 }
                 let shreds = source.get_data_shreds_for_slot(slot, 0)?;
-                    if target.insert_shreds(shreds, None, true).is_err() {
-                        warn!("error inserting shreds for slot {}", slot);
-                    }
+                if target.insert_shreds(shreds, None, true).is_err() {
+                    warn!("error inserting shreds for slot {}", slot);
+                }
             }
         }
         ("dead-slots", Some(arg_matches)) => {
