@@ -698,15 +698,14 @@ fn do_blockstore_process_command(
                 ),
             );
             let target = crate::open_blockstore(&target_db, arg_matches, AccessType::Primary);
-            for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
+            for (slot, _meta) in source.slot_meta_iterator(starting_slot)? {
                 if slot > ending_slot {
                     break;
                 }
-                if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
+                let shreds = source.get_data_shreds_for_slot(slot, 0)?;
                     if target.insert_shreds(shreds, None, true).is_err() {
                         warn!("error inserting shreds for slot {}", slot);
                     }
-                }
             }
         }
         ("dead-slots", Some(arg_matches)) => {
