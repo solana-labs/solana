@@ -1,10 +1,7 @@
 ---
-title: Staking
----
-
-For an overview of staking, read first the
-[Staking and Inflation FAQ](https://solana.com/staking).
-
+title: Staking SOL with the Solana CLI
+pagination_label: "Solana CLI: Staking"
+sidebar_label: Staking
 ---
 
 After you have [received SOL](./transfer-tokens.md), you might consider putting it
@@ -14,6 +11,11 @@ to them, which gives those validators more influence in determining then next
 valid block of transactions in the blockchain. Solana then generates new SOL
 periodically to reward stakers and validators. You earn more rewards the more
 stake you delegate.
+
+:::info
+For an overview of staking, read first the
+[Staking and Inflation FAQ](https://solana.com/staking).
+:::
 
 ## Create a Stake Account
 

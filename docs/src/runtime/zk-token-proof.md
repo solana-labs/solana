@@ -1,5 +1,7 @@
 ---
-title: ZK Token Proof Program
+title: Solana ZK Token Proof Program
+pagination_label: Native ZK Token Proof Program
+sidebar_label: ZK Token Proof Program
 ---
 
 The native Solana ZK Token proof program verifies a number of zero-knowledge
