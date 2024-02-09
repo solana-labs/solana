@@ -607,77 +607,75 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
     });
 }
 
-
-fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -> Result<(), Box<dyn std::error::Error>> {
+fn do_blockstore_process_command(
+    ledger_path: &Path,
+    matches: &ArgMatches<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let ledger_path = canonicalize_ledger_path(ledger_path);
     let verbose_level = matches.occurrences_of("verbose");
 
     match matches.subcommand() {
-        ("analyze-storage", Some(arg_matches)) => {
-            analyze_storage(
-                &crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
-            )?
-        }
+        ("analyze-storage", Some(arg_matches)) => analyze_storage(
+            &crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
+        )?,
         ("bounds", Some(arg_matches)) => {
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
             let slot_meta_iterator = blockstore.slot_meta_iterator(0)?;
-                    let output_format =
-                        OutputFormat::from_matches(arg_matches, "output_format", false);
-                    let all = arg_matches.is_present("all");
+            let output_format = OutputFormat::from_matches(arg_matches, "output_format", false);
+            let all = arg_matches.is_present("all");
 
-                    let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
+            let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
 
-                    let slot_bounds = if slots.is_empty() {
-                        SlotBounds::default()
-                    } else {
-                        // Collect info about slot bounds
-                        let mut bounds = SlotBounds {
-                            slots: SlotInfo {
-                                total: slots.len(),
-                                first: Some(*slots.first().unwrap()),
-                                last: Some(*slots.last().unwrap()),
-                                ..SlotInfo::default()
-                            },
-                            ..SlotBounds::default()
-                        };
-                        if all {
-                            bounds.all_slots = Some(&slots);
-                        }
+            let slot_bounds = if slots.is_empty() {
+                SlotBounds::default()
+            } else {
+                // Collect info about slot bounds
+                let mut bounds = SlotBounds {
+                    slots: SlotInfo {
+                        total: slots.len(),
+                        first: Some(*slots.first().unwrap()),
+                        last: Some(*slots.last().unwrap()),
+                        ..SlotInfo::default()
+                    },
+                    ..SlotBounds::default()
+                };
+                if all {
+                    bounds.all_slots = Some(&slots);
+                }
 
-                        // Consider also rooted slots, if present
-                        let rooted_slot_iterator = blockstore.rooted_slot_iterator(0)?;
-                            let mut first_rooted = None;
-                            let mut last_rooted = None;
-                            let mut total_rooted = 0;
-                            for (i, slot) in rooted_slot_iterator.into_iter().enumerate() {
-                                if i == 0 {
-                                    first_rooted = Some(slot);
-                                }
-                                last_rooted = Some(slot);
-                                total_rooted += 1;
-                            }
-                            let last_root_for_comparison = last_rooted.unwrap_or_default();
-                            let count_past_root = slots
-                                .iter()
-                                .rev()
-                                .take_while(|slot| *slot > &last_root_for_comparison)
-                                .count();
+                // Consider also rooted slots, if present
+                let rooted_slot_iterator = blockstore.rooted_slot_iterator(0)?;
+                let mut first_rooted = None;
+                let mut last_rooted = None;
+                let mut total_rooted = 0;
+                for (i, slot) in rooted_slot_iterator.into_iter().enumerate() {
+                    if i == 0 {
+                        first_rooted = Some(slot);
+                    }
+                    last_rooted = Some(slot);
+                    total_rooted += 1;
+                }
+                let last_root_for_comparison = last_rooted.unwrap_or_default();
+                let count_past_root = slots
+                    .iter()
+                    .rev()
+                    .take_while(|slot| *slot > &last_root_for_comparison)
+                    .count();
 
-                            bounds.roots = SlotInfo {
-                                total: total_rooted,
-                                first: first_rooted,
-                                last: last_rooted,
-                                num_after_last_root: Some(count_past_root),
-                            };
+                bounds.roots = SlotInfo {
+                    total: total_rooted,
+                    first: first_rooted,
+                    last: last_rooted,
+                    num_after_last_root: Some(count_past_root),
+                };
 
-                        bounds
-                    };
+                bounds
+            };
 
-                    // Print collected data
-                    println!("{}", output_format.formatted_string(&slot_bounds));
-
+            // Print collected data
+            println!("{}", output_format.formatted_string(&slot_bounds));
         }
         ("copy", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
