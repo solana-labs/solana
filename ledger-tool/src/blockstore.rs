@@ -600,6 +600,14 @@ pub fn blockstore_subcommands<'a, 'b>(hidden: bool) -> Vec<App<'a, 'b>> {
 }
 
 pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
+    do_blockstore_process_command(ledger_path, matches).unwrap_or_else(|err| {
+        eprintln!("{err:?}");
+        std::process::exit(1);
+    });
+}
+
+
+fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -> Result<(), Box<dyn std::error::Error>> {
     let ledger_path = canonicalize_ledger_path(ledger_path);
     let verbose_level = matches.occurrences_of("verbose");
 
@@ -1084,6 +1092,7 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
         }
         _ => unreachable!(),
     }
+    Ok(())
 }
 
 #[cfg(test)]
