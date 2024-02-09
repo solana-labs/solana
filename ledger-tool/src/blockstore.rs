@@ -712,7 +712,7 @@ fn do_blockstore_process_command(
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-            for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
+            for slot in blockstore.dead_slots_iterator(starting_slot)? {
                 println!("{slot}");
             }
         }
@@ -720,7 +720,7 @@ fn do_blockstore_process_command(
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-            for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
+            for slot in blockstore.duplicate_slots_iterator(starting_slot)? {
                 println!("{slot}");
             }
         }
@@ -778,8 +778,7 @@ fn do_blockstore_process_command(
             let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
 
             let iter = blockstore
-                .rooted_slot_iterator(start_root)
-                .expect("Failed to get rooted slot");
+                .rooted_slot_iterator(start_root)?;
 
             let mut output: Box<dyn Write> = if let Some(path) = arg_matches.value_of("slot_list") {
                 match File::create(path) {
@@ -790,21 +789,19 @@ fn do_blockstore_process_command(
                 Box::new(stdout())
             };
 
-            iter.take(num_roots)
+            for slot in iter.take(num_roots)
                 .take_while(|slot| *slot <= max_height as u64)
                 .collect::<Vec<_>>()
                 .into_iter()
-                .rev()
-                .for_each(|slot| {
+                .rev() {
                     let blockhash = blockstore
-                        .get_slot_entries(slot, 0)
-                        .unwrap()
+                        .get_slot_entries(slot, 0)?
                         .last()
                         .unwrap()
                         .hash;
 
                     writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
-                });
+                }
         }
         ("parse_full_frozen", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -813,7 +810,7 @@ fn do_blockstore_process_command(
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             let mut ancestors = BTreeSet::new();
             assert!(
-                blockstore.meta(ending_slot).unwrap().is_some(),
+                blockstore.meta(ending_slot)?.is_some(),
                 "Ending slot doesn't exist"
             );
             for a in AncestorIterator::new(ending_slot, &blockstore) {
@@ -830,7 +827,7 @@ fn do_blockstore_process_command(
             let full_regex = Regex::new(r"slot (\d*) is full").unwrap();
 
             let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
-            let f = BufReader::new(File::open(log_file).unwrap());
+            let f = BufReader::new(File::open(log_file)?);
             println!("Reading log file");
             for line in f.lines().map_while(Result::ok) {
                 let parse_results = {
@@ -964,8 +961,7 @@ fn do_blockstore_process_command(
                 }
             } else {
                 let dead_slots_iter = blockstore
-                    .dead_slots_iterator(start_slot)
-                    .unwrap()
+                    .dead_slots_iterator(start_slot)?
                     .take_while(|s| *s <= end_slot);
                 for dead_slot in dead_slots_iter {
                     info!("Purging dead slot {}", dead_slot);
@@ -1038,8 +1034,7 @@ fn do_blockstore_process_command(
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
             let ledger = crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             for (slot, _meta) in ledger
-                .slot_meta_iterator(starting_slot)
-                .unwrap()
+                .slot_meta_iterator(starting_slot)?
                 .take_while(|(slot, _)| *slot <= ending_slot)
             {
                 let full_slot = ledger.is_full(slot);
