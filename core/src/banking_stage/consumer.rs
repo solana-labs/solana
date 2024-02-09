@@ -9,7 +9,6 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
-    solana_accounts_db::transaction_results::TransactionCheckResult,
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
@@ -33,7 +32,8 @@ use {
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
     solana_svm::{
-        account_loader::validate_fee_payer, transaction_error_metrics::TransactionErrorMetrics,
+        account_loader::{validate_fee_payer, TransactionCheckResult},
+        transaction_error_metrics::TransactionErrorMetrics,
     },
     std::{
         sync::{atomic::Ordering, Arc},

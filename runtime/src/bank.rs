@@ -90,8 +90,7 @@ use {
         stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
         transaction_results::{
-            TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
@@ -161,6 +160,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_svm::{
+        account_loader::TransactionCheckResult,
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
