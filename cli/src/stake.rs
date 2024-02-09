@@ -2415,7 +2415,8 @@ fn get_stake_account_state(
     stake_account.state().map_err(|err| {
         CliError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {err}"
-        )).into()
+        ))
+        .into()
     })
 }
 
@@ -2528,7 +2529,14 @@ pub fn process_show_stake_account(
     use_csv: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
-    let state= get_account_stake_state(rpc_client, stake_account_address, stake_account, use_lamports_unit, with_rewards, use_csv)?;
+    let state = get_account_stake_state(
+        rpc_client,
+        stake_account_address,
+        stake_account,
+        use_lamports_unit,
+        with_rewards,
+        use_csv,
+    )?;
     return Ok(config.output_format.formatted_string(&state));
 }
 
@@ -2538,7 +2546,7 @@ pub fn get_account_stake_state(
     stake_account: solana_sdk::account::Account,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
-    use_csv: bool, 
+    use_csv: bool,
 ) -> Result<CliStakeState, CliError> {
     if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
