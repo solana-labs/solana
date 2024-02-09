@@ -1442,10 +1442,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
         self.get_account_read_entry(pubkey)
-            .and_then(|entry| {
-                let slot_list = entry.slot_list();
+            .and_then(|locked_entry| {
+                let slot_list = locked_entry.slot_list();
                 self.latest_slot(ancestors, slot_list, max_root)
-                    .map(|found_index| AccountIndexGetResult::Found(entry, found_index))
+                    .map(|found_index| AccountIndexGetResult::Found(locked_entry, found_index))
             })
             .unwrap_or(AccountIndexGetResult::NotFound)
     }
