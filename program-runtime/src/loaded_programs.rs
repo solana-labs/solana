@@ -1085,26 +1085,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         }
     }
 
-    fn unload_program(&mut self, id: &Pubkey) {
-        if let Some(second_level) = self.entries.get_mut(id) {
-            for entry in second_level.slot_versions.iter_mut() {
-                if let Some(unloaded) = entry.to_unloaded() {
-                    *entry = Arc::new(unloaded);
-                    self.stats
-                        .evictions
-                        .entry(*id)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
-                }
-            }
-        }
-    }
-
-    pub fn unload_all_programs(&mut self) {
-        let keys = self.entries.keys().copied().collect::<Vec<Pubkey>>();
-        keys.iter().for_each(|key| self.unload_program(key));
-    }
-
     /// This function removes the given entry for the given program from the cache.
     /// The function expects that the program and entry exists in the cache. Otherwise it'll panic.
     fn unload_program_entry(&mut self, program: &Pubkey, remove_entry: &Arc<LoadedProgram>) {
