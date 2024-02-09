@@ -374,29 +374,14 @@ fn test_program_sbf_sanity() {
             ..
         } = create_genesis_config(50);
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank_client = BankClient::new(bank);
-=======
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
         let authority_keypair = Keypair::new();
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
         // Call user program
         let (_, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             program.0,
@@ -457,81 +442,6 @@ fn test_program_sbf_loader_deprecated() {
     }
 }
 
-/// This test is written with bpf_loader v2 specific instructions, which will be
-/// deprecated when `disable_bpf_loader_instructions` feature is activated.
-///
-/// The same test has been migrated to
-/// `test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader`  with a new version
-/// of bpf_upgradeable_loader!
-#[test]
-#[cfg(feature = "sbf_rust")]
-fn test_sol_alloc_free_no_longer_deployable() {
-    solana_logger::setup();
-
-    let program_keypair = Keypair::new();
-    let program_address = program_keypair.pubkey();
-
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-<<<<<<< HEAD
-    let mut bank = Bank::new_for_tests(&genesis_config);
-=======
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
-
-    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
-
-    let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
-    let mut program_account = AccountSharedData::new(1, elf.len(), &bpf_loader::id());
-    program_account
-        .data_as_mut_slice()
-        .get_mut(..)
-        .unwrap()
-        .copy_from_slice(&elf);
-    bank.store_account(&program_address, &program_account);
-
-    let finalize_tx = Transaction::new(
-        &[&mint_keypair, &program_keypair],
-        Message::new(
-            &[loader_instruction::finalize(
-                &program_keypair.pubkey(),
-                &bpf_loader::id(),
-            )],
-            Some(&mint_keypair.pubkey()),
-        ),
-        bank.last_blockhash(),
-    );
-
-    // Try and deploy a program that depends on _sol_alloc_free
-    assert_eq!(
-        bank.process_transaction(&finalize_tx).unwrap_err(),
-        TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
-    );
-}
-
-<<<<<<< HEAD
-    // Enable _sol_alloc_free syscall
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
-    bank.clear_program_cache();
-
-    // Try and finalize the program now that sol_alloc_free is re-enabled
-    assert!(bank.process_transaction(&finalize_tx).is_ok());
-    let new_slot = bank.slot() + 1;
-    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), new_slot);
-=======
 #[test]
 #[cfg(feature = "sbf_rust")]
 #[should_panic(
@@ -545,17 +455,11 @@ fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
-<<<<<<< HEAD
-    // disable _sol_alloc_free
-    bank.activate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
-=======
     // Populate loader account with `solana_sbf_rust_deprecated_loader` elf, which
     // depends on `sol_alloc_free_` syscall. This can be verified with
     // $ elfdump solana_sbf_rust_deprecated_loader.so
@@ -563,7 +467,6 @@ fn test_sol_alloc_free_no_longer_deployable_with_upgradeable_loader() {
     // In the symbol table, there is `sol_alloc_free_`.
     // In fact, `sol_alloc_free_` is called from sbf allocator, which is originated from
     // AccountInfo::realloc() in the program code.
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     // Expect that deployment to fail. B/C during deployment, there is an elf
     // verification step, which uses the runtime to look up relocatable symbols
@@ -603,28 +506,13 @@ fn test_program_sbf_duplicate_accounts() {
             ..
         } = create_genesis_config(50);
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
-=======
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         let mut bank_client = BankClient::new_shared(bank.clone());
         let authority_keypair = Keypair::new();
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             program,
@@ -725,19 +613,6 @@ fn test_program_sbf_error_handling() {
             ..
         } = create_genesis_config(50);
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank_client = BankClient::new(bank);
-        let (_, program_id) = load_program_and_advance_slot(
-            &mut bank_client,
-            &bpf_loader::id(),
-=======
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let mut bank_client = BankClient::new_shared(bank);
         let authority_keypair = Keypair::new();
@@ -745,7 +620,6 @@ fn test_program_sbf_error_handling() {
         let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             program,
@@ -849,28 +723,13 @@ fn test_return_data_and_log_data_syscall() {
             ..
         } = create_genesis_config(50);
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
-=======
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         let mut bank_client = BankClient::new_shared(bank.clone());
         let authority_keypair = Keypair::new();
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             program,
@@ -934,18 +793,7 @@ fn test_program_sbf_invoke_sanity() {
             ..
         } = create_genesis_config(50);
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        genesis_config
-            .accounts
-            .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank = Arc::new(bank);
-=======
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         let mut bank_client = BankClient::new_shared(bank.clone());
         let authority_keypair = Keypair::new();
 
@@ -965,11 +813,7 @@ fn test_program_sbf_invoke_sanity() {
 
         let (bank, noop_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             program.3,
@@ -1358,18 +1202,7 @@ fn test_program_sbf_program_id_spoofing() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
@@ -1382,11 +1215,7 @@ fn test_program_sbf_program_id_spoofing() {
 
     let (bank, malicious_system_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_spoof1_system",
@@ -1427,18 +1256,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
@@ -1451,11 +1269,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
 
     let (_bank, caller2_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_caller_access",
@@ -1484,28 +1298,13 @@ fn test_program_sbf_ro_modify() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
     let (bank, program_pubkey) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_ro_modify",
@@ -1556,19 +1355,6 @@ fn test_program_sbf_call_depth() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let (_, program_id) = load_program_and_advance_slot(
-        &mut bank_client,
-        &bpf_loader::id(),
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -1576,7 +1362,6 @@ fn test_program_sbf_call_depth() {
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_call_depth",
@@ -1607,19 +1392,6 @@ fn test_program_sbf_compute_budget() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let (_, program_id) = load_program_and_advance_slot(
-        &mut bank_client,
-        &bpf_loader::id(),
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -1627,7 +1399,6 @@ fn test_program_sbf_compute_budget() {
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_noop",
@@ -1752,28 +1523,13 @@ fn test_program_sbf_instruction_introspection() {
         ..
     } = create_genesis_config(50_000);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
     let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_instruction_introspection",
@@ -2525,19 +2281,6 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let invoke_and_return = load_program(
-        &bank_client,
-        &bpf_loader::id(),
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -2545,7 +2288,6 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
@@ -2675,10 +2417,6 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         bank.deactivate_feature(
             &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
         );
-<<<<<<< HEAD
-        bank.deactivate_feature(&feature_set::disable_bpf_loader_instructions::id());
-        let bank_client = BankClient::new(bank);
-=======
         let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
         let mut bank_client = BankClient::new_shared(bank);
         let authority_keypair = Keypair::new();
@@ -2690,7 +2428,6 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             &authority_keypair,
             program,
         );
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
         let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
         let instruction = Instruction::new_with_bytes(bpf_loader::id(), &[1], account_metas);
@@ -2713,28 +2450,13 @@ fn test_program_reads_from_program_account() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "read_program",
@@ -2757,28 +2479,12 @@ fn test_program_sbf_c_dup() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     let account_address = Pubkey::new_unique();
     let account = AccountSharedData::new_data(42, &[1_u8, 2, 3], &system_program::id()).unwrap();
     bank.store_account(&account_address, &account);
 
-<<<<<<< HEAD
-    let mut bank_client = BankClient::new(bank);
-
-    let (_, program_id) =
-        load_program_and_advance_slot(&mut bank_client, &bpf_loader::id(), &mint_keypair, "ser");
-=======
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
     let (_, program_id) = load_upgradeable_program_and_advance_slot(
@@ -2788,7 +2494,6 @@ fn test_program_sbf_c_dup() {
         &authority_keypair,
         "ser",
     );
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let account_metas = vec![
         AccountMeta::new_readonly(account_address, false),
         AccountMeta::new_readonly(account_address, false),
@@ -2810,19 +2515,6 @@ fn test_program_sbf_upgrade_via_cpi() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-    let invoke_and_return = load_program(
-        &bank_client,
-        &bpf_loader::id(),
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -2830,7 +2522,6 @@ fn test_program_sbf_upgrade_via_cpi() {
     let (_bank, invoke_and_return) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
@@ -2938,20 +2629,9 @@ fn test_program_sbf_set_upgrade_authority_via_cpi() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let mut bank_client = BankClient::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     // Deploy CPI invoker program
     let invoke_and_return = load_upgradeable_program_wrapper(
@@ -3218,28 +2898,13 @@ fn test_program_sbf_ro_account_modify() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
     let (bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_ro_account_modify",
@@ -3297,15 +2962,6 @@ fn test_program_sbf_realloc() {
         ..
     } = create_genesis_config(1_000_000_000_000);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
     for direct_mapping in [false, true] {
@@ -3322,11 +2978,7 @@ fn test_program_sbf_realloc() {
 
         let (bank, program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
@@ -3647,15 +3299,6 @@ fn test_program_sbf_realloc_invoke() {
     } = create_genesis_config(1_000_000_000_000);
     genesis_config.rent = Rent::default();
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
 
@@ -3673,11 +3316,7 @@ fn test_program_sbf_realloc_invoke() {
 
     let (bank, realloc_invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_realloc_invoke",
@@ -4182,18 +3821,7 @@ fn test_program_sbf_processed_inner_instruction() {
         ..
     } = create_genesis_config(50);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-=======
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank_client = BankClient::new_shared(bank.clone());
     let authority_keypair = Keypair::new();
 
@@ -4217,11 +3845,7 @@ fn test_program_sbf_processed_inner_instruction() {
     );
     let (_, invoke_and_return_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke_and_return",
@@ -4275,35 +3899,18 @@ fn test_program_fees() {
         ..
     } = create_genesis_config(500_000_000);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     genesis_config.fee_rate_governor = FeeRateGovernor::new(congestion_multiplier, 0);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let fee_structure =
         FeeStructure::new(0.000005, 0.0, vec![(200, 0.0000005), (1400000, 0.000005)]);
     bank.fee_structure = fee_structure.clone();
-<<<<<<< HEAD
-    let mut bank_client = BankClient::new(bank);
-=======
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_noop",
@@ -4374,15 +3981,6 @@ fn test_get_minimum_delegation() {
         ..
     } = create_genesis_config(100_123_456_789);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
     let mut bank_client = BankClient::new_shared(bank.clone());
@@ -4390,11 +3988,7 @@ fn test_get_minimum_delegation() {
 
     let (_bank, program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_get_minimum_delegation",
@@ -4460,13 +4054,6 @@ fn test_cpi_account_ownership_writability() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        feature_set.deactivate(&feature_set::disable_bpf_loader_instructions::id());
-=======
-
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         bank.feature_set = Arc::new(feature_set);
         let bank = Arc::new(bank);
         let mut bank_client = BankClient::new_shared(bank);
@@ -4488,11 +4075,7 @@ fn test_cpi_account_ownership_writability() {
 
         let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
@@ -4654,12 +4237,6 @@ fn test_cpi_account_data_updates() {
         if !direct_mapping {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        feature_set.deactivate(&feature_set::disable_bpf_loader_instructions::id());
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
 
         bank.feature_set = Arc::new(feature_set);
         let bank = Arc::new(bank);
@@ -4675,11 +4252,7 @@ fn test_cpi_account_data_updates() {
 
         let (bank, realloc_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             "solana_sbf_rust_realloc",
@@ -4815,13 +4388,6 @@ fn test_cpi_deprecated_loader_realloc() {
             feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
         }
 
-<<<<<<< HEAD
-        // deactivate `disable_bpf_loader_instructions` feature so that the program
-        // can be loaded, finalized and tested.
-        feature_set.deactivate(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         bank.feature_set = Arc::new(feature_set);
         let bank = Arc::new(bank);
 
@@ -4836,11 +4402,7 @@ fn test_cpi_deprecated_loader_realloc() {
 
         let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoke",
@@ -4936,15 +4498,6 @@ fn test_cpi_change_account_data_memory_allocation() {
         ..
     } = create_genesis_config(100_123_456_789);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     declare_process_instruction!(MockBuiltin, 42, |invoke_context| {
@@ -4993,11 +4546,7 @@ fn test_cpi_change_account_data_memory_allocation() {
 
     let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke",
@@ -5035,15 +4584,6 @@ fn test_cpi_invalid_account_info_pointers() {
         ..
     } = create_genesis_config(100_123_456_789);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     let bank = Bank::new_for_tests(&genesis_config);
     let bank = Arc::new(bank);
     let mut bank_client = BankClient::new_shared(bank);
@@ -5054,11 +4594,7 @@ fn test_cpi_invalid_account_info_pointers() {
 
     let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
         &mut bank_client,
-<<<<<<< HEAD
-        &bpf_loader::id(),
-=======
         bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
         &mint_keypair,
         &authority_keypair,
         "solana_sbf_rust_invoke",
@@ -5111,15 +4647,6 @@ fn test_deny_executable_write() {
         ..
     } = create_genesis_config(100_123_456_789);
 
-<<<<<<< HEAD
-    // deactivate `disable_bpf_loader_instructions` feature so that the program
-    // can be loaded, finalized and tested.
-    genesis_config
-        .accounts
-        .remove(&feature_set::disable_bpf_loader_instructions::id());
-
-=======
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
     for direct_mapping in [false, true] {
         let mut bank = Bank::new_for_tests(&genesis_config);
         let feature_set = Arc::make_mut(&mut bank.feature_set);
@@ -5134,11 +4661,7 @@ fn test_deny_executable_write() {
 
         let (_bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
             &mut bank_client,
-<<<<<<< HEAD
-            &bpf_loader::id(),
-=======
             bank_forks.as_ref(),
->>>>>>> 8869d0c8a0 (Upgrade sbf tests to use bpf loader v3 (#34691))
             &mint_keypair,
             &authority_keypair,
             "solana_sbf_rust_invoke",
