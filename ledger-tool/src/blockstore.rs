@@ -622,13 +622,12 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
 
-            match blockstore.slot_meta_iterator(0) {
-                Ok(metas) => {
+            let slot_meta_iterator = blockstore.slot_meta_iterator(0)?;
                     let output_format =
                         OutputFormat::from_matches(arg_matches, "output_format", false);
                     let all = arg_matches.is_present("all");
 
-                    let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                    let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
 
                     let slot_bounds = if slots.is_empty() {
                         SlotBounds::default()
@@ -648,11 +647,11 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
                         }
 
                         // Consider also rooted slots, if present
-                        if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                        let rooted_slot_iterator = blockstore.rooted_slot_iterator(0)?;
                             let mut first_rooted = None;
                             let mut last_rooted = None;
                             let mut total_rooted = 0;
-                            for (i, slot) in rooted.into_iter().enumerate() {
+                            for (i, slot) in rooted_slot_iterator.into_iter().enumerate() {
                                 if i == 0 {
                                     first_rooted = Some(slot);
                                 }
@@ -672,18 +671,13 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
                                 last: last_rooted,
                                 num_after_last_root: Some(count_past_root),
                             };
-                        }
+
                         bounds
                     };
 
                     // Print collected data
                     println!("{}", output_format.formatted_string(&slot_bounds));
-                }
-                Err(err) => {
-                    eprintln!("Unable to read the Ledger: {err:?}");
-                    std::process::exit(1);
-                }
-            };
+
         }
         ("copy", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
