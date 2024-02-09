@@ -904,13 +904,13 @@ fn do_blockstore_process_command(
                 Some(end_slot) => end_slot,
                 None => {
                     let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
-                        let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
-                        if slots.is_empty() {
-                            eprintln!("Purge range is empty");
-                            std::process::exit(1);
-                        }
-                        *slots.last().unwrap()
-                },
+                    let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
+                    if slots.is_empty() {
+                        eprintln!("Purge range is empty");
+                        std::process::exit(1);
+                    }
+                    *slots.last().unwrap()
+                }
             };
 
             if end_slot < start_slot {
