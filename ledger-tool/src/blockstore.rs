@@ -777,8 +777,7 @@ fn do_blockstore_process_command(
             let start_root = value_t!(arg_matches, "start_root", Slot).unwrap_or(0);
             let num_roots = value_t_or_exit!(arg_matches, "num_roots", usize);
 
-            let iter = blockstore
-                .rooted_slot_iterator(start_root)?;
+            let iter = blockstore.rooted_slot_iterator(start_root)?;
 
             let mut output: Box<dyn Write> = if let Some(path) = arg_matches.value_of("slot_list") {
                 match File::create(path) {
@@ -789,19 +788,16 @@ fn do_blockstore_process_command(
                 Box::new(stdout())
             };
 
-            for slot in iter.take(num_roots)
+            for slot in iter
+                .take(num_roots)
                 .take_while(|slot| *slot <= max_height as u64)
                 .collect::<Vec<_>>()
                 .into_iter()
-                .rev() {
-                    let blockhash = blockstore
-                        .get_slot_entries(slot, 0)?
-                        .last()
-                        .unwrap()
-                        .hash;
-
-                    writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
-                }
+                .rev()
+            {
+                let blockhash = blockstore.get_slot_entries(slot, 0)?.last().unwrap().hash;
+                writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
+            }
         }
         ("parse_full_frozen", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
