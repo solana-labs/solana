@@ -902,19 +902,14 @@ fn do_blockstore_process_command(
 
             let end_slot = match end_slot {
                 Some(end_slot) => end_slot,
-                None => match blockstore.slot_meta_iterator(start_slot) {
-                    Ok(metas) => {
-                        let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                None => {
+                    let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+                        let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
                         if slots.is_empty() {
                             eprintln!("Purge range is empty");
                             std::process::exit(1);
                         }
                         *slots.last().unwrap()
-                    }
-                    Err(err) => {
-                        eprintln!("Unable to read the Ledger: {err:?}");
-                        std::process::exit(1);
-                    }
                 },
             };
 
