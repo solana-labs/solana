@@ -619,13 +619,12 @@ fn do_blockstore_process_command(
             &crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
         )?,
         ("bounds", Some(arg_matches)) => {
-            let blockstore =
-                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
-
-            let slot_meta_iterator = blockstore.slot_meta_iterator(0)?;
             let output_format = OutputFormat::from_matches(arg_matches, "output_format", false);
             let all = arg_matches.is_present("all");
 
+            let blockstore =
+                crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
+            let slot_meta_iterator = blockstore.slot_meta_iterator(0)?;
             let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
 
             let slot_bounds = if slots.is_empty() {
