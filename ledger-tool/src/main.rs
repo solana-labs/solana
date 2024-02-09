@@ -2047,7 +2047,19 @@ fn main() {
                         }
                     }
 
+                    let pre_capitalization = bank.capitalization();
+
                     bank.set_capitalization();
+
+                    let post_capitalization = bank.capitalization();
+                    if pre_capitalization != post_capitalization {
+                        let amount = if pre_capitalization > post_capitalization {
+                            format!("-{}", pre_capitalization - post_capitalization)
+                        } else {
+                            (post_capitalization - pre_capitalization).to_string()
+                        };
+                        warn!("Capitalization change: {amount} lamports");
+                    }
 
                     let bank = if let Some(warp_slot) = warp_slot {
                         // need to flush the write cache in order to use Storages to calculate
