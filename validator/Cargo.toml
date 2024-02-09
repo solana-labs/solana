@@ -58,6 +58,7 @@ solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
+solana-svm = { workspace = true }
 solana-test-validator = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }

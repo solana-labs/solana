@@ -63,6 +63,10 @@ pub enum ProgramError {
     InvalidAccountOwner,
     #[error("Program arithmetic overflowed")]
     ArithmeticOverflow,
+    #[error("Account is immutable")]
+    Immutable,
+    #[error("Incorrect authority provided")]
+    IncorrectAuthority,
 }
 
 pub trait PrintProgramError {
@@ -113,6 +117,8 @@ impl PrintProgramError for ProgramError {
             }
             Self::InvalidAccountOwner => msg!("Error: InvalidAccountOwner"),
             Self::ArithmeticOverflow => msg!("Error: ArithmeticOverflow"),
+            Self::Immutable => msg!("Error: Immutable"),
+            Self::IncorrectAuthority => msg!("Error: IncorrectAuthority"),
         }
     }
 }
@@ -149,6 +155,8 @@ pub const MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED: u64 = to_builtin!(21);
 pub const BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS: u64 = to_builtin!(22);
 pub const INVALID_ACCOUNT_OWNER: u64 = to_builtin!(23);
 pub const ARITHMETIC_OVERFLOW: u64 = to_builtin!(24);
+pub const IMMUTABLE: u64 = to_builtin!(25);
+pub const INCORRECT_AUTHORITY: u64 = to_builtin!(26);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivalent to InstructionError
@@ -187,6 +195,8 @@ impl From<ProgramError> for u64 {
             }
             ProgramError::InvalidAccountOwner => INVALID_ACCOUNT_OWNER,
             ProgramError::ArithmeticOverflow => ARITHMETIC_OVERFLOW,
+            ProgramError::Immutable => IMMUTABLE,
+            ProgramError::IncorrectAuthority => INCORRECT_AUTHORITY,
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -227,6 +237,8 @@ impl From<u64> for ProgramError {
             }
             INVALID_ACCOUNT_OWNER => Self::InvalidAccountOwner,
             ARITHMETIC_OVERFLOW => Self::ArithmeticOverflow,
+            IMMUTABLE => Self::Immutable,
+            INCORRECT_AUTHORITY => Self::IncorrectAuthority,
             _ => Self::Custom(error as u32),
         }
     }
@@ -267,6 +279,8 @@ impl TryFrom<InstructionError> for ProgramError {
             }
             Self::Error::InvalidAccountOwner => Ok(Self::InvalidAccountOwner),
             Self::Error::ArithmeticOverflow => Ok(Self::ArithmeticOverflow),
+            Self::Error::Immutable => Ok(Self::Immutable),
+            Self::Error::IncorrectAuthority => Ok(Self::IncorrectAuthority),
             _ => Err(error),
         }
     }
@@ -305,6 +319,8 @@ where
             }
             INVALID_ACCOUNT_OWNER => Self::InvalidAccountOwner,
             ARITHMETIC_OVERFLOW => Self::ArithmeticOverflow,
+            IMMUTABLE => Self::Immutable,
+            INCORRECT_AUTHORITY => Self::IncorrectAuthority,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {

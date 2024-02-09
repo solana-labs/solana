@@ -28,9 +28,8 @@ use {
 /// an error be consistent across software versions.  For example, it is
 /// dangerous to include error strings from 3rd party crates because they could
 /// change at any time and changes to them are difficult to detect.
-#[derive(
-    Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,
-)]
+#[cfg_attr(not(target_os = "solana"), derive(AbiExample, AbiEnumVisitor))]
+#[derive(Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone)]
 pub enum InstructionError {
     /// Deprecated! Use CustomError instead!
     /// The program instruction returned an error

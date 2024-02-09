@@ -1,5 +1,6 @@
 ---
-title: Command Line Wallets
+title: Solana Wallets with the CLI
+pagination_label: Command Line Wallets
 sidebar_label: Overview
 sidebar_position: 0
 ---

@@ -1,7 +1,8 @@
 ---
-title: Validator Requirements
-sidebar_label: Requirements
+title: Solana Validator Requirements
 sidebar_position: 3
+sidebar_label: Requirements
+pagination_label: Requirements to Operate a Validator
 ---
 
 ## Minimum SOL requirements

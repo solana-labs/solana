@@ -1,7 +1,8 @@
 ---
 title: Solana CLI Tool Suite
-sidebar_label: Overview
 sidebar_position: 0
+sidebar_label: Overview
+pagination_label: Solana CLI Tool Suite
 ---
 
 In this section, we will describe how to use the Solana command-line tools to
@@ -19,6 +20,6 @@ secure access to your Solana accounts.
 To get started using the Solana Command Line (CLI) tools:
 
 - [Install the Solana CLI Tool Suite](./install.md)
-- [Choose a Cluster](./examples/choose-a-cluster.md)
-- [Create a Wallet](./wallets/index.md)
 - [Introduction to our CLI conventions](./intro.md)
+- [Create a Wallet using the CLI](./wallets/index.md)
+- [Choose a Cluster to connect to using the CLI](./examples/choose-a-cluster.md)

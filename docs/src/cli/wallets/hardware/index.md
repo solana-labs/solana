@@ -1,5 +1,6 @@
 ---
 title: Using Hardware Wallets in the Solana CLI
+pagination_label: "Using Hardware Wallets in the Solana CLI"
 sidebar_label: Using in the Solana CLI
 sidebar_position: 0
 ---

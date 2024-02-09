@@ -1,5 +1,7 @@
 ---
-title: Send and Receive Tokens
+title: Send and Receive Tokens with the Solana CLI
+pagination_label: "Solana CLI: Send and Receive Tokens"
+sidebar_label: Send and Receive Tokens
 ---
 
 This page describes how to receive and send SOL tokens using the command line

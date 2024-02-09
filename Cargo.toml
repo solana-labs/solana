@@ -100,6 +100,7 @@ members = [
     "storage-bigtable/build-proto",
     "storage-proto",
     "streamer",
+    "svm",
     "test-validator",
     "thin-client",
     "tokens",
@@ -163,7 +164,7 @@ bs58 = "0.4.0"
 bv = "0.11.1"
 byte-unit = "4.0.19"
 bytecount = "0.6.7"
-bytemuck = "1.14.1"
+bytemuck = "1.14.2"
 byteorder = "1.5.0"
 bytes = "1.5"
 bzip2 = "0.4.4"
@@ -212,7 +213,7 @@ gethostname = "0.2.3"
 getrandom = "0.2.10"
 goauth = "0.13.1"
 hex = "0.4.3"
-hidapi = { version = "2.5.1", default-features = false }
+hidapi = { version = "2.6.0", default-features = false }
 histogram = "0.6.9"
 hmac = "0.12.1"
 http = "0.2.11"
@@ -221,13 +222,13 @@ hyper = "0.14.28"
 hyper-proxy = "0.9.1"
 im = "15.1.0"
 index_list = "0.2.11"
-indexmap = "2.1.0"
+indexmap = "2.2.2"
 indicatif = "0.17.7"
 itertools = "0.10.5"
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = [
     "unprefixed_malloc_on_supported_platforms",
 ] }
-js-sys = "0.3.67"
+js-sys = "0.3.68"
 json5 = "0.4.1"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
@@ -237,7 +238,7 @@ jsonrpc-ipc-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
 lazy_static = "1.4.0"
-libc = "0.2.152"
+libc = "0.2.153"
 libloading = "0.7.4"
 libsecp256k1 = "0.6.0"
 light-poseidon = "0.2.0"
@@ -297,7 +298,7 @@ serde_bytes = "0.11.14"
 serde_derive = "1.0.103"
 serde_json = "1.0.113"
 serde_with = { version = "2.3.3", default-features = false }
-serde_yaml = "0.9.30"
+serde_yaml = "0.9.31"
 serial_test = "2.0.0"
 sha2 = "0.10.8"
 sha3 = "0.10.4"
@@ -373,6 +374,7 @@ solana-stake-program = { path = "programs/stake", version = "=1.18.0" }
 solana-storage-bigtable = { path = "storage-bigtable", version = "=1.18.0" }
 solana-storage-proto = { path = "storage-proto", version = "=1.18.0" }
 solana-streamer = { path = "streamer", version = "=1.18.0" }
+solana-svm = { path = "svm", version = "=1.18.0" }
 solana-system-program = { path = "programs/system", version = "=1.18.0" }
 solana-test-validator = { path = "test-validator", version = "=1.18.0" }
 solana-thin-client = { path = "thin-client", version = "=1.18.0" }
@@ -408,7 +410,7 @@ sysctl = "0.4.6"
 systemstat = "0.2.3"
 tar = "0.4.40"
 tarpc = "0.29.0"
-tempfile = "3.9.0"
+tempfile = "3.10.0"
 test-case = "3.3.1"
 thiserror = "1.0.56"
 tiny-bip39 = "0.8.2"
@@ -418,7 +420,7 @@ tokio-serde = "0.8"
 tokio-stream = "0.1.14"
 tokio-tungstenite = "0.20.1"
 tokio-util = "0.6"
-toml = "0.8.8"
+toml = "0.8.10"
 tonic = "0.9.2"
 tonic-build = "0.9.2"
 trees = "0.4.2"

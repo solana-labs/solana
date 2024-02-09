@@ -6,6 +6,7 @@ use {
         Deserialize, Serialize,
     },
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_accounts_db::accounts_index::ScanConfig,
     solana_cli_output::{
         display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
         VerboseDisplay,
@@ -572,7 +573,14 @@ pub struct AccountsOutputStreamer {
     output_format: OutputFormat,
 }
 
+pub enum AccountsOutputMode {
+    All,
+    Individual(Vec<Pubkey>),
+    Program(Pubkey),
+}
+
 pub struct AccountsOutputConfig {
+    pub mode: AccountsOutputMode,
     pub include_sysvars: bool,
     pub include_account_contents: bool,
     pub include_account_data: bool,
@@ -608,7 +616,10 @@ impl AccountsOutputStreamer {
                     .serialize_field("summary", &*self.total_accounts_stats.borrow())
                     .map_err(|err| format!("unable to serialize accounts summary: {err}"))?;
                 SerializeStruct::end(struct_serializer)
-                    .map_err(|err| format!("unable to end serialization: {err}"))
+                    .map_err(|err| format!("unable to end serialization: {err}"))?;
+                // The serializer doesn't give us a trailing newline so do it ourselves
+                println!();
+                Ok(())
             }
             _ => {
                 // The compiler needs a placeholder type to satisfy the generic
@@ -637,6 +648,33 @@ impl AccountsScanner {
             && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
     }
 
+    fn maybe_output_account<S>(
+        &self,
+        seq_serializer: &mut Option<S>,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+        slot: Option<Slot>,
+        cli_account_new_config: &CliAccountNewConfig,
+    ) where
+        S: SerializeSeq,
+    {
+        if self.config.include_account_contents {
+            if let Some(serializer) = seq_serializer {
+                let cli_account =
+                    CliAccount::new_with_config(pubkey, account, cli_account_new_config);
+                serializer.serialize_element(&cli_account).unwrap();
+            } else {
+                output_account(
+                    pubkey,
+                    account,
+                    slot,
+                    self.config.include_account_data,
+                    self.config.account_data_encoding,
+                );
+            }
+        }
+    }
+
     pub fn output<S>(&self, seq_serializer: &mut Option<S>)
     where
         S: SerializeSeq,
@@ -654,26 +692,53 @@ impl AccountsScanner {
                 .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
             {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
-
-                if self.config.include_account_contents {
-                    if let Some(serializer) = seq_serializer {
-                        let cli_account =
-                            CliAccount::new_with_config(pubkey, &account, &cli_account_new_config);
-                        serializer.serialize_element(&cli_account).unwrap();
-                    } else {
-                        output_account(
-                            pubkey,
-                            &account,
-                            Some(slot),
-                            self.config.include_account_data,
-                            self.config.account_data_encoding,
-                        );
-                    }
-                }
+                self.maybe_output_account(
+                    seq_serializer,
+                    pubkey,
+                    &account,
+                    Some(slot),
+                    &cli_account_new_config,
+                );
             }
         };
 
-        self.bank.scan_all_accounts(scan_func).unwrap();
+        match &self.config.mode {
+            AccountsOutputMode::All => {
+                self.bank.scan_all_accounts(scan_func).unwrap();
+            }
+            AccountsOutputMode::Individual(pubkeys) => pubkeys.iter().for_each(|pubkey| {
+                if let Some((account, slot)) = self
+                    .bank
+                    .get_account_modified_slot_with_fixed_root(pubkey)
+                    .filter(|(account, _)| self.should_process_account(account, pubkey))
+                {
+                    total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+                    self.maybe_output_account(
+                        seq_serializer,
+                        pubkey,
+                        &account,
+                        Some(slot),
+                        &cli_account_new_config,
+                    );
+                }
+            }),
+            AccountsOutputMode::Program(program_pubkey) => self
+                .bank
+                .get_program_accounts(program_pubkey, &ScanConfig::default())
+                .unwrap()
+                .iter()
+                .filter(|(pubkey, account)| self.should_process_account(account, pubkey))
+                .for_each(|(pubkey, account)| {
+                    total_accounts_stats.accumulate_account(pubkey, account, rent_collector);
+                    self.maybe_output_account(
+                        seq_serializer,
+                        pubkey,
+                        account,
+                        None,
+                        &cli_account_new_config,
+                    );
+                }),
+        }
     }
 }
 

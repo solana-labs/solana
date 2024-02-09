@@ -124,9 +124,9 @@ pub enum PrioritizationFeeError {
     // minimum fees.
     FailGetTransactionAccountLocks,
 
-    // Not able to read priority details, including compute-unit price, from transaction.
+    // Not able to read compute budget details, including compute-unit price, from transaction.
     // Compute-unit price is required to update block minimum fees.
-    FailGetTransactionPriorityDetails,
+    FailGetComputeBudgetDetails,
 
     // Block is already finalized, trying to finalize it again is usually unexpected
     BlockIsAlreadyFinalized,

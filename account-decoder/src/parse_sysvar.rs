@@ -9,7 +9,6 @@ use {
     bv::BitVec,
     solana_sdk::{
         clock::{Clock, Epoch, Slot, UnixTimestamp},
-        epoch_rewards_partition_data::EpochRewardsPartitionDataVersion,
         epoch_schedule::EpochSchedule,
         pubkey::Pubkey,
         rent::Rent,
@@ -97,24 +96,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                 .ok()
                 .map(SysvarAccountType::EpochRewards)
         } else {
-            // EpochRewards PartitionData accounts are owned by the sysvar
-            // program, but have dynamically generated addresses. Test on
-            // whether account content deserializes properly.
-            if let Ok(epoch_rewards_partition_data) =
-                deserialize::<EpochRewardsPartitionDataVersion>(data)
-            {
-                let EpochRewardsPartitionDataVersion::V0(partition_data) =
-                    epoch_rewards_partition_data;
-                Some(SysvarAccountType::EpochRewardsPartitionData(
-                    UiEpochRewardsPartitionData {
-                        version: 0,
-                        num_partitions: partition_data.num_partitions as u64,
-                        parent_blockhash: partition_data.parent_blockhash.to_string(),
-                    },
-                ))
-            } else {
-                None
-            }
+            None
         }
     };
     parsed_account.ok_or(ParseAccountError::AccountNotParsable(
@@ -138,7 +120,6 @@ pub enum SysvarAccountType {
     StakeHistory(Vec<UiStakeHistoryEntry>),
     LastRestartSlot(UiLastRestartSlot),
     EpochRewards(EpochRewards),
-    EpochRewardsPartitionData(UiEpochRewardsPartitionData),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -256,14 +237,6 @@ pub struct UiStakeHistoryEntry {
 #[serde(rename_all = "camelCase")]
 pub struct UiLastRestartSlot {
     pub last_restart_slot: Slot,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct UiEpochRewardsPartitionData {
-    pub version: u32,
-    pub num_partitions: u64,
-    pub parent_blockhash: String,
 }
 
 #[cfg(test)]

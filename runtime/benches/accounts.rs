@@ -16,7 +16,6 @@ use {
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
     },
     solana_runtime::bank::*,
     solana_sdk::{
@@ -25,6 +24,7 @@ use {
         hash::Hash,
         lamports::LamportsError,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
         sysvar::epoch_schedule::EpochSchedule,
     },
     std::{

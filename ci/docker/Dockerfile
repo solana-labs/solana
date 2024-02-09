@@ -1,10 +1,12 @@
 FROM ubuntu:20.04
 
 ARG \
-  RUST_VERSION=1.75.0 \
+  RUST_VERSION= \
+  RUST_NIGHTLY_VERSION= \
   GOLANG_VERSION=1.21.3 \
   NODE_MAJOR=18 \
-  SCCACHE_VERSION=v0.5.4
+  SCCACHE_VERSION=v0.5.4 \
+  GRCOV_VERSION=v0.8.18
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -21,7 +23,10 @@ ENV \
   CARGO_HOME=/usr/local/cargo \
   PATH="$PATH:/usr/local/cargo/bin"
 
-RUN apt-get update && \
+RUN \
+  if [ -z "$RUST_VERSION" ]; then echo "ERROR: The RUST_VERSION argument is required!" && exit 1; fi && \
+  if [ -z "$RUST_NIGHTLY_VERSION" ]; then echo "ERROR: The RUST_NIGHTLY_VERSION argument is required!" && exit 1; fi && \
+  apt-get update && \
   apt-get install --no-install-recommends -y \
   # basic
   tzdata \
@@ -65,6 +70,9 @@ RUN apt-get update && \
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs/ | sh -s -- --no-modify-path --profile minimal --default-toolchain $RUST_VERSION -y && \
   rustup component add rustfmt && \
   rustup component add clippy && \
+  rustup install $RUST_NIGHTLY_VERSION && \
+  rustup component add clippy --toolchain=$RUST_NIGHTLY_VERSION && \
+  rustup component add rustfmt --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup target add wasm32-unknown-unknown && \
   cargo install cargo-audit && \
   cargo install cargo-hack && \
@@ -74,6 +82,9 @@ RUN apt-get update && \
   cargo install svgbob_cli && \
   cargo install wasm-pack && \
   cargo install rustfilt && \
+  rustup show && \
+  rustc --version && \
+  cargo --version && \
   chmod -R a+w $CARGO_HOME $RUSTUP_HOME && \
   rm -rf $CARGO_HOME/registry && \
   # sccache
@@ -101,5 +112,14 @@ RUN apt-get update && \
   chmod -R a+w /.config && \
   mkdir /.npm && \
   chmod -R a+w /.npm && \
+  # grcov
+  curl -LOsS "https://github.com/mozilla/grcov/releases/download/$GRCOV_VERSION/grcov-x86_64-unknown-linux-musl.tar.bz2" && \
+  tar -xf grcov-x86_64-unknown-linux-musl.tar.bz2 && \
+  mv ./grcov $CARGO_HOME/bin && \
+  rm grcov-x86_64-unknown-linux-musl.tar.bz2 && \
+  # codecov
+  curl -Os https://uploader.codecov.io/latest/linux/codecov && \
+  chmod +x codecov && \
+  mv codecov /usr/bin && \
   # clean lists
   rm -rf /var/lib/apt/lists/*

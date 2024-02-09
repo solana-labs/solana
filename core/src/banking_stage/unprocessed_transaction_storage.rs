@@ -17,13 +17,13 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
     solana_measure::{measure, measure_us},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
         saturating_add_assign, transaction::SanitizedTransaction,
     },
+    solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
         collections::HashMap,
         sync::{atomic::Ordering, Arc},
@@ -282,6 +282,24 @@ impl UnprocessedTransactionStorage {
         }
     }
 
+    pub fn get_min_priority(&self) -> Option<u64> {
+        match self {
+            Self::VoteStorage(_) => None,
+            Self::LocalTransactionStorage(transaction_storage) => {
+                transaction_storage.get_min_compute_unit_price()
+            }
+        }
+    }
+
+    pub fn get_max_priority(&self) -> Option<u64> {
+        match self {
+            Self::VoteStorage(_) => None,
+            Self::LocalTransactionStorage(transaction_storage) => {
+                transaction_storage.get_max_compute_unit_price()
+            }
+        }
+    }
+
     /// Returns the maximum number of packets a receive should accept
     pub fn max_receive_size(&self) -> usize {
         match self {
@@ -529,6 +547,14 @@ impl ThreadLocalUnprocessedPackets {
         self.unprocessed_packet_batches.len()
     }
 
+    pub fn get_min_compute_unit_price(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_min_compute_unit_price()
+    }
+
+    pub fn get_max_compute_unit_price(&self) -> Option<u64> {
+        self.unprocessed_packet_batches.get_max_compute_unit_price()
+    }
+
     fn max_receive_size(&self) -> usize {
         self.unprocessed_packet_batches.capacity() - self.unprocessed_packet_batches.len()
     }
@@ -749,7 +775,6 @@ impl ThreadLocalUnprocessedPackets {
                 })
                 .unzip();
 
-        inc_new_counter_info!("banking_stage-packet_conversion", 1);
         let filtered_count = packets_to_process.len().saturating_sub(transactions.len());
         saturating_add_assign!(*total_dropped_packets, filtered_count);
 

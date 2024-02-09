@@ -2211,7 +2211,6 @@ fn create_snapshot_to_hard_fork(
                 .unwrap()
                 .0,
         ],
-        None,
         Some(&snapshot_config),
         process_options,
         None,
@@ -5609,11 +5608,11 @@ fn test_invalid_forks_persisted_on_restart() {
             .entries_to_shreds(
                 &majority_keypair,
                 &entries,
-                true,  // is_full_slot
-                None,  // chained_merkle_root
-                0,     // next_shred_index,
-                0,     // next_code_index
-                false, // merkle_variant
+                true, // is_full_slot
+                None, // chained_merkle_root
+                0,    // next_shred_index,
+                0,    // next_code_index
+                true, // merkle_variant
                 &ReedSolomonCache::default(),
                 &mut ProcessShredsStats::default(),
             )

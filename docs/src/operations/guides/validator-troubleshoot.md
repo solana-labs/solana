@@ -1,5 +1,8 @@
 ---
-title: Troubleshooting
+title: "Validator Guide: Troubleshooting"
+sidebar_position: 4
+sidebar_label: Troubleshooting
+pagination_label: "Validator Guides: Troubleshooting"
 ---
 
 There is a `#validator-support` Discord channel available to reach other

@@ -11,9 +11,11 @@ use {
         accounts_db::{AccountStorageEntry, AccountsDb},
         accounts_hash::{AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
     },
-    solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
+    solana_sdk::{
+        clock::Slot, feature_set, rent_collector::RentCollector,
+        sysvar::epoch_schedule::EpochSchedule,
+    },
     std::{
         path::{Path, PathBuf},
         sync::Arc,

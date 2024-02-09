@@ -1,5 +1,7 @@
 ---
-title: Connecting to a Cluster
+title: Connecting to a Cluster with the Solana CLI
+pagination_label: "Solana CLI: Connecting to a Cluster"
+sidebar_label: Connecting to a Cluster
 ---
 
 See [Solana Clusters](../../clusters/available.md) for general information about the
