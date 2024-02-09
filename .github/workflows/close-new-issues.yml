@@ -14,7 +14,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           COMMENT: >
-            This repository is no longer in use. Please re-open this 
+            This repository is no longer in use. Please re-open this
             issue in the agave repo: https://github.com/anza-xyz/agave
         run: >
           gh issue close "$ISSUE_NUMBER" --comment "$COMMENT"
