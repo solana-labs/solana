@@ -239,10 +239,8 @@ fn get_latest_optimistic_slots(
 fn print_blockstore_file_metadata(
     blockstore: &Blockstore,
     file_name: &Option<&str>,
-) -> Result<(), String> {
-    let live_files = blockstore
-        .live_files_metadata()
-        .map_err(|err| format!("{err:?}"))?;
+) -> Result<(), Box<dyn std::error::Error>> {
+    let live_files = blockstore.live_files_metadata()?;
 
     // All files under live_files_metadata are prefixed with "/".
     let sst_file_name = file_name.as_ref().map(|name| format!("/{name}"));
@@ -267,7 +265,8 @@ fn print_blockstore_file_metadata(
     if sst_file_name.is_some() {
         return Err(format!(
             "Failed to find or load the metadata of the specified file {file_name:?}"
-        ));
+        )
+        .into());
     }
     Ok(())
 }
