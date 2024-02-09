@@ -42,13 +42,13 @@ fn analyze_column<
 >(
     db: &Database,
     name: &str,
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut key_len: u64 = 0;
     let mut key_tot: u64 = 0;
     let mut val_hist = histogram::Histogram::new();
     let mut val_tot: u64 = 0;
     let mut row_hist = histogram::Histogram::new();
-    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
+    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start)? {
         // Key length is fixed, only need to calculate it once
         if key_len == 0 {
             key_len = C::key(key).len() as u64;
@@ -108,31 +108,32 @@ fn analyze_column<
         })
     };
 
-    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+    println!("{}", serde_json::to_string_pretty(&json_result)?);
+    Ok(())
 }
 
-fn analyze_storage(database: &Database) {
+fn analyze_storage(database: &Database) -> Result<(), Box<dyn std::error::Error>> {
     use solana_ledger::blockstore_db::columns::*;
-    analyze_column::<SlotMeta>(database, "SlotMeta");
-    analyze_column::<Orphans>(database, "Orphans");
-    analyze_column::<DeadSlots>(database, "DeadSlots");
-    analyze_column::<DuplicateSlots>(database, "DuplicateSlots");
-    analyze_column::<ErasureMeta>(database, "ErasureMeta");
-    analyze_column::<BankHash>(database, "BankHash");
-    analyze_column::<Root>(database, "Root");
-    analyze_column::<Index>(database, "Index");
-    analyze_column::<ShredData>(database, "ShredData");
-    analyze_column::<ShredCode>(database, "ShredCode");
-    analyze_column::<TransactionStatus>(database, "TransactionStatus");
-    analyze_column::<AddressSignatures>(database, "AddressSignatures");
-    analyze_column::<TransactionMemos>(database, "TransactionMemos");
-    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
-    analyze_column::<Rewards>(database, "Rewards");
-    analyze_column::<Blocktime>(database, "Blocktime");
-    analyze_column::<PerfSamples>(database, "PerfSamples");
-    analyze_column::<BlockHeight>(database, "BlockHeight");
-    analyze_column::<ProgramCosts>(database, "ProgramCosts");
-    analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
+    analyze_column::<SlotMeta>(database, "SlotMeta")?;
+    analyze_column::<Orphans>(database, "Orphans")?;
+    analyze_column::<DeadSlots>(database, "DeadSlots")?;
+    analyze_column::<DuplicateSlots>(database, "DuplicateSlots")?;
+    analyze_column::<ErasureMeta>(database, "ErasureMeta")?;
+    analyze_column::<BankHash>(database, "BankHash")?;
+    analyze_column::<Root>(database, "Root")?;
+    analyze_column::<Index>(database, "Index")?;
+    analyze_column::<ShredData>(database, "ShredData")?;
+    analyze_column::<ShredCode>(database, "ShredCode")?;
+    analyze_column::<TransactionStatus>(database, "TransactionStatus")?;
+    analyze_column::<AddressSignatures>(database, "AddressSignatures")?;
+    analyze_column::<TransactionMemos>(database, "TransactionMemos")?;
+    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex")?;
+    analyze_column::<Rewards>(database, "Rewards")?;
+    analyze_column::<Blocktime>(database, "Blocktime")?;
+    analyze_column::<PerfSamples>(database, "PerfSamples")?;
+    analyze_column::<BlockHeight>(database, "BlockHeight")?;
+    analyze_column::<ProgramCosts>(database, "ProgramCosts")?;
+    analyze_column::<OptimisticSlots>(database, "OptimisticSlots")
 }
 
 fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
@@ -615,7 +616,7 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
         ("analyze-storage", Some(arg_matches)) => {
             analyze_storage(
                 &crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary).db(),
-            );
+            )?
         }
         ("bounds", Some(arg_matches)) => {
             let blockstore =
