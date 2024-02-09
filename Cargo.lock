@@ -7927,9 +7927,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc160c39ee33d920c1b4985537ec037bc0e1b53e192dae98e363aca55aaf141"
+checksum = "b9fec83597cf7be923c5c3bdfd2fcc08cdfacd2eeb6c4e413da06b6916f50827"
 dependencies = [
  "arrayref",
  "bytemuck",
