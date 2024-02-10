@@ -651,15 +651,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
-        let index = slot_versions.binary_search_by(|at| {
+        match slot_versions.binary_search_by(|at| {
             at.effective_slot
                 .cmp(&entry.effective_slot)
                 .then(at.deployment_slot.cmp(&entry.deployment_slot))
-        });
-        if let Some(existing) = index.and_then(|index| slot_versions.get_mut(index)) {
-            if existing.deployment_slot == entry.deployment_slot
-                && existing.effective_slot == entry.effective_slot
-            {
+        }) {
+            Ok(index) => {
+                let existing = slot_versions.get_mut(index).unwrap();
                 if std::mem::discriminant(&existing.program)
                     != std::mem::discriminant(&entry.program)
                 {
@@ -673,18 +671,20 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         Ordering::Relaxed,
                     );
                     self.stats.reloads.fetch_add(1, Ordering::Relaxed);
+                    *existing = entry.clone();
+                    (false, entry)
                 } else {
                     // Something is wrong, I can feel it ...
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                    return (true, existing.clone());
+                    (true, existing.clone())
                 }
-                *existing = entry.clone();
-                return (false, entry);
+            }
+            Err(index) => {
+                self.stats.insertions.fetch_add(1, Ordering::Relaxed);
+                slot_versions.insert(index, entry.clone());
+                (false, entry)
             }
         }
-        self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-        slot_versions.insert(index.unwrap_or(slot_versions.len()), entry.clone());
-        (false, entry)
     }
 
     /// Assign the program `entry` to the given `key` in the cache.
