@@ -10,6 +10,7 @@ pub mod meta;
 pub mod mmap_utils;
 pub mod owners;
 pub mod readable;
+mod test_utils;
 pub mod writer;
 
 use {
@@ -160,17 +161,12 @@ impl TieredStorage {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::{StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
+        crate::account_storage::meta::StoredMetaWriteVersion,
         footer::{TieredStorageFooter, TieredStorageMagicNumber},
         hot::HOT_FORMAT,
         index::IndexOffset,
-        owners::OWNER_NO_OWNER,
         solana_sdk::{
-            account::{Account, AccountSharedData},
-            clock::Slot,
-            hash::Hash,
-            pubkey::Pubkey,
-            rent_collector::RENT_EXEMPT_RENT_EPOCH,
+            account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
         std::{
@@ -178,6 +174,7 @@ mod tests {
             mem::ManuallyDrop,
         },
         tempfile::tempdir,
+        test_utils::{create_test_account, verify_test_account},
     };
 
     impl TieredStorage {
@@ -310,58 +307,6 @@ mod tests {
         assert!(!tiered_storage_path.try_exists().unwrap());
     }
 
-    /// Create a test account based on the specified seed.
-    fn create_account(seed: u64) -> (StoredMeta, AccountSharedData) {
-        let data_byte = seed as u8;
-        let account = Account {
-            lamports: seed,
-            data: std::iter::repeat(data_byte).take(seed as usize).collect(),
-            owner: Pubkey::new_unique(),
-            executable: seed % 2 > 0,
-            rent_epoch: if seed % 3 > 0 {
-                seed
-            } else {
-                RENT_EXEMPT_RENT_EPOCH
-            },
-        };
-
-        let stored_meta = StoredMeta {
-            write_version_obsolete: StoredMetaWriteVersion::default(),
-            pubkey: Pubkey::new_unique(),
-            data_len: seed,
-        };
-        (stored_meta, AccountSharedData::from(account))
-    }
-
-    fn verify_account(
-        stored_meta: &StoredAccountMeta<'_>,
-        account: Option<&impl ReadableAccount>,
-        account_hash: &AccountHash,
-    ) {
-        let (lamports, owner, data, executable, account_hash) = account
-            .map(|acc| {
-                (
-                    acc.lamports(),
-                    acc.owner(),
-                    acc.data(),
-                    acc.executable(),
-                    // only persist rent_epoch for those rent-paying accounts
-                    Some(*account_hash),
-                )
-            })
-            .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
-
-        assert_eq!(stored_meta.lamports(), lamports);
-        assert_eq!(stored_meta.data().len(), data.len());
-        assert_eq!(stored_meta.data(), data);
-        assert_eq!(stored_meta.executable(), executable);
-        assert_eq!(stored_meta.owner(), owner);
-        assert_eq!(
-            *stored_meta.hash(),
-            account_hash.unwrap_or(AccountHash(Hash::default()))
-        );
-    }
-
     /// The helper function for all write_accounts tests.
     /// Currently only supports hot accounts.
     fn do_test_write_accounts(
@@ -371,7 +316,7 @@ mod tests {
     ) {
         let accounts: Vec<_> = account_data_sizes
             .iter()
-            .map(|size| create_account(*size))
+            .map(|size| create_test_account(*size))
             .collect();
 
         let account_refs: Vec<_> = accounts
@@ -415,7 +360,7 @@ mod tests {
         let mut verified_accounts = HashSet::new();
         while let Some((stored_meta, next)) = reader.get_account(index_offset).unwrap() {
             if let Some((account, account_hash)) = expected_accounts_map.get(stored_meta.pubkey()) {
-                verify_account(&stored_meta, *account, account_hash);
+                verify_test_account(&stored_meta, *account, stored_meta.pubkey(), account_hash);
                 verified_accounts.insert(stored_meta.pubkey());
             }
             index_offset = next;
