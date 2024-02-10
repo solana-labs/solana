@@ -49,10 +49,14 @@ pub struct TieredStorageFormat {
     pub account_block_format: AccountBlockFormat,
 }
 
+/// The implementation of AccountsFile for tiered-storage.
 #[derive(Debug)]
 pub struct TieredStorage {
+    /// The internal reader instance for its accounts file.
     reader: OnceLock<TieredStorageReader>,
+    /// A status flag indicating whether its file has been already written.
     already_written: AtomicBool,
+    /// The path to the file that stores accounts.
     path: PathBuf,
 }
 
@@ -100,9 +104,7 @@ impl TieredStorage {
     /// Writes the specified accounts into this TieredStorage.
     ///
     /// Note that this function can only be called once per a TieredStorage
-    /// instance.  TieredStorageError::AttemptToUpdateReadOnly will be returned
-    /// if this function is invoked more than once on the same TieredStorage
-    /// instance.
+    /// instance.  Otherwise, it will trigger panic.
     pub fn write_accounts<
         'a,
         'b,
@@ -117,10 +119,9 @@ impl TieredStorage {
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         let was_written = self.already_written.swap(true, Ordering::AcqRel);
 
-        // If it was not previously written, and the current thread has
-        // successfully updated the already_written flag, then the current
-        // thread will proceed and writes the input accounts.
-        if !was_written {
+        if was_written {
+            panic!("cannot write same tiered storage file more than once");
+        } else {
             if format == &HOT_FORMAT {
                 let result = {
                     let writer = HotStorageWriter::new(&self.path)?;
@@ -128,18 +129,17 @@ impl TieredStorage {
                 };
 
                 // panic here if self.reader.get() is not None as self.reader can only be
-                // None since we have passed `is_read_only()` check previously, indicating
-                // self.reader is not yet set.
+                // None since a false-value `was_written` indicates the accounts file has
+                // not been written previously, implying is_read_only() was also false.
+                debug_assert!(!self.is_read_only());
                 self.reader
                     .set(TieredStorageReader::new_from_path(&self.path)?)
                     .unwrap();
 
                 return result;
+            } else {
+                Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
             }
-
-            Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
-        } else {
-            panic!("TieredStorage::write_accounts() is expected to be invoked once per file.");
         }
     }
 
@@ -267,9 +267,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "TieredStorage::write_accounts() is expected to be invoked once per file"
-    )]
+    #[should_panic(expected = "cannot write same tiered storage file more than once")]
     fn test_write_accounts_twice() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = tempdir().unwrap();
