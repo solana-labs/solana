@@ -8,7 +8,7 @@ Static content delivery is handled using `vercel`.
 > documentation which is generalize to the Solana protocol as a whole, and apply
 > to all Solana validator implementations, are maintained within the
 > [`developer-content`](https://github.com/solana-foundation/developer-content/)
-> repo. Those "common docs" are manged by the Solana Foundation within their
+> repo. Those "common docs" are managed by the Solana Foundation within their
 > GitHub organization and are publicly accessible via
 > [solana.com/docs](https://solana.com/docs)
 
