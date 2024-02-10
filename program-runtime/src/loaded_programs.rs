@@ -193,7 +193,7 @@ impl Stats {
             ("reloads", reloads, i64),
             ("insertions", insertions, i64),
             ("lost_insertions", lost_insertions, i64),
-            ("replacements", replacements, i64),
+            ("replace_entry", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
             ("prunes_orphan", prunes_orphan, i64),
             ("prunes_environment", prunes_environment, i64),
@@ -553,6 +553,7 @@ pub struct LoadedProgramsForTxBatch {
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
     pub environments: ProgramRuntimeEnvironments,
+    pub hit_max_limit: bool,
 }
 
 impl LoadedProgramsForTxBatch {
@@ -561,6 +562,7 @@ impl LoadedProgramsForTxBatch {
             entries: HashMap::new(),
             slot,
             environments,
+            hit_max_limit: false,
         }
     }
 
@@ -649,81 +651,41 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         &mut self,
         key: Pubkey,
         entry: Arc<LoadedProgram>,
-        current_slot: Slot,
     ) -> (bool, Arc<LoadedProgram>) {
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
-        if current_slot > 247806000 {
-            match slot_versions.binary_search_by(|at| {
-                at.effective_slot
-                    .cmp(&entry.effective_slot)
-                    .then(at.deployment_slot.cmp(&entry.deployment_slot))
-            }) {
-                Ok(index) => {
-                    let existing = slot_versions.get_mut(index).unwrap();
-                    if std::mem::discriminant(&existing.program)
-                        != std::mem::discriminant(&entry.program)
-                    {
-                        // Copy over the usage counter to the new entry
-                        entry.tx_usage_counter.fetch_add(
-                            existing.tx_usage_counter.load(Ordering::Relaxed),
-                            Ordering::Relaxed,
-                        );
-                        entry.ix_usage_counter.fetch_add(
-                            existing.ix_usage_counter.load(Ordering::Relaxed),
-                            Ordering::Relaxed,
-                        );
-                        self.stats.reloads.fetch_add(1, Ordering::Relaxed);
-                        *existing = entry.clone();
-                        (false, entry)
-                    } else {
-                        // Something is wrong, I can feel it ...
-                        self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                        (true, existing.clone())
-                    }
-                }
-                Err(index) => {
-                    self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-                    slot_versions.insert(index, entry.clone());
-                    (false, entry)
-                }
-            }
-        } else {
-            let index = slot_versions
-                .iter()
-                .position(|at| at.effective_slot >= entry.effective_slot);
-            if let Some(existing) = index.and_then(|index| slot_versions.get_mut(index)) {
-                if existing.deployment_slot == entry.deployment_slot
-                    && existing.effective_slot == entry.effective_slot
+        match slot_versions.binary_search_by(|at| {
+            at.effective_slot
+                .cmp(&entry.effective_slot)
+                .then(at.deployment_slot.cmp(&entry.deployment_slot))
+        }) {
+            Ok(index) => {
+                let existing = slot_versions.get_mut(index).unwrap();
+                if std::mem::discriminant(&existing.program)
+                    != std::mem::discriminant(&entry.program)
                 {
-                    if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
-                        // The unloaded program is getting reloaded
-                        // Copy over the usage counter to the new entry
-                        entry.tx_usage_counter.fetch_add(
-                            existing.tx_usage_counter.load(Ordering::Relaxed),
-                            Ordering::Relaxed,
-                        );
-                        entry.ix_usage_counter.fetch_add(
-                            existing.ix_usage_counter.load(Ordering::Relaxed),
-                            Ordering::Relaxed,
-                        );
-                        self.stats.reloads.fetch_add(1, Ordering::Relaxed);
-                    } else if existing.is_tombstone() != entry.is_tombstone() {
-                        // Either the old entry is tombstone and the new one is not.
-                        // (Let's give the new entry a chance).
-                        // Or, the old entry is not a tombstone and the new one is a tombstone.
-                        // (Remove the old entry, as the tombstone makes it obsolete).
-                        self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-                    } else {
-                        self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                        return (true, existing.clone());
-                    }
+                    // Copy over the usage counter to the new entry
+                    entry.tx_usage_counter.fetch_add(
+                        existing.tx_usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
+                    entry.ix_usage_counter.fetch_add(
+                        existing.ix_usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
+                    self.stats.reloads.fetch_add(1, Ordering::Relaxed);
                     *existing = entry.clone();
-                    return (false, entry);
+                    (false, entry)
+                } else {
+                    // Something is wrong, I can feel it ...
+                    self.stats.replacements.fetch_add(1, Ordering::Relaxed);
+                    (true, existing.clone())
                 }
             }
-            self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-            slot_versions.insert(index.unwrap_or(slot_versions.len()), entry.clone());
-            (false, entry)
+            Err(index) => {
+                self.stats.insertions.fetch_add(1, Ordering::Relaxed);
+                slot_versions.insert(index, entry.clone());
+                (false, entry)
+            }
         }
     }
 
@@ -735,11 +697,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         &mut self,
         key: Pubkey,
         entry: Arc<LoadedProgram>,
-        current_slot: Slot,
-    ) -> Arc<LoadedProgram> {
-        let (was_occupied, entry) = self.replenish(key, entry, current_slot);
+    ) -> (bool, Arc<LoadedProgram>) {
+        let (was_occupied, entry) = self.replenish(key, entry);
         debug_assert!(!was_occupied);
-        entry
+        (was_occupied, entry)
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
@@ -985,7 +946,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         slot: Slot,
         key: Pubkey,
         loaded_program: Arc<LoadedProgram>,
-    ) {
+    ) -> bool {
         let second_level = self.entries.entry(key).or_default();
         debug_assert_eq!(
             second_level.cooperative_loading_lock,
@@ -1008,13 +969,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         {
             self.stats.lost_insertions.fetch_add(1, Ordering::Relaxed);
         }
-        self.assign_program(key, loaded_program, slot);
+        let (was_replaced, _) = self.assign_program(key, loaded_program);
         self.loading_task_waiter.notify();
+        was_replaced
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
         tx_batch_cache.entries.iter().for_each(|(key, entry)| {
-            self.replenish(*key, entry.clone(), tx_batch_cache.slot);
+            self.replenish(*key, entry.clone());
         })
     }
 
@@ -1232,11 +1194,9 @@ mod tests {
         slot: Slot,
         reason: LoadedProgramType,
     ) -> Arc<LoadedProgram> {
-        cache.assign_program(
-            key,
-            Arc::new(LoadedProgram::new_tombstone(slot, reason)),
-            u64::MAX,
-        )
+        cache
+            .assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot, reason)))
+            .1
     }
 
     fn insert_unloaded_program<FG: ForkGraph>(
@@ -1259,7 +1219,7 @@ mod tests {
             .to_unloaded()
             .expect("Failed to unload the program"),
         );
-        cache.replenish(key, unloaded, u64::MAX).1
+        cache.replenish(key, unloaded).1
     }
 
     fn num_matching_entries<P, FG>(cache: &LoadedPrograms<FG>, predicate: P) -> usize
@@ -1301,7 +1261,6 @@ mod tests {
                         (*deployment_slot) + 2,
                         AtomicU64::new(usage_counter),
                     ),
-                    u64::MAX,
                 );
                 programs.push((program1, *deployment_slot, usage_counter));
             });
@@ -1335,7 +1294,6 @@ mod tests {
                         (*deployment_slot) + 2,
                         AtomicU64::new(usage_counter),
                     ),
-                    u64::MAX,
                 );
                 programs.push((program2, *deployment_slot, usage_counter));
             });
@@ -1368,7 +1326,6 @@ mod tests {
                         (*deployment_slot) + 2,
                         AtomicU64::new(usage_counter),
                     ),
-                    u64::MAX,
                 );
                 programs.push((program3, *deployment_slot, usage_counter));
             });
@@ -1458,7 +1415,6 @@ mod tests {
             cache.replenish(
                 program,
                 new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i + 10)),
-                u64::MAX,
             );
         });
 
@@ -1486,7 +1442,6 @@ mod tests {
         cache.replenish(
             program,
             new_test_loaded_program_with_usage(0, 2, AtomicU64::new(0)),
-            u64::MAX,
         );
 
         cache.entries.values().for_each(|second_level| {
@@ -1515,7 +1470,7 @@ mod tests {
         );
 
         let loaded_program = new_test_loaded_program(10, 10);
-        let (existing, program) = cache.replenish(program1, loaded_program.clone(), u64::MAX);
+        let (existing, program) = cache.replenish(program1, loaded_program.clone());
         assert!(!existing);
         assert_eq!(program, loaded_program);
     }
@@ -1557,7 +1512,7 @@ mod tests {
         let program2 = Pubkey::new_unique();
         assert!(
             !cache
-                .replenish(program2, new_test_builtin_program(50, 51), u64::MAX)
+                .replenish(program2, new_test_builtin_program(50, 51))
                 .0
         );
         let second_level = &cache
@@ -1660,7 +1615,7 @@ mod tests {
 
         let program1 = Pubkey::new_unique();
         let loaded_program = new_test_loaded_program(10, 10);
-        let (existing, program) = cache.replenish(program1, loaded_program.clone(), u64::MAX);
+        let (existing, program) = cache.replenish(program1, loaded_program.clone());
         assert!(!existing);
         assert_eq!(program, loaded_program);
 
@@ -1678,7 +1633,7 @@ mod tests {
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
         });
-        let (existing, program) = cache.replenish(program1, updated_program.clone(), u64::MAX);
+        let (existing, program) = cache.replenish(program1, updated_program.clone());
         assert!(!existing);
         assert_eq!(program, updated_program);
 
@@ -1831,70 +1786,36 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(10, 11), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(20, 21), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         // Test: inserting duplicate entry return pre existing entry from the cache
-        assert!(
-            cache
-                .replenish(program1, new_test_loaded_program(20, 21), u64::MAX)
-                .0
-        );
+        assert!(cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
         assert!(
             !cache
                 .replenish(
                     program2,
-                    new_test_loaded_program(11, 11 + DELAY_VISIBILITY_SLOT_OFFSET),
-                    u64::MAX
+                    new_test_loaded_program(11, 11 + DELAY_VISIBILITY_SLOT_OFFSET)
                 )
                 .0
         );
 
         let program3 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program3, new_test_loaded_program(25, 26), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
 
         let program4 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program4, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program4, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program4, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program4, new_test_loaded_program(5, 6)).0);
         // The following is a special case, where effective slot is 3 slots in the future
         assert!(
             !cache
                 .replenish(
                     program4,
-                    new_test_loaded_program(15, 15 + DELAY_VISIBILITY_SLOT_OFFSET),
-                    u64::MAX
+                    new_test_loaded_program(15, 15 + DELAY_VISIBILITY_SLOT_OFFSET)
                 )
                 .0
         );
@@ -2020,7 +1941,7 @@ mod tests {
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
         });
-        assert!(!cache.replenish(program4, test_program, u64::MAX).0);
+        assert!(!cache.replenish(program4, test_program).0);
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let mut missing = vec![
@@ -2173,35 +2094,15 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(20, 21), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(11, 12), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
 
         let program3 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program3, new_test_loaded_program(25, 26), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let mut missing = vec![
@@ -2266,28 +2167,12 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(20, 21), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(11, 12), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
 
         let program3 = Pubkey::new_unique();
         // Insert an unloaded program with correct/cache's environment at slot 25
@@ -2304,8 +2189,7 @@ mod tests {
                         new_test_loaded_program(20, 21)
                             .to_unloaded()
                             .expect("Failed to create unloaded program")
-                    ),
-                    u64::MAX
+                    )
                 )
                 .0
         );
@@ -2380,35 +2264,15 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(10, 11), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(20, 21), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(11, 12), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
 
         let program3 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program3, new_test_loaded_program(25, 26), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
 
         // The following is a special case, where there's an expiration slot
         let test_program = Arc::new(LoadedProgram {
@@ -2420,7 +2284,7 @@ mod tests {
             tx_usage_counter: AtomicU64::default(),
             ix_usage_counter: AtomicU64::default(),
         });
-        assert!(!cache.replenish(program1, test_program, u64::MAX).0);
+        assert!(!cache.replenish(program1, test_program).0);
 
         // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
         let mut missing = vec![
@@ -2504,16 +2368,8 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
 
         cache.prune(10, 0);
 
@@ -2552,23 +2408,11 @@ mod tests {
         cache.set_fork_graph(fork_graph);
 
         let program1 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(0, 1), u64::MAX)
-                .0
-        );
-        assert!(
-            !cache
-                .replenish(program1, new_test_loaded_program(5, 6), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(
-            !cache
-                .replenish(program2, new_test_loaded_program(10, 11), u64::MAX)
-                .0
-        );
+        assert!(!cache.replenish(program2, new_test_loaded_program(10, 11)).0);
 
         let mut missing = vec![
             (program1, (LoadedProgramMatchCriteria::NoCriteria, 1)),
