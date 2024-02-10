@@ -136,7 +136,7 @@ impl TieredStorage {
                     .set(TieredStorageReader::new_from_path(&self.path)?)
                     .unwrap();
 
-                return result;
+                result
             } else {
                 Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
             }
