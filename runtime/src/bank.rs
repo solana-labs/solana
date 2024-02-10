@@ -1472,7 +1472,7 @@ impl Bank {
                     drop(loaded_programs_cache);
                     let recompiled = new.load_program(&key, false, Some(program_to_recompile));
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                    loaded_programs_cache.replenish(key, recompiled);
+                    loaded_programs_cache.replenish(key, recompiled, new.slot());
                 }
             } else if new.epoch() != loaded_programs_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -7772,10 +7772,11 @@ impl Bank {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name.as_str(), &program_id, false);
         self.builtin_programs.insert(program_id);
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .replenish(program_id, Arc::new(builtin));
+        self.loaded_programs_cache.write().unwrap().replenish(
+            program_id,
+            Arc::new(builtin),
+            self.slot,
+        );
         debug!("Added program {} under {:?}", name, program_id);
     }
 
