@@ -645,22 +645,24 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
 
     /// Refill the cache with a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
-    /// The function dedupes the cache, in case some other thread replenished the entry in parallel.
     pub fn replenish(
         &mut self,
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
-        let index = slot_versions
-            .iter()
-            .position(|at| at.effective_slot >= entry.effective_slot);
+        let index = slot_versions.binary_search_by(|at| {
+            at.effective_slot
+                .cmp(&entry.effective_slot)
+                .then(at.deployment_slot.cmp(&entry.deployment_slot))
+        });
         if let Some(existing) = index.and_then(|index| slot_versions.get_mut(index)) {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
-                    // The unloaded program is getting reloaded
+                if std::mem::discriminant(&existing.program)
+                    != std::mem::discriminant(&entry.program)
+                {
                     // Copy over the usage counter to the new entry
                     entry.tx_usage_counter.fetch_add(
                         existing.tx_usage_counter.load(Ordering::Relaxed),
@@ -671,13 +673,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         Ordering::Relaxed,
                     );
                     self.stats.reloads.fetch_add(1, Ordering::Relaxed);
-                } else if existing.is_tombstone() != entry.is_tombstone() {
-                    // Either the old entry is tombstone and the new one is not.
-                    // (Let's give the new entry a chance).
-                    // Or, the old entry is not a tombstone and the new one is a tombstone.
-                    // (Remove the old entry, as the tombstone makes it obsolete).
-                    self.stats.insertions.fetch_add(1, Ordering::Relaxed);
                 } else {
+                    // Something is wrong, I can feel it ...
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
                 }
