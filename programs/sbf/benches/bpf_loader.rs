@@ -101,6 +101,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_program_alu(bencher: &mut Bencher) {
     let ns_per_s = 1000000000;
     let one_million = 1000000;
@@ -118,13 +119,18 @@ fn bench_program_alu(bencher: &mut Bencher) {
         true,
         false,
     );
+    #[allow(unused_mut)]
     let mut executable =
         Executable::<InvokeContext>::from_elf(&elf, Arc::new(program_runtime_environment.unwrap()))
             .unwrap();
 
     executable.verify::<RequisiteVerifier>().unwrap();
 
-    executable.jit_compile().unwrap();
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+    {
+        executable.jit_compile().unwrap();
+    }
+
     create_vm!(
         vm,
         &executable,
@@ -181,6 +187,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_program_execute_noop(bencher: &mut Bencher) {
     let GenesisConfigInfo {
         mut genesis_config,
