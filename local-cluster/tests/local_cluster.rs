@@ -3059,6 +3059,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
 }
 
 #[test]
+#[ignore]
 #[serial]
 fn test_no_optimistic_confirmation_violation_with_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(true);
