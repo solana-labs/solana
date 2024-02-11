@@ -276,6 +276,7 @@ impl PartitionInfo {
 }
 
 pub struct ReplayStageConfig {
+    pub startup_identity: Pubkey,
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub exit: Arc<AtomicBool>,
@@ -546,6 +547,7 @@ impl ReplayStage {
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
     ) -> Result<Self, String> {
         let ReplayStageConfig {
+            startup_identity,
             vote_account,
             authorized_voter_keypairs,
             exit,
@@ -578,6 +580,20 @@ impl ReplayStage {
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
             let mut my_pubkey = identity_keypair.pubkey();
+            if my_pubkey != startup_identity {
+                // set-identity was called during the startup procedure, ensure the tower is consistent
+                // before starting the loop. further calls to set-identity will reload the tower in the loop
+                tower = Self::reload_tower_with_new_identity(
+                    &tower_storage,
+                    &my_pubkey,
+                    &vote_account,
+                    &bank_forks,
+                );
+                warn!(
+                    "Identity changed during startup from {} to {}",
+                    startup_identity, my_pubkey
+                );
+            }
             let (mut progress, mut heaviest_subtree_fork_choice) =
                 Self::initialize_progress_and_fork_choice_with_locked_bank_forks(
                     &bank_forks,
@@ -983,28 +999,12 @@ impl ReplayStage {
                             my_pubkey = identity_keypair.pubkey();
 
                             // Load the new identity's tower
-                            tower = Tower::restore(tower_storage.as_ref(), &my_pubkey)
-                                .and_then(|restored_tower| {
-                                    let root_bank = bank_forks.read().unwrap().root_bank();
-                                    let slot_history = root_bank.get_slot_history();
-                                    restored_tower.adjust_lockouts_after_replay(
-                                        root_bank.slot(),
-                                        &slot_history,
-                                    )
-                                })
-                                .unwrap_or_else(|err| {
-                                    if err.is_file_missing() {
-                                        Tower::new_from_bankforks(
-                                            &bank_forks.read().unwrap(),
-                                            &my_pubkey,
-                                            &vote_account,
-                                        )
-                                    } else {
-                                        error!("Failed to load tower for {}: {}", my_pubkey, err);
-                                        std::process::exit(1);
-                                    }
-                                });
-
+                            tower = Self::reload_tower_with_new_identity(
+                                &tower_storage,
+                                &my_pubkey,
+                                &vote_account,
+                                &bank_forks,
+                            );
                             // Ensure the validator can land votes with the new identity before
                             // becoming leader
                             has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
@@ -1152,6 +1152,32 @@ impl ReplayStage {
             t_replay,
             commitment_service,
         })
+    }
+
+    fn reload_tower_with_new_identity(
+        tower_storage: &Arc<dyn TowerStorage>,
+        new_identity: &Pubkey,
+        vote_account: &Pubkey,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> Tower {
+        Tower::restore(tower_storage.as_ref(), new_identity)
+            .and_then(|restored_tower| {
+                let root_bank = bank_forks.read().unwrap().root_bank();
+                let slot_history = root_bank.get_slot_history();
+                restored_tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+            })
+            .unwrap_or_else(|err| {
+                if err.is_file_missing() {
+                    Tower::new_from_bankforks(
+                        &bank_forks.read().unwrap(),
+                        new_identity,
+                        vote_account,
+                    )
+                } else {
+                    error!("Failed to load tower for {}: {}", new_identity, err);
+                    std::process::exit(1);
+                }
+            })
     }
 
     fn check_for_vote_only_mode(
