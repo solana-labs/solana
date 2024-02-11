@@ -2323,7 +2323,7 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert_eq!(
             result.unwrap_err().unwrap(),
-            TransactionError::InstructionError(0, InstructionError::IncorrectProgramId)
+            TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId)
         );
     }
 }
