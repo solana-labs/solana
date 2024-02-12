@@ -23,10 +23,24 @@ use {
         ebpf::MM_INPUT_START, elf::Executable, memory_region::MemoryRegion,
         verifier::RequisiteVerifier, vm::ContextObject,
     },
-    solana_runtime::loader_utils::load_program_from_file,
+    solana_runtime::{
+        bank::Bank,
+        bank_client::BankClient,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        loader_utils::{load_program, load_program_from_file},
+    },
     solana_sdk::{
-        account::AccountSharedData, bpf_loader, entrypoint::SUCCESS, feature_set::FeatureSet,
-        native_loader, pubkey::Pubkey, transaction_context::InstructionAccount,
+        account::AccountSharedData,
+        bpf_loader,
+        client::SyncClient,
+        entrypoint::SUCCESS,
+        feature_set::{self, FeatureSet},
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        native_loader,
+        pubkey::Pubkey,
+        signature::Signer,
+        transaction_context::InstructionAccount,
     },
     std::{mem, sync::Arc},
     test::Bencher,
@@ -166,6 +180,46 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
     println!("  {:?} MIPS", mips);
     println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+}
+
+#[bench]
+fn bench_program_execute_noop(bencher: &mut Bencher) {
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+
+    genesis_config
+        .accounts
+        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
+
+    let bank = Bank::new_for_benches(&genesis_config);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let mut bank_client = BankClient::new_shared(bank.clone());
+
+    let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+    let bank = bank_client
+        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
+
+    let instruction =
+        Instruction::new_with_bincode(invoke_program_id, &[u8::MAX, 0, 0, 0], account_metas);
+    let message = Message::new(&[instruction], Some(&mint_pubkey));
+
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair], message.clone())
+        .unwrap();
+
+    bencher.iter(|| {
+        bank.clear_signatures();
+        bank_client
+            .send_and_confirm_message(&[&mint_keypair], message.clone())
+            .unwrap();
+    });
 }
 
 #[bench]
