@@ -412,7 +412,7 @@ tar = "0.4.40"
 tarpc = "0.29.0"
 tempfile = "3.10.0"
 test-case = "3.3.1"
-thiserror = "1.0.56"
+thiserror = "1.0.57"
 tiny-bip39 = "0.8.2"
 # Update solana-tokio patch below when updating this version
 tokio = "1.29.1"
