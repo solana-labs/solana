@@ -25,7 +25,7 @@ use {
         fmt::{Debug, Formatter},
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc, Condvar, Mutex, RwLock,
+            Arc, Condvar, Mutex, RwLock, RwLockReadGuard,
         },
     },
 };
@@ -463,6 +463,53 @@ impl LoadedProgram {
             || Arc::ptr_eq(environment, &environments.program_runtime_v2)
     }
 
+    fn usability_in_slot_with_criteria<FG: ForkGraph>(
+        &self,
+        fork_graph: &RwLockReadGuard<FG>,
+        latest_root_slot: Slot,
+        current_slot: Slot,
+        environments: &ProgramRuntimeEnvironments,
+        match_criteria: &LoadedProgramMatchCriteria,
+    ) -> LoadedProgramUsability {
+        if latest_root_slot < self.deployment_slot
+            && !matches!(
+                fork_graph.relationship(self.deployment_slot, current_slot),
+                BlockRelation::Equal | BlockRelation::Ancestor
+            )
+        {
+            return LoadedProgramUsability::SkipOnDifferentFork;
+        }
+
+        if current_slot < self.effective_slot {
+            return if self.is_implicit_delay_visibility_tombstone(current_slot) {
+                LoadedProgramUsability::AcceptDelayVisibility
+            } else {
+                LoadedProgramUsability::SkipNotEffectiveYet
+            };
+        }
+
+        if !self.matches_environment(environments) {
+            return LoadedProgramUsability::SkipEnvironmentMismatch;
+        }
+
+        let matches_criteria = match match_criteria {
+            LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot) => {
+                self.deployment_slot >= *slot
+            }
+            LoadedProgramMatchCriteria::Tombstone => self.is_tombstone(),
+            LoadedProgramMatchCriteria::NoCriteria => true,
+        };
+        if !matches_criteria {
+            return LoadedProgramUsability::RejectMatchCriteria;
+        }
+
+        if let LoadedProgramType::Unloaded(_environment) = &self.program {
+            return LoadedProgramUsability::RejectUnloaded;
+        }
+
+        LoadedProgramUsability::AcceptOther
+    }
+
     pub fn update_access_slot(&self, slot: Slot) {
         let _ = self.latest_access_slot.fetch_max(slot, Ordering::Relaxed);
     }
@@ -858,19 +905,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         self.latest_root_slot = new_root_slot;
     }
 
-    fn matches_loaded_program_criteria(
-        program: &Arc<LoadedProgram>,
-        criteria: &LoadedProgramMatchCriteria,
-    ) -> bool {
-        match criteria {
-            LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot) => {
-                program.deployment_slot >= *slot
-            }
-            LoadedProgramMatchCriteria::Tombstone => program.is_tombstone(),
-            LoadedProgramMatchCriteria::NoCriteria => true,
-        }
-    }
-
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
     pub fn extract(
@@ -883,58 +917,41 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         let locked_fork_graph = self.fork_graph.as_ref().unwrap().read().unwrap();
         let mut cooperative_loading_task = None;
         search_for.retain(|(key, (match_criteria, usage_count))| {
-            if let Some(second_level) = self.entries.get_mut(key) {
+            if let Some(second_level) = self.entries.get(key) {
+                let mut accepted_entry = None;
                 for entry in second_level.slot_versions.iter().rev() {
-                    if entry.deployment_slot <= self.latest_root_slot
-                        || matches!(
-                            locked_fork_graph.relationship(
-                                entry.deployment_slot,
-                                loaded_programs_for_tx_batch.slot
-                            ),
-                            BlockRelation::Equal | BlockRelation::Ancestor
-                        )
-                    {
-                        let entry_to_return = if loaded_programs_for_tx_batch.slot
-                            >= entry.effective_slot
-                            && entry.matches_environment(&loaded_programs_for_tx_batch.environments)
-                        {
-                            if !Self::matches_loaded_program_criteria(entry, match_criteria) {
-                                // LoadedProgramUsability::RejectMatchCriteria
-                                break;
-                            }
-                            if let LoadedProgramType::Unloaded(_environment) = &entry.program {
-                                // LoadedProgramUsability::RejectUnloaded
-                                break;
-                            }
-                            // LoadedProgramUsability::AcceptOther
-                            entry.clone()
-                        } else if entry.is_implicit_delay_visibility_tombstone(
-                            loaded_programs_for_tx_batch.slot,
-                        ) {
-                            // Found a program entry on the current fork, but it's not effective
-                            // yet. It indicates that the program has delayed visibility. Return
-                            // the tombstone to reflect that.
-                            Arc::new(LoadedProgram::new_tombstone(
+                    let usability = entry.usability_in_slot_with_criteria(
+                        &locked_fork_graph,
+                        self.latest_root_slot,
+                        loaded_programs_for_tx_batch.slot,
+                        &loaded_programs_for_tx_batch.environments,
+                        match_criteria,
+                    );
+                    accepted_entry = match usability {
+                        LoadedProgramUsability::SkipOnDifferentFork
+                        | LoadedProgramUsability::SkipNotEffectiveYet
+                        | LoadedProgramUsability::SkipEnvironmentMismatch => {
+                            continue;
+                        }
+                        LoadedProgramUsability::RejectMatchCriteria
+                        | LoadedProgramUsability::RejectUnloaded => None,
+                        LoadedProgramUsability::AcceptDelayVisibility => {
+                            Some(Arc::new(LoadedProgram::new_tombstone(
                                 entry.deployment_slot,
                                 LoadedProgramType::DelayVisibility,
-                            ))
-                            // LoadedProgramUsability::AcceptDelayVisibility
-                        } else {
-                            // LoadedProgramUsability::SkipNotEffectiveYet
-                            // LoadedProgramUsability::SkipEnvironmentMismatch
-                            continue;
-                        };
-                        entry_to_return.update_access_slot(loaded_programs_for_tx_batch.slot);
-                        entry_to_return
-                            .tx_usage_counter
-                            .fetch_add(*usage_count, Ordering::Relaxed);
-                        loaded_programs_for_tx_batch
-                            .entries
-                            .insert(*key, entry_to_return);
-                        return false;
-                    } else {
-                        // LoadedProgramUsability::SkipOnDifferentFork
-                    }
+                            )))
+                        }
+                        LoadedProgramUsability::AcceptOther => Some(entry.clone()),
+                    };
+                    break;
+                }
+                if let Some(entry) = accepted_entry {
+                    entry.update_access_slot(loaded_programs_for_tx_batch.slot);
+                    entry
+                        .tx_usage_counter
+                        .fetch_add(*usage_count, Ordering::Relaxed);
+                    loaded_programs_for_tx_batch.entries.insert(*key, entry);
+                    return false;
                 }
             }
             if cooperative_loading_task.is_none() {
