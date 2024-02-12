@@ -27,7 +27,7 @@ use {
         bank::Bank,
         bank_client::BankClient,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        loader_utils::{load_program, load_program_from_file},
+        loader_utils::{load_program_from_file, load_upgradeable_program_and_advance_slot},
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -198,12 +198,17 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank.clone());
 
-    let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
-    let bank = bank_client
-        .advance_slot(1, bank_forks.as_ref(), &Pubkey::default())
-        .expect("Failed to advance the slot");
-
+    let authority_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
+
+    let (_, invoke_program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &authority_keypair,
+        "noop",
+    );
+
     let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
 
     let instruction =
