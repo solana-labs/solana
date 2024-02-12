@@ -124,6 +124,16 @@ impl LoadedProgramType {
     }
 }
 
+enum LoadedProgramUsability {
+    SkipOnDifferentFork,
+    SkipNotEffectiveYet,
+    SkipEnvironmentMismatch,
+    RejectMatchCriteria,
+    RejectUnloaded,
+    AcceptDelayVisibility,
+    AcceptOther,
+}
+
 /// Holds a program version at a specific address and on a specific slot / fork.
 ///
 /// It contains the actual program in [LoadedProgramType] and a bunch of meta-data.
@@ -889,11 +899,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             && entry.matches_environment(&loaded_programs_for_tx_batch.environments)
                         {
                             if !Self::matches_loaded_program_criteria(entry, match_criteria) {
+                                // LoadedProgramUsability::RejectMatchCriteria
                                 break;
                             }
                             if let LoadedProgramType::Unloaded(_environment) = &entry.program {
+                                // LoadedProgramUsability::RejectUnloaded
                                 break;
                             }
+                            // LoadedProgramUsability::AcceptOther
                             entry.clone()
                         } else if entry.is_implicit_delay_visibility_tombstone(
                             loaded_programs_for_tx_batch.slot,
@@ -905,7 +918,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                                 entry.deployment_slot,
                                 LoadedProgramType::DelayVisibility,
                             ))
+                            // LoadedProgramUsability::AcceptDelayVisibility
                         } else {
+                            // LoadedProgramUsability::SkipNotEffectiveYet
+                            // LoadedProgramUsability::SkipEnvironmentMismatch
                             continue;
                         };
                         entry_to_return.update_access_slot(loaded_programs_for_tx_batch.slot);
@@ -916,6 +932,8 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                             .entries
                             .insert(*key, entry_to_return);
                         return false;
+                    } else {
+                        // LoadedProgramUsability::SkipOnDifferentFork
                     }
                 }
             }
