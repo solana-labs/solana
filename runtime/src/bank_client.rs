@@ -26,7 +26,7 @@ use {
         time::{Duration, Instant},
     },
 };
-#[cfg(feature = "dev-context-only-utils")]
+// These imports are only used for tests and benchmarks.
 use {crate::bank_forks::BankForks, solana_sdk::clock, std::sync::RwLock};
 
 pub struct BankClient {
@@ -331,7 +331,7 @@ impl BankClient {
         self.bank.set_sysvar_for_tests(sysvar);
     }
 
-    /// Only used for test and bench.
+    /// Only used for tests and benchmarks.
     pub fn advance_slot(
         &mut self,
         by: u64,
