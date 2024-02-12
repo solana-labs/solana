@@ -63,7 +63,6 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
-        bank_forks::BankForks,
         genesis_utils::{
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
@@ -85,12 +84,7 @@ use {
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::{
-        cell::RefCell,
-        str::FromStr,
-        sync::{Arc, RwLock},
-        time::Duration,
-    },
+    std::{cell::RefCell, str::FromStr, sync::Arc, time::Duration},
 };
 
 #[cfg(feature = "sbf_rust")]
