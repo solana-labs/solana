@@ -707,8 +707,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                if matches!(existing.program, LoadedProgramType::Unloaded(_)) {
-                    // The unloaded program is getting reloaded
+                return if std::mem::discriminant(&existing.program)
+                    != std::mem::discriminant(&entry.program)
+                {
                     // Copy over the usage counter to the new entry
                     entry.tx_usage_counter.fetch_add(
                         existing.tx_usage_counter.load(Ordering::Relaxed),
@@ -718,20 +719,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                         existing.ix_usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
+                    *existing = entry.clone();
                     self.stats.reloads.fetch_add(1, Ordering::Relaxed);
-                } else if existing.is_tombstone() != entry.is_tombstone() {
-                    // Either the old entry is tombstone and the new one is not.
-                    // (Let's give the new entry a chance).
-                    // Or, the old entry is not a tombstone and the new one is a tombstone.
-                    // (Remove the old entry, as the tombstone makes it obsolete).
-                    self.stats.insertions.fetch_add(1, Ordering::Relaxed);
+                    false
                 } else {
-                    debug_assert!(false);
+                    // Something is wrong, I can feel it ...
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                    return true;
-                }
-                *existing = entry.clone();
-                return false;
+                    true
+                };
             }
         }
         self.stats.insertions.fetch_add(1, Ordering::Relaxed);
@@ -1663,18 +1658,36 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_tombstones() {
+    fn test_assign_program_tombstones() {
         let mut cache = new_mock_cache::<TestForkGraph>();
         let program1 = Pubkey::new_unique();
-        let env = Arc::new(BuiltinProgram::new_mock());
+        let env = cache.environments.program_runtime_v1.clone();
+
         set_tombstone(
             &mut cache,
             program1,
             10,
-            LoadedProgramType::FailedVerification(env),
+            LoadedProgramType::FailedVerification(env.clone()),
         );
+        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
+        set_tombstone(&mut cache, program1, 10, LoadedProgramType::Closed);
+        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
+        set_tombstone(
+            &mut cache,
+            program1,
+            10,
+            LoadedProgramType::FailedVerification(env.clone()),
+        );
+        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
 
-        cache.assign_program(program1, new_test_loaded_program(10, 10));
+        // Fail on exact replacement
+        assert!(cache.assign_program(
+            program1,
+            Arc::new(LoadedProgram::new_tombstone(
+                10,
+                LoadedProgramType::FailedVerification(env)
+            ))
+        ));
     }
 
     #[test]
