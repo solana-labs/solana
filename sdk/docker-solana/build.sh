@@ -29,7 +29,7 @@ cp -f ../../fetch-spl.sh usr/bin/
   ./fetch-spl.sh
 )
 
-docker build -t solanalabs/solana:"$CHANNEL_OR_TAG" .
+docker build -t anzaxyz/agave:"$CHANNEL_OR_TAG" .
 
 maybeEcho=
 if [[ -z $CI ]]; then
@@ -43,4 +43,4 @@ else
     fi
   )
 fi
-$maybeEcho docker push solanalabs/solana:"$CHANNEL_OR_TAG"
+$maybeEcho docker push anzaxyz/agave:"$CHANNEL_OR_TAG"
