@@ -1936,7 +1936,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "slab",
  "tokio",
  "tokio-util 0.7.1",
@@ -2287,9 +2287,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.2"
+version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824b2ae422412366ba479e8111fd301f7b5faece8149317bb81925979a53f520"
+checksum = "233cf39063f058ea2caae4091bf4a3ef70a653afbc026f5c4a4135d114e3c177"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.1",
@@ -4317,7 +4317,7 @@ version = "0.9.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adf8a49373e98a4c5f0ceb5d05aa7c648d75f63774981ed95b7c7443bbd50c6e"
 dependencies = [
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "itoa",
  "ryu",
  "serde",
@@ -4588,7 +4588,7 @@ dependencies = [
  "fnv",
  "im",
  "index_list",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "itertools",
  "lazy_static",
  "log",
@@ -4815,7 +4815,7 @@ dependencies = [
  "dashmap",
  "futures 0.3.30",
  "futures-util",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "indicatif",
  "log",
  "quinn",
@@ -4865,7 +4865,7 @@ dependencies = [
  "bincode",
  "crossbeam-channel",
  "futures-util",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "log",
  "rand 0.8.5",
  "rayon",
@@ -5116,7 +5116,7 @@ dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
  "flate2",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "itertools",
  "log",
  "lru",
@@ -6279,7 +6279,7 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "histogram",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "itertools",
  "libc",
  "log",
@@ -6381,7 +6381,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "futures-util",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "indicatif",
  "log",
  "rayon",
@@ -7437,7 +7437,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
 dependencies = [
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "toml_datetime",
  "winnow",
 ]
