@@ -33,7 +33,7 @@ pull_request_rules:
     actions:
       request_reviews:
         teams:
-          - "@solana-labs/community-pr-subscribers"
+          - "@anza-xyz/community-pr-subscribers"
   - name: label changes from monorepo-triage
     conditions:
       - author≠@core-contributors
@@ -102,7 +102,7 @@ pull_request_rules:
     actions:
       backport:
         assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@anza-xyz/community-pr-subscribers')) }}"
         title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
