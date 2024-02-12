@@ -700,14 +700,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// when the cache doesn't contain the entry corresponding to program `key`.
     pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> bool {
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
-        let index = slot_versions
-            .iter()
-            .position(|at| at.effective_slot >= entry.effective_slot);
-        if let Some(existing) = index.and_then(|index| slot_versions.get_mut(index)) {
-            if existing.deployment_slot == entry.deployment_slot
-                && existing.effective_slot == entry.effective_slot
-            {
-                return if std::mem::discriminant(&existing.program)
+        match slot_versions.binary_search_by(|at| {
+            at.effective_slot
+                .cmp(&entry.effective_slot)
+                .then(at.deployment_slot.cmp(&entry.deployment_slot))
+        }) {
+            Ok(index) => {
+                let existing = slot_versions.get_mut(index).unwrap();
+                if std::mem::discriminant(&existing.program)
                     != std::mem::discriminant(&entry.program)
                 {
                     // Copy over the usage counter to the new entry
@@ -726,12 +726,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     // Something is wrong, I can feel it ...
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     true
-                };
+                }
+            }
+            Err(index) => {
+                self.stats.insertions.fetch_add(1, Ordering::Relaxed);
+                slot_versions.insert(index, entry.clone());
+                false
             }
         }
-        self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-        slot_versions.insert(index.unwrap_or(slot_versions.len()), entry);
-        false
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
@@ -1655,6 +1657,33 @@ mod tests {
                 }
             })
         });
+    }
+
+    #[test]
+    fn test_fuzz_assign_program_order() {
+        use rand::prelude::SliceRandom;
+        const EXPECTED_ENTRIES: [(u64, u64); 7] =
+            [(1, 2), (5, 5), (5, 6), (5, 10), (9, 10), (10, 10), (3, 12)];
+        let mut rng = rand::thread_rng();
+        let program_id = Pubkey::new_unique();
+        for _ in 0..1000 {
+            let mut entries = EXPECTED_ENTRIES.to_vec();
+            entries.shuffle(&mut rng);
+            let mut cache = new_mock_cache::<TestForkGraph>();
+            for (deployment_slot, effective_slot) in entries {
+                assert!(!cache.assign_program(
+                    program_id,
+                    new_test_loaded_program(deployment_slot, effective_slot)
+                ));
+            }
+            for ((deployment_slot, effective_slot), entry) in EXPECTED_ENTRIES
+                .iter()
+                .zip(cache.entries.get(&program_id).unwrap().slot_versions.iter())
+            {
+                assert_eq!(entry.deployment_slot, *deployment_slot);
+                assert_eq!(entry.effective_slot, *effective_slot);
+            }
+        }
     }
 
     #[test]
