@@ -3122,7 +3122,7 @@ fn test_optimistic_confirmation_violation_without_tower() {
 //    `A` should not be able to generate a switching proof.
 //
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
-    solana_logger::setup_with("debug");
+    solana_logger::setup_with("info");
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
@@ -3228,6 +3228,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Immediately kill validator C. No need to kill validator A because
     // 1) It has no slots in the leader schedule, so no way to make forks
     // 2) We need it to vote
+    let client = RpcClient::new_socket(cluster.entry_point_info.rpc().unwrap());
+    while client.get_slot().unwrap() < 29 {
+        sleep(Duration::from_millis(100));
+    }
     info!("Exiting validator C");
     let mut validator_c_info = cluster.exit_node(&validator_c_pubkey);
 
