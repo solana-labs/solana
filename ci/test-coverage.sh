@@ -32,5 +32,5 @@ else
   codecov -t "${CODECOV_TOKEN}"
 
   annotate --style success --context codecov.io \
-    "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${CI_COMMIT:0:9}"
+    "CodeCov report: https://codecov.io/github/anza-xyz/agave/commit/${CI_COMMIT:0:9}"
 fi
