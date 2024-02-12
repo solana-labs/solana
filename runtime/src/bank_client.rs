@@ -331,7 +331,7 @@ impl BankClient {
         self.bank.set_sysvar_for_tests(sysvar);
     }
 
-    #[cfg(feature = "dev-context-only-utils")]
+    /// Only used for test and bench.
     pub fn advance_slot(
         &mut self,
         by: u64,
