@@ -41,7 +41,8 @@ cannot change the original value that is contained in a commitment.
 Interested readers can refer to the following resources for a more in-depth
 treatment of Pedersen commitment and the (twisted) ElGamal encryption schemes.
 
-- [Notes](./zk-docs/twisted_elgamal.pdf) on the twisted ElGamal encryption
+- [Notes](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/twisted_elgamal.pdf)
+  on the twisted ElGamal encryption
 - A technical
   [overview](https://github.com/solana-labs/solana-program-library/blob/master/token/zk-token-protocol-paper/part1.pdf)
   of the SPL Token 2022 confidential extension
@@ -98,14 +99,14 @@ The ZK Token proof program supports the following list of zero-knowledge proofs.
   - The ElGamal public-key validity proof instruction certifies that an ElGamal
     public-key is a properly formed public key.
   - Mathematical description and proof of security:
-    [[Notes]](./zk-docs/pubkey_proof.pdf)
+    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/pubkey_proof.pdf)
 
 - `VerifyZeroBalance`:
 
   - The zero-balance proof certifies that an ElGamal ciphertext encrypts the
     number zero.
   - Mathematical description and proof of security:
-    [[Notes]](./zk-docs/zero_proof.pdf)
+    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/zero_proof.pdf)
 
 #### Equality proofs
 
@@ -114,11 +115,11 @@ The ZK Token proof program supports the following list of zero-knowledge proofs.
   - The ciphertext-commitment equality proof certifies that an ElGamal
     ciphertext and a Pedersen commitment encode the same message.
   - Mathematical description and proof of security:
-    [[Notes]](./zk-docs/ciphertext_commitment_equality.pdf)
+    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/ciphertext_commitment_equality.pdf)
 
 - `VerifyCiphertextCiphertextEquality`:
 
   - The ciphertext-ciphertext equality proof certifies that two ElGamal
     ciphertexts encrypt the same message.
   - Mathematical description and proof of security:
-    [[Notes]](./zk-docs/ciphertext_ciphertext_equality.pdf)
+    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/ciphertext_ciphertext_equality.pdf)

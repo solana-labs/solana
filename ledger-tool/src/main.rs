@@ -6,7 +6,9 @@ use {
         blockstore::*,
         ledger_path::*,
         ledger_utils::*,
-        output::{output_account, AccountsOutputConfig, AccountsOutputStreamer},
+        output::{
+            output_account, AccountsOutputConfig, AccountsOutputMode, AccountsOutputStreamer,
+        },
         program::*,
     },
     clap::{
@@ -1312,6 +1314,7 @@ fn main() {
                 .arg(&geyser_plugin_args)
                 .arg(&accounts_data_encoding_arg)
                 .arg(&use_snapshot_archives_at_startup)
+                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(
                     Arg::with_name("include_sysvars")
                         .long("include-sysvars")
@@ -1333,7 +1336,27 @@ fn main() {
                         .takes_value(false)
                         .help("Do not print account data when printing account contents."),
                 )
-                .arg(&max_genesis_archive_unpacked_size_arg),
+                .arg(
+                    Arg::with_name("account")
+                        .long("account")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .multiple(true)
+                        .help(
+                            "Limit output to accounts corresponding to the specified pubkey(s), \
+                            may be specified multiple times",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("program_accounts")
+                        .long("program-accounts")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .conflicts_with("account")
+                        .help("Limit output to accounts owned by the provided program pubkey"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("capitalization")
@@ -2179,7 +2202,18 @@ fn main() {
                     let include_account_contents = !arg_matches.is_present("no_account_contents");
                     let include_account_data = !arg_matches.is_present("no_account_data");
                     let account_data_encoding = parse_encoding_format(arg_matches);
+                    let mode = if let Some(pubkeys) = pubkeys_of(arg_matches, "account") {
+                        info!("Scanning individual accounts: {pubkeys:?}");
+                        AccountsOutputMode::Individual(pubkeys)
+                    } else if let Some(pubkey) = pubkey_of(arg_matches, "program_accounts") {
+                        info!("Scanning program accounts for {pubkey}");
+                        AccountsOutputMode::Program(pubkey)
+                    } else {
+                        info!("Scanning all accounts");
+                        AccountsOutputMode::All
+                    };
                     let config = AccountsOutputConfig {
+                        mode,
                         include_sysvars,
                         include_account_contents,
                         include_account_data,

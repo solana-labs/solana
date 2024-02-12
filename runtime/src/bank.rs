@@ -76,7 +76,6 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
         },
-        accounts_file::MatchAccountOwnerError,
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
@@ -86,16 +85,12 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         epoch_accounts_hash::EpochAccountsHash,
-        nonce_info::{NonceInfo, NoncePartial},
         partitioned_rewards::PartitionedEpochRewardsConfig,
-        rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
-        rent_debits::RentDebits,
         sorted_storages::SortedStorages,
-        stake_rewards::{RewardInfo, StakeReward},
+        stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
         transaction_results::{
-            TransactionCheckResult, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
@@ -139,10 +134,14 @@ use {
         native_token::LAMPORTS_PER_SOL,
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
+        nonce_info::{NonceInfo, NoncePartial},
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
         rent::RentDue,
+        rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
+        rent_debits::RentDebits,
+        reward_info::RewardInfo,
         saturating_add_assign,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
@@ -161,6 +160,7 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_svm::{
+        account_loader::TransactionCheckResult,
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -4911,7 +4911,6 @@ impl Bank {
             sanitized_txs,
             &execution_results,
             loaded_txs,
-            &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
         );
@@ -5240,15 +5239,12 @@ impl Bank {
                 .accounts
                 .accounts_db
                 .test_skip_rewrites_but_include_in_bank_hash;
-        let set_exempt_rent_epoch_max: bool = self
-            .feature_set
-            .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let rent_collected_info = if self.should_collect_rent() {
                 let (rent_collected_info, measure) = measure!(self
                     .rent_collector
-                    .collect_from_existing_account(pubkey, account, set_exempt_rent_epoch_max,));
+                    .collect_from_existing_account(pubkey, account));
                 time_collecting_rent_us += measure.as_us();
                 rent_collected_info
             } else {
@@ -5256,9 +5252,8 @@ impl Bank {
                 // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
                 // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                 // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
-                if set_exempt_rent_epoch_max
-                    && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
-                        && self.rent_collector.get_rent_due(account) == RentDue::Exempt)
+                if account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                    && self.rent_collector.get_rent_due(account) == RentDue::Exempt
                 {
                     account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                 }
@@ -6044,8 +6039,16 @@ impl Bank {
     // pro: safer assertion can be enabled inside AccountsDb
     // con: panics!() if called from off-chain processing
     pub fn get_account_with_fixed_root(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        self.load_slow_with_fixed_root(&self.ancestors, pubkey)
+        self.get_account_modified_slot_with_fixed_root(pubkey)
             .map(|(acc, _slot)| acc)
+    }
+
+    // See note above get_account_with_fixed_root() about when to prefer this function
+    pub fn get_account_modified_slot_with_fixed_root(
+        &self,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
+        self.load_slow_with_fixed_root(&self.ancestors, pubkey)
     }
 
     pub fn get_account_modified_slot(&self, pubkey: &Pubkey) -> Option<(AccountSharedData, Slot)> {
@@ -7492,15 +7495,12 @@ impl Bank {
 }
 
 impl TransactionProcessingCallback for Bank {
-    fn account_matches_owners(
-        &self,
-        account: &Pubkey,
-        owners: &[Pubkey],
-    ) -> std::result::Result<usize, MatchAccountOwnerError> {
+    fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize> {
         self.rc
             .accounts
             .accounts_db
             .account_matches_owners(&self.ancestors, account, owners)
+            .ok()
     }
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {

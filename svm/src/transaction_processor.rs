@@ -1,18 +1,17 @@
 use {
     crate::{
-        account_loader::load_accounts, account_overrides::AccountOverrides,
-        runtime_config::RuntimeConfig, transaction_account_state_info::TransactionAccountStateInfo,
+        account_loader::{load_accounts, TransactionCheckResult},
+        account_overrides::AccountOverrides,
+        runtime_config::RuntimeConfig,
+        transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
     },
     log::debug,
     percentage::Percentage,
     solana_accounts_db::{
         accounts::{LoadedTransaction, TransactionLoadResult},
-        accounts_file::MatchAccountOwnerError,
-        rent_collector::RentCollector,
         transaction_results::{
-            DurableNonceFee, TransactionCheckResult, TransactionExecutionDetails,
-            TransactionExecutionResult,
+            DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
         },
     },
     solana_measure::measure::Measure,
@@ -43,6 +42,7 @@ use {
         message::SanitizedMessage,
         native_loader,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
@@ -70,11 +70,7 @@ pub struct LoadAndExecuteSanitizedTransactionsOutput {
 }
 
 pub trait TransactionProcessingCallback {
-    fn account_matches_owners(
-        &self,
-        account: &Pubkey,
-        owners: &[Pubkey],
-    ) -> std::result::Result<usize, MatchAccountOwnerError>;
+    fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize>;
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData>;
 
@@ -340,7 +336,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                                 saturating_add_assign!(*count, 1);
                             }
                             Entry::Vacant(entry) => {
-                                if let Ok(index) =
+                                if let Some(index) =
                                     callbacks.account_matches_owners(key, program_owners)
                                 {
                                     program_owners
@@ -774,7 +770,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     program_runtime_environment.clone(),
                     deployment_slot,
                     deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
-                    None,
                     programdata,
                     account_size,
                     load_program_metrics,
@@ -786,7 +781,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 program_runtime_environment.clone(),
                 deployment_slot,
                 deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET),
-                None,
                 programdata,
                 account_size,
                 load_program_metrics,

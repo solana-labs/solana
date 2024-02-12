@@ -1441,22 +1441,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
-        let read_lock = self.get_bin(pubkey);
-        let account = read_lock
-            .get(pubkey)
-            .map(ReadAccountMapEntry::from_account_map_entry);
-
-        match account {
-            Some(locked_entry) => {
+        self.get_account_read_entry(pubkey)
+            .and_then(|locked_entry| {
                 let slot_list = locked_entry.slot_list();
-                let found_index = self.latest_slot(ancestors, slot_list, max_root);
-                match found_index {
-                    Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
-                    None => AccountIndexGetResult::NotFound,
-                }
-            }
-            None => AccountIndexGetResult::NotFound,
-        }
+                self.latest_slot(ancestors, slot_list, max_root)
+                    .map(|found_index| AccountIndexGetResult::Found(locked_entry, found_index))
+            })
+            .unwrap_or(AccountIndexGetResult::NotFound)
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`

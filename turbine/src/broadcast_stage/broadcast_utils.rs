@@ -28,6 +28,7 @@ pub(super) struct ReceiveResults {
 
 #[derive(Clone)]
 pub struct UnfinishedSlotInfo {
+    pub(super) chained_merkle_root: Hash,
     pub next_shred_index: u32,
     pub(crate) next_code_index: u32,
     pub slot: Slot,

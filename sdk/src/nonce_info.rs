@@ -1,13 +1,12 @@
-use {
-    crate::rent_debits::RentDebits,
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
-        message::SanitizedMessage,
-        nonce_account,
-        pubkey::Pubkey,
-        transaction::{self, TransactionError},
-        transaction_context::TransactionAccount,
-    },
+#![cfg(feature = "full")]
+use crate::{
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
+    message::SanitizedMessage,
+    nonce_account,
+    pubkey::Pubkey,
+    rent_debits::RentDebits,
+    transaction::{self, TransactionError},
+    transaction_context::TransactionAccount,
 };
 
 pub trait NonceInfo {
@@ -120,7 +119,7 @@ impl NonceInfo for NonceFull {
 mod tests {
     use {
         super::*,
-        solana_sdk::{
+        crate::{
             hash::Hash,
             instruction::Instruction,
             message::Message,

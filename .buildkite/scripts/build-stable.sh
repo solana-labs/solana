@@ -12,7 +12,7 @@ partitions=$(
   cat <<EOF
 {
   "name": "partitions",
-  "command": ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/stable/run-partition.sh",
+  "command": "ci/docker-run-default-image.sh ci/stable/run-partition.sh",
   "timeout_in_minutes": 30,
   "agent": "$agent",
   "parallelism": 2,
@@ -25,7 +25,7 @@ local_cluster_partitions=$(
   cat <<EOF
 {
   "name": "local-cluster",
-  "command": ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/stable/run-local-cluster-partially.sh",
+  "command": "ci/docker-run-default-image.sh ci/stable/run-local-cluster-partially.sh",
   "timeout_in_minutes": 30,
   "agent": "$agent",
   "parallelism": 5,
@@ -38,7 +38,7 @@ localnet=$(
   cat <<EOF
 {
   "name": "localnet",
-  "command": ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/stable/run-localnet.sh",
+  "command": "ci/docker-run-default-image.sh ci/stable/run-localnet.sh",
   "timeout_in_minutes": 30,
   "agent": "$agent"
 }
