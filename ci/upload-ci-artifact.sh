@@ -40,3 +40,13 @@ upload-s3-artifact() {
     docker run "${args[@]}"
   )
 }
+
+upload-gcs-artifact() {
+  echo "--- artifact: $1 to $2"
+  docker run --rm \
+    -v "$GCS_RELEASE_BUCKET_WRITER_CREDIENTIAL:/application_default_credentials.json" \
+    -v "$PWD:/solana" \
+    -e CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=/application_default_credentials.json \
+    gcr.io/google.com/cloudsdktool/google-cloud-cli:latest \
+    gcloud storage cp "$1" "$2"
+}
