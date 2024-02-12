@@ -16,9 +16,9 @@
 { # this ensures the entire script is downloaded #
 
 if [ -z "$SOLANA_DOWNLOAD_ROOT" ]; then
-    SOLANA_DOWNLOAD_ROOT="https://github.com/solana-labs/solana/releases/download/"
+    SOLANA_DOWNLOAD_ROOT="https://github.com/anza-xyz/agave/releases/download/"
 fi
-GH_LATEST_RELEASE="https://api.github.com/repos/solana-labs/solana/releases/latest"
+GH_LATEST_RELEASE="https://api.github.com/repos/anza-xyz/agave/releases/latest"
 
 set -e
 

@@ -14,14 +14,12 @@ concurrency:
 
 jobs:
   release-artifacts:
-    if: github.repository == 'solana-labs/solana'
+    if: github.repository == 'anza-xyz/agave'
     uses: ./.github/workflows/release-artifacts.yml
     with:
       commit: ${{ github.sha }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GCS_RELEASE_BUCKET_WRITER_CREDIENTIAL: ${{ secrets.GCS_RELEASE_BUCKET_WRITER_CREDIENTIAL }}
 
   error_reporting:
     needs:
