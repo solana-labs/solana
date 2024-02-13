@@ -584,7 +584,7 @@ impl ReplayStage {
                 // set-identity was called during the startup procedure, ensure the tower is consistent
                 // before starting the loop. further calls to set-identity will reload the tower in the loop
                 tower = Self::reload_tower_with_new_identity(
-                    &tower_storage,
+                    tower_storage.as_ref(),
                     &my_pubkey,
                     &vote_account,
                     &bank_forks,
@@ -1000,7 +1000,7 @@ impl ReplayStage {
 
                             // Load the new identity's tower
                             tower = Self::reload_tower_with_new_identity(
-                                &tower_storage,
+                                tower_storage.as_ref(),
                                 &my_pubkey,
                                 &vote_account,
                                 &bank_forks,
@@ -1155,12 +1155,12 @@ impl ReplayStage {
     }
 
     fn reload_tower_with_new_identity(
-        tower_storage: &Arc<dyn TowerStorage>,
+        tower_storage: &dyn TowerStorage,
         new_identity: &Pubkey,
         vote_account: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Tower {
-        Tower::restore(tower_storage.as_ref(), new_identity)
+        Tower::restore(tower_storage, new_identity)
             .and_then(|restored_tower| {
                 let root_bank = bank_forks.read().unwrap().root_bank();
                 let slot_history = root_bank.get_slot_history();
@@ -4256,9 +4256,9 @@ pub(crate) mod tests {
         crate::{
             consensus::{
                 progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
-                tower_storage::NullTowerStorage,
+                tower_storage::{FileTowerStorage, NullTowerStorage},
                 tree_diff::TreeDiff,
-                Tower,
+                Tower, VOTE_THRESHOLD_DEPTH,
             },
             replay_stage::ReplayStage,
             vote_simulator::{self, VoteSimulator},
@@ -4280,7 +4280,7 @@ pub(crate) mod tests {
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender,
-            commitment::BlockCommitment,
+            commitment::{BlockCommitment, VOTE_THRESHOLD_SIZE},
             genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
         },
         solana_sdk::{
@@ -4304,6 +4304,7 @@ pub(crate) mod tests {
             iter,
             sync::{atomic::AtomicU64, Arc, RwLock},
         },
+        tempfile::tempdir,
         trees::{tr, Tree},
     };
 
@@ -8623,5 +8624,61 @@ pub(crate) mod tests {
         assert_eq!(vote_fork, None);
         assert_eq!(reset_fork, Some(4));
         assert_eq!(failures, vec![HeaviestForkFailures::LockedOut(4),]);
+    }
+
+    #[test]
+    fn test_tower_reload_missing() {
+        let tower_file = tempdir().unwrap().into_path();
+        let tower_storage = FileTowerStorage::new(tower_file);
+        let identity = Pubkey::new_unique();
+        let vote_account = Pubkey::new_unique();
+        let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
+        let generate_votes = |pubkeys: Vec<Pubkey>| {
+            pubkeys
+                .into_iter()
+                .zip(iter::once(vec![0, 1, 2, 5, 6]).chain(iter::repeat(vec![0, 1, 3, 4]).take(2)))
+                .collect()
+        };
+        let (vote_simulator, _blockstore) =
+            setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
+        let bank_forks = vote_simulator.bank_forks;
+
+        let tower = ReplayStage::reload_tower_with_new_identity(
+            &tower_storage,
+            &identity,
+            &vote_account,
+            &bank_forks,
+        );
+        let expected_tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, VOTE_THRESHOLD_SIZE);
+        assert_eq!(tower.vote_state, expected_tower.vote_state);
+    }
+
+    #[test]
+    fn test_tower_reload() {
+        let tower_file = tempdir().unwrap().into_path();
+        let tower_storage = FileTowerStorage::new(tower_file);
+        let node_keypair = Keypair::new();
+        let identity = node_keypair.pubkey();
+        let vote_account = Pubkey::new_unique();
+        let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
+        let generate_votes = |pubkeys: Vec<Pubkey>| {
+            pubkeys
+                .into_iter()
+                .zip(iter::once(vec![0, 1, 2, 5, 6]).chain(iter::repeat(vec![0, 1, 3, 4]).take(2)))
+                .collect()
+        };
+        let (vote_simulator, _blockstore) =
+            setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
+        let bank_forks = vote_simulator.bank_forks;
+        let expected_tower = Tower::new_random(identity);
+        expected_tower.save(&tower_storage, &node_keypair).unwrap();
+
+        let tower = ReplayStage::reload_tower_with_new_identity(
+            &tower_storage,
+            &identity,
+            &vote_account,
+            &bank_forks,
+        );
+        assert_eq!(tower.vote_state, expected_tower.vote_state);
     }
 }

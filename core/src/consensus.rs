@@ -292,6 +292,28 @@ impl Tower {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_random(node_pubkey: Pubkey) -> Self {
+        use rand::Rng;
+
+        let mut rng = rand::thread_rng();
+        let root_slot = rng.gen();
+        let vote_state = VoteState::new_rand_for_tests(node_pubkey, root_slot);
+        let last_vote = VoteStateUpdate::from(
+            vote_state
+                .votes
+                .iter()
+                .map(|lv| (lv.slot(), lv.confirmation_count()))
+                .collect::<Vec<_>>(),
+        );
+        Self {
+            node_pubkey,
+            vote_state,
+            last_vote: VoteTransaction::CompactVoteStateUpdate(last_vote),
+            ..Tower::default()
+        }
+    }
+
     pub fn new_from_bankforks(
         bank_forks: &BankForks,
         node_pubkey: &Pubkey,
