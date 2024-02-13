@@ -2097,12 +2097,13 @@ fn maybe_warp_slot(
     Ok(())
 }
 
-/// Searches the blockstore for data shreds with the incorrect shred version.
-fn blockstore_contains_bad_shred_version(
+/// Searches the blockstore for data shreds with a shred version that differs
+/// from the passed `expected_shred_version`
+fn blockstore_contains_incorrect_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
     expected_shred_version: u16,
-) -> Result<bool, BlockstoreError> {
+) -> Result<Option<u16>, BlockstoreError> {
     const TIMEOUT: Duration = Duration::from_secs(60);
     let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
@@ -2113,7 +2114,7 @@ fn blockstore_contains_bad_shred_version(
         let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
         for shred in &shreds {
             if shred.version() != expected_shred_version {
-                return Ok(true);
+                return Ok(Some(shred.version()));
             }
         }
         if timer.elapsed() > TIMEOUT {
@@ -2121,7 +2122,7 @@ fn blockstore_contains_bad_shred_version(
             break;
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
 /// If the blockstore contains any shreds with the incorrect shred version,
@@ -2134,10 +2135,13 @@ fn backup_and_clear_blockstore(
 ) -> Result<(), BlockstoreError> {
     let blockstore =
         Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))?;
-    let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version)?;
+    let incorrect_shred_version = blockstore_contains_incorrect_shred_version(
+        &blockstore,
+        start_slot,
+        expected_shred_version,
+    )?;
 
-    if do_copy_and_clear {
+    if let Some(incorrect_shred_version) = incorrect_shred_version {
         // .unwrap() safe because getting to this point implies blockstore has slots/shreds
         let end_slot = blockstore.highest_slot()?.unwrap();
 
@@ -2149,7 +2153,7 @@ fn backup_and_clear_blockstore(
                 .ledger_column_options
                 .shred_storage_type
                 .blockstore_directory(),
-            expected_shred_version,
+            incorrect_shred_version,
             start_slot,
             end_slot
         );
