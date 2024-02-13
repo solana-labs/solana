@@ -2376,6 +2376,52 @@ mod tests {
     }
 
     #[test]
+    fn test_unloaded() {
+        let mut cache = new_mock_cache::<TestForkGraph>();
+        for loaded_program_type in [
+            LoadedProgramType::FailedVerification(cache.environments.program_runtime_v1.clone()),
+            LoadedProgramType::Closed,
+            LoadedProgramType::DelayVisibility, // Never inserted in the global cache
+            LoadedProgramType::Unloaded(cache.environments.program_runtime_v1.clone()),
+            LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+        ] {
+            let entry = Arc::new(LoadedProgram {
+                program: loaded_program_type,
+                account_size: 0,
+                deployment_slot: 0,
+                effective_slot: 0,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            });
+            assert!(entry.to_unloaded().is_none());
+
+            // Check that unload_program_entry() does nothing for this entry
+            let program_id = Pubkey::new_unique();
+            cache.assign_program(program_id, entry.clone());
+            cache.unload_program_entry(&program_id, &entry);
+            assert_eq!(
+                cache.entries.get(&program_id).unwrap().slot_versions.len(),
+                1
+            );
+            assert!(cache.stats.evictions.is_empty());
+        }
+
+        let entry = new_test_loaded_program_with_usage(1, 2, AtomicU64::new(3));
+        let unloaded_entry = entry.to_unloaded().unwrap();
+        assert_eq!(unloaded_entry.deployment_slot, 1);
+        assert_eq!(unloaded_entry.effective_slot, 2);
+        assert_eq!(unloaded_entry.latest_access_slot.load(Ordering::Relaxed), 1);
+        assert_eq!(unloaded_entry.tx_usage_counter.load(Ordering::Relaxed), 3);
+
+        // Check that unload_program_entry() does its work
+        let program_id = Pubkey::new_unique();
+        cache.assign_program(program_id, entry.clone());
+        cache.unload_program_entry(&program_id, &entry);
+        assert!(cache.stats.evictions.get(&program_id).is_some());
+    }
+
+    #[test]
     fn test_fork_prune_find_first_ancestor() {
         let mut cache = new_mock_cache::<TestForkGraphSpecific>();
 
