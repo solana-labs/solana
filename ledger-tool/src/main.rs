@@ -2062,7 +2062,7 @@ fn main() {
 
                     let post_capitalization = bank.capitalization();
 
-                    if pre_capitalization != post_capitalization {
+                    let capitalization_message = if pre_capitalization != post_capitalization {
                         let amount = if pre_capitalization > post_capitalization {
                             format!("-{}", pre_capitalization - post_capitalization)
                         } else {
@@ -2076,7 +2076,10 @@ fn main() {
                             );
                             exit(1);
                         }
-                    }
+                        Some(msg)
+                    } else {
+                        None
+                    };
 
                     let bank = if let Some(warp_slot) = warp_slot {
                         // need to flush the write cache in order to use Storages to calculate
@@ -2204,6 +2207,9 @@ fn main() {
                         }
                     }
 
+                    if let Some(msg) = capitalization_message {
+                        println!("{msg}");
+                    }
                     println!(
                         "Shred version: {}",
                         compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
