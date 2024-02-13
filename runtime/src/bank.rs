@@ -7252,6 +7252,13 @@ impl Bank {
             self.get_minimum_balance_for_rent_exemption(account.data().len())
                 .max(account.lamports()),
         );
+
+        if self
+            .feature_set
+            .is_active(&feature_set::set_sysvar_rent_epoch_max::id())
+        {
+            account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+        }
     }
 
     /// Compute the active feature set based on the current bank state,
