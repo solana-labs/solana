@@ -19,6 +19,7 @@ use {
     },
     dashmap::DashMap,
     derivative::Derivative,
+    lazy_static::lazy_static,
     log::*,
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
@@ -55,7 +56,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use lazy_static::lazy_static;
 
 type AtomicSchedulerId = AtomicU64;
 
