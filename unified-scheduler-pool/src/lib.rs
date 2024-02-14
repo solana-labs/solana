@@ -28,6 +28,7 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank,
+        compute_budget_details::GetComputeBudgetDetails,
         installed_scheduler_pool::{
             DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerPool,
             InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg, SchedulerId,
@@ -35,7 +36,6 @@ use {
             WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
-        transaction_priority_details::GetTransactionPriorityDetails,
     },
     solana_sdk::{
         clock::Slot,
@@ -890,11 +890,11 @@ where
             )
             .unwrap();
             let status = format!("{:?}", executed_task.result_with_timings.0);
-            let priority = executed_task
+            let compute_price = executed_task
                 .task
                 .transaction()
-                .get_transaction_priority_details(false)
-                .map(|d| d.priority)
+                .get_compute_budget_details(false)
+                .map(|d| d.compute_price)
                 .unwrap_or_default();
 
             datapoint_info_at!(
@@ -909,7 +909,7 @@ where
                 ("duration", handler_timings.execution_us, i64),
                 ("cpu_duration", handler_timings.execution_cpu_us, i64),
                 ("compute_units", 0 /*task.cu*/, i64),
-                ("priority", priority, i64),
+                ("priority", compute_price, i64), // old name is kept for compat...
             );
         }
 
