@@ -1,8 +1,8 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![cfg(not(target_os = "linux"))]
 
-#![cfg(target_os = "linux")]
-fn main() {}
+#[cfg(target_os = "linux")]
+pub fn main() {}
 
 
 #[global_allocator]
