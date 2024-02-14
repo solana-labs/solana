@@ -5500,7 +5500,9 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
 
     // Randomly switch to use unified scheduler
      use rand::seq::SliceRandom;
-    for method in (&mut [BlockVerificationMethod::UnifiedScheduler, BlockVerificationMethod::BlockstoreProcessor]).shuffle(&mut rand::thread_rng()){
+     let method = &mut [BlockVerificationMethod::UnifiedScheduler, BlockVerificationMethod::BlockstoreProcessor];
+    methods.shuffle(&mut rand::thread_rng());
+    for method in methods {
     }
     /*
     config 
