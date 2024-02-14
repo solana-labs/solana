@@ -20,12 +20,18 @@ name = "bench-with-iai-callgrind"
 harness = false
 
 [dev-dependencies]
-iai-callgrind = { version = "0.10.2", features = [
-    "client_requests_defs"
-] }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-unified-scheduler-logic = { path = ".", features = ["dev-context-only-utils"] }
 triomphe = { version = "0.1.11" }
+
+[target."cfg(target_os = \"linux\")".dependencies]
+iai-callgrind = { version = "0.10.2", features = [
+    "client_requests"
+] }
+[target."cfg(not(target_os = \"linux\"))".dependencies]
+iai-callgrind = { version = "0.10.2", features = [
+    "client_requests_defs"
+] }
 
 [features]
 dev-context-only-utils = []
