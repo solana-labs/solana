@@ -1,6 +1,6 @@
 #![cfg(not(target_os = "linux"))]
 
-#![cfg(not(target_os = "linux"))]
+#![cfg(target_os = "linux")]
 fn main() {}
 
 #![allow(clippy::arithmetic_side_effects)]
