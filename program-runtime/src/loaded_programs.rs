@@ -721,33 +721,39 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         }) {
             Ok(index) => {
                 let existing = slot_versions.get_mut(index).unwrap();
-                if std::mem::discriminant(&existing.program)
-                    != std::mem::discriminant(&entry.program)
-                {
-                    // Copy over the usage counter to the new entry
-                    entry.tx_usage_counter.fetch_add(
-                        existing.tx_usage_counter.load(Ordering::Relaxed),
-                        Ordering::Relaxed,
-                    );
-                    entry.ix_usage_counter.fetch_add(
-                        existing.ix_usage_counter.load(Ordering::Relaxed),
-                        Ordering::Relaxed,
-                    );
-                    *existing = entry.clone();
-                    self.stats.reloads.fetch_add(1, Ordering::Relaxed);
-                    false
-                } else {
-                    // Something is wrong, I can feel it ...
-                    self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                    true
+                match (&existing.program, &entry.program) {
+                    (LoadedProgramType::Builtin(_), LoadedProgramType::Builtin(_))
+                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV0(_))
+                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV1(_))
+                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::Typed(_)) => {}
+                    #[cfg(test)]
+                    (LoadedProgramType::Unloaded(_), LoadedProgramType::TestLoaded(_)) => {}
+                    _ => {
+                        // Something is wrong, I can feel it ...
+                        error!("LoadedPrograms::assign_program() failed key={:?} existing={:?} entry={:?}", key, slot_versions, entry);
+                        debug_assert!(false, "Unexpected replacement of an entry");
+                        self.stats.replacements.fetch_add(1, Ordering::Relaxed);
+                        return true;
+                    }
                 }
+                // Copy over the usage counter to the new entry
+                entry.tx_usage_counter.fetch_add(
+                    existing.tx_usage_counter.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                entry.ix_usage_counter.fetch_add(
+                    existing.ix_usage_counter.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                *existing = Arc::clone(&entry);
+                self.stats.reloads.fetch_add(1, Ordering::Relaxed);
             }
             Err(index) => {
                 self.stats.insertions.fetch_add(1, Ordering::Relaxed);
-                slot_versions.insert(index, entry.clone());
-                false
+                slot_versions.insert(index, Arc::clone(&entry));
             }
         }
+        false
     }
 
     pub fn prune_by_deployment_slot(&mut self, slot: Slot) {
@@ -1673,39 +1679,6 @@ mod tests {
                 assert_eq!(entry.effective_slot, *effective_slot);
             }
         }
-    }
-
-    #[test]
-    fn test_assign_program_tombstones() {
-        let mut cache = new_mock_cache::<TestForkGraph>();
-        let program1 = Pubkey::new_unique();
-        let env = cache.environments.program_runtime_v1.clone();
-
-        set_tombstone(
-            &mut cache,
-            program1,
-            10,
-            LoadedProgramType::FailedVerification(env.clone()),
-        );
-        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
-        set_tombstone(&mut cache, program1, 10, LoadedProgramType::Closed);
-        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
-        set_tombstone(
-            &mut cache,
-            program1,
-            10,
-            LoadedProgramType::FailedVerification(env.clone()),
-        );
-        assert_eq!(cache.entries.get(&program1).unwrap().slot_versions.len(), 1);
-
-        // Fail on exact replacement
-        assert!(cache.assign_program(
-            program1,
-            Arc::new(LoadedProgram::new_tombstone(
-                10,
-                LoadedProgramType::FailedVerification(env)
-            ))
-        ));
     }
 
     #[test]
