@@ -100,6 +100,7 @@ use {
         time::{Duration, Instant},
     },
 };
+ use rand::seq::SliceRandom;
 
 #[test]
 fn test_local_cluster_start_and_exit() {
@@ -5499,7 +5500,6 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     );
 
     // Randomly switch to use unified scheduler
-     use rand::seq::SliceRandom;
      let mut methods = [BlockVerificationMethod::UnifiedScheduler, BlockVerificationMethod::BlockstoreProcessor];
     methods.shuffle(&mut rand::thread_rng());
     for (validator_config, method) in config.validator_configs.iter_mut().zip(methods) {
