@@ -12403,15 +12403,19 @@ fn test_epoch_credit_rewards_and_history_update() {
 #[test]
 fn test_distribute_partitioned_epoch_rewards_bank_capital_and_sysvar_balance() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    activate_all_features(&mut genesis_config);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+    let bank = Bank::new_for_tests(&genesis_config);
 
     // Set up epoch_rewards sysvar with rewards with 1e9 lamports to distribute.
     let total_rewards = 1_000_000_000;
     bank.create_epoch_rewards_sysvar(total_rewards, 0, 42);
     let pre_epoch_rewards_account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
     assert_eq!(pre_epoch_rewards_account.lamports(), total_rewards);
+    assert_eq!(
+        pre_epoch_rewards_account.rent_epoch(),
+        RENT_EXEMPT_RENT_EPOCH
+    );
 
     // Set up a partition of rewards to distribute
     let expected_num = 100;
@@ -12436,6 +12440,10 @@ fn test_distribute_partitioned_epoch_rewards_bank_capital_and_sysvar_balance() {
     assert_eq!(
         post_epoch_rewards_account.lamports(),
         expected_epoch_rewards_sysvar_lamports_remaining
+    );
+    assert_eq!(
+        post_epoch_rewards_account.rent_epoch(),
+        RENT_EXEMPT_RENT_EPOCH
     );
 
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
@@ -12704,8 +12712,8 @@ fn test_rewards_computation_and_partitioned_distribution_two_blocks() {
 fn test_epoch_rewards_sysvar() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+    activate_all_features(&mut genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let total_rewards = 1_000_000_000; // a large rewards so that the sysvar account is rent-exempted.
 
@@ -12719,6 +12727,7 @@ fn test_epoch_rewards_sysvar() {
     bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
     let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
     assert_eq!(account.lamports(), total_rewards - 10);
+    assert_eq!(account.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
     assert_eq!(epoch_rewards, expected_epoch_rewards);
 
@@ -12726,6 +12735,7 @@ fn test_epoch_rewards_sysvar() {
     bank.update_epoch_rewards_sysvar(10);
     let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
     assert_eq!(account.lamports(), total_rewards - 20);
+    assert_eq!(account.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
     let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
         total_rewards,
