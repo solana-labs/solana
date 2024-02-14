@@ -212,6 +212,7 @@ pub fn load_upgradeable_program(
     });
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn load_upgradeable_program_wrapper(
     bank_client: &BankClient,
     mint_keypair: &Keypair,
@@ -231,6 +232,7 @@ pub fn load_upgradeable_program_wrapper(
     program_keypair.pubkey()
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn load_upgradeable_program_and_advance_slot(
     bank_client: &mut BankClient,
     bank_forks: &RwLock<BankForks>,
