@@ -1,3 +1,5 @@
+#[cfg(test)]
+use arbitrary::Arbitrary;
 use {
     crate::{clock::Epoch, pubkey::Pubkey},
     serde_derive::{Deserialize, Serialize},
@@ -5,6 +7,7 @@ use {
 };
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct AuthorizedVoters {
     authorized_voters: BTreeMap<Epoch, Pubkey>,
 }

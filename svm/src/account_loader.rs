@@ -1,24 +1,12 @@
-pub mod account_rent_state;
-
 use {
     crate::{
-        accounts::account_rent_state::{check_rent_state_with_account, RentState},
-        bank::RewardInterval,
+        account_overrides::AccountOverrides, account_rent_state::RentState,
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_processor::TransactionProcessingCallback,
     },
     itertools::Itertools,
     log::warn,
-    solana_accounts_db::{
-        account_overrides::AccountOverrides,
-        accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
-        accounts_db::AccountsDb,
-        ancestors::Ancestors,
-        blockhash_queue::BlockhashQueue,
-        nonce_info::{NonceFull, NonceInfo},
-        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
-        rent_debits::RentDebits,
-        transaction_error_metrics::TransactionErrorMetrics,
-        transaction_results::TransactionCheckResult,
-    },
+    solana_accounts_db::accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
         loaded_programs::LoadedProgramsForTxBatch,
@@ -28,53 +16,46 @@ use {
             create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
             ReadableAccount, WritableAccount,
         },
-        feature_set::{include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation},
         fee::FeeStructure,
         message::SanitizedMessage,
         native_loader,
         nonce::State as NonceState,
+        nonce_info::{NonceFull, NoncePartial},
         pubkey::Pubkey,
         rent::RentDue,
+        rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
+        rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{Result, SanitizedTransaction, TransactionError},
+        transaction::{self, Result, SanitizedTransaction, TransactionError},
         transaction_context::IndexOfAccount,
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{collections::HashMap, num::NonZeroUsize},
 };
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn load_accounts(
-    accounts_db: &AccountsDb,
-    ancestors: &Ancestors,
+pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
+
+pub fn load_accounts<CB: TransactionProcessingCallback>(
+    callbacks: &CB,
     txs: &[SanitizedTransaction],
-    lock_results: Vec<TransactionCheckResult>,
-    hash_queue: &BlockhashQueue,
+    lock_results: &[TransactionCheckResult],
     error_counters: &mut TransactionErrorMetrics,
-    rent_collector: &RentCollector,
-    feature_set: &FeatureSet,
     fee_structure: &FeeStructure,
     account_overrides: Option<&AccountOverrides>,
-    in_reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-    should_collect_rent: bool,
 ) -> Vec<TransactionLoadResult> {
+    let feature_set = callbacks.get_feature_set();
     txs.iter()
         .zip(lock_results)
         .map(|etx| match etx {
-            (tx, (Ok(()), nonce)) => {
-                let lamports_per_signature = nonce
-                    .as_ref()
-                    .map(|nonce| nonce.lamports_per_signature())
-                    .unwrap_or_else(|| {
-                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                    });
+            (tx, (Ok(()), nonce, lamports_per_signature)) => {
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
                     fee_structure.calculate_fee(
                         tx.message(),
-                        lamports_per_signature,
+                        *lamports_per_signature,
                         &process_compute_budget_instructions(
                             tx.message().program_instructions_iter(),
                         )
@@ -89,18 +70,13 @@ pub(super) fn load_accounts(
 
                 // load transactions
                 let loaded_transaction = match load_transaction_accounts(
-                    accounts_db,
-                    ancestors,
+                    callbacks,
                     tx,
                     fee,
                     error_counters,
-                    rent_collector,
-                    feature_set,
                     account_overrides,
-                    in_reward_interval,
                     program_accounts,
                     loaded_programs,
-                    should_collect_rent,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
                     Err(e) => return (Err(e), None),
@@ -123,32 +99,26 @@ pub(super) fn load_accounts(
 
                 (Ok(loaded_transaction), nonce)
             }
-            (_, (Err(e), _nonce)) => (Err(e), None),
+            (_, (Err(e), _nonce, _lamports_per_signature)) => (Err(e.clone()), None),
         })
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn load_transaction_accounts(
-    accounts_db: &AccountsDb,
-    ancestors: &Ancestors,
+fn load_transaction_accounts<CB: TransactionProcessingCallback>(
+    callbacks: &CB,
     tx: &SanitizedTransaction,
     fee: u64,
     error_counters: &mut TransactionErrorMetrics,
-    rent_collector: &RentCollector,
-    feature_set: &FeatureSet,
     account_overrides: Option<&AccountOverrides>,
-    reward_interval: RewardInterval,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
-    should_collect_rent: bool,
 ) -> Result<LoadedTransaction> {
-    let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
-
     // NOTE: this check will never fail because `tx` is sanitized
     if tx.signatures().is_empty() && fee != 0 {
         return Err(TransactionError::MissingSignatureForFee);
     }
+
+    let feature_set = callbacks.get_feature_set();
 
     // There is no way to predict what program will execute without an error
     // If a fee can pay for execution then the program will be scheduled
@@ -159,9 +129,7 @@ fn load_transaction_accounts(
     let mut accounts_found = Vec::with_capacity(account_keys.len());
     let mut account_deps = Vec::with_capacity(account_keys.len());
     let mut rent_debits = RentDebits::default();
-
-    let set_exempt_rent_epoch_max =
-        feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+    let rent_collector = callbacks.get_rent_collector();
 
     let requested_loaded_accounts_data_size_limit =
         get_requested_loaded_accounts_data_size_limit(tx)?;
@@ -199,17 +167,15 @@ fn load_transaction_accounts(
                     account_shared_data_from_program(key, program_accounts)
                         .map(|program_account| (program.account_size, program_account, 0))?
                 } else {
-                    accounts_db
-                        .load_with_fixed_root(ancestors, key)
-                        .map(|(mut account, _)| {
+                    callbacks
+                        .get_account_shared_data(key)
+                        .map(|mut account| {
                             if message.is_writable(i) {
-                                if should_collect_rent {
+                                if !feature_set
+                                    .is_active(&feature_set::disable_rent_fees_collection::id())
+                                {
                                     let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            set_exempt_rent_epoch_max,
-                                        )
+                                        .collect_from_existing_account(key, &mut account)
                                         .rent_amount;
 
                                     (account.data().len(), account, rent_due)
@@ -218,10 +184,8 @@ fn load_transaction_accounts(
                                     // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
                                     // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                                     // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
-                                    if set_exempt_rent_epoch_max
-                                        && (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
-                                            && rent_collector.get_rent_due(&account)
-                                                == RentDue::Exempt)
+                                    if account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                                        && rent_collector.get_rent_due(&account) == RentDue::Exempt
                                     {
                                         account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                                     }
@@ -234,12 +198,10 @@ fn load_transaction_accounts(
                         .unwrap_or_else(|| {
                             account_found = false;
                             let mut default_account = AccountSharedData::default();
-                            if set_exempt_rent_epoch_max {
-                                // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
-                                // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
-                                // with this field already set would allow us to skip rent collection for these accounts.
-                                default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
-                            }
+                            // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                            // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                            // with this field already set would allow us to skip rent collection for these accounts.
+                            default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                             (default_account.data().len(), default_account, 0)
                         })
                 };
@@ -267,15 +229,7 @@ fn load_transaction_accounts(
                     validated_fee_payer = true;
                 }
 
-                if in_reward_interval
-                    && message.is_writable(i)
-                    && solana_stake_program::check_id(account.owner())
-                {
-                    error_counters.program_execution_temporarily_restricted += 1;
-                    return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
-                        account_index: i as u8,
-                    });
-                }
+                callbacks.check_account_access(tx, i, &account, error_counters)?;
 
                 tx_rent += rent;
                 rent_debits.insert(key, rent, account.lamports());
@@ -320,7 +274,7 @@ fn load_transaction_accounts(
                 return Err(TransactionError::ProgramAccountNotFound);
             }
 
-            if !(is_builtin(program_account) || is_executable(program_account, feature_set)) {
+            if !(is_builtin(program_account) || is_executable(program_account, &feature_set)) {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -338,12 +292,10 @@ fn load_transaction_accounts(
                 builtins_start_index.saturating_add(owner_index)
             } else {
                 let owner_index = accounts.len();
-                if let Some((owner_account, _)) =
-                    accounts_db.load_with_fixed_root(ancestors, owner_id)
-                {
+                if let Some(owner_account) = callbacks.get_account_shared_data(owner_id) {
                     if !native_loader::check_id(owner_account.owner())
                         || !(is_builtin(&owner_account)
-                            || is_executable(&owner_account, feature_set))
+                            || is_executable(&owner_account, &feature_set))
                     {
                         error_counters.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);
@@ -476,7 +428,7 @@ pub fn validate_fee_payer(
         .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
     let payer_post_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
-    check_rent_state_with_account(
+    RentState::check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
         payer_address,
@@ -498,7 +450,7 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{accounts::Accounts, rent_collector::RentCollector},
+        solana_accounts_db::{accounts::Accounts, accounts_db::AccountsDb, ancestors::Ancestors},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -508,11 +460,13 @@ mod tests {
             bpf_loader_upgradeable,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
+            feature_set::FeatureSet,
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, SanitizedMessage},
             nonce,
             rent::Rent,
+            rent_collector::RentCollector,
             signature::{Keypair, Signer},
             system_program, sysvar,
             transaction::{Result, Transaction, TransactionError},
@@ -521,17 +475,46 @@ mod tests {
         std::{convert::TryFrom, sync::Arc},
     };
 
+    struct TestCallbacks {
+        accounts: Accounts,
+        ancestors: Ancestors,
+        rent_collector: RentCollector,
+        feature_set: Arc<FeatureSet>,
+    }
+
+    impl TransactionProcessingCallback for TestCallbacks {
+        fn account_matches_owners(&self, _account: &Pubkey, _owners: &[Pubkey]) -> Option<usize> {
+            None
+        }
+
+        fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
+            self.accounts
+                .load_without_fixed_root(&self.ancestors, pubkey)
+                .map(|(acc, _slot)| acc)
+        }
+
+        fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
+            (Hash::new_unique(), 0)
+        }
+
+        fn get_rent_collector(&self) -> &RentCollector {
+            &self.rent_collector
+        }
+
+        fn get_feature_set(&self) -> Arc<FeatureSet> {
+            self.feature_set.clone()
+        }
+    }
+
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut TransactionErrorMetrics,
-        feature_set: &FeatureSet,
+        feature_set: &mut FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
         let accounts_db = AccountsDb::new_single_for_tests();
         let accounts = Accounts::new(Arc::new(accounts_db));
         for ka in ka.iter() {
@@ -539,22 +522,23 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        feature_set.deactivate(&feature_set::disable_rent_fees_collection::id());
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
+        let callbacks = TestCallbacks {
+            accounts,
+            ancestors,
+            rent_collector: rent_collector.clone(),
+            feature_set: Arc::new(feature_set.clone()),
+        };
         load_accounts(
-            &accounts.accounts_db,
-            &ancestors,
+            &callbacks,
             &[sanitized_tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
+            &[(Ok(()), None, Some(lamports_per_signature))],
             error_counters,
-            rent_collector,
-            feature_set,
             fee_structure,
             None,
-            RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            true,
         )
     }
 
@@ -581,7 +565,7 @@ mod tests {
             lamports_per_signature,
             &RentCollector::default(),
             error_counters,
-            &all_features_except(exclude_features),
+            &mut all_features_except(exclude_features),
             &FeeStructure {
                 lamports_per_signature,
                 ..FeeStructure::default()
@@ -784,7 +768,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &all_features_except(None),
+            &mut all_features_except(None),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -800,7 +784,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &mut FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -817,7 +801,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &mut FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1007,32 +991,29 @@ mod tests {
     }
 
     fn load_accounts_no_store(
-        accounts: &Accounts,
+        accounts: Accounts,
         tx: Transaction,
         account_overrides: Option<&AccountOverrides>,
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
-        let rent_collector = RentCollector::default();
-        let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = TransactionErrorMetrics::default();
+        let callbacks = TestCallbacks {
+            accounts,
+            ancestors,
+            rent_collector: RentCollector::default(),
+            feature_set: Arc::new(FeatureSet::all_enabled()),
+        };
         load_accounts(
-            &accounts.accounts_db,
-            &ancestors,
+            &callbacks,
             &[tx],
-            vec![(Ok(()), None)],
-            &hash_queue,
+            &[(Ok(()), None, Some(10))],
             &mut error_counters,
-            &rent_collector,
-            &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
-            RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
-            true,
         )
     }
 
@@ -1053,7 +1034,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(&accounts, tx, None);
+        let loaded_accounts = load_accounts_no_store(accounts, tx, None);
         assert_eq!(loaded_accounts.len(), 1);
         assert!(loaded_accounts[0].0.is_err());
     }
@@ -1081,7 +1062,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(&accounts, tx, Some(&account_overrides));
+        let loaded_accounts = load_accounts_no_store(accounts, tx, Some(&account_overrides));
         assert_eq!(loaded_accounts.len(), 1);
         let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());

@@ -1,5 +1,7 @@
 ---
-title: Offline Transaction Signing
+title: Offline Transaction Signing with the Solana CLI
+pagination_label: "Solana CLI: Offline Transaction Signing"
+sidebar_label: Offline Transaction Signing
 ---
 
 Some security models require keeping signing keys, and thus the signing

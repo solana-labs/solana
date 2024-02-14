@@ -1,6 +1,8 @@
 ---
-title: Blockstore
+title: Blockstore in a Solana Validator
 sidebar_position: 3
+sidebar_label: Blockstore
+pagination_label: Validator Blockstore
 ---
 
 After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../consensus/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.

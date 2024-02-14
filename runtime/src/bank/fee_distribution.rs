@@ -1,14 +1,14 @@
 use {
     super::Bank,
-    crate::accounts::account_rent_state::RentState,
     log::{debug, warn},
-    solana_accounts_db::stake_rewards::RewardInfo,
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         pubkey::Pubkey,
+        reward_info::RewardInfo,
         reward_type::RewardType,
         system_program,
     },
+    solana_svm::account_rent_state::RentState,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{result::Result, sync::atomic::Ordering::Relaxed},
     thiserror::Error,

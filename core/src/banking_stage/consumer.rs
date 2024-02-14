@@ -9,10 +9,6 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
-    solana_accounts_db::{
-        transaction_error_metrics::TransactionErrorMetrics,
-        transaction_results::TransactionCheckResult,
-    },
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
@@ -23,8 +19,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
     },
     solana_runtime::{
-        accounts::validate_fee_payer,
         bank::{Bank, LoadAndExecuteTransactionsOutput},
+        compute_budget_details::GetComputeBudgetDetails,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -34,6 +30,10 @@ use {
         saturating_add_assign,
         timing::timestamp,
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+    },
+    solana_svm::{
+        account_loader::{validate_fee_payer, TransactionCheckResult},
+        transaction_error_metrics::TransactionErrorMetrics,
     },
     std::{
         sync::{atomic::Ordering, Arc},
@@ -69,6 +69,8 @@ pub struct ExecuteAndCommitTransactionsOutput {
     pub commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     pub(crate) execute_and_commit_timings: LeaderExecuteAndCommitTimings,
     pub(crate) error_counters: TransactionErrorMetrics,
+    pub(crate) min_prioritization_fees: u64,
+    pub(crate) max_prioritization_fees: u64,
 }
 
 pub struct Consumer {
@@ -291,6 +293,8 @@ impl Consumer {
         let mut total_execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
         let mut total_error_counters = TransactionErrorMetrics::default();
         let mut reached_max_poh_height = false;
+        let mut overall_min_prioritization_fees: u64 = u64::MAX;
+        let mut overall_max_prioritization_fees: u64 = 0;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
@@ -321,6 +325,8 @@ impl Consumer {
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
                 error_counters: new_error_counters,
+                min_prioritization_fees,
+                max_prioritization_fees,
                 ..
             } = execute_and_commit_transactions_output;
 
@@ -330,6 +336,10 @@ impl Consumer {
                 total_transactions_attempted_execution_count,
                 new_transactions_attempted_execution_count
             );
+            overall_min_prioritization_fees =
+                std::cmp::min(overall_min_prioritization_fees, min_prioritization_fees);
+            overall_max_prioritization_fees =
+                std::cmp::min(overall_max_prioritization_fees, max_prioritization_fees);
 
             trace!(
                 "process_transactions result: {:?}",
@@ -390,6 +400,8 @@ impl Consumer {
             cost_model_us: total_cost_model_us,
             execute_and_commit_timings: total_execute_and_commit_timings,
             error_counters: total_error_counters,
+            min_prioritization_fees: overall_min_prioritization_fees,
+            max_prioritization_fees: overall_max_prioritization_fees,
         }
     }
 
@@ -403,7 +415,9 @@ impl Consumer {
         let pre_results = vec![Ok(()); txs.len()];
         let check_results =
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
-        let check_results = check_results.into_iter().map(|(result, _nonce)| result);
+        let check_results = check_results
+            .into_iter()
+            .map(|(result, _nonce, _lamports)| result);
         let mut output = self.process_and_record_transactions_with_pre_results(
             bank,
             txs,
@@ -565,6 +579,19 @@ impl Consumer {
         });
         execute_and_commit_timings.collect_balances_us = collect_balances_us;
 
+        let min_max = batch
+            .sanitized_transactions()
+            .iter()
+            .filter_map(|transaction| {
+                let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
+                transaction
+                    .get_compute_budget_details(round_compute_unit_price_enabled)
+                    .map(|details| details.compute_unit_price)
+            })
+            .minmax();
+        let (min_prioritization_fees, max_prioritization_fees) =
+            min_max.into_option().unwrap_or_default();
+
         let (load_and_execute_transactions_output, load_execute_us) = measure_us!(bank
             .load_and_execute_transactions(
                 batch,
@@ -646,6 +673,8 @@ impl Consumer {
                 commit_transactions_result: Err(recorder_err),
                 execute_and_commit_timings,
                 error_counters,
+                min_prioritization_fees,
+                max_prioritization_fees,
             };
         }
 
@@ -701,6 +730,8 @@ impl Consumer {
             commit_transactions_result: Ok(commit_transaction_statuses),
             execute_and_commit_timings,
             error_counters,
+            min_prioritization_fees,
+            max_prioritization_fees,
         }
     }
 
@@ -787,7 +818,7 @@ impl Consumer {
         valid_txs
             .iter()
             .enumerate()
-            .filter_map(|(index, (x, _h))| if x.is_ok() { Some(index) } else { None })
+            .filter_map(|(index, (x, _h, _lamports))| if x.is_ok() { Some(index) } else { None })
             .collect_vec()
     }
 }
@@ -2488,24 +2519,24 @@ mod tests {
     fn test_bank_filter_valid_transaction_indexes() {
         assert_eq!(
             Consumer::filter_valid_transaction_indexes(&[
-                (Err(TransactionError::BlockhashNotFound), None),
-                (Err(TransactionError::BlockhashNotFound), None),
-                (Ok(()), None),
-                (Err(TransactionError::BlockhashNotFound), None),
-                (Ok(()), None),
-                (Ok(()), None),
+                (Err(TransactionError::BlockhashNotFound), None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None),
+                (Ok(()), None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None),
+                (Ok(()), None, None),
+                (Ok(()), None, None),
             ]),
             [2, 4, 5]
         );
 
         assert_eq!(
             Consumer::filter_valid_transaction_indexes(&[
-                (Ok(()), None),
-                (Err(TransactionError::BlockhashNotFound), None),
-                (Err(TransactionError::BlockhashNotFound), None),
-                (Ok(()), None),
-                (Ok(()), None),
-                (Ok(()), None),
+                (Ok(()), None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None),
+                (Err(TransactionError::BlockhashNotFound), None, None),
+                (Ok(()), None, None),
+                (Ok(()), None, None),
+                (Ok(()), None, None),
             ]),
             [0, 3, 4, 5]
         );

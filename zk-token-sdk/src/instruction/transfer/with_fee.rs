@@ -9,10 +9,10 @@ use {
         instruction::{
             errors::InstructionError,
             transfer::{
-                combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-                combine_lo_hi_u64,
                 encryption::{FeeEncryption, TransferAmountCiphertext},
-                split_u64, FeeParameters, Role,
+                try_combine_lo_hi_ciphertexts, try_combine_lo_hi_commitments,
+                try_combine_lo_hi_openings, try_combine_lo_hi_u64, try_split_u64, FeeParameters,
+                Role,
             },
         },
         range_proof::RangeProof,
@@ -128,7 +128,8 @@ impl TransferWithFeeData {
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
     ) -> Result<Self, ProofGenerationError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
+        let (amount_lo, amount_hi) = try_split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS)
+            .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
@@ -159,11 +160,12 @@ impl TransferWithFeeData {
         };
 
         let new_source_ciphertext = old_source_ciphertext
-            - combine_lo_hi_ciphertexts(
+            - try_combine_lo_hi_ciphertexts(
                 &transfer_amount_lo_source,
                 &transfer_amount_hi_source,
                 TRANSFER_AMOUNT_LO_BITS,
-            );
+            )
+            .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         // calculate fee
         //
@@ -177,7 +179,9 @@ impl TransferWithFeeData {
             u64::conditional_select(&fee_parameters.maximum_fee, &fee_amount, below_max);
 
         // split and encrypt fee
-        let (fee_to_encrypt_lo, fee_to_encrypt_hi) = split_u64(fee_to_encrypt, FEE_AMOUNT_LO_BITS);
+        let (fee_to_encrypt_lo, fee_to_encrypt_hi) =
+            try_split_u64(fee_to_encrypt, FEE_AMOUNT_LO_BITS)
+                .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         let (fee_ciphertext_lo, opening_fee_lo) = FeeEncryption::new(
             fee_to_encrypt_lo,
@@ -510,23 +514,28 @@ impl TransferWithFeeProof {
         let pod_claimed_commitment: pod::PedersenCommitment = claimed_commitment.into();
         transcript.append_commitment(b"commitment-claimed", &pod_claimed_commitment);
 
-        let combined_commitment = combine_lo_hi_commitments(
+        let combined_commitment = try_combine_lo_hi_commitments(
             ciphertext_lo.get_commitment(),
             ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
-        );
+        )
+        .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
         let combined_opening =
-            combine_lo_hi_openings(opening_lo, opening_hi, TRANSFER_AMOUNT_LO_BITS);
+            try_combine_lo_hi_openings(opening_lo, opening_hi, TRANSFER_AMOUNT_LO_BITS)
+                .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         let combined_fee_amount =
-            combine_lo_hi_u64(fee_amount_lo, fee_amount_hi, TRANSFER_AMOUNT_LO_BITS);
-        let combined_fee_commitment = combine_lo_hi_commitments(
+            try_combine_lo_hi_u64(fee_amount_lo, fee_amount_hi, TRANSFER_AMOUNT_LO_BITS)
+                .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
+        let combined_fee_commitment = try_combine_lo_hi_commitments(
             fee_ciphertext_lo.get_commitment(),
             fee_ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
-        );
+        )
+        .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
         let combined_fee_opening =
-            combine_lo_hi_openings(opening_fee_lo, opening_fee_hi, TRANSFER_AMOUNT_LO_BITS);
+            try_combine_lo_hi_openings(opening_fee_lo, opening_fee_hi, TRANSFER_AMOUNT_LO_BITS)
+                .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         // compute real delta commitment
         let (delta_commitment, opening_delta) = compute_delta_commitment_and_opening(
@@ -561,11 +570,12 @@ impl TransferWithFeeProof {
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
 
-        let combined_amount = combine_lo_hi_u64(
+        let combined_amount = try_combine_lo_hi_u64(
             transfer_amount_lo,
             transfer_amount_hi,
             TRANSFER_AMOUNT_LO_BITS,
-        );
+        )
+        .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
         let amount_sub_fee = combined_amount
             .checked_sub(combined_fee_amount)
             .ok_or(ProofGenerationError::FeeCalculation)?;
@@ -680,16 +690,18 @@ impl TransferWithFeeProof {
         // verify fee sigma proof
         transcript.append_commitment(b"commitment-claimed", &self.claimed_commitment);
 
-        let combined_commitment = combine_lo_hi_commitments(
+        let combined_commitment = try_combine_lo_hi_commitments(
             ciphertext_lo.get_commitment(),
             ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
-        );
-        let combined_fee_commitment = combine_lo_hi_commitments(
+        )
+        .map_err(|_| ProofVerificationError::IllegalAmountBitLength)?;
+        let combined_fee_commitment = try_combine_lo_hi_commitments(
             fee_ciphertext_lo.get_commitment(),
             fee_ciphertext_hi.get_commitment(),
             TRANSFER_AMOUNT_LO_BITS,
-        );
+        )
+        .map_err(|_| ProofVerificationError::IllegalAmountBitLength)?;
 
         let delta_commitment = compute_delta_commitment(
             &combined_commitment,

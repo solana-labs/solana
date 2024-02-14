@@ -23,7 +23,6 @@ use {
         bank::{epoch_accounts_hash_utils, Bank},
         bank_forks::BankForks,
         genesis_utils::{self, GenesisConfigInfo},
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
@@ -39,6 +38,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         mem::ManuallyDrop,
         sync::{
@@ -197,8 +197,6 @@ impl BackgroundServices {
             accounts_package_receiver,
             Some(snapshot_package_sender),
             exit.clone(),
-            cluster_info,
-            None,
             snapshot_config.clone(),
         );
 

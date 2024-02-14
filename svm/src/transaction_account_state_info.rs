@@ -1,27 +1,25 @@
 use {
-    crate::{
-        accounts::account_rent_state::{check_rent_state, RentState},
-        bank::Bank,
-    },
+    crate::account_rent_state::RentState,
     solana_sdk::{
         account::ReadableAccount,
         message::SanitizedMessage,
         native_loader,
+        rent::Rent,
         transaction::Result,
         transaction_context::{IndexOfAccount, TransactionContext},
     },
 };
 
-pub(crate) struct TransactionAccountStateInfo {
+pub struct TransactionAccountStateInfo {
     rent_state: Option<RentState>, // None: readonly account
 }
 
-impl Bank {
-    pub(crate) fn get_transaction_account_state_info(
-        &self,
+impl TransactionAccountStateInfo {
+    pub fn new(
+        rent: &Rent,
         transaction_context: &TransactionContext,
         message: &SanitizedMessage,
-    ) -> Vec<TransactionAccountStateInfo> {
+    ) -> Vec<Self> {
         (0..message.account_keys().len())
             .map(|i| {
                 let rent_state = if message.is_writable(i) {
@@ -34,10 +32,7 @@ impl Bank {
                         // balances; however they will never be loaded as writable
                         debug_assert!(!native_loader::check_id(account.owner()));
 
-                        Some(RentState::from_account(
-                            &account,
-                            &self.rent_collector().rent,
-                        ))
+                        Some(RentState::from_account(&account, rent))
                     } else {
                         None
                     };
@@ -49,21 +44,20 @@ impl Bank {
                 } else {
                     None
                 };
-                TransactionAccountStateInfo { rent_state }
+                Self { rent_state }
             })
             .collect()
     }
 
-    pub(crate) fn verify_transaction_account_state_changes(
-        &self,
-        pre_state_infos: &[TransactionAccountStateInfo],
-        post_state_infos: &[TransactionAccountStateInfo],
+    pub(crate) fn verify_changes(
+        pre_state_infos: &[Self],
+        post_state_infos: &[Self],
         transaction_context: &TransactionContext,
     ) -> Result<()> {
         for (i, (pre_state_info, post_state_info)) in
             pre_state_infos.iter().zip(post_state_infos).enumerate()
         {
-            check_rent_state(
+            RentState::check_rent_state(
                 pre_state_info.rent_state.as_ref(),
                 post_state_info.rent_state.as_ref(),
                 transaction_context,

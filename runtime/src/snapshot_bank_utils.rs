@@ -2,7 +2,6 @@ use {
     crate::{
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::BuiltinPrototype,
-        runtime_config::RuntimeConfig,
         serde_snapshot::{
             bank_from_streams, bank_to_stream, fields_from_streams,
             BankIncrementalSnapshotPersistence, SerdeStyle,
@@ -46,6 +45,7 @@ use {
         pubkey::Pubkey,
         slot_history::{Check, SlotHistory},
     },
+    solana_svm::runtime_config::RuntimeConfig,
     std::{
         collections::HashSet,
         fs,

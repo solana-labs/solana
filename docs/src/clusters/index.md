@@ -1,7 +1,8 @@
 ---
-title: A Solana Cluster
-sidebar_label: Overview
+title: Overview of a Solana Cluster
 sidebar_position: 0
+sidebar_label: Overview
+pagination_label: Overview of a Solana Cluster
 ---
 
 A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this section, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.

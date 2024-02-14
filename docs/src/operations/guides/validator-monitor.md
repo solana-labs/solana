@@ -1,5 +1,8 @@
 ---
-title: Monitoring a Validator
+title: "Validator Guide: Monitoring a Validator"
+sidebar_position: 2
+sidebar_label: Monitoring a Validator
+pagination_label: "Validator Guides: Monitoring a Validator"
 ---
 
 ## Check Gossip

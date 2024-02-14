@@ -1,19 +1,26 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    crate::{args::*, bigtable::*, blockstore::*, ledger_path::*, ledger_utils::*, program::*},
+    crate::{
+        args::*,
+        bigtable::*,
+        blockstore::*,
+        ledger_path::*,
+        ledger_utils::*,
+        output::{
+            output_account, AccountsOutputConfig, AccountsOutputMode, AccountsOutputStreamer,
+        },
+        program::*,
+    },
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     dashmap::DashMap,
     log::*,
-    serde::{
-        ser::{SerializeSeq, Serializer},
-        Serialize,
-    },
-    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    serde::Serialize,
+    solana_account_decoder::UiAccountEncoding,
     solana_accounts_db::{
-        accounts::Accounts, accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
+        accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
     solana_clap_utils::{
@@ -25,7 +32,7 @@ use {
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
-    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
+    solana_cli_output::OutputFormat,
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
@@ -38,7 +45,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        bank::{bank_hash_details, Bank, RewardCalculationEvent, TotalAccountsStats},
+        bank::{bank_hash_details, Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
@@ -74,7 +81,7 @@ use {
         collections::{HashMap, HashSet},
         ffi::OsStr,
         fs::File,
-        io::{self, stdout, Write},
+        io::{self, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
@@ -100,44 +107,6 @@ fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
         Some("base64") => UiAccountEncoding::Base64,
         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
         _ => UiAccountEncoding::Base64,
-    }
-}
-
-fn output_account(
-    pubkey: &Pubkey,
-    account: &AccountSharedData,
-    modified_slot: Option<Slot>,
-    print_account_data: bool,
-    encoding: UiAccountEncoding,
-) {
-    println!("{pubkey}:");
-    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
-    println!("  owner: '{}'", account.owner());
-    println!("  executable: {}", account.executable());
-    if let Some(slot) = modified_slot {
-        println!("  slot: {slot}");
-    }
-    println!("  rent_epoch: {}", account.rent_epoch());
-    println!("  data_len: {}", account.data().len());
-    if print_account_data {
-        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-        match account_data {
-            UiAccountData::Binary(data, data_encoding) => {
-                println!("  data: '{data}'");
-                println!(
-                    "  encoding: {}",
-                    serde_json::to_string(&data_encoding).unwrap()
-                );
-            }
-            UiAccountData::Json(account_data) => {
-                println!(
-                    "  data: '{}'",
-                    serde_json::to_string(&account_data).unwrap()
-                );
-                println!("  encoding: \"jsonParsed\"");
-            }
-            UiAccountData::LegacyBinary(_) => {}
-        };
     }
 }
 
@@ -846,7 +815,7 @@ fn main() {
         .arg(
             Arg::with_name("ignore_ulimit_nofile_error")
                 .long("ignore-ulimit-nofile-error")
-                .value_name("FORMAT")
+                .takes_value(false)
                 .global(true)
                 .help(
                     "Allow opening the blockstore to succeed even if the desired open file \
@@ -855,12 +824,13 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("snapshot_archive_path")
-                .long("snapshot-archive-path")
+            Arg::with_name("snapshots")
+                .long("snapshots")
+                .alias("snapshot-archive-path")
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for snapshot location"),
+                .help("Use DIR for snapshot location [default: --ledger value]"),
         )
         .arg(
             Arg::with_name("incremental_snapshot_archive_path")
@@ -1358,6 +1328,7 @@ fn main() {
                 .arg(&geyser_plugin_args)
                 .arg(&accounts_data_encoding_arg)
                 .arg(&use_snapshot_archives_at_startup)
+                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(
                     Arg::with_name("include_sysvars")
                         .long("include-sysvars")
@@ -1379,7 +1350,27 @@ fn main() {
                         .takes_value(false)
                         .help("Do not print account data when printing account contents."),
                 )
-                .arg(&max_genesis_archive_unpacked_size_arg),
+                .arg(
+                    Arg::with_name("account")
+                        .long("account")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .multiple(true)
+                        .help(
+                            "Limit output to accounts corresponding to the specified pubkey(s), \
+                            may be specified multiple times",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("program_accounts")
+                        .long("program-accounts")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey)
+                        .conflicts_with("account")
+                        .help("Limit output to accounts owned by the provided program pubkey"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("capitalization")
@@ -1467,7 +1458,7 @@ fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
 
     let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
-    let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
+    let snapshot_archive_path = value_t!(matches, "snapshots", String)
         .ok()
         .map(PathBuf::from);
     let incremental_snapshot_archive_path =
@@ -2208,7 +2199,6 @@ fn main() {
                 ("accounts", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let include_sysvars = arg_matches.is_present("include_sysvars");
                     let blockstore = open_blockstore(
                         &ledger_path,
                         arg_matches,
@@ -2222,70 +2212,41 @@ fn main() {
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
                     );
-
                     let bank = bank_forks.read().unwrap().working_bank();
-                    let mut serializer = serde_json::Serializer::new(stdout());
-                    let (summarize, mut json_serializer) =
-                        match OutputFormat::from_matches(arg_matches, "output_format", false) {
-                            OutputFormat::Json | OutputFormat::JsonCompact => {
-                                (false, Some(serializer.serialize_seq(None).unwrap()))
-                            }
-                            _ => (true, None),
-                        };
-                    let mut total_accounts_stats = TotalAccountsStats::default();
-                    let rent_collector = bank.rent_collector();
-                    let print_account_contents = !arg_matches.is_present("no_account_contents");
-                    let print_account_data = !arg_matches.is_present("no_account_data");
-                    let data_encoding = parse_encoding_format(arg_matches);
-                    let cli_account_new_config = CliAccountNewConfig {
-                        data_encoding,
-                        ..CliAccountNewConfig::default()
+
+                    let include_sysvars = arg_matches.is_present("include_sysvars");
+                    let include_account_contents = !arg_matches.is_present("no_account_contents");
+                    let include_account_data = !arg_matches.is_present("no_account_data");
+                    let account_data_encoding = parse_encoding_format(arg_matches);
+                    let mode = if let Some(pubkeys) = pubkeys_of(arg_matches, "account") {
+                        info!("Scanning individual accounts: {pubkeys:?}");
+                        AccountsOutputMode::Individual(pubkeys)
+                    } else if let Some(pubkey) = pubkey_of(arg_matches, "program_accounts") {
+                        info!("Scanning program accounts for {pubkey}");
+                        AccountsOutputMode::Program(pubkey)
+                    } else {
+                        info!("Scanning all accounts");
+                        AccountsOutputMode::All
                     };
-                    let scan_func =
-                        |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-                            if let Some((pubkey, account, slot)) = some_account_tuple
-                                .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
-                            {
-                                if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
-                                    return;
-                                }
+                    let config = AccountsOutputConfig {
+                        mode,
+                        include_sysvars,
+                        include_account_contents,
+                        include_account_data,
+                        account_data_encoding,
+                    };
+                    let output_format =
+                        OutputFormat::from_matches(arg_matches, "output_format", false);
 
-                                total_accounts_stats.accumulate_account(
-                                    pubkey,
-                                    &account,
-                                    rent_collector,
-                                );
-
-                                if print_account_contents {
-                                    if let Some(json_serializer) = json_serializer.as_mut() {
-                                        let cli_account = CliAccount::new_with_config(
-                                            pubkey,
-                                            &account,
-                                            &cli_account_new_config,
-                                        );
-                                        json_serializer.serialize_element(&cli_account).unwrap();
-                                    } else {
-                                        output_account(
-                                            pubkey,
-                                            &account,
-                                            Some(slot),
-                                            print_account_data,
-                                            data_encoding,
-                                        );
-                                    }
-                                }
-                            }
-                        };
-                    let mut measure = Measure::start("scanning accounts");
-                    bank.scan_all_accounts(scan_func).unwrap();
-                    measure.stop();
-                    info!("{}", measure);
-                    if let Some(json_serializer) = json_serializer {
-                        json_serializer.end().unwrap();
-                    }
-                    if summarize {
-                        println!("\n{total_accounts_stats:#?}");
-                    }
+                    let accounts_streamer =
+                        AccountsOutputStreamer::new(bank, output_format, config);
+                    let (_, scan_time) = measure!(
+                        accounts_streamer
+                            .output()
+                            .map_err(|err| error!("Error while outputting accounts: {err}")),
+                        "accounts scan"
+                    );
+                    info!("{scan_time}");
                 }
                 ("capitalization", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);

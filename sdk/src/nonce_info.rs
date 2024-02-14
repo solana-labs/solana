@@ -1,13 +1,12 @@
-use {
-    crate::rent_debits::RentDebits,
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
-        message::SanitizedMessage,
-        nonce_account,
-        pubkey::Pubkey,
-        transaction::{self, TransactionError},
-        transaction_context::TransactionAccount,
-    },
+#![cfg(feature = "full")]
+use crate::{
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
+    message::SanitizedMessage,
+    nonce_account,
+    pubkey::Pubkey,
+    rent_debits::RentDebits,
+    transaction::{self, TransactionError},
+    transaction_context::TransactionAccount,
 };
 
 pub trait NonceInfo {
@@ -66,7 +65,7 @@ impl NonceFull {
         }
     }
     pub fn from_partial(
-        partial: NoncePartial,
+        partial: &NoncePartial,
         message: &SanitizedMessage,
         accounts: &[TransactionAccount],
         rent_debits: &RentDebits,
@@ -120,7 +119,7 @@ impl NonceInfo for NonceFull {
 mod tests {
     use {
         super::*,
-        solana_sdk::{
+        crate::{
             hash::Hash,
             instruction::Instruction,
             message::Message,
@@ -221,8 +220,8 @@ mod tests {
                 ),
             ];
 
-            let full = NonceFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
-                .unwrap();
+            let full =
+                NonceFull::from_partial(&partial, &message, &accounts, &rent_debits).unwrap();
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), rent_collected_nonce_account);
             assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
@@ -252,8 +251,8 @@ mod tests {
                 ),
             ];
 
-            let full = NonceFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
-                .unwrap();
+            let full =
+                NonceFull::from_partial(&partial, &message, &accounts, &rent_debits).unwrap();
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), nonce_account);
             assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
@@ -264,7 +263,7 @@ mod tests {
         {
             let message = new_sanitized_message(&instructions, Some(&nonce_address));
             assert_eq!(
-                NonceFull::from_partial(partial, &message, &[], &RentDebits::default())
+                NonceFull::from_partial(&partial, &message, &[], &RentDebits::default())
                     .unwrap_err(),
                 TransactionError::AccountNotFound,
             );

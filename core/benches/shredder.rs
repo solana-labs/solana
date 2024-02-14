@@ -4,7 +4,7 @@
 extern crate test;
 
 use {
-    rand::seq::SliceRandom,
+    rand::{seq::SliceRandom, Rng},
     raptorq::{Decoder, Encoder},
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
@@ -50,6 +50,7 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
         &Keypair::new(),
         &entries,
         true,  // is_last_in_slot
+        None,  // chained_merkle_root
         0,     // next_shred_index
         0,     // next_code_index
         false, // merkle_variant
@@ -80,12 +81,14 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
     let num_ticks = max_ticks_per_n_shreds(1, Some(LEGACY_SHRED_DATA_CAPACITY)) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
     let reed_solomon_cache = ReedSolomonCache::default();
+    let chained_merkle_root = Some(Hash::new_from_array(rand::thread_rng().gen()));
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
         shredder.entries_to_shreds(
             &kp,
             &entries,
             true,
+            chained_merkle_root,
             0,
             0,
             true, // merkle_variant
@@ -107,6 +110,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
         Some(shred_size),
     );
     let entries = make_large_unchained_entries(txs_per_entry, num_entries);
+    let chained_merkle_root = Some(Hash::new_from_array(rand::thread_rng().gen()));
     let reed_solomon_cache = ReedSolomonCache::default();
     // 1Mb
     bencher.iter(|| {
@@ -115,6 +119,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
             &kp,
             &entries,
             true,
+            chained_merkle_root,
             0,
             0,
             true, // merkle_variant
@@ -133,10 +138,12 @@ fn bench_deshredder(bencher: &mut Bencher) {
     let num_ticks = max_ticks_per_n_shreds(1, Some(shred_size)) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
     let shredder = Shredder::new(1, 0, 0, 0).unwrap();
+    let chained_merkle_root = Some(Hash::new_from_array(rand::thread_rng().gen()));
     let (data_shreds, _) = shredder.entries_to_shreds(
         &kp,
         &entries,
         true,
+        chained_merkle_root,
         0,
         0,
         true, // merkle_variant

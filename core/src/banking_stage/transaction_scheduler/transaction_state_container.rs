@@ -4,9 +4,8 @@ use {
         transaction_state::{SanitizedTransactionTTL, TransactionState},
     },
     crate::banking_stage::scheduler_messages::TransactionId,
+    itertools::MinMaxResult,
     min_max_heap::MinMaxHeap,
-    solana_cost_model::transaction_cost::TransactionCost,
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     std::collections::HashMap,
 };
 
@@ -98,18 +97,13 @@ impl TransactionStateContainer {
         &mut self,
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
-        transaction_cost: TransactionCost,
+        priority: u64,
+        cost: u64,
     ) -> bool {
-        let priority_id =
-            TransactionPriorityId::new(transaction_priority_details.priority, transaction_id);
+        let priority_id = TransactionPriorityId::new(priority, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(
-                transaction_ttl,
-                transaction_priority_details,
-                transaction_cost,
-            ),
+            TransactionState::new(transaction_ttl, priority, cost),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -149,16 +143,24 @@ impl TransactionStateContainer {
             .remove(id)
             .expect("transaction must exist");
     }
+
+    pub(crate) fn get_min_max_priority(&self) -> MinMaxResult<u64> {
+        match self.priority_queue.peek_min() {
+            Some(min) => match self.priority_queue.peek_max() {
+                Some(max) => MinMaxResult::MinMax(min.priority, max.priority),
+                None => MinMaxResult::OneElement(min.priority),
+            },
+            None => MinMaxResult::NoElements,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        solana_cost_model::cost_model::CostModel,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
-            feature_set::FeatureSet,
             hash::Hash,
             message::Message,
             signature::Keypair,
@@ -169,13 +171,8 @@ mod tests {
         },
     };
 
-    fn test_transaction(
-        priority: u64,
-    ) -> (
-        SanitizedTransactionTTL,
-        TransactionPriorityDetails,
-        TransactionCost,
-    ) {
+    /// Returns (transaction_ttl, priority, cost)
+    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, u64, u64) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -191,31 +188,23 @@ mod tests {
             message,
             Hash::default(),
         ));
-        let transaction_cost = CostModel::calculate_cost(&tx, &FeatureSet::default());
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: tx,
             max_age_slot: Slot::MAX,
         };
-        (
-            transaction_ttl,
-            TransactionPriorityDetails {
-                priority,
-                compute_unit_limit: 0,
-            },
-            transaction_cost,
-        )
+        const TEST_TRANSACTION_COST: u64 = 5000;
+        (transaction_ttl, priority, TEST_TRANSACTION_COST)
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, transaction_priority_details, transaction_cost) =
-                test_transaction(priority);
+            let (transaction_ttl, priority, cost) = test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
-                transaction_priority_details,
-                transaction_cost,
+                priority,
+                cost,
             );
         }
     }

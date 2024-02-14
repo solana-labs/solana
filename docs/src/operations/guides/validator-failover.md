@@ -1,5 +1,8 @@
 ---
-title: Failover Setup
+title: "Validator Guide: Setup Node Failover"
+sidebar_position: 9
+sidebar_label: Node Failover
+pagination_label: "Validator Guides: Node Failover"
 ---
 
 A simple two machine instance failover method is described here, which allows you to:

@@ -16,6 +16,7 @@ impl AddressLoader for &Bank {
         address_table_lookups: &[MessageAddressTableLookup],
     ) -> Result<LoadedAddresses, AddressLoaderError> {
         let slot_hashes = self
+            .transaction_processor
             .sysvar_cache
             .read()
             .unwrap()

@@ -5,7 +5,6 @@
 extern crate lazy_static;
 
 pub mod account_info;
-pub mod account_overrides;
 pub mod account_storage;
 pub mod accounts;
 pub mod accounts_cache;
@@ -31,12 +30,9 @@ pub mod hardened_unpack;
 pub mod in_mem_accounts_index;
 pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
-pub mod nonce_info;
 pub mod partitioned_rewards;
 mod pubkey_bins;
 mod read_only_accounts_cache;
-pub mod rent_collector;
-pub mod rent_debits;
 mod rolling_bit_field;
 pub mod secondary_index;
 pub mod shared_buffer_reader;
@@ -44,7 +40,6 @@ pub mod sorted_storages;
 pub mod stake_rewards;
 pub mod storable_accounts;
 pub mod tiered_storage;
-pub mod transaction_error_metrics;
 pub mod transaction_results;
 pub mod utils;
 mod verify_accounts_hash_in_background;

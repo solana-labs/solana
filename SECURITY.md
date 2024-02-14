@@ -110,7 +110,6 @@ _Note: Payments will continue to be paid out in 12-month locked SOL._
 
 
 #### Loss of Funds:
-Current: $2,000,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 25,000 SOL tokens. Min: 6,250 SOL tokens_
 
 * Theft of funds without users signature from any account
@@ -118,14 +117,12 @@ _**As of 2/1/24:** Max: 25,000 SOL tokens. Min: 6,250 SOL tokens_
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 #### Consensus/Safety Violations:
-Current: $1,000,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 12,500 SOL tokens. Min: 3,125 SOL tokens_
 
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
 #### Liveness / Loss of Availability:
-Current: $400,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 5,000 SOL tokens. Min: 1,250 SOL tokens_
 
 * Whereby consensus halts and requires human intervention
@@ -133,19 +130,16 @@ _**As of 2/1/24:** Max: 5,000 SOL tokens. Min: 1,250 SOL tokens_
 * Remote attacks that partition the network,
 
 #### DoS Attacks:
-Current: $100,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
 
 * Remote resource exhaustion via Non-RPC protocols
 
 #### Supply Chain Attacks:
-Current: $100,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
 
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 
 #### RPC DoS/Crashes:
-Current: $5,000 USD in locked SOL tokens (locked for 12 months)<br/>
 _**As of 2/1/24:** Max: 65 SOL tokens. Min: 20 SOL tokens_
 
 * RPC attacks
@@ -190,6 +184,4 @@ bi = 2 ^ (R - ri) / ((2^R) - 1)
 
 ### Payment of Bug Bounties:
 * Bounties are currently awarded on a rolling/weekly basis and paid out within 30 days upon receipt of an invoice.
-* The SOL/USD conversion rate used for payments is the market price of SOL (denominated in USD) at the end of the day the invoice is submitted by the researcher.
-* The reference for this price is the Closing Price given by Coingecko.com on that date given here: https://www.coingecko.com/en/coins/solana/historical_data/usd#panel
 * Bug bounties that are paid out in SOL are paid to stake accounts with a lockup expiring 12 months from the date of delivery of SOL.

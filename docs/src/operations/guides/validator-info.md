@@ -1,5 +1,8 @@
 ---
-title: Publishing Validator Info
+title: "Validator Guide: Publishing Validator Info"
+sidebar_position: 1
+sidebar_label: Publishing Validator Info
+pagination_label: "Validator Guides: Publishing Validator Info"
 ---
 
 You can publish your validator information to the chain to be publicly visible to other users.

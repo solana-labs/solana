@@ -1,6 +1,9 @@
 //! Solana account addresses.
 
 #![allow(clippy::arithmetic_side_effects)]
+
+#[cfg(test)]
+use arbitrary::Arbitrary;
 use {
     crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
@@ -85,6 +88,7 @@ impl From<u64> for PubkeyError {
     Zeroable,
 )]
 #[borsh(crate = "borsh")]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Pubkey(pub(crate) [u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}

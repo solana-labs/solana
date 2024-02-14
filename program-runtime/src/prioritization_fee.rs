@@ -10,15 +10,15 @@ pub enum PrioritizationFeeType {
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct PrioritizationFeeDetails {
     fee: u64,
-    priority: u64,
+    compute_unit_price: u64,
 }
 
 impl PrioritizationFeeDetails {
     pub fn new(fee_type: PrioritizationFeeType, compute_unit_limit: u64) -> Self {
         match fee_type {
-            PrioritizationFeeType::ComputeUnitPrice(cu_price) => {
+            PrioritizationFeeType::ComputeUnitPrice(compute_unit_price) => {
                 let micro_lamport_fee: MicroLamports =
-                    (cu_price as u128).saturating_mul(compute_unit_limit as u128);
+                    (compute_unit_price as u128).saturating_mul(compute_unit_limit as u128);
                 let fee = micro_lamport_fee
                     .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
                     .checked_div(MICRO_LAMPORTS_PER_LAMPORT as u128)
@@ -27,7 +27,7 @@ impl PrioritizationFeeDetails {
 
                 Self {
                     fee,
-                    priority: cu_price,
+                    compute_unit_price,
                 }
             }
         }
@@ -37,8 +37,8 @@ impl PrioritizationFeeDetails {
         self.fee
     }
 
-    pub fn get_priority(&self) -> u64 {
-        self.priority
+    pub fn get_compute_unit_price(&self) -> u64 {
+        self.compute_unit_price
     }
 }
 
@@ -62,7 +62,7 @@ mod test {
             FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT - 1), 1),
             FeeDetails {
                 fee: 1,
-                priority: MICRO_LAMPORTS_PER_LAMPORT - 1,
+                compute_unit_price: MICRO_LAMPORTS_PER_LAMPORT - 1,
             },
             "should round up (<1.0) lamport fee to 1 lamport"
         );
@@ -71,7 +71,7 @@ mod test {
             FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT), 1),
             FeeDetails {
                 fee: 1,
-                priority: MICRO_LAMPORTS_PER_LAMPORT,
+                compute_unit_price: MICRO_LAMPORTS_PER_LAMPORT,
             },
         );
 
@@ -79,7 +79,7 @@ mod test {
             FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT + 1), 1),
             FeeDetails {
                 fee: 2,
-                priority: MICRO_LAMPORTS_PER_LAMPORT + 1,
+                compute_unit_price: MICRO_LAMPORTS_PER_LAMPORT + 1,
             },
             "should round up (>1.0) lamport fee to 2 lamports"
         );
@@ -88,7 +88,7 @@ mod test {
             FeeDetails::new(FeeType::ComputeUnitPrice(200), 100_000),
             FeeDetails {
                 fee: 20,
-                priority: 200,
+                compute_unit_price: 200,
             },
         );
 
@@ -99,7 +99,7 @@ mod test {
             ),
             FeeDetails {
                 fee: u64::MAX,
-                priority: MICRO_LAMPORTS_PER_LAMPORT,
+                compute_unit_price: MICRO_LAMPORTS_PER_LAMPORT,
             },
         );
 
@@ -107,7 +107,7 @@ mod test {
             FeeDetails::new(FeeType::ComputeUnitPrice(u64::MAX), u64::MAX),
             FeeDetails {
                 fee: u64::MAX,
-                priority: u64::MAX,
+                compute_unit_price: u64::MAX,
             },
         );
     }

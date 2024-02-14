@@ -2075,6 +2075,7 @@ impl fmt::Display for CliTokenAccount {
 #[serde(rename_all = "camelCase")]
 pub struct CliProgramId {
     pub program_id: String,
+    pub signature: Option<String>,
 }
 
 impl QuietDisplay for CliProgramId {}
@@ -2082,7 +2083,12 @@ impl VerboseDisplay for CliProgramId {}
 
 impl fmt::Display for CliProgramId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln_name_value(f, "Program Id:", &self.program_id)
+        writeln_name_value(f, "Program Id:", &self.program_id)?;
+        if let Some(ref signature) = self.signature {
+            writeln!(f)?;
+            writeln_name_value(f, "Signature:", signature)?;
+        }
+        Ok(())
     }
 }
 

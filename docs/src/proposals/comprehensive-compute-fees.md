@@ -35,7 +35,7 @@ A fee could be calculated based on:
    - Fixed rate per writable account
 3. Data byte cost
    - Fixed rate per byte of the sum of the length all a transactions instruction
-     datas
+     data
 4. Account sizes
    - Account sizes can't be known up-front but can account for a considerable
      amount of the load the transaction incurs on the network.  The payer will

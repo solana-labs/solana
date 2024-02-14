@@ -1,5 +1,7 @@
 ---
-title: Geyser Plugins
+title: Solana Validator Geyser Plugins
+sidebar_label: Geyser Plugins
+pagination_label: Validator Geyser Plugins
 ---
 
 ## Overview

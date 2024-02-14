@@ -14,11 +14,11 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
-        rent_collector::RentCollector,
     },
     solana_measure::measure::Measure,
     solana_sdk::{
-        genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
+        genesis_config::ClusterType, pubkey::Pubkey, rent_collector::RentCollector,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{env, fs, path::PathBuf, sync::Arc},
 };

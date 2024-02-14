@@ -1,5 +1,6 @@
 ---
 title: Install the Solana CLI
+pagination_label: Install the Solana CLI
 sidebar_label: Installation
 sidebar_position: 1
 ---

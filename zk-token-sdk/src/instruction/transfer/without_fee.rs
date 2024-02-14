@@ -9,7 +9,8 @@ use {
         instruction::{
             errors::InstructionError,
             transfer::{
-                combine_lo_hi_ciphertexts, encryption::TransferAmountCiphertext, split_u64, Role,
+                encryption::TransferAmountCiphertext, try_combine_lo_hi_ciphertexts, try_split_u64,
+                Role,
             },
         },
         range_proof::RangeProof,
@@ -96,7 +97,8 @@ impl TransferData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofGenerationError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
+        let (amount_lo, amount_hi) = try_split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS)
+            .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         let (ciphertext_lo, opening_lo) = TransferAmountCiphertext::new(
             amount_lo,
@@ -128,11 +130,12 @@ impl TransferData {
         };
 
         let new_source_ciphertext = ciphertext_old_source
-            - combine_lo_hi_ciphertexts(
+            - try_combine_lo_hi_ciphertexts(
                 &transfer_amount_lo_source,
                 &transfer_amount_hi_source,
                 TRANSFER_AMOUNT_LO_BITS,
-            );
+            )
+            .map_err(|_| ProofGenerationError::IllegalAmountBitLength)?;
 
         // generate transcript and append all public inputs
         let pod_transfer_pubkeys = TransferPubkeys {
