@@ -370,9 +370,9 @@ where
     pub fn cli_message() -> &'static str {
         lazy_static! {
             static ref MESSAGE: String = format!(
-                "Change the number of the unified scheduler's transaction execution threads dedicated to \
-                 each block, otherwise calculated as cpu_cores/4 [default: {}]",
-                 DefaultSchedulerPool::default_handler_count()
+                "Change the number of the unified scheduler's transaction execution threads \
+                 dedicated to each block, otherwise calculated as cpu_cores/4 [default: {}]",
+                DefaultSchedulerPool::default_handler_count()
             );
         };
 
