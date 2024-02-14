@@ -223,7 +223,7 @@ where
         let (watchdog_sender, watchdog_receiver) = unbounded();
         let (watchdog_exit_signal_sender, watchdog_exit_signal_receiver) = unbounded();
         let handler_count = handler_count.unwrap_or(Self::default_handler_count());
-        assert!(handler_count != 0);
+        assert!(handler_count >= 1);
 
         let watchdog_main_loop = || {
             move || {
