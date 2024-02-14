@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_info::AccountInfo,
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
@@ -151,15 +152,24 @@ impl AccountsFile {
     /// Return (account metadata, next_index) pair for the account at the
     /// specified `index` if any.  Otherwise return None.   Also return the
     /// index of the next entry.
-    pub fn get_account(&self, index: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
+    pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
         match self {
-            Self::AppendVec(av) => av.get_account(index),
+            Self::AppendVec(av) => av.get_account(offset),
             Self::TieredHot(ts) => {
+                // The get_account API here uses usize "offset", which AccountsDB
+                // assumes it is an multiple of 8.
+                //
+                // On the other hand, TieredHot uses IndexOffset in get_account(),
+                // which is equivalent to the reduced-offset concept in AccountsDB.
+                // As a result, we need to convert it to reduced_offset, but returns
+                // usize offset in the return value.
                 if let Some(reader) = ts.reader() {
                     return reader
-                        .get_account(IndexOffset(index as u32))
+                        .get_account(IndexOffset(AccountInfo::get_reduced_offset(offset)))
                         .unwrap()
-                        .map(|(metas, index_offset)| (metas, index_offset.0 as usize));
+                        .map(|(metas, index_offset)| {
+                            (metas, AccountInfo::reduced_offset_to_offset(index_offset.0))
+                        });
                 }
                 None
             }
@@ -175,7 +185,10 @@ impl AccountsFile {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),
             Self::TieredHot(ts) => {
                 if let Some(reader) = ts.reader() {
-                    return reader.account_matches_owners(IndexOffset(offset as u32), owners);
+                    return reader.account_matches_owners(
+                        IndexOffset(AccountInfo::get_reduced_offset(offset)),
+                        owners,
+                    );
                 }
                 Err(MatchAccountOwnerError::UnableToLoad)
             }
@@ -201,7 +214,13 @@ impl AccountsFile {
             Self::AppendVec(av) => av.accounts(offset),
             Self::TieredHot(ts) => {
                 if let Some(reader) = ts.reader() {
-                    return reader.accounts(IndexOffset(offset as u32)).unwrap();
+                    // A conversion is needed here as TieredStorage uses
+                    // IndexOffset (which is equivalent to reduced-offset)
+                    // while AccountsDb uses usize non-reduced offset that
+                    // assumes the offset must be a multiple of 8.
+                    return reader
+                        .accounts(IndexOffset(AccountInfo::get_reduced_offset(offset)))
+                        .unwrap();
                 }
                 vec![]
             }
@@ -228,7 +247,19 @@ impl AccountsFile {
     ) -> Option<Vec<StoredAccountInfo>> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
-            Self::TieredHot(ts) => ts.write_accounts(accounts, skip, &HOT_FORMAT).ok(),
+            Self::TieredHot(ts) => ts
+                .write_accounts(accounts, skip, &HOT_FORMAT)
+                .map(|mut infos| {
+                    infos.iter_mut().for_each(|info| {
+                        // A conversion is needed here as TieredStorage uses
+                        // IndexOffset (which is equivalent to reduced-offset)
+                        // while AccountsDb uses usize non-reduced offset that
+                        // assumes the offset must be a multiple of 8.
+                        info.offset = AccountInfo::reduced_offset_to_offset(info.offset as u32);
+                    });
+                    infos
+                })
+                .ok(),
         }
     }
 }
