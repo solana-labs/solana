@@ -4,7 +4,6 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
-    rand::seq::IteratorRandom,
     serial_test::serial,
     solana_accounts_db::{
         hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
