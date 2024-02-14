@@ -5499,12 +5499,13 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     );
 
     // Randomly switch to use unified scheduler
-    config
+    for method in (&mut [BlockVerificationMethod::UnifiedScheduler, BlockVerificationMethod::BlockstoreProcessor]).shuffle(&mut rand::thread_rng()){
+    }
+    config 
         .validator_configs
-        .iter_mut()
         .shuffle(&mut rand::thread_rng())
         .unwrap()
-        .block_verification_method = BlockVerificationMethod::UnifiedScheduler;
+        .block_verification_method = ;
 
     let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     cluster_tests::spend_and_verify_all_nodes(
