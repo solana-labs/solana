@@ -1,4 +1,3 @@
-#[cfg(not(target_os = "linux"))]
 #![feature(test)]
 #![allow(clippy::arithmetic_side_effects)]
 
