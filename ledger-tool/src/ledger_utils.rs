@@ -296,6 +296,8 @@ pub fn load_and_process_ledger(
             info!("no scheduler pool is installed for block verification...");
         }
         BlockVerificationMethod::UnifiedScheduler => {
+            let unified_scheduler_handler_threads =
+                value_t!(arg_matches, "unified_scheduler_handler_threads", usize).ok();
             let no_transaction_status_sender = None;
             let no_replay_vote_sender = None;
             let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -303,6 +305,7 @@ pub fn load_and_process_ledger(
                 .write()
                 .unwrap()
                 .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
+                    unified_scheduler_handler_threads,
                     process_options.runtime_config.log_messages_bytes_limit,
                     no_transaction_status_sender,
                     no_replay_vote_sender,
