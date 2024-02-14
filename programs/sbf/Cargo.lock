@@ -6543,6 +6543,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "derivative",
+ "lazy_static",
  "log",
  "procfs",
  "qualifier_attr",
