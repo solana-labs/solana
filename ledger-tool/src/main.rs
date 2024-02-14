@@ -851,7 +851,7 @@ fn main() {
         .arg(
             Arg::with_name("unified_scheduler_handler_threads")
                 .long("unified-scheduler-handler-threads")
-                .value_name("THREADS")
+                .value_name("COUNT")
                 .takes_value(true)
                 .validator(|s| is_within_range(s, 1..))
                 .global(true)

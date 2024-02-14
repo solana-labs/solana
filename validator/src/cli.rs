@@ -1394,7 +1394,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("unified_scheduler_handler_threads")
                 .long("unified-scheduler-handler-threads")
                 .hidden(hidden_unless_forced())
-                .value_name("THREADS")
+                .value_name("COUNT")
                 .takes_value(true)
                 .validator(|s| is_within_range(s, 1..))
                 .help(DefaultSchedulerPool::cli_message()),
