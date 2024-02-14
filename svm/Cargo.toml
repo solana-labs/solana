@@ -13,6 +13,7 @@ edition = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 percentage = { workspace = true }
+rand = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
