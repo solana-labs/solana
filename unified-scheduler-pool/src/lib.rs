@@ -55,6 +55,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use lazy_static::lazy_static;
 
 type AtomicSchedulerId = AtomicU64;
 
