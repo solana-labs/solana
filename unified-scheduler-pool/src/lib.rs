@@ -372,7 +372,7 @@ where
             static ref MESSAGE: String = format!(
                 "Change the number of the unified scheduler's transaction execution threads dedicated to \
                  each block, otherwise calculated as cpu_cores/4 [default: {}]",
-                 DefaultTaskHandler::default_handler_count()
+                 DefaultSchedulerPool::default_handler_count()
             );
         };
 
