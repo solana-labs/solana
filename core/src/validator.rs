@@ -818,7 +818,7 @@ impl Validator {
                 if let Some(count) = config.unified_scheduler_handler_threads {
                     warn!(
                         "--unified-scheduler-handler-threads={count} is ignored because unified \
-                         scheduler is disabled"
+                         scheduler isn't enabled"
                     );
                 }
             }

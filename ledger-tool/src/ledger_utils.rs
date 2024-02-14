@@ -299,7 +299,7 @@ pub fn load_and_process_ledger(
             if let Some(count) = unified_scheduler_handler_threads {
                 warn!(
                     "--unified-scheduler-handler-threads={count} is ignored because unified \
-                     scheduler is disabled"
+                     scheduler isn't enabled"
                 );
             }
         }
