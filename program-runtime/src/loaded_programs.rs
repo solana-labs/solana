@@ -180,7 +180,7 @@ impl Stats {
         let evictions: u64 = self.evictions.values().sum();
         let reloads = self.reloads.load(Ordering::Relaxed);
         let insertions = self.insertions.load(Ordering::Relaxed);
-        let lost_insertions = self.insertions.load(Ordering::Relaxed);
+        let lost_insertions = self.lost_insertions.load(Ordering::Relaxed);
         let replacements = self.replacements.load(Ordering::Relaxed);
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
         let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
