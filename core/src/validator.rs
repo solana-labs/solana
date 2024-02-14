@@ -815,6 +815,12 @@ impl Validator {
         match &config.block_verification_method {
             BlockVerificationMethod::BlockstoreProcessor => {
                 info!("no scheduler pool is installed for block verification...");
+                if let Some(count) = config.unified_scheduler_handler_threads {
+                    warn!(
+                        "--unified-scheduler-handler-threads={count} is ignored because unified \
+                         scheduler is disabled"
+                    );
+                }
             }
             BlockVerificationMethod::UnifiedScheduler => {
                 let scheduler_pool = DefaultSchedulerPool::new_dyn(
