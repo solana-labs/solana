@@ -85,9 +85,9 @@ pub struct SchedulerPool<
     next_scheduler_id: AtomicSchedulerId,
     // prune schedulers, stop idling scheduler's threads, sanity check on the
     // address book after scheduler is returned.
-    watchdog_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
-    watchdog_exit_signal_sender: Sender<()>,
-    watchdog_thread: Mutex<Option<JoinHandle<()>>>,
+    cleaner_sender: Sender<Weak<RwLock<ThreadManager<S, TH, SEA>>>>,
+    cleaner_exit_signal_sender: Sender<()>,
+    cleaner_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 #[derive(Debug)]
@@ -147,7 +147,7 @@ where
         //
         // Thus, this OS-specific implementation can be justified because this enables the hot-path
         // (the scheduler main thread) to omit VDSO calls and timed-out futex syscalls by relying on
-        // this out-of-bound watchdog for a defensive thread reclaiming.
+        // this out-of-bound cleaner for a defensive thread reclaiming.
         #[cfg(target_os = "linux")]
         {
             let Some(tid) = thread_manager.read().unwrap().active_tid_if_not_primary() else {
@@ -175,7 +175,7 @@ where
                     const BITS_PER_HEX_DIGIT: usize = 4;
                     let thread_manager = &mut thread_manager.write().unwrap();
                     info!(
-                        "[sch_{:0width$x}]: watchdog: retire_if_stale(): stopping thread manager ({tid}/{} <= {}/{:?})...",
+                        "[sch_{:0width$x}]: cleaner: retire_if_stale(): stopping thread manager ({tid}/{} <= {}/{:?})...",
                         thread_manager.scheduler_id,
                         current_tick,
                         self.tick,
@@ -221,12 +221,12 @@ where
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
         let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
-        let (watchdog_sender, watchdog_receiver) = unbounded();
-        let (watchdog_exit_signal_sender, watchdog_exit_signal_receiver) = unbounded();
+        let (cleaner_sender, cleaner_receiver) = unbounded();
+        let (cleaner_exit_signal_sender, cleaner_exit_signal_receiver) = unbounded();
         let handler_count = handler_count.unwrap_or(Self::default_handler_count());
         assert!(handler_count >= 1);
 
-        let watchdog_main_loop = || {
+        let cleaner_main_loop = || {
             move || {
                 let scheduler_pool: Arc<Self> = scheduler_pool_receiver.recv().unwrap();
                 drop(scheduler_pool_receiver);
@@ -245,7 +245,7 @@ where
 
                     let thread_manager_len_pre_push = thread_managers.len();
                     'inner: loop {
-                        match watchdog_receiver.try_recv() {
+                        match cleaner_receiver.try_recv() {
                             Ok(thread_manager) => {
                                 thread_managers.push(WatchedThreadManager::new(thread_manager))
                             }
@@ -255,7 +255,7 @@ where
                     }
 
                     info!(
-                        "watchdog: unused schedulers in the pool: {} => {}, all thread managers: {} => {} => {}",
+                        "cleaner: unused schedulers in the pool: {} => {}, all thread managers: {} => {} => {}",
                         schedulers_len_pre_retain,
                         schedulers_len_post_retain,
                         thread_manager_len_pre_retain,
@@ -264,18 +264,18 @@ where
                     );
                     // wait for signal with timeout here instead of recv_timeout() to write all the
                     // preceeding logs at once.
-                    match watchdog_exit_signal_receiver.recv_timeout(Duration::from_secs(1)) {
+                    match cleaner_exit_signal_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(()) | Err(RecvTimeoutError::Disconnected) => break 'outer,
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 }
-                info!("watchdog thread terminating!");
+                info!("cleaner thread terminating!");
             }
         };
 
-        let watchdog_thread = thread::Builder::new()
-            .name("solScWatchdog".to_owned())
-            .spawn(watchdog_main_loop())
+        let cleaner_thread = thread::Builder::new()
+            .name("solScCleaner".to_owned())
+            .spawn(cleaner_main_loop())
             .unwrap();
 
         let scheduler_pool = Arc::new_cyclic(|weak_self| Self {
@@ -289,9 +289,9 @@ where
             },
             weak_self: weak_self.clone(),
             next_scheduler_id: AtomicSchedulerId::new(PRIMARY_SCHEDULER_ID),
-            watchdog_thread: Mutex::new(Some(watchdog_thread)),
-            watchdog_sender,
-            watchdog_exit_signal_sender,
+            cleaner_thread: Mutex::new(Some(cleaner_thread)),
+            cleaner_sender,
+            cleaner_exit_signal_sender,
         });
         scheduler_pool_sender.send(scheduler_pool.clone()).unwrap();
         scheduler_pool
@@ -344,8 +344,8 @@ where
         }
     }
 
-    fn register_to_watchdog(&self, thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) {
-        self.watchdog_sender.send(thread_manager).unwrap();
+    fn register_to_cleaner(&self, thread_manager: Weak<RwLock<ThreadManager<S, TH, SEA>>>) {
+        self.cleaner_sender.send(thread_manager).unwrap();
     }
 
     pub fn default_handler_count() -> usize {
@@ -392,9 +392,9 @@ where
 
     fn uninstalled_from_bank_forks(self: Arc<Self>) {
         self.scheduler_inners.lock().unwrap().clear();
-        self.watchdog_exit_signal_sender.send(()).unwrap();
+        self.cleaner_exit_signal_sender.send(()).unwrap();
         let () = self
-            .watchdog_thread
+            .cleaner_thread
             .lock()
             .unwrap()
             .take()
@@ -402,7 +402,7 @@ where
             .join()
             .unwrap();
         info!(
-            "SchedulerPool::uninstalled_from_bank_forks(): joined watchdog thread at {:?}...",
+            "SchedulerPool::uninstalled_from_bank_forks(): joined cleaner thread at {:?}...",
             thread::current()
         );
     }
@@ -1082,6 +1082,8 @@ where
                                 let executed_task = executed_task.unwrap();
                                 if executed_task.is_err() {
                                     log_scheduler!("S+T:aborted");
+                                    // MUST: clear the addressbook before reusing this scheduler
+                                    // ...
                                     session_result_sender.send(None).unwrap();
                                     // be explicit about specifically dropping this receiver
                                     drop(new_task_receiver);
@@ -1396,7 +1398,7 @@ where
     #[cfg(target_os = "linux")]
     fn active_tid_if_not_primary(&self) -> Option<Tid> {
         if self.is_primary() {
-            // always exempt from watchdog...
+            // always exempt from cleaner...
             None
         } else {
             self.scheduler_thread_and_tid.as_ref().map(|&(_, tid)| tid)
@@ -1459,7 +1461,7 @@ where
         handler: TH,
     ) -> Self {
         let scheduler = Self::do_spawn(pool.clone(), initial_context, handler);
-        pool.register_to_watchdog(Arc::downgrade(&scheduler.inner.thread_manager));
+        pool.register_to_cleaner(Arc::downgrade(&scheduler.inner.thread_manager));
         scheduler
     }
 }
@@ -1543,13 +1545,13 @@ where
         let page_count = self.address_book.page_count();
         if page_count < 200_000 {
             info!(
-                "[sch_{:0width$x}]: watchdog: address book size: {page_count}...",
+                "[sch_{:0width$x}]: cleaner: address book size: {page_count}...",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
         } else if self.thread_manager.read().unwrap().is_primary() {
             info!(
-                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; emptying the primary scheduler",
+                "[sch_{:0width$x}]: cleaner: too big address book size: {page_count}...; emptying the primary scheduler",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
@@ -1557,7 +1559,7 @@ where
             return true;
         } else {
             info!(
-                "[sch_{:0width$x}]: watchdog: too big address book size: {page_count}...; retiring scheduler",
+                "[sch_{:0width$x}]: cleaner: too big address book size: {page_count}...; retiring scheduler",
                 self.id(),
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
             );
@@ -1570,7 +1572,7 @@ where
             true
         } else if !self.thread_manager.read().unwrap().is_primary() {
             info!(
-                "[sch_{:0width$x}]: watchdog: retiring unused scheduler after {:?}...",
+                "[sch_{:0width$x}]: cleaner: retiring unused scheduler after {:?}...",
                 self.id(),
                 pooled_duration,
                 width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
