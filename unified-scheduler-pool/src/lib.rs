@@ -890,11 +890,11 @@ where
             )
             .unwrap();
             let status = format!("{:?}", executed_task.result_with_timings.0);
-            let compute_price = executed_task
+            let compute_unit_price = executed_task
                 .task
                 .transaction()
                 .get_compute_budget_details(false)
-                .map(|d| d.compute_price)
+                .map(|d| d.compute_unit_price)
                 .unwrap_or_default();
 
             datapoint_info_at!(
@@ -909,7 +909,7 @@ where
                 ("duration", handler_timings.execution_us, i64),
                 ("cpu_duration", handler_timings.execution_cpu_us, i64),
                 ("compute_units", 0 /*task.cu*/, i64),
-                ("priority", compute_price, i64), // old name is kept for compat...
+                ("priority", compute_unit_price, i64), // old name is kept for compat...
             );
         }
 
