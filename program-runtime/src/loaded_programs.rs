@@ -382,6 +382,20 @@ impl LoadedProgram {
     }
 
     pub fn to_unloaded(&self) -> Option<Self> {
+        match &self.program {
+            LoadedProgramType::LegacyV0(_)
+            | LoadedProgramType::LegacyV1(_)
+            | LoadedProgramType::Typed(_) => {}
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded(_) => {}
+            LoadedProgramType::FailedVerification(_)
+            | LoadedProgramType::Closed
+            | LoadedProgramType::DelayVisibility
+            | LoadedProgramType::Unloaded(_)
+            | LoadedProgramType::Builtin(_) => {
+                return None;
+            }
+        }
         Some(Self {
             program: LoadedProgramType::Unloaded(self.program.get_environment()?.clone()),
             account_size: self.account_size,
@@ -1052,31 +1066,6 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         for k in keys {
             self.entries.remove(&k);
         }
-    }
-
-    fn unload_program(&mut self, id: &Pubkey) {
-        if let Some(second_level) = self.entries.get_mut(id) {
-            for entry in second_level.slot_versions.iter_mut() {
-                if let Some(unloaded) = entry.to_unloaded() {
-                    *entry = Arc::new(unloaded);
-                    self.stats
-                        .evictions
-                        .entry(*id)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
-                } else {
-                    error!(
-                        "Failed to create an unloaded cache entry for a program type {:?}",
-                        entry.program
-                    );
-                }
-            }
-        }
-    }
-
-    pub fn unload_all_programs(&mut self) {
-        let keys = self.entries.keys().copied().collect::<Vec<Pubkey>>();
-        keys.iter().for_each(|key| self.unload_program(key));
     }
 
     /// This function removes the given entry for the given program from the cache.
@@ -2388,6 +2377,52 @@ mod tests {
 
         assert!(match_missing(&missing, &program2, false));
         assert!(match_missing(&missing, &program3, true));
+    }
+
+    #[test]
+    fn test_unloaded() {
+        let mut cache = new_mock_cache::<TestForkGraph>();
+        for loaded_program_type in [
+            LoadedProgramType::FailedVerification(cache.environments.program_runtime_v1.clone()),
+            LoadedProgramType::Closed,
+            LoadedProgramType::DelayVisibility, // Never inserted in the global cache
+            LoadedProgramType::Unloaded(cache.environments.program_runtime_v1.clone()),
+            LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+        ] {
+            let entry = Arc::new(LoadedProgram {
+                program: loaded_program_type,
+                account_size: 0,
+                deployment_slot: 0,
+                effective_slot: 0,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            });
+            assert!(entry.to_unloaded().is_none());
+
+            // Check that unload_program_entry() does nothing for this entry
+            let program_id = Pubkey::new_unique();
+            cache.assign_program(program_id, entry.clone());
+            cache.unload_program_entry(&program_id, &entry);
+            assert_eq!(
+                cache.entries.get(&program_id).unwrap().slot_versions.len(),
+                1
+            );
+            assert!(cache.stats.evictions.is_empty());
+        }
+
+        let entry = new_test_loaded_program_with_usage(1, 2, AtomicU64::new(3));
+        let unloaded_entry = entry.to_unloaded().unwrap();
+        assert_eq!(unloaded_entry.deployment_slot, 1);
+        assert_eq!(unloaded_entry.effective_slot, 2);
+        assert_eq!(unloaded_entry.latest_access_slot.load(Ordering::Relaxed), 1);
+        assert_eq!(unloaded_entry.tx_usage_counter.load(Ordering::Relaxed), 3);
+
+        // Check that unload_program_entry() does its work
+        let program_id = Pubkey::new_unique();
+        cache.assign_program(program_id, entry.clone());
+        cache.unload_program_entry(&program_id, &entry);
+        assert!(cache.stats.evictions.get(&program_id).is_some());
     }
 
     #[test]
