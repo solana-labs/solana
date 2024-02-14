@@ -612,17 +612,17 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.69.4"
+version = "0.69.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
+checksum = "a4c69fae65a523209d34240b60abe0c42d33d1045d445c0839d8a4894a736e2d"
 dependencies = [
  "bitflags 2.4.2",
  "cexpr",
  "clang-sys",
- "itertools",
  "lazy_static",
  "lazycell",
  "log",
+ "peeking_take_while",
  "prettyplease 0.2.16",
  "proc-macro2",
  "quote",
@@ -2634,7 +2634,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e99bf26f496b13ac6273014f40afda46a233fbfb0289ce50fb4daaad2f2ffc80"
 dependencies = [
  "bincode",
- "bindgen 0.69.4",
+ "bindgen 0.69.2",
  "cc",
  "cfg-if 1.0.0",
  "cty",
