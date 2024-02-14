@@ -974,7 +974,7 @@ lazy_static! {
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
-        (set_sysvar_rent_epoch_max::id(), "Set rent epoch to MAX for sysvar #"),
+        (set_sysvar_rent_epoch_max::id(), "Set rent epoch to MAX for sysvar #35193"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
