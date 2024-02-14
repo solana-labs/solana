@@ -5502,7 +5502,7 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     config
         .validator_configs
         .iter_mut()
-        .choose(&mut rand::thread_rng())
+        .shuffle(&mut rand::thread_rng())
         .unwrap()
         .block_verification_method = BlockVerificationMethod::UnifiedScheduler;
 
