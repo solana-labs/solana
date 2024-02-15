@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        error::{LedgerToolError, Result},
         ledger_path::canonicalize_ledger_path,
         ledger_utils::{get_program_ids, get_shred_storage_type},
         output::{output_ledger, output_slot, SlotBounds, SlotInfo},
@@ -42,7 +43,7 @@ fn analyze_column<
 >(
     db: &Database,
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let mut key_len: u64 = 0;
     let mut key_tot: u64 = 0;
     let mut val_hist = histogram::Histogram::new();
@@ -112,7 +113,7 @@ fn analyze_column<
     Ok(())
 }
 
-fn analyze_storage(database: &Database) -> Result<(), Box<dyn std::error::Error>> {
+fn analyze_storage(database: &Database) -> Result<()> {
     use solana_ledger::blockstore_db::columns::*;
     analyze_column::<SlotMeta>(database, "SlotMeta")?;
     analyze_column::<Orphans>(database, "Orphans")?;
@@ -236,10 +237,7 @@ fn get_latest_optimistic_slots(
     }
 }
 
-fn print_blockstore_file_metadata(
-    blockstore: &Blockstore,
-    file_name: &Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn print_blockstore_file_metadata(blockstore: &Blockstore, file_name: &Option<&str>) -> Result<()> {
     let live_files = blockstore.live_files_metadata()?;
 
     // All files under live_files_metadata are prefixed with "/".
@@ -263,10 +261,9 @@ fn print_blockstore_file_metadata(
         }
     }
     if sst_file_name.is_some() {
-        return Err(format!(
-            "Failed to find or load the metadata of the specified file {file_name:?}"
-        )
-        .into());
+        return Err(LedgerToolError::BadArgument(format!(
+            "failed to find or load the metadata of the specified file {file_name:?}"
+        )));
     }
     Ok(())
 }
@@ -606,10 +603,7 @@ pub fn blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) 
     });
 }
 
-fn do_blockstore_process_command(
-    ledger_path: &Path,
-    matches: &ArgMatches<'_>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -> Result<()> {
     let ledger_path = canonicalize_ledger_path(ledger_path);
     let verbose_level = matches.occurrences_of("verbose");
 
@@ -824,7 +818,7 @@ fn do_blockstore_process_command(
             let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
             let f = BufReader::new(File::open(log_file)?);
             println!("Reading log file");
-            for line in f.lines().map_while(Result::ok) {
+            for line in f.lines().map_while(std::io::Result::ok) {
                 let parse_results = {
                     if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
                         Some((slot_string, &mut frozen))
@@ -903,18 +897,19 @@ fn do_blockstore_process_command(
                     let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
                     let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
                     if slots.is_empty() {
-                        return Err("purge range is empty".into());
+                        return Err(LedgerToolError::BadArgument(format!(
+                            "blockstore is empty beyond purge start slot {start_slot}"
+                        )));
                     }
                     *slots.last().unwrap()
                 }
             };
 
             if end_slot < start_slot {
-                return Err(format!(
+                return Err(LedgerToolError::BadArgument(format!(
                     "starting slot {start_slot} should be less than or equal to \
                     ending slot {end_slot}"
-                )
-                .into());
+                )));
             }
             info!(
                 "Purging data from slots {} to {} ({} slots) (do compaction: {}) \
@@ -980,11 +975,10 @@ fn do_blockstore_process_command(
             // Adjust by one since start_root need not be checked
             let num_slots = start_root - end_root - 1;
             if arg_matches.is_present("end_root") && num_slots > max_slots {
-                return Err(format!(
+                return Err(LedgerToolError::BadArgument(format!(
                     "Requested range {num_slots} too large, max {max_slots}. Either adjust \
-                 `--until` value, or pass a larger `--repair-limit` to override the limit",
-                )
-                .into());
+                    `--until` value, or pass a larger `--repair-limit` to override the limit",
+                )));
             }
 
             let num_repaired_roots = blockstore.scan_and_fix_roots(
