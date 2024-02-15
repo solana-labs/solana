@@ -19,7 +19,7 @@ use {
     },
     solana_runtime::bank::*,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{Account, AccountSharedData, ReadableAccount},
         genesis_config::{create_genesis_config, ClusterType},
         hash::Hash,
         lamports::LamportsError,
@@ -203,23 +203,29 @@ fn store_accounts_with_possible_contention<F: 'static>(
     let accounts = Arc::new(Accounts::new(Arc::new(accounts_db)));
     let num_keys = 1000;
     let slot = 0;
-    accounts.add_root(slot);
-    let pubkeys: Arc<Vec<_>> = Arc::new(
-        (0..num_keys)
-            .map(|_| {
-                let pubkey = solana_sdk::pubkey::new_rand();
-                let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
-                accounts.store_slow_uncached(slot, &pubkey, &account);
-                pubkey
-            })
-            .collect(),
-    );
 
-    for _ in 0..num_readers {
+    let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+        .take(num_keys)
+        .collect();
+    let accounts_data: Vec<_> = std::iter::repeat(Account {
+        lamports: 1,
+        ..Default::default()
+    })
+    .take(num_keys)
+    .collect();
+    let storable_accounts: Vec<_> = pubkeys.iter().zip(accounts_data.iter()).collect();
+    accounts.store_accounts_cached((slot, storable_accounts.as_slice()));
+    accounts.add_root(slot);
+    accounts
+        .accounts_db
+        .flush_accounts_cache_slot_for_tests(slot);
+
+    let pubkeys = Arc::new(pubkeys);
+    for i in 0..num_readers {
         let accounts = accounts.clone();
         let pubkeys = pubkeys.clone();
         Builder::new()
-            .name("readers".to_string())
+            .name(format!("reader{i:02}"))
             .spawn(move || {
                 reader_f(&accounts, &pubkeys);
             })
@@ -227,21 +233,19 @@ fn store_accounts_with_possible_contention<F: 'static>(
     }
 
     let num_new_keys = 1000;
-    let new_accounts: Vec<_> = (0..num_new_keys)
-        .map(|_| AccountSharedData::new(1, 0, AccountSharedData::default().owner()))
-        .collect();
     bencher.iter(|| {
-        for account in &new_accounts {
-            // Write to a different slot than the one being read from. Because
-            // there's a new account pubkey being written to every time, will
-            // compete for the accounts index lock on every store
-            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), account);
-        }
-    })
+        let new_pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+            .take(num_new_keys)
+            .collect();
+        let new_storable_accounts: Vec<_> = new_pubkeys.iter().zip(accounts_data.iter()).collect();
+        // Write to a different slot than the one being read from. Because
+        // there's a new account pubkey being written to every time, will
+        // compete for the accounts index lock on every store
+        accounts.store_accounts_cached((slot + 1, new_storable_accounts.as_slice()));
+    });
 }
 
 #[bench]
-#[ignore]
 fn bench_concurrent_read_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention(
         "concurrent_read_write",
@@ -261,7 +265,6 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
 }
 
 #[bench]
-#[ignore]
 fn bench_concurrent_scan_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
         test::black_box(
