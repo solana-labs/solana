@@ -534,7 +534,7 @@ impl SchedulingStateMachine {
             .iter()
             .map(|address| (address, RequestedUsage::Readonly));
 
-        let locks = writable_locks
+        let lock_attempts = writable_locks
             .chain(readonly_locks)
             .map(|(address, requested_usage)| {
                 LockAttempt::new(page_loader(**address), requested_usage)
@@ -544,7 +544,8 @@ impl SchedulingStateMachine {
         Task::new(TaskInner {
             transaction,
             index,
-            task_status: TokenCell::new(TaskStatus::new(locks)),
+            lock_attempts,
+            task_status: TokenCell::new(TaskStatus::new()),
         })
     }
 
