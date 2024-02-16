@@ -226,9 +226,7 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts(
-        &self,
-    ) -> &Vec<LockAttempt> {
+    fn lock_attempts(&self) -> &Vec<LockAttempt> {
         &self.lock_attempts
     }
 
@@ -392,10 +390,7 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn attempt_lock_for_execution(
-        &mut self,
-        task: &Task,
-    ) -> ShortCounter {
+    fn attempt_lock_for_execution(&mut self, task: &Task) -> ShortCounter {
         let mut blocked_lock_count = ShortCounter::zero();
 
         for attempt in task.lock_attempts() {
@@ -473,9 +468,7 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
-        let blocked_lock_count = self.attempt_lock_for_execution(
-            &task,
-        );
+        let blocked_lock_count = self.attempt_lock_for_execution(&task);
 
         if blocked_lock_count.is_zero() {
             // lock succeeded
