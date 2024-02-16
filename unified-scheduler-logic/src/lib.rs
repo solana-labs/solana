@@ -538,7 +538,7 @@ impl SchedulingStateMachine {
             transaction,
             index,
             lock_attempts,
-            task_status: TokenCell::new(ShortCounter::zero()),
+            blocked_lock_count: TokenCell::new(ShortCounter::zero()),
         })
     }
 
