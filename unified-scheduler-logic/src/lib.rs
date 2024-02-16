@@ -122,13 +122,13 @@ mod utils {
     unsafe impl<V> Sync for TokenCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    pub(super) struct Token<V: 'static, F: 'static>(PhantomData<(*mut V, *mut F)>);
+    pub(super) struct Token<V: 'static>(PhantomData<(*mut V)>);
 
     thread_local! {
         pub static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
     }
 
-    impl<V, F> Token<V, F> {
+    impl<V> Token<V> {
         #[must_use]
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
             assert!(
