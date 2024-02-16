@@ -182,31 +182,11 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
-#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-#[derive(Debug)]
-struct TaskStatus {
-    blocked_lock_count: ShortCounter,
-}
-
-impl PartialBorrowMut<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCounter> {
-    fn partial_borrow_mut(v: &mut TaskStatus) -> &mut ShortCounter {
-        &mut v.blocked_lock_count
-    }
-}
-
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
 type BlockedLockCountToken = Token<ShortCounter, ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
-
-impl TaskStatus {
-    fn new() -> Self {
-        Self {
-            blocked_lock_count: ShortCounter::zero(),
-        }
-    }
-}
 
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
 #[derive(Debug)]
