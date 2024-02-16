@@ -315,8 +315,8 @@ impl PageInner {
         self.blocked_tasks.push_back((task, requested_usage));
     }
 
-    fn has_blocked_task(&self) -> bool {
-        !self.blocked_tasks.is_empty()
+    fn has_no_blocked_task(&self) -> bool {
+        self.blocked_tasks.is_empty()
     }
 
     fn pop_blocked_task(&mut self) {
@@ -412,7 +412,11 @@ impl SchedulingStateMachine {
 
         for attempt in task.lock_attempts_mut(&mut self.lock_attempt_token) {
             let page = attempt.page_mut(&mut self.page_token);
-            let lock_status = Self::attempt_lock_address(page, attempt.requested_usage);
+            let lock_status = if page.has_no_blocked_task() {
+                Self::attempt_lock_address(page, attempt.requested_usage)
+            } else {
+                LockStatus::Blocked
+            };
             match lock_status {
                 LockStatus::Succeded(Usage::Unused) => unreachable!(),
                 LockStatus::Succeded(usage) => {
@@ -430,10 +434,6 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
-        if page.has_blocked_task() {
-            return LockStatus::Blocked;
-        }
-
         match page.usage {
             Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
