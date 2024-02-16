@@ -14,23 +14,29 @@
 //! its perf footprint is well understood. It really focuses on its single job: sorting
 //! transactions in executable order.
 //!
-//! And its algorithm is very fast for high throughput, real-time for low latency. The whole
+//! Its algorithm is very fast for high throughput, real-time for low latency. The whole
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
 //! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
-//! data structure (called `Page`) for the scheduling thread to offload the job to other threads.
-//! This preloading is done inside `create_task()`. Thus, task scheduling
-//! complexity can be reduced to several word-sized loads and stores (i.e. constant), strictly
-//! proportional to the number of addresses in a given transaction. Not that this is true,
-//! regardless of conflicts. This is because the preloading also pre-allocates some scratch-pad
-//! area to stash blocked transactions.
+//! data structures (called `Page`) for all of transaction's accounts, in order to offload the job
+//! to other threads from the scheduler thread. This preloading is done inside `create_task()`. In
+//! this way, task scheduling complexity is basically reduced to several word-sized loads and
+//! stores in the schduler thread (i.e. constant; no allocations nor syscalls), while being
+//! strictly proportional to the number of addresses in a given transaction. Note that this
+//! statement is held true, regardless of conflicts. This is because the preloading also
+//! pre-allocates some scratch-pad area (`blocked_tasks`) to stash blocked ones. So, conflicts only
+//! incurs some additional fixed number of mem stores, within error magin of constant complexity.
+//! And additional memory allocation for the scratchpad could said to be amortized, if such unsual
+//! event should occur.
 //!
-//! Naturally, Arc is used to implement this preloading. Also, this needs interior mutability
-//! inside it.  However, `SchedulingStateMachine` doesn't use RwLock, leveraving the fact it's the
-//! only thread, which modifies the states. Instead, it uses UnsafeCell, which is sugar-coated with
-//! overly restrictive lifetime safety via rust type system with a specialized wrapper called
-//! `TokenCell`. In this way, the scheduling code attains maximally possible single-threaed
-//! execution without stalling cpu pipelines at all, only constrained to mem access latency,
-//! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
+//! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
+//! accessing the same account, and among threads. Also, interior mutability is needed inside it.
+//! However, `SchedulingStateMachine` doesn't use conventional locks like RwLock. Leveraving the
+//! fact it's the only state-mutating exclusive thread, it instead uses `UnsafeCell`, which is
+//! sugar-coated by a specialized wrapper called `TokenCell`. `TokenCell` improses an overly
+//! restrictive aliasing rule via rust type system to maintain the memory safety. By localizing any
+//! synchronization to the message passing, the scheduling code itself attains maximally possible
+//! single-threaed execution without stalling cpu pipelines at all, only constrained to mem access
+//! latency, efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers};
