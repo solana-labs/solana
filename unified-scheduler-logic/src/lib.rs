@@ -639,7 +639,6 @@ mod tests {
             "Succeded(Readonly(ShortCounter(1)))"
         );
         let task_status = TaskStatus {
-            lock_attempts: vec![LockAttempt::new(Page::default(), RequestedUsage::Writable)],
             blocked_lock_count: ShortCounter::zero(),
         };
         assert_eq!(
