@@ -15,11 +15,17 @@
 //!
 //! And its algorithm is very fast for high throughput, real-time for low latency. The whole
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
-//! this scheduling code. For that end, unified scheduler preloads address-specific locking state
-//! data struture (called `Page`) for the scheduling code to offload the job. This reloading is
-//! done inside `create_task()`. Thus, task scheduling complexitiy can be reduced to several
-//! word-sized loads/stores basically, strictly proportional to the number of addresses in a given
-//! transaction.
+//! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
+//! data structure (called `Page`) for the scheduling code to offload the job to other threads.
+//! This preloading is done inside `create_task()`. Thus, task scheduling complexity can be reduced
+//! to several word-sized loads/stores (i.e. constant), strictly proportional to the number of
+//! addresses in a given transaction. Not that this is true, regardless of conflicts. This is
+//! because the preloading also pre-allocates some scratch-pad area to stash blocked transactions.
+//!
+//! Naturally, Arc is used to implement this preloading. Also, this needs interior mutability
+//! inside it.  However, `SchedulingStateMachine` doesn't use RwLock. Instead, it uses UnsafeCell,
+//! which is sugar-coated with overly restictive lifetime safety with a specialized wrapper called
+//! TokenCell.
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
