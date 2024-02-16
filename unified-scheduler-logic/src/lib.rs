@@ -234,7 +234,7 @@ impl TaskInner {
         &self,
         blocked_lock_count_token: &'t mut BlockedLockCountToken,
     ) -> &'t mut ShortCounter {
-        self.task_status.borrow_mut(blocked_lock_count_token)
+        self.blocked_lock_count.borrow_mut(blocked_lock_count_token)
     }
 }
 
