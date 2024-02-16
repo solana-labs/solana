@@ -158,7 +158,7 @@ mod utils {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum LockStatus {
     Succeded(Usage),
     Blocked,
