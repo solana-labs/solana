@@ -437,7 +437,7 @@ impl SchedulingStateMachine {
         let blocked_lock_count = self.attempt_lock_for_execution(&task);
 
         if blocked_lock_count.is_zero() {
-            // lock succeeded
+            // succeeded
             Some(task)
         } else {
             *task.blocked_lock_count_mut(&mut self.blocked_lock_count_token) = blocked_lock_count;
