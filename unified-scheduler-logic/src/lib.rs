@@ -185,7 +185,6 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 #[derive(Debug)]
 struct TaskStatus {
-    lock_attempts: Vec<LockAttempt>,
     blocked_lock_count: ShortCounter,
 }
 
@@ -224,6 +223,7 @@ impl TaskStatus {
 pub struct TaskInner {
     transaction: SanitizedTransaction,
     index: usize,
+    lock_attempts: Vec<LockAttempt>,
     task_status: TokenCell<TaskStatus>,
 }
 
