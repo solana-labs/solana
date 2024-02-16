@@ -1,14 +1,14 @@
 //! The task (transaction) scheduling code for the unified scheduler
 //!
 //! The most important type is `SchedulingStateMachine`. It takes new tasks (= transactons) and
-//! returns runnable tasks via `::schedule_task()` while maintaining the account readonly/writable
-//! lock rules. Those returned runnable tasks are guaranteed to be safe to execute in parallel.
-//! Lastly, `SchedulingStateMachine` should be notified about the completion of the exeuciton via
-//! `::deschedule_task()`, so that conflicting tasks can be returned from
+//! may return back them if runnable via `::schedule_task()` while maintaining the account
+//! readonly/writable lock rules. Those returned runnable tasks are guaranteed to be safe to
+//! execute in parallel. Lastly, `SchedulingStateMachine` should be notified about the completion
+//! of the exeuciton via `::deschedule_task()`, so that conflicting tasks can be returned from
 //! `::schedule_unblocked_task()` as newly-unblocked runnable ones.
 //!
 //! The design principle of this crate (`solana-unified-scheduler-logic`) is simplicity for
-//! the separation of concern. It's interacted with a few of its public API from
+//! the separation of concern. It can be interacted only with a few of its public API from
 //! `solana-unified-scheduler-pool`. This crate doesn't know about banks, slots, solana-runtime,
 //! threads, crossbeam-channel at all. Becasue of this, it's deterministic, easy-to-unit-test, and
 //! its perf footprint is well understood. It really focuses on its single job: sorting
@@ -23,20 +23,20 @@
 //! stores in the schduler thread (i.e. constant; no allocations nor syscalls), while being
 //! strictly proportional to the number of addresses in a given transaction. Note that this
 //! statement is held true, regardless of conflicts. This is because the preloading also
-//! pre-allocates some scratch-pad area (`blocked_tasks`) to stash blocked ones. So, conflicts only
-//! incurs some additional fixed number of mem stores, within error magin of constant complexity.
-//! And additional memory allocation for the scratchpad could said to be amortized, if such unsual
-//! event should occur.
+//! pre-allocates some scratch-pad area (`blocked_tasks`) to stash blocked ones. So, a conflict
+//! only incurs some additional fixed number of mem stores, within error magin of constant
+//! complexity. And additional memory allocation for the scratchpad could said to be amortized, if
+//! such unsual event should occur.
 //!
 //! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
-//! accessing the same account, and among threads. Also, interior mutability is needed.  However,
+//! accessing the same account, and among threads. Also, interior mutability is needed. However,
 //! `SchedulingStateMachine` doesn't use conventional locks like RwLock. Leveraving the fact it's
 //! the only state-mutating exclusive thread, it instead uses `UnsafeCell`, which is sugar-coated
-//! by a specialized wrapper called `TokenCell`. `TokenCell` improses an overly restrictive
-//! aliasing rule via rust type system to maintain the memory safety. By localizing any
-//! synchronization to the message passing, the scheduling code itself attains maximally possible
-//! single-threaed execution without stalling cpu pipelines at all, only constrained to mem access
-//! latency, efficiently utilzing L1-L3 cpu cache with full of `Page`s.
+//! by a tailored wrapper called `TokenCell`. `TokenCell` improses an overly restrictive aliasing
+//! rule via rust type system to maintain the memory safety. By localizing any synchronization to
+//! the message passing, the scheduling code itself attains maximally possible single-threaed
+//! execution without stalling cpu pipelines at all, only constrained to mem access latency,
+//! while efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers};
