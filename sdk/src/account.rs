@@ -811,8 +811,9 @@ pub fn is_executable(account: &impl ReadableAccount, feature_set: &FeatureSet) -
     if !feature_set.is_active(&deprecate_executable_meta_update_in_bpf_loader::id()) {
         account.executable()
     } else {
-        // First, check if the account is empty. Empty accounts are not executable.
-        if account.data().is_empty() {
+        // First, check if the account is empty or all zeros. Empty or all zeros
+        // accounts are not executable.
+        if account.data().is_empty() || account.data().iter().all(|&x| x == 0) {
             return false;
         }
 
