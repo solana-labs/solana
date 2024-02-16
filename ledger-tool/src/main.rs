@@ -1295,6 +1295,12 @@ fn main() {
                         .takes_value(true)
                         .help("Snapshot archive format to use.")
                         .conflicts_with("no_snapshot"),
+                )
+                .arg(
+                    Arg::with_name("enable_capitalization_change")
+                        .long("enable-capitalization-change")
+                        .takes_value(false)
+                        .help("If snapshot creation should succeed with a capitalization delta."),
                 ),
         )
         .subcommand(
@@ -1806,6 +1812,9 @@ fn main() {
                         None
                     };
 
+                    let enable_capitalization_change =
+                        arg_matches.is_present("enable_capitalization_change");
+
                     let snapshot_type_str = if is_incremental {
                         "incremental "
                     } else if is_minimized {
@@ -2047,7 +2056,30 @@ fn main() {
                         }
                     }
 
+                    let pre_capitalization = bank.capitalization();
+
                     bank.set_capitalization();
+
+                    let post_capitalization = bank.capitalization();
+
+                    let capitalization_message = if pre_capitalization != post_capitalization {
+                        let amount = if pre_capitalization > post_capitalization {
+                            format!("-{}", pre_capitalization - post_capitalization)
+                        } else {
+                            (post_capitalization - pre_capitalization).to_string()
+                        };
+                        let msg = format!("Capitalization change: {amount} lamports");
+                        warn!("{msg}");
+                        if !enable_capitalization_change {
+                            eprintln!(
+                                "{msg}\nBut `--enable-capitalization-change flag not provided"
+                            );
+                            exit(1);
+                        }
+                        Some(msg)
+                    } else {
+                        None
+                    };
 
                     let bank = if let Some(warp_slot) = warp_slot {
                         // need to flush the write cache in order to use Storages to calculate
@@ -2175,6 +2207,9 @@ fn main() {
                         }
                     }
 
+                    if let Some(msg) = capitalization_message {
+                        println!("{msg}");
+                    }
                     println!(
                         "Shred version: {}",
                         compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
