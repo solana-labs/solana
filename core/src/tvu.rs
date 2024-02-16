@@ -320,11 +320,7 @@ impl Tvu {
         )?;
 
         let blockstore_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
-            BlockstoreCleanupService::new(
-                blockstore.clone(),
-                max_ledger_shreds,
-                exit.clone(),
-            )
+            BlockstoreCleanupService::new(blockstore.clone(), max_ledger_shreds, exit.clone())
         });
 
         let duplicate_shred_listener = DuplicateShredListener::new(

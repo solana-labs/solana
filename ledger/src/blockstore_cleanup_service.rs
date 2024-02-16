@@ -370,7 +370,7 @@ mod tests {
 
         // Mark 50 as a root to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
-        blockstore.set_roots(vec![50].iter()).unwrap();
+        blockstore.set_roots([50].iter()).unwrap();
         BlockstoreCleanupService::cleanup_ledger(&blockstore, 5, &mut last_purge_slot, 10);
         assert_eq!(last_purge_slot, 50);
 
@@ -412,7 +412,7 @@ mod tests {
             insert_time.stop();
 
             let mut time = Measure::start("purge time");
-            blockstore.set_roots(vec![slot + num_slots].iter()).unwrap();
+            blockstore.set_roots([slot + num_slots].iter()).unwrap();
             BlockstoreCleanupService::cleanup_ledger(
                 &blockstore,
                 initial_slots,
