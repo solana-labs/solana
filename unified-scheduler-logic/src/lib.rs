@@ -406,6 +406,7 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_for_execution(
+        &mut self,
         task: &Task,
         lock_attempts: &mut [LockAttempt],
     ) -> ShortCounter {
