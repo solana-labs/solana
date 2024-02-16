@@ -169,10 +169,10 @@ const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
-type PageToken = Token<PageInner, PageInner>;
+type PageToken = Token<PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-type BlockedLockCountToken = Token<ShortCounter, ShortCounter>;
+type BlockedLockCountToken = Token<ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
