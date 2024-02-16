@@ -658,7 +658,7 @@ mod tests {
         assert_eq!(
             format!("{:?}", task_status),
             "TaskStatus { lock_attempts: [LockAttempt { page: Page(TokenCell(UnsafeCell { \
-             .. })), requested_usage: Writable, lock_status: Blocked }], blocked_lock_count: \
+             .. })), requested_usage: Writable }], blocked_lock_count: \
              ShortCounter(0) }"
         );
         let sanitized = simplest_transaction();
