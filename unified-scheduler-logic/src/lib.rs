@@ -1,3 +1,20 @@
+//! The task (transaction) scheduling code for the unified scheduler
+//!
+//! The most important type is `SchedulingStateMachine`. It takes new tasks (= transactons) and
+//! returns runnable tasks while maintaining account lock rules. Those returned runnable tasks are
+//! guaranteed to be safe to execute in parallel. Lastly, `SchedulingStateMachine` should be
+//! notified about the completion of the exeuciton, so that conflicting tasks can be returned from
+//! `SchedulingStateMachine` as newly-unblocked runnable ones.
+//!
+//! The design principle of this crate (`solana-unified-scheduler-logic`) is simplicity for
+//! the separation of concern . It's interacted with a few of its public API from
+//! `solana-unified-scheduler-pool`. This crate doesn't know about banks, slots, solana-runtime,
+//! threads, crossbeam-channel at all. Becasue of this, it's deterministic, easy-to-unit-test, and
+//! its perf footprint is well understood.  It really focuses on its job: sorting transactions in
+//! executable order. 
+//!
+//! And its algorithm is very fast, real-time, and unbatched. The whole unified-scheduler
+//! architecture is designed from grounds up to support the fastest execution of this scheduling code. For that end, several unusual implementation tactics are employed.
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
