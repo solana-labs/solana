@@ -236,9 +236,6 @@ impl Consumer {
         slot_metrics_tracker.accumulate_process_transactions_summary(&process_transactions_summary);
         slot_metrics_tracker.accumulate_transaction_errors(error_counters);
 
-        let retryable_tx_count = retryable_transaction_indexes.len();
-        inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);
-
         // Filter out the retryable transactions that are too old
         let (filtered_retryable_transaction_indexes, filter_retryable_packets_us) =
             measure_us!(Self::filter_pending_packets_from_pending_txs(
