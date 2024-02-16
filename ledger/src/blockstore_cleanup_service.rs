@@ -60,26 +60,25 @@ impl BlockstoreCleanupService {
                     ledger shreds={max_ledger_shreds}",
                 );
                 loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                if last_check_time.elapsed() > LOOP_LIMITER {
-                    Self::cleanup_ledger(
-                        &blockstore,
-                        max_ledger_shreds,
-                        &mut last_purge_slot,
-                        DEFAULT_PURGE_SLOT_INTERVAL,
-                    );
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if last_check_time.elapsed() > LOOP_LIMITER {
+                        Self::cleanup_ledger(
+                            &blockstore,
+                            max_ledger_shreds,
+                            &mut last_purge_slot,
+                            DEFAULT_PURGE_SLOT_INTERVAL,
+                        );
 
-                    last_check_time = Instant::now();
+                        last_check_time = Instant::now();
+                    }
+                    // Only sleep for 1 second instead of LOOP_LIMITER so that this
+                    // thread can respond to the exit flag in a timely manner
+                    thread::sleep(Duration::from_secs(1));
                 }
-                // Only sleep for 1 second instead of LOOP_LIMITER so that this
-                // thread can respond to the exit flag in a timely manner
-                thread::sleep(Duration::from_secs(1));
-            }
-            info!("BlockstoreCleanupService has stopped");
-        }
-            )
+                info!("BlockstoreCleanupService has stopped");
+            })
             .unwrap();
 
         Self { t_cleanup }
