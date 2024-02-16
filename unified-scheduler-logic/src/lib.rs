@@ -214,7 +214,7 @@ pub struct TaskInner {
     transaction: SanitizedTransaction,
     index: usize,
     lock_attempts: Vec<LockAttempt>,
-    task_status: TokenCell<TaskStatus>,
+    blocked_lock_count: TokenCell<ShortCounter>,
 }
 
 impl TaskInner {
