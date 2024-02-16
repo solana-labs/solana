@@ -52,14 +52,14 @@ impl BlockstoreCleanupService {
         let mut last_purge_slot = 0;
         let mut last_check_time = Instant::now();
 
-        info!(
-            "BlockstoreCleanupService active. max ledger shreds={}",
-            max_ledger_shreds
-        );
-
         let t_cleanup = Builder::new()
             .name("solBstoreClean".to_string())
-            .spawn(move || loop {
+            .spawn(move || {
+                info!(
+                    "BlockstoreCleanupService has started with max \
+                    ledger shreds={max_ledger_shreds}",
+                );
+                loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
@@ -76,7 +76,10 @@ impl BlockstoreCleanupService {
                 // Only sleep for 1 second instead of LOOP_LIMITER so that this
                 // thread can respond to the exit flag in a timely manner
                 thread::sleep(Duration::from_secs(1));
-            })
+            }
+            info!("BlockstoreCleanupService has stopped");
+        }
+            )
             .unwrap();
 
         Self { t_cleanup }
