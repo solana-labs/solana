@@ -573,7 +573,6 @@ impl SchedulingStateMachine {
             blocked_lock_count_token: unsafe {
                 BlockedLockCountToken::assume_exclusive_mutating_thread()
             },
-            lock_attempt_token: unsafe { LockAttemptToken::assume_exclusive_mutating_thread() },
             page_token: unsafe { PageToken::assume_exclusive_mutating_thread() },
         }
     }
