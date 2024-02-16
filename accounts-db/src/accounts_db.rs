@@ -5086,36 +5086,18 @@ impl AccountsDb {
         max_root: Option<Slot>,
         clone_in_lock: bool,
     ) -> Option<(Slot, StorageLocation, Option<LoadedAccountAccessor<'a>>)> {
-        let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
-            AccountIndexGetResult::Found(lock, index) => (lock, index),
-            // we bail out pretty early for missing.
-            AccountIndexGetResult::NotFound => {
-                return None;
-            }
-        };
-
-        let slot_list = lock.slot_list();
-        let (slot, info) = slot_list[index];
-        let storage_location = info.storage_location();
-        let some_from_slow_path = if clone_in_lock {
-            // the fast path must have failed.... so take the slower approach
-            // of copying potentially large Account::data inside the lock.
-
-            // calling check_and_get_loaded_account is safe as long as we're guaranteed to hold
-            // the lock during the time and there should be no purge thanks to alive ancestors
-            // held by our caller.
-            Some(self.get_account_accessor(slot, pubkey, &storage_location))
-        } else {
-            None
-        };
-
-        Some((slot, storage_location, some_from_slow_path))
-        // `lock` is dropped here rather pretty quickly with clone_in_lock = false,
-        // so the entry could be raced for mutation by other subsystems,
-        // before we actually provision an account data for caller's use from now on.
-        // This is traded for less contention and resultant performance, introducing fair amount of
-        // delicate handling in retry_to_get_account_accessor() below ;)
-        // you're warned!
+        self.accounts_index.get_with_and_then(
+            pubkey,
+            Some(ancestors),
+            max_root,
+            true,
+            |(slot, account_info)| {
+                let storage_location = account_info.storage_location();
+                let account_accessor = clone_in_lock
+                    .then(|| self.get_account_accessor(slot, pubkey, &storage_location));
+                (slot, storage_location, account_accessor)
+            },
+        )
     }
 
     fn retry_to_get_account_accessor<'a>(
