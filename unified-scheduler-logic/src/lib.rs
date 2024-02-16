@@ -18,8 +18,7 @@
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
 //! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
 //! data structure (called `Page`) for the scheduling thread to offload the job to other threads.
-//! Also, task-specific locking state data structure (called `TaskStatus`) initialization is
-//! offloaded as well.  This preloading is done inside `create_task()`. Thus, task scheduling
+//! This preloading is done inside `create_task()`. Thus, task scheduling
 //! complexity can be reduced to several word-sized loads and stores (i.e. constant), strictly
 //! proportional to the number of addresses in a given transaction. Not that this is true,
 //! regardless of conflicts. This is because the preloading also pre-allocates some scratch-pad
@@ -31,7 +30,7 @@
 //! overly restrictive lifetime safety via rust type system with a specialized wrapper called
 //! `TokenCell`. In this way, the scheduling code attains maximally possible single-threaed
 //! execution without stalling cpu pipelines at all, only constrained to mem access latency,
-//! efficiently utilzing L1-L3 cpu cache with full of `Page`s and `TaskStatus`es.
+//! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers};
