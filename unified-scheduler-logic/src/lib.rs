@@ -36,7 +36,7 @@
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
-    crate::utils::{PartialBorrowMut, ShortCounter, Token, TokenCell},
+    crate::utils::{ShortCounter, Token, TokenCell},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     static_assertions::const_assert_eq,
     std::{collections::VecDeque, mem, sync::Arc},
@@ -140,17 +140,6 @@ mod utils {
                 thread::current()
             );
             Self(PhantomData)
-        }
-    }
-
-    pub trait PartialBorrowMut<V, F> {
-        fn partial_borrow_mut(v: &mut V) -> &mut F;
-    }
-
-    // generic identity conversion impl
-    impl<T> PartialBorrowMut<T, T> for Token<T, T> {
-        fn partial_borrow_mut(t: &mut T) -> &mut T {
-            t
         }
     }
 
