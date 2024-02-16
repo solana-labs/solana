@@ -227,11 +227,10 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts_mut<'t>(
+    fn lock_attempts(
         &self,
-        lock_attempt_token: &'t mut LockAttemptToken,
-    ) -> &'t mut Vec<LockAttempt> {
-        self.task_status.borrow_mut(lock_attempt_token)
+    ) -> &Vec<LockAttempt> {
+        &self.lock_attempts
     }
 
     fn blocked_lock_count_mut<'t>(
@@ -339,7 +338,6 @@ pub struct SchedulingStateMachine {
     unblocked_task_count: ShortCounter,
     total_task_count: ShortCounter,
     blocked_lock_count_token: BlockedLockCountToken,
-    lock_attempt_token: LockAttemptToken,
     page_token: PageToken,
 }
 const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
