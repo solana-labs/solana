@@ -147,7 +147,7 @@ mod utils {
 
         #[test]
         #[should_panic(
-            expected = "\"solana_unified_scheduler_logic::utils::Token<usize, usize>\" is wrongly \
+            expected = "\"solana_unified_scheduler_logic::utils::Token<usize>\" is wrongly \
                         initialized twice on Thread"
         )]
         fn test_second_creation_of_tokens_in_a_thread() {
