@@ -487,7 +487,7 @@ impl SchedulingStateMachine {
     }
 
     fn unlock_after_execution(&mut self, task: &Task) {
-        for unlock_attempt in task.lock_attempts_mut(&mut self.lock_attempt_token) {
+        for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut heaviest_unblocked = Self::unlock(page, unlock_attempt);
 
