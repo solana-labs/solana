@@ -201,9 +201,8 @@ type BlockedLockCountToken = Token<TaskStatus, ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 impl TaskStatus {
-    fn new(lock_attempts: Vec<LockAttempt>) -> Self {
+    fn new() -> Self {
         Self {
-            lock_attempts,
             blocked_lock_count: ShortCounter::zero(),
         }
     }
