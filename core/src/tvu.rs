@@ -246,7 +246,7 @@ impl Tvu {
             exit.clone(),
         );
 
-        let (blockstore_cleanup_slot_sender, blockstore_cleanup_slot_receiver) = unbounded();
+        let (blockstore_cleanup_slot_sender, _blockstore_cleanup_slot_receiver) = unbounded();
         let replay_stage_config = ReplayStageConfig {
             vote_account: *vote_account,
             authorized_voter_keypairs,
@@ -323,7 +323,6 @@ impl Tvu {
 
         let blockstore_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             BlockstoreCleanupService::new(
-                blockstore_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
                 exit.clone(),
