@@ -6727,7 +6727,8 @@ impl AccountsDb {
                         .map(|_| write_version_producer.next().unwrap())
                         .collect::<Vec<_>>();
                     match hashes {
-                        Some(hashes) => self.write_accounts_to_storage(
+                        Some(hashes) => {
+                            let r = self.write_accounts_to_storage(
                             slot,
                             storage,
                             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -6735,18 +6736,39 @@ impl AccountsDb {
                                 hashes,
                                 write_versions,
                             ),
-                        ),
+                            );
+                            // debug code to test new storage format
+
+                            // for each account we just wrote...
+                            (0..accounts.len()).into_iter().for_each(|i| {
+                                let expected_account = accounts.account(i);
+                                let pk = accounts.pubkey(i);
+                                let expected_hash = Self::hash_account(expected_account, pk);
+
+                                // todo load the account from the new storage
+                                let loaded_account = AccountSharedData::default();
+                                let got_hash = Self::hash_account(&loaded_account, pk);
+
+                                if expected_hash != got_hash {
+                                    panic!(
+                                        "account mismatch: {}, {:?}, {:?}",
+                                        pk,
+                                        expected_account.to_account_shared_data(),
+                                        loaded_account
+                                    );
+                                }
+                            });
+                            r
+                        }
                         None => {
                             // hash any accounts where we were lazy in calculating the hash
                             let mut hash_time = Measure::start("hash_accounts");
                             let len = accounts.len();
                             let mut hashes = Vec::with_capacity(len);
                             for index in 0..accounts.len() {
-                                let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                                let hash = Self::hash_account(
-                                    account,
-                                    pubkey,
-                                );
+                                let (pubkey, account) =
+                                    (accounts.pubkey(index), accounts.account(index));
+                                let hash = Self::hash_account(account, pubkey);
                                 hashes.push(hash);
                             }
                             hash_time.stop();
