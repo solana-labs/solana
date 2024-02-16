@@ -172,10 +172,9 @@ mod utils {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 enum LockStatus {
     Succeded(Usage),
-    #[default]
     Blocked,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
