@@ -7,7 +7,6 @@ use {
         tpu_connection::TpuConnection,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign,
@@ -481,7 +480,6 @@ impl SendTransactionService {
                             let entry = retry_transactions.entry(signature);
                             if let Entry::Vacant(_) = entry {
                                 if retry_len >= config.retry_pool_max_size {
-                                    datapoint_warn!("send_transaction_service-queue-overflow");
                                     break;
                                 } else {
                                     transaction_info.last_sent_time = Some(last_sent_time);
