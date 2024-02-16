@@ -1,31 +1,37 @@
 //! The task (transaction) scheduling code for the unified scheduler
 //!
 //! The most important type is `SchedulingStateMachine`. It takes new tasks (= transactons) and
-//! returns runnable tasks while maintaining account lock rules. Those returned runnable tasks are
-//! guaranteed to be safe to execute in parallel. Lastly, `SchedulingStateMachine` should be
-//! notified about the completion of the exeuciton, so that conflicting tasks can be returned from
-//! `SchedulingStateMachine` as newly-unblocked runnable ones.
+//! returns runnable tasks via `::schedule_task()` while maintaining the account readonly/writable
+//! lock rules. Those returned runnable tasks are guaranteed to be safe to execute in parallel.
+//! Lastly, `SchedulingStateMachine` should be notified about the completion of the exeuciton via
+//! `::deschedule_task()`, so that conflicting tasks can be returned from
+//! `::schedule_unblocked_task()` as newly-unblocked runnable ones.
 //!
 //! The design principle of this crate (`solana-unified-scheduler-logic`) is simplicity for
 //! the separation of concern . It's interacted with a few of its public API from
 //! `solana-unified-scheduler-pool`. This crate doesn't know about banks, slots, solana-runtime,
 //! threads, crossbeam-channel at all. Becasue of this, it's deterministic, easy-to-unit-test, and
-//! its perf footprint is well understood.  It really focuses on its job: sorting transactions in
-//! executable order. 
+//! its perf footprint is well understood. It really focuses on its job: sorting transactions in
+//! executable order.
 //!
 //! And its algorithm is very fast for high throughput, real-time for low latency. The whole
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
 //! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
-//! data structure (called `Page`) for the scheduling code to offload the job to other threads.
-//! This preloading is done inside `create_task()`. Thus, task scheduling complexity can be reduced
-//! to several word-sized loads/stores (i.e. constant), strictly proportional to the number of
-//! addresses in a given transaction. Not that this is true, regardless of conflicts. This is
-//! because the preloading also pre-allocates some scratch-pad area to stash blocked transactions.
+//! data structure (called `Page`) for the scheduling thread to offload the job to other threads.
+//! Also, task-specific locking state data structure (called `TaskStatus`) initialization is
+//! offloaded as well.  This preloading is done inside `create_task()`. Thus, task scheduling
+//! complexity can be reduced to several word-sized loads/stores (i.e. constant), strictly
+//! proportional to the number of addresses in a given transaction. Not that this is true,
+//! regardless of conflicts. This is because the preloading also pre-allocates some scratch-pad
+//! area to stash blocked transactions.
 //!
 //! Naturally, Arc is used to implement this preloading. Also, this needs interior mutability
-//! inside it.  However, `SchedulingStateMachine` doesn't use RwLock. Instead, it uses UnsafeCell,
-//! which is sugar-coated with overly restictive lifetime safety with a specialized wrapper called
-//! TokenCell.
+//! inside it.  However, `SchedulingStateMachine` doesn't use RwLock, leveraving the fact it's the
+//! only thread, which modifies the states. Instead, it uses UnsafeCell, which is sugar-coated with
+//! overly restrictive lifetime safety via rust type system with a specialized wrapper called
+//! `TokenCell`. In this way, the scheduling code attains maximally possible single-threaed
+//! execution without stalling cpu pipelines at all, only constrained to mem access latency,
+//! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
