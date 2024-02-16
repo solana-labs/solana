@@ -10,7 +10,7 @@ use {
         blockstore_db::{Result as BlockstoreResult, DATA_SHRED_CF},
     },
     solana_measure::measure::Measure,
-    solana_sdk::clock::{DEFAULT_MS_PER_SLOT, Slot},
+    solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
     std::{
         string::ToString,
         sync::{
@@ -212,29 +212,29 @@ impl BlockstoreCleanupService {
             Self::find_slots_to_clean(blockstore, root, max_ledger_shreds);
 
         if slots_to_clean {
-                    let mut slot_update_time = Measure::start("slot_update");
-                    *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
-                    slot_update_time.stop();
+            let mut slot_update_time = Measure::start("slot_update");
+            *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+            slot_update_time.stop();
 
-                    info!("purging data older than {}", lowest_cleanup_slot);
-                    let mut purge_time = Measure::start("purge_slots");
-                    // purge any slots older than lowest_cleanup_slot.
-                    blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
-                    // Update only after purge operation.
-                    // Safety: This value can be used by compaction_filters shared via Arc<AtomicU64>.
-                    // Compactions are async and run as a multi-threaded background job. However, this
-                    // shouldn't cause consistency issues for iterators and getters because we have
-                    // already expired all affected keys (older than or equal to lowest_cleanup_slot)
-                    // by the above `purge_slots`. According to the general RocksDB design where SST
-                    // files are immutable, even running iterators aren't affected; the database grabs
-                    // a snapshot of the live set of sst files at iterator's creation.
-                    // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range for
-                    // transaction_status and address_signatures CFs. These are fine because they
-                    // don't require strong consistent view for their operation.
-                    blockstore.set_max_expired_slot(lowest_cleanup_slot);
+            info!("purging data older than {}", lowest_cleanup_slot);
+            let mut purge_time = Measure::start("purge_slots");
+            // purge any slots older than lowest_cleanup_slot.
+            blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
+            // Update only after purge operation.
+            // Safety: This value can be used by compaction_filters shared via Arc<AtomicU64>.
+            // Compactions are async and run as a multi-threaded background job. However, this
+            // shouldn't cause consistency issues for iterators and getters because we have
+            // already expired all affected keys (older than or equal to lowest_cleanup_slot)
+            // by the above `purge_slots`. According to the general RocksDB design where SST
+            // files are immutable, even running iterators aren't affected; the database grabs
+            // a snapshot of the live set of sst files at iterator's creation.
+            // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range for
+            // transaction_status and address_signatures CFs. These are fine because they
+            // don't require strong consistent view for their operation.
+            blockstore.set_max_expired_slot(lowest_cleanup_slot);
 
-                    purge_time.stop();
-                    info!("{}", purge_time);
+            purge_time.stop();
+            info!("{}", purge_time);
         }
 
         let disk_utilization_post = blockstore.storage_size();
@@ -369,12 +369,7 @@ mod tests {
         // Mark 50 as a root to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
         blockstore.set_roots(vec![50].iter()).unwrap();
-        BlockstoreCleanupService::cleanup_ledger(
-            &blockstore,
-            5,
-            &mut last_purge_slot,
-            10,
-        );
+        BlockstoreCleanupService::cleanup_ledger(&blockstore, 5, &mut last_purge_slot, 10);
         assert_eq!(last_purge_slot, 50);
 
         //check that 0-40 don't exist
