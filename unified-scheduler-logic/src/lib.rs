@@ -197,7 +197,7 @@ impl PartialBorrowMut<TaskStatus, ShortCounter> for Token<TaskStatus, ShortCount
 type PageToken = Token<PageInner, PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-type BlockedLockCountToken = Token<TaskStatus, ShortCounter>;
+type BlockedLockCountToken = Token<ShortCounter, ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
 impl TaskStatus {
