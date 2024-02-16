@@ -112,11 +112,9 @@ mod utils {
             Self(UnsafeCell::new(value))
         }
 
-        pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, F>) -> &'t mut F
-        where
-            Token<V, F>: PartialBorrowMut<V, F>,
+        pub(super) fn borrow_mut<'t, F>(&self, _token: &'t mut Token<V, V>) -> &'t mut F
         {
-            Token::partial_borrow_mut(unsafe { &mut *self.0.get() })
+            unsafe { &mut *self.0.get() }
         }
     }
 
