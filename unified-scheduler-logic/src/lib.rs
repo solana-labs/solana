@@ -408,7 +408,6 @@ impl SchedulingStateMachine {
     fn attempt_lock_for_execution(
         &mut self,
         task: &Task,
-        lock_attempts: &mut [LockAttempt],
     ) -> ShortCounter {
         let mut blocked_lock_count = ShortCounter::zero();
 
