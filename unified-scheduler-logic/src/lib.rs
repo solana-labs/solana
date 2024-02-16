@@ -256,7 +256,6 @@ impl TaskInner {
 struct LockAttempt {
     page: Page,
     requested_usage: RequestedUsage,
-    lock_status: LockStatus,
 }
 const_assert_eq!(mem::size_of::<LockAttempt>(), 24);
 
@@ -265,7 +264,6 @@ impl LockAttempt {
         Self {
             page,
             requested_usage,
-            lock_status: LockStatus::default(),
         }
     }
 
@@ -408,13 +406,13 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_for_execution(
-        page_token: &mut PageToken,
+        task: &Task,
         lock_attempts: &mut [LockAttempt],
     ) -> ShortCounter {
-        let mut lock_count = ShortCounter::zero();
+        let mut blocked_lock_count = ShortCounter::zero();
 
         for attempt in lock_attempts.iter_mut() {
-            let page = attempt.page_mut(page_token);
+            let page = attempt.page_mut(self.page_token);
             let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
@@ -426,13 +424,13 @@ impl SchedulingStateMachine {
                     page.usage = usage;
                 }
                 LockStatus::Blocked => {
-                    lock_count.increment_self();
+                    blocked_lock_count.increment_self();
+                    page.insert_blocked_task(task.clone(), attempt.requested_usage);
                 }
             }
-            attempt.lock_status = lock_status;
         }
 
-        lock_count
+        blocked_lock_count
     }
 
     #[must_use]
@@ -488,8 +486,8 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
-        let blocked_lock_count = Self::attempt_lock_for_execution(
-            &mut self.page_token,
+        let blocked_lock_count = self.attempt_lock_for_execution(
+            task,
             task.lock_attempts_mut(&mut self.lock_attempt_token),
         );
 
@@ -498,19 +496,7 @@ impl SchedulingStateMachine {
             Some(task)
         } else {
             *task.blocked_lock_count_mut(&mut self.blocked_lock_count_token) = blocked_lock_count;
-            self.register_blocked_task_into_pages(&task);
             None
-        }
-    }
-
-    fn register_blocked_task_into_pages(&mut self, task: &Task) {
-        for lock_attempt in task.lock_attempts_mut(&mut self.lock_attempt_token) {
-            if matches!(lock_attempt.lock_status, LockStatus::Blocked) {
-                let requested_usage = lock_attempt.requested_usage;
-                lock_attempt
-                    .page_mut(&mut self.page_token)
-                    .insert_blocked_task(task.clone(), requested_usage);
-            }
         }
     }
 
