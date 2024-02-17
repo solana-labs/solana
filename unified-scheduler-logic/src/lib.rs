@@ -288,7 +288,7 @@ impl PageInner {
     }
 }
 
-const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 32);
+const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 24);
 
 // very opaque wrapper type; no methods just with .clone() and ::default()
 #[derive(Debug, Clone, Default)]
