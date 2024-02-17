@@ -3110,23 +3110,32 @@ impl AccountsDb {
                     if failed.load(Ordering::Relaxed) {
                         return;
                     }
-                    if let Some(idx) = self.accounts_index.get_account_read_entry(entry.key()) {
-                        match (idx.ref_count() as usize).cmp(&entry.value().len()) {
-                            std::cmp::Ordering::Greater => {
-                            let list = idx.slot_list();
-                            let too_new = list.iter().filter_map(|(slot, _)| (slot > &max_slot_inclusive).then_some(())).count();
 
-                            if ((idx.ref_count() as usize) - too_new) > entry.value().len() {
-                                failed.store(true, Ordering::Relaxed);
-                                error!("exhaustively_verify_refcounts: {} refcount too large: {}, should be: {}, {:?}, {:?}, original: {:?}, too_new: {too_new}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), list, idx.slot_list());
+                    self.accounts_index.get_and_then(entry.key(), |index_entry| {
+                        if let Some(index_entry) = index_entry {
+                            match (index_entry.ref_count() as usize).cmp(&entry.value().len()) {
+                                std::cmp::Ordering::Equal => {
+                                    // ref counts match, nothing to do here
+                                }
+                                std::cmp::Ordering::Greater => {
+                                    let slot_list = index_entry.slot_list.read().unwrap();
+                                    let num_too_new = slot_list
+                                        .iter()
+                                        .filter(|(slot, _)| slot > &max_slot_inclusive)
+                                        .count();
+
+                                    if ((index_entry.ref_count() as usize) - num_too_new) > entry.value().len() {
+                                        failed.store(true, Ordering::Relaxed);
+                                        error!("exhaustively_verify_refcounts: {} refcount too large: {}, should be: {}, {:?}, {:?}, too_new: {num_too_new}", entry.key(), index_entry.ref_count(), entry.value().len(), *entry.value(), slot_list);
+                                    }
+                                }
+                                std::cmp::Ordering::Less => {
+                                    error!("exhaustively_verify_refcounts: {} refcount too small: {}, should be: {}, {:?}, {:?}", entry.key(), index_entry.ref_count(), entry.value().len(), *entry.value(), index_entry.slot_list.read().unwrap());
+                                }
                             }
-                        }
-                        std::cmp::Ordering::Less => {
-                            error!("exhaustively_verify_refcounts: {} refcount too small: {}, should be: {}, {:?}, {:?}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), idx.slot_list());
-                        }
-                        _ => {}
-                    }
-                    }
+                        };
+                        (false, ())
+                    });
                 });
             });
         if failed.load(Ordering::Relaxed) {
