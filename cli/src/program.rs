@@ -1517,7 +1517,7 @@ fn process_set_authority(
             &tx,
             &config.output_format,
             &ReturnSignersConfig {
-                dump_transaction_message: dump_transaction_message,
+                dump_transaction_message,
             },
         )
     } else {
@@ -1579,7 +1579,7 @@ fn process_set_authority_checked(
             &tx,
             &config.output_format,
             &ReturnSignersConfig {
-                dump_transaction_message: dump_transaction_message,
+                dump_transaction_message,
             },
         )
     } else {

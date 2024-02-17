@@ -490,19 +490,20 @@ fn test_cli_program_deploy_with_authority() {
 
     // Set a new authority sign offline first
     let new_upgrade_authority = Keypair::new();
-    config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
+    config.signers = vec![&keypair, &upgrade_authority, &new_upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
         program_pubkey,
         upgrade_authority_index: Some(1),
         new_upgrade_authority: Some(new_upgrade_authority.pubkey()),
         sign_only: true,
         dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
     });
     let sig_response = process_command(&config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
-    let offline_pre_signer = sign_only.presigner_of(&keypair.pubkey()).unwrap();
+    let offline_pre_signer = sign_only.presigner_of(&new_upgrade_authority.pubkey()).unwrap();
 
-    config.signers = vec![&keypair, &upgrade_authority];
+    config.signers = vec![&keypair, &upgrade_authority, &offline_pre_signer];
     config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
         program_pubkey,
         upgrade_authority_index: Some(1),
@@ -593,6 +594,7 @@ fn test_cli_program_deploy_with_authority() {
         new_upgrade_authority: None,
         sign_only: false,
         dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
