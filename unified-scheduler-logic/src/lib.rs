@@ -239,7 +239,7 @@ enum Usage {
 const_assert_eq!(mem::size_of::<Usage>(), 8);
 
 impl Usage {
-    fn renew(requested_usage: RequestedUsage) -> Self {
+    fn from_requested_usage(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
             RequestedUsage::Readonly => Usage::Readonly(ShortCounter::one()),
             RequestedUsage::Writable => Usage::Writable,
@@ -389,7 +389,7 @@ impl SchedulingStateMachine {
     #[must_use]
     fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
         match page.usage {
-            Usage::Unused => LockStatus::Succeded(Usage::renew(requested_usage)),
+            Usage::Unused => LockStatus::Succeded(Usage::from_requested_usage(requested_usage)),
             Usage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     LockStatus::Succeded(Usage::Readonly(count.increment()))
