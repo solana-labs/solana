@@ -201,25 +201,16 @@ impl BlockstoreCleanupService {
         if root - *last_purge_slot <= purge_interval {
             return;
         }
-
-        let disk_utilization_pre = blockstore.storage_size();
-        info!(
-            "purge: last_root={}, last_purge_slot={}, purge_interval={}, disk_utilization={:?}",
-            root, last_purge_slot, purge_interval, disk_utilization_pre
-        );
-
         *last_purge_slot = root;
 
+        let disk_utilization_pre = blockstore.storage_size();
         let (slots_to_clean, lowest_cleanup_slot, total_shreds) =
             Self::find_slots_to_clean(blockstore, root, max_ledger_shreds);
 
         if slots_to_clean {
-            let mut slot_update_time = Measure::start("slot_update");
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
-            slot_update_time.stop();
 
-            info!("purging data older than {}", lowest_cleanup_slot);
-            let mut purge_time = Measure::start("purge_slots");
+            let mut purge_time = Measure::start("purge_slots()");
             // purge any slots older than lowest_cleanup_slot.
             blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
             // Update only after purge operation.
@@ -234,9 +225,8 @@ impl BlockstoreCleanupService {
             // transaction_status and address_signatures CFs. These are fine because they
             // don't require strong consistent view for their operation.
             blockstore.set_max_expired_slot(lowest_cleanup_slot);
-
             purge_time.stop();
-            info!("{}", purge_time);
+            info!("Cleaned up Blockstore data older than slot {lowest_cleanup_slot}. {purge_time}");
         }
 
         let disk_utilization_post = blockstore.storage_size();
