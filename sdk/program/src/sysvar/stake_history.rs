@@ -95,10 +95,10 @@ mod tests {
         }
         assert_eq!(stake_history.len(), MAX_ENTRIES);
         assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
-        assert_eq!(stake_history.get(0), None);
+        assert_eq!(stake_history.get_entry(0), None);
         assert_eq!(
-            stake_history.get(1),
-            Some(&StakeHistoryEntry {
+            stake_history.get_entry(1),
+            Some(StakeHistoryEntry {
                 activating: 1,
                 ..StakeHistoryEntry::default()
             })

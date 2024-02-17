@@ -1,8 +1,14 @@
 //! This module implements clone-on-write semantics for the SDK's `StakeHistory` to reduce
 //! unnecessary cloning of the underlying vector.
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
+use {
+    solana_sdk::{
+        clock::Epoch,
+        stake_history::{StakeHistoryEntry, StakeHistoryGetEntry},
+    },
+    std::{
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    },
 };
 
 /// The SDK's stake history with clone-on-write semantics
@@ -19,6 +25,12 @@ impl Deref for StakeHistory {
 impl DerefMut for StakeHistory {
     fn deref_mut(&mut self) -> &mut Self::Target {
         Arc::make_mut(&mut self.0)
+    }
+}
+
+impl StakeHistoryGetEntry for StakeHistory {
+    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+        self.0.get_entry(epoch)
     }
 }
 

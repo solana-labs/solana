@@ -24,7 +24,7 @@ use {
             stake_flags::StakeFlags,
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
-        stake_history::{StakeHistory, StakeHistoryEntry},
+        stake_history::{StakeHistory, StakeHistoryEntry, StakeHistoryGetEntry},
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
@@ -256,10 +256,10 @@ struct CalculatedStakePoints {
 /// for a given stake and vote_state, calculate how many
 ///   points were earned (credits * stake) and new value
 ///   for credits_observed were the points paid
-fn calculate_stake_points_and_credits(
+fn calculate_stake_points_and_credits<T: StakeHistoryGetEntry>(
     stake: &Stake,
     new_vote_state: &VoteState,
-    stake_history: &StakeHistory,
+    stake_history: &T,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> CalculatedStakePoints {
@@ -373,12 +373,12 @@ struct CalculatedStakeRewards {
 ///   * voter_rewards to be distributed
 ///   * new value for credits_observed in the stake
 /// returns None if there's no payout or if any deserved payout is < 1 lamport
-fn calculate_stake_rewards(
+fn calculate_stake_rewards<T: StakeHistoryGetEntry>(
     rewarded_epoch: Epoch,
     stake: &Stake,
     point_value: &PointValue,
     vote_state: &VoteState,
-    stake_history: &StakeHistory,
+    stake_history: &T,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Option<CalculatedStakeRewards> {
