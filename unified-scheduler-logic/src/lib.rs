@@ -117,7 +117,10 @@ mod utils {
         }
     }
 
-    /// A special cell leveraging scheduler's data access pattern.
+    /// A special `Send`-able and `Sync`-able cell leveraging scheduler's one-by-one data access
+    /// pattern with zero runtime synchronization cost.
+    ///
+    /// needs token to access inner value
     #[derive(Debug, Default)]
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
@@ -127,8 +130,13 @@ mod utils {
             Self(UnsafeCell::new(value))
         }
 
-        // Borrows mutable reference with its lifetime bound to the mutable reference of the given
-        // token.
+        /// Returns mutable reference with its lifetime bound to the mutable reference of the given
+        /// token.
+        ///
+        /// In this way, any additional reborrow can never happen at the same time across all
+        /// instances of [`TokenCell<V>`] conceptually owned by the instance of [`Token<V>`] (a
+        /// particular thread), unless previous borrow is released. After the release, the used
+        /// singleton token should be free to be reused for reborrows.
         pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
@@ -137,9 +145,13 @@ mod utils {
     // Safety: Access to TokenCell is assumed to be only from a single thread by proper use of
     // Token once after TokenCell is sent to the thread from other threads; So, both implementing
     // Send and Sync can be thought as safe.
+    //
+    // In other words, TokenCell is technicall still !Send and !Sync. But there should be no legal
+    // use happening which requires !Send or !Sync to avoid undefined behavior.
     unsafe impl<V> Send for TokenCell<V> {}
     unsafe impl<V> Sync for TokenCell<V> {}
 
+    /// A auxiliary zero-sized type to enforce aliasing rule to [`TokenCell`] via rust type system
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     // *mut is used to make this type !Send and !Sync
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
