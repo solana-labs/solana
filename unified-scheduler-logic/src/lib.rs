@@ -117,7 +117,7 @@ mod utils {
         }
     }
 
-    /// A special `Send`-able and `Sync`-able cell leveraging scheduler's one-by-one data access
+    /// A special [`Send`]-able and [`Sync`]-able cell leveraging scheduler's one-by-one data access
     /// pattern with zero runtime synchronization cost.
     ///
     /// needs token to access inner value
