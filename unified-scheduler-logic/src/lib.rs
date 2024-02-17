@@ -117,7 +117,7 @@ mod utils {
         }
     }
 
-    /// A special cell leveraging scheduler's data access pattern
+    /// A special cell leveraging scheduler's data access pattern.
     #[derive(Debug, Default)]
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
@@ -127,32 +127,40 @@ mod utils {
             Self(UnsafeCell::new(value))
         }
 
+        // Borrows mutable reference with its lifetime bound to the mutable reference of the given
+        // token.
         pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
             unsafe { &mut *self.0.get() }
         }
     }
 
     // Safety: Access to TokenCell is assumed to be only from a single thread by proper use of
-    // Token; So, Send can be justified.
+    // Token once after TokenCell is sent to the thread from other threads; So, both implementing
+    // Send and Sync can be thought as safe.
     unsafe impl<V> Send for TokenCell<V> {}
-    //unsafe impl<V> Sync for TokenCell<V> {}
+    unsafe impl<V> Sync for TokenCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    // *mut is used to make this type !Send and !Sync
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
 
     impl<V> Token<V> {
+        // Returns the token to acquire a mutable reference to the inner value of [TokenCell].
+        //
+        // Safety:
+        // This method should be called exactly once for each thread at most.
         #[must_use]
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
             thread_local! {
                 static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
             }
-
             assert!(
                 TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())),
                 "{:?} is wrongly initialized twice on {:?}",
                 any::type_name::<Self>(),
                 thread::current()
             );
+
             Self(PhantomData)
         }
     }
