@@ -1,14 +1,19 @@
+#![allow(rustdoc::private_intra_doc_links)]
+
 //! The task (transaction) scheduling code for the unified scheduler
 //!
-//! The most important type is `SchedulingStateMachine`. It takes new tasks (= transactons) and
-//! may return back them if runnable via `::schedule_task()` while maintaining the account
+//! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactons) and
+//! may return back them if runnable via
+//! [`::schedule_task()`](SchedulingStateMachine::schedule_task) while maintaining the account
 //! readonly/writable lock rules. Those returned runnable tasks are guaranteed to be safe to
 //! execute in parallel. Lastly, `SchedulingStateMachine` should be notified about the completion
-//! of the exeuciton via `::deschedule_task()`, so that conflicting tasks can be returned from
-//! `::schedule_unblocked_task()` as newly-unblocked runnable ones.
+//! of the exeuciton via [`::deschedule_task()`](SchedulingStateMachine::deschedule_task), so that
+//! conflicting tasks can be returned from
+//! [`::schedule_unblocked_task()`](SchedulingStateMachine::schedule_unblocked_task) as
+//! newly-unblocked runnable ones.
 //!
-//! The design principle of this crate (`solana-unified-scheduler-logic`) is simplicity for
-//! the separation of concern. It can be interacted only with a few of its public API from
+//! The design principle of this crate (`solana-unified-scheduler-logic`) is simplicity for the
+//! separation of concern. It is interacted only with a few of its public API by
 //! `solana-unified-scheduler-pool`. This crate doesn't know about banks, slots, solana-runtime,
 //! threads, crossbeam-channel at all. Becasue of this, it's deterministic, easy-to-unit-test, and
 //! its perf footprint is well understood. It really focuses on its single job: sorting
@@ -17,26 +22,27 @@
 //! Its algorithm is very fast for high throughput, real-time for low latency. The whole
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
 //! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
-//! data structures (called `Page`) for all of transaction's accounts, in order to offload the job
-//! to other threads from the scheduler thread. This preloading is done inside `create_task()`. In
-//! this way, task scheduling complexity is basically reduced to several word-sized loads and
-//! stores in the schduler thread (i.e. constant; no allocations nor syscalls), while being
-//! strictly proportional to the number of addresses in a given transaction. Note that this
-//! statement is held true, regardless of conflicts. This is because the preloading also
-//! pre-allocates some scratch-pad area (`blocked_tasks`) to stash blocked ones. So, a conflict
-//! only incurs some additional fixed number of mem stores, within error magin of constant
-//! complexity. And additional memory allocation for the scratchpad could said to be amortized, if
-//! such unsual event should occur.
+//! data structures (called [`Page`]) for all of transaction's accounts, in order to offload the
+//! job to other threads from the scheduler thread. This preloading is done inside
+//! [`create_task()`](SchedulingStateMachine::create_task). In this way, task scheduling complexity
+//! is basically reduced to several word-sized loads and stores in the schduler thread (i.e.
+//! constant; no allocations nor syscalls), while being proportional to the number of addresses in
+//! a given transaction. Note that this statement is held true, regardless of conflicts. This is
+//! because the preloading also pre-allocates some scratch-pad area
+//! ([`blocked_tasks`](PageInner::blocked_tasks)) to stash blocked ones. So, a conflict only incurs
+//! some additional fixed number of mem stores, within error magin of constant complexity. And
+//! additional memory allocation for the scratchpad could said to be amortized, if such unsual
+//! event should occur.
 //!
 //! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
 //! accessing the same account, and among threads. Also, interior mutability is needed. However,
 //! `SchedulingStateMachine` doesn't use conventional locks like RwLock. Leveraving the fact it's
 //! the only state-mutating exclusive thread, it instead uses `UnsafeCell`, which is sugar-coated
-//! by a tailored wrapper called `TokenCell`. `TokenCell` improses an overly restrictive aliasing
+//! by a tailored wrapper called [`TokenCell`]. `TokenCell` improses an overly restrictive aliasing
 //! rule via rust type system to maintain the memory safety. By localizing any synchronization to
 //! the message passing, the scheduling code itself attains maximally possible single-threaed
-//! execution without stalling cpu pipelines at all, only constrained to mem access latency,
-//! while efficiently utilzing L1-L3 cpu cache with full of `Page`s.
+//! execution without stalling cpu pipelines at all, only constrained to mem access latency, while
+//! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::field_qualifiers;
@@ -58,6 +64,9 @@ mod utils {
         thread,
     };
 
+    /// A really tiny counter to hide `.checked_{add,sub}` all over the place.
+    ///
+    /// it's caller's reponsibility to ensure this (backed by u32) never overflow.
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     #[derive(Debug, Clone, Copy)]
     pub(super) struct ShortCounter(u32);
@@ -108,6 +117,7 @@ mod utils {
         }
     }
 
+    /// A special cell leveraging scheduler's data access pattern
     #[derive(Debug, Default)]
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
@@ -122,19 +132,20 @@ mod utils {
         }
     }
 
+    // Safety: TokenCell 
     unsafe impl<V> Send for TokenCell<V> {}
     unsafe impl<V> Sync for TokenCell<V> {}
 
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
 
-    thread_local! {
-        pub static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
-    }
-
     impl<V> Token<V> {
         #[must_use]
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
+            thread_local! {
+                static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
+            }
+
             assert!(
                 TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())),
                 "{:?} is wrongly initialized twice on {:?}",
