@@ -132,7 +132,8 @@ mod utils {
         }
     }
 
-    // Safety: TokenCell 
+    // Safety: Access to TokenCell is assumed to be only from a single thread by proper use of
+    // Token; So, Send can be justified.
     unsafe impl<V> Send for TokenCell<V> {}
     unsafe impl<V> Sync for TokenCell<V> {}
 
