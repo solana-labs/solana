@@ -39,7 +39,7 @@
 //! while efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 
 #[cfg(feature = "dev-context-only-utils")]
-use qualifier_attr::{field_qualifiers};
+use qualifier_attr::field_qualifiers;
 use {
     crate::utils::{ShortCounter, Token, TokenCell},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
