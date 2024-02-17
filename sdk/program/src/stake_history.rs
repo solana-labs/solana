@@ -8,7 +8,10 @@
 
 pub use crate::clock::Epoch;
 use {
-    crate::{account_info::AccountInfo, serialize_utils::cursor::read_u64},
+    crate::{
+        account_info::AccountInfo, program_error::ProgramError, serialize_utils::cursor::read_u64,
+        sysvar::SysvarId,
+    },
     std::{cell::RefCell, io::Cursor, ops::Deref, rc::Rc, sync::Arc},
 };
 
@@ -89,10 +92,13 @@ impl Deref for StakeHistory {
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct StakeHistoryData<'a>(Rc<RefCell<&'a mut [u8]>>);
 
+// HANA should i impl all of Sysvar for this?
 impl<'a> StakeHistoryData<'a> {
-    pub fn from_account_info(account_info: &AccountInfo<'a>) -> StakeHistoryData<'a> {
-        // TODO check address
-        StakeHistoryData(account_info.data.clone())
+    pub fn from_account_info(account_info: &AccountInfo<'a>) -> Result<Self, ProgramError> {
+        if *account_info.unsigned_key() != StakeHistory::id() {
+            return Err(ProgramError::InvalidArgument);
+        }
+        Ok(StakeHistoryData(account_info.data.clone()))
     }
 }
 
