@@ -11642,13 +11642,16 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(0);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let id = {
-            let (lock, idx) = accounts
-                .accounts_index
-                .get_for_tests(&pubkey, Some(&ancestors), None)
-                .unwrap();
-            lock.slot_list()[idx].1.store_id()
-        };
+        let id = accounts
+            .accounts_index
+            .get_with_and_then(
+                &pubkey,
+                Some(&ancestors),
+                None,
+                false,
+                |(_slot, account_info)| account_info.store_id(),
+            )
+            .unwrap();
         accounts.calculate_accounts_delta_hash(0);
 
         //slot is still there, since gc is lazy
@@ -11703,13 +11706,23 @@ pub mod tests {
         let ancestors = vec![(0, 1)].into_iter().collect();
         let (slot1, account_info1) = accounts
             .accounts_index
-            .get_for_tests(&pubkey1, Some(&ancestors), None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
+            .get_with_and_then(
+                &pubkey1,
+                Some(&ancestors),
+                None,
+                false,
+                |(slot, account_info)| (slot, account_info),
+            )
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
-            .get_for_tests(&pubkey2, Some(&ancestors), None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
+            .get_with_and_then(
+                &pubkey2,
+                Some(&ancestors),
+                None,
+                false,
+                |(slot, account_info)| (slot, account_info),
+            )
             .unwrap();
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
@@ -11833,10 +11846,7 @@ pub mod tests {
 
         // zero lamport account, should no longer exist in accounts index
         // because it has been removed
-        assert!(accounts
-            .accounts_index
-            .get_for_tests(&pubkey, None, None)
-            .is_none());
+        assert!(!accounts.accounts_index.contains_with(&pubkey, None, None));
     }
 
     #[test]
@@ -12022,10 +12032,7 @@ pub mod tests {
 
         // `pubkey1`, a zero lamport account, should no longer exist in accounts index
         // because it has been removed by the clean
-        assert!(accounts
-            .accounts_index
-            .get_for_tests(&pubkey1, None, None)
-            .is_none());
+        assert!(!accounts.accounts_index.contains_with(&pubkey1, None, None));
 
         // Secondary index should have purged `pubkey1` as well
         let mut found_accounts = vec![];
@@ -12069,10 +12076,7 @@ pub mod tests {
         accounts.clean_accounts(Some(0), false, None, &EpochSchedule::default());
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-        assert!(accounts
-            .accounts_index
-            .get_for_tests(&pubkey, None, None)
-            .is_some());
+        assert!(accounts.accounts_index.contains_with(&pubkey, None, None));
 
         // Now the account can be cleaned up
         accounts.clean_accounts(Some(1), false, None, &EpochSchedule::default());
@@ -12081,10 +12085,7 @@ pub mod tests {
 
         // The zero lamport account, should no longer exist in accounts index
         // because it has been removed
-        assert!(accounts
-            .accounts_index
-            .get_for_tests(&pubkey, None, None)
-            .is_none());
+        assert!(!accounts.accounts_index.contains_with(&pubkey, None, None));
     }
 
     #[test]
@@ -12159,13 +12160,15 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(current_slot);
         let (slot1, account_info1) = accounts
             .accounts_index
-            .get_for_tests(&pubkey, None, None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
+            .get_with_and_then(&pubkey, None, None, false, |(slot, account_info)| {
+                (slot, account_info)
+            })
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
-            .get_for_tests(&pubkey2, None, None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
+            .get_with_and_then(&pubkey2, None, None, false, |(slot, account_info)| {
+                (slot, account_info)
+            })
             .unwrap();
         assert_eq!(slot1, current_slot);
         assert_eq!(slot1, slot2);
