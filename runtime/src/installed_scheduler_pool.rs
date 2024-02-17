@@ -40,7 +40,7 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
 
-pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
+pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Debug {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
     fn uninstalled_from_bank_forks(self: Arc<Self>);
 }
