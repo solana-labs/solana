@@ -1411,7 +1411,7 @@ where
     TH: TaskHandler<SEA>,
     SEA: ScheduleExecutionArg,
 {
-    type Inner: Debug + Send + RetirableSchedulerInner;
+    type Inner: Debug + Send + Sync + RetirableSchedulerInner;
 
     fn into_inner(self) -> (ResultWithTimings, Self::Inner);
 
