@@ -40,7 +40,7 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {mockall::automock, qualifier_attr::qualifiers};
 
-pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Debug {
+pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn take_scheduler(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler<SEA>>;
     fn uninstalled_from_bank_forks(self: Arc<Self>);
 }
@@ -100,7 +100,7 @@ pub trait InstalledSchedulerPool<SEA: ScheduleExecutionArg>: Send + Debug {
     feature = "dev-context-only-utils",
     allow(unused_attributes, clippy::needless_lifetimes)
 )]
-pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Debug + 'static {
+pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
     fn context(&self) -> &SchedulingContext;
 
@@ -134,7 +134,7 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Debug + 'static 
 }
 
 #[cfg_attr(feature = "dev-context-only-utils", automock)]
-pub trait UninstalledScheduler: Send + Debug + 'static {
+pub trait UninstalledScheduler: Send + Sync + Debug + 'static {
     fn return_to_pool(self: Box<Self>);
 }
 
@@ -145,7 +145,7 @@ pub type InstalledSchedulerPoolArc<SEA> = Arc<dyn InstalledSchedulerPool<SEA>>;
 
 pub type SchedulerId = u64;
 
-pub trait WithTransactionAndIndex: Send + Debug {
+pub trait WithTransactionAndIndex: Send + Sync + Debug {
     fn with_transaction_and_index<R>(
         &self,
         callback: impl FnOnce(&SanitizedTransaction, usize) -> R,
@@ -153,9 +153,9 @@ pub trait WithTransactionAndIndex: Send + Debug {
 }
 
 impl<
-        T: Send + Debug + Borrow<SanitizedTransaction>,
-        U: Send + Debug + Borrow<usize>,
-        Z: Send + Debug + Deref<Target = (T, U)>,
+        T: Send + Sync + Debug + Borrow<SanitizedTransaction>,
+        U: Send + Sync + Debug + Borrow<usize>,
+        Z: Send + Sync + Debug + Deref<Target = (T, U)>,
     > WithTransactionAndIndex for Z
 {
     fn with_transaction_and_index<R>(
@@ -166,7 +166,7 @@ impl<
     }
 }
 
-pub trait ScheduleExecutionArg: Send + Debug + 'static {
+pub trait ScheduleExecutionArg: Send + Sync + Debug + 'static {
     // GAT is used to make schedule_execution parametric even supporting references
     // under the object-safety req. of InstalledScheduler trait...
     type TransactionWithIndex<'tx>: WithTransactionAndIndex;
