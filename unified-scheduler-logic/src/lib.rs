@@ -389,7 +389,7 @@ impl PageInner {
             .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
-    fn pop_blocked_next_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
+    fn pop_blocked_next_readonly_task(&self) -> Option<(Task, RequestedUsage)> {
         self.blocked_next_task()
             .filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
             .and_then(|_| self.pop_unblocked_next_task())
