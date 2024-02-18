@@ -163,8 +163,8 @@ mod utils {
             Self(UnsafeCell::new(value))
         }
 
-        /// Returns mutable reference with its lifetime bound to the mutable reference of the given
-        /// token.
+        /// Returns a mutable reference with its lifetime bound to the mutable reference of the
+        /// given token.
         ///
         /// In this way, any additional reborrow can never happen at the same time across all
         /// instances of [`TokenCell<V>`] conceptually owned by the instance of [`Token<V>`] (a
