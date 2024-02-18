@@ -59,6 +59,7 @@ use {
     std::{collections::VecDeque, mem, sync::Arc},
 };
 
+/// Internal generic code. Namely contain [`ShortCounter`] and [`TokenCell`].
 mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
