@@ -378,7 +378,7 @@ impl PageInner {
     }
 
     fn next_blocked_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
-       self.next_blocked_task.filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
+       self.next_blocked_task().filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
     }
 }
 
