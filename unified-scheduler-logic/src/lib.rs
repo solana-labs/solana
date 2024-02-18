@@ -239,8 +239,8 @@ mod utils {
     }
 }
 
-type LockStatus = Result<PageUsage, ()>;
-const_assert_eq!(mem::size_of::<LockStatus>(), 8);
+type LockResult = Result<PageUsage, ()>;
+const_assert_eq!(mem::size_of::<LockResult>(), 8);
 
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
@@ -455,14 +455,14 @@ impl SchedulingStateMachine {
             let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
-                LockStatus::Err(())
+                LockResult::Err(())
             };
             match lock_status {
-                LockStatus::Ok(PageUsage::Unused) => unreachable!(),
-                LockStatus::Ok(usage) => {
+                LockResult::Ok(PageUsage::Unused) => unreachable!(),
+                LockResult::Ok(usage) => {
                     page.usage = usage;
                 }
-                LockStatus::Err(()) => {
+                LockResult::Err(()) => {
                     blocked_lock_count.increment_self();
                     page.insert_blocked_task(task.clone(), attempt.requested_usage);
                 }
@@ -473,16 +473,16 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
+    fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
         match page.usage {
-            PageUsage::Unused => LockStatus::Ok(PageUsage::from_requested_usage(requested_usage)),
+            PageUsage::Unused => LockResult::Ok(PageUsage::from_requested_usage(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    LockStatus::Ok(PageUsage::Readonly(count.increment()))
+                    LockResult::Ok(PageUsage::Readonly(count.increment()))
                 }
-                RequestedUsage::Writable => LockStatus::Err(()),
+                RequestedUsage::Writable => LockResult::Err(()),
             },
-            PageUsage::Writable => LockStatus::Err(()),
+            PageUsage::Writable => LockResult::Err(()),
         }
     }
 
@@ -552,8 +552,8 @@ impl SchedulingStateMachine {
                 page.pop_blocked_task();
 
                 match Self::attempt_lock_address(page, requested_usage) {
-                    LockStatus::Err(_) | LockStatus::Ok(PageUsage::Unused) => unreachable!(),
-                    LockStatus::Ok(usage) => {
+                    LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
+                    LockResult::Ok(usage) => {
                         page.usage = usage;
                         heaviest_unblocked = if matches!(usage, PageUsage::Readonly(_)) {
                             page.heaviest_blocked_task()
@@ -684,7 +684,7 @@ mod tests {
         assert_eq!(
             format!(
                 "{:?}",
-                LockStatus::Ok(PageUsage::Readonly(ShortCounter::one()))
+                LockResult::Ok(PageUsage::Readonly(ShortCounter::one()))
             ),
             "Ok(Readonly(ShortCounter(1)))"
         );
