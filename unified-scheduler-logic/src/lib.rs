@@ -684,9 +684,9 @@ mod tests {
         assert_eq!(
             format!(
                 "{:?}",
-                LockStatus::Succeded(PageUsage::Readonly(ShortCounter::one()))
+                LockStatus::Ok(PageUsage::Readonly(ShortCounter::one()))
             ),
-            "Succeded(Readonly(ShortCounter(1)))"
+            "Ok(Readonly(ShortCounter(1)))"
         );
         let sanitized = simplest_transaction();
         let task = SchedulingStateMachine::create_task(sanitized, 0, &mut |_| Page::default());
