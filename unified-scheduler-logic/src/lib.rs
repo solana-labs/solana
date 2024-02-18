@@ -545,7 +545,7 @@ impl SchedulingStateMachine {
         } else {
             // task.set_blocked_page_count()
             // task.decrement_blocked_page_count
-            *task.blocked_page_count_mut(&mut self.blocked_page_count_token) = blocked_page_count;
+            task.set_blocked_page_count(&mut self.blocked_page_count_token, blocked_page_count);
             None
         }
     }
