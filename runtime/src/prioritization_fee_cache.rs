@@ -123,7 +123,7 @@ enum CacheServiceUpdate {
         slot: Slot,
         bank_id: BankId,
         transaction_fee: u64,
-        writable_accounts: Arc<Vec<Pubkey>>,
+        writable_accounts: Vec<Pubkey>,
     },
     BankFinalized {
         slot: Slot,
@@ -219,14 +219,12 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let writable_accounts = Arc::new(
-                        account_locks
-                            .unwrap()
-                            .writable
-                            .iter()
-                            .map(|key| **key)
-                            .collect::<Vec<_>>(),
-                    );
+                    let writable_accounts = account_locks
+                        .unwrap()
+                        .writable
+                        .iter()
+                        .map(|key| **key)
+                        .collect::<Vec<_>>();
 
                     self.sender
                         .send(CacheServiceUpdate::TransactionUpdate {
@@ -269,7 +267,7 @@ impl PrioritizationFeeCache {
         slot: Slot,
         bank_id: BankId,
         transaction_fee: u64,
-        writable_accounts: Arc<Vec<Pubkey>>,
+        writable_accounts: &[Pubkey],
         metrics: &PrioritizationFeeCacheMetrics,
     ) {
         let (_, entry_update_time) = measure!(
@@ -279,7 +277,7 @@ impl PrioritizationFeeCache {
                     .or_default()
                     .entry(bank_id)
                     .or_insert(PrioritizationFee::default());
-                block_prioritization_fee.update(transaction_fee, &writable_accounts)
+                block_prioritization_fee.update(transaction_fee, writable_accounts)
             },
             "entry_update_time"
         );
@@ -376,7 +374,7 @@ impl PrioritizationFeeCache {
                     slot,
                     bank_id,
                     transaction_fee,
-                    writable_accounts,
+                    &writable_accounts,
                     &metrics,
                 ),
                 CacheServiceUpdate::BankFinalized { slot, bank_id } => {
