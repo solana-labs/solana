@@ -123,19 +123,20 @@ mod utils {
         }
     }
 
-    /// A conditionally [`Send`]-able and [`Sync`]-able cell leveraging scheduler's one-by-one data access
-    /// pattern with zero runtime synchronization cost.
+    /// A conditionally [`Send`]-able and [`Sync`]-able cell leveraging scheduler's one-by-one data
+    /// access pattern with zero runtime synchronization cost.
     ///
-    /// To comply with Rust's aliasing rules, these cells require a carefully-created [`Token`] to be
-    /// passed around to access the inner values. The token is the special-purpose object to make
-    /// [`TokenCell`] to get rid of its inherent `unsafe`-ness in [`UnsafeCell`], which is
+    /// To comply with Rust's aliasing rules, these cells require a carefully-created [`Token`] to
+    /// be passed around to access the inner values. The token is the special-purpose object to
+    /// make [`TokenCell`] to get rid of its inherent `unsafe`-ness in [`UnsafeCell`], which is
     /// internally used for the interior mutability.
     ///
     /// The final objective of [`Token`] is to ensure there's only one mutable reference to the
-    /// [`TokenCell`] at most _at any given moment_. To that end, it's `unsafe` to create it, shifting
-    /// the responsibility of binding the only singleton instance to a particular thread and not
-    /// creating more than one, onto the API consumers. And its constructor is non-`const`, and the
-    /// type is `!Clone` (and `!Copy` as well), `!Default`, `!Send` and `!Sync` to make it relatively hard to cross thread boundaries accidentally.
+    /// [`TokenCell`] at most _at any given moment_. To that end, it's `unsafe` to create it,
+    /// shifting the responsibility of binding the only singleton instance to a particular thread
+    /// and not creating more than one, onto the API consumers. And its constructor is non-`const`,
+    /// and the type is `!Clone` (and `!Copy` as well), `!Default`, `!Send` and `!Sync` to make it
+    /// relatively hard to cross thread boundaries accidentally.
     ///
     /// In other words, the token semantically _owns_ all of its associated instances of
     /// [`TokenCell`]s. And `&mut Token` is needed to access one of them as if the one is of
@@ -143,9 +144,8 @@ mod utils {
     /// to be satisfied simply based on the usual borrow checking of the `&mut` reference of
     /// [`Token`] itself.
     ///
-    /// Additionally, creating multiple tokens in a single process is still
-    /// allowed as long as no instance of [`TokenCell`] is shared by multiple instances of
-    /// [`Token`].
+    /// Additionally, creating multiple tokens in a single process is still allowed as long as no
+    /// instance of [`TokenCell`] is shared by multiple instances of [`Token`].
     ///
     /// Note that this is overly restrictive in that it's forbidden while it's technically possible
     /// to have multiple mutable references to the inner value _if and only if_ the respective
