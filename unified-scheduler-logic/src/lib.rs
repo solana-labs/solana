@@ -480,8 +480,8 @@ impl SchedulingStateMachine {
             };
             match lock_status {
                 LockResult::Ok(PageUsage::Unused) => unreachable!(),
-                LockResult::Ok(usage) => {
-                    page.usage = usage;
+                LockResult::Ok(new_usage) => {
+                    page.usage = new_usage;
                 }
                 LockResult::Err(()) => {
                     blocked_page_count.increment_self();
