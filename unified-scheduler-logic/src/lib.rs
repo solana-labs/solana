@@ -405,10 +405,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 
 /// A high-level `struct`, managing the overall scheduling of [tasks](Task), to be used by
 /// `solana-unified-scheduler-pool`.
-#[cfg_attr(
-    feature = "dev-context-only-utils",
-    field_qualifiers(count_token(pub))
-)]
+#[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(count_token(pub)))]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: ShortCounter,
@@ -557,10 +554,10 @@ impl SchedulingStateMachine {
     fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut semi_unblocked = Self::unlock_page(page, unlock_attempt);
+            let mut page_with_unblocked = Self::unlock_page(page, unlock_attempt);
 
-            while let Some((semi_unblocked_task, requested_usage)) = semi_unblocked {
-                if let Some(unblocked_task) = semi_unblocked_task.try_unblock(&mut self.count_token)
+            while let Some((task_with_unblocked_page, requested_usage)) = page_with_unblocked {
+                if let Some(unblocked_task) = task_with_unblocked_page.try_unblock(&mut self.count_token)
                 {
                     self.unblocked_task_queue.push_back(unblocked_task);
                 }
@@ -570,7 +567,7 @@ impl SchedulingStateMachine {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(usage) => {
                         page.usage = usage;
-                        semi_unblocked = matches!(usage, PageUsage::Readonly(_))
+                        page_with_unblocked = matches!(usage, PageUsage::Readonly(_))
                             .then(|| page.next_blocked_readonly_task())
                             .flatten();
                     }
@@ -640,9 +637,7 @@ impl SchedulingStateMachine {
             handled_task_count: ShortCounter::zero(),
             unblocked_task_count: ShortCounter::zero(),
             total_task_count: ShortCounter::zero(),
-            count_token: unsafe {
-                BlockedPageCountToken::assume_exclusive_mutating_thread()
-            },
+            count_token: unsafe { BlockedPageCountToken::assume_exclusive_mutating_thread() },
             page_token: unsafe { PageToken::assume_exclusive_mutating_thread() },
         }
     }
