@@ -624,8 +624,11 @@ impl SchedulingStateMachine {
         self.total_task_count.reset_to_zero();
     }
 
+    /// Creates a new instance of [`SchedulingStateMachine`] with its `unsafe` fields created as
+    /// well, thus carrying over `unsafe`.
+    ///
     /// # Safety
-    /// Call this exactly once for each thread.
+    /// Call this exactly once for each thread. See [`TokenCell`] for details.
     #[must_use]
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
