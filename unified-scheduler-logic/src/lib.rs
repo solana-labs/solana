@@ -496,7 +496,7 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock_address<'t>(
+    fn unlock_page<'t>(
         page: &'t mut PageInner,
         attempt: &LockAttempt,
     ) -> Option<(&'t Task, RequestedUsage)> {
@@ -548,7 +548,7 @@ impl SchedulingStateMachine {
     fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut newly_unblocked = Self::unlock_address(page, unlock_attempt);
+            let mut newly_unblocked = Self::unlock_page(page, unlock_attempt);
 
             while let Some((unblocked_task, requested_usage)) = newly_unblocked {
                 if unblocked_task
@@ -1084,7 +1084,7 @@ mod tests {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         let page = Page::default();
-        let _ = SchedulingStateMachine::unlock_address(
+        let _ = SchedulingStateMachine::unlock_page(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
@@ -1098,7 +1098,7 @@ mod tests {
         };
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage = PageUsage::Writable;
-        let _ = SchedulingStateMachine::unlock_address(
+        let _ = SchedulingStateMachine::unlock_page(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Readonly),
         );
@@ -1113,7 +1113,7 @@ mod tests {
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage =
             PageUsage::Readonly(ShortCounter::one());
-        let _ = SchedulingStateMachine::unlock_address(
+        let _ = SchedulingStateMachine::unlock_page(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
