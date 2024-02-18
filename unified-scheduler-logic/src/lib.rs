@@ -288,7 +288,7 @@ impl TaskInner {
 
     fn set_blocked_page_count(
         &self,
-        token: &'t mut BlockedPageCountToken,
+        token: &mut BlockedPageCountToken,
         count: ShortCounter,
     ) {
         self.blocked_page_count_mut(token) = count;
