@@ -480,9 +480,9 @@ impl SchedulingStateMachine {
                 RequestedUsage::Readonly => {
                     LockStatus::Succeded(PageUsage::Readonly(count.increment()))
                 }
-                RequestedUsage::Writable => LockStatus::Blocked,
+                RequestedUsage::Writable => LockStatus::Err(()),
             },
-            PageUsage::Writable => LockStatus::Blocked,
+            PageUsage::Writable => LockStatus::Err(()),
         }
     }
 
