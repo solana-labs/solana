@@ -299,7 +299,7 @@ impl TaskInner {
         &self,
         token: &mut BlockedPageCountToken,
     ) -> Option<Task> {
-        self.blocked_page_count_mut(token).decrement_self().is_zero().then(|| 
+        self.blocked_page_count_mut(token).decrement_self().is_zero().then(|| {
                                                                            self.clone()
                                                                        })
     }
