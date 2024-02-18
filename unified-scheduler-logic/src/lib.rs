@@ -497,10 +497,10 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock_address(
-        page: &mut PageInner,
+    fn unlock_address<'t>(
+        page: &'t mut PageInner,
         attempt: &LockAttempt,
-    ) -> Option<(&Task, RequestedUsage)> {
+    ) -> Option<(&'t Task, RequestedUsage)> {
         let mut is_unused_now = false;
 
         let requested_usage = attempt.requested_usage;
