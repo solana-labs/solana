@@ -368,7 +368,7 @@ impl PageInner {
 
 const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
 
-/// Scheduler's internal data for each address ([`Pubkey`](`solana_sdk::Pubkey`)). Very opaque wrapper type; no methods just with [`::clone()`](Clone::clone) and
+/// Scheduler's internal data for each address ([`Pubkey`](`solana_sdk::pubkey::Pubkey`)). Very opaque wrapper type; no methods just with [`::clone()`](Clone::clone) and
 /// [`::default()`](Default::default).
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<TokenCell<PageInner>>);
