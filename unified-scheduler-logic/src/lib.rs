@@ -521,12 +521,10 @@ impl SchedulingStateMachine {
             PageUsage::Unused => unreachable!(),
         }
 
-        if is_unused_now {
+        is_unused_now.and_then(|| {
             page.usage = PageUsage::Unused;
             page.next_blocked_task()
-        } else {
-            None
-        }
+        })
     }
 
     #[must_use]
