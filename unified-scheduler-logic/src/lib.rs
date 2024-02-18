@@ -293,6 +293,13 @@ impl TaskInner {
     ) {
         *self.blocked_page_count_mut(token) = count;
     }
+
+    #[must_use]
+    fn decrement_blocked_page_count(
+        &self,
+        token: &mut BlockedPageCountToken,
+    ) -> Option<Task> {
+    }
 }
 
 /// [`Task`]'s per-address attempt to use a [page](Page) with [certain kind of
@@ -543,7 +550,7 @@ impl SchedulingStateMachine {
             // succeeded
             Some(task)
         } else {
-            // task.set_blocked_page_count()
+            // failed
             // task.decrement_blocked_page_count
             task.set_blocked_page_count(&mut self.blocked_page_count_token, blocked_page_count);
             None
