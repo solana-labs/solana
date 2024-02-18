@@ -246,6 +246,7 @@ const_assert_eq!(mem::size_of::<LockResult>(), 8);
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
+/// [`Token`] for [`Page`].
 type PageToken = Token<PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
