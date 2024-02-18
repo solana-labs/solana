@@ -501,11 +501,8 @@ impl SchedulingStateMachine {
         attempt: &LockAttempt,
     ) -> Option<(&'t Task, RequestedUsage)> {
         let mut is_unused_now = false;
-
-        let requested_usage = attempt.requested_usage;
-
         match &mut page.usage {
-            PageUsage::Readonly(ref mut count) => match requested_usage {
+            PageUsage::Readonly(ref mut count) => match attempt.requested_usage {
                 RequestedUsage::Readonly => {
                     if count.is_one() {
                         is_unused_now = true;
@@ -515,7 +512,7 @@ impl SchedulingStateMachine {
                 }
                 RequestedUsage::Writable => unreachable!(),
             },
-            PageUsage::Writable => match requested_usage {
+            PageUsage::Writable => match attempt.requested_usage {
                 RequestedUsage::Writable => {
                     is_unused_now = true;
                 }
