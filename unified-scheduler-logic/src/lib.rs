@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_pages(&mut self, task: &Task) -> ShortCounter {
-        let mut blocked_page_count = ShortCounter::zero();
+        let mut blocked_page_count = task.blocked_page_count_mut(&mut self.blocked_page_count_token);
 
         for attempt in task.lock_attempts() {
             let page = attempt.page_mut(&mut self.page_token);
@@ -529,13 +529,10 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_for_task(&mut self, task: Task) -> Option<Task> {
-        let blocked_page_count = self.attempt_lock_pages(&task);
-
-        if blocked_page_count.is_zero() {
+        if self.attempt_lock_pages(&task) {
             // succeeded
             Some(task)
         } else {
-            *task.blocked_page_count_mut(&mut self.blocked_page_count_token) = blocked_page_count;
             None
         }
     }
@@ -559,9 +556,9 @@ impl SchedulingStateMachine {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(usage) => {
                         page.usage = usage;
-                        newly_unblocked = matches!(usage, PageUsage::Readonly(_)).then(|| {
-                            page.next_blocked_readonly_task()
-                        }).flatten();
+                        newly_unblocked = matches!(usage, PageUsage::Readonly(_))
+                            .then(|| page.next_blocked_readonly_task())
+                            .flatten();
                     }
                 }
             }
