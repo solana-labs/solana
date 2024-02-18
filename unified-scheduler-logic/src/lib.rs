@@ -286,20 +286,16 @@ impl TaskInner {
         self.blocked_page_count.borrow_mut(token)
     }
 
-    fn set_blocked_page_count(
-        &self,
-        token: &mut BlockedPageCountToken,
-        count: ShortCounter,
-    ) {
+    fn set_blocked_page_count(&self, token: &mut BlockedPageCountToken, count: ShortCounter) {
         *self.blocked_page_count_mut(token) = count;
     }
 
     #[must_use]
-    fn reduce_blocked_page(
-        self: &Task,
-        token: &mut BlockedPageCountToken,
-    ) -> Option<Task> {
-        self.blocked_page_count_mut(token).decrement_self().is_zero().then(|| self.clone())
+    fn try_unblock(self: &Task, token: &mut BlockedPageCountToken) -> Option<Task> {
+        self.blocked_page_count_mut(token)
+            .decrement_self()
+            .is_zero()
+            .then(|| self.clone())
     }
 }
 
@@ -411,7 +407,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 /// `solana-unified-scheduler-pool`.
 #[cfg_attr(
     feature = "dev-context-only-utils",
-    field_qualifiers(blocked_page_count_token(pub))
+    field_qualifiers(count_token(pub))
 )]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
@@ -419,7 +415,7 @@ pub struct SchedulingStateMachine {
     handled_task_count: ShortCounter,
     unblocked_task_count: ShortCounter,
     total_task_count: ShortCounter,
-    blocked_page_count_token: BlockedPageCountToken,
+    count_token: BlockedPageCountToken,
     page_token: PageToken,
 }
 const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
@@ -553,7 +549,7 @@ impl SchedulingStateMachine {
         } else {
             // failed
             // task.reduce_blocked_page
-            task.set_blocked_page_count(&mut self.blocked_page_count_token, blocked_page_count);
+            task.set_blocked_page_count(&mut self.count_token, blocked_page_count);
             None
         }
     }
@@ -561,11 +557,12 @@ impl SchedulingStateMachine {
     fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut partially_unblocked = Self::unlock_page(page, unlock_attempt);
+            let mut semi_unblocked = Self::unlock_page(page, unlock_attempt);
 
-            while let Some((partially_unblocked_task, requested_usage)) = partially_unblocked {
-                if let Some(fully_unblocked_task) = partially_unblocked_task.reduce_blocked_page(&mut self.blocked_page_count_token) {
-                    self.unblocked_task_queue.push_back(fully_unblocked_task);
+            while let Some((semi_unblocked_task, requested_usage)) = semi_unblocked {
+                if let Some(unblocked_task) = semi_unblocked_task.try_unblock(&mut self.count_token)
+                {
+                    self.unblocked_task_queue.push_back(unblocked_task);
                 }
                 page.pop_blocked_task();
 
@@ -573,7 +570,7 @@ impl SchedulingStateMachine {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(usage) => {
                         page.usage = usage;
-                        partially_unblocked = matches!(usage, PageUsage::Readonly(_))
+                        semi_unblocked = matches!(usage, PageUsage::Readonly(_))
                             .then(|| page.next_blocked_readonly_task())
                             .flatten();
                     }
@@ -643,7 +640,7 @@ impl SchedulingStateMachine {
             handled_task_count: ShortCounter::zero(),
             unblocked_task_count: ShortCounter::zero(),
             total_task_count: ShortCounter::zero(),
-            blocked_page_count_token: unsafe {
+            count_token: unsafe {
                 BlockedPageCountToken::assume_exclusive_mutating_thread()
             },
             page_token: unsafe { PageToken::assume_exclusive_mutating_thread() },
