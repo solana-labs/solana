@@ -148,12 +148,12 @@ mod utils {
     /// instance of [`TokenCell`] is shared by multiple instances of [`Token`].
     ///
     /// Note that this is overly restrictive in that it's forbidden, yet, technically possible
-    /// to _have multiple mutable references to the inner value if and only if_the respective
-    /// cells aren't aliased to each other (i.e. different instances)_. This artificial restriction
-    /// is acceptable for its intended use by the unified scheduler's code because its algorithm
-    /// only needs to access each instance of [`TokenCell`]-ed data once at a time. Finally, this
-    /// restriction is traded off for restoration of Rust aliasing rule at zero runtime cost.
-    /// Without this token mechanism, there's no way to realize this.
+    /// to _have multiple mutable references to the inner values at the same time if and only
+    /// if_the respective cells aren't aliased to each other (i.e. different instances)_. This
+    /// artificial restriction is acceptable for its intended use by the unified scheduler's code
+    /// because its algorithm only needs to access each instance of [`TokenCell`]-ed data once at a
+    /// time. Finally, this restriction is traded off for restoration of Rust aliasing rule at zero
+    /// runtime cost.  Without this token mechanism, there's no way to realize this.
     #[derive(Debug, Default)]
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
