@@ -577,7 +577,7 @@ impl SchedulingStateMachine {
     }
 
     /// Creates a new task with
-    /// [`SanitizedTransaction`](solana_sdk::transaction::SanitizedTransaction) with all of its
+    /// [`SanitizedTransaction`] with all of its
     /// corresponding [`Page`]s preloaded.
     ///
     /// Closure (`page_loader`) is used to delegate the (possibly multi-thread friendly)
