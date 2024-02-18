@@ -161,8 +161,9 @@ mod utils {
         /// Creates a new `TokenCell` with the `value` typed as `V`.
         ///
         /// Note that this isn't parametric over the its accompanied `Token`'s lifetime to avoid
-        /// complex handling of non-`'static` heaped data in general. It's required for this
-        /// instance to be accessed only via its associated Token for the entire lifetime.
+        /// complex handling of non-`'static` heaped data in general. Instead, it's manually
+        /// required for this instance to be accessed only via its associated Token for the entire
+        /// lifetime.
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
             Self(UnsafeCell::new(value))
