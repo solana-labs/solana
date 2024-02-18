@@ -253,9 +253,9 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 type PageToken = Token<PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-/// [`Token`] for [task](Task)'s [internal mutable data](`TaskInner::blocked_lock_count`).
-type BlockedLockCountToken = Token<ShortCounter>;
-const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
+/// [`Token`] for [task](Task)'s [internal mutable data](`TaskInner::blocked_page_count`).
+type BlockedPageCountToken = Token<ShortCounter>;
+const_assert_eq!(mem::size_of::<BlockedPageCountToken>(), 0);
 
 /// Internal scheduling data about a particular task.
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
@@ -264,7 +264,7 @@ pub struct TaskInner {
     transaction: SanitizedTransaction,
     index: usize,
     lock_attempts: Vec<LockAttempt>,
-    blocked_lock_count: TokenCell<ShortCounter>,
+    blocked_page_count: TokenCell<ShortCounter>,
 }
 
 impl TaskInner {
@@ -280,11 +280,11 @@ impl TaskInner {
         &self.lock_attempts
     }
 
-    fn blocked_lock_count_mut<'t>(
+    fn blocked_page_count_mut<'t>(
         &self,
-        blocked_lock_count_token: &'t mut BlockedLockCountToken,
+        blocked_page_count_token: &'t mut BlockedPageCountToken,
     ) -> &'t mut ShortCounter {
-        self.blocked_lock_count.borrow_mut(blocked_lock_count_token)
+        self.blocked_page_count.borrow_mut(blocked_page_count_token)
     }
 }
 
@@ -396,7 +396,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 /// `solana-unified-scheduler-pool`.
 #[cfg_attr(
     feature = "dev-context-only-utils",
-    field_qualifiers(blocked_lock_count_token(pub))
+    field_qualifiers(blocked_page_count_token(pub))
 )]
 pub struct SchedulingStateMachine {
     unblocked_task_queue: VecDeque<Task>,
@@ -404,7 +404,7 @@ pub struct SchedulingStateMachine {
     handled_task_count: ShortCounter,
     unblocked_task_count: ShortCounter,
     total_task_count: ShortCounter,
-    blocked_lock_count_token: BlockedLockCountToken,
+    blocked_page_count_token: BlockedPageCountToken,
     page_token: PageToken,
 }
 const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
@@ -438,7 +438,7 @@ impl SchedulingStateMachine {
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.try_lock_for_task(task)
+        self.attempt_lock_for_task(task)
     }
 
     pub fn has_unblocked_task(&self) -> bool {
@@ -460,13 +460,13 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn attempt_lock_for_execution(&mut self, task: &Task) -> ShortCounter {
-        let mut blocked_lock_count = ShortCounter::zero();
+    fn attempt_lock_pages(&mut self, task: &Task) -> ShortCounter {
+        let mut blocked_page_count = ShortCounter::zero();
 
         for attempt in task.lock_attempts() {
             let page = attempt.page_mut(&mut self.page_token);
             let lock_status = if page.has_no_blocked_task() {
-                Self::attempt_lock_address(page, attempt.requested_usage)
+                Self::attempt_lock_page(page, attempt.requested_usage)
             } else {
                 LockResult::Err(())
             };
@@ -476,16 +476,16 @@ impl SchedulingStateMachine {
                     page.usage = usage;
                 }
                 LockResult::Err(()) => {
-                    blocked_lock_count.increment_self();
+                    blocked_page_count.increment_self();
                     page.insert_blocked_task(task.clone(), attempt.requested_usage);
                 }
             }
         }
 
-        blocked_lock_count
+        blocked_page_count
     }
 
-    fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
+    fn attempt_lock_page(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
         match page.usage {
             PageUsage::Unused => LockResult::Ok(PageUsage::from_requested_usage(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
@@ -534,14 +534,14 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
-        let blocked_lock_count = self.attempt_lock_for_execution(&task);
+    fn attempt_lock_for_task(&mut self, task: Task) -> Option<Task> {
+        let blocked_page_count = self.attempt_lock_pages(&task);
 
-        if blocked_lock_count.is_zero() {
+        if blocked_page_count.is_zero() {
             // succeeded
             Some(task)
         } else {
-            *task.blocked_lock_count_mut(&mut self.blocked_lock_count_token) = blocked_lock_count;
+            *task.blocked_page_count_mut(&mut self.blocked_page_count_token) = blocked_page_count;
             None
         }
     }
@@ -553,7 +553,7 @@ impl SchedulingStateMachine {
 
             while let Some((unblocked_task, requested_usage)) = newly_unblocked {
                 if unblocked_task
-                    .blocked_lock_count_mut(&mut self.blocked_lock_count_token)
+                    .blocked_page_count_mut(&mut self.blocked_page_count_token)
                     .decrement_self()
                     .is_zero()
                 {
@@ -561,7 +561,7 @@ impl SchedulingStateMachine {
                 }
                 page.pop_blocked_task();
 
-                match Self::attempt_lock_address(page, requested_usage) {
+                match Self::attempt_lock_page(page, requested_usage) {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(usage) => {
                         page.usage = usage;
@@ -612,7 +612,7 @@ impl SchedulingStateMachine {
             transaction,
             index,
             lock_attempts,
-            blocked_lock_count: TokenCell::new(ShortCounter::zero()),
+            blocked_page_count: TokenCell::new(ShortCounter::zero()),
         })
     }
 
@@ -638,8 +638,8 @@ impl SchedulingStateMachine {
             handled_task_count: ShortCounter::zero(),
             unblocked_task_count: ShortCounter::zero(),
             total_task_count: ShortCounter::zero(),
-            blocked_lock_count_token: unsafe {
-                BlockedLockCountToken::assume_exclusive_mutating_thread()
+            blocked_page_count_token: unsafe {
+                BlockedPageCountToken::assume_exclusive_mutating_thread()
             },
             page_token: unsafe { PageToken::assume_exclusive_mutating_thread() },
         }
