@@ -142,7 +142,7 @@ mod utils {
     /// [`TokenCell`]s. And `&mut Token` is needed to access one of them as if the one is of
     /// [`Token`]'s fields. Thus, the Rust aliasing rule for `UnsafeCell` can deductively be proven
     /// to be satisfied simply based on the usual borrow checking of the `&mut` reference of
-    /// [`Token`] itself.
+    /// [`Token`] itself via [`::borrow_mut()`](TokenCell::borrow_mut).
     ///
     /// Additionally, creating multiple tokens in a single process is still allowed as long as no
     /// instance of [`TokenCell`] is shared by multiple instances of [`Token`].
