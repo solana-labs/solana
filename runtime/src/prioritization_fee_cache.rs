@@ -140,7 +140,7 @@ type SlotPrioritizationFee = HashMap<BankId, PrioritizationFee>;
 /// and collecting stats and reporting metrics.
 #[derive(Debug)]
 pub struct PrioritizationFeeCache {
-    cache: Arc<RwLock<BTreeMap<Slot, SlotPrioritizationFee>>>,
+    cache: Arc<RwLock<BTreeMap<Slot, PrioritizationFee>>>,
     service_thread: Option<JoinHandle<()>>,
     sender: Sender<CacheServiceUpdate>,
     metrics: Arc<PrioritizationFeeCacheMetrics>,
@@ -286,7 +286,7 @@ impl PrioritizationFeeCache {
 
     fn finalize_slot(
         unfinalized: &mut BTreeMap<Slot, SlotPrioritizationFee>,
-        cache: &RwLock<BTreeMap<Slot, SlotPrioritizationFee>>,
+        cache: &RwLock<BTreeMap<Slot, PrioritizationFee>>,
         cache_max_size: usize,
         slot: Slot,
         bank_id: BankId,
@@ -309,12 +309,13 @@ impl PrioritizationFeeCache {
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
         // block minimum fee.
-        let (_, slot_finalize_time) = measure!(
+        let (slot_prioritization_fee, slot_finalize_time) = measure!(
             {
                 // Only retain priority fee reported from optimistically confirmed bank
                 let pre_purge_bank_count = slot_prioritization_fee.len() as u64;
-                slot_prioritization_fee.retain(|id, _| *id == bank_id);
-                let post_purge_bank_count = slot_prioritization_fee.len() as u64;
+                let mut slot_prioritization_fee = slot_prioritization_fee.remove(&bank_id);
+                let post_purge_bank_count =
+                    slot_prioritization_fee.as_ref().map(|_| 1).unwrap_or(1);
                 metrics.accumulate_total_purged_duplicated_bank_count(
                     pre_purge_bank_count.saturating_sub(post_purge_bank_count),
                 );
@@ -324,37 +325,39 @@ impl PrioritizationFeeCache {
                     warn!("Finalized bank has empty prioritization fee cache. slot {slot} bank id {bank_id}");
                 }
 
-                let block_prioritization_fee = slot_prioritization_fee
-                    .entry(bank_id)
-                    .or_insert(PrioritizationFee::default());
-                if let Err(err) = block_prioritization_fee.mark_block_completed() {
-                    error!(
-                        "Unsuccessful finalizing slot {slot}, bank ID {bank_id}: {:?}",
-                        err
-                    );
+                if let Some(slot_prioritization_fee) = &mut slot_prioritization_fee {
+                    if let Err(err) = slot_prioritization_fee.mark_block_completed() {
+                        error!(
+                            "Unsuccessful finalizing slot {slot}, bank ID {bank_id}: {:?}",
+                            err
+                        );
+                    }
+                    slot_prioritization_fee.report_metrics(slot);
                 }
-                block_prioritization_fee.report_metrics(slot);
+                slot_prioritization_fee
             },
             "slot_finalize_time"
         );
         metrics.accumulate_total_block_finalize_elapsed_us(slot_finalize_time.as_us());
 
         // Create new cache entry
-        let (_, cache_lock_time) = measure!(
-            {
-                let mut cache = cache.write().unwrap();
-                while cache.len() >= cache_max_size {
-                    cache.pop_first();
-                }
-                cache.insert(slot, slot_prioritization_fee);
-            },
-            "cache_lock_time"
-        );
-        metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
+        if let Some(slot_prioritization_fee) = slot_prioritization_fee {
+            let (_, cache_lock_time) = measure!(
+                {
+                    let mut cache = cache.write().unwrap();
+                    while cache.len() >= cache_max_size {
+                        cache.pop_first();
+                    }
+                    cache.insert(slot, slot_prioritization_fee);
+                },
+                "cache_lock_time"
+            );
+            metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
+        }
     }
 
     fn service_loop(
-        cache: Arc<RwLock<BTreeMap<Slot, SlotPrioritizationFee>>>,
+        cache: Arc<RwLock<BTreeMap<Slot, PrioritizationFee>>>,
         cache_max_size: usize,
         receiver: Receiver<CacheServiceUpdate>,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
@@ -405,22 +408,18 @@ impl PrioritizationFeeCache {
             .read()
             .unwrap()
             .iter()
-            .filter_map(|(slot, slot_prioritization_fee)| {
-                slot_prioritization_fee
-                    .values()
-                    .find_map(|prioritization_fee| {
-                        let mut fee = prioritization_fee
-                            .get_min_transaction_fee()
-                            .unwrap_or_default();
-                        for account_key in account_keys {
-                            if let Some(account_fee) =
-                                prioritization_fee.get_writable_account_fee(account_key)
-                            {
-                                fee = std::cmp::max(fee, account_fee);
-                            }
-                        }
-                        Some((*slot, fee))
-                    })
+            .map(|(slot, slot_prioritization_fee)| {
+                let mut fee = slot_prioritization_fee
+                    .get_min_transaction_fee()
+                    .unwrap_or_default();
+                for account_key in account_keys {
+                    if let Some(account_fee) =
+                        slot_prioritization_fee.get_writable_account_fee(account_key)
+                    {
+                        fee = std::cmp::max(fee, account_fee);
+                    }
+                }
+                (*slot, fee)
             })
             .collect()
     }
@@ -498,10 +497,8 @@ mod tests {
         loop {
             let cache = prioritization_fee_cache.cache.read().unwrap();
             if let Some(slot_cache) = cache.get(&slot) {
-                if let Some(block_fee) = slot_cache.get(&bank_id) {
-                    if block_fee.is_finalized() {
-                        return;
-                    }
+                if slot_cache.is_finalized() {
+                    return;
                 }
             }
             drop(cache);
@@ -559,7 +556,6 @@ mod tests {
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot, bank.bank_id());
             let lock = prioritization_fee_cache.cache.read().unwrap();
             let fee = lock.get(&slot).unwrap();
-            let fee = fee.get(&bank.bank_id()).unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert!(fee.get_writable_account_fee(&write_account_a).is_none());
             assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
@@ -938,10 +934,11 @@ mod tests {
         {
             sync_finalize_priority_fee_for_test(&prioritization_fee_cache, slot, bank1.bank_id());
 
-            let cache_lock = prioritization_fee_cache.cache.read().unwrap();
-            let slot_prioritization_fee = cache_lock.get(&slot).unwrap();
-            assert_eq!(1, slot_prioritization_fee.len());
-            assert!(slot_prioritization_fee.contains_key(&bank1.bank_id()));
+            // Not possible to check bank_id
+            // let cache_lock = prioritization_fee_cache.cache.read().unwrap();
+            // let slot_prioritization_fee = cache_lock.get(&slot).unwrap();
+            // assert_eq!(1, slot_prioritization_fee.len());
+            // assert!(slot_prioritization_fee.contains_key(&bank1.bank_id()));
 
             // and data available for query are from bank1
             assert_eq!(
