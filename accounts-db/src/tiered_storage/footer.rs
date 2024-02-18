@@ -202,26 +202,28 @@ impl TieredStorageFooter {
         file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
 
         let mut footer_version: u64 = 0;
-        file.read_pod(&mut footer_version)?;
-        if footer_version != FOOTER_FORMAT_VERSION {
-            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
-        }
-
         let mut footer_size: u64 = 0;
-        file.read_pod(&mut footer_size)?;
-        if footer_size != FOOTER_SIZE as u64 {
-            return Err(TieredStorageError::InvalidFooterSize(
-                footer_size,
-                FOOTER_SIZE as u64,
-            ));
-        }
-
         let mut magic_number = TieredStorageMagicNumber::zeroed();
+
+        file.read_pod(&mut footer_version)?;
+        file.read_pod(&mut footer_size)?;
         file.read_pod(&mut magic_number)?;
+
         if magic_number != TieredStorageMagicNumber::default() {
             return Err(TieredStorageError::MagicNumberMismatch(
                 TieredStorageMagicNumber::default().0,
                 magic_number.0,
+            ));
+        }
+
+        if footer_version != FOOTER_FORMAT_VERSION {
+            return Err(TieredStorageError::InvalidFooterVersion(footer_version));
+        }
+
+        if footer_size != FOOTER_SIZE as u64 {
+            return Err(TieredStorageError::InvalidFooterSize(
+                footer_size,
+                FOOTER_SIZE as u64,
             ));
         }
 
