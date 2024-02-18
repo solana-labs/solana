@@ -255,6 +255,7 @@ const_assert_eq!(mem::size_of::<PageToken>(), 0);
 type BlockedLockCountToken = Token<ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
+/// Internal scheduling data about a particular task.
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(index(pub)))]
 #[derive(Debug)]
 pub struct TaskInner {
