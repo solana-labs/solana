@@ -325,6 +325,8 @@ impl PageUsage {
     }
 }
 
+/// Status about how a task is requesting to use a particular [`Page`]. Unlike [`RequestedUsage`],
+/// it has additional variant of [`Unused`](`PageUsage::Unused`).
 #[derive(Clone, Copy, Debug)]
 enum RequestedUsage {
     Readonly,
@@ -368,7 +370,8 @@ impl PageInner {
 
 const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
 
-/// Scheduler's internal data for each address ([`Pubkey`](`solana_sdk::pubkey::Pubkey`)). Very opaque wrapper type; no methods just with [`::clone()`](Clone::clone) and
+/// Scheduler's internal data for each address ([`Pubkey`](`solana_sdk::pubkey::Pubkey`)). Very
+/// opaque wrapper type; no methods just with [`::clone()`](Clone::clone) and
 /// [`::default()`](Default::default).
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<TokenCell<PageInner>>);
