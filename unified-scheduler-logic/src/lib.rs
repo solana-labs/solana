@@ -545,7 +545,6 @@ impl SchedulingStateMachine {
             Some(task)
         } else {
             // failed
-            // task.reduce_blocked_page
             task.set_blocked_page_count(&mut self.count_token, blocked_page_count);
             None
         }
