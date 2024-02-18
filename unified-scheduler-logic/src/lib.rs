@@ -147,9 +147,9 @@ mod utils {
     /// By extension, it's allowed to create _multiple_ tokens in a _single_ process as long as no
     /// instance of [`TokenCell`] is shared by multiple instances of [`Token`].
     ///
-    /// Note that this is overly restrictive in that it's forbidden while it's technically possible
-    /// to have multiple mutable references to the inner value _if and only if_ the respective
-    /// cells aren't aliased to each other (i.e. different instances). This artificial restriction
+    /// Note that this is overly restrictive in that it's forbidden, yet, technically possible
+    /// to _have multiple mutable references to the inner value if and only if_the respective
+    /// cells aren't aliased to each other (i.e. different instances)_. This artificial restriction
     /// is acceptable for its intended use by the unified scheduler's code because its algorithm
     /// only needs to access each instance of [`TokenCell`]-ed data once at a time. Finally, this
     /// restriction is traded off for restoration of Rust aliasing rule at zero runtime cost.
