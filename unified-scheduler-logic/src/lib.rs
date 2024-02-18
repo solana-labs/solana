@@ -564,7 +564,7 @@ impl SchedulingStateMachine {
             let mut partially_unblocked = Self::unlock_page(page, unlock_attempt);
 
             while let Some((partially_unblocked_task, requested_usage)) = partially_unblocked {
-                if let Some(fully_unblocked_task) = partially_unblocked_task.reduce_blocked_page() {
+                if let Some(fully_unblocked_task) = partially_unblocked_task.reduce_blocked_page(&mut self.blocked_page_count_token) {
                     self.unblocked_task_queue.push_back(fully_unblocked_task);
                 }
                 page.pop_blocked_task();
