@@ -574,7 +574,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    /// Creates a new task with [`SanitizedTransaction`] with all of its corresponding [`Page`]s
+    /// Creates a new task with [`SanitizedTransaction`](SanitizedTransaction) with all of its corresponding [`Page`]s
     /// are preloaded. 
     ///
     /// Closure is used to delegate the (possibly multi-thread friendly) implementation details of
