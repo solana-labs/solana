@@ -144,8 +144,8 @@ mod utils {
     /// to be satisfied simply based on the usual borrow checking of the `&mut` reference of
     /// [`Token`] itself via [`::borrow_mut()`](TokenCell::borrow_mut).
     ///
-    /// Further more, creating _multiple_ tokens in a _single_ process is still allowed as long as no
-    /// instance of [`TokenCell`] is shared by multiple instances of [`Token`].
+    /// Further more, it's still allowed to create _multiple_ tokens in a _single_ process as long
+    /// as no instance of [`TokenCell`] is shared by multiple instances of [`Token`].
     ///
     /// Note that this is overly restrictive in that it's forbidden while it's technically possible
     /// to have multiple mutable references to the inner value _if and only if_ the respective
