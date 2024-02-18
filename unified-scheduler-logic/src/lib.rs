@@ -565,8 +565,8 @@ impl SchedulingStateMachine {
                 match Self::attempt_lock_page(page, requested_usage) {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
-                        page.usage = usage;
-                        now_unused = matches!(usage, PageUsage::Readonly(_))
+                        page.usage = new_usage;
+                        now_unused = matches!(new_usage, PageUsage::Readonly(_))
                             .then(|| page.next_blocked_readonly_task())
                             .flatten();
                     }
