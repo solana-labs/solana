@@ -456,7 +456,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
-        self.unlock_after_execution(task);
+        self.unlock_for_task(task);
     }
 
     #[must_use]
@@ -546,7 +546,7 @@ impl SchedulingStateMachine {
         }
     }
 
-    fn unlock_after_execution(&mut self, task: &Task) {
+    fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut newly_unblocked = Self::unlock_address(page, unlock_attempt);
