@@ -459,7 +459,7 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn attempt_lock_pages(&mut self, task: &Task) -> ShortCounter {
+    fn attempt_lock_pages(&mut self, task: &Task) -> bool {
         let mut blocked_page_count = task.blocked_page_count_mut(&mut self.blocked_page_count_token);
 
         for attempt in task.lock_attempts() {
@@ -481,7 +481,7 @@ impl SchedulingStateMachine {
             }
         }
 
-        blocked_page_count
+        blocked_page_count.is_zero()
     }
 
     fn attempt_lock_page(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
