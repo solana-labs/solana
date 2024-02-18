@@ -1,5 +1,4 @@
 #![allow(rustdoc::private_intra_doc_links)]
-
 //! The task (transaction) scheduling code for the unified scheduler
 //!
 //! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactons) and
