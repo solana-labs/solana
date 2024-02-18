@@ -553,9 +553,9 @@ impl SchedulingStateMachine {
     fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut unblocked = Self::unlock_page(page, unlock_attempt);
+            let mut unblocked_task_from_page = Self::unlock_page(page, unlock_attempt);
 
-            while let Some((task_with_unused_page, requested_usage)) = unblocked {
+            while let Some((task_with_unused_page, requested_usage)) = unblocked_task_from_page {
                 if let Some(task) = task_with_unused_page.try_unblock(&mut self.count_token) {
                     self.unblocked_task_queue.push_back(task);
                 }
@@ -565,7 +565,7 @@ impl SchedulingStateMachine {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
-                        unblocked = matches!(new_usage, PageUsage::Readonly(_))
+                        unblocked_task_from_page = matches!(new_usage, PageUsage::Readonly(_))
                             .then(|| page.blocked_next_readonly_task())
                             .flatten();
                     }
