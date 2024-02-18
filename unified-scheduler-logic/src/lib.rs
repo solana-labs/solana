@@ -306,7 +306,7 @@ impl LockAttempt {
 }
 
 /// Status about how the [`Page`] is used currently. Unlike [`RequestedUsage`], it has additional
-/// variant of `Unused`[`PageUsage::Unused`].
+/// variant of [`Unused`](`PageUsage::Unused`).
 #[derive(Copy, Clone, Debug, Default)]
 enum PageUsage {
     #[default]
