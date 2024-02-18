@@ -1,7 +1,6 @@
 use {
     crate::{bank::Bank, compute_budget_details::GetComputeBudgetDetails, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
-    dashmap::DashMap,
     log::*,
     solana_measure::measure,
     solana_sdk::{
@@ -134,7 +133,7 @@ enum CacheServiceUpdate {
 
 /// Potentially there are more than one bank that updates Prioritization Fee
 /// for a slot. The updates are tracked and finalized by bank_id.
-type SlotPrioritizationFee = DashMap<BankId, PrioritizationFee>;
+type SlotPrioritizationFee = HashMap<BankId, PrioritizationFee>;
 
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
 /// A separate internal thread `service_thread` handles additional tasks when a bank is frozen,
@@ -272,7 +271,7 @@ impl PrioritizationFeeCache {
     ) {
         let (_, entry_update_time) = measure!(
             {
-                let mut block_prioritization_fee = unfinalized
+                let block_prioritization_fee = unfinalized
                     .entry(slot)
                     .or_default()
                     .entry(bank_id)
@@ -302,7 +301,7 @@ impl PrioritizationFeeCache {
             };
         }
 
-        let slot_prioritization_fee = match unfinalized.remove(&slot) {
+        let mut slot_prioritization_fee = match unfinalized.remove(&slot) {
             Some(slot_prioritization_fee) => slot_prioritization_fee,
             None => return,
         };
@@ -325,7 +324,7 @@ impl PrioritizationFeeCache {
                     warn!("Finalized bank has empty prioritization fee cache. slot {slot} bank id {bank_id}");
                 }
 
-                let mut block_prioritization_fee = slot_prioritization_fee
+                let block_prioritization_fee = slot_prioritization_fee
                     .entry(bank_id)
                     .or_insert(PrioritizationFee::default());
                 if let Err(err) = block_prioritization_fee.mark_block_completed() {
@@ -408,7 +407,7 @@ impl PrioritizationFeeCache {
             .iter()
             .filter_map(|(slot, slot_prioritization_fee)| {
                 slot_prioritization_fee
-                    .iter()
+                    .values()
                     .find_map(|prioritization_fee| {
                         let mut fee = prioritization_fee
                             .get_min_transaction_fee()
