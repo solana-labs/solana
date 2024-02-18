@@ -524,7 +524,7 @@ impl SchedulingStateMachine {
         is_unused_now.then_some(|| {
             page.usage = PageUsage::Unused;
             page.next_blocked_task()
-        })
+        })?
     }
 
     #[must_use]
