@@ -118,8 +118,9 @@ mod utils {
             self
         }
 
-        pub(super) fn reset_to_zero(&mut self) {
+        pub(super) fn reset_to_zero(&mut self) -> &mut Self {
             self.0 = 0;
+            self
         }
     }
 
