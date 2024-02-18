@@ -390,11 +390,11 @@ impl PageInner {
     }
 
     fn pop_blocked_next_readonly_task(&mut self) -> Option<(Task, RequestedUsage)> {
-       if matches!(self.blocked_next_task(), Some((_, RequestedUsage::Readonly))) {
-           self.pop_unblocked_next_task()
-       } else {
-           None
-       }
+        matches!(
+            self.blocked_next_task(),
+            Some((_, RequestedUsage::Readonly))
+        )
+        .then(|| self.pop_unblocked_next_task())?
     }
 }
 
@@ -509,10 +509,7 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock_page(
-        page: &mut PageInner,
-        attempt: &LockAttempt,
-    ) -> Option<(Task, RequestedUsage)> {
+    fn unlock_page(page: &mut PageInner, attempt: &LockAttempt) -> Option<(Task, RequestedUsage)> {
         let mut is_unused_now = false;
         match &mut page.usage {
             PageUsage::Readonly(ref mut count) => match attempt.requested_usage {
