@@ -245,7 +245,7 @@ type LockResult = Result<PageUsage, ()>;
 const_assert_eq!(mem::size_of::<LockResult>(), 8);
 
 /// Something to be scheduled; usually a wrapper of
-/// [`SanitizedTransaction`](solana_sdk::transaction::SanitizedTransaction).
+/// [`SanitizedTransaction`].
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
