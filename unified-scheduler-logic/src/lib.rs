@@ -285,6 +285,8 @@ impl TaskInner {
     }
 }
 
+/// [`Task']'s per-address attempt to use a [page](Page) with [certain kind of
+/// request](RequestedUsage).
 #[derive(Debug)]
 struct LockAttempt {
     page: Page,
