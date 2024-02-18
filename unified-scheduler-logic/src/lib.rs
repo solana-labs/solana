@@ -569,7 +569,7 @@ impl SchedulingStateMachine {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(usage) => {
                         page.usage = usage;
-                        partially_unblocked_task = matches!(usage, PageUsage::Readonly(_))
+                        partially_unblocked = matches!(usage, PageUsage::Readonly(_))
                             .then(|| page.next_blocked_readonly_task())
                             .flatten();
                     }
