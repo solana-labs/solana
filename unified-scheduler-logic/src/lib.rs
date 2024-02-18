@@ -250,7 +250,7 @@ const_assert_eq!(mem::size_of::<Task>(), 8);
 type PageToken = Token<PageInner>;
 const_assert_eq!(mem::size_of::<PageToken>(), 0);
 
-/// [`Token`] for [task](Task)'s internal mutable data (`TaskInner::blocked_lock_count`).
+/// [`Token`] for [task](Task)'s [internal mutable data](`TaskInner::blocked_lock_count`).
 type BlockedLockCountToken = Token<ShortCounter>;
 const_assert_eq!(mem::size_of::<BlockedLockCountToken>(), 0);
 
