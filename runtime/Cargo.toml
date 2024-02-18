@@ -29,7 +29,6 @@ index_list = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-lru = { workspace = true }
 lz4 = { workspace = true }
 memmap2 = { workspace = true }
 mockall = { workspace = true }
