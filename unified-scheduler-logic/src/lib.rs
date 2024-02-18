@@ -385,7 +385,8 @@ const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
 pub struct Page(Arc<TokenCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
 
-/// A high-level `struct`, managing the overall scheduling of [tasks](Task).
+/// A high-level `struct`, managing the overall scheduling of [tasks](Task), to be used by
+/// `solana-unified-scheduler-pool`.
 #[cfg_attr(
     feature = "dev-context-only-utils",
     field_qualifiers(blocked_lock_count_token(pub))
