@@ -555,16 +555,19 @@ impl SchedulingStateMachine {
             let page = unlock_attempt.page_mut(&mut self.page_token);
             let mut unblocked_task_from_page = Self::unlock_page(page, unlock_attempt);
 
-            while let Some((task_with_unused_page, requested_usage)) = unblocked_task_from_page {
-                if let Some(task) = task_with_unused_page.try_unblock(&mut self.count_token) {
+            while let Some((task_with_unblocked_page, requested_usage)) = unblocked_task_from_page {
+                if let Some(task) = task_with_unblocked_page.try_unblock(&mut self.count_token) {
                     self.unblocked_task_queue.push_back(task);
                 }
                 page.pop_unblocked_next_task();
 
                 match Self::attempt_lock_page(page, requested_usage) {
-                    LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
+                    LockResult::Err(_) => panic!("should never fail in this context"),
+                    LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
+                        // Try to further schedule blocked transactions for parallelism in the case
+                        // of readonly locks
                         unblocked_task_from_page = matches!(new_usage, PageUsage::Readonly(_))
                             .then(|| page.blocked_next_readonly_task())
                             .flatten();
