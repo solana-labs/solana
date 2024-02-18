@@ -561,7 +561,7 @@ impl SchedulingStateMachine {
                     .decrement_self()
                     .is_zero()
                 {
-                    self.unblocked_task_queue.push_back(unblocked_task.clone());
+                    self.unblocked_task_queue.push_back(partially_unblocked_task.clone());
                 }
                 page.pop_blocked_task();
 
