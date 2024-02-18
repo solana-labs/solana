@@ -194,8 +194,8 @@ mod utils {
     /// A auxiliary zero-sized type to enforce aliasing rule to [`TokenCell`] via rust type system
     ///
     /// Token semantically owns a collection of `TokenCell` objects and governs the _unique_
-    /// existence of mutable access over them by requiring it to be mutably borrowed to get a
-    /// mutable reference to the internal value of `TokenCell`
+    /// existence of mutable access over them by requiring the token itself to be mutably borrowed
+    /// to get a mutable reference to the internal value of `TokenCell`
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     // *mut is used to make this type !Send and !Sync
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
