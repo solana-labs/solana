@@ -158,7 +158,7 @@ mod utils {
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
     impl<V> TokenCell<V> {
-        /// Creates a new TokenCell with the value.
+        /// Creates a new `TokenCell` with the `value` typed as `V`.
         ///
         /// Note that this isn't parametric over the its accompanied `Token`'s lifetime to avoid
         /// complex handling of non-`'static` heaped data in general. It's required for this
