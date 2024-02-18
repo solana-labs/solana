@@ -158,6 +158,11 @@ mod utils {
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
     impl<V> TokenCell<V> {
+        /// Creates a new TokenCell with the value.
+        ///
+        /// Note that this isn't parametric over the its accompanied `Token`'s lifetime to avoid
+        /// complex handling of non-`'static` heaped data in general. It's required for this
+        /// instance to be accessed only via its associated Token for the entire lifetime.
         // non-const to forbid unprotected sharing via static variables among threads.
         pub(super) fn new(value: V) -> Self {
             Self(UnsafeCell::new(value))
