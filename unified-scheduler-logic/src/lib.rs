@@ -523,7 +523,7 @@ impl SchedulingStateMachine {
 
         is_unused_now.then(|| {
             page.usage = PageUsage::Unused;
-            page.next_blaocked_task()
+            page.next_blocked_task()
         })
     }
 
