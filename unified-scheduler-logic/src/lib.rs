@@ -455,14 +455,14 @@ impl SchedulingStateMachine {
             let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_address(page, attempt.requested_usage)
             } else {
-                LockStatus::Blocked
+                LockStatus::Err(())
             };
             match lock_status {
-                LockStatus::Succeded(PageUsage::Unused) => unreachable!(),
-                LockStatus::Succeded(usage) => {
+                LockStatus::Ok(PageUsage::Unused) => unreachable!(),
+                LockStatus::Ok(usage) => {
                     page.usage = usage;
                 }
-                LockStatus::Blocked => {
+                LockStatus::Err(()) => {
                     blocked_lock_count.increment_self();
                     page.insert_blocked_task(task.clone(), attempt.requested_usage);
                 }
