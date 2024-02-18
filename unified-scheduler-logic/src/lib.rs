@@ -244,8 +244,7 @@ mod utils {
 type LockResult = Result<PageUsage, ()>;
 const_assert_eq!(mem::size_of::<LockResult>(), 8);
 
-/// Something to be scheduled; usually a wrapper of
-/// [`SanitizedTransaction`].
+/// Something to be scheduled; usually a wrapper of [`SanitizedTransaction`].
 pub type Task = Arc<TaskInner>;
 const_assert_eq!(mem::size_of::<Task>(), 8);
 
@@ -576,9 +575,8 @@ impl SchedulingStateMachine {
         }
     }
 
-    /// Creates a new task with
-    /// [`SanitizedTransaction`] with all of its
-    /// corresponding [`Page`]s preloaded.
+    /// Creates a new task with [`SanitizedTransaction`] with all of its corresponding [`Page`]s
+    /// preloaded.
     ///
     /// Closure (`page_loader`) is used to delegate the (possibly multi-thread friendly)
     /// implementation details of looking a page up with [`pubkey`](Pubkey). It's the caller's
