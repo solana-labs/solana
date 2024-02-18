@@ -70,7 +70,7 @@ mod utils {
         thread,
     };
 
-    /// A really tiny counter to hide `.checked_{add,sub}` all over the place.
+    /// A really tiny counter to hide `.checked_{add``,sub}` all over the place.
     ///
     /// it's caller's reponsibility to ensure this (backed by u32) never overflow.
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
