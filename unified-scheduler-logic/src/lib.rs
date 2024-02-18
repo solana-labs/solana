@@ -366,7 +366,7 @@ impl PageInner {
 
 const_assert_eq!(mem::size_of::<TokenCell<PageInner>>(), 40);
 
-// very opaque wrapper type; no methods just with .clone() and ::default()
+/// Very opaque wrapper type; no methods just with `::clone()`[clone] and `::default()`[default].
 #[derive(Debug, Clone, Default)]
 pub struct Page(Arc<TokenCell<PageInner>>);
 const_assert_eq!(mem::size_of::<Page>(), 8);
