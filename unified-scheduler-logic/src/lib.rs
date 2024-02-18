@@ -378,8 +378,10 @@ impl PageInner {
         self.blocked_tasks.is_empty()
     }
 
-    fn pop_unblocked_next_task(&mut self) {
-        self.blocked_tasks.pop_front().unwrap();
+    #[must_use]
+    fn pop_unblocked_next_task(&mut self) -> Option<(&Task, RequestedUsage)> {
+        self.blocked_tasks.pop_front()
+            .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
     fn blocked_next_task(&self) -> Option<(&Task, RequestedUsage)> {
@@ -388,9 +390,10 @@ impl PageInner {
             .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
-    fn blocked_next_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
+    fn pop_blocked_next_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
         self.blocked_next_task()
             .filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
+            .map(|| self.pop_unblocked_next_task())
     }
 }
 
@@ -532,7 +535,7 @@ impl SchedulingStateMachine {
 
         is_unused_now.then(|| {
             page.usage = PageUsage::Unused;
-            page.blocked_next_task()
+            page.pop_unblocked_next_task()
         })?
     }
 
@@ -559,7 +562,6 @@ impl SchedulingStateMachine {
                 if let Some(task) = task_with_unblocked_page.try_unblock(&mut self.count_token) {
                     self.unblocked_task_queue.push_back(task);
                 }
-                page.pop_unblocked_next_task();
 
                 match Self::attempt_lock_page(page, requested_usage) {
                     LockResult::Err(_) => panic!("should never fail in this context"),
@@ -569,7 +571,7 @@ impl SchedulingStateMachine {
                         // Try to further schedule blocked transactions for parallelism in the case
                         // of readonly locks
                         unblocked_task_from_page = matches!(new_usage, PageUsage::Readonly(_))
-                            .then(|| page.blocked_next_readonly_task())
+                            .then(|| page.pop_blocked_next_readonly_task())
                             .flatten();
                     }
                 }
