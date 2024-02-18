@@ -128,8 +128,8 @@ mod utils {
     ///
     /// To comply with Rust's aliasing rules, these cells require a carefully-created [`Token`] to
     /// be passed around to access the inner values. The token is a special-purpose phantom object
-    /// to make [`TokenCell`] to get rid of its inherent `unsafe`-ness in [`UnsafeCell`], which is
-    /// internally used for the interior mutability.
+    /// to to get rid of its inherent `unsafe`-ness in [`UnsafeCell`], which is internally used for
+    /// the interior mutability.
     ///
     /// The final objective of [`Token`] is to ensure there's only one mutable reference to the
     /// [`TokenCell`] at most _at any given moment_. To that end, it's `unsafe` to create it,
