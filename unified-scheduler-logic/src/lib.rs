@@ -240,10 +240,7 @@ mod utils {
 }
 
 #[derive(Debug)]
-enum LockStatus {
-    Succeded(PageUsage),
-    Blocked,
-}
+type LockStatus = Result<PageUsage, ()>;
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 
 pub type Task = Arc<TaskInner>;
