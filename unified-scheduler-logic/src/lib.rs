@@ -295,10 +295,13 @@ impl TaskInner {
     }
 
     #[must_use]
-    fn decrement_blocked_page_count(
+    fn reduce_blocked_page(
         &self,
         token: &mut BlockedPageCountToken,
     ) -> Option<Task> {
+        self.blocked_page_count_mut(token).decrement_self().is_zero().then(|| 
+                                                                           self.clone()
+                                                                       })
     }
 }
 
@@ -551,7 +554,7 @@ impl SchedulingStateMachine {
             Some(task)
         } else {
             // failed
-            // task.decrement_blocked_page_count
+            // task.reduce_blocked_page
             task.set_blocked_page_count(&mut self.blocked_page_count_token, blocked_page_count);
             None
         }
