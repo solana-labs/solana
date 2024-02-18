@@ -378,7 +378,8 @@ impl PageInner {
     }
 
     fn next_blocked_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
-       self.next_blocked_task().filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
+        self.next_blocked_task()
+            .filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
     }
 }
 
@@ -488,9 +489,7 @@ impl SchedulingStateMachine {
         match page.usage {
             PageUsage::Unused => LockResult::Ok(PageUsage::from_requested_usage(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
-                RequestedUsage::Readonly => {
-                    LockResult::Ok(PageUsage::Readonly(count.increment()))
-                }
+                RequestedUsage::Readonly => LockResult::Ok(PageUsage::Readonly(count.increment())),
                 RequestedUsage::Writable => LockResult::Err(()),
             },
             PageUsage::Writable => LockResult::Err(()),
@@ -579,7 +578,7 @@ impl SchedulingStateMachine {
 
     /// Creates a new task with
     /// [`SanitizedTransaction`](solana_sdk::transaction::SanitizedTransaction) with all of its
-    /// corresponding [`Page`]s preloaded. 
+    /// corresponding [`Page`]s preloaded.
     ///
     /// Closure (`page_loader`) is used to delegate the (possibly multi-thread friendly)
     /// implementation details of looking a page up with [`pubkey`](Pubkey). It's the caller's
