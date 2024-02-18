@@ -239,6 +239,7 @@ mod utils {
     }
 }
 
+/// Result for locking a [page](Page) with particular [usage](RequestedUsage).
 type LockResult = Result<PageUsage, ()>;
 const_assert_eq!(mem::size_of::<LockResult>(), 8);
 
