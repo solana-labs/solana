@@ -195,7 +195,7 @@ mod utils {
     ///
     /// Token semantically owns a collection of `TokenCell` objects and governs the _unique_
     /// existence of mutable access over them by requiring the token itself to be mutably borrowed
-    /// to get a mutable reference to the internal value of `TokenCell`
+    /// to get a mutable reference to the internal value of `TokenCell`.
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     // *mut is used to make this type !Send and !Sync
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
