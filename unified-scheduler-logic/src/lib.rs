@@ -379,9 +379,8 @@ impl PageInner {
     }
 
     #[must_use]
-    fn pop_unblocked_next_task(&mut self) -> Option<(&Task, RequestedUsage)> {
+    fn pop_unblocked_next_task(&mut self) -> Option<(Task, RequestedUsage)> {
         self.blocked_tasks.pop_front()
-            .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
     fn blocked_next_task(&self) -> Option<(&Task, RequestedUsage)> {
