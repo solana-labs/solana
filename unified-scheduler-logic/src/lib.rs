@@ -336,8 +336,8 @@ enum RequestedUsage {
 /// Internal scheduling data about a particular address.
 ///
 /// Specifially, it holds the current [`PageUsage`](PageUsage) (or no usage with
-/// [`PageUsage::Unused`]) and which [`Task`]s are blocked to be
-/// executed after the current task is notified to be completed via [`::deschedule_task`](`SchedulingStateMachine::deschedule_task`)
+/// [`PageUsage::Unused`]) and which [`Task`]s are blocked to be executed after the current task is
+/// notified to be finished via [`::deschedule_task`](`SchedulingStateMachine::deschedule_task`)
 #[derive(Debug)]
 struct PageInner {
     usage: PageUsage,
