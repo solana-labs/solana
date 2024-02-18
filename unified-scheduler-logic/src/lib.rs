@@ -557,10 +557,10 @@ impl SchedulingStateMachine {
             let mut now_unused = Self::unlock_page(page, unlock_attempt);
 
             while let Some((task_with_unused_page, requested_usage)) = now_unused {
-                page.pop_blocked_task();
                 if let Some(task) = task_with_unused_page.try_unblock(&mut self.count_token) {
                     self.unblocked_task_queue.push_back(task);
                 }
+                page.pop_blocked_task();
 
                 match Self::attempt_lock_page(page, requested_usage) {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
