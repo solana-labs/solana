@@ -460,7 +460,7 @@ impl SchedulingStateMachine {
 
     #[must_use]
     fn attempt_lock_pages(&mut self, task: &Task) -> bool {
-        let mut blocked_page_count = task.blocked_page_count_mut(&mut self.blocked_page_count_token);
+        let blocked_page_count = task.blocked_page_count_mut(&mut self.blocked_page_count_token);
 
         for attempt in task.lock_attempts() {
             let page = attempt.page_mut(&mut self.page_token);
