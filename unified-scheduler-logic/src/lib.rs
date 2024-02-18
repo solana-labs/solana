@@ -521,7 +521,7 @@ impl SchedulingStateMachine {
             PageUsage::Unused => unreachable!(),
         }
 
-        is_unused_now.then(|| {
+        is_unused_now.inspect(|| {
             page.usage = PageUsage::Unused;
             page.next_blocked_task()
         })
