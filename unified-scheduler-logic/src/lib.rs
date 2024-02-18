@@ -239,7 +239,6 @@ mod utils {
     }
 }
 
-#[derive(Debug)]
 type LockStatus = Result<PageUsage, ()>;
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
 
