@@ -475,10 +475,10 @@ impl SchedulingStateMachine {
     #[must_use]
     fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
         match page.usage {
-            PageUsage::Unused => LockStatus::Succeded(PageUsage::from_requested_usage(requested_usage)),
+            PageUsage::Unused => LockStatus::Ok(PageUsage::from_requested_usage(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    LockStatus::Succeded(PageUsage::Readonly(count.increment()))
+                    LockStatus::Ok(PageUsage::Readonly(count.increment()))
                 }
                 RequestedUsage::Writable => LockStatus::Err(()),
             },
