@@ -35,13 +35,17 @@ pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
 // Allow down to 50m, or 3.5 days at idle, 1hr at 50k load, around ~100GB
 pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 
-// Check for removing slots at this interval so we don't purge too often
-// and starve other blockstore users.
-pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
-// Limit how often we look for cleanup; divide by two to avoid waiting for too
-// long incase we look just before the interval has elapsed
+// Perform blockstore cleanup at this interval to limit the overhead of cleanup
+// Cleanup will be considered after the latest root has advanced by this value
+const DEFAULT_CLEANUP_SLOT_INTERVAL: u64 = 512;
+// The above slot interval can be roughly equated to a time interval. So, scale
+// how often we check for cleanup with the interval. Doing so will avoid easted
+// checks when we know that the latest root could not have advanced far enough
+//
+// Given that the timing of new slots/roots is not exact, divide by 10 to avoid
+// a long wait incase a check occurs just before the interval has elapsed
 const LOOP_LIMITER: Duration =
-    Duration::from_millis(DEFAULT_MS_PER_SLOT * DEFAULT_PURGE_SLOT_INTERVAL / 2);
+    Duration::from_millis(DEFAULT_CLEANUP_SLOT_INTERVAL * DEFAULT_MS_PER_SLOT / 10);
 
 pub struct BlockstoreCleanupService {
     t_cleanup: JoinHandle<()>,
@@ -68,7 +72,7 @@ impl BlockstoreCleanupService {
                             &blockstore,
                             max_ledger_shreds,
                             &mut last_purge_slot,
-                            DEFAULT_PURGE_SLOT_INTERVAL,
+                            DEFAULT_CLEANUP_SLOT_INTERVAL,
                         );
 
                         last_check_time = Instant::now();
