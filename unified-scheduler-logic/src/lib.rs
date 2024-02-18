@@ -43,6 +43,13 @@
 //! the message passing, the scheduling code itself attains maximally possible single-threaed
 //! execution without stalling cpu pipelines at all, only constrained to mem access latency, while
 //! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
+//!
+//! generic high-level algorithm description
+//! address-level , rather than transaction. fifo for each address. no retry
+//!
+//! X ns for the usual case.
+//!
+//! Ignorance of buffer bloat
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::field_qualifiers;
@@ -117,10 +124,37 @@ mod utils {
         }
     }
 
-    /// A special [`Send`]-able and [`Sync`]-able cell leveraging scheduler's one-by-one data access
+    /// A conditionally [`Send`]-able and [`Sync`]-able cell leveraging scheduler's one-by-one data access
     /// pattern with zero runtime synchronization cost.
     ///
-    /// needs token to access inner value
+    /// To comply with Rust's aliasing rules, these cells require a carefully-created [`Token`] to be
+    /// passed around to access the inner values. The token is the special-purpose object to make
+    /// [`TokenCell`] to get rid of its inherent `unsafe`-ness in [`UnsafeCell`], which is
+    /// internally used for the interior mutability.
+    ///
+    /// The final objective of [`Token`] is to ensure there's only one mutable reference to the
+    /// [`TokenCell`] at most _at any given moment_. To that end, it's `unsafe` to create it, shifting
+    /// the responsibility of binding the only singleton instance to a particular thread and not
+    /// creating more than one, onto the API consumers. And its constructor is non-`const`, and the
+    /// type is `!Clone` (and `!Copy` as well), `!Default`, `!Send` and `!Sync` to make it relatively hard to cross thread boundaries accidentally.
+    ///
+    /// In other words, the token semantically _owns_ all of its associated instances of
+    /// [`TokenCell`]s. And `&mut Token` is needed to access one of them as if the one is of
+    /// [`Token`]'s fields. Thus, the Rust aliasing rule for `UnsafeCell` can deductively be proven
+    /// to be satisfied simply based on the usual borrow checking of the `&mut` reference of
+    /// [`Token`] itself.
+    ///
+    /// Additionally, creating multiple tokens in a single process is still
+    /// allowed as long as no instance of [`TokenCell`] is shared by multiple instances of
+    /// [`Token`].
+    ///
+    /// Note that this is overly restrictive in that it's forbidden while it's technically possible
+    /// to have multiple mutable references to the inner value _if and only if_ the respective
+    /// cells aren't aliased to each other (i.e. different instances). This artificial restriction
+    /// is acceptable for its intended use by the unified scheduler's code because its algorithm
+    /// only needs to access each instance of [`TokenCell`]-ed data once at a time. Finally, this
+    /// restriction is traded off for restoration of Rust aliasing rule at zero runtime cost.
+    /// Without this token mechanism, there's no way to realize this.
     #[derive(Debug, Default)]
     pub(super) struct TokenCell<V>(UnsafeCell<V>);
 
@@ -152,6 +186,10 @@ mod utils {
     unsafe impl<V> Sync for TokenCell<V> {}
 
     /// A auxiliary zero-sized type to enforce aliasing rule to [`TokenCell`] via rust type system
+    ///
+    /// Token semantically owns a collection of `TokenCell` objects and governs the _unique_
+    /// existence of mutable access over them by requiring it to be mutably borrowed to get a
+    /// mutable reference to the internal value of `TokenCell`
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     // *mut is used to make this type !Send and !Sync
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
