@@ -117,12 +117,17 @@ impl PrioritizationFeeCacheMetrics {
 }
 
 #[derive(Debug)]
+struct CacheTransactionUpdate {
+    transaction_fee: u64,
+    writable_accounts: Vec<Pubkey>,
+}
+
+#[derive(Debug)]
 enum CacheServiceUpdate {
-    TransactionUpdate {
+    TransactionsUpdate {
         slot: Slot,
         bank_id: BankId,
-        transaction_fee: u64,
-        writable_accounts: Vec<Pubkey>,
+        updates: Vec<CacheTransactionUpdate>,
     },
     BankFinalized {
         slot: Slot,
@@ -188,57 +193,63 @@ impl PrioritizationFeeCache {
         }
     }
 
-    /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
+        /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
     /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
     pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let (_, send_updates_time) = measure!(
             {
-                for sanitized_transaction in txs {
-                    // Vote transactions are not prioritized, therefore they are excluded from
-                    // updating fee_cache.
-                    if sanitized_transaction.is_simple_vote_transaction() {
-                        continue;
-                    }
+                let updates = txs
+                    .filter_map(|sanitized_transaction| {
+                        // Vote transactions are not prioritized, therefore they are excluded from
+                        // updating fee_cache.
+                        if sanitized_transaction.is_simple_vote_transaction() {
+                            return None;
+                        }
 
-                    let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
-                    let compute_budget_details = sanitized_transaction
-                        .get_compute_budget_details(round_compute_unit_price_enabled);
-                    let account_locks = sanitized_transaction
-                        .get_account_locks(bank.get_transaction_account_lock_limit());
+                        let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
+                        let compute_budget_details = sanitized_transaction
+                            .get_compute_budget_details(round_compute_unit_price_enabled);
+                        let account_locks = sanitized_transaction
+                            .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                    if compute_budget_details.is_none() || account_locks.is_err() {
-                        continue;
-                    }
-                    let compute_budget_details = compute_budget_details.unwrap();
+                        if compute_budget_details.is_none() || account_locks.is_err() {
+                            return None;
+                        }
+                        let compute_budget_details = compute_budget_details.unwrap();
 
-                    // filter out any transaction that requests zero compute_unit_limit
-                    // since its priority fee amount is not instructive
-                    if compute_budget_details.compute_unit_limit == 0 {
-                        continue;
-                    }
+                        // filter out any transaction that requests zero compute_unit_limit
+                        // since its priority fee amount is not instructive
+                        if compute_budget_details.compute_unit_limit == 0 {
+                            return None;
+                        }
 
-                    let writable_accounts = account_locks
-                        .unwrap()
-                        .writable
-                        .iter()
-                        .map(|key| **key)
-                        .collect::<Vec<_>>();
+                        let writable_accounts = account_locks
+                            .unwrap()
+                            .writable
+                            .iter()
+                            .map(|key| **key)
+                            .collect::<Vec<_>>();
 
-                    self.sender
-                        .send(CacheServiceUpdate::TransactionUpdate {
-                            slot: bank.slot(),
-                            bank_id: bank.bank_id(),
+                        Some(CacheTransactionUpdate {
                             transaction_fee: compute_budget_details.compute_unit_price,
                             writable_accounts,
                         })
-                        .unwrap_or_else(|err| {
-                            warn!(
-                                "prioritization fee cache transaction updates failed: {:?}",
-                                err
-                            );
-                        });
-                }
+                    })
+                    .collect();
+
+                self.sender
+                    .send(CacheServiceUpdate::TransactionsUpdate {
+                        slot: bank.slot(),
+                        bank_id: bank.bank_id(),
+                        updates,
+                    })
+                    .unwrap_or_else(|err| {
+                        warn!(
+                            "prioritization fee cache transaction updates failed: {:?}",
+                            err
+                        );
+                    });
             },
             "send_updates",
         );
@@ -265,10 +276,10 @@ impl PrioritizationFeeCache {
         unfinalized: &mut BTreeMap<Slot, SlotPrioritizationFee>,
         slot: Slot,
         bank_id: BankId,
-        transaction_fee: u64,
-        writable_accounts: &[Pubkey],
+        updates: Vec<CacheTransactionUpdate>,
         metrics: &PrioritizationFeeCacheMetrics,
     ) {
+        let transaction_update_count = updates.len() as u64;
         let (_, entry_update_time) = measure!(
             {
                 let block_prioritization_fee = unfinalized
@@ -276,12 +287,19 @@ impl PrioritizationFeeCache {
                     .or_default()
                     .entry(bank_id)
                     .or_insert(PrioritizationFee::default());
-                block_prioritization_fee.update(transaction_fee, writable_accounts)
+
+                for CacheTransactionUpdate {
+                    transaction_fee,
+                    writable_accounts,
+                } in updates
+                {
+                    block_prioritization_fee.update(transaction_fee, writable_accounts);
+                }
             },
             "entry_update_time"
         );
         metrics.accumulate_total_entry_update_elapsed_us(entry_update_time.as_us());
-        metrics.accumulate_successful_transaction_update_count(1);
+        metrics.accumulate_successful_transaction_update_count(transaction_update_count);
     }
 
     fn finalize_slot(
@@ -366,19 +384,11 @@ impl PrioritizationFeeCache {
 
         for update in receiver.iter() {
             match update {
-                CacheServiceUpdate::TransactionUpdate {
+                CacheServiceUpdate::TransactionsUpdate {
                     slot,
                     bank_id,
-                    transaction_fee,
-                    writable_accounts,
-                } => Self::update_cache(
-                    &mut unfinalized,
-                    slot,
-                    bank_id,
-                    transaction_fee,
-                    &writable_accounts,
-                    &metrics,
-                ),
+                    updates,
+                } => Self::update_cache(&mut unfinalized, slot, bank_id, updates, &metrics),
                 CacheServiceUpdate::BankFinalized { slot, bank_id } => {
                     Self::finalize_slot(
                         &mut unfinalized,
@@ -388,7 +398,6 @@ impl PrioritizationFeeCache {
                         bank_id,
                         &metrics,
                     );
-
                     metrics.report(slot);
                 }
                 CacheServiceUpdate::Exit => {
@@ -480,7 +489,7 @@ mod tests {
             .load(Ordering::Relaxed)
             != expected_update_count
         {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 
