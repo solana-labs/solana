@@ -378,18 +378,18 @@ impl PageInner {
         self.blocked_tasks.is_empty()
     }
 
-    fn pop_blocked_task(&mut self) {
+    fn pop_unblocked_next_task(&mut self) {
         self.blocked_tasks.pop_front().unwrap();
     }
 
-    fn next_blocked_task(&self) -> Option<(&Task, RequestedUsage)> {
+    fn blocked_next_task(&self) -> Option<(&Task, RequestedUsage)> {
         self.blocked_tasks
             .front()
             .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
-    fn next_blocked_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
-        self.next_blocked_task()
+    fn blocked_next_readonly_task(&self) -> Option<(&Task, RequestedUsage)> {
+        self.blocked_next_task()
             .filter(|(_task, requested_usage)| matches!(requested_usage, RequestedUsage::Readonly))
     }
 }
@@ -532,7 +532,7 @@ impl SchedulingStateMachine {
 
         is_unused_now.then(|| {
             page.usage = PageUsage::Unused;
-            page.next_blocked_task()
+            page.blocked_next_task()
         })?
     }
 
@@ -553,20 +553,20 @@ impl SchedulingStateMachine {
     fn unlock_for_task(&mut self, task: &Task) {
         for unlock_attempt in task.lock_attempts() {
             let page = unlock_attempt.page_mut(&mut self.page_token);
-            let mut now_unused = Self::unlock_page(page, unlock_attempt);
+            let mut unblocked = Self::unlock_page(page, unlock_attempt);
 
-            while let Some((task_with_unused_page, requested_usage)) = now_unused {
+            while let Some((task_with_unused_page, requested_usage)) = unblocked {
                 if let Some(task) = task_with_unused_page.try_unblock(&mut self.count_token) {
                     self.unblocked_task_queue.push_back(task);
                 }
-                page.pop_blocked_task();
+                page.pop_unblocked_next_task();
 
                 match Self::attempt_lock_page(page, requested_usage) {
                     LockResult::Err(_) | LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
-                        now_unused = matches!(new_usage, PageUsage::Readonly(_))
-                            .then(|| page.next_blocked_readonly_task())
+                        unblocked = matches!(new_usage, PageUsage::Readonly(_))
+                            .then(|| page.blocked_next_readonly_task())
                             .flatten();
                     }
                 }
