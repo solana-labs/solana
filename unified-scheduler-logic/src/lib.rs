@@ -241,7 +241,7 @@ mod utils {
 
 #[derive(Debug)]
 enum LockStatus {
-    Succeded(Usage),
+    Succeded(TaskUsage),
     Blocked,
 }
 const_assert_eq!(mem::size_of::<LockStatus>(), 8);
@@ -306,19 +306,19 @@ impl LockAttempt {
 }
 
 #[derive(Copy, Clone, Debug, Default)]
-enum Usage {
+enum TaskUsage {
     #[default]
     Unused,
     Readonly(ShortCounter),
     Writable,
 }
-const_assert_eq!(mem::size_of::<Usage>(), 8);
+const_assert_eq!(mem::size_of::<TaskUsage>(), 8);
 
-impl Usage {
+impl TaskUsage {
     fn from_requested_usage(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => Usage::Readonly(ShortCounter::one()),
-            RequestedUsage::Writable => Usage::Writable,
+            RequestedUsage::Readonly => TaskUsage::Readonly(ShortCounter::one()),
+            RequestedUsage::Writable => TaskUsage::Writable,
         }
     }
 }
@@ -331,14 +331,14 @@ enum RequestedUsage {
 
 #[derive(Debug)]
 struct PageInner {
-    usage: Usage,
+    usage: TaskUsage,
     blocked_tasks: VecDeque<(Task, RequestedUsage)>,
 }
 
 impl Default for PageInner {
     fn default() -> Self {
         Self {
-            usage: Usage::default(),
+            usage: TaskUsage::default(),
             blocked_tasks: VecDeque::with_capacity(1024),
         }
     }
@@ -449,7 +449,7 @@ impl SchedulingStateMachine {
                 LockStatus::Blocked
             };
             match lock_status {
-                LockStatus::Succeded(Usage::Unused) => unreachable!(),
+                LockStatus::Succeded(TaskUsage::Unused) => unreachable!(),
                 LockStatus::Succeded(usage) => {
                     page.usage = usage;
                 }
@@ -466,14 +466,14 @@ impl SchedulingStateMachine {
     #[must_use]
     fn attempt_lock_address(page: &PageInner, requested_usage: RequestedUsage) -> LockStatus {
         match page.usage {
-            Usage::Unused => LockStatus::Succeded(Usage::from_requested_usage(requested_usage)),
-            Usage::Readonly(count) => match requested_usage {
+            TaskUsage::Unused => LockStatus::Succeded(TaskUsage::from_requested_usage(requested_usage)),
+            TaskUsage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => {
-                    LockStatus::Succeded(Usage::Readonly(count.increment()))
+                    LockStatus::Succeded(TaskUsage::Readonly(count.increment()))
                 }
                 RequestedUsage::Writable => LockStatus::Blocked,
             },
-            Usage::Writable => LockStatus::Blocked,
+            TaskUsage::Writable => LockStatus::Blocked,
         }
     }
 
@@ -487,7 +487,7 @@ impl SchedulingStateMachine {
         let requested_usage = attempt.requested_usage;
 
         match &mut page.usage {
-            Usage::Readonly(ref mut count) => match requested_usage {
+            TaskUsage::Readonly(ref mut count) => match requested_usage {
                 RequestedUsage::Readonly => {
                     if count.is_one() {
                         is_unused_now = true;
@@ -497,17 +497,17 @@ impl SchedulingStateMachine {
                 }
                 RequestedUsage::Writable => unreachable!(),
             },
-            Usage::Writable => match requested_usage {
+            TaskUsage::Writable => match requested_usage {
                 RequestedUsage::Writable => {
                     is_unused_now = true;
                 }
                 RequestedUsage::Readonly => unreachable!(),
             },
-            Usage::Unused => unreachable!(),
+            TaskUsage::Unused => unreachable!(),
         }
 
         if is_unused_now {
-            page.usage = Usage::Unused;
+            page.usage = TaskUsage::Unused;
             page.heaviest_blocked_task()
         } else {
             None
@@ -543,10 +543,10 @@ impl SchedulingStateMachine {
                 page.pop_blocked_task();
 
                 match Self::attempt_lock_address(page, requested_usage) {
-                    LockStatus::Blocked | LockStatus::Succeded(Usage::Unused) => unreachable!(),
+                    LockStatus::Blocked | LockStatus::Succeded(TaskUsage::Unused) => unreachable!(),
                     LockStatus::Succeded(usage) => {
                         page.usage = usage;
-                        heaviest_unblocked = if matches!(usage, Usage::Readonly(_)) {
+                        heaviest_unblocked = if matches!(usage, TaskUsage::Readonly(_)) {
                             page.heaviest_blocked_task()
                                 .filter(|t| matches!(t, (_, RequestedUsage::Readonly)))
                         } else {
@@ -675,7 +675,7 @@ mod tests {
         assert_eq!(
             format!(
                 "{:?}",
-                LockStatus::Succeded(Usage::Readonly(ShortCounter::one()))
+                LockStatus::Succeded(TaskUsage::Readonly(ShortCounter::one()))
             ),
             "Succeded(Readonly(ShortCounter(1)))"
         );
@@ -1039,14 +1039,14 @@ mod tests {
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
-            Usage::Writable
+            TaskUsage::Writable
         );
         let page = pages
             .get(task2.transaction().message().fee_payer())
             .unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
-            Usage::Writable
+            TaskUsage::Writable
         );
     }
 
@@ -1070,7 +1070,7 @@ mod tests {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         let page = Page::default();
-        page.0.borrow_mut(&mut state_machine.page_token).usage = Usage::Writable;
+        page.0.borrow_mut(&mut state_machine.page_token).usage = TaskUsage::Writable;
         let _ = SchedulingStateMachine::unlock(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Readonly),
@@ -1085,7 +1085,7 @@ mod tests {
         };
         let page = Page::default();
         page.0.borrow_mut(&mut state_machine.page_token).usage =
-            Usage::Readonly(ShortCounter::one());
+            TaskUsage::Readonly(ShortCounter::one());
         let _ = SchedulingStateMachine::unlock(
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
