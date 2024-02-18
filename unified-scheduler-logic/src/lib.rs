@@ -291,7 +291,7 @@ impl TaskInner {
         token: &mut BlockedPageCountToken,
         count: ShortCounter,
     ) {
-        self.blocked_page_count_mut(token) = count;
+        *self.blocked_page_count_mut(token) = count;
     }
 }
 
