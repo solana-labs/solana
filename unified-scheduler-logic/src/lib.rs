@@ -325,8 +325,8 @@ impl PageUsage {
     }
 }
 
-/// Status about how a task is requesting to use a particular [`Page`]. Unlike [`RequestedUsage`],
-/// it has additional variant of [`Unused`](`PageUsage::Unused`).
+/// Status about how a task is requesting to use a particular [`Page`]. Unlike [`PageUsage`],
+/// it has only two unit variants.
 #[derive(Clone, Copy, Debug)]
 enum RequestedUsage {
     Readonly,
