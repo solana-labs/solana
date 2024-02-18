@@ -553,7 +553,7 @@ impl SchedulingStateMachine {
 
                 match Self::attempt_lock_address(page, requested_usage) {
                     LockStatus::Err(_) | LockStatus::Succeded(PageUsage::Unused) => unreachable!(),
-                    LockStatus::Succeded(usage) => {
+                    LockStatus::Ok(usage) => {
                         page.usage = usage;
                         heaviest_unblocked = if matches!(usage, PageUsage::Readonly(_)) {
                             page.heaviest_blocked_task()
