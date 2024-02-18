@@ -507,10 +507,10 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn unlock_page<'t>(
-        page: &'t mut PageInner,
+    fn unlock_page(
+        page: &mut PageInner,
         attempt: &LockAttempt,
-    ) -> Option<(&'t Task, RequestedUsage)> {
+    ) -> Option<(Task, RequestedUsage)> {
         let mut is_unused_now = false;
         match &mut page.usage {
             PageUsage::Readonly(ref mut count) => match attempt.requested_usage {
