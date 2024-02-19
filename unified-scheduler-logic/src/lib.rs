@@ -27,7 +27,8 @@
 //! _descheduling_).
 //!
 //! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that each of
-//! accessed address is write-locked or read-locked along with the number of active active tasks.
+//! accessed addresses are write-locked or read-locked along with the number of active (=
+//! _currently-scheduled-and-not-descheduled-yet_) tasks.
 //! Along with it, descheduling does the opposite book-keeping process regardless whether a
 //! finished task has been conflicted or not. Note that there's no data container manipulation is
 //! involved.
