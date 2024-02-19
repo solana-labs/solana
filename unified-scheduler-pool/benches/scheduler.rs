@@ -1,4 +1,5 @@
 #![cfg(feature = "dummy")]
+
 #![feature(test)]
 #![allow(clippy::arithmetic_side_effects)]
 
