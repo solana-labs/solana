@@ -24,8 +24,8 @@ iai-callgrind = { version = "0.10.2", features = [
     "client_requests"
 ] }
 
-[target."cfg(target_os = \"linux\")".dev-dependencies]
-iai-callgrind = { version = "0.10.2", features }
+[target."cfg(not(target_os = \"linux\"))".dev-dependencies]
+iai-callgrind = { version = "0.10.2" }
 
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-unified-scheduler-logic = { path = ".", features = ["dev-context-only-utils"] }
