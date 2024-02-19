@@ -15,9 +15,9 @@ qualifier_attr = { workspace = true }
 solana-sdk = { workspace = true }
 static_assertions = { workspace = true }
 
-[[bench]]
-name = "bench-with-iai-callgrind"
-harness = false
+#[[bench]]
+#name = "bench-with-iai-callgrind"
+#harness = false
 
 [dev-dependencies]
 # See order-crates-for-publishing.py for using this unusual `path = "."`
