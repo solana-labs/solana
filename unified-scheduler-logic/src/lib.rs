@@ -23,7 +23,7 @@
 //! ### Algorithm
 //!
 //! The algorithm can be said it's based on per-address FIFO queues, which are updated every time
-//! both new task is coming (= called _scheduling_) and runnble task is finished (= called
+//! both new task is coming (= called _scheduling_) and runnble (i.e. _post-scheduling_) task is finished (= called
 //! _descheduling_).
 //!
 //! For the _non-conflicting scheduling_ case, the story is simple it remembers that each of
