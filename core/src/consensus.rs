@@ -1533,6 +1533,9 @@ impl TowerError {
             false
         }
     }
+    pub fn is_too_old(&self) -> bool {
+        matches!(self, TowerError::TooOldTower(_, _))
+    }
 }
 
 #[derive(Debug)]
