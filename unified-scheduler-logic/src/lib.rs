@@ -34,7 +34,7 @@
 //! involved.
 //!
 //! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting**
-//! addresses like with the non-conflicting case. Only for conflicting addresses, each task is
+//! addresses like with the non-conflicting case. Only for **conflicting** addresses, each task is
 //! recorded to each FIFO queues attached to the (conflicting) addresses. Importantly, the number
 //! of conflicting addresses is also remembered for the scheduled task.
 //!
