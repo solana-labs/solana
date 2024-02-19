@@ -161,7 +161,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("BLOCKHASH")
                         .validator(is_hash)
-                        .help("Query fees for BLOCKHASH instead of the the most recent blockhash"),
+                        .help("Query fees for BLOCKHASH instead of the most recent blockhash"),
                 ),
         )
         .subcommand(
@@ -233,7 +233,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("print_accounts")
                         .long("print-accounts")
                         .takes_value(false)
-                        .help("Print list of non-circualting account addresses"),
+                        .help("Print list of non-circulating account addresses"),
                 ),
         )
         .subcommand(
