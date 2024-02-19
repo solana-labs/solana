@@ -37,13 +37,13 @@
 //! recorded to respective FIFO queues attached to the (conflicting) addresses. Importantly, the
 //! number of conflicting addresses of the conflicting task is also remembered.
 //!
-//! Lastly, in addition to the above-mentioned normal descheduling processing, the scheduler also
-//! tries to reschedule previously blocked tasks. Namely, when given address is ready for new fresh
-//! locking resulted from descheduling a task (i.e. write lock is released or read lock count is
-//! reached to zero), it pops out the first element of the FIFO queue of the address and decrement
-//! the popped-out task's number of conflicting addresses. After that, if the number reaches to the
-//! zero, it means the task is fully finished locking all of its addresses and is routed for
-//! re-scheduling.
+//! Lastly, the scheduler actually also tries to reschedule previously blocked tasks, in addition
+//! to the above-mentioned normal descheduling processing. Namely, when given address is ready for
+//! new fresh locking resulted from descheduling a task (i.e. write lock is released or read lock
+//! count is reached to zero), it pops out the first element of the FIFO queue of the address and
+//! decrement the popped-out task's number of conflicting addresses. After that, if the number
+//! reaches to the zero, it means the task is fully finished locking all of its addresses and is
+//! routed for re-scheduling.
 //!
 //! Put differently, this algorigthm tries to gradually lock all of addresses of tasks at different
 //! timings while not deviating the execution order from the original task ingestion order. This
