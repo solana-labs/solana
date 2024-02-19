@@ -615,8 +615,8 @@ impl SchedulingStateMachine {
                     LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
-                        // Try to further schedule blocked transactions for parallelism in the case
-                        // of readonly locks
+                        // Try to further schedule blocked task for parallelism in the case of
+                        // readonly usages
                         unblocked_task_from_page = if matches!(new_usage, PageUsage::Readonly(_)) {
                             page.pop_blocked_next_readonly_task()
                         } else {
