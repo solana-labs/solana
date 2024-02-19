@@ -44,9 +44,10 @@
 //! zero, it means the task is fully finished locking all of its addresses and is routed for
 //! re-scheduling.
 //!
-//! Put differently, this algorigthm tries to gradually lock given addresses of tasks while not
-//! deviating the execution order from the original task ingestion order. This implies there's no
-//! locking failure in general, which is the primary source of non-linear perf. degration.
+//! Put differently, this algorigthm tries to gradually lock all of addresses of tasks at different
+//! timings while not deviating the execution order from the original task ingestion order. This
+//! implies there's no locking failure in general, which is the primary source of non-linear perf.
+//! degration.
 //!
 //! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
 //! validators, it takes 100ns to schedule and deschedule a transaction with 10 accounts. And 1us
