@@ -23,20 +23,19 @@
 //! ### Algorithm
 //!
 //! The algorithm can be said it's based on per-address FIFO queues, which are updated every time
-//! both new task is coming (= called _scheduling_) and runnble (= _post-scheduling_) task is finished (= called
-//! _descheduling_).
+//! both new task is coming (= called _scheduling_) and runnable (= _post-scheduling_) task is
+//! finished (= called _descheduling_).
 //!
-//! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that each of
-//! accessed addresses are write-locked or read-locked along with the number of active (=
-//! _currently-scheduled-and-not-descheduled-yet_) tasks.
-//! Along with it, descheduling does the opposite book-keeping process regardless whether a
-//! finished task has been conflicted or not. Note that there's no data container manipulation is
-//! involved.
+//! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that
+//! each of accessed addresses are write-locked or read-locked along with the number of active (=
+//! _currently-scheduled-and-not-descheduled-yet_) tasks.  Along with it, descheduling does the
+//! opposite book-keeping process regardless whether a finished task has been conflicted or not.
+//! Note that there's no data container manipulation is involved.
 //!
-//! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting**
-//! addresses like with the non-conflicting case. Only for **conflicting** addresses, each task is
-//! recorded to each FIFO queues attached to the (conflicting) addresses. Importantly, the number
-//! of conflicting addresses is also remembered for the conflicting task.
+//! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting** addresses
+//! like with the non-conflicting case. Only for **conflicting** addresses, each task is recorded
+//! to each FIFO queues attached to the (conflicting) addresses. Importantly, the number of
+//! conflicting addresses is also remembered for the conflicting task.
 //!
 //! Lastly, in addition to the above-mentioned normal descheduling processing, the scheduler also
 //! tries to reschedule previously blocked tasks. Namely, when given address is ready for new fresh
@@ -48,7 +47,7 @@
 //!
 //! Put differently, this algorigthm tries to gradually lock all of addresses of tasks at different
 //! timings while not deviating the execution order from the original task ingestion order. This
-//! implies there's no locking failure in general, which is the primary source of non-linear perf.
+//! implies there's no locking retries in general, which is the primary source of non-linear perf.
 //! degration.
 //!
 //! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
