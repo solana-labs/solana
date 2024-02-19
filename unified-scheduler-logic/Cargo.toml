@@ -24,7 +24,7 @@ iai-callgrind = { version = "0.10.2", features = [
     "client_requests"
 ] }
 
-[target."cfg(not(target_os = \"linux\"))".dev-dependencies]
+[target."cfg(target_os = \"linux\")".dev-dependencies]
 iai-callgrind = { version = "0.10.2", features }
 
 # See order-crates-for-publishing.py for using this unusual `path = "."`
