@@ -1138,6 +1138,30 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
 
+    /// Gets the index's entry for `pubkey` and applies `callback` to it
+    ///
+    /// If `callback`'s boolean return value is true, add this entry to the in-mem cache.
+    pub fn get_and_then<R>(
+        &self,
+        pubkey: &Pubkey,
+        callback: impl FnOnce(Option<&AccountMapEntry<T>>) -> (bool, R),
+    ) -> R {
+        self.get_bin(pubkey).get_internal(pubkey, callback)
+    }
+
+    /// Gets the index's entry for `pubkey` and clones it
+    ///
+    /// Prefer `get_and_then()` whenever possible.
+    /// NOTE: The entry is *not* added to the in-mem cache.
+    pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
+        self.get_and_then(pubkey, |entry| (false, entry.cloned()))
+    }
+
+    /// Is `pubkey` in the index?
+    pub fn contains(&self, pubkey: &Pubkey) -> bool {
+        self.get_and_then(pubkey, |entry| (false, entry.is_some()))
+    }
+
     fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
