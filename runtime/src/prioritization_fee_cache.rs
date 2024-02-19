@@ -286,7 +286,7 @@ impl PrioritizationFeeCache {
                     .entry(slot)
                     .or_default()
                     .entry(bank_id)
-                    .or_insert(PrioritizationFee::default());
+                    .or_default();
 
                 for CacheTransactionUpdate {
                     transaction_fee,
@@ -319,10 +319,7 @@ impl PrioritizationFeeCache {
             };
         }
 
-        let mut slot_prioritization_fee = match unfinalized.remove(&slot) {
-            Some(slot_prioritization_fee) => slot_prioritization_fee,
-            None => return,
-        };
+        let Some(mut slot_prioritization_fee) = unfinalized.remove(&slot) else { return };
 
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
