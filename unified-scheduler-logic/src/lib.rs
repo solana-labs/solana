@@ -46,10 +46,18 @@
 //! generic high-level algorithm description
 //! address-level , rather than transaction. fifo for each address. no retry
 //!
-//! X ns for the usual case.
+//! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
+//! validators, it takes 100ns to schedule and deschedule a transaction with 10 accounts. And 1us
+//! for a transaction with 100 accounts. Note that this excludes crossbeam communication overhead
+//! at all. That's said, it's not unrealistic to say the whole unified scheduler can attain 100k-1m
+//! tps overall, assuming those tx executions aren't bottlenecked.
 //!
-//! Ignorance of buffer bloat
-
+//! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
+//! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
+//! by very large number of interleaved runnable tasks along side.  The reason is again for
+//! separation of concerns. This is accetable because the scheduling code itself isn't susceitible
+//! to buffer block problem by itself as explained by the description and demonstrated by the
+//! benchmark above. Thus, this should be solved elsewhere, specifically at the scheduler pool.
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::field_qualifiers;
 use {
@@ -370,7 +378,7 @@ impl Default for PageInner {
 }
 
 impl PageInner {
-    fn insert_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
+    fn push_blocked_task(&mut self, task: Task, requested_usage: RequestedUsage) {
         self.blocked_tasks.push_back((task, requested_usage));
     }
 
@@ -492,7 +500,7 @@ impl SchedulingStateMachine {
                 }
                 LockResult::Err(()) => {
                     blocked_page_count.increment_self();
-                    page.insert_blocked_task(task.clone(), attempt.requested_usage);
+                    page.push_blocked_task(task.clone(), attempt.requested_usage);
                 }
             }
         }
