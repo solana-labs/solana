@@ -292,13 +292,10 @@ impl TaskInner {
 
     #[must_use]
     fn try_unblock(self: &Task, token: &mut BlockedPageCountToken) -> Option<Task> {
-        if self.blocked_page_count_mut(token)
+        self.blocked_page_count_mut(token)
             .decrement_self()
-            .is_zero() {
-                self.clone()
-            } else {
-                None
-            }
+            .is_zero()
+            .then(|| self.clone())
     }
 }
 
