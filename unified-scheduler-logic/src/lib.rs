@@ -74,8 +74,8 @@
 //! event should occur.
 //!
 //! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
-//! accessing the same account, and among threads due to off-loading. Also, interior mutability is
-//! needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
+//! accessing the same account, and among threads due to the preloading. Also, interior mutability
+//! is needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
 //! Leveraving the fact it's the only state-mutating exclusive thread, it instead uses
 //! `UnsafeCell`, which is sugar-coated by a tailored wrapper called [`TokenCell`]. `TokenCell`
 //! improses an overly restrictive aliasing rule via rust type system to maintain the memory
