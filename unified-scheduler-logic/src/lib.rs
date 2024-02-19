@@ -40,10 +40,10 @@
 //! Lastly, the scheduler actually also tries to reschedule previously blocked tasks, in addition
 //! to the above-mentioned normal descheduling processing. Namely, when given address is ready for
 //! new fresh locking resulted from descheduling a task (i.e. write lock is released or read lock
-//! count is reached to zero), it immediately marks the address as relocked. Then, it pops out the
-//! first element of the FIFO queue of the address and decrement the popped-out task's number of
-//! conflicting addresses. After that, if the number reaches to the zero, it means the task is
-//! fully finished locking all of its addresses and is routed for re-scheduling.
+//! count is reached to zero), it pops out the first element of the FIFO blocked-task queue of the
+//! address. Then, it immediately marks the address as relocked. It also decrements the number of
+//! conflicting addresses of the popped-out task. Lastly, if the number reaches to the zero, it
+//! means the task is fully finished locking all of its addresses and is routed for re-scheduling.
 //!
 //! Put differently, this algorigthm tries to gradually lock all of addresses of tasks at different
 //! timings while not deviating the execution order from the original task ingestion order. This
