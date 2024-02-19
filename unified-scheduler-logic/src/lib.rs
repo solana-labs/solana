@@ -73,7 +73,7 @@
 //! additional memory allocation for the scratchpad could said to be amortized, if such unsual
 //! event should occur.
 //!
-//! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
+//! [`Arc`] is used to implement this preloading mechanism, because `Page`s are shared across tasks
 //! accessing the same account, and among threads due to the preloading. Also, interior mutability
 //! is needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
 //! Leveraving the fact it's the only state-mutating exclusive thread, it instead uses
