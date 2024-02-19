@@ -26,10 +26,11 @@
 //! both new task is coming (= called _scheduling_) and runnble (= _post-scheduling_) task is finished (= called
 //! _descheduling_).
 //!
-//! For the _non-conflicting scheduling_ case, the story is simple it remembers that each of
+//! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that each of
 //! accessed address is write-locked or read-locked along with the number of active active tasks.
 //! Along with it, descheduling does the opposite book-keeping process regardless whether a
-//! finished task has been conflicted or not.
+//! finished task has been conflicted or not. Note that there's no data container manipulation is
+//! involved.
 //!
 //! For the _conflicting scheduling_ case, it still remembers that each of non-conflicting
 //! addresses like with the non-conflicting case. Only for conflicting addresses, each task is
