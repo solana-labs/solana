@@ -55,7 +55,7 @@
 //! validators, it takes roughly 100ns to schedule and deschedule a transaction with 10 accounts.
 //! And 1us for a transaction with 100 accounts. Note that this excludes crossbeam communication
 //! overhead at all. That's said, it's not unrealistic to say the whole unified scheduler can
-//! attain 100k-1m tps overall, assuming those tx executions aren't bottlenecked.
+//! attain 100k-1m tps overall, assuming those transaction executions aren't bottlenecked.
 //!
 //! ### Runtime performance characteristics and data structure arrangement
 //!
