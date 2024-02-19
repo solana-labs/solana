@@ -74,14 +74,15 @@
 //! event should occur.
 //!
 //! `Arc` is used to implement this preloading mechanism, because `Page`s are shared across tasks
-//! accessing the same account, and among threads. Also, interior mutability is needed. However,
-//! `SchedulingStateMachine` doesn't use conventional locks like RwLock. Leveraving the fact it's
-//! the only state-mutating exclusive thread, it instead uses `UnsafeCell`, which is sugar-coated
-//! by a tailored wrapper called [`TokenCell`]. `TokenCell` improses an overly restrictive aliasing
-//! rule via rust type system to maintain the memory safety. By localizing any synchronization to
-//! the message passing, the scheduling code itself attains maximally possible single-threaed
-//! execution without stalling cpu pipelines at all, only constrained to mem access latency, while
-//! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
+//! accessing the same account, and among threads due to off-loading. Also, interior mutability is
+//! needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
+//! Leveraving the fact it's the only state-mutating exclusive thread, it instead uses
+//! `UnsafeCell`, which is sugar-coated by a tailored wrapper called [`TokenCell`]. `TokenCell`
+//! improses an overly restrictive aliasing rule via rust type system to maintain the memory
+//! safety. By localizing any synchronization to the message passing, the scheduling code itself
+//! attains maximally possible single-threaed execution without stalling cpu pipelines at all, only
+//! constrained to mem access latency, while efficiently utilzing L1-L3 cpu cache with full of
+//! `Page`s.
 //!
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
 //! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
