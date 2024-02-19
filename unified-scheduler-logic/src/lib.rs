@@ -84,6 +84,8 @@
 //! constrained to mem access latency, while efficiently utilzing L1-L3 cpu cache with full of
 //! `Page`s.
 //!
+//! ### Buffer bloat insignificance
+//!
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
 //! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
 //! by very large number of interleaved runnable tasks along side.  The reason is again for
