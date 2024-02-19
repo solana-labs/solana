@@ -740,25 +740,6 @@ macro_rules! impl_borsh_serialize {
 impl_borsh_serialize!(borsh0_10);
 impl_borsh_serialize!(borsh0_9);
 
-/*
- * #[cfg(RUSTC_WITH_SPECIALIZATION)]
- * impl solana_frozen_abi::abi_example::AbiExample for Pubkey {
- *     fn example() -> Self {
- *         log::info!("AbiExample for &Pubkey: {}", std::any::type_name::<Self>());
- *         const EXAMPLE: Pubkey = Pubkey([0; 32]);
- *         EXAMPLE
- *     }
- * }
- */
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::AbiExample for &Pubkey {
-    fn example() -> Self {
-        log::info!("AbiExample for &Pubkey: {}", std::any::type_name::<Self>());
-        &Pubkey([0; 32])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use {super::*, std::str::from_utf8};
