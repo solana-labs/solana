@@ -1,7 +1,7 @@
 #![allow(rustdoc::private_intra_doc_links)]
 //! The task (transaction) scheduling code for the unified scheduler
 //!
-//! ### Summary
+//! ### High-level API and design
 //!
 //! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactons) and
 //! may return back them if runnable via
@@ -26,8 +26,8 @@
 //! both new task is coming (= called _scheduling_) and runnable (= _post-scheduling_) task is
 //! finished (= called _descheduling_).
 //!
-//! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that
-//! all of accessed addresses are write-locked or read-locked with the number of active (=
+//! For the _non-conflicting scheduling_ case, the story is very simple; it just remembers that all
+//! of accessed addresses are write-locked or read-locked with the number of active (=
 //! _currently-scheduled-and-not-descheduled-yet_) tasks. Correspondingly, descheduling does the
 //! opposite book-keeping process, regardless whether a finished task has been conflicted or not.
 //! Note that there's no data container manipulation is involved here.
@@ -51,11 +51,11 @@
 //! implies there's no locking retries in general, which is the primary source of non-linear perf.
 //! degration.
 //!
-//! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
-//! validators, it takes 100ns to schedule and deschedule a transaction with 10 accounts. And 1us
-//! for a transaction with 100 accounts. Note that this excludes crossbeam communication overhead
-//! at all. That's said, it's not unrealistic to say the whole unified scheduler can attain 100k-1m
-//! tps overall, assuming those tx executions aren't bottlenecked.
+//! As a ballpark number from a synthesized micro benchmark on usual CPU for `mainnet-beta`
+//! validators, it takes roughly 100ns to schedule and deschedule a transaction with 10 accounts.
+//! And 1us for a transaction with 100 accounts. Note that this excludes crossbeam communication
+//! overhead at all. That's said, it's not unrealistic to say the whole unified scheduler can
+//! attain 100k-1m tps overall, assuming those tx executions aren't bottlenecked.
 //!
 //! ### Runtime performance characteristics and data structure arrangement
 //!
