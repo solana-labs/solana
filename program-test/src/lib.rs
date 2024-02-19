@@ -23,6 +23,7 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
         bank::Bank,
         bank_forks::BankForks,
+        builtins::BUILTINS,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
@@ -526,6 +527,14 @@ impl ProgramTest {
         builtin_function: Option<BuiltinFunctionWithContext>,
     ) -> Self {
         let mut me = Self::default();
+        if BUILTINS.iter().any(|b| b.program_id == program_id) {
+            info!(
+                "Detected program ID matching builtin. Overwriting existing builtin with provided \
+                program: {}",
+                program_id,
+            );
+            me.prefer_bpf = false;
+        }
         me.add_program(program_name, program_id, builtin_function);
         me
     }
