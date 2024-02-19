@@ -87,8 +87,8 @@
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
 //! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
 //! by very large number of interleaved runnable tasks along side.  The reason is again for
-//! separation of concerns. This is accetable because the scheduling code itself isn't susceitible
-//! to buffer block problem by itself as explained by the description and validated by the
+//! separation of concerns. This is acceptable because the scheduling code itself isn't susceptible
+//! to the buffer bloat problem by itself as explained by the description and validated by the
 //! mentioned benchmark above. Thus, this should be solved elsewhere, specifically at the scheduler
 //! pool.
 #[cfg(feature = "dev-context-only-utils")]
