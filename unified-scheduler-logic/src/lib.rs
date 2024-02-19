@@ -64,11 +64,11 @@
 //! this scheduling code. For that end, unified scheduler pre-loads address-specific locking state
 //! data structures (called [`Page`]) for all of transaction's accounts, in order to offload the
 //! job to other threads from the scheduler thread. This preloading is done inside
-//! [`create_task()`](SchedulingStateMachine::create_task). In this way, task scheduling complexity
-//! is basically reduced to several word-sized loads and stores in the schduler thread (i.e.
-//! constant; no allocations nor syscalls), while being proportional to the number of addresses in
-//! a given transaction. Note that this statement is held true, regardless of conflicts. This is
-//! because the preloading also pre-allocates some scratch-pad area
+//! [`create_task()`](SchedulingStateMachine::create_task). In this way, task scheduling
+//! computational complexity is basically reduced to several word-sized loads and stores in the
+//! schduler thread (i.e.  constant; no allocations nor syscalls), while being proportional to the
+//! number of addresses in a given transaction. Note that this statement is held true, regardless
+//! of conflicts. This is because the preloading also pre-allocates some scratch-pad area
 //! ([`blocked_tasks`](PageInner::blocked_tasks)) to stash blocked ones. So, a conflict only incurs
 //! some additional fixed number of mem stores, within error magin of constant complexity. And
 //! additional memory allocation for the scratchpad could said to be amortized, if such unsual
