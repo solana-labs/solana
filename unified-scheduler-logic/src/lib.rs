@@ -1,6 +1,8 @@
 #![allow(rustdoc::private_intra_doc_links)]
 //! The task (transaction) scheduling code for the unified scheduler
 //!
+//! ### Summary
+//!
 //! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactons) and
 //! may return back them if runnable via
 //! [`::schedule_task()`](SchedulingStateMachine::schedule_task) while maintaining the account
@@ -17,6 +19,42 @@
 //! threads, crossbeam-channel at all. Becasue of this, it's deterministic, easy-to-unit-test, and
 //! its perf footprint is well understood. It really focuses on its single job: sorting
 //! transactions in executable order.
+//!
+//! ### Algorithm
+//!
+//! The algorithm can be said it's based on per-address FIFO queues, which are updated every time
+//! both new task is coming (= called _scheduling_) and runnble task is finished (= called
+//! _descheduling_).
+//!
+//! For the _non-conflicting scheduling_ case, the story is simple it remembers that each of
+//! accessed address is write-locked or read-locked along with the number of active active tasks.
+//! Along with it, descheduling does the opposite book-keeping process regardless whether a
+//! finished task has been conflicted or not.
+//!
+//! For the _conflicting scheduling_ case, it still remembers that each of non-conflicting
+//! addresses like with the non-conflicting case. Only for conflicting addresses, each task is
+//! recorded to each FIFO queues attached to the (conflicting) addresses. Importantly, the number
+//! of conflicting addresses is also remembered for the scheduled task.
+//!
+//! Lastly, in addition to the above-mentioned normal descheduling processing, the scheduler also
+//! tries to reschedule previously blocked tasks. Namely, when given address is ready for new fresh
+//! locking resulted from descheduling a task (i.e. write lock is released or read lock count is
+//! reached to zero), it pops out the first element of the FIFO queue of the address and decrement
+//! the popped-out task's number of conflicting addresses. After that, if the number reaches to the
+//! zero, it means the task is fully finished locking all of its addresses and is routed for
+//! re-scheduling.
+//!
+//! Put differently, this algorigthm tries to gradually lock given addresses of tasks while not
+//! deviating the execution order from the original task ingestion order. This implies there's no
+//! locking failure in general, which is the primary source of non-linear perf. degration.
+//!
+//! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
+//! validators, it takes 100ns to schedule and deschedule a transaction with 10 accounts. And 1us
+//! for a transaction with 100 accounts. Note that this excludes crossbeam communication overhead
+//! at all. That's said, it's not unrealistic to say the whole unified scheduler can attain 100k-1m
+//! tps overall, assuming those tx executions aren't bottlenecked.
+//!
+//! ### Runtime performance characteristics and data structure arrangement
 //!
 //! Its algorithm is very fast for high throughput, real-time for low latency. The whole
 //! unified-scheduler architecture is designed from grounds up to support the fastest execution of
@@ -43,21 +81,13 @@
 //! execution without stalling cpu pipelines at all, only constrained to mem access latency, while
 //! efficiently utilzing L1-L3 cpu cache with full of `Page`s.
 //!
-//! generic high-level algorithm description
-//! address-level , rather than transaction. fifo for each address. no retry
-//!
-//! As a ballpark number from a synthesized micro benchmark on usual cpu for mainnet-beta
-//! validators, it takes 100ns to schedule and deschedule a transaction with 10 accounts. And 1us
-//! for a transaction with 100 accounts. Note that this excludes crossbeam communication overhead
-//! at all. That's said, it's not unrealistic to say the whole unified scheduler can attain 100k-1m
-//! tps overall, assuming those tx executions aren't bottlenecked.
-//!
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
 //! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
 //! by very large number of interleaved runnable tasks along side.  The reason is again for
 //! separation of concerns. This is accetable because the scheduling code itself isn't susceitible
-//! to buffer block problem by itself as explained by the description and demonstrated by the
-//! benchmark above. Thus, this should be solved elsewhere, specifically at the scheduler pool.
+//! to buffer block problem by itself as explained by the description and validated by the
+//! mentioned benchmark above. Thus, this should be solved elsewhere, specifically at the scheduler
+//! pool.
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::field_qualifiers;
 use {
