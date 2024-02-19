@@ -102,7 +102,7 @@ use {
     std::{collections::VecDeque, mem, sync::Arc},
 };
 
-/// Internal generic code. Namely contain [`ShortCounter`] and [`TokenCell`].
+/// Internal utilities. Namely this contains [`ShortCounter`] and [`TokenCell`].
 mod utils {
     #[cfg(feature = "dev-context-only-utils")]
     use qualifier_attr::qualifiers;
@@ -426,12 +426,14 @@ impl PageInner {
         self.blocked_tasks.pop_front()
     }
 
+    #[must_use]
     fn blocked_next_task(&self) -> Option<(&Task, RequestedUsage)> {
         self.blocked_tasks
             .front()
             .map(|(task, requested_usage)| (task, *requested_usage))
     }
 
+    #[must_use]
     fn pop_blocked_next_readonly_task(&mut self) -> Option<(Task, RequestedUsage)> {
         if matches!(
             self.blocked_next_task(),
