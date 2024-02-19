@@ -562,16 +562,18 @@ impl SchedulingStateMachine {
                 }
 
                 match Self::attempt_lock_page(page, requested_usage) {
-                    LockResult::Err(_) => panic!("should never fail in this context"),
                     LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
                         // Try to further schedule blocked transactions for parallelism in the case
                         // of readonly locks
-                        unblocked_task_from_page = matches!(new_usage, PageUsage::Readonly(_))
-                            .then(|| page.pop_blocked_next_readonly_task())
-                            .flatten();
+                        unblocked_task_from_page = if matches!(new_usage, PageUsage::Readonly(_)) {
+                            page.pop_blocked_next_readonly_task()
+                        } else {
+                            None
+                        };
                     }
+                    LockResult::Err(_) => panic!("should never fail in this context"),
                 }
             }
         }
