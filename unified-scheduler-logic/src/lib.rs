@@ -33,9 +33,9 @@
 //! Note that there's no data container manipulation is involved here.
 //!
 //! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting addresses**
-//! like with the non-conflicting case like above. As for **conflicting addresses**, each task is
-//! recorded to respective FIFO queues attached to the (conflicting) addresses. Importantly, the
-//! number of conflicting addresses of the conflicting task is also remembered.
+//! like the non-conflicting case above. As for **conflicting addresses**, each task is recorded to
+//! respective FIFO queues attached to the (conflicting) addresses. Importantly, the number of
+//! conflicting addresses of the conflicting task is also remembered.
 //!
 //! The last missing piece is that the scheduler actually tries to reschedule previously blocked
 //! tasks while deschduling, in addition to the above-mentioned book-keeping processing. Namely,
