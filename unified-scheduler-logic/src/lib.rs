@@ -32,8 +32,8 @@
 //! opposite book-keeping process, regardless whether a finished task has been conflicted or not.
 //! Note that there's no data container manipulation is involved here.
 //!
-//! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting** addresses
-//! like with the non-conflicting case like above. As for **conflicting** addresses, each task is
+//! For the _conflicting scheduling_ case, it remembers that each of **non-conflicting addresses**
+//! like with the non-conflicting case like above. As for **conflicting addresses**, each task is
 //! recorded to respective FIFO queues attached to the (conflicting) addresses. Importantly, the
 //! number of conflicting addresses is also remembered for the conflicting task.
 //!
