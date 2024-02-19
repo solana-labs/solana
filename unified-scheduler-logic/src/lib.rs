@@ -390,11 +390,11 @@ impl PageInner {
     }
 
     fn pop_blocked_next_readonly_task(&mut self) -> Option<(Task, RequestedUsage)> {
-        matches!(
-            self.blocked_next_task(),
-            Some((_, RequestedUsage::Readonly))
-        )
-        .then(|| self.pop_unblocked_next_task())?
+        if matches!(self.blocked_next_task(), Some((_, RequestedUsage::Readonly))) {
+            self.pop_unblocked_next_task()
+        } else {
+            None
+        }
     }
 }
 
