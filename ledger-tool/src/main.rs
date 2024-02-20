@@ -604,7 +604,11 @@ fn main() {
         .long("accounts")
         .value_name("PATHS")
         .takes_value(true)
-        .help("Comma separated persistent accounts location");
+        .help(
+            "Persistent accounts location. \
+            May be specified multiple times. \
+            [default: <LEDGER>/accounts]",
+        );
     let accounts_hash_cache_path_arg = Arg::with_name("accounts_hash_cache_path")
         .long("accounts-hash-cache-path")
         .value_name("PATH")
