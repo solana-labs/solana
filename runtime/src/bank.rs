@@ -5674,6 +5674,7 @@ impl Bank {
         let mut fees = 0;
         let mut accumulated_fee_details = FeeDetails::default();
         let mut accumulated_write_lock_fees: u64 = 0;
+        let mut failed_tx_write_non_saturated_account_count: u64 = 0;
 
         let results = txs
             .iter()
@@ -5725,10 +5726,10 @@ impl Bank {
                                     ("exeucted_units", executed_units, i64),
                                     ("num_write_locks", message.num_write_locks(), i64),
                                     ("num_signatures", message.num_signatures(), i64),
-                                    ("execution_succeeded", execution_status.is_err(), bool),
+                                    ("execution_succeeded", execution_status.is_ok(), bool),
                     );
 
-                    let mut failed_tx_write_non_saturated_account_count: u64 = 0;
+                    // TODO - make sure ALT are fully loaded w this call
                     let write_accounts = solana_cost_model::cost_model::CostModel::get_writable_accounts(tx);
                     write_accounts.iter().for_each(|account_pubkey| {
                         if self.write_lock_fee_cache.read().unwrap().has_account(account_pubkey) {
@@ -5741,7 +5742,7 @@ impl Bank {
                                     ("priority_fee", fee_details.prioritization_fee, i64),
                                     ("write_lock_fee", write_lock_fee, i64),
                                     ("exeucted_units", executed_units, i64),
-                                    ("execution_succeeded", execution_status.is_err(), bool),
+                                    ("execution_succeeded", execution_status.is_ok(), bool),
                                             );
                         } else {
                             // count failed tx that write to non-saturated account
@@ -5750,10 +5751,6 @@ impl Bank {
                             }
                         }
                     });
-                    datapoint_info!("simd-0110_failed-tx-write-non-saturated-accounts",
-                                    ("slot", self.slot(), i64),
-                                    ("count", failed_tx_write_non_saturated_account_count, i64),
-                        );
                 }
 
                 // In case of instruction error, even though no accounts
@@ -5777,6 +5774,13 @@ impl Bank {
                 Ok(())
             })
             .collect();
+
+        if failed_tx_write_non_saturated_account_count > 0 {
+            datapoint_info!("simd-0110_failed-tx-write-non-saturated-accounts",
+                            ("slot", self.slot(), i64),
+                            ("count", failed_tx_write_non_saturated_account_count, i64),
+            );
+        }
 
         self.collector_fees.fetch_add(fees, Relaxed);
         self.collector_fee_details
