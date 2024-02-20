@@ -1012,7 +1012,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&[BuiltinPrototype]>,
+        override_builtins: Option<&[BuiltinPrototype]>,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
@@ -1042,11 +1042,7 @@ impl Bank {
         #[cfg(feature = "dev-context-only-utils")]
         bank.process_genesis_config(genesis_config, collector_id_for_tests);
 
-        bank.finish_init(
-            genesis_config,
-            additional_builtins,
-            debug_do_not_add_builtins,
-        );
+        bank.finish_init(genesis_config, override_builtins, debug_do_not_add_builtins);
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
@@ -1731,7 +1727,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&[BuiltinPrototype]>,
+        override_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
     ) -> Self {
@@ -1828,11 +1824,7 @@ impl Bank {
             bank.loaded_programs_cache.clone(),
         );
 
-        bank.finish_init(
-            genesis_config,
-            additional_builtins,
-            debug_do_not_add_builtins,
-        );
+        bank.finish_init(genesis_config, override_builtins, debug_do_not_add_builtins);
         bank.fill_missing_sysvar_cache_entries();
         bank.rebuild_skipped_rewrites();
 
@@ -5934,7 +5926,7 @@ impl Bank {
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
-        additional_builtins: Option<&[BuiltinPrototype]>,
+        override_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
     ) {
         self.rewards_pool_pubkeys =
@@ -5946,10 +5938,7 @@ impl Bank {
         );
 
         if !debug_do_not_add_builtins {
-            for builtin in BUILTINS
-                .iter()
-                .chain(additional_builtins.unwrap_or(&[]).iter())
-            {
+            for builtin in override_builtins.unwrap_or(BUILTINS).iter() {
                 if builtin.feature_id.is_none() {
                     self.add_builtin(
                         builtin.program_id,
