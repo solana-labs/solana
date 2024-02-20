@@ -4,7 +4,8 @@ use {
     crossbeam_channel::unbounded,
     log::*,
     solana_accounts_db::{
-        hardened_unpack::open_genesis_config, utils::create_all_accounts_run_and_snapshot_dirs,
+        hardened_unpack::open_genesis_config,
+        utils::{create_all_accounts_run_and_snapshot_dirs, move_and_async_delete_path_contents},
     },
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier, validator::BlockVerificationMethod,
@@ -35,9 +36,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-        },
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
     },
     solana_sdk::{
         clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey,
@@ -274,7 +273,6 @@ pub fn load_and_process_ledger(
             genesis_config,
             blockstore.as_ref(),
             account_paths,
-            None,
             snapshot_config.as_ref(),
             &process_options,
             None,

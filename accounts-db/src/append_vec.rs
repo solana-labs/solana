@@ -44,6 +44,14 @@ pub mod test_utils;
 /// we need to add data len and align it to get the actual stored size
 pub const STORE_META_OVERHEAD: usize = 136;
 
+// Ensure the STORE_META_OVERHEAD constant remains accurate
+const _: () = assert!(
+    STORE_META_OVERHEAD
+        == mem::size_of::<StoredMeta>()
+            + mem::size_of::<AccountMeta>()
+            + mem::size_of::<AccountHash>()
+);
+
 /// Returns the size this item will take to store plus possible alignment padding bytes before the next entry.
 /// fixed-size portion of per-account data written
 /// plus 'data_len', aligned to next boundary
@@ -578,7 +586,11 @@ impl AppendVec {
         let mut offset = self.len();
 
         let len = accounts.accounts.len();
-        let mut offsets = Vec::with_capacity(len);
+        // Here we have `len - skip` number of accounts.  The +1 extra capacity
+        // is for storing the aligned offset of the last entry to that is used
+        // to compute the StoredAccountInfo of the last entry.
+        let offsets_len = len - skip + 1;
+        let mut offsets = Vec::with_capacity(offsets_len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
@@ -621,10 +633,11 @@ impl AppendVec {
         if offsets.is_empty() {
             None
         } else {
+            let mut rv = Vec::with_capacity(offsets.len());
+
             // The last entry in this offset needs to be the u64 aligned offset, because that's
             // where the *next* entry will begin to be stored.
             offsets.push(u64_align!(offset));
-            let mut rv = Vec::with_capacity(len);
             for offsets in offsets.windows(2) {
                 rv.push(StoredAccountInfo {
                     offset: offsets[0],
@@ -715,13 +728,6 @@ pub mod tests {
             }
         }
     }
-
-    static_assertions::const_assert_eq!(
-        STORE_META_OVERHEAD,
-        std::mem::size_of::<StoredMeta>()
-            + std::mem::size_of::<AccountMeta>()
-            + std::mem::size_of::<Hash>()
-    );
 
     // Hash is [u8; 32], which has no alignment
     static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);

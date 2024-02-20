@@ -1,5 +1,6 @@
 ---
 title: Using Ledger Nano Hardware Wallets in the Solana CLI
+pagination_label: "Hardware Wallets in the Solana CLI: Ledger Nano"
 sidebar_label: Ledger Nano
 ---
 

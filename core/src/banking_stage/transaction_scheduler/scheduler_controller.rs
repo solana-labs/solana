@@ -17,14 +17,17 @@ use {
         TOTAL_BUFFERED_PACKETS,
     },
     crossbeam_channel::RecvTimeoutError,
-    solana_accounts_db::transaction_error_metrics::TransactionErrorMetrics,
+    itertools::MinMaxResult,
     solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
+    solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        clock::MAX_PROCESSING_AGE, saturating_add_assign, timing::AtomicInterval,
-        transaction::SanitizedTransaction,
+        clock::MAX_PROCESSING_AGE,
+        feature_set::include_loaded_accounts_data_size_in_fee_calculation, fee::FeeBudgetLimits,
+        saturating_add_assign, timing::AtomicInterval, transaction::SanitizedTransaction,
     },
+    solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
         sync::{Arc, RwLock},
         time::Duration,
@@ -95,10 +98,11 @@ impl SchedulerController {
             if !self.receive_and_buffer_packets(&decision) {
                 break;
             }
-
             // Report metrics only if there is data.
             // Reset intervals when appropriate, regardless of report.
             let should_report = self.count_metrics.has_data();
+            self.count_metrics
+                .update_priority_stats(self.container.get_min_max_priority());
             self.count_metrics.maybe_report_and_reset(should_report);
             self.timing_metrics.maybe_report_and_reset(should_report);
             self.worker_metrics
@@ -309,20 +313,23 @@ impl SchedulerController {
         let mut error_counts = TransactionErrorMetrics::default();
         for chunk in packets.chunks(CHUNK_SIZE) {
             let mut post_sanitization_count: usize = 0;
-            let (transactions, priority_details): (Vec<_>, Vec<_>) = chunk
+            let (transactions, fee_budget_limits_vec): (Vec<_>, Vec<_>) = chunk
                 .iter()
                 .filter_map(|packet| {
-                    packet
-                        .build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
-                        .map(|tx| (tx, packet.priority_details()))
+                    packet.build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
                 })
                 .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
-                .filter(|(tx, _)| {
+                .filter(|tx| {
                     SanitizedTransaction::validate_account_locks(
                         tx.message(),
                         transaction_account_lock_limit,
                     )
                     .is_ok()
+                })
+                .filter_map(|tx| {
+                    process_compute_budget_instructions(tx.message().program_instructions_iter())
+                        .map(|compute_budget| (tx, compute_budget.into()))
+                        .ok()
                 })
                 .unzip();
 
@@ -335,16 +342,17 @@ impl SchedulerController {
             let post_lock_validation_count = transactions.len();
 
             let mut post_transaction_check_count: usize = 0;
-            for ((transaction, priority_details), _) in transactions
+            for ((transaction, fee_budget_limits), _) in transactions
                 .into_iter()
-                .zip(priority_details)
+                .zip(fee_budget_limits_vec)
                 .zip(check_results)
                 .filter(|(_, check_result)| check_result.0.is_ok())
             {
                 saturating_add_assign!(post_transaction_check_count, 1);
                 let transaction_id = self.transaction_id_generator.next();
 
-                let transaction_cost = CostModel::calculate_cost(&transaction, &bank.feature_set);
+                let (priority, cost) =
+                    Self::calculate_priority_and_cost(&transaction, &fee_budget_limits, &bank);
                 let transaction_ttl = SanitizedTransactionTTL {
                     transaction,
                     max_age_slot: last_slot_in_epoch,
@@ -353,8 +361,8 @@ impl SchedulerController {
                 if self.container.insert_new_transaction(
                     transaction_id,
                     transaction_ttl,
-                    priority_details,
-                    transaction_cost,
+                    priority,
+                    cost,
                 ) {
                     saturating_add_assign!(self.count_metrics.num_dropped_on_capacity, 1);
                 }
@@ -381,6 +389,51 @@ impl SchedulerController {
                 num_dropped_on_transaction_checks
             );
         }
+    }
+
+    /// Calculate priority and cost for a transaction:
+    ///
+    /// Cost is calculated through the `CostModel`,
+    /// and priority is calculated through a formula here that attempts to sell
+    /// blockspace to the highest bidder.
+    ///
+    /// The priority is calculated as:
+    /// P = R / (1 + C)
+    /// where P is the priority, R is the reward,
+    /// and C is the cost towards block-limits.
+    ///
+    /// Current minimum costs are on the order of several hundred,
+    /// so the denominator is effectively C, and the +1 is simply
+    /// to avoid any division by zero due to a bug - these costs
+    /// are calculated by the cost-model and are not direct
+    /// from user input. They should never be zero.
+    /// Any difference in the prioritization is negligible for
+    /// the current transaction costs.
+    fn calculate_priority_and_cost(
+        transaction: &SanitizedTransaction,
+        fee_budget_limits: &FeeBudgetLimits,
+        bank: &Bank,
+    ) -> (u64, u64) {
+        let cost = CostModel::calculate_cost(transaction, &bank.feature_set).sum();
+        let fee = bank.fee_structure.calculate_fee(
+            transaction.message(),
+            5_000, // this just needs to be non-zero
+            fee_budget_limits,
+            bank.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+        );
+
+        // We need a multiplier here to avoid rounding down too aggressively.
+        // For many transactions, the cost will be greater than the fees in terms of raw lamports.
+        // For the purposes of calculating prioritization, we multiply the fees by a large number so that
+        // the cost is a small fraction.
+        // An offset of 1 is used in the denominator to explicitly avoid division by zero.
+        const MULTIPLIER: u64 = 1_000_000;
+        (
+            fee.saturating_mul(MULTIPLIER)
+                .saturating_div(cost.saturating_add(1)),
+            cost,
+        )
     }
 }
 
@@ -419,6 +472,10 @@ struct SchedulerCountMetrics {
     num_dropped_on_age_and_status: usize,
     /// Number of transactions that were dropped due to exceeded capacity.
     num_dropped_on_capacity: usize,
+    /// Min prioritization fees in the transaction container
+    min_prioritization_fees: u64,
+    /// Max prioritization fees in the transaction container
+    max_prioritization_fees: u64,
 }
 
 impl SchedulerCountMetrics {
@@ -468,7 +525,9 @@ impl SchedulerCountMetrics {
                 self.num_dropped_on_age_and_status,
                 i64
             ),
-            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64)
+            ("num_dropped_on_capacity", self.num_dropped_on_capacity, i64),
+            ("min_priority", self.get_min_priority(), i64),
+            ("max_priority", self.get_max_priority(), i64)
         );
     }
 
@@ -504,6 +563,38 @@ impl SchedulerCountMetrics {
         self.num_dropped_on_clear = 0;
         self.num_dropped_on_age_and_status = 0;
         self.num_dropped_on_capacity = 0;
+        self.min_prioritization_fees = u64::MAX;
+        self.max_prioritization_fees = 0;
+    }
+
+    pub fn update_priority_stats(&mut self, min_max_fees: MinMaxResult<u64>) {
+        // update min/max priority
+        match min_max_fees {
+            itertools::MinMaxResult::NoElements => {
+                // do nothing
+            }
+            itertools::MinMaxResult::OneElement(e) => {
+                self.min_prioritization_fees = e;
+                self.max_prioritization_fees = e;
+            }
+            itertools::MinMaxResult::MinMax(min, max) => {
+                self.min_prioritization_fees = min;
+                self.max_prioritization_fees = max;
+            }
+        }
+    }
+
+    pub fn get_min_priority(&self) -> u64 {
+        // to avoid getting u64::max recorded by metrics / in case of edge cases
+        if self.min_prioritization_fees != u64::MAX {
+            self.min_prioritization_fees
+        } else {
+            0
+        }
+    }
+
+    pub fn get_max_priority(&self) -> u64 {
+        self.max_prioritization_fees
     }
 }
 
@@ -680,7 +771,7 @@ mod tests {
         from_keypair: &Keypair,
         to_pubkey: &Pubkey,
         lamports: u64,
-        priority: u64,
+        compute_unit_price: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
         // Fund the sending key, so that the transaction does not get filtered by the fee-payer check.
@@ -695,7 +786,7 @@ mod tests {
         }
 
         let transfer = system_instruction::transfer(&from_keypair.pubkey(), to_pubkey, lamports);
-        let prioritization = ComputeBudgetInstruction::set_compute_unit_price(priority);
+        let prioritization = ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price);
         let message = Message::new(&[transfer, prioritization], Some(&from_keypair.pubkey()));
         Transaction::new(&vec![from_keypair], message, recent_blockhash)
     }
@@ -951,7 +1042,7 @@ mod tests {
                     &Keypair::new(),
                     &Pubkey::new_unique(),
                     1,
-                    i,
+                    i * 10,
                     bank.last_blockhash(),
                 )
             })

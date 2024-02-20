@@ -20,7 +20,6 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_debits::RentDebits,
         transaction_results::{
             TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
@@ -41,7 +40,6 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
-        runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -50,6 +48,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        rent_debits::RentDebits,
         saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
@@ -58,6 +57,7 @@ use {
             VersionedTransaction,
         },
     },
+    solana_svm::runtime_config::RuntimeConfig,
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
@@ -744,7 +744,6 @@ pub fn test_process_blockstore(
         genesis_config,
         blockstore,
         Vec::new(),
-        None,
         None,
         opts,
         None,

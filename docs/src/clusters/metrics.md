@@ -1,5 +1,7 @@
 ---
-title: Performance Metrics
+title: Solana Cluster Performance Metrics
+sidebar_label: Performance Metrics
+pagination_label: Cluster Performance Metrics
 ---
 
 Solana cluster performance is measured as average number of transactions per second that the network can sustain \(TPS\). And, how long it takes for a transaction to be confirmed by super majority of the cluster \(Confirmation Time\).

@@ -1,5 +1,8 @@
 ---
-title: Staking
+title: "Validator Guide: Staking"
+sidebar_position: 3
+sidebar_label: Staking
+pagination_label: "Validator Guides: Staking"
 ---
 
 **By default your validator will have no stake.** This means it will be

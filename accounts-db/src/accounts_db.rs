@@ -67,7 +67,6 @@ use {
         partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
-        rent_collector::RentCollector,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
         u64_align, utils,
@@ -92,6 +91,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
         saturating_add_assign,
         timing::AtomicInterval,
         transaction::SanitizedTransaction,
@@ -494,6 +494,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     base_working_path: None,
     accounts_hash_cache_path: None,
+    shrink_paths: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -506,6 +507,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     base_working_path: None,
     accounts_hash_cache_path: None,
+    shrink_paths: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -547,6 +549,7 @@ pub struct AccountsDbConfig {
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
+    pub shrink_paths: Option<Vec<PathBuf>>,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
@@ -1396,7 +1399,7 @@ pub struct AccountsDb {
 
     accounts_hash_cache_path: PathBuf,
 
-    pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
+    shrink_paths: Vec<PathBuf>,
 
     /// Directory of paths this accounts_db needs to hold/remove
     #[allow(dead_code)]
@@ -2433,7 +2436,7 @@ impl AccountsDb {
             base_working_path,
             base_working_temp_dir,
             accounts_hash_cache_path,
-            shrink_paths: RwLock::new(None),
+            shrink_paths: Vec::default(),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
@@ -2570,6 +2573,10 @@ impl AccountsDb {
             new.paths = paths;
             new.temp_paths = Some(temp_dirs);
         };
+        new.shrink_paths = accounts_db_config
+            .as_ref()
+            .and_then(|config| config.shrink_paths.clone())
+            .unwrap_or_else(|| new.paths.clone());
 
         new.start_background_hasher();
         {
@@ -2578,15 +2585,6 @@ impl AccountsDb {
             }
         }
         new
-    }
-
-    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
-        assert!(!paths.is_empty());
-        let mut shrink_paths = self.shrink_paths.write().unwrap();
-        for path in &paths {
-            std::fs::create_dir_all(path).expect("Create directory failed.");
-        }
-        *shrink_paths = Some(paths);
     }
 
     pub fn file_size(&self) -> u64 {
@@ -3985,16 +3983,39 @@ impl AccountsDb {
             shrink_collect.alive_total_bytes as u64,
             shrink_collect.capacity,
         ) {
+            warn!(
+                "Unexpected shrink for slot {} alive {} capacity {}, \
+                likely caused by a bug for calculating alive bytes.",
+                slot, shrink_collect.alive_total_bytes, shrink_collect.capacity
+            );
+
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
-            for pubkey in shrink_collect.unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+
+            self.accounts_index.scan(
+                shrink_collect.unrefed_pubkeys.into_iter(),
+                |pubkey, _slot_refs, entry| {
                     // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
                     // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                    locked_entry.addref();
-                }
-            }
+                    if let Some(entry) = entry {
+                        entry.addref();
+                    } else {
+                        // We also expect that the accounts index must contain an
+                        // entry for `pubkey`. Log a warning for now. In future,
+                        // we will panic when this happens.
+                        warn!("pubkey {pubkey} in slot {slot} was NOT found in accounts index during shrink");
+                        datapoint_warn!(
+                            "accounts_db-shink_pubkey_missing_from_index",
+                            ("store_slot", slot, i64),
+                            ("pubkey", pubkey.to_string(), String),
+                        )
+                    }
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                },
+                None,
+                true,
+            );
             return;
         }
 
@@ -4153,12 +4174,7 @@ impl AccountsDb {
         let shrunken_store = self
             .try_recycle_store(slot, aligned_total, aligned_total + 1024)
             .unwrap_or_else(|| {
-                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-                let (shrink_paths, from) = maybe_shrink_paths
-                    .as_ref()
-                    .map(|paths| (paths, "shrink-w-path"))
-                    .unwrap_or_else(|| (&self.paths, "shrink"));
-                self.create_store(slot, aligned_total, from, shrink_paths)
+                self.create_store(slot, aligned_total, "shrink", self.shrink_paths.as_slice())
             });
         self.storage.shrinking_in_progress(slot, shrunken_store)
     }
@@ -9908,11 +9924,11 @@ pub mod tests {
                 .store(data.len(), Ordering::Relaxed);
 
             let genesis_config = GenesisConfig::default();
-            assert!(db.accounts_index.get_account_read_entry(&pubkey).is_none());
+            assert!(!db.accounts_index.contains(&pubkey));
             let result = db.generate_index(None, false, &genesis_config);
             // index entry should only contain a single entry for the pubkey since index cannot hold more than 1 entry per slot
-            let entry = db.accounts_index.get_account_read_entry(&pubkey).unwrap();
-            assert_eq!(entry.slot_list().len(), 1);
+            let entry = db.accounts_index.get_cloned(&pubkey).unwrap();
+            assert_eq!(entry.slot_list.read().unwrap().len(), 1);
             assert_eq!(append_vec.alive_bytes(), expected_alive_bytes);
             // total # accounts in append vec
             assert_eq!(append_vec.approx_stored_count(), 2);
@@ -11393,16 +11409,14 @@ pub mod tests {
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
         let ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
+        assert!(!db.accounts_index.contains(&key));
         if is_cached {
             db.store_cached((unrooted_slot, &[(&key, &account0)][..]), None);
         } else {
             db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
         }
         assert!(db.get_bank_hash_stats(unrooted_slot).is_some());
-        assert!(db
-            .accounts_index
-            .get(&key, Some(&ancestors), None)
-            .is_some());
+        assert!(db.accounts_index.contains(&key));
         db.assert_load_account(unrooted_slot, key, 1);
 
         // Purge the slot
@@ -11411,11 +11425,7 @@ pub mod tests {
         assert!(db.get_bank_hash_stats(unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.get_slot_storage_entry(unrooted_slot).is_none());
-        assert!(db.accounts_index.get_account_read_entry(&key).is_none());
-        assert!(db
-            .accounts_index
-            .get(&key, Some(&ancestors), None)
-            .is_none());
+        assert!(!db.accounts_index.contains(&key));
 
         // Test we can store for the same slot again and get the right information
         let account0 = AccountSharedData::new(2, 0, &key);
@@ -12173,11 +12183,8 @@ pub mod tests {
 
         // The earlier entry for pubkey in the account index is purged,
         let (slot_list_len, index_slot) = {
-            let account_entry = accounts
-                .accounts_index
-                .get_account_read_entry(&pubkey)
-                .unwrap();
-            let slot_list = account_entry.slot_list();
+            let account_entry = accounts.accounts_index.get_cloned(&pubkey).unwrap();
+            let slot_list = account_entry.slot_list.read().unwrap();
             (slot_list.len(), slot_list[0].0)
         };
         assert_eq!(slot_list_len, 1);
@@ -12242,10 +12249,7 @@ pub mod tests {
         accounts.print_accounts_stats("post_purge");
 
         // Make sure the index is for pubkey cleared
-        assert!(accounts
-            .accounts_index
-            .get_account_read_entry(&pubkey)
-            .is_none());
+        assert!(!accounts.accounts_index.contains(&pubkey));
 
         // slot 1 & 2 should not have any stores
         assert_no_stores(&accounts, 1);
@@ -13817,10 +13821,7 @@ pub mod tests {
         assert!(db
             .load_without_fixed_root(&ancestors, &unrooted_key)
             .is_some());
-        assert!(db
-            .accounts_index
-            .get_account_read_entry(&unrooted_key)
-            .is_some());
+        assert!(db.accounts_index.contains(&unrooted_key));
         assert_eq!(db.accounts_cache.num_slots(), 1);
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_some());
         assert_eq!(
@@ -14352,12 +14353,13 @@ pub mod tests {
             let before_size = storage0.alive_bytes.load(Ordering::Acquire);
             let account_info = accounts_db
                 .accounts_index
-                .get_account_read_entry(account.pubkey())
-                .map(|locked_entry| {
-                    // Should only be one entry per key, since every key was only stored to slot 0
-                    locked_entry.slot_list()[0]
-                })
-                .unwrap();
+                .get_cloned(account.pubkey())
+                .unwrap()
+                .slot_list
+                .read()
+                .unwrap()
+                // Should only be one entry per key, since every key was only stored to slot 0
+                [0];
             assert_eq!(account_info.0, slot);
             let reclaims = [account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
@@ -15319,8 +15321,7 @@ pub mod tests {
                 assert_no_storages_at_slot(&db, *slot);
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
-                let item = db.accounts_index.get_account_read_entry(&account_in_slot);
-                assert!(item.is_none(), "item: {item:?}");
+                assert!(!db.accounts_index.contains(&account_in_slot));
             }
 
             // Wait for flush to finish before starting next trial
@@ -15706,20 +15707,14 @@ pub mod tests {
         // The later rooted zero-lamport update to `shared_key` cannot be cleaned
         // because it is kept alive by the unrooted slot.
         accounts.clean_accounts_for_tests();
-        assert!(accounts
-            .accounts_index
-            .get_account_read_entry(&shared_key)
-            .is_some());
+        assert!(accounts.accounts_index.contains(&shared_key));
 
         // Simulate purge_slot() all from AccountsBackgroundService
         accounts.purge_slot(slot0, 0, true);
 
         // Now clean should clean up the remaining key
         accounts.clean_accounts_for_tests();
-        assert!(accounts
-            .accounts_index
-            .get_account_read_entry(&shared_key)
-            .is_none());
+        assert!(!accounts.accounts_index.contains(&shared_key));
         assert_no_storages_at_slot(&accounts, slot0);
     }
 

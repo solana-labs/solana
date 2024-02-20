@@ -1,8 +1,5 @@
 use {
-    crate::{
-        bank::Bank, prioritization_fee::*,
-        transaction_priority_details::GetTransactionPriorityDetails,
-    },
+    crate::{bank::Bank, compute_budget_details::GetComputeBudgetDetails, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::DashMap,
     log::*,
@@ -208,8 +205,8 @@ impl PrioritizationFeeCache {
         }
     }
 
-    /// Update with a list of non-vote transactions' tx_priority_details and tx_account_locks; Only
-    /// transactions have both valid priority_detail and account_locks will be used to update
+    /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
+    /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
     pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let (_, send_updates_time) = measure!(
@@ -222,19 +219,19 @@ impl PrioritizationFeeCache {
                     }
 
                     let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
-                    let priority_details = sanitized_transaction
-                        .get_transaction_priority_details(round_compute_unit_price_enabled);
+                    let compute_budget_details = sanitized_transaction
+                        .get_compute_budget_details(round_compute_unit_price_enabled);
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                    if priority_details.is_none() || account_locks.is_err() {
+                    if compute_budget_details.is_none() || account_locks.is_err() {
                         continue;
                     }
-                    let priority_details = priority_details.unwrap();
+                    let compute_budget_details = compute_budget_details.unwrap();
 
                     // filter out any transaction that requests zero compute_unit_limit
                     // since its priority fee amount is not instructive
-                    if priority_details.compute_unit_limit == 0 {
+                    if compute_budget_details.compute_unit_limit == 0 {
                         continue;
                     }
 
@@ -251,7 +248,7 @@ impl PrioritizationFeeCache {
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
                             bank_id: bank.bank_id(),
-                            transaction_fee: priority_details.priority,
+                            transaction_fee: compute_budget_details.compute_unit_price,
                             writable_accounts,
                         })
                         .unwrap_or_else(|err| {

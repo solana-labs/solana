@@ -191,7 +191,7 @@ build() {
   if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
     # shellcheck source=ci/rust-version.sh
     source "$SOLANA_ROOT"/ci/rust-version.sh
-    MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
+    MAYBE_DOCKER="ci/docker-run.sh ${ci_docker_image:?}"
   fi
   SECONDS=0
   (
