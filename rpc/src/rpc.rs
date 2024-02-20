@@ -1875,16 +1875,26 @@ impl JsonRpcRequestProcessor {
                 }
             })
             .collect();
-        token_balances.sort_by(|a, b| {
+
+        let sort_largest = |a: &RpcTokenAccountBalance, b: &RpcTokenAccountBalance| {
             a.amount
                 .amount
                 .parse::<u64>()
                 .unwrap()
                 .cmp(&b.amount.amount.parse::<u64>().unwrap())
                 .reverse()
-        });
-        token_balances.truncate(NUM_LARGEST_ACCOUNTS);
-        Ok(new_response(&bank, token_balances))
+        };
+
+        let largest_token_balances = if token_balances.len() > NUM_LARGEST_ACCOUNTS {
+            token_balances
+                .select_nth_unstable_by(NUM_LARGEST_ACCOUNTS, sort_largest)
+                .0
+        } else {
+            token_balances.as_mut_slice()
+        };
+        largest_token_balances.sort_unstable_by(sort_largest);
+
+        Ok(new_response(&bank, largest_token_balances.to_vec()))
     }
 
     pub fn get_token_accounts_by_owner(
