@@ -1621,11 +1621,14 @@ pub fn main() {
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!(
-            "Invalid snapshot configuration provided: snapshot intervals are incompatible. \n\t- \
-             full snapshot interval MUST be a multiple of incremental snapshot interval (if \
-             enabled) \n\t- full snapshot interval MUST be larger than incremental snapshot \
-             interval (if enabled) \nSnapshot configuration values: \n\tfull snapshot interval: \
-             {} \n\tincremental snapshot interval: {}",
+            "Invalid snapshot configuration provided: snapshot intervals are incompatible. \
+             \n\t- full snapshot interval MUST be a multiple of incremental snapshot interval (if \
+             enabled)\
+             \n\t- full snapshot interval MUST be larger than incremental snapshot \
+             interval (if enabled)\
+             \nSnapshot configuration values:\
+             \n\tfull snapshot interval: {}\
+             \n\tincremental snapshot interval: {}",
             if full_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
                 "disabled".to_string()
             } else {
@@ -1647,8 +1650,8 @@ pub fn main() {
         };
         if limit_ledger_size < DEFAULT_MIN_MAX_LEDGER_SHREDS {
             eprintln!(
-                "The provided --limit-ledger-size value was too small, the minimum value is \
-                 {DEFAULT_MIN_MAX_LEDGER_SHREDS}"
+                "The provided --limit-ledger-size value was too small, \
+                the minimum value is {DEFAULT_MIN_MAX_LEDGER_SHREDS}"
             );
             exit(1);
         }
