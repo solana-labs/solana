@@ -3,7 +3,10 @@ use {
         stakes::{create_and_add_stakes, StakerInfo},
         unlocks::UnlockInfo,
     },
-    solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL},
+    solana_sdk::{
+        genesis_config::{ClusterType, GenesisConfig},
+        native_token::LAMPORTS_PER_SOL,
+    },
 };
 
 // 9 month schedule is 100% after 9 months
@@ -227,10 +230,14 @@ fn add_stakes(
         .sum::<u64>()
 }
 
+/// Add MainnetBeta accounts that should be present in genesis; do nothing for other cluster types
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lamports: u64) {
+    if genesis_config.cluster_type != ClusterType::MainnetBeta {
+        return;
+    }
+
     // add_stakes() and add_validators() award tokens for rent exemption and
     //  to cover an initial transfer-free period of the network
-
     issued_lamports += add_stakes(
         genesis_config,
         CREATOR_STAKER_INFOS,
