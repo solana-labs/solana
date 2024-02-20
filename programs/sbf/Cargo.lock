@@ -5037,7 +5037,6 @@ dependencies = [
  "either",
  "generic-array 0.14.7",
  "im",
- "lazy_static",
  "log",
  "memmap2",
  "rustc_version",

@@ -63,15 +63,14 @@ mod account_serialize {
         #[serde(with = "serde_bytes")]
         // a slice so we don't have to make a copy just to serialize this
         data: &'a [u8],
-        // can't be &pubkey because abi example doesn't support it
-        owner: Pubkey,
+        owner: &'a Pubkey,
         executable: bool,
         rent_epoch: Epoch,
     }
 
     /// allows us to implement serialize on AccountSharedData that is equivalent to Account::serialize without making a copy of the Vec<u8>
     pub fn serialize_account<S>(
-        account: &(impl ReadableAccount + Serialize),
+        account: &impl ReadableAccount,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
@@ -80,7 +79,7 @@ mod account_serialize {
         let temp = Account {
             lamports: account.lamports(),
             data: account.data(),
-            owner: *account.owner(),
+            owner: account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         };

@@ -1,6 +1,5 @@
 use {
     crate::abi_digester::{AbiDigester, DigestError, DigestResult},
-    lazy_static::lazy_static,
     log::*,
     serde::Serialize,
     std::any::type_name,
@@ -350,6 +349,20 @@ fn leak_and_inhibit_drop<'a, T>(t: T) -> &'a mut T {
     Box::leak(Box::new(t))
 }
 
+impl<T: AbiExample> AbiExample for &T {
+    fn example() -> Self {
+        info!("AbiExample for (&T): {}", type_name::<Self>());
+        leak_and_inhibit_drop(T::example())
+    }
+}
+
+impl<T: AbiExample> AbiExample for &[T] {
+    fn example() -> Self {
+        info!("AbiExample for (&[T]): {}", type_name::<Self>());
+        leak_and_inhibit_drop(vec![T::example()])
+    }
+}
+
 impl<T: AbiExample> AbiExample for std::sync::Weak<T> {
     fn example() -> Self {
         info!("AbiExample for (Arc's Weak<T>): {}", type_name::<Self>());
@@ -431,25 +444,6 @@ impl<T: AbiExample> AbiExample for Vec<T> {
     fn example() -> Self {
         info!("AbiExample for (Vec<T>): {}", type_name::<Self>());
         vec![T::example()]
-    }
-}
-
-lazy_static! {
-    /// we need &Vec<u8>, so we need something with a static lifetime
-    static ref VEC_U8: Vec<u8> = vec![u8::default()];
-}
-
-impl AbiExample for &Vec<u8> {
-    fn example() -> Self {
-        info!("AbiExample for (&Vec<u8>): {}", type_name::<Self>());
-        &VEC_U8
-    }
-}
-
-impl AbiExample for &[u8] {
-    fn example() -> Self {
-        info!("AbiExample for (&[u8]): {}", type_name::<Self>());
-        &VEC_U8[..]
     }
 }
 
