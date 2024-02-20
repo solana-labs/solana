@@ -1173,7 +1173,7 @@ impl ReplayStage {
                         vote_account,
                     )
                 } else if err.is_too_old() {
-                    warn!("Failed to load tower for {}: {}", node_pubkey, err);
+                    warn!("Failed to load tower, too old for {}: {}. Creating a new tower from bankforks.", node_pubkey, err);
                     Tower::new_from_bankforks(
                         &bank_forks.read().unwrap(),
                         &node_pubkey,
