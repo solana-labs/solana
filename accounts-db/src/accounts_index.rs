@@ -2526,9 +2526,12 @@ pub mod tests {
         index.set_startup(Startup::Normal);
 
         for (i, key) in [key0, key1].iter().enumerate() {
-            let entry = index.get_account_read_entry(key).unwrap();
-            assert_eq!(entry.ref_count(), 1);
-            assert_eq!(entry.slot_list().to_vec(), vec![(slot0, account_infos[i]),]);
+            let entry = index.get_cloned(key).unwrap();
+            assert_eq!(entry.ref_count.load(Ordering::Relaxed), 1);
+            assert_eq!(
+                entry.slot_list.read().unwrap().as_slice(),
+                &[(slot0, account_infos[i])],
+            );
         }
     }
 
@@ -2586,10 +2589,10 @@ pub mod tests {
 
         // verify the added entry matches expected
         {
-            let entry = index.get_account_read_entry(&key).unwrap();
+            let entry = index.get_cloned(&key).unwrap();
+            let slot_list = entry.slot_list.read().unwrap();
             assert_eq!(entry.ref_count(), u64::from(!is_cached));
-            let expected = vec![(slot0, account_infos[0])];
-            assert_eq!(entry.slot_list().to_vec(), expected);
+            assert_eq!(slot_list.as_slice(), &[(slot0, account_infos[0])]);
             let new_entry: AccountMapEntry<_> = PreAllocatedAccountMapEntry::new(
                 slot0,
                 account_infos[0],
@@ -2598,8 +2601,8 @@ pub mod tests {
             )
             .into_account_map_entry(&index.storage.storage);
             assert_eq!(
-                entry.slot_list().to_vec(),
-                new_entry.slot_list.read().unwrap().to_vec(),
+                slot_list.as_slice(),
+                new_entry.slot_list.read().unwrap().as_slice(),
             );
         }
 
@@ -2636,35 +2639,22 @@ pub mod tests {
         assert!(gc.is_empty());
         index.populate_and_retrieve_duplicate_keys_from_startup(|_slot_keys| {});
 
-        for lock in &[false, true] {
-            let read_lock = if *lock {
-                Some(index.get_bin(&key))
-            } else {
-                None
-            };
+        let entry = index.get_cloned(&key).unwrap();
+        let slot_list = entry.slot_list.read().unwrap();
 
-            let entry = if *lock {
-                index
-                    .get_account_read_entry_with_lock(&key, read_lock.as_ref().unwrap())
-                    .unwrap()
-            } else {
-                index.get_account_read_entry(&key).unwrap()
-            };
+        assert_eq!(entry.ref_count(), if is_cached { 0 } else { 2 });
+        assert_eq!(
+            slot_list.as_slice(),
+            &[(slot0, account_infos[0]), (slot1, account_infos[1])],
+        );
 
-            assert_eq!(entry.ref_count(), if is_cached { 0 } else { 2 });
-            assert_eq!(
-                entry.slot_list().to_vec(),
-                vec![(slot0, account_infos[0]), (slot1, account_infos[1])]
-            );
-
-            let new_entry = PreAllocatedAccountMapEntry::new(
-                slot1,
-                account_infos[1],
-                &index.storage.storage,
-                false,
-            );
-            assert_eq!(entry.slot_list()[1], new_entry.into());
-        }
+        let new_entry = PreAllocatedAccountMapEntry::new(
+            slot1,
+            account_infos[1],
+            &index.storage.storage,
+            false,
+        );
+        assert_eq!(slot_list[1], new_entry.into());
     }
 
     #[test]
@@ -4090,25 +4080,21 @@ pub mod tests {
         assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
         index.upsert_simple_test(&key, slot2, value);
 
-        assert_eq!(
-            2,
-            index
-                .get_account_read_entry(&key)
-                .unwrap()
-                .slot_list()
-                .len()
-        );
-        assert_eq!(
-            &vec![(slot1, value), (slot2, value)],
-            index.get_account_read_entry(&key).unwrap().slot_list()
-        );
+        {
+            let account_map_entry = index.get_cloned(&key).unwrap();
+            let slot_list = account_map_entry.slot_list.read().unwrap();
+            assert_eq!(2, slot_list.len());
+            assert_eq!(&[(slot1, value), (slot2, value)], slot_list.as_slice());
+        }
         assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
         assert_eq!(
             2,
             index
-                .get_account_read_entry(&key)
+                .get_cloned(&key)
                 .unwrap()
-                .slot_list()
+                .slot_list
+                .read()
+                .unwrap()
                 .len()
         );
         assert!(gc.is_empty());
