@@ -89,8 +89,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .requires("vote_account")
                 .multiple(true)
                 .help(
-                    "Include an additional authorized voter keypair. May be specified multiple \
-                     times. [default: the --identity keypair]",
+                    "Include an additional authorized voter keypair. \
+                     May be specified multiple times. \
+                     [default: the --identity keypair]",
                 ),
         )
         .arg(
@@ -101,9 +102,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
                 .help(
-                    "Validator vote account public key.  If unspecified voting will be disabled. \
+                    "Validator vote account public key. If unspecified, voting will be disabled. \
                      The authorized voter for the account must either be the --identity keypair \
-                     or with the --authorized-voter argument",
+                     or set by the --authorized-voter argument",
                 ),
         )
         .arg(
@@ -276,9 +277,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .default_value(&default_args.health_check_slot_distance)
                 .help(
-                    "Report this validator healthy if its latest optimistically confirmed slot \
-                     that has been replayed is no further behind than this number of slots from \
-                     the cluster latest optimistically confirmed slot",
+                    "Report this validator as healthy if its latest, replayed optimistically \
+                     confirmed slot is within the specified number of slots from the cluster's \
+                     latest optimistically confirmed slot",
                 ),
         )
         .arg(
@@ -314,8 +315,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help(
-                    "Use PATH as accounts hash cache location [default: \
-                     <LEDGER>/accounts_hash_cache]",
+                    "Use PATH as accounts hash cache location \
+                     [default: <LEDGER>/accounts_hash_cache]",
                 ),
         )
         .arg(
@@ -323,7 +324,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as snapshot location [default: --ledger value]"),
+                .help("Use DIR as snapshot location [default: <LEDGER>/snapshots]"),
         )
         .arg(
             Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
@@ -341,8 +342,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("DIR")
                 .takes_value(true)
                 .help(
-                    "Use DIR as separate location for incremental snapshot archives [default: \
-                     --snapshots value]",
+                    "Use DIR as separate location for incremental snapshot archives \
+                     [default: --snapshots value]",
                 ),
         )
         .arg(
@@ -429,8 +430,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
                 .help(
-                    "Specify TPU address to advertise in gossip [default: ask --entrypoint or \
-                     localhostwhen --entrypoint is not provided]",
+                    "Specify TPU address to advertise in gossip \
+                     [default: ask --entrypoint or localhost when --entrypoint is not provided]",
                 ),
         )
         .arg(
@@ -639,11 +640,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(&["level", "fifo"])
                 .default_value(&default_args.rocksdb_shred_compaction)
                 .help(
-                    "Controls how RocksDB compacts shreds. *WARNING*: You will lose your ledger \
-                     data when you switch between options. Possible values are: 'level': stores \
-                     shreds using RocksDB's default (level) compaction. 'fifo': stores shreds \
-                     under RocksDB's FIFO compaction. This option is more efficient on \
-                     disk-write-bytes of the ledger store.",
+                    "Controls how RocksDB compacts shreds. *WARNING*: You will lose your \
+                     Blockstore data when you switch between options. Possible values are: \
+                     'level': stores shreds using RocksDB's default (level) compaction. \
+                     'fifo': stores shreds under RocksDB's FIFO compaction. This option is more \
+                     efficient on disk-write-bytes of the Blockstore.",
                 ),
         )
         .arg(
@@ -655,7 +656,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help(
                     "The shred storage size in bytes. The suggested value is at least 50% of your \
                      ledger storage size. If this argument is unspecified, we will assign a \
-                     proper value based on --limit-ledger-size.  If --limit-ledger-size is not \
+                     proper value based on --limit-ledger-size. If --limit-ledger-size is not \
                      presented, it means there is no limitation on the ledger size and thus \
                      rocksdb_fifo_shred_storage_size will also be unbounded.",
                 ),
@@ -682,9 +683,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_parsable::<usize>)
                 .default_value(&default_args.rocksdb_perf_sample_interval)
                 .help(
-                    "Controls how often RocksDB read/write performance sample is collected. \
-                     Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL \
-                     sampling rate.",
+                    "Controls how often RocksDB read/write performance samples are collected. \
+                     Perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL sampling rate.",
                 ),
         )
         .arg(
@@ -881,13 +881,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help(
-                    "Provide path to a yaml file with custom overrides for stakes of specific
-                            identities. Overriding the amount of stake this validator considers
-                            as valid for other peers in network. The stake amount is used for \
-                     calculating
-                            number of QUIC streams permitted from the peer and vote packet sender \
-                     stage.
-                            Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}",
+                    "Provide path to a yaml file with custom overrides for stakes of specific \
+                     identities. Overriding the amount of stake this validator considers as valid \
+                     for other peers in network. The stake amount is used for calculating the \
+                     number of QUIC streams permitted from the peer and vote packet sender stage. \
+                     Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}",
                 ),
         )
         .arg(
@@ -2327,8 +2325,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .validator(is_url_or_moniker)
                 .help(
-                    "URL for Solana's JSON RPC or moniker (or their first letter): [mainnet-beta, \
-                     testnet, devnet, localhost]",
+                    "URL for Solana's JSON RPC or moniker (or their first letter): \
+                     [mainnet-beta, testnet, devnet, localhost]",
                 ),
         )
         .arg(
@@ -2339,8 +2337,8 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .help(
                     "Address of the mint account that will receive tokens created at genesis.  If \
-                     the ledger already exists then this parameter is silently ignored [default: \
-                     client keypair]",
+                     the ledger already exists then this parameter is silently ignored \
+                     [default: client keypair]",
                 ),
         )
         .arg(
@@ -2454,7 +2452,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .multiple(true)
                 .help(
                     "Add a SBF program to the genesis configuration with upgrades disabled. If \
-                     the ledger already exists then this parameter is silently ignored. First \
+                     the ledger already exists then this parameter is silently ignored. The first \
                      argument can be a pubkey string or path to a keypair",
                 ),
         )
