@@ -1861,7 +1861,6 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a Token mint".to_string(),
             ));
         }
-
         let mut token_balances: Vec<_> = self
             .get_filtered_spl_token_accounts_by_mint(&bank, &mint_owner, mint, vec![])?
             .into_iter()
@@ -1891,7 +1890,6 @@ impl JsonRpcRequestProcessor {
                 amount: token_amount_to_ui_amount(*amount, decimals),
             })
             .collect();
-
         Ok(new_response(&bank, largest_token_balances))
     }
 
