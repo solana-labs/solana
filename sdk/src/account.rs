@@ -874,6 +874,21 @@ pub mod tests {
     }
 
     #[test]
+    fn test_is_executable() {
+        let feature_set = FeatureSet::all_enabled();
+
+        let key = Pubkey::new_unique();
+        let (mut account1, mut account2) = make_two_accounts(&key);
+
+        account1.set_owner(bpf_loader::id());
+        assert!(!is_executable(&account1, &feature_set));
+
+        account2.set_owner(bpf_loader::id());
+        account2.set_data_from_slice(&[0x7f, 0x45, 0x4c, 0x46]);
+        assert!(is_executable(&account2, &feature_set));
+    }
+
+    #[test]
     fn test_account_data_copy_as_slice() {
         let key = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();

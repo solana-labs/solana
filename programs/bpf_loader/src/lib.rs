@@ -1586,8 +1586,8 @@ mod tests {
         solana_rbpf::vm::ContextObject,
         solana_sdk::{
             account::{
-                create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
-                ReadableAccount, WritableAccount,
+                create_account_shared_data_for_test as create_account_for_test, is_executable,
+                AccountSharedData, ReadableAccount, WritableAccount,
             },
             account_utils::StateMut,
             clock::Clock,
@@ -1648,6 +1648,16 @@ mod tests {
         program_account.set_data(elf);
         program_account.set_executable(true);
         program_account
+    }
+
+    #[test]
+    fn test_bpf_loader_is_executable() {
+        let loader_id = bpf_loader::id();
+        let mut program_account =
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
+        program_account.set_executable(false);
+        let feature_set = FeatureSet::all_enabled();
+        assert!(is_executable(&program_account, &feature_set));
     }
 
     #[test]
