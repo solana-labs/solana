@@ -35,7 +35,6 @@ use {
         ancestors::Ancestors,
         inline_spl_token,
         partitioned_rewards::TestPartitionedEpochRewards,
-        transaction_results::DurableNonceFee,
     },
     solana_logger,
     solana_program_runtime::{
@@ -110,7 +109,7 @@ use {
     solana_stake_program::stake_state::{self, StakeStateV2},
     solana_svm::{
         account_loader::load_accounts, transaction_account_state_info::TransactionAccountStateInfo,
-        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_error_metrics::TransactionErrorMetrics, transaction_results::DurableNonceFee,
     },
     solana_vote_program::{
         vote_instruction,

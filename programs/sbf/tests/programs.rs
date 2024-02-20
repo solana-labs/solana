@@ -15,10 +15,6 @@ use {
     solana_account_decoder::parse_bpf_loader::{
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
-    solana_accounts_db::transaction_results::{
-        DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
-        TransactionResults,
-    },
     solana_ledger::token_balances::collect_token_balances,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -51,6 +47,10 @@ use {
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         sysvar::{self, clock},
         transaction::VersionedTransaction,
+    },
+    solana_svm::transaction_results::{
+        DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
+        TransactionResults,
     },
     solana_transaction_status::{
         map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,

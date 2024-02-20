@@ -55,6 +55,7 @@ solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
+solana-svm = { workspace = true }
 solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }

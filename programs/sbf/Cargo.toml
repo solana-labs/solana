@@ -48,6 +48,7 @@ solana-sdk = { path = "../../sdk", version = "=1.19.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.19.0" }
 solana-validator = { path = "../../validator", version = "=1.19.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.19.0" }
+solana-svm = { path = "../../svm", version = "=1.19.0" }
 solana_rbpf = "=0.8.0"
 static_assertions = "1.1.0"
 thiserror = "1.0"
@@ -96,6 +97,7 @@ solana-sbf-rust-invoke = { workspace = true }
 solana-sbf-rust-realloc = { workspace = true, features = ["default"] }
 solana-sbf-rust-realloc-invoke = { workspace = true }
 solana-sdk = { workspace = true }
+solana-svm = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana_rbpf = { workspace = true }
 
