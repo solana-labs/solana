@@ -811,9 +811,8 @@ pub fn is_executable(account: &impl ReadableAccount, feature_set: &FeatureSet) -
     if !feature_set.is_active(&deprecate_executable_meta_update_in_bpf_loader::id()) {
         account.executable()
     } else {
-        // First, check if the account is empty or all zeros. Empty or all zeros
-        // accounts are not executable.
-        if account.data().is_empty() || account.data().iter().all(|&x| x == 0) {
+        // First, check if the account is empty. Empty accounts are not executable.
+        if account.data().is_empty() {
             return false;
         }
 
@@ -822,11 +821,14 @@ pub fn is_executable(account: &impl ReadableAccount, feature_set: &FeatureSet) -
         // mark `executable` flag on the account. We can't emulate `executable` for
         // these two loaders. However, when `deprecate_executable` is true, we
         // should have already disabled the deployment of bpf_loader and
-        // bpf_loader_deprecated. Therefore, we can safely assume that all those
-        // programs are `executable`.
+        // bpf_loader_deprecated.
         if bpf_loader::check_id(account.owner()) || bpf_loader_deprecated::check_id(account.owner())
         {
-            return true;
+            const ELF_HEADER: [u8; 4] = [0x7f, 0x45, 0x4c, 0x46];
+            if account.data().len() < 4 {
+                return false;
+            }
+            return account.data()[0..4] == ELF_HEADER;
         }
 
         if bpf_loader_upgradeable::check_id(account.owner()) {
