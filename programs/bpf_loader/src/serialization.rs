@@ -809,7 +809,7 @@ mod tests {
                     solana_sdk::pubkey::new_rand(),
                     AccountSharedData::from(Account {
                         lamports: 1,
-                        data: vec![1u8, 2, 3, 4, 5],
+                        data: vec![0x7f, 0x45, 0x4c, 0x46, 5],
                         owner: bpf_loader::id(),
                         executable: false,
                         rent_epoch: 100,
@@ -819,7 +819,7 @@ mod tests {
                     solana_sdk::pubkey::new_rand(),
                     AccountSharedData::from(Account {
                         lamports: 2,
-                        data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                        data: vec![0x7f, 0x45, 0x4c, 0x46, 15, 16, 17, 18, 19],
                         owner: bpf_loader::id(),
                         executable: true,
                         rent_epoch: 200,
@@ -839,7 +839,7 @@ mod tests {
                     solana_sdk::pubkey::new_rand(),
                     AccountSharedData::from(Account {
                         lamports: 4,
-                        data: vec![1u8, 2, 3, 4, 5],
+                        data: vec![0x7f, 0x45, 0x4c, 0x46, 5],
                         owner: bpf_loader::id(),
                         executable: false,
                         rent_epoch: 100,
@@ -849,7 +849,7 @@ mod tests {
                     solana_sdk::pubkey::new_rand(),
                     AccountSharedData::from(Account {
                         lamports: 5,
-                        data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                        data: vec![0x7f, 0x45, 0x4c, 0x46, 15, 16, 17, 18, 19],
                         owner: bpf_loader::id(),
                         executable: true,
                         rent_epoch: 200,
