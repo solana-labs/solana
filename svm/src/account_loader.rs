@@ -6,7 +6,6 @@ use {
     },
     itertools::Itertools,
     log::warn,
-    solana_accounts_db::accounts::{LoadedTransaction, TransactionLoadResult, TransactionRent},
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
         loaded_programs::LoadedProgramsForTxBatch,
@@ -29,12 +28,24 @@ use {
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{self, Result, SanitizedTransaction, TransactionError},
-        transaction_context::IndexOfAccount,
+        transaction_context::{IndexOfAccount, TransactionAccount},
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{collections::HashMap, num::NonZeroUsize},
 };
 
+// for the load instructions
+pub type TransactionRent = u64;
+pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct LoadedTransaction {
+    pub accounts: Vec<TransactionAccount>,
+    pub program_indices: TransactionProgramIndices,
+    pub rent: TransactionRent,
+    pub rent_debits: RentDebits,
+}
+
+pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
 pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
 
 pub fn load_accounts<CB: TransactionProcessingCallback>(
