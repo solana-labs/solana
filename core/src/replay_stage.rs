@@ -276,7 +276,6 @@ impl PartitionInfo {
 }
 
 pub struct ReplayStageConfig {
-    pub startup_identity: Pubkey,
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub exit: Arc<AtomicBool>,
@@ -547,7 +546,6 @@ impl ReplayStage {
         popular_pruned_forks_receiver: PopularPrunedForksReceiver,
     ) -> Result<Self, String> {
         let ReplayStageConfig {
-            startup_identity,
             vote_account,
             authorized_voter_keypairs,
             exit,
@@ -580,10 +578,11 @@ impl ReplayStage {
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
             let mut my_pubkey = identity_keypair.pubkey();
-            if my_pubkey != startup_identity {
+            if my_pubkey != tower.node_pubkey {
                 // set-identity was called during the startup procedure, ensure the tower is consistent
                 // before starting the loop. further calls to set-identity will reload the tower in the loop
-                tower = Self::reload_tower_with_new_identity(
+                let my_old_pubkey = tower.node_pubkey;
+                tower = Self::load_tower(
                     tower_storage.as_ref(),
                     &my_pubkey,
                     &vote_account,
@@ -591,7 +590,7 @@ impl ReplayStage {
                 );
                 warn!(
                     "Identity changed during startup from {} to {}",
-                    startup_identity, my_pubkey
+                    my_old_pubkey, my_pubkey
                 );
             }
             let (mut progress, mut heaviest_subtree_fork_choice) =
@@ -999,7 +998,7 @@ impl ReplayStage {
                             my_pubkey = identity_keypair.pubkey();
 
                             // Load the new identity's tower
-                            tower = Self::reload_tower_with_new_identity(
+                            tower = Self::load_tower(
                                 tower_storage.as_ref(),
                                 &my_pubkey,
                                 &vote_account,
@@ -1154,13 +1153,13 @@ impl ReplayStage {
         })
     }
 
-    fn reload_tower_with_new_identity(
+    fn load_tower(
         tower_storage: &dyn TowerStorage,
-        new_identity: &Pubkey,
+        node_pubkey: &Pubkey,
         vote_account: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Tower {
-        Tower::restore(tower_storage, new_identity)
+        Tower::restore(tower_storage, node_pubkey)
             .and_then(|restored_tower| {
                 let root_bank = bank_forks.read().unwrap().root_bank();
                 let slot_history = root_bank.get_slot_history();
@@ -1170,11 +1169,11 @@ impl ReplayStage {
                 if err.is_file_missing() {
                     Tower::new_from_bankforks(
                         &bank_forks.read().unwrap(),
-                        new_identity,
+                        node_pubkey,
                         vote_account,
                     )
                 } else {
-                    error!("Failed to load tower for {}: {}", new_identity, err);
+                    error!("Failed to load tower for {}: {}", node_pubkey, err);
                     std::process::exit(1);
                 }
             })
@@ -8627,10 +8626,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_tower_reload_missing() {
+    fn test_tower_load_missing() {
         let tower_file = tempdir().unwrap().into_path();
         let tower_storage = FileTowerStorage::new(tower_file);
-        let identity = Pubkey::new_unique();
+        let node_pubkey = Pubkey::new_unique();
         let vote_account = Pubkey::new_unique();
         let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
         let generate_votes = |pubkeys: Vec<Pubkey>| {
@@ -8643,22 +8642,19 @@ pub(crate) mod tests {
             setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
         let bank_forks = vote_simulator.bank_forks;
 
-        let tower = ReplayStage::reload_tower_with_new_identity(
-            &tower_storage,
-            &identity,
-            &vote_account,
-            &bank_forks,
-        );
+        let tower =
+            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks);
         let expected_tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, VOTE_THRESHOLD_SIZE);
         assert_eq!(tower.vote_state, expected_tower.vote_state);
+        assert_eq!(tower.node_pubkey, node_pubkey);
     }
 
     #[test]
-    fn test_tower_reload() {
+    fn test_tower_load() {
         let tower_file = tempdir().unwrap().into_path();
         let tower_storage = FileTowerStorage::new(tower_file);
         let node_keypair = Keypair::new();
-        let identity = node_keypair.pubkey();
+        let node_pubkey = node_keypair.pubkey();
         let vote_account = Pubkey::new_unique();
         let tree = tr(0) / (tr(1) / (tr(3) / (tr(4))) / (tr(2) / (tr(5) / (tr(6)))));
         let generate_votes = |pubkeys: Vec<Pubkey>| {
@@ -8670,15 +8666,12 @@ pub(crate) mod tests {
         let (vote_simulator, _blockstore) =
             setup_forks_from_tree(tree, 3, Some(Box::new(generate_votes)));
         let bank_forks = vote_simulator.bank_forks;
-        let expected_tower = Tower::new_random(identity);
+        let expected_tower = Tower::new_random(node_pubkey);
         expected_tower.save(&tower_storage, &node_keypair).unwrap();
 
-        let tower = ReplayStage::reload_tower_with_new_identity(
-            &tower_storage,
-            &identity,
-            &vote_account,
-            &bank_forks,
-        );
+        let tower =
+            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks);
         assert_eq!(tower.vote_state, expected_tower.vote_state);
+        assert_eq!(tower.node_pubkey, expected_tower.node_pubkey);
     }
 }

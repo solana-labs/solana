@@ -1248,7 +1248,6 @@ impl Validator {
             Arc::new(crate::cluster_slots_service::cluster_slots::ClusterSlots::default());
 
         let tvu = Tvu::new(
-            id,
             vote_account,
             authorized_voter_keypairs,
             &bank_forks,
