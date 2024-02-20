@@ -276,7 +276,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATHS")
                 .takes_value(true)
                 .multiple(true)
-                .help("Comma separated persistent accounts location"),
+                .help("Comma separated persistent accounts location [default: <LEDGER>/accounts]"),
         )
         .arg(
             Arg::with_name("account_shrink_path")
