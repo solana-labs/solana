@@ -31,6 +31,14 @@ patch_crates_io_solana() {
   declare solana_dir="$2"
   cat >> "$Cargo_toml" <<EOF
 [patch.crates-io]
+EOF
+patch_crates_io_solana_no_header Cargo_toml solana_dir
+}
+
+patch_crates_io_solana_no_header() {
+  declare Cargo_toml="$1"
+  declare solana_dir="$2"
+  cat >> "$Cargo_toml" <<EOF
 solana-account-decoder = { path = "$solana_dir/account-decoder" }
 solana-clap-utils = { path = "$solana_dir/clap-utils" }
 solana-client = { path = "$solana_dir/client" }
