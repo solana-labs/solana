@@ -1631,19 +1631,25 @@ fn test_rent_eager_under_fixed_cycle_for_development() {
 }
 
 impl Bank {
-    fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
-        let (locked_entry, _) = self
-            .rc
+    fn slots_by_pubkey(&self, pubkey: &Pubkey) -> Vec<Slot> {
+        self.rc
             .accounts
             .accounts_db
             .accounts_index
-            .get(pubkey, Some(ancestors), None)
-            .unwrap();
-        locked_entry
-            .slot_list()
-            .iter()
-            .map(|(slot, _)| *slot)
-            .collect::<Vec<Slot>>()
+            .get_and_then(pubkey, |entry| {
+                let slots = entry
+                    .map(|entry| {
+                        entry
+                            .slot_list
+                            .read()
+                            .unwrap()
+                            .iter()
+                            .map(|(slot, _)| *slot)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                (false, slots)
+            })
     }
 }
 
@@ -1693,7 +1699,6 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     );
 
     let genesis_slot = 0;
-    let ancestors = vec![(some_slot, 0), (0, 1)].into_iter().collect();
 
     let previous_epoch = bank.epoch();
     bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), some_slot));
@@ -1706,16 +1711,13 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
         little_lamports
     );
     assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 0);
+    assert_eq!(bank.slots_by_pubkey(&rent_due_pubkey), vec![genesis_slot]);
     assert_eq!(
-        bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
+        bank.slots_by_pubkey(&rent_exempt_pubkey),
         vec![genesis_slot]
     );
     assert_eq!(
-        bank.slots_by_pubkey(&rent_exempt_pubkey, &ancestors),
-        vec![genesis_slot]
-    );
-    assert_eq!(
-        bank.slots_by_pubkey(&zero_lamport_pubkey, &ancestors),
+        bank.slots_by_pubkey(&zero_lamport_pubkey),
         vec![genesis_slot]
     );
 
@@ -1740,15 +1742,15 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
         RENT_EXEMPT_RENT_EPOCH
     );
     assert_eq!(
-        bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
+        bank.slots_by_pubkey(&rent_due_pubkey),
         vec![genesis_slot, some_slot]
     );
     assert_eq!(
-        bank.slots_by_pubkey(&rent_exempt_pubkey, &ancestors),
+        bank.slots_by_pubkey(&rent_exempt_pubkey),
         vec![genesis_slot, some_slot]
     );
     assert_eq!(
-        bank.slots_by_pubkey(&zero_lamport_pubkey, &ancestors),
+        bank.slots_by_pubkey(&zero_lamport_pubkey),
         vec![genesis_slot]
     );
 }
