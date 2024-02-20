@@ -39,7 +39,7 @@ pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 // Cleanup will be considered after the latest root has advanced by this value
 const DEFAULT_CLEANUP_SLOT_INTERVAL: u64 = 512;
 // The above slot interval can be roughly equated to a time interval. So, scale
-// how often we check for cleanup with the interval. Doing so will avoid easted
+// how often we check for cleanup with the interval. Doing so will avoid wasted
 // checks when we know that the latest root could not have advanced far enough
 //
 // Given that the timing of new slots/roots is not exact, divide by 10 to avoid
@@ -142,8 +142,8 @@ impl BlockstoreCleanupService {
             .unwrap_or(lowest_slot);
         if highest_slot < lowest_slot {
             error!(
-                "Skipping cleanup: Blockstore highest slot {} < lowest slot {}",
-                highest_slot, lowest_slot
+                "Skipping Blockstore cleanup: \
+                highest slot {highest_slot} < lowest slot {lowest_slot}",
             );
             return (false, 0, num_shreds);
         }
@@ -152,8 +152,8 @@ impl BlockstoreCleanupService {
         let num_slots = highest_slot - lowest_slot + 1;
         let mean_shreds_per_slot = num_shreds / num_slots;
         info!(
-            "{} alive shreds in slots [{}, {}], mean of {} shreds per slot",
-            num_shreds, lowest_slot, highest_slot, mean_shreds_per_slot
+            "Blockstore has {num_shreds} alive shreds in slots [{lowest_slot}, {highest_slot}], \
+            mean of {mean_shreds_per_slot} shreds per slot",
         );
 
         if num_shreds <= max_ledger_shreds {
@@ -170,7 +170,7 @@ impl BlockstoreCleanupService {
             let lowest_cleanup_slot = std::cmp::min(lowest_slot + num_slots_to_clean - 1, root);
             (true, lowest_cleanup_slot, num_shreds)
         } else {
-            error!("Skipping cleanup: calculated mean of 0 shreds per slot");
+            error!("Skipping Blockstore cleanup: calculated mean of 0 shreds per slot");
             (false, 0, num_shreds)
         }
     }
@@ -206,6 +206,7 @@ impl BlockstoreCleanupService {
             return;
         }
         *last_purge_slot = root;
+        info!("Looking for Blockstore data to cleanup, latest root: {root}");
 
         let disk_utilization_pre = blockstore.storage_size();
         let (slots_to_clean, lowest_cleanup_slot, total_shreds) =
