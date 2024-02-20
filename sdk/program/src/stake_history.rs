@@ -223,7 +223,7 @@ mod tests {
         );
         stake_history.to_account_info(&mut account_info).unwrap();
 
-        let stake_history_data = StakeHistoryData::from_account_info(&account_info);
+        let stake_history_data = StakeHistoryData::from_account_info(&account_info).unwrap();
 
         assert_eq!(stake_history_data.get_entry(0), None);
         assert_eq!(
