@@ -296,9 +296,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATHS")
                 .takes_value(true)
                 .multiple(true)
-                .help("Comma separated persistent accounts location. \
+                .help(
+                    "Comma separated persistent accounts location. \
                     May be specified multiple times. \
-                    [default: <LEDGER>/accounts]"
+                    [default: <LEDGER>/accounts]",
                 ),
         )
         .arg(
