@@ -2749,38 +2749,38 @@ impl Blockstore {
         Ok(vec![])
     }
 
-    // Returns all signatures for an address in a particular slot, regardless of whether that slot
-    // has been rooted. The transactions will be ordered by their occurrence in the block
-    fn find_address_signatures_for_slot(
-        &self,
-        pubkey: Pubkey,
-        slot: Slot,
-    ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-        let mut signatures: Vec<(Slot, Signature)> = vec![];
-        if slot < lowest_available_slot {
-            return Ok(signatures);
-        }
-        let index_iterator =
-            self.address_signatures_cf
-                .iter_current_index_filtered(IteratorMode::From(
-                    (
-                        pubkey,
-                        slot.max(lowest_available_slot),
-                        0,
-                        Signature::default(),
-                    ),
-                    IteratorDirection::Forward,
-                ))?;
-        for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
-            if transaction_slot > slot || address != pubkey {
-                break;
-            }
-            signatures.push((slot, signature));
-        }
-        drop(lock);
-        Ok(signatures)
-    }
+    // // Returns all signatures for an address in a particular slot, regardless of whether that slot
+    // // has been rooted. The transactions will be ordered by their occurrence in the block
+    // fn find_address_signatures_for_slot(
+    //     &self,
+    //     pubkey: Pubkey,
+    //     slot: Slot,
+    // ) -> Result<Vec<(Slot, Signature)>> {
+    //     let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+    //     let mut signatures: Vec<(Slot, Signature)> = vec![];
+    //     if slot < lowest_available_slot {
+    //         return Ok(signatures);
+    //     }
+    //     let index_iterator =
+    //         self.address_signatures_cf
+    //             .iter_current_index_filtered(IteratorMode::From(
+    //                 (
+    //                     pubkey,
+    //                     slot.max(lowest_available_slot),
+    //                     0,
+    //                     Signature::default(),
+    //                 ),
+    //                 IteratorDirection::Forward,
+    //             ))?;
+    //     for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
+    //         if transaction_slot > slot || address != pubkey {
+    //             break;
+    //         }
+    //         signatures.push((slot, signature));
+    //     }
+    //     drop(lock);
+    //     Ok(signatures)
+    // }
 
     // DEPRECATED and decommissioned
     // This method always returns an empty Vec
@@ -2842,106 +2842,100 @@ impl Blockstore {
         // `before` signature if present.  Also generate a HashSet of signatures that should
         // be excluded from the results.
         let mut get_before_slot_timer = Measure::start("get_before_slot_timer");
-        let (slot, mut before_excluded_signatures) = match before {
-            None => (highest_slot, None),
-            Some(before) => {
-                let transaction_status =
-                    self.get_transaction_status(before, &confirmed_unrooted_slots)?;
-                match transaction_status {
-                    None => return Ok(SignatureInfosForAddress::default()),
-                    Some((slot, _)) => {
-                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
-                        if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
-                            slot_signatures.truncate(pos + 1);
-                        }
+        let (newest_slot, excluded_because_too_new) = if let Some(before) = before {
+            let Some((slot, _)) = self.get_transaction_status(before, &confirmed_unrooted_slots)?
+            else {
+                return Ok(SignatureInfosForAddress::default());
+            };
 
-                        (
-                            slot,
-                            Some(slot_signatures.into_iter().collect::<HashSet<_>>()),
-                        )
-                    }
-                }
-            }
+            let slot_signatures = self.get_block_signatures_rev(slot)?;
+            let excluded = slot_signatures
+                .into_iter()
+                // start with the oldest
+                .rev()
+                // as soon as we skip everything older than `before` — start collecting.
+                .skip_while(|s| *s != before);
+            (slot, excluded.collect::<HashSet<_>>())
+        } else {
+            (highest_slot, Default::default())
         };
+
         get_before_slot_timer.stop();
 
         let first_available_block = self.get_first_available_block()?;
         // Generate a HashSet of signatures that should be excluded from the results based on
         // `until` signature
         let mut get_until_slot_timer = Measure::start("get_until_slot_timer");
-        let (lowest_slot, until_excluded_signatures) = match until {
-            None => (first_available_block, HashSet::new()),
-            Some(until) => {
-                let transaction_status =
-                    self.get_transaction_status(until, &confirmed_unrooted_slots)?;
-                match transaction_status {
-                    None => (first_available_block, HashSet::new()),
-                    Some((slot, _)) => {
-                        let mut slot_signatures = self.get_block_signatures_rev(slot)?;
-                        if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
-                            slot_signatures = slot_signatures.split_off(pos);
-                        }
 
-                        (slot, slot_signatures.into_iter().collect::<HashSet<_>>())
-                    }
-                }
-            }
+        let (oldest_slot, excluded_because_too_old) = if let Some(((slot, _), until)) = until
+            .map(|u| self.get_transaction_status(u, &confirmed_unrooted_slots))
+            .transpose()?
+            .flatten()
+            .zip(until)
+        {
+            let slot_signatures = self.get_block_signatures_rev(slot)?;
+            let excluded = slot_signatures.into_iter().skip_while(|s| *s != until);
+            (slot, excluded.collect::<HashSet<_>>())
+        } else {
+            (first_available_block, Default::default())
         };
+
         get_until_slot_timer.stop();
 
         // Fetch the list of signatures that affect the given address
-        let mut address_signatures = vec![];
 
-        // Get signatures in `slot`
+        // TODO: remove
         let mut get_initial_slot_timer = Measure::start("get_initial_slot_timer");
-        let mut signatures = self.find_address_signatures_for_slot(address, slot)?;
-        signatures.reverse();
-        if let Some(excluded_signatures) = before_excluded_signatures.take() {
-            address_signatures.extend(
-                signatures
-                    .into_iter()
-                    .filter(|(_, signature)| !excluded_signatures.contains(signature)),
-            )
-        } else {
-            address_signatures.append(&mut signatures);
-        }
         get_initial_slot_timer.stop();
 
         let mut address_signatures_iter_timer = Measure::start("iter_timer");
-        let mut iterator =
-            self.address_signatures_cf
-                .iter_current_index_filtered(IteratorMode::From(
-                    // Regardless of whether a `before` signature is provided, the latest relevant
-                    // `slot` is queried directly with the `find_address_signatures_for_slot()`
-                    // call above. Thus, this iterator starts at the lowest entry of `address,
-                    // slot` and iterates backwards to continue reporting the next earliest
-                    // signatures.
-                    (address, slot, 0, Signature::default()),
-                    IteratorDirection::Reverse,
-                ))?;
 
-        // Iterate until limit is reached
-        while address_signatures.len() < limit {
-            if let Some(((key_address, slot, _transaction_index, signature), _)) = iterator.next() {
-                if slot < lowest_slot {
-                    break;
-                }
-                if key_address == address {
-                    if self.is_root(slot) || confirmed_unrooted_slots.contains(&slot) {
-                        address_signatures.push((slot, signature));
-                    }
-                    continue;
-                }
-            }
-            break;
-        }
+        // TODO:
+        // think of having `let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();` and `drop(lock)`, guarding while the newest_slot is being fetched.
+
+        let address_signatures = self
+            .address_signatures_cf
+            // read backwards (newer to older)
+            // starting with the `newest_slot`.
+            .iter_current_index_filtered(IteratorMode::From(
+                (address, newest_slot, 0, Signature::default()),
+                IteratorDirection::Reverse,
+            ))?
+            // read up to the `oldest_slot` (inclusively)
+            .take_while(
+                |((_key_address, slot, _transaction_index, _signature), _)| *slot >= oldest_slot,
+            )
+            // only yield the entries related to the specified `address`
+            .filter(
+                |((key_address, _slot, _transaction_index, _signature), _)| *key_address == address,
+            )
+            // skip if neither rooted or in the whitelist of unrooted slots
+            .filter(
+                |((_key_address, slot, _transaction_index, _signature), _)| {
+                    self.is_root(*slot) || confirmed_unrooted_slots.contains(slot)
+                },
+            )
+            // we only need `slot` and `signature` later on
+            .map(|((_key_address, slot, _transaction_index, signature), _)| (slot, signature))
+            // for the entries of the `newest_slot` — skip the excluded signatures
+            .skip_while(|(slot, signature)| {
+                *slot == newest_slot && excluded_because_too_new.contains(signature)
+            })
+            // once we reach the `oldest_slot`, stop once we reach an excluded signature
+            .take_while(|(slot, signature)| {
+                *slot != oldest_slot || excluded_because_too_old.contains(signature)
+            })
+            // do not yield more entries that specified
+            .take(limit)
+            // XXX: if not collected, this whole fetch-iterator will run simultanously with a series of:
+            // - get_transaction_status
+            // - read_transaction_memos
+            // - get_block_time
+            //
+            // Might be a problem if the `ensure_lowest_cleanup_slot` lock will be taken for the duration of fetching the `newest_slot`.
+            .collect::<Vec<_>>();
+
         address_signatures_iter_timer.stop();
-
-        let mut address_signatures: Vec<(Slot, Signature)> = address_signatures
-            .into_iter()
-            .filter(|(_, signature)| !until_excluded_signatures.contains(signature))
-            .collect();
-        address_signatures.truncate(limit);
 
         // Fill in the status information for each found transaction
         let mut get_status_info_timer = Measure::start("get_status_info_timer");
