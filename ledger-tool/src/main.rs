@@ -616,8 +616,9 @@ fn main() {
         .takes_value(true)
         .multiple(true)
         .help(
-            "Persistent accounts-index location. May be specified multiple times. [default: \
-             [ledger]/accounts_index]",
+            "Persistent accounts-index location. \
+            May be specified multiple times. \
+            [default: <LEDGER>/accounts_index]",
         );
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
