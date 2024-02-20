@@ -2749,39 +2749,6 @@ impl Blockstore {
         Ok(vec![])
     }
 
-    // // Returns all signatures for an address in a particular slot, regardless of whether that slot
-    // // has been rooted. The transactions will be ordered by their occurrence in the block
-    // fn find_address_signatures_for_slot(
-    //     &self,
-    //     pubkey: Pubkey,
-    //     slot: Slot,
-    // ) -> Result<Vec<(Slot, Signature)>> {
-    //     let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
-    //     let mut signatures: Vec<(Slot, Signature)> = vec![];
-    //     if slot < lowest_available_slot {
-    //         return Ok(signatures);
-    //     }
-    //     let index_iterator =
-    //         self.address_signatures_cf
-    //             .iter_current_index_filtered(IteratorMode::From(
-    //                 (
-    //                     pubkey,
-    //                     slot.max(lowest_available_slot),
-    //                     0,
-    //                     Signature::default(),
-    //                 ),
-    //                 IteratorDirection::Forward,
-    //             ))?;
-    //     for ((address, transaction_slot, _transaction_index, signature), _) in index_iterator {
-    //         if transaction_slot > slot || address != pubkey {
-    //             break;
-    //         }
-    //         signatures.push((slot, signature));
-    //     }
-    //     drop(lock);
-    //     Ok(signatures)
-    // }
-
     // DEPRECATED and decommissioned
     // This method always returns an empty Vec
     pub fn get_confirmed_signatures_for_address(
