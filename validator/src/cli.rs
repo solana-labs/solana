@@ -1293,9 +1293,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PATH")
                 .takes_value(true)
                 .multiple(true)
-                .help("Persistent accounts-index location. \
-                       May be specified multiple times. \
-                       [default: [ledger]/accounts_index]"),
+                .help(
+                    "Persistent accounts-index location. \
+                    May be specified multiple times. \
+                    [default: <LEDGER>/accounts_index]",
+                ),
         )
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
