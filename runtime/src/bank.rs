@@ -1488,7 +1488,11 @@ impl Bank {
         );
 
         let (_, apply_feature_activations_time) = measure!(
-            self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false),
+            self.apply_feature_activations(
+                ApplyFeatureActivationsCaller::NewFromParent,
+                false,
+                None
+            ),
             "apply_feature_activation",
         );
 
@@ -1716,7 +1720,7 @@ impl Bank {
 
         let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(ApplyFeatureActivationsCaller::WarpFromParent, false);
+        new.apply_feature_activations(ApplyFeatureActivationsCaller::WarpFromParent, false, None);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
 
@@ -5960,12 +5964,20 @@ impl Bank {
         self.apply_feature_activations(
             ApplyFeatureActivationsCaller::FinishInit,
             debug_do_not_add_builtins,
+            additional_builtins,
         );
 
         if !debug_do_not_add_builtins {
+            let additional_builtins = additional_builtins.unwrap_or(&[]);
             for builtin in BUILTINS
                 .iter()
-                .chain(additional_builtins.unwrap_or(&[]).iter())
+                .filter(|builtin| {
+                    // Give priority to additional builtins.
+                    !additional_builtins
+                        .iter()
+                        .any(|b| b.program_id == builtin.program_id)
+                })
+                .chain(additional_builtins.iter())
             {
                 if builtin.feature_id.is_none() {
                     self.add_builtin(
@@ -7186,6 +7198,7 @@ impl Bank {
         &mut self,
         caller: ApplyFeatureActivationsCaller,
         debug_do_not_add_builtins: bool,
+        additional_builtins: Option<&[BuiltinPrototype]>,
     ) {
         use ApplyFeatureActivationsCaller as Caller;
         let allow_new_activations = match caller {
@@ -7227,6 +7240,7 @@ impl Bank {
             self.apply_builtin_program_feature_transitions(
                 allow_new_activations,
                 &new_feature_activations,
+                additional_builtins,
             );
         }
 
@@ -7311,8 +7325,19 @@ impl Bank {
         &mut self,
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
     ) {
-        for builtin in BUILTINS.iter() {
+        let additional_builtins = additional_builtins.unwrap_or(&[]);
+        for builtin in BUILTINS
+            .iter()
+            .filter(|builtin| {
+                // Give priority to additional builtins.
+                !additional_builtins
+                    .iter()
+                    .any(|b| b.program_id == builtin.program_id)
+            })
+            .chain(additional_builtins.iter())
+        {
             if let Some(feature_id) = builtin.feature_id {
                 let should_apply_action_for_feature_transition =
                     if only_apply_transitions_for_new_features {
