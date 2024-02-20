@@ -450,7 +450,6 @@ mod tests {
     use {
         super::*,
         nonce::state::Versions as NonceVersions,
-        solana_accounts_db::{accounts::Accounts, accounts_db::AccountsDb, ancestors::Ancestors},
         solana_program_runtime::{
             compute_budget_processor,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -476,8 +475,7 @@ mod tests {
     };
 
     struct TestCallbacks {
-        accounts: Accounts,
-        ancestors: Ancestors,
+        accounts_map: HashMap<Pubkey, AccountSharedData>,
         rent_collector: RentCollector,
         feature_set: Arc<FeatureSet>,
     }
@@ -488,9 +486,7 @@ mod tests {
         }
 
         fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-            self.accounts
-                .load_without_fixed_root(&self.ancestors, pubkey)
-                .map(|(acc, _slot)| acc)
+            self.accounts_map.get(pubkey).cloned()
         }
 
         fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
@@ -515,18 +511,14 @@ mod tests {
         feature_set: &mut FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
-        let accounts_db = AccountsDb::new_single_for_tests();
-        let accounts = Accounts::new(Arc::new(accounts_db));
-        for ka in ka.iter() {
-            accounts.accounts_db.store_for_tests(0, &[(&ka.0, &ka.1)]);
-        }
-
-        let ancestors = vec![(0, 0)].into_iter().collect();
         feature_set.deactivate(&feature_set::disable_rent_fees_collection::id());
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
+        let mut accounts_map = HashMap::new();
+        for (pubkey, account) in ka {
+            accounts_map.insert(*pubkey, account.clone());
+        }
         let callbacks = TestCallbacks {
-            accounts,
-            ancestors,
+            accounts_map,
             rent_collector: rent_collector.clone(),
             feature_set: Arc::new(feature_set.clone()),
         };
@@ -991,17 +983,19 @@ mod tests {
     }
 
     fn load_accounts_no_store(
-        accounts: Accounts,
+        ka: &[TransactionAccount],
         tx: Transaction,
         account_overrides: Option<&AccountOverrides>,
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
 
-        let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = TransactionErrorMetrics::default();
+        let mut accounts_map = HashMap::new();
+        for (pubkey, account) in ka {
+            accounts_map.insert(*pubkey, account.clone());
+        }
         let callbacks = TestCallbacks {
-            accounts,
-            ancestors,
+            accounts_map,
             rent_collector: RentCollector::default(),
             feature_set: Arc::new(FeatureSet::all_enabled()),
         };
@@ -1020,9 +1014,6 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_single_for_tests();
-        let accounts = Accounts::new(Arc::new(accounts_db));
-
         let instructions_key = solana_sdk::sysvar::instructions::id();
         let keypair = Keypair::new();
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
@@ -1034,7 +1025,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(accounts, tx, None);
+        let loaded_accounts = load_accounts_no_store(&[], tx, None);
         assert_eq!(loaded_accounts.len(), 1);
         assert!(loaded_accounts[0].0.is_err());
     }
@@ -1042,8 +1033,6 @@ mod tests {
     #[test]
     fn test_overrides() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_single_for_tests();
-        let accounts = Accounts::new(Arc::new(accounts_db));
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
         let account = AccountSharedData::new(42, 0, &Pubkey::default());
@@ -1051,7 +1040,6 @@ mod tests {
 
         let keypair = Keypair::new();
         let account = AccountSharedData::new(1_000_000, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
@@ -1062,7 +1050,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(accounts, tx, Some(&account_overrides));
+        let loaded_accounts =
+            load_accounts_no_store(&[(keypair.pubkey(), account)], tx, Some(&account_overrides));
         assert_eq!(loaded_accounts.len(), 1);
         let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
