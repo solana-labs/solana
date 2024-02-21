@@ -848,13 +848,13 @@ mod tests {
     fn test_unblocked_task_related_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(3));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
@@ -864,7 +864,7 @@ mod tests {
             state_machine
                 .schedule_unblocked_task()
                 .map(|t| t.task_index()),
-            Some(4)
+            Some(102)
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task(), None);
