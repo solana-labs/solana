@@ -404,7 +404,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("commitment-config")
                 .takes_value(true)
                 .possible_values(&["processed", "confirmed", "finalized"])
-                .help("Block commitment config for getting latest blockhash"),
+                .help("Block commitment config for getting latest blockhash. default: processed"),
         )
 }
 
@@ -588,12 +588,12 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(commitment_config) = matches.value_of("commitment_config") {
+        // Don't need else here. Input validation done in ArgMatches
         if commitment_config == "processed" {
             args.commitment_config = CommitmentConfig::processed();
         } else if commitment_config == "confirmed" {
             args.commitment_config = CommitmentConfig::confirmed();
-        } else {
-            // Don't need else if. Input validation done in ArgMatches
+        } else if commitment_config == "finalized" {
             args.commitment_config = CommitmentConfig::finalized();
         }
     }
