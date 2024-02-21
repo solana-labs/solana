@@ -918,7 +918,7 @@ mod tests {
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(5));
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
