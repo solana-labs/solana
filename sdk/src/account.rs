@@ -794,8 +794,8 @@ pub fn create_executable_meta(owner: &Pubkey) -> &[u8] {
     const EXECUTABLE_META_FOR_LOADER_V4: [u8; LOADER_V4_STATUS_BYTE_OFFSET + 1] =
         get_executable_meta_for_loader_v4();
 
-    // For other owners, simple returns a 1 byte array would make it executable.
-    const DEFAULT_EXECUTABLE_META: [u8; 1] = [1];
+    // For other owners, simple returns a 4 byte array of elf header to make it executable.
+    const DEFAULT_EXECUTABLE_META: [u8; 4] = [0x7f, 0x45, 0x4c, 0x46];
 
     if bpf_loader_upgradeable::check_id(owner) {
         &EXECUTABLE_META_FOR_BPF_LOADER_UPGRADABLE
