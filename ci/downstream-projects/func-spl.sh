@@ -5,6 +5,7 @@ spl() {
     # Mind the order!
     PROGRAMS=(
       instruction-padding/program
+      token/transfer-hook/example
       token/program
       token/program-2022
       token/program-2022-test
@@ -37,9 +38,6 @@ spl() {
     for program in "${PROGRAMS[@]}"; do
       $CARGO_TEST_SBF --manifest-path "$program"/Cargo.toml
     done
-
-    # token hook example isn't built with `cargo build`, but it is necessary for `cargo test`
-    $CARGO_BUILD_SBF --manifest-path token/transfer-hook/example/Cargo.toml
 
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
     # the required programs to run the tests, so instead we run the tests
