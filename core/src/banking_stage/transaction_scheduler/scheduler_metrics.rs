@@ -1,9 +1,17 @@
-use {itertools::MinMaxResult, solana_sdk::timing::AtomicInterval};
+use {
+    itertools::MinMaxResult,
+    solana_sdk::timing::AtomicInterval,
+    std::ops::{Deref, DerefMut},
+};
 
 #[derive(Default)]
 pub struct SchedulerCountMetrics {
     interval: AtomicInterval,
+    metrics: SchedulerCountMetricsInner,
+}
 
+#[derive(Default)]
+pub struct SchedulerCountMetricsInner {
     /// Number of packets received.
     pub num_received: usize,
     /// Number of packets buffered.
@@ -41,20 +49,35 @@ pub struct SchedulerCountMetrics {
     pub max_prioritization_fees: u64,
 }
 
+impl Deref for SchedulerCountMetrics {
+    type Target = SchedulerCountMetricsInner;
+    fn deref(&self) -> &Self::Target {
+        &self.metrics
+    }
+}
+
+impl DerefMut for SchedulerCountMetrics {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.metrics
+    }
+}
+
 impl SchedulerCountMetrics {
     pub fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report();
+                self.report("banking_stage_scheduler_counts");
             }
             self.reset();
         }
     }
+}
 
-    fn report(&self) {
+impl SchedulerCountMetricsInner {
+    fn report(&self, name: &'static str) {
         datapoint_info!(
-            "banking_stage_scheduler_counts",
+            name,
             ("num_received", self.num_received, i64),
             ("num_buffered", self.num_buffered, i64),
             ("num_scheduled", self.num_scheduled, i64),
@@ -164,6 +187,11 @@ impl SchedulerCountMetrics {
 #[derive(Default)]
 pub struct SchedulerTimingMetrics {
     interval: AtomicInterval,
+    metrics: SchedulerTimingMetricsInner,
+}
+
+#[derive(Default)]
+pub struct SchedulerTimingMetricsInner {
     /// Time spent making processing decisions.
     pub decision_time_us: u64,
     /// Time spent receiving packets.
@@ -182,20 +210,35 @@ pub struct SchedulerTimingMetrics {
     pub receive_completed_time_us: u64,
 }
 
+impl Deref for SchedulerTimingMetrics {
+    type Target = SchedulerTimingMetricsInner;
+    fn deref(&self) -> &Self::Target {
+        &self.metrics
+    }
+}
+
+impl DerefMut for SchedulerTimingMetrics {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.metrics
+    }
+}
+
 impl SchedulerTimingMetrics {
     pub fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report();
+                self.report("banking_stage_scheduler_timing");
             }
             self.reset();
         }
     }
+}
 
-    fn report(&self) {
+impl SchedulerTimingMetricsInner {
+    fn report(&self, name: &'static str) {
         datapoint_info!(
-            "banking_stage_scheduler_timing",
+            name,
             ("decision_time_us", self.decision_time_us, i64),
             ("receive_time_us", self.receive_time_us, i64),
             ("buffer_time_us", self.buffer_time_us, i64),
