@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_non_conflicting_task() {
+    fn test_schedule_non_conflicting_task_and_updated_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -808,7 +808,7 @@ mod tests {
         state_machine.deschedule_task(&task);
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.total_task_count(), 1);
-        drop(task);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
