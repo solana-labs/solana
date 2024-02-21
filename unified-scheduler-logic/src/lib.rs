@@ -1061,6 +1061,7 @@ mod tests {
             Some(102)
         );
         state_machine.deschedule_task(&task2);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
