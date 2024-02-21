@@ -458,7 +458,6 @@ where
         None
     };
 
-    // relies on commitment config in rpc-client
     let s_threads = create_sender_threads(
         &client,
         &shared_txs,

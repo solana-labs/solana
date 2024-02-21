@@ -21,7 +21,6 @@ where
         self.try_send_transaction(&transaction)?;
         Ok(signature)
     }
-
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
         self.try_send_transaction_batch(&transactions)?;
         Ok(())
