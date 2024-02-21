@@ -277,16 +277,26 @@ mod tests {
 
     #[test]
     fn test_add_genesis_accounts() {
-        let mut genesis_config = GenesisConfig::default();
+        let clusters_and_expected_lamports = [
+            (ClusterType::MainnetBeta, 500_000_000 * LAMPORTS_PER_SOL),
+            (ClusterType::Testnet, 0),
+            (ClusterType::Devnet, 0),
+            (ClusterType::Development, 0),
+        ];
 
-        add_genesis_accounts(&mut genesis_config, 0);
+        for (cluster_type, expected_lamports) in clusters_and_expected_lamports.iter() {
+            let mut genesis_config = GenesisConfig {
+                cluster_type: *cluster_type,
+                ..GenesisConfig::default()
+            };
+            add_genesis_accounts(&mut genesis_config, 0);
 
-        let lamports = genesis_config
-            .accounts
-            .values()
-            .map(|account| account.lamports)
-            .sum::<u64>();
-
-        assert_eq!(500_000_000 * LAMPORTS_PER_SOL, lamports);
+            let lamports = genesis_config
+                .accounts
+                .values()
+                .map(|account| account.lamports)
+                .sum::<u64>();
+            assert_eq!(*expected_lamports, lamports);
+        }
     }
 }
