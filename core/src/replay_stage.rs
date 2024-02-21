@@ -281,7 +281,6 @@ pub struct ReplayStageConfig {
     pub exit: Arc<AtomicBool>,
     pub rpc_subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
-    pub latest_root_senders: Vec<Sender<Slot>>,
     pub accounts_background_request_sender: AbsRequestSender,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
@@ -551,7 +550,6 @@ impl ReplayStage {
             exit,
             rpc_subscriptions,
             leader_schedule_cache,
-            latest_root_senders,
             accounts_background_request_sender,
             block_commitment_cache,
             transaction_status_sender,
@@ -951,7 +949,6 @@ impl ReplayStage {
                         &leader_schedule_cache,
                         &lockouts_sender,
                         &accounts_background_request_sender,
-                        &latest_root_senders,
                         &rpc_subscriptions,
                         &block_commitment_cache,
                         &mut heaviest_subtree_fork_choice,
@@ -2230,7 +2227,6 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_background_request_sender: &AbsRequestSender,
-        latest_root_senders: &[Sender<Slot>],
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -2319,11 +2315,6 @@ impl ReplayStage {
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
             }
-            latest_root_senders.iter().for_each(|s| {
-                if let Err(e) = s.send(new_root) {
-                    trace!("latest root send failed: {:?}", e);
-                }
-            });
             info!("new root {}", new_root);
         }
 
