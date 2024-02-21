@@ -1327,7 +1327,13 @@ impl Validator {
             "validator-new",
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
+<<<<<<< HEAD
             ("cluster_type", cluster_type as u32, i64),
+=======
+            ("cluster_type", genesis_config.cluster_type as u32, i64),
+            ("waited_for_supermajority", waited_for_supermajority, bool),
+            ("expected_shred_version", config.expected_shred_version, Option<i64>),
+>>>>>>> b0134ab04d (validator: include waited_for_supermajority in startup metric (#35137))
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
