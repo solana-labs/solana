@@ -1101,9 +1101,7 @@ mod tests {
         assert_matches!(state_machine.schedule_unblocked_task(), None);
         state_machine.deschedule_task(&task3);
         assert_matches!(
-            state_machine
-                .schedule_unblocked_task()
-                .map(|t| t.task_index()),
+            state_machine.schedule_unblocked_task(),
             None
         );
     }
