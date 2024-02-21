@@ -1096,6 +1096,8 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(5)
         );
+        // the above deschedule_task(task1) call should only unblock task2 and task3 because these
+        // are read-locking. And shouldn't unblock task4 because it's write-locking
         assert_matches!(state_machine.schedule_unblocked_task(), None);
     }
 
