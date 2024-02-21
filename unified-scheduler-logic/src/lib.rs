@@ -815,14 +815,14 @@ mod tests {
     fn test_conflicting_task_related_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
-        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 103, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(3));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
@@ -839,7 +839,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()).map(|task| task.task_index()), Some(5));
+        assert_matches!(state_machine.schedule_task(task3.clone()).map(|task| task.task_index()), Some(103));
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
     }
