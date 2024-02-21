@@ -1774,6 +1774,7 @@ mod tests {
             vec![accounts_dir.clone()],
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
+            None,
         )
         .wrap_with_bank_forks_for_tests();
         bank0

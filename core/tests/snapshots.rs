@@ -106,6 +106,7 @@ impl SnapshotTestConfig {
             vec![accounts_dir.clone()],
             AccountSecondaryIndexes::default(),
             accounts_db::AccountShrinkThreshold::default(),
+            None,
         );
         bank0.freeze();
         bank0.set_startup_verification_complete();
