@@ -32,7 +32,7 @@ patch_crates_io_solana() {
   cat >> "$Cargo_toml" <<EOF
 [patch.crates-io]
 EOF
-patch_crates_io_solana_no_header Cargo_toml solana_dir
+patch_crates_io_solana_no_header "$Cargo_toml" "$solana_dir"
 }
 
 patch_crates_io_solana_no_header() {
