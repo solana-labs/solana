@@ -1104,7 +1104,7 @@ mod tests {
             state_machine
                 .schedule_unblocked_task()
                 .map(|t| t.task_index()),
-            None,
+            None
         );
     }
 
