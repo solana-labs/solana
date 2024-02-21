@@ -845,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_unblocked_task() {
+    fn test_unblocked_task_related_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -870,6 +870,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
