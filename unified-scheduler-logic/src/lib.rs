@@ -854,7 +854,7 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(3));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
