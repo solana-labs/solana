@@ -1481,7 +1481,7 @@ fn process_set_authority(
     };
 
     trace!("Set a new authority");
-    let blockhash = blockhash_query.get_blockhash(&rpc_client, config.commitment)?;
+    let blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
     let mut tx = if let Some(ref pubkey) = program_pubkey {
         Transaction::new_unsigned(Message::new(
@@ -1561,7 +1561,7 @@ fn process_set_authority_checked(
     let new_authority_signer = config.signers[new_authority_index];
 
     trace!("Set a new (checked) authority");
-    let blockhash = blockhash_query.get_blockhash(&rpc_client, config.commitment)?;
+    let blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
     let mut tx = Transaction::new_unsigned(Message::new(
         &[bpf_loader_upgradeable::set_upgrade_authority_checked(
