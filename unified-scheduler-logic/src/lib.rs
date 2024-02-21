@@ -822,7 +822,12 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
@@ -839,7 +844,12 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()).map(|task| task.task_index()), Some(103));
+        assert_matches!(
+            state_machine
+                .schedule_task(task3.clone())
+                .map(|task| task.task_index()),
+            Some(103)
+        );
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
     }
@@ -854,7 +864,12 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         state_machine.deschedule_task(&task1);
@@ -1086,7 +1101,12 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
         assert_matches!(state_machine.schedule_task(task4.clone()), None);
@@ -1110,10 +1130,7 @@ mod tests {
 
         state_machine.deschedule_task(&task2);
         // still task4 is blocked...
-        assert_matches!(
-            state_machine.schedule_unblocked_task(),
-            None
-        );
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
 
         state_machine.deschedule_task(&task3);
         // finally task4 should be unblocked
@@ -1140,7 +1157,12 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
@@ -1151,7 +1173,7 @@ mod tests {
         // task2's fee payer should have been locked already even if task2 is blocked still via the
         // above the schedule_task(task2) call
         let fee_payer = task2.transaction().message().fee_payer();
-        let page = pages.get(&fee_payer) .unwrap();
+        let page = pages.get(&fee_payer).unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
             PageUsage::Writable
