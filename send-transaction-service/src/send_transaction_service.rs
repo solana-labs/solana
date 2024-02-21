@@ -565,11 +565,14 @@ impl SendTransactionService {
                     stats_report.report();
 
                     retry_interval_ms = retry_interval_ms_default
-                        - result
-                            .last_sent_time
-                            .and_then(|last| Instant::now().checked_duration_since(last))
-                            .and_then(|interval| interval.as_millis().try_into().ok())
-                            .unwrap_or(0);
+                        .checked_sub(
+                            result
+                                .last_sent_time
+                                .and_then(|last| Instant::now().checked_duration_since(last))
+                                .and_then(|interval| interval.as_millis().try_into().ok())
+                                .unwrap_or(0),
+                        )
+                        .unwrap_or(retry_interval_ms_default);
                 }
             })
             .unwrap()
