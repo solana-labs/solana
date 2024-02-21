@@ -1131,7 +1131,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "internal error: entered unreachable code")]
-    fn test_unreachable_unlock_conditions() {
+    fn test_unreachable_unlock_conditions1() {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
