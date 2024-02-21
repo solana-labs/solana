@@ -1100,7 +1100,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rollback() {
+    fn test_gradual_locking() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_writable_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
@@ -1120,9 +1120,10 @@ mod tests {
             page.0.borrow_mut(&mut state_machine.page_token).usage,
             PageUsage::Writable
         );
-        let page = pages
-            .get(task2.transaction().message().fee_payer())
-            .unwrap();
+        // task2's fee payer should have been locked already even if task2 is blocked still via the
+        // above the schedule_task(task2) call
+        let fee_payer = task2.transaction().message().fee_payer();
+        let page = pages.get(&fee_payer) .unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
             PageUsage::Writable
