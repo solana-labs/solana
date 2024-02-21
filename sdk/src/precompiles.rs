@@ -132,7 +132,7 @@ pub fn verify_if_precompile_with_reporting(
     precompile_instruction: &CompiledInstruction,
     all_instructions: &[CompiledInstruction],
     feature_set: &FeatureSet,
-    f: fn(&Pubkey, u64, usize, usize, u128, bool),
+    f: &impl Fn(&Pubkey, u64, usize, usize, u128, bool),
 ) -> Result<(), PrecompileError> {
     for precompile in PRECOMPILES.iter() {
         if precompile.check_id(program_id, |feature_id| feature_set.is_active(feature_id)) {

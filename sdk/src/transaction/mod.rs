@@ -1034,7 +1034,7 @@ impl Transaction {
     pub fn verify_precompiles_with_reporting(
         &self,
         feature_set: &feature_set::FeatureSet,
-        f: fn(&Pubkey, u64, usize, usize, u128, bool),
+        f: &impl Fn(&Pubkey, u64, usize, usize, u128, bool),
     ) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point

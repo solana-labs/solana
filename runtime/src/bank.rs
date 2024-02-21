@@ -6555,16 +6555,17 @@ impl Bank {
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
             || verification_mode == TransactionVerificationMode::FullVerification
         {
-            fn report(
+            let report = |
                 program_id: &Pubkey,
                 num_verifies: u64,
                 ix_count: usize,
                 total_data_size: usize,
                 elapse: u128,
                 result: bool,
-            ) {
+            | {
                 datapoint_info!(
                     "precompile_verify_stats",
+                    ("slot", self.slot(), i64),
                     ("program_id", program_id.to_string(), String),
                     ("num_verifies", num_verifies, i64),
                     ("ix_count", ix_count, i64),
@@ -6572,8 +6573,8 @@ impl Bank {
                     ("elapse", elapse, i64),
                     ("result", result, bool),
                 );
-            }
-            sanitized_tx.verify_precompiles_with_reporting(&self.feature_set, report)?;
+            };
+            sanitized_tx.verify_precompiles_with_reporting(&self.feature_set, &report)?;
         }
 
         Ok(sanitized_tx)

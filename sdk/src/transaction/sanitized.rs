@@ -262,7 +262,7 @@ impl SanitizedTransaction {
     pub fn verify_precompiles_with_reporting(
         &self,
         feature_set: &feature_set::FeatureSet,
-        f: fn(&Pubkey, u64, usize, usize, u128, bool),
+        f: &impl Fn(&Pubkey, u64, usize, usize, u128, bool),
     ) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             crate::precompiles::verify_if_precompile_with_reporting(
