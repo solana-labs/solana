@@ -6498,25 +6498,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "3VqF5pMe3XABLqzUaYw2UVXfAokMJgMkrdfvneFQkHbB",
+                "AAv6wZeKSMRPxSx2XqmbAbzs4k4WwSSipaRi9vJuzjy7",
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "B8GsaBJ9aJrQcbhTTfgNVuV4uwb4v8nKT86HUjDLvNgk",
+                "9vDtVTtYDiePfYwzh548PRa5wLvfjqjvNQqiDiuXBch8",
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "Eg9VRE3zUwarxWyHXhitX9wLkg1vfNeiVqVQxSif6qEC"
+                "GFNhkBoCY72V3HxHXpPv8RGtQkMT9tAmavpX3MW3fymP"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "5rLmK24zyxdeb8aLn5LDEnHLDQmxRd5gWZDVJGgsFX1c"
+                "CXyWuUgVB8r9M555iRZ5iYnrwHy3tQx1spfCsgsbQSoF"
             );
             break;
         }
