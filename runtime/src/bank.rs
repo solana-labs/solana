@@ -6558,7 +6558,8 @@ impl Bank {
             fn report(
                 program_id: &Pubkey,
                 num_verifies: u64,
-                ix_size: usize,
+                ix_count: usize,
+                total_data_size: usize,
                 elapse: u128,
                 result: bool,
             ) {
@@ -6566,7 +6567,8 @@ impl Bank {
                     "precompile_verify_stats",
                     ("program_id", program_id.to_string(), String),
                     ("num_verifies", num_verifies, i64),
-                    ("ix_size", ix_size, i64),
+                    ("ix_count", ix_count, i64),
+                    ("tot_data_size", total_data_size, i64),
                     ("elapse", elapse, i64),
                     ("result", result, bool),
                 );

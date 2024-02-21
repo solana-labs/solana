@@ -132,7 +132,7 @@ pub fn verify_if_precompile_with_reporting(
     precompile_instruction: &CompiledInstruction,
     all_instructions: &[CompiledInstruction],
     feature_set: &FeatureSet,
-    f: fn(&Pubkey, u64, usize, u128, bool),
+    f: fn(&Pubkey, u64, usize, usize, u128, bool),
 ) -> Result<(), PrecompileError> {
     for precompile in PRECOMPILES.iter() {
         if precompile.check_id(program_id, |feature_id| feature_set.is_active(feature_id)) {
@@ -141,8 +141,15 @@ pub fn verify_if_precompile_with_reporting(
                 .map(|instruction| instruction.data.as_ref())
                 .collect();
 
+            // are num_verifiies ~= instrcution_count ? 
             let num_verifies = u64::from(*precompile_instruction.data.first().unwrap());
-            let instruction_size = instruction_datas.len();
+            let instruction_count = instruction_datas.len();
+            // total instruction data size can be used to approximate message data bytes used for
+            // hashing (only applies to secp256k1, ed25519 does not hashing message)
+            let total_data_size = all_instructions
+                .iter()
+                .map(|instruction| instruction.data.len())
+                .sum();
             let timer = std::time::Instant::now();
 
             let result = precompile.verify(
@@ -155,7 +162,8 @@ pub fn verify_if_precompile_with_reporting(
             f(
                 program_id,
                 num_verifies,
-                instruction_size,
+                instruction_count,
+                total_data_size,
                 elapse_us,
                 result.is_ok(),
             );
