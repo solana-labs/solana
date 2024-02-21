@@ -1108,13 +1108,13 @@ mod tests {
         let sanitized2 = transaction_with_writable_address(conflicting_address);
         let pages = Arc::new(Mutex::new(HashMap::new()));
         let address_loader = &mut create_address_loader(Some(pages.clone()));
-        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         let pages = pages.lock().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
