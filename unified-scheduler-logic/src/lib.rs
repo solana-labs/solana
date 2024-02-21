@@ -1117,6 +1117,7 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(104)
         );
+        state_machine.deschedule_task(&task4);
         assert!(state_machine.has_no_active_task());
     }
 
