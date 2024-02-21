@@ -490,9 +490,9 @@ fn get_vetted_rpc_nodes(
             Ok(rpc_node_details) => rpc_node_details,
             Err(err) => {
                 error!(
-                    "Failed to get RPC nodes: {err}. \
-                    Consider checking system clock, removing `--no-port-check`, \
-                    or adjusting `--known-validator ...` arguments as applicable"
+                    "Failed to get RPC nodes: {err}. Consider checking system clock, removing \
+                    `--no-port-check`, or adjusting `--known-validator ...` arguments as \
+                    applicable"
                 );
                 exit(1);
             }
@@ -1281,8 +1281,8 @@ fn download_snapshot(
                         warn!(
                             "The snapshot download is too slow, throughput: {} < min speed {} \
                              bytes/sec, but will NOT abort and try a different node as it is the \
-                             only known validator and the --only-known-rpc flag is set. \
-                             Abort count: {}, Progress detail: {:?}",
+                             only known validator and the --only-known-rpc flag is set. Abort \
+                             count: {}, Progress detail: {:?}",
                             download_progress.last_throughput,
                             minimal_snapshot_download_speed,
                             download_abort_count,

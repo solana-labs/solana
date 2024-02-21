@@ -89,9 +89,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .requires("vote_account")
                 .multiple(true)
                 .help(
-                    "Include an additional authorized voter keypair. \
-                     May be specified multiple times. \
-                     [default: the --identity keypair]",
+                    "Include an additional authorized voter keypair. May be specified multiple \
+                     times. [default: the --identity keypair]",
                 ),
         )
         .arg(
@@ -277,7 +276,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .default_value(&default_args.health_check_slot_distance)
                 .help(
-                    "Report this validator as healthy if its latest, replayed optimistically \
+                    "Report this validator as healthy if its latest replayed optimistically \
                      confirmed slot is within the specified number of slots from the cluster's \
                      latest optimistically confirmed slot",
                 ),
