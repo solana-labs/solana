@@ -152,6 +152,91 @@ pub mod solana_sdk {
         impl<T> StateMut<T> for Account {}
     }
 
+    pub mod address_lookup_table {
+        pub mod program {
+            crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
+        }
+
+        pub mod state {
+            use {
+                crate::{instruction::InstructionError, pubkey::Pubkey, slot_hashes::Slot},
+                serde::{Deserialize, Serialize},
+                std::borrow::Cow,
+            };
+
+            pub const LOOKUP_TABLE_META_SIZE: usize = 56;
+
+            #[derive(Default, Serialize, Deserialize)]
+            pub struct LookupTableMeta {
+                pub deactivation_slot: Slot,
+                pub last_extended_slot: Slot,
+                pub last_extended_slot_start_index: u8,
+                pub authority: Option<Pubkey>,
+                pub _padding: u16,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub enum ProgramState {
+                Uninitialized,
+                LookupTable(LookupTableMeta),
+            }
+
+            pub struct AddressLookupTable<'a> {
+                pub meta: LookupTableMeta,
+                pub addresses: Cow<'a, [Pubkey]>,
+            }
+            impl<'a> AddressLookupTable<'a> {
+                pub fn overwrite_meta_data(
+                    data: &mut [u8],
+                    lookup_table_meta: LookupTableMeta,
+                ) -> Result<(), InstructionError> {
+                    let meta_data = data
+                        .get_mut(0..LOOKUP_TABLE_META_SIZE)
+                        .ok_or(InstructionError::InvalidAccountData)?;
+                    meta_data.fill(0);
+                    bincode::serialize_into(
+                        meta_data,
+                        &ProgramState::LookupTable(lookup_table_meta),
+                    )
+                    .map_err(|_| InstructionError::GenericError)?;
+                    Ok(())
+                }
+
+                pub fn serialize_for_tests(self) -> Result<Vec<u8>, InstructionError> {
+                    let mut data = vec![0; LOOKUP_TABLE_META_SIZE];
+                    Self::overwrite_meta_data(&mut data, self.meta)?;
+                    self.addresses.iter().for_each(|address| {
+                        data.extend_from_slice(address.as_ref());
+                    });
+                    Ok(data)
+                }
+
+                pub fn deserialize(
+                    data: &'a [u8],
+                ) -> Result<AddressLookupTable<'a>, InstructionError> {
+                    let program_state: ProgramState = bincode::deserialize(data)
+                        .map_err(|_| InstructionError::InvalidAccountData)?;
+
+                    let meta = match program_state {
+                        ProgramState::LookupTable(meta) => Ok(meta),
+                        ProgramState::Uninitialized => Err(InstructionError::UninitializedAccount),
+                    }?;
+
+                    let raw_addresses_data = data
+                        .get(LOOKUP_TABLE_META_SIZE..)
+                        .ok_or(InstructionError::InvalidAccountData)?;
+                    let addresses: &[Pubkey] = bytemuck::try_cast_slice(raw_addresses_data)
+                        .map_err(|_| InstructionError::InvalidAccountData)?;
+
+                    Ok(Self {
+                        meta,
+                        addresses: Cow::Borrowed(addresses),
+                    })
+                }
+            }
+        }
+    }
+
     pub mod signature {
         use crate::pubkey::Pubkey;
 

@@ -202,11 +202,10 @@ impl Message {
     /// # use solana_sdk::account::Account;
     /// use anyhow::Result;
     /// use solana_rpc_client::rpc_client::RpcClient;
-    /// use solana_program::address_lookup_table::{self, state::{AddressLookupTable, LookupTableMeta}};
     /// use solana_sdk::{
-    ///      address_lookup_table_account::AddressLookupTableAccount,
+    ///      address_lookup_table::state::{AddressLookupTable, LookupTableMeta},
     ///      instruction::{AccountMeta, Instruction},
-    ///      message::{VersionedMessage, v0},
+    ///      message::{VersionedMessage, v0::{self, AddressLookupTableAccount}},
     ///      pubkey::Pubkey,
     ///      signature::{Keypair, Signer},
     ///      transaction::VersionedTransaction,
@@ -224,7 +223,7 @@ impl Message {
     ///     #     meta: LookupTableMeta::default(),
     ///     #     addresses: Cow::Owned(instruction.accounts.iter().map(|meta| meta.pubkey).collect()),
     ///     #   }.serialize_for_tests().unwrap(),
-    ///     #   owner: address_lookup_table::program::id(),
+    ///     #   owner: solana_sdk::address_lookup_table::program::id(),
     ///     #   executable: false,
     ///     #   rent_epoch: 1,
     ///     # });
