@@ -739,10 +739,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
+        loaded_program.effective_slot = loaded_program
+            .effective_slot
+            .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
         if let Some(recompile) = recompile {
-            loaded_program.effective_slot = loaded_program
-                .effective_slot
-                .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
             loaded_program.tx_usage_counter =
                 AtomicU64::new(recompile.tx_usage_counter.load(Ordering::Relaxed));
             loaded_program.ix_usage_counter =
