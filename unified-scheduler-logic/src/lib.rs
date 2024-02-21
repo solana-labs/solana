@@ -840,6 +840,7 @@ mod tests {
         state_machine.deschedule_task(&task2);
 
         assert_matches!(state_machine.schedule_task(task3.clone()), Some(_));
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
