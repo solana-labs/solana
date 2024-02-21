@@ -471,7 +471,6 @@
 extern crate self as solana_program;
 
 pub mod account_info;
-pub mod address_lookup_table;
 pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod big_mod_exp;
@@ -536,14 +535,6 @@ pub mod sysvar;
 pub mod vote;
 pub mod wasm;
 
-#[deprecated(
-    since = "1.17.0",
-    note = "Please use `solana_sdk::address_lookup_table::AddressLookupTableAccount` instead"
-)]
-pub mod address_lookup_table_account {
-    pub use crate::address_lookup_table::AddressLookupTableAccount;
-}
-
 #[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
 /// Re-export of [wasm-bindgen].
@@ -565,9 +556,9 @@ pub mod config {
 pub mod sdk_ids {
     use {
         crate::{
-            address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-            config, ed25519_program, feature, incinerator, loader_v4, secp256k1_program,
-            solana_program::pubkey::Pubkey, stake, system_program, sysvar, vote,
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
+            feature, incinerator, loader_v4, secp256k1_program, solana_program::pubkey::Pubkey,
+            stake, system_program, sysvar, vote,
         },
         lazy_static::lazy_static,
     };
@@ -586,7 +577,6 @@ pub mod sdk_ids {
                 vote::program::id(),
                 feature::id(),
                 bpf_loader_deprecated::id(),
-                address_lookup_table::program::id(),
                 loader_v4::id(),
                 stake::program::id(),
                 #[allow(deprecated)]

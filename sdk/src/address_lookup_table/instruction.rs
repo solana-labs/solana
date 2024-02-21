@@ -1,6 +1,6 @@
 use {
+    super::program::id,
     crate::{
-        address_lookup_table::program::id,
         clock::Slot,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,

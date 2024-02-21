@@ -10,7 +10,6 @@
 //! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
 use crate::{
-    address_lookup_table_account::AddressLookupTableAccount,
     bpf_loader_upgradeable,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
@@ -26,6 +25,15 @@ use crate::{
 pub use loaded::*;
 
 mod loaded;
+
+/// The definition of address lookup table accounts.
+///
+/// As used by the `v0` message format.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AddressLookupTableAccount {
+    pub key: crate::pubkey::Pubkey,
+    pub addresses: Vec<crate::pubkey::Pubkey>,
+}
 
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
