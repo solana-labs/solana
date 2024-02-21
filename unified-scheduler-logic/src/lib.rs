@@ -892,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_unblocked_task2() {
+    fn test_schedule_order_blocked_earlier_task_then_newly_scheduled_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -909,12 +909,11 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
 
+        // new task is arriving after task1 is already descheduled and task2 got unblocked
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(state_machine.schedule_unblocked_task(), Some(_));
-        assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task(), None);
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(4));
         assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
