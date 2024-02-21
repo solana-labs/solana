@@ -1033,13 +1033,13 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_writable_after_readonly() {
+    fn test_schedule_readonly_then_writable() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
@@ -1048,22 +1048,23 @@ mod tests {
             state_machine
                 .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
-            Some(3)
+            Some(101)
         );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
+        // descheduling read-locking task1 should equate to unblocking write-locking task2
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
                 .schedule_unblocked_task()
                 .map(|t| t.task_index()),
-            Some(4)
+            Some(102)
         );
         state_machine.deschedule_task(&task2);
     }
 
     #[test]
-    fn test_blocked_tasks_readonly_then_writable() {
+    fn test_blocked_tasks_writable_2_readonly_then_writable() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_writable_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
