@@ -1861,29 +1861,18 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a Token mint".to_string(),
             ));
         }
-        let mut token_balances: Vec<RpcTokenAccountBalance> = self
+        let mut token_balances: Vec<_> = self
             .get_filtered_spl_token_accounts_by_mint(&bank, &mint_owner, mint, vec![])?
             .into_iter()
             .map(|(address, account)| {
                 let amount = StateWithExtensions::<TokenAccount>::unpack(account.data())
                     .map(|account| account.base.amount)
                     .unwrap_or(0);
-                let amount = token_amount_to_ui_amount(amount, decimals);
-                RpcTokenAccountBalance {
-                    address: address.to_string(),
-                    amount,
-                }
+                (address, amount)
             })
             .collect();
 
-        let sort_largest = |a: &RpcTokenAccountBalance, b: &RpcTokenAccountBalance| {
-            a.amount
-                .amount
-                .parse::<u64>()
-                .unwrap()
-                .cmp(&b.amount.amount.parse::<u64>().unwrap())
-                .reverse()
-        };
+        let sort_largest = |a: &(_, u64), b: &(_, u64)| b.1.cmp(&a.1);
 
         let largest_token_balances = if token_balances.len() > NUM_LARGEST_ACCOUNTS {
             token_balances
@@ -1894,7 +1883,14 @@ impl JsonRpcRequestProcessor {
         };
         largest_token_balances.sort_unstable_by(sort_largest);
 
-        Ok(new_response(&bank, largest_token_balances.to_vec()))
+        let largest_token_balances = largest_token_balances
+            .iter()
+            .map(|(address, amount)| RpcTokenAccountBalance {
+                address: address.to_string(),
+                amount: token_amount_to_ui_amount(*amount, decimals),
+            })
+            .collect();
+        Ok(new_response(&bank, largest_token_balances))
     }
 
     pub fn get_token_accounts_by_owner(
