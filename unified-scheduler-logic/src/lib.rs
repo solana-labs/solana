@@ -1071,9 +1071,9 @@ mod tests {
         let sanitized4 = transaction_with_writable_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
-        let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
-        let task4 = SchedulingStateMachine::create_task(sanitized4, 6, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized3, 103, address_loader);
+        let task4 = SchedulingStateMachine::create_task(sanitized4, 104, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
@@ -1088,13 +1088,13 @@ mod tests {
             state_machine
                 .schedule_unblocked_task()
                 .map(|t| t.task_index()),
-            Some(4)
+            Some(102)
         );
         assert_matches!(
             state_machine
                 .schedule_unblocked_task()
                 .map(|t| t.task_index()),
-            Some(5)
+            Some(103)
         );
         // the above deschedule_task(task1) call should only unblock task2 and task3 because these
         // are read-locking. And shouldn't unblock task4 because it's write-locking
