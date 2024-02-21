@@ -1,6 +1,7 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::config::RpcSendTransactionConfig,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
         message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
@@ -9,8 +10,18 @@ use {
 
 impl BenchTpsClient for RpcClient {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
-        RpcClient::send_transaction(self, &transaction).map_err(|err| err.into())
+        RpcClient::send_transaction_with_config(
+            self,
+            &transaction,
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+                preflight_commitment: Some(self.commitment().commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
+        .map_err(|err| err.into())
     }
+
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
         for transaction in transactions {
             BenchTpsClient::send_transaction(self, transaction)?;

@@ -81,6 +81,7 @@ fn create_connection_cache(
     use_quic: bool,
     bind_address: IpAddr,
     client_node_id: Option<&Keypair>,
+    commitment_config: CommitmentConfig,
 ) -> ConnectionCache {
     if !use_quic {
         return ConnectionCache::with_udp(
@@ -97,7 +98,7 @@ fn create_connection_cache(
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
         json_rpc_url.to_string(),
-        CommitmentConfig::confirmed(),
+        commitment_config,
     ));
 
     let client_node_id = client_node_id.unwrap();
@@ -132,11 +133,12 @@ fn create_client(
     num_nodes: usize,
     target_node: Option<Pubkey>,
     connection_cache: ConnectionCache,
+    commitment_config: CommitmentConfig,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
             json_rpc_url.to_string(),
-            CommitmentConfig::confirmed(),
+            commitment_config,
         )),
         ExternalClientType::ThinClient => {
             let connection_cache = Arc::new(connection_cache);
@@ -188,7 +190,7 @@ fn create_client(
         ExternalClientType::TpuClient => {
             let rpc_client = Arc::new(RpcClient::new_with_commitment(
                 json_rpc_url.to_string(),
-                CommitmentConfig::confirmed(),
+                commitment_config,
             ));
             match connection_cache {
                 ConnectionCache::Udp(cache) => Arc::new(
@@ -256,6 +258,7 @@ fn main() {
         instruction_padding_config,
         bind_address,
         client_node_id,
+        commitment_config,
         ..
     } = &cli_config;
 
@@ -317,6 +320,7 @@ fn main() {
         *use_quic,
         *bind_address,
         client_node_id.as_ref(),
+        *commitment_config,
     );
     let client = create_client(
         external_client_type,
@@ -328,6 +332,7 @@ fn main() {
         *num_nodes,
         *target_node,
         connection_cache,
+        *commitment_config,
     );
     if let Some(instruction_padding_config) = instruction_padding_config {
         info!(

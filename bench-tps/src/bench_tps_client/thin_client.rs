@@ -18,6 +18,7 @@ impl BenchTpsClient for ThinClient {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         AsyncClient::async_send_transaction(self, transaction).map_err(|err| err.into())
     }
+
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
         AsyncClient::async_send_batch(self, transactions).map_err(|err| err.into())
     }

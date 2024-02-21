@@ -400,6 +400,7 @@ where
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
+        commitment_config,
         ..
     } = config;
 
@@ -457,6 +458,7 @@ where
         None
     };
 
+    // relies on commitment config in rpc-client
     let s_threads = create_sender_threads(
         &client,
         &shared_txs,

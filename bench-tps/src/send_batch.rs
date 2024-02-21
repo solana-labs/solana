@@ -155,7 +155,7 @@ fn verify_funding_transfer<T: BenchTpsClient + ?Sized>(
     amount: u64,
 ) -> bool {
     for a in &tx.message().account_keys[1..] {
-        match client.get_balance_with_commitment(a, CommitmentConfig::processed()) {
+        match client.get_balance_with_commitment(a, CommitmentConfig::confirmed()) {
             Ok(balance) => return balance >= amount,
             Err(err) => error!("failed to get balance {:?}", err),
         }

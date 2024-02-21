@@ -6,6 +6,7 @@ use {
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
@@ -80,6 +81,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
+    pub commitment_config: CommitmentConfig,
 }
 
 impl Eq for Config {}
@@ -115,6 +117,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
+            commitment_config: CommitmentConfig::processed(),
         }
     }
 }
@@ -396,6 +399,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
+        .arg(
+            Arg::with_name("commitment_config")
+                .long("commitment-config")
+                .takes_value(true)
+                .possible_values(&["processed", "confirmed", "finalized"])
+                .help("Block commitment config for getting latest blockhash"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -575,6 +585,17 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         // error is checked by arg validator
         let client_node_id = read_keypair_file(client_node_id_filename).map_err(|_| "")?;
         args.client_node_id = Some(client_node_id);
+    }
+
+    if let Some(commitment_config) = matches.value_of("commitment_config") {
+        if commitment_config == "processed" {
+            args.commitment_config = CommitmentConfig::processed();
+        } else if commitment_config == "confirmed" {
+            args.commitment_config = CommitmentConfig::confirmed();
+        } else {
+            // Don't need else if. Input validation done in ArgMatches
+            args.commitment_config = CommitmentConfig::finalized();
+        }
     }
 
     Ok(args)
