@@ -1063,7 +1063,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_readonly_after_writable() {
+    fn test_blocked_tasks_readonly_then_writable() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_writable_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
@@ -1099,12 +1099,16 @@ mod tests {
         // the above deschedule_task(task1) call should only unblock task2 and task3 because these
         // are read-locking. And shouldn't unblock task4 because it's write-locking
         assert_matches!(state_machine.schedule_unblocked_task(), None);
+
         state_machine.deschedule_task(&task2);
+        // still task4 is blocked...
         assert_matches!(
             state_machine.schedule_unblocked_task(),
             None
         );
+
         state_machine.deschedule_task(&task3);
+        // finally task4 should be unblocked
         assert_matches!(
             state_machine
                 .schedule_unblocked_task()
