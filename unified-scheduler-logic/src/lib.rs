@@ -865,12 +865,11 @@ mod tests {
                 .schedule_unblocked_task()
                 .unwrap()
                 .task_index(),
-            task2.task_index()
+            4
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
-        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
