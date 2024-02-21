@@ -1150,4 +1150,71 @@ pub mod tests {
         }
         assert_eq!(count, 1);
     }
+
+    #[test]
+    fn test_purge_exact_and_cleanup_chaining_range() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let (shreds, _) = make_many_slot_entries(0, 10, 5);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        assert!(matches!(
+            blockstore
+                .run_purge(4, 6, PurgeType::ExactAndCleanupChaining)
+                .unwrap_err(),
+            BlockstoreError::InvalidRangeForSlotMetaCleanup
+        ));
+    }
+
+    #[test]
+    fn test_purge_exact_and_cleanup_chaining_missing_slot_meta() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let (shreds, _) = make_many_slot_entries(0, 10, 5);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        assert!(matches!(
+            blockstore
+                .run_purge(11, 11, PurgeType::ExactAndCleanupChaining)
+                .unwrap_err(),
+            BlockstoreError::SlotUnavailable
+        ));
+    }
+
+    #[test]
+    fn test_purge_exact_and_cleanup_chaining() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let (shreds, _) = make_many_slot_entries(0, 10, 5);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (slot_11, _) = make_slot_entries(11, 4, 5, true);
+        blockstore.insert_shreds(slot_11, None, false).unwrap();
+        let (slot_12, _) = make_slot_entries(12, 5, 5, true);
+        blockstore.insert_shreds(slot_12, None, false).unwrap();
+
+        blockstore
+            .run_purge(5, 5, PurgeType::ExactAndCleanupChaining)
+            .unwrap();
+
+        let slot_meta = blockstore.meta(5).unwrap().unwrap();
+        let expected_slot_meta = SlotMeta {
+            slot: 5,
+            // Only the next_slots should be preserved
+            next_slots: vec![6, 12],
+            ..SlotMeta::default()
+        };
+        assert_eq!(slot_meta, expected_slot_meta);
+
+        let parent_slot_meta = blockstore.meta(4).unwrap().unwrap();
+        assert_eq!(parent_slot_meta.next_slots, vec![11]);
+
+        let child_slot_meta = blockstore.meta(6).unwrap().unwrap();
+        assert_eq!(child_slot_meta.parent_slot.unwrap(), 5);
+
+        let child_slot_meta = blockstore.meta(12).unwrap().unwrap();
+        assert_eq!(child_slot_meta.parent_slot.unwrap(), 5);
+    }
 }
