@@ -860,12 +860,11 @@ mod tests {
         state_machine.deschedule_task(&task1);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_eq!(
+        assert_matches!(
             state_machine
                 .schedule_unblocked_task()
-                .unwrap()
-                .task_index(),
-            4
+                .map(|t| t.task_index()),
+            Some(4)
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
         assert_matches!(state_machine.schedule_unblocked_task(), None);
