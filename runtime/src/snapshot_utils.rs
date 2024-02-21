@@ -121,13 +121,13 @@ impl SnapshotVersion {
 }
 
 /// Information about a bank snapshot. Namely the slot of the bank, the path to the snapshot, and
-/// the type of the snapshot.
+/// the kind of the snapshot.
 #[derive(PartialEq, Eq, Debug)]
 pub struct BankSnapshotInfo {
     /// Slot of the bank
     pub slot: Slot,
-    /// Type of the snapshot
-    pub snapshot_type: BankSnapshotType,
+    /// Snapshot kind
+    pub snapshot_kind: BankSnapshotKind,
     /// Path to the bank snapshot directory
     pub snapshot_dir: PathBuf,
     /// Snapshot version
@@ -195,12 +195,12 @@ impl BankSnapshotInfo {
         // AccountsPackage for a snapshot/slot; if AHV is in the middle of reserializing the
         // bank snapshot file (writing the new "Post" file), and then the process dies,
         // there will be an incomplete "Post" file on disk.  We do not want only the existence of
-        // this "Post" file to be sufficient for deciding the snapshot type as "Post".  More so,
+        // this "Post" file to be sufficient for deciding the snapshot kind as "Post".  More so,
         // "Post" *requires* the *absence* of a "Pre" file.
-        let snapshot_type = if bank_snapshot_pre_path.is_file() {
-            BankSnapshotType::Pre
+        let snapshot_kind = if bank_snapshot_pre_path.is_file() {
+            BankSnapshotKind::Pre
         } else if bank_snapshot_post_path.is_file() {
-            BankSnapshotType::Post
+            BankSnapshotKind::Post
         } else {
             return Err(SnapshotNewFromDirError::MissingSnapshotFile(
                 bank_snapshot_dir,
@@ -209,7 +209,7 @@ impl BankSnapshotInfo {
 
         Ok(BankSnapshotInfo {
             slot,
-            snapshot_type,
+            snapshot_kind,
             snapshot_dir: bank_snapshot_dir,
             snapshot_version,
         })
@@ -218,9 +218,9 @@ impl BankSnapshotInfo {
     pub fn snapshot_path(&self) -> PathBuf {
         let mut bank_snapshot_path = self.snapshot_dir.join(get_snapshot_file_name(self.slot));
 
-        let ext = match self.snapshot_type {
-            BankSnapshotType::Pre => BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
-            BankSnapshotType::Post => "",
+        let ext = match self.snapshot_kind {
+            BankSnapshotKind::Pre => BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+            BankSnapshotKind::Post => "",
         };
         bank_snapshot_path.set_extension(ext);
 
@@ -236,7 +236,7 @@ impl BankSnapshotInfo {
 /// that this bank snapshot is "pre" accounts hash.  Later, when the accounts hash is calculated,
 /// the bank snapshot is re-serialized, and is now "post" accounts hash.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum BankSnapshotType {
+pub enum BankSnapshotKind {
     /// This bank snapshot has *not* yet had its accounts hash calculated
     Pre,
     /// This bank snapshot *has* had its accounts hash calculated
@@ -894,25 +894,25 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
 
 /// Get the bank snapshots in a directory
 ///
-/// This function retains only the bank snapshots of type BankSnapshotType::Pre
+/// This function retains only the bank snapshots of kind BankSnapshotKind::Pre
 pub fn get_bank_snapshots_pre(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
     let mut bank_snapshots = get_bank_snapshots(bank_snapshots_dir);
-    bank_snapshots.retain(|bank_snapshot| bank_snapshot.snapshot_type == BankSnapshotType::Pre);
+    bank_snapshots.retain(|bank_snapshot| bank_snapshot.snapshot_kind == BankSnapshotKind::Pre);
     bank_snapshots
 }
 
 /// Get the bank snapshots in a directory
 ///
-/// This function retains only the bank snapshots of type BankSnapshotType::Post
+/// This function retains only the bank snapshots of kind BankSnapshotKind::Post
 pub fn get_bank_snapshots_post(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
     let mut bank_snapshots = get_bank_snapshots(bank_snapshots_dir);
-    bank_snapshots.retain(|bank_snapshot| bank_snapshot.snapshot_type == BankSnapshotType::Post);
+    bank_snapshots.retain(|bank_snapshot| bank_snapshot.snapshot_kind == BankSnapshotKind::Post);
     bank_snapshots
 }
 
 /// Get the bank snapshot with the highest slot in a directory
 ///
-/// This function gets the highest bank snapshot of type BankSnapshotType::Pre
+/// This function gets the highest bank snapshot of kind BankSnapshotKind::Pre
 pub fn get_highest_bank_snapshot_pre(
     bank_snapshots_dir: impl AsRef<Path>,
 ) -> Option<BankSnapshotInfo> {
@@ -921,7 +921,7 @@ pub fn get_highest_bank_snapshot_pre(
 
 /// Get the bank snapshot with the highest slot in a directory
 ///
-/// This function gets the highest bank snapshot of type BankSnapshotType::Post
+/// This function gets the highest bank snapshot of kind BankSnapshotKind::Post
 pub fn get_highest_bank_snapshot_post(
     bank_snapshots_dir: impl AsRef<Path>,
 ) -> Option<BankSnapshotInfo> {
@@ -930,7 +930,7 @@ pub fn get_highest_bank_snapshot_post(
 
 /// Get the bank snapshot with the highest slot in a directory
 ///
-/// This function gets the highest bank snapshot of any type
+/// This function gets the highest bank snapshot of any kind
 pub fn get_highest_bank_snapshot(bank_snapshots_dir: impl AsRef<Path>) -> Option<BankSnapshotInfo> {
     do_get_highest_bank_snapshot(get_bank_snapshots(&bank_snapshots_dir))
 }
@@ -2142,11 +2142,11 @@ pub fn verify_snapshot_archive(
 pub fn purge_old_bank_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     num_bank_snapshots_to_retain: usize,
-    filter_by_type: Option<BankSnapshotType>,
+    filter_by_kind: Option<BankSnapshotKind>,
 ) {
-    let mut bank_snapshots = match filter_by_type {
-        Some(BankSnapshotType::Pre) => get_bank_snapshots_pre(&bank_snapshots_dir),
-        Some(BankSnapshotType::Post) => get_bank_snapshots_post(&bank_snapshots_dir),
+    let mut bank_snapshots = match filter_by_kind {
+        Some(BankSnapshotKind::Pre) => get_bank_snapshots_pre(&bank_snapshots_dir),
+        Some(BankSnapshotKind::Post) => get_bank_snapshots_post(&bank_snapshots_dir),
         None => get_bank_snapshots(&bank_snapshots_dir),
     };
 
@@ -2164,8 +2164,8 @@ pub fn purge_old_bank_snapshots(
 /// Only a single bank snapshot could be needed at startup (when using fast boot), so
 /// retain the highest bank snapshot "post", and purge the rest.
 pub fn purge_old_bank_snapshots_at_startup(bank_snapshots_dir: impl AsRef<Path>) {
-    purge_old_bank_snapshots(&bank_snapshots_dir, 0, Some(BankSnapshotType::Pre));
-    purge_old_bank_snapshots(&bank_snapshots_dir, 1, Some(BankSnapshotType::Post));
+    purge_old_bank_snapshots(&bank_snapshots_dir, 0, Some(BankSnapshotKind::Pre));
+    purge_old_bank_snapshots(&bank_snapshots_dir, 1, Some(BankSnapshotKind::Post));
 
     let highest_bank_snapshot_post = get_highest_bank_snapshot_post(&bank_snapshots_dir);
     if let Some(highest_bank_snapshot_post) = highest_bank_snapshot_post {

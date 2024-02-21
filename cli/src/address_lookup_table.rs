@@ -257,6 +257,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .index(1)
                                 .value_name("LOOKUP_TABLE_ADDRESS")
                                 .takes_value(true)
+                                .required(true)
                                 .help("Address of the lookup table to show"),
                         ),
                 ),

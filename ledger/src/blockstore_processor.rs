@@ -20,9 +20,6 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         epoch_accounts_hash::EpochAccountsHash,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
     },
     solana_cost_model::cost_model::CostModel,
     solana_entry::entry::{
@@ -57,7 +54,12 @@ use {
             VersionedTransaction,
         },
     },
-    solana_svm::runtime_config::RuntimeConfig,
+    solana_svm::{
+        runtime_config::RuntimeConfig,
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+        },
+    },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
     std::{
