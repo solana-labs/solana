@@ -659,8 +659,10 @@ impl ReplayStage {
                 let mut tpu_has_bank = poh_recorder.read().unwrap().has_bank();
 
                 let mut replay_active_banks_time = Measure::start("replay_active_banks_time");
-                let mut ancestors = bank_forks.read().unwrap().ancestors();
-                let mut descendants = bank_forks.read().unwrap().descendants();
+                let (mut ancestors, mut descendants) = {
+                    let r_bank_forks = bank_forks.read().unwrap();
+                    (r_bank_forks.ancestors(), r_bank_forks.descendants())
+                };
                 let did_complete_bank = Self::replay_active_banks(
                     &blockstore,
                     &bank_forks,
