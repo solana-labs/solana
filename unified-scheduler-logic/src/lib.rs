@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_non_conflicting_task_and_updated_counts() {
+    fn test_non_conflicting_task_related_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
@@ -812,7 +812,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_conflicting_task() {
+    fn test_conflicting_task_related_counts() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
