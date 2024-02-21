@@ -400,7 +400,6 @@ where
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
-        commitment_config,
         ..
     } = config;
 
