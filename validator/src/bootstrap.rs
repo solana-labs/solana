@@ -237,7 +237,10 @@ fn get_rpc_peers(
         })
         .count();
 
-    info!("Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, {rpc_peers_blacklisted} blacklisted");
+    info!(
+        "Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, \
+         {rpc_peers_blacklisted} blacklisted"
+    );
 
     if rpc_peers_blacklisted == rpc_peers_total {
         *retry_reason = if !blacklisted_rpc_nodes.is_empty()
@@ -487,9 +490,9 @@ fn get_vetted_rpc_nodes(
             Ok(rpc_node_details) => rpc_node_details,
             Err(err) => {
                 error!(
-                    "Failed to get RPC nodes: {err}. Consider checking system \
-                    clock, removing `--no-port-check`, or adjusting \
-                    `--known-validator ...` arguments as applicable"
+                    "Failed to get RPC nodes: {err}. Consider checking system clock, removing \
+                    `--no-port-check`, or adjusting `--known-validator ...` arguments as \
+                    applicable"
                 );
                 exit(1);
             }
@@ -905,9 +908,8 @@ fn get_snapshot_hashes_from_known_validators(
         get_snapshot_hashes_for_node,
     ) {
         debug!(
-            "Snapshot hashes have not been discovered from known validators. \
-            This likely means the gossip tables are not fully populated. \
-            We will sleep and retry..."
+            "Snapshot hashes have not been discovered from known validators. This likely means \
+             the gossip tables are not fully populated. We will sleep and retry..."
         );
         return KnownSnapshotHashes::default();
     }
@@ -981,8 +983,9 @@ fn build_known_snapshot_hashes<'a>(
         // hashes.  So if it happens, keep the first and ignore the rest.
         if is_any_same_slot_and_different_hash(&full_snapshot_hash, known_snapshot_hashes.keys()) {
             warn!(
-                "Ignoring all snapshot hashes from node {node} since we've seen a different full snapshot hash with this slot.\
-                \nfull snapshot hash: {full_snapshot_hash:?}"
+                "Ignoring all snapshot hashes from node {node} since we've seen a different full \
+                 snapshot hash with this slot.\
+                 \nfull snapshot hash: {full_snapshot_hash:?}"
             );
             debug!(
                 "known full snapshot hashes: {:#?}",
@@ -1007,9 +1010,10 @@ fn build_known_snapshot_hashes<'a>(
                 known_incremental_snapshot_hashes.iter(),
             ) {
                 warn!(
-                    "Ignoring incremental snapshot hash from node {node} since we've seen a different incremental snapshot hash with this slot.\
-                    \nfull snapshot hash: {full_snapshot_hash:?}\
-                    \nincremental snapshot hash: {incremental_snapshot_hash:?}"
+                    "Ignoring incremental snapshot hash from node {node} since we've seen a \
+                     different incremental snapshot hash with this slot.\
+                     \nfull snapshot hash: {full_snapshot_hash:?}\
+                     \nincremental snapshot hash: {incremental_snapshot_hash:?}"
                 );
                 debug!(
                     "known incremental snapshot hashes based on this slot: {:#?}",
@@ -1112,7 +1116,10 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
     });
 
-    trace!("retain peer snapshot hashes with highest incremental snapshot slot: {peer_snapshot_hashes:?}");
+    trace!(
+        "retain peer snapshot hashes with highest incremental snapshot slot: \
+         {peer_snapshot_hashes:?}"
+    );
 }
 
 /// Check to see if we can use our local snapshots, otherwise download newer ones.
@@ -1192,7 +1199,8 @@ fn download_snapshots(
                 })
             {
                 info!(
-                    "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
+                    "Incremental snapshot archive already exists locally. Skipping download. \
+                     slot: {}, hash: {}",
                     incremental_snapshot_hash.0, incremental_snapshot_hash.1
                 );
             } else {
@@ -1272,9 +1280,9 @@ fn download_snapshot(
                     {
                         warn!(
                             "The snapshot download is too slow, throughput: {} < min speed {} \
-                            bytes/sec, but will NOT abort and try a different node as it is the \
-                            only known validator and the --only-known-rpc flag is set. \
-                            Abort count: {}, Progress detail: {:?}",
+                             bytes/sec, but will NOT abort and try a different node as it is the \
+                             only known validator and the --only-known-rpc flag is set. Abort \
+                             count: {}, Progress detail: {:?}",
                             download_progress.last_throughput,
                             minimal_snapshot_download_speed,
                             download_abort_count,
@@ -1284,9 +1292,8 @@ fn download_snapshot(
                     }
                 }
                 warn!(
-                    "The snapshot download is too slow, throughput: {} < min speed {} \
-                    bytes/sec, will abort and try a different node. \
-                    Abort count: {}, Progress detail: {:?}",
+                    "The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, \
+                     will abort and try a different node. Abort count: {}, Progress detail: {:?}",
                     download_progress.last_throughput,
                     minimal_snapshot_download_speed,
                     download_abort_count,
@@ -1321,17 +1328,26 @@ fn should_use_local_snapshot(
         incremental_snapshot_fetch,
     ) {
         None => {
-            info!("Downloading a snapshot for slot {cluster_snapshot_slot} since there is not a local snapshot.");
+            info!(
+                "Downloading a snapshot for slot {cluster_snapshot_slot} since there is not a \
+                 local snapshot."
+            );
             false
         }
         Some((local_snapshot_slot, _)) => {
             if local_snapshot_slot
                 >= cluster_snapshot_slot.saturating_sub(maximum_local_snapshot_age)
             {
-                info!("Reusing local snapshot at slot {local_snapshot_slot} instead of downloading a snapshot for slot {cluster_snapshot_slot}.");
+                info!(
+                    "Reusing local snapshot at slot {local_snapshot_slot} instead of downloading \
+                     a snapshot for slot {cluster_snapshot_slot}."
+                );
                 true
             } else {
-                info!("Local snapshot from slot {local_snapshot_slot} is too old. Downloading a newer snapshot for slot {cluster_snapshot_slot}.");
+                info!(
+                    "Local snapshot from slot {local_snapshot_slot} is too old. Downloading a \
+                     newer snapshot for slot {cluster_snapshot_slot}."
+                );
                 false
             }
         }
