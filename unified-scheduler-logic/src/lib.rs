@@ -867,8 +867,13 @@ mod tests {
             Some(102)
         );
         assert_eq!(state_machine.unblocked_task_count(), 1);
+        // there's no blocked task anymore; calling schedule_unblocked_task should be noop and
+        // shouldn't increment the unblocked_task_count().
         assert_matches!(state_machine.schedule_unblocked_task(), None);
         assert_eq!(state_machine.unblocked_task_count(), 1);
+
+        state_machine.deschedule_task(&task2);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
