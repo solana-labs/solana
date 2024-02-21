@@ -12,7 +12,7 @@ pub struct PurgeStats {
     delete_files_in_range: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 /// Controls how `blockstore::purge_slots` purges the data.
 pub enum PurgeType {
     /// A slower but more accurate way to purge slots by also ensuring higher
@@ -21,6 +21,10 @@ pub enum PurgeType {
     /// The fastest purge mode that relies on the slot-id based TTL
     /// compaction filter to do the cleanup.
     CompactionFilter,
+    /// In this case along with an `Exact` purge we orphan the specified slot by
+    /// removing it from `parent_slot_meta.next_slots` and reinsert an empty `slot_meta`
+    /// for the orphan that only retains the `next_slots` value.
+    ExactAndCleanupChaining,
 }
 
 impl Blockstore {
@@ -135,7 +139,6 @@ impl Blockstore {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn run_purge(
         &self,
         from_slot: Slot,
@@ -150,6 +153,9 @@ impl Blockstore {
     ///
     /// When `from_slot` is 0, any sst-file with a key-range completely older
     /// than `to_slot` will also be deleted.
+    ///
+    /// If the `purge_type` is `PurgeType::ExactAndCleanupChaining` we require
+    /// that `from_slot == to_slot` - we are purging only one slot.
     pub(crate) fn run_purge_with_stats(
         &self,
         from_slot: Slot,
@@ -157,48 +163,21 @@ impl Blockstore {
         purge_type: PurgeType,
         purge_stats: &mut PurgeStats,
     ) -> Result<bool> {
-        self.run_purge_with_stats_and_maybe_cleanup_slot_meta(
-            from_slot,
-            to_slot,
-            purge_type,
-            purge_stats,
-            None,
-        )
-    }
-
-    pub(crate) fn run_purge_and_cleanup_slot_meta(
-        &self,
-        slot: Slot,
-        slot_meta: SlotMeta,
-    ) -> Result<bool> {
-        self.run_purge_with_stats_and_maybe_cleanup_slot_meta(
-            slot,
-            slot,
-            PurgeType::Exact,
-            &mut PurgeStats::default(),
-            Some(slot_meta),
-        )
-    }
-
-    /// A helper function to `purge_slots` that executes the ledger clean up.
-    /// The cleanup applies to \[`from_slot`, `to_slot`\].
-    ///
-    /// When `from_slot` is 0, any sst-file with a key-range completely older
-    /// than `to_slot` will also be deleted.
-    ///
-    /// If `slot_meta` is specified for some `child_slot`, we require that
-    /// `child_slot == from_slot == to_slot` - we are purging only one slot.
-    /// In this case along with the purge we remove `child_slot` from its
-    /// `parent_slot_meta.next_slots` as well as reinsert an orphaned `slot_meta`
-    /// for `child_slot` that only retains the `next_slots` value.
-    pub(crate) fn run_purge_with_stats_and_maybe_cleanup_slot_meta(
-        &self,
-        from_slot: Slot,
-        to_slot: Slot,
-        purge_type: PurgeType,
-        purge_stats: &mut PurgeStats,
-        slot_meta: Option<SlotMeta>,
-    ) -> Result<bool> {
+        let slot_meta = if purge_type == PurgeType::ExactAndCleanupChaining {
+            if from_slot != to_slot {
+                error!(
+                    "Chaining cleanup was requested but a range was specified {} {}",
+                    from_slot, to_slot
+                );
+                return Err(BlockstoreError::InvalidRangeForSlotMetaCleanup);
+            }
+            let Some(slot_meta) = self.meta(from_slot)? else {
+                return Err(BlockstoreError::SlotUnavailable);
+            };
+            Some(slot_meta)
+        } else {
+            None
+        };
         let mut write_batch = self
             .db
             .batch()
@@ -269,7 +248,7 @@ impl Blockstore {
                 .delete_range_cf::<cf::MerkleRootMeta>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
         match purge_type {
-            PurgeType::Exact => {
+            PurgeType::Exact | PurgeType::ExactAndCleanupChaining => {
                 self.purge_special_columns_exact(&mut write_batch, from_slot, to_slot)?;
             }
             PurgeType::CompactionFilter => {
@@ -282,13 +261,9 @@ impl Blockstore {
         }
         delete_range_timer.stop();
 
-        if let Some(mut slot_meta) = slot_meta {
-            let child_slot = slot_meta.slot;
-            if child_slot != from_slot || child_slot != to_slot {
-                error!("Slot meta parent cleanup was requested for {}, but a range was specified {} {}", child_slot, from_slot, to_slot);
-                return Err(BlockstoreError::InvalidRangeForSlotMetaCleanup);
-            }
-
+        if purge_type == PurgeType::ExactAndCleanupChaining {
+            let mut slot_meta = slot_meta.expect("Slot meta should be present by this point");
+            let slot = from_slot; // also equal to to_slot
             if let Some(parent_slot) = slot_meta.parent_slot {
                 let parent_slot_meta = self.meta(parent_slot)?;
                 if let Some(mut parent_slot_meta) = parent_slot_meta {
@@ -296,19 +271,19 @@ impl Blockstore {
                     // only contain several elements so this isn't so bad
                     parent_slot_meta
                         .next_slots
-                        .retain(|&next_slot| next_slot != child_slot);
+                        .retain(|&next_slot| next_slot != slot);
                     write_batch.put::<cf::SlotMeta>(parent_slot, &parent_slot_meta)?;
                 } else {
                     error!("Parent slot meta {} for child {} is missing. In the absence of a duplicate block this
                         likely means a cluster restart was performed and your node contains invalid shreds generated
                         with the wrong shred version, whose ancestors have been cleaned up.
-                        Falling back to duplicate block handling to remedy the situation", parent_slot, child_slot);
+                        Falling back to duplicate block handling to remedy the situation", parent_slot, slot);
                 }
             }
 
             // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots` field.
             slot_meta.clear_unconfirmed_slot();
-            write_batch.put::<cf::SlotMeta>(child_slot, &slot_meta)?;
+            write_batch.put::<cf::SlotMeta>(slot, &slot_meta)?;
         }
 
         let mut write_timer = Measure::start("write_batch");

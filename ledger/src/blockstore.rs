@@ -1164,19 +1164,15 @@ impl Blockstore {
     /// family.
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
-        if let Some(slot_meta) = self
-            .meta(slot)
-            .expect("Couldn't fetch from SlotMeta column family")
-        {
-            // Clear all slot related information, and cleanup slot meta by removing
-            // `slot` from parents `next_slots`, but retaining `slot`'s `next_slots`.
-            self.run_purge_and_cleanup_slot_meta(slot, slot_meta)
-                .expect("Purge database operations failed");
-        } else {
-            error!(
+        // Clear all slot related information, and cleanup slot meta by removing
+        // `slot` from parents `next_slots`, but retaining `slot`'s `next_slots`.
+        match self.run_purge(slot, slot, PurgeType::ExactAndCleanupChaining) {
+            Ok(_) => {}
+            Err(BlockstoreError::SlotUnavailable) => error!(
                 "clear_unconfirmed_slot() called on slot {} with no SlotMeta",
                 slot
-            );
+            ),
+            Err(e) => panic!("Purge database operations failed {}", e),
         }
     }
 
