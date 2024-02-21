@@ -839,7 +839,7 @@ mod tests {
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_task(task3.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task3.clone()).map(|task| task.task_index()), Some(5));
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
     }
