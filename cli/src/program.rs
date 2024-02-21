@@ -18,7 +18,7 @@ use {
         input_parsers::*,
         input_validators::*,
         keypair::*,
-        offline::{dump_transaction_message, OfflineArgs, DUMP_TRANSACTION_MESSAGE, SIGN_ONLY_ARG},
+        offline::{OfflineArgs, DUMP_TRANSACTION_MESSAGE, SIGN_ONLY_ARG},
     },
     solana_cli_output::{
         return_signers_with_config, CliProgram, CliProgramAccountType, CliProgramAuthority,
