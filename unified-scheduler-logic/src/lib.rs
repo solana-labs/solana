@@ -1007,7 +1007,7 @@ mod tests {
         let sanitized2 = transaction_with_writable_address(conflicting_address);
         let sanitized3 = transaction_with_readonly_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
         let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
 
@@ -1018,7 +1018,7 @@ mod tests {
             state_machine
                 .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
-            Some(3)
+            Some(101)
         );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
