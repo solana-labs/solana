@@ -684,7 +684,7 @@ impl SchedulingStateMachine {
         })
     }
 
-    /// Rewind the inactive SchedulingStateMachine state to be initialized
+    /// Rewind the inactive state machine to be initialized
     ///
     /// This isn't called _reset_ to indicate this isn't safe to call this at any given moment.
     /// This panics if the state machine hasn't properly been finished (i.e.  there should be no
