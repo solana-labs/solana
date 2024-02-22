@@ -520,7 +520,7 @@ impl SchedulingStateMachine {
 
     pub fn deschedule_task(&mut self, task: &Task) {
         let blocked_task_index = task.task_index();
-        let largest_task_index = self.last_task_index.expect("at least one task should have been scheduled");
+        let largest_task_index = self.last_task_index.expect("task should have been scheduled");
         assert!(blocked_task_index <= largest_task_index, "bad task index: {blocked_task_index} <= {largest_task_index}");
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
