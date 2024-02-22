@@ -690,8 +690,7 @@ impl SchedulingStateMachine {
     /// This panics if the state machine hasn't properly been finished (i.e.  there should be no
     /// active task) to uphold invariants of [`Page`]s.
     ///
-    /// This method is intended to reuse SchedulingStateMachine instance (to avoid unsafe its
-    /// `unsafe`
+    /// This method is intended to reuse SchedulingStateMachine instance (to avoid its `unsafe`
     /// [constructor](SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling)
     /// as much as possible) and its (possbily cached) associated [`Page`]s for processing other
     /// slots. 
