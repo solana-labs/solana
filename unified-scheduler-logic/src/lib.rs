@@ -791,7 +791,7 @@ mod tests {
         assert!(format!("{:?}", task).contains("TaskInner"));
 
         assert_eq!(
-            format!("{:?}", Page::default()),
+            format!("{:?}", PageInner::default()),
             "Page(TokenCell(UnsafeCell { .. }))"
         )
     }
