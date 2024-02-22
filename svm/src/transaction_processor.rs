@@ -739,6 +739,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
+        // There can be two entries per program when the environment changes.
+        // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
+        // These two entries have the same deployment slot, so they must differ in their effective slot instead.
+        // This is done by setting the effective slot of the entry for the new environment to the epoch boundary.
         loaded_program.effective_slot = loaded_program
             .effective_slot
             .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
