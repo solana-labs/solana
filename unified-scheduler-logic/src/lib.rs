@@ -792,7 +792,7 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", PageInner::default()),
-            "Page(TokenCell(UnsafeCell { .. }))"
+            "PageInner { usage: Unused, blocked_tasks: [] }"
         )
     }
 
