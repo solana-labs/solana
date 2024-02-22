@@ -994,6 +994,7 @@ mod tests {
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
+        // task3 is finally unblocked after all of readble tasks (task1 and task2) is finished.
         assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(103));
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
