@@ -1,3 +1,8 @@
+//! NOTE: While the unified scheduler is fully functional and moderately performant even with
+//! mainnet-beta, it has known resource-exhaustion related security issues for replaying
+//! specially-crafted blocks produced by malicious leaders. Thus, this functionality is exempt from
+//! the bug bounty program for now.
+//!
 //! Transaction scheduling code.
 //!
 //! This crate implements 3 solana-runtime traits (`InstalledScheduler`, `UninstalledScheduler` and
@@ -10,7 +15,8 @@
 
 use {
     assert_matches::assert_matches,
-    crossbeam_channel::{select, unbounded, Receiver, SendError, Sender},
+    crossbeam_channel::{never, select, unbounded, Receiver, RecvError, SendError, Sender},
+    dashmap::DashMap,
     derivative::Derivative,
     log::*,
     solana_ledger::blockstore_processor::{
@@ -26,8 +32,11 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_sdk::transaction::{Result, SanitizedTransaction},
-    solana_unified_scheduler_logic::Task,
+    solana_sdk::{
+        pubkey::Pubkey,
+        transaction::{Result, SanitizedTransaction},
+    },
+    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
@@ -90,10 +99,8 @@ where
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
-        let handler_count = handler_count.unwrap_or(1);
-        // we're hard-coding the number of handler thread to 1, meaning this impl is currently
-        // single-threaded still.
-        assert_eq!(handler_count, 1); // replace this with assert!(handler_count >= 1) later
+        let handler_count = handler_count.unwrap_or(Self::default_handler_count());
+        assert!(handler_count >= 1);
 
         Arc::new_cyclic(|weak_self| Self {
             scheduler_inners: Mutex::default(),
@@ -386,13 +393,25 @@ mod chained_channel {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct AddressBook {
+    book: DashMap<Pubkey, Page>,
+}
+
+impl AddressBook {
+    pub fn load(&self, address: Pubkey) -> Page {
+        self.book.entry(address).or_default().clone()
+    }
+}
+
+fn disconnected<T>() -> Receiver<T> {
+    unbounded().1
+}
+
 fn initialized_result_with_timings() -> ResultWithTimings {
     (Ok(()), ExecuteTimings::default())
 }
 
-// Currently, simplest possible implementation (i.e. single-threaded)
-// this will be replaced with more proper implementation...
-// not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 pub struct PooledScheduler<TH: TaskHandler> {
     inner: PooledSchedulerInner<Self, TH>,
@@ -402,6 +421,7 @@ pub struct PooledScheduler<TH: TaskHandler> {
 #[derive(Debug)]
 pub struct PooledSchedulerInner<S: SpawnableScheduler<TH>, TH: TaskHandler> {
     thread_manager: ThreadManager<S, TH>,
+    address_book: AddressBook,
 }
 
 // This type manages the OS threads for scheduling and executing transactions. The term
@@ -427,6 +447,7 @@ impl<TH: TaskHandler> PooledScheduler<TH> {
         Self::from_inner(
             PooledSchedulerInner::<Self, TH> {
                 thread_manager: ThreadManager::new(pool),
+                address_book: AddressBook::default(),
             },
             initial_context,
         )
@@ -518,7 +539,6 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             let new_task_receiver = self.new_task_receiver.clone();
 
             let mut session_ending = false;
-            let mut active_task_count: usize = 0;
 
             // Now, this is the main loop for the scheduler thread, which is a special beast.
             //
@@ -558,61 +578,78 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             // cycles out of the scheduler thread. Thus, any kinds of unessential overhead sources
             // like syscalls, VDSO, and even memory (de)allocation should be avoided at all costs
             // by design or by means of offloading at the last resort.
-            move || loop {
-                let mut is_finished = false;
-                while !is_finished {
-                    select! {
-                        recv(finished_task_receiver) -> executed_task => {
-                            let executed_task = executed_task.unwrap();
+            move || {
+                let (do_now, dont_now) = (&disconnected::<()>(), &never::<()>());
+                let dummy_receiver = |trigger| {
+                    if trigger {
+                        do_now
+                    } else {
+                        dont_now
+                    }
+                };
 
-                            active_task_count = active_task_count.checked_sub(1).unwrap();
-                            let result_with_timings = result_with_timings.as_mut().unwrap();
-                            Self::accumulate_result_with_timings(result_with_timings, executed_task);
-                        },
-                        recv(new_task_receiver) -> message => {
-                            assert!(!session_ending);
+                let mut state_machine = unsafe {
+                    SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+                };
 
-                            match message.unwrap() {
-                                NewTaskPayload::Payload(task) => {
-                                    // so, we're NOT scheduling at all here; rather, just execute
-                                    // tx straight off. the inter-tx locking deps aren't needed to
-                                    // be resolved in the case of single-threaded FIFO like this.
-                                    runnable_task_sender
-                                        .send_payload(task)
-                                        .unwrap();
-                                    active_task_count = active_task_count.checked_add(1).unwrap();
+                loop {
+                    let mut is_finished = false;
+                    while !is_finished {
+                        select! {
+                            recv(finished_task_receiver) -> executed_task => {
+                                let executed_task = executed_task.unwrap();
+
+                                state_machine.deschedule_task(&executed_task.task);
+                                let result_with_timings = result_with_timings.as_mut().unwrap();
+                                Self::accumulate_result_with_timings(result_with_timings, executed_task);
+                            },
+                            recv(dummy_receiver(state_machine.has_unblocked_task())) -> dummy => {
+                                assert_matches!(dummy, Err(RecvError));
+
+                                if let Some(task) = state_machine.schedule_unblocked_task() {
+                                    runnable_task_sender.send_payload(task).unwrap();
                                 }
-                                NewTaskPayload::OpenSubchannel(context) => {
-                                    // signal about new SchedulingContext to handler threads
-                                    runnable_task_sender
-                                        .send_chained_channel(context, handler_count)
-                                        .unwrap();
-                                    assert_matches!(
-                                        result_with_timings.replace(initialized_result_with_timings()),
-                                        None
-                                    );
-                                }
-                                NewTaskPayload::CloseSubchannel => {
-                                    session_ending = true;
-                                }
-                            }
-                        },
-                    };
+                            },
+                            recv(new_task_receiver) -> message => {
+                                assert!(!session_ending);
 
-                    // a really simplistic termination condition, which only works under the
-                    // assumption of single handler thread...
-                    is_finished = session_ending && active_task_count == 0;
-                }
+                                match message.unwrap() {
+                                    NewTaskPayload::Payload(task) => {
+                                        if let Some(task) = state_machine.schedule_task(task) {
+                                            runnable_task_sender.send_payload(task).unwrap();
+                                        }
+                                    }
+                                    NewTaskPayload::OpenSubchannel(context) => {
+                                        // signal about new SchedulingContext to handler threads
+                                        runnable_task_sender
+                                            .send_chained_channel(context, handler_count)
+                                            .unwrap();
+                                        assert_matches!(
+                                            result_with_timings.replace(initialized_result_with_timings()),
+                                            None
+                                        );
+                                    }
+                                    NewTaskPayload::CloseSubchannel => {
+                                        session_ending = true;
+                                    }
+                                }
+                            },
+                        };
 
-                if session_ending {
-                    session_result_sender
-                        .send(Some(
-                            result_with_timings
-                                .take()
-                                .unwrap_or_else(initialized_result_with_timings),
-                        ))
-                        .unwrap();
-                    session_ending = false;
+                        is_finished = session_ending && state_machine.has_no_active_task();
+                    }
+
+                    if session_ending {
+                        state_machine.reinitialize();
+                        session_result_sender
+                            .send(Some(
+                                result_with_timings
+                                    .take()
+                                    .unwrap_or_else(initialized_result_with_timings),
+                            ))
+                            .unwrap();
+                        session_ending = false;
+                    }
                 }
             }
         };
@@ -741,7 +778,9 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
     }
 
     fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
-        let task = Task::create_task(transaction.clone(), index);
+        let task = SchedulingStateMachine::create_task(transaction.clone(), index, &mut |pubkey| {
+            self.inner.address_book.load(pubkey)
+        });
         self.inner.thread_manager.send_task(task);
     }
 
@@ -1023,7 +1062,7 @@ mod tests {
                 .result,
             Ok(_)
         );
-        scheduler.schedule_execution(&(good_tx_after_bad_tx, 0));
+        scheduler.schedule_execution(&(good_tx_after_bad_tx, 1));
         scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         // That's because we're testing the serialized failing execution case in this test.
