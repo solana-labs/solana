@@ -1274,7 +1274,21 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "bad task index: 102 <= 101")]
-    fn test_deschedule_new_task() {
+    fn test_deschedule_new_task_wihout_scheduling() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized = transaction_with_writable_address(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
+
+        let mut state_machine = unsafe {
+            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+        };
+        let _ = state_machine.deschedule_task(&task);
+    }
+
+    #[test]
+    #[should_panic(expected = "bad task index: 102 <= 101")]
+    fn test_deschedule_new_task_out_of_order() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
