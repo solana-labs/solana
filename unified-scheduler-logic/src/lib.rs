@@ -521,7 +521,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         let old_task_index = task.task_index();
         if let Some(new_task_index) = self.last_task_index {
-            assert!(new_task_index > old_task_index, "bad task index: {new_task_index} > {old_task_index}");
+            assert!(new_task_index >= old_task_index, "bad task index: {new_task_index} > {old_task_index}");
         }
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
