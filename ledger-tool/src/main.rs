@@ -96,6 +96,7 @@ use {
 mod args;
 mod bigtable;
 mod blockstore;
+mod error;
 mod ledger_path;
 mod ledger_utils;
 mod output;
