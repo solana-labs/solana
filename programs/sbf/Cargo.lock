@@ -6443,7 +6443,9 @@ dependencies = [
 name = "solana-unified-scheduler-logic"
 version = "1.19.0"
 dependencies = [
+ "assert_matches",
  "solana-sdk",
+ "static_assertions",
 ]
 
 [[package]]
@@ -6452,6 +6454,7 @@ version = "1.19.0"
 dependencies = [
  "assert_matches",
  "crossbeam-channel",
+ "dashmap",
  "derivative",
  "log",
  "solana-ledger",
