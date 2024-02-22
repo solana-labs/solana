@@ -1252,8 +1252,8 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        state_machine.schedule_task(task.clone());
-        state_machine.schedule_task(task.clone());
+        let _ = state_machine.schedule_task(task.clone());
+        let _ = state_machine.schedule_task(task.clone());
     }
 
     #[test]
