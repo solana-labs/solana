@@ -1052,6 +1052,8 @@ mod tests {
                 .schedule_unblocked_task(),
             None
         );
+        //state_machine.deschedule_task(&task3);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
