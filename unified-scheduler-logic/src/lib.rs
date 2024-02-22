@@ -648,9 +648,9 @@ impl SchedulingStateMachine {
     /// Creates a new task with [`SanitizedTransaction`] with all of its corresponding [`Page`]s
     /// preloaded.
     ///
-    /// Closure (`page_loader`) is used to delegate the (possibly multi-thread friendly)
-    /// implementation of looking a page up with [`pubkey`](Pubkey) to callers. It's the caller's
-    /// responsibility to ensure the same instance is returned from the closure given a particular
+    /// Closure (`page_loader`) is used to delegate the (possibly multi-threaded)
+    /// implementation of [`Page`] look-up by [`pubkey`](Pubkey) to callers. It's the caller's
+    /// responsibility to ensure the same instance is returned from the closure, given a particular
     /// pubkey.
     pub fn create_task(
         transaction: SanitizedTransaction,
