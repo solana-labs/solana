@@ -1271,4 +1271,20 @@ mod tests {
         let _ = state_machine.schedule_task(task2.clone());
         let _ = state_machine.schedule_task(task1.clone());
     }
+
+    #[test]
+    #[should_panic(expected = "bad task index: 101 > 102")]
+    fn test_deschedule_new_task() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized = transaction_with_writable_address(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
+
+        let mut state_machine = unsafe {
+            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+        };
+        let _ = state_machine.schedule_task(task1.clone());
+        let _ = state_machine.deschedule_task(&task2);
+    }
 }
