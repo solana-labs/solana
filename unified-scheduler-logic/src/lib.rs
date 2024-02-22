@@ -772,8 +772,9 @@ mod tests {
     fn create_address_loader(
         pages: Option<Arc<Mutex<HashMap<Pubkey, Page>>>>,
     ) -> impl FnMut(Pubkey) -> Page {
-        let pages = pages.unwrap_or_default();
-        move |address| pages.lock().unwrap().entry(address).or_default().clone()
+        //let pages = pages.unwrap_or_default();
+        //move |address| pages.lock().unwrap().entry(address).or_default().clone()
+        move |address| HashMap::new().entry(address).or_default().clone()
     }
 
     #[test]
