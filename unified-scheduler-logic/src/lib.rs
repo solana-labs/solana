@@ -683,7 +683,7 @@ impl SchedulingStateMachine {
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
-        self.last_task_index = None;
+        //self.last_task_index = None;
         self.active_task_count.reset_to_zero();
         self.handled_task_count.reset_to_zero();
         self.unblocked_task_count.reset_to_zero();
