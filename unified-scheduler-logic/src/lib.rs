@@ -737,7 +737,7 @@ mod tests {
             signer::keypair::Keypair,
             transaction::{SanitizedTransaction, Transaction},
         },
-        std::{cell::RefCell, collections::HashMap},
+        std::{rc::Rc, cell::RefCell, collections::HashMap},
     };
 
     fn simplest_transaction() -> SanitizedTransaction {
