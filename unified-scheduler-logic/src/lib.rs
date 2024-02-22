@@ -499,7 +499,7 @@ impl SchedulingStateMachine {
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         let new_task_index = task.task_index();
         if let Some(old_task_index) = self.last_task_index.replace(new_task_index) {
-            assert!(new_task_index > old_task_index, "bad task index: {new_task_index} > {old_task_index}");
+            assert!(new_task_index > old_task_index, "bad new task index: {new_task_index} > {old_task_index}");
         }
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -521,7 +521,7 @@ impl SchedulingStateMachine {
     pub fn deschedule_task(&mut self, task: &Task) {
         let blocked_task_index = task.task_index();
         let largest_task_index = self.last_task_index.expect("task should have been scheduled");
-        assert!(blocked_task_index <= largest_task_index, "bad task index: {blocked_task_index} <= {largest_task_index}");
+        assert!(blocked_task_index <= largest_task_index, "bad unblocked task index: {blocked_task_index} <= {largest_task_index}");
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
         self.unlock_for_task(task);
@@ -1242,7 +1242,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bad task index: 101 > 101")]
+    #[should_panic(expected = "bad new task index: 101 > 101")]
     fn test_schedule_same_task() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
@@ -1257,7 +1257,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bad task index: 101 > 102")]
+    #[should_panic(expected = "bad new task index: 101 > 102")]
     fn test_schedule_task_out_of_order() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
@@ -1287,7 +1287,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bad task index: 102 <= 101")]
+    #[should_panic(expected = "bad unblocked task index: 102 <= 101")]
     fn test_deschedule_new_task_out_of_order() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
