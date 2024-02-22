@@ -1218,7 +1218,7 @@ mod tests {
         // task2's fee payer should have been locked already even if task2 is blocked still via the
         // above the schedule_task(task2) call
         let fee_payer = task2.transaction().message().fee_payer();
-        let page = pages.get(&fee_payer).unwrap();
+        let page = pages.get(fee_payer).unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
             PageUsage::Writable
@@ -1309,7 +1309,7 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        let _ = state_machine.deschedule_task(&task);
+        state_machine.deschedule_task(&task);
     }
 
     #[test]
@@ -1324,7 +1324,7 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        let _ = state_machine.schedule_task(task1.clone());
-        let _ = state_machine.deschedule_task(&task2);
+        state_machine.schedule_task(task1.clone());
+        state_machine.deschedule_task(&task2);
     }
 }
