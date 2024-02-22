@@ -499,7 +499,10 @@ impl SchedulingStateMachine {
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         let new_task_index = task.task_index();
         if let Some(old_task_index) = self.last_task_index.replace(new_task_index) {
-            assert!(new_task_index > old_task_index, "bad new task index: {new_task_index} > {old_task_index}");
+            assert!(
+                new_task_index > old_task_index,
+                "bad new task index: {new_task_index} > {old_task_index}"
+            );
         }
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
@@ -520,8 +523,13 @@ impl SchedulingStateMachine {
 
     pub fn deschedule_task(&mut self, task: &Task) {
         let blocked_task_index = task.task_index();
-        let largest_task_index = self.last_task_index.expect("task should have been scheduled");
-        assert!(blocked_task_index <= largest_task_index, "bad unblocked task index: {blocked_task_index} <= {largest_task_index}");
+        let largest_task_index = self
+            .last_task_index
+            .expect("task should have been scheduled");
+        assert!(
+            blocked_task_index <= largest_task_index,
+            "bad unblocked task index: {blocked_task_index} <= {largest_task_index}"
+        );
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
         self.unlock_for_task(task);
@@ -918,7 +926,12 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
@@ -929,12 +942,22 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(102));
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task()
+                .map(|t| t.task_index()),
+            Some(102)
+        );
         assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(103));
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task()
+                .map(|t| t.task_index()),
+            Some(103)
+        );
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
@@ -954,8 +977,18 @@ mod tests {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         // both of read-only tasks should be immediately runnable
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
-        assert_matches!(state_machine.schedule_task(task2.clone()).map(|t| t.task_index()), Some(102));
+        assert_matches!(
+            state_machine
+                .schedule_task(task1.clone())
+                .map(|t| t.task_index()),
+            Some(101)
+        );
+        assert_matches!(
+            state_machine
+                .schedule_task(task2.clone())
+                .map(|t| t.task_index()),
+            Some(102)
+        );
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
@@ -1011,7 +1044,12 @@ mod tests {
         assert_eq!(state_machine.handled_task_count(), 2);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         // task3 is finally unblocked after all of readble tasks (task1 and task2) is finished.
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(103));
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task()
+                .map(|t| t.task_index()),
+            Some(103)
+        );
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
     }
@@ -1039,11 +1077,7 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
-        assert_matches!(
-            state_machine
-                .schedule_unblocked_task(),
-            None
-        );
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         state_machine.deschedule_task(&task1);
         assert_matches!(
             state_machine
@@ -1051,11 +1085,7 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(102)
         );
-        assert_matches!(
-            state_machine
-                .schedule_unblocked_task(),
-            None
-        );
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         state_machine.deschedule_task(&task2);
         assert_matches!(
             state_machine
@@ -1063,11 +1093,7 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(103)
         );
-        assert_matches!(
-            state_machine
-                .schedule_unblocked_task(),
-            None
-        );
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         state_machine.deschedule_task(&task3);
         assert!(state_machine.has_no_active_task());
     }
