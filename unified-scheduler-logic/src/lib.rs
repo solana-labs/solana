@@ -525,7 +525,7 @@ impl SchedulingStateMachine {
 
         for attempt in task.lock_attempts() {
             let page = attempt.page_mut(&mut self.page_token);
-            let lock_status = if true || page.has_no_blocked_task() {
+            let lock_status = if page.has_no_blocked_task() {
                 Self::attempt_lock_page(page, attempt.requested_usage)
             } else {
                 LockResult::Err(())
