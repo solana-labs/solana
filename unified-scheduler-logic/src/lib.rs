@@ -686,8 +686,12 @@ impl SchedulingStateMachine {
 
     /// Rewind the inactive SchedulingStateMachine state to be initialized
     ///
-    /// This isn't _reset_. This panics if the state machine hasn't properly been finished (i.e.
-    /// there should be no active task)
+    /// This isn't _reset_. This method is intended to be used to reuse SchedulingStateMachine
+    /// instance (to avoid unsafe its `unsafe`
+    /// [constructor](SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling)
+    /// as much as possible) and its (possbily cached) associated [`Page`]s for processing other
+    /// slots. This panics if the state machine hasn't properly been finished (i.e.  there should
+    /// be no active task) to uphold invariants of [`Page`] required for such a reuse.
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
