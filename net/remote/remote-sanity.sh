@@ -65,7 +65,7 @@ local|tar|skip)
   export USE_INSTALL=1
   solana_cli=solana
   solana_gossip=solana-gossip
-  solana_install=solana-install
+  solana_install=agave-install
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -122,7 +122,7 @@ else
 fi
 
 if $installCheck && [[ -r update_manifest_keypair.json ]]; then
-  echo "--- $sanityTargetIp: solana-install test"
+  echo "--- $sanityTargetIp: agave-install test"
 
   (
     set -x

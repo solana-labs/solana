@@ -1,7 +1,7 @@
 [package]
-name = "solana-watchtower"
+name = "agave-watchtower"
 description = "Blockchain, Rebuilt for Scale"
-documentation = "https://docs.rs/solana-watchtower"
+documentation = "https://docs.rs/agave-watchtower"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }

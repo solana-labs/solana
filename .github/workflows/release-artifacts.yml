@@ -70,7 +70,7 @@ jobs:
           mkdir -p "windows-release/$FOLDER_NAME"
           cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "windows-release/$FOLDER_NAME/"
           cp -v "solana-release-x86_64-pc-windows-msvc.yml" "windows-release/$FOLDER_NAME/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "windows-release/$FOLDER_NAME"
+          cp -v "agave-install-init-x86_64-pc-windows-msvc"* "windows-release/$FOLDER_NAME"
 
       - name: Upload Artifacts
         if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}

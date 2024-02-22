@@ -18,11 +18,11 @@ You will want to be aware of the following flags:
 - `--no-voting`: runs the validator without participating in consensus. Typically, you do not want to run a validator as _both_ a consensus node and a full RPC node due to resource constraints.
 - `--private-rpc`: does not publish the validator's open RPC port in the `solana gossip` command
 
-> For more explanation on the flags used in the command, refer to the `solana-validator --help` command
+> For more explanation on the flags used in the command, refer to the `agave-validator --help` command
 
 ```
 #!/bin/bash
-exec solana-validator \
+exec agave-validator \
     --identity /home/sol/validator-keypair.json \
     --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
     --known-validator dDzy5SR3AXdYWVqbDEkVFdvSPCtS9ihF5kJkHCtXoFs \
