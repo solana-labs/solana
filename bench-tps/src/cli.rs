@@ -588,14 +588,13 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(commitment_config) = matches.value_of("commitment_config") {
-        // Don't need else here. Input validation done in ArgMatches
-        if commitment_config == "processed" {
-            args.commitment_config = CommitmentConfig::processed();
-        } else if commitment_config == "confirmed" {
-            args.commitment_config = CommitmentConfig::confirmed();
-        } else if commitment_config == "finalized" {
-            args.commitment_config = CommitmentConfig::finalized();
-        }
+        // the * in the match will never be triggered. Validation done by ArgMatches
+        args.commitment_config = match commitment_config {
+            "processed" => CommitmentConfig::processed(),
+            "confirmed" => CommitmentConfig::confirmed(),
+            "finalized" => CommitmentConfig::finalized(),
+            _ => CommitmentConfig::processed(),
+        };
     }
 
     Ok(args)
