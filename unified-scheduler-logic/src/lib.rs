@@ -459,6 +459,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 /// `solana-unified-scheduler-pool`.
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(count_token(pub)))]
 pub struct SchedulingStateMachine {
+    last_task_index: usize,
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: ShortCounter,
     handled_task_count: ShortCounter,
