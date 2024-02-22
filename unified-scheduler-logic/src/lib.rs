@@ -1000,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_readonly_then_writable_then_readonly_lineralized() {
+    fn test_schedule_readonly_then_writable_then_readonly_linearized() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
