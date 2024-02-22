@@ -926,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_multiple_readonly_task() {
+    fn test_schedule_multiple_readonly_task_and_counts() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
@@ -937,6 +937,7 @@ mod tests {
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
+        // both of read-only tasks should be immediately runnable
         assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
         assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
 
@@ -950,6 +951,7 @@ mod tests {
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 0);
         assert_eq!(state_machine.handled_task_count(), 2);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
