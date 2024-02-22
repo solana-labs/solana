@@ -1257,7 +1257,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bad task index: 101 > 101")]
+    #[should_panic(expected = "bad task index: 101 > 102")]
     fn test_schedule_task_out_of_order() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
