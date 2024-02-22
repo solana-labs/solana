@@ -460,7 +460,10 @@ impl StandardBroadcastRun {
     }
 
     fn report_and_reset_stats(&mut self, was_interrupted: bool) {
-        let unfinished_slot = self.unfinished_slot.as_ref().unwrap();
+        let Some(unfinished_slot) = self.unfinished_slot.as_ref() else {
+            warn!("Unfinished slot is None, unable to report and reset stats.");
+            return;
+        };
         if was_interrupted {
             self.process_shreds_stats.submit(
                 "broadcast-process-shreds-interrupted-stats",
