@@ -676,9 +676,14 @@ impl SchedulingStateMachine {
         })
     }
 
+    /// Rewind the state to the initialized state
+    ///
+    /// This isn't _reset_. Panics if the state machine hasn't properly been finished (i.e.
+    /// no_active_task)
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
+        self.last_task_index = None;
         self.active_task_count.reset_to_zero();
         self.handled_task_count.reset_to_zero();
         self.unblocked_task_count.reset_to_zero();
@@ -789,8 +794,10 @@ mod tests {
         };
         state_machine.total_task_count.increment_self();
         assert_eq!(state_machine.total_task_count(), 1);
+        state_machine.last_task_index = Some(1);
         state_machine.reinitialize();
         assert_eq!(state_machine.total_task_count(), 0);
+        assert_eq!(state_machine.last_task_index, None);
     }
 
     #[test]
