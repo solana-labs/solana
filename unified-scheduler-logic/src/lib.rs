@@ -678,8 +678,8 @@ impl SchedulingStateMachine {
 
     /// Rewind the state to the initialized state
     ///
-    /// This isn't _reset_. Panics if the state machine hasn't properly been finished (i.e.
-    /// no_active_task)
+    /// This isn't _reset_. This panics if the state machine hasn't properly been finished (i.e.
+    /// there should be no active task)
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
