@@ -15,7 +15,10 @@ use {
             create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
             ReadableAccount, WritableAccount,
         },
-        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation},
+        feature_set::{
+            self, include_loaded_accounts_data_size_in_fee_calculation,
+            remove_rounding_in_fee_calculation,
+        },
         fee::FeeStructure,
         message::SanitizedMessage,
         native_loader,
@@ -74,6 +77,7 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
                         .into(),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                        feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
                     )
                 } else {
                     return (Err(TransactionError::BlockhashNotFound), None);
@@ -682,6 +686,7 @@ mod tests {
                 .unwrap_or_default()
                 .into(),
             false,
+            true,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -1210,6 +1215,7 @@ mod tests {
                 .unwrap_or_default()
                 .into(),
             false,
+            true,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);
 

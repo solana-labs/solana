@@ -747,6 +747,8 @@ impl Consumer {
             bank.feature_set.is_active(
                 &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
             ),
+            bank.feature_set
+                .is_active(&feature_set::remove_rounding_in_fee_calculation::id()),
         );
         let (mut fee_payer_account, _slot) = bank
             .rc

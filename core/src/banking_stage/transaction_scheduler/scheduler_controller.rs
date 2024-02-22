@@ -25,8 +25,13 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::MAX_PROCESSING_AGE,
-        feature_set::include_loaded_accounts_data_size_in_fee_calculation, fee::FeeBudgetLimits,
-        saturating_add_assign, transaction::SanitizedTransaction,
+        feature_set::{
+            include_loaded_accounts_data_size_in_fee_calculation,
+            remove_rounding_in_fee_calculation,
+        },
+        fee::FeeBudgetLimits,
+        saturating_add_assign,
+        transaction::SanitizedTransaction,
     },
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
@@ -422,6 +427,8 @@ impl SchedulerController {
             fee_budget_limits,
             bank.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            bank.feature_set
+                .is_active(&remove_rounding_in_fee_calculation::id()),
         );
 
         // We need a multiplier here to avoid rounding down too aggressively.

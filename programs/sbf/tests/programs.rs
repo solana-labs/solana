@@ -3713,6 +3713,7 @@ fn test_program_fees() {
             .unwrap_or_default()
             .into(),
         false,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3736,6 +3737,7 @@ fn test_program_fees() {
             .unwrap_or_default()
             .into(),
         false,
+        true,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 

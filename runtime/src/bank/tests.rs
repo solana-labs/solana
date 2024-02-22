@@ -10031,7 +10031,7 @@ fn calculate_test_fee(
         .unwrap_or_default()
         .into();
 
-    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false)
+    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false, true)
 }
 
 #[test]
