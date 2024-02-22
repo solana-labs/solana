@@ -50,7 +50,7 @@ pull_request_rules:
   - name: automatic merge (squash) on CI success
     conditions:
       - and:
-        - status-success=buildkite/solana
+        - status-success=buildkite/agave
         - status-success=ci-gate
         - label=automerge
         - label!=no-automerge
