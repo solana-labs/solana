@@ -775,7 +775,7 @@ mod tests {
         pages: Option<Arc<RefCell<HashMap<Pubkey, Page>>>>,
     ) -> impl FnMut(Pubkey) -> Page {
         let pages = pages.unwrap_or_default();
-        move |address| pages.lock().unwrap().entry(address).or_default().clone()
+        move |address| pages.borrow_mut().entry(address).or_default().clone()
     }
 
     #[test]
