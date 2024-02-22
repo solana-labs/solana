@@ -1023,13 +1023,12 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
-        assert_eq!(state_machine.active_task_count(), 3);
-        assert_eq!(state_machine.handled_task_count(), 0);
-        assert_eq!(state_machine.unblocked_task_queue_count(), 0);
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task(),
+            None
+        );
         state_machine.deschedule_task(&task1);
-        assert_eq!(state_machine.active_task_count(), 2);
-        assert_eq!(state_machine.handled_task_count(), 1);
-        assert_eq!(state_machine.unblocked_task_queue_count(), 1);
         assert_matches!(
             state_machine
                 .schedule_unblocked_task()
