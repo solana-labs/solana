@@ -28,7 +28,7 @@ use {
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            validate_maximum_full_snapshot_archives_to_retain,
+            is_within_range, validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
@@ -72,6 +72,7 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -851,6 +852,16 @@ fn main() {
                 .global(true)
                 .hidden(hidden_unless_forced())
                 .help(BlockVerificationMethod::cli_message()),
+        )
+        .arg(
+            Arg::with_name("unified_scheduler_handler_threads")
+                .long("unified-scheduler-handler-threads")
+                .value_name("COUNT")
+                .takes_value(true)
+                .validator(|s| is_within_range(s, 1..))
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")

@@ -61,6 +61,7 @@ solana-streamer = { workspace = true }
 solana-svm = { workspace = true }
 solana-test-validator = { workspace = true }
 solana-tpu-client = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }

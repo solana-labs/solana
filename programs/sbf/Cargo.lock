@@ -6546,6 +6546,7 @@ dependencies = [
  "solana-svm",
  "solana-test-validator",
  "solana-tpu-client",
+ "solana-unified-scheduler-pool",
  "solana-version",
  "solana-vote-program",
  "symlink",

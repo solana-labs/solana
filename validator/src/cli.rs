@@ -47,6 +47,7 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     std::{path::PathBuf, str::FromStr},
 };
 
@@ -1529,6 +1530,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .possible_values(BlockProductionMethod::cli_names())
                 .help(BlockProductionMethod::cli_message()),
+        )
+        .arg(
+            Arg::with_name("unified_scheduler_handler_threads")
+                .long("unified-scheduler-handler-threads")
+                .hidden(hidden_unless_forced())
+                .value_name("COUNT")
+                .takes_value(true)
+                .validator(|s| is_within_range(s, 1..))
+                .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
             Arg::with_name("wen_restart")
