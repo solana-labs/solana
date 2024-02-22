@@ -693,7 +693,7 @@ impl SchedulingStateMachine {
     /// This method is intended to reuse SchedulingStateMachine instance (to avoid its `unsafe`
     /// [constructor](SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling)
     /// as much as possible) and its (possbily cached) associated [`Page`]s for processing other
-    /// slots.
+    /// slots. 
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
@@ -769,12 +769,12 @@ mod tests {
         SanitizedTransaction::from_transaction_for_tests(unsigned)
     }
 
+     // Arc<Mutex<_>> is needed for inspection of the collection by test code
     fn create_address_loader(
         pages: Option<Arc<Mutex<HashMap<Pubkey, Page>>>>,
     ) -> impl FnMut(Pubkey) -> Page {
-        //let pages = pages.unwrap_or_default();
-        //move |address| pages.lock().unwrap().entry(address).or_default().clone()
-        move |address| HashMap::<_, Page>::new().entry(address).or_default().clone()
+        let pages = pages.unwrap_or_default();
+        move |address| pages.lock().unwrap().entry(address).or_default().clone()
     }
 
     #[test]
