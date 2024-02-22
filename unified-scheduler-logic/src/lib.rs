@@ -499,7 +499,7 @@ impl SchedulingStateMachine {
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         let new_task_index = task.task_index();
         if let Some(old_task_index) = self.last_task_index.replace(new_task_index) {
-            assert!(new_task_index > old_task_index);//, "bad task index: {new_task_index} > {old_task_index}");
+            assert!(new_task_index > old_task_index, "bad task index: {new_task_index} > {old_task_index}");
         }
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
