@@ -994,7 +994,9 @@ mod tests {
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(103));
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(102));
+        state_machine.deschedule_task(&task3);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
