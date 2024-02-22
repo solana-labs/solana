@@ -989,10 +989,12 @@ mod tests {
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 1);
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
         state_machine.deschedule_task(&task2);
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(102));
     }
 
     #[test]
