@@ -683,7 +683,7 @@ impl SchedulingStateMachine {
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
-        //self.last_task_index = None;
+        self.last_task_index = None;
         self.active_task_count.reset_to_zero();
         self.handled_task_count.reset_to_zero();
         self.unblocked_task_count.reset_to_zero();
@@ -1239,5 +1239,20 @@ mod tests {
             page.0.borrow_mut(&mut state_machine.page_token),
             &LockAttempt::new(page, RequestedUsage::Writable),
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "internal error: entered unreachable code")]
+    fn test_schedule_same_task() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized1 = transaction_with_writable_address(conflicting_address);
+        let sanitized2 = transaction_with_writable_address(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
+
+        let mut state_machine = unsafe {
+            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+        };
     }
 }
