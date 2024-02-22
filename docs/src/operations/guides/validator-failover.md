@@ -85,11 +85,11 @@ For more information on etcd TLS setup, please refer to
 https://etcd.io/docs/v3.5/op-guide/security/#example-2-client-to-server-authentication-with-https-client-certificates
 
 ### Primary Validator
-The following additional `solana-validator` parameters are required to enable
+The following additional `agave-validator` parameters are required to enable
 tower storage into etcd:
 
 ```
-solana-validator ... \
+agave-validator ... \
   --tower-storage etcd \
   --etcd-cacert-file certs/etcd-ca.pem \
   --etcd-cert-file certs/validator.pem \
@@ -103,7 +103,7 @@ that your etcd endpoint remain accessible at all times.
 
 ### Secondary Validator
 Configure the secondary validator like the primary with the exception of the
-following `solana-validator` command-line argument changes:
+following `agave-validator` command-line argument changes:
 * Generate and use a secondary validator identity: `--identity secondary-validator-keypair.json`
 * Add `--no-check-vote-account`
 * Add `--authorized-voter validator-keypair.json` (where
@@ -114,8 +114,8 @@ When both validators are running normally and caught up to the cluster, a
 failover from primary to secondary can be triggered by running the following
 command on the secondary validator:
 ```bash
-$ solana-validator wait-for-restart-window --identity validator-keypair.json \
-  && solana-validator set-identity validator-keypair.json
+$ agave-validator wait-for-restart-window --identity validator-keypair.json \
+  && agave-validator set-identity validator-keypair.json
 ```
 
 The secondary validator will acquire a lock on the tower in etcd to ensure
@@ -131,7 +131,7 @@ exit. However if/when the secondary validator restarts, it will do so using the
 secondary validator identity and thus the restart cycle is broken.
 
 ## Triggering a failover via monitoring
-Monitoring of your choosing can invoke the `solana-validator set-identity
+Monitoring of your choosing can invoke the `agave-validator set-identity
 validator-keypair.json` command mentioned in the previous section.
 
 It is not necessary to guarantee the primary validator has halted before failing

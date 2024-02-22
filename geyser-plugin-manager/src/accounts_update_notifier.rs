@@ -1,13 +1,13 @@
 /// Module responsible for notifying plugins of account updates
 use {
     crate::geyser_plugin_manager::GeyserPluginManager,
+    agave_geyser_plugin_interface::geyser_plugin_interface::{
+        ReplicaAccountInfoV3, ReplicaAccountInfoVersions,
+    },
     log::*,
     solana_accounts_db::{
         account_storage::meta::StoredAccountMeta,
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
-    },
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfoV3, ReplicaAccountInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,

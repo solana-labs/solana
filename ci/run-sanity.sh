@@ -31,7 +31,7 @@ while [[ $latest_slot -le $((snapshot_slot + 1)) ]]; do
   latest_slot=$($solana_cli --url http://localhost:8899 slot --commitment processed)
 done
 
-$solana_validator --ledger config/ledger exit --force || true
+$agave_validator --ledger config/ledger exit --force || true
 
 wait $pid
 

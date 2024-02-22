@@ -317,7 +317,7 @@ solana-bench-tps = { path = "bench-tps", version = "=1.19.0" }
 solana-bloom = { path = "bloom", version = "=1.19.0" }
 solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=1.19.0" }
 solana-bucket-map = { path = "bucket_map", version = "=1.19.0" }
-solana-cargo-registry = { path = "cargo-registry", version = "=1.19.0" }
+agave-cargo-registry = { path = "cargo-registry", version = "=1.19.0" }
 solana-clap-utils = { path = "clap-utils", version = "=1.19.0" }
 solana-clap-v3-utils = { path = "clap-v3-utils", version = "=1.19.0" }
 solana-cli = { path = "cli", version = "=1.19.0" }
@@ -336,7 +336,7 @@ solana-frozen-abi = { path = "frozen-abi", version = "=1.19.0" }
 solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=1.19.0" }
 solana-genesis = { path = "genesis", version = "=1.19.0" }
 solana-genesis-utils = { path = "genesis-utils", version = "=1.19.0" }
-solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.19.0" }
+agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.19.0" }
 solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.19.0" }
 solana-gossip = { path = "gossip", version = "=1.19.0" }
 solana-ledger = { path = "ledger", version = "=1.19.0" }

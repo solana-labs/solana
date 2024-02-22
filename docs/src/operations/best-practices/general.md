@@ -23,12 +23,12 @@ watch past workshops through the
 
 ## Help with the validator command line
 
-From within the Solana CLI, you can execute the `solana-validator` command with
+From within the Solana CLI, you can execute the `agave-validator` command with
 the `--help` flag to get a better understanding of the flags and sub commands
 available.
 
 ```
-solana-validator --help
+agave-validator --help
 ```
 
 ## Restarting your validator
@@ -49,14 +49,14 @@ solana leader-schedule
 Based on the current slot and the leader schedule, you can calculate open time
 windows where your validator is not expected to produce blocks.
 
-Assuming you are ready to restart, you may use the `solana-validator exit`
+Assuming you are ready to restart, you may use the `agave-validator exit`
 command. The command exits your validator process when an appropriate idle time
 window is reached. Assuming that you have systemd implemented for your validator
 process, the validator should restart automatically after the exit. See the
 below help command for details:
 
 ```
-solana-validator exit --help
+agave-validator exit --help
 ```
 
 ## Upgrading
@@ -75,28 +75,28 @@ process.
 It is a best practice to always build your Solana binaries from source. If you
 build from source, you are certain that the code you are building has not been
 tampered with before the binary was created. You may also be able to optimize
-your `solana-validator` binary to your specific hardware.
+your `agave-validator` binary to your specific hardware.
 
 If you build from source on the validator machine (or a machine with the same
 CPU), you can target your specific architecture using the `-march` flag. Refer
 to the following doc for
 [instructions on building from source](../../cli/install.md#build-from-source).
 
-### solana-install
+### agave-install
 
 If you are not comfortable building from source, or you need to quickly install
 a new version to test something out, you could instead try using the
-`solana-install` command.
+`agave-install` command.
 
 Assuming you want to install Solana version `1.14.17`, you would execute the
 following:
 
 ```
-solana-install init 1.14.17
+agave-install init 1.14.17
 ```
 
 This command downloads the executable for `1.14.17` and installs it into a
-`.local` directory. You can also look at `solana-install --help` for more
+`.local` directory. You can also look at `agave-install --help` for more
 options.
 
 > **Note** this command only works if you already have the solana cli installed.
@@ -106,7 +106,7 @@ options.
 ### Restart
 
 For all install methods, the validator process will need to be restarted before
-the newly installed version is in use. Use `solana-validator exit` to restart
+the newly installed version is in use. Use `agave-validator exit` to restart
 your validator process.
 
 ### Verifying version
@@ -132,13 +132,13 @@ have state locally. In other cases such as restarts for upgrades, a snapshot
 download should be avoided.
 
 To avoid downloading a snapshot on restart, add the following flag to the
-`solana-validator` command:
+`agave-validator` command:
 
 ```
 --no-snapshot-fetch
 ```
 
-If you use this flag with the `solana-validator` command, make sure that you run
+If you use this flag with the `agave-validator` command, make sure that you run
 `solana catchup <pubkey>` after your validator starts to make sure that the
 validator is catching up in a reasonable time. After some time (potentially a
 few hours), if it appears that your validator continues to fall behind, then you
@@ -199,7 +199,7 @@ It is important that you do not accidentally run out of funds in your identity
 account, as your node will stop voting. It is also important to note that this
 account keypair is the most vulnerable of the three keypairs in a vote account
 because the keypair for the identity account is stored on your validator when
-running the `solana-validator` software. How much SOL you should store there is
+running the `agave-validator` software. How much SOL you should store there is
 up to you. As a best practice, make sure to check the account regularly and
 refill or deduct from it as needed. To check the account balance do:
 
@@ -207,7 +207,7 @@ refill or deduct from it as needed. To check the account balance do:
 solana balance validator-keypair.json
 ```
 
-> **Note** `solana-watchtower` can monitor for a minimum validator identity
+> **Note** `agave-watchtower` can monitor for a minimum validator identity
 > balance. See [monitoring best practices](./monitoring.md) for details.
 
 ## Withdrawing From The Vote Account

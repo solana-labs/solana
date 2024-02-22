@@ -431,7 +431,7 @@ impl Rocks {
                 info!(
                     "Opening Rocks with secondary (read only) access at: {secondary_path:?}. \
                     This secondary access could temporarily degrade other accesses, such as \
-                    by solana-validator"
+                    by agave-validator"
                 );
                 DB::open_cf_descriptors_as_secondary(
                     &db_options,

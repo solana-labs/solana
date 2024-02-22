@@ -63,6 +63,217 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-cargo-registry"
+version = "1.19.0"
+dependencies = [
+ "clap 2.33.3",
+ "flate2",
+ "hex",
+ "hyper",
+ "log",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "solana-clap-utils",
+ "solana-cli",
+ "solana-cli-config",
+ "solana-cli-output",
+ "solana-logger",
+ "solana-remote-wallet",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk",
+ "solana-version",
+ "tar",
+ "tempfile",
+ "tokio",
+ "toml 0.8.10",
+]
+
+[[package]]
+name = "agave-geyser-plugin-interface"
+version = "1.19.0"
+dependencies = [
+ "log",
+ "solana-sdk",
+ "solana-transaction-status",
+ "thiserror",
+]
+
+[[package]]
+name = "agave-install"
+version = "1.19.0"
+dependencies = [
+ "atty",
+ "bincode",
+ "bzip2",
+ "chrono",
+ "clap 2.33.3",
+ "console",
+ "crossbeam-channel",
+ "ctrlc",
+ "dirs-next",
+ "indicatif",
+ "lazy_static",
+ "nix 0.26.4",
+ "reqwest",
+ "scopeguard",
+ "semver 1.0.22",
+ "serde",
+ "serde_yaml 0.8.26",
+ "serde_yaml 0.9.32",
+ "solana-clap-utils",
+ "solana-config-program",
+ "solana-logger",
+ "solana-rpc-client",
+ "solana-sdk",
+ "solana-version",
+ "tar",
+ "tempfile",
+ "url 2.5.0",
+ "winapi 0.3.9",
+ "winreg",
+]
+
+[[package]]
+name = "agave-ledger-tool"
+version = "1.19.0"
+dependencies = [
+ "assert_cmd",
+ "bs58",
+ "bytecount",
+ "chrono",
+ "clap 2.33.3",
+ "crossbeam-channel",
+ "csv",
+ "dashmap",
+ "futures 0.3.30",
+ "histogram",
+ "itertools",
+ "log",
+ "num_cpus",
+ "regex",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "solana-account-decoder",
+ "solana-accounts-db",
+ "solana-bpf-loader-program",
+ "solana-clap-utils",
+ "solana-cli-output",
+ "solana-core",
+ "solana-cost-model",
+ "solana-entry",
+ "solana-geyser-plugin-manager",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-measure",
+ "solana-program-runtime",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-stake-program",
+ "solana-storage-bigtable",
+ "solana-streamer",
+ "solana-svm",
+ "solana-transaction-status",
+ "solana-unified-scheduler-pool",
+ "solana-version",
+ "solana-vote-program",
+ "solana_rbpf",
+ "thiserror",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
+name = "agave-validator"
+version = "1.19.0"
+dependencies = [
+ "agave-geyser-plugin-interface",
+ "chrono",
+ "clap 2.33.3",
+ "console",
+ "core_affinity",
+ "crossbeam-channel",
+ "fd-lock",
+ "indicatif",
+ "itertools",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-ipc-server",
+ "jsonrpc-server-utils",
+ "lazy_static",
+ "libc",
+ "libloading",
+ "log",
+ "num_cpus",
+ "rand 0.8.5",
+ "rayon",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.9.32",
+ "signal-hook",
+ "solana-account-decoder",
+ "solana-accounts-db",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-core",
+ "solana-download-utils",
+ "solana-entry",
+ "solana-faucet",
+ "solana-genesis-utils",
+ "solana-geyser-plugin-manager",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-perf",
+ "solana-poh",
+ "solana-rpc",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-send-transaction-service",
+ "solana-storage-bigtable",
+ "solana-streamer",
+ "solana-svm",
+ "solana-test-validator",
+ "solana-tpu-client",
+ "solana-unified-scheduler-pool",
+ "solana-version",
+ "solana-vote-program",
+ "spl-token-2022",
+ "symlink",
+ "thiserror",
+ "tikv-jemallocator",
+]
+
+[[package]]
+name = "agave-watchtower"
+version = "1.19.0"
+dependencies = [
+ "clap 2.33.3",
+ "humantime",
+ "log",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-cli-output",
+ "solana-logger",
+ "solana-metrics",
+ "solana-notifier",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk",
+ "solana-version",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5483,35 +5694,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-cargo-registry"
-version = "1.19.0"
-dependencies = [
- "clap 2.33.3",
- "flate2",
- "hex",
- "hyper",
- "log",
- "rustc_version 0.4.0",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "solana-clap-utils",
- "solana-cli",
- "solana-cli-config",
- "solana-cli-output",
- "solana-logger",
- "solana-remote-wallet",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-sdk",
- "solana-version",
- "tar",
- "tempfile",
- "tokio",
- "toml 0.8.10",
-]
-
-[[package]]
 name = "solana-cargo-test-bpf"
 version = "1.19.0"
 
@@ -6041,19 +6223,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-geyser-plugin-interface"
-version = "1.19.0"
-dependencies = [
- "log",
- "solana-sdk",
- "solana-transaction-status",
- "thiserror",
-]
-
-[[package]]
 name = "solana-geyser-plugin-manager"
 version = "1.19.0"
 dependencies = [
+ "agave-geyser-plugin-interface",
  "bs58",
  "crossbeam-channel",
  "json5",
@@ -6064,7 +6237,6 @@ dependencies = [
  "serde_json",
  "solana-accounts-db",
  "solana-entry",
- "solana-geyser-plugin-interface",
  "solana-ledger",
  "solana-measure",
  "solana-metrics",
@@ -6124,41 +6296,6 @@ dependencies = [
  "static_assertions",
  "test-case",
  "thiserror",
-]
-
-[[package]]
-name = "solana-install"
-version = "1.19.0"
-dependencies = [
- "atty",
- "bincode",
- "bzip2",
- "chrono",
- "clap 2.33.3",
- "console",
- "crossbeam-channel",
- "ctrlc",
- "dirs-next",
- "indicatif",
- "lazy_static",
- "nix 0.26.4",
- "reqwest",
- "scopeguard",
- "semver 1.0.22",
- "serde",
- "serde_yaml 0.8.26",
- "serde_yaml 0.9.32",
- "solana-clap-utils",
- "solana-config-program",
- "solana-logger",
- "solana-rpc-client",
- "solana-sdk",
- "solana-version",
- "tar",
- "tempfile",
- "url 2.5.0",
- "winapi 0.3.9",
- "winreg",
 ]
 
 [[package]]
@@ -6246,58 +6383,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "trees",
-]
-
-[[package]]
-name = "solana-ledger-tool"
-version = "1.19.0"
-dependencies = [
- "assert_cmd",
- "bs58",
- "bytecount",
- "chrono",
- "clap 2.33.3",
- "crossbeam-channel",
- "csv",
- "dashmap",
- "futures 0.3.30",
- "histogram",
- "itertools",
- "log",
- "num_cpus",
- "regex",
- "serde",
- "serde_json",
- "signal-hook",
- "solana-account-decoder",
- "solana-accounts-db",
- "solana-bpf-loader-program",
- "solana-clap-utils",
- "solana-cli-output",
- "solana-core",
- "solana-cost-model",
- "solana-entry",
- "solana-geyser-plugin-manager",
- "solana-gossip",
- "solana-ledger",
- "solana-logger",
- "solana-measure",
- "solana-program-runtime",
- "solana-rpc",
- "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
- "solana-storage-bigtable",
- "solana-streamer",
- "solana-svm",
- "solana-transaction-status",
- "solana-unified-scheduler-pool",
- "solana-version",
- "solana-vote-program",
- "solana_rbpf",
- "thiserror",
- "tikv-jemallocator",
- "tokio",
 ]
 
 [[package]]
@@ -7464,72 +7549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-validator"
-version = "1.19.0"
-dependencies = [
- "chrono",
- "clap 2.33.3",
- "console",
- "core_affinity",
- "crossbeam-channel",
- "fd-lock",
- "indicatif",
- "itertools",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "jsonrpc-ipc-server",
- "jsonrpc-server-utils",
- "lazy_static",
- "libc",
- "libloading",
- "log",
- "num_cpus",
- "rand 0.8.5",
- "rayon",
- "serde",
- "serde_json",
- "serde_yaml 0.9.32",
- "signal-hook",
- "solana-account-decoder",
- "solana-accounts-db",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-core",
- "solana-download-utils",
- "solana-entry",
- "solana-faucet",
- "solana-genesis-utils",
- "solana-geyser-plugin-interface",
- "solana-geyser-plugin-manager",
- "solana-gossip",
- "solana-ledger",
- "solana-logger",
- "solana-metrics",
- "solana-net-utils",
- "solana-perf",
- "solana-poh",
- "solana-rpc",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-runtime",
- "solana-sdk",
- "solana-send-transaction-service",
- "solana-storage-bigtable",
- "solana-streamer",
- "solana-svm",
- "solana-test-validator",
- "solana-tpu-client",
- "solana-unified-scheduler-pool",
- "solana-version",
- "solana-vote-program",
- "spl-token-2022",
- "symlink",
- "thiserror",
- "tikv-jemallocator",
-]
-
-[[package]]
 name = "solana-version"
 version = "1.19.0"
 dependencies = [
@@ -7583,25 +7602,6 @@ dependencies = [
  "solana-sdk",
  "test-case",
  "thiserror",
-]
-
-[[package]]
-name = "solana-watchtower"
-version = "1.19.0"
-dependencies = [
- "clap 2.33.3",
- "humantime",
- "log",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-cli-output",
- "solana-logger",
- "solana-metrics",
- "solana-notifier",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-sdk",
- "solana-version",
 ]
 
 [[package]]
