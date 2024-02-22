@@ -931,15 +931,15 @@ mod tests {
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         // both of read-only tasks should be immediately runnable
-        assert_matches!(state_machine.schedule_task(task1.clone()), Some(_));
-        assert_matches!(state_machine.schedule_task(task2.clone()), Some(_));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
+        assert_matches!(state_machine.schedule_task(task2.clone()).map(|t| t.task_index()), Some(102));
 
         assert_eq!(state_machine.active_task_count(), 2);
         assert_eq!(state_machine.handled_task_count(), 0);
