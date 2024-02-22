@@ -895,14 +895,14 @@ mod tests {
     fn test_schedule_order_blocked_earlier_task_then_newly_scheduled_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 4, address_loader);
-        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 5, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized.clone(), 103, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
-        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(3));
+        assert_matches!(state_machine.schedule_task(task1.clone()).map(|t| t.task_index()), Some(101));
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
@@ -913,12 +913,12 @@ mod tests {
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
         assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(4));
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(102));
         assert_eq!(state_machine.unblocked_task_count(), 1);
 
         state_machine.deschedule_task(&task2);
 
-        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(5));
+        assert_matches!(state_machine.schedule_unblocked_task().map(|t| t.task_index()), Some(103));
         assert_eq!(state_machine.unblocked_task_count(), 2);
 
         state_machine.deschedule_task(&task3);
