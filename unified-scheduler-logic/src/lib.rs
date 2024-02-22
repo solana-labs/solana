@@ -459,7 +459,7 @@ const_assert_eq!(mem::size_of::<Page>(), 8);
 /// `solana-unified-scheduler-pool`.
 #[cfg_attr(feature = "dev-context-only-utils", field_qualifiers(count_token(pub)))]
 pub struct SchedulingStateMachine {
-    last_task_index: usize,
+    last_task_index: Option<usize>,
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: ShortCounter,
     handled_task_count: ShortCounter,
@@ -686,7 +686,7 @@ impl SchedulingStateMachine {
     #[must_use]
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
-            last_task_index: Default::default(),
+            last_task_index: None,
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: ShortCounter::zero(),
             handled_task_count: ShortCounter::zero(),
