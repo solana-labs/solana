@@ -688,7 +688,7 @@ impl SchedulingStateMachine {
     ///
     /// This isn't called _reset_ to indicate this isn't safe to call this at any given moment.
     /// This panics if the state machine hasn't properly been finished (i.e.  there should be no
-    /// active task) to uphold invariants of [`Page`] required for such a reuse.
+    /// active task) to uphold invariants of [`Page`]s.
     ///
     /// This method is intended to be used to reuse SchedulingStateMachine
     /// instance (to avoid unsafe its `unsafe`
