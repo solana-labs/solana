@@ -8,11 +8,9 @@
 
 pub use crate::clock::Epoch;
 use {
-    crate::{
-        account_info::AccountInfo, program_error::ProgramError, serialize_utils::cursor::read_u64,
-        sysvar::SysvarId,
-    },
-    std::{cell::RefCell, io::Cursor, ops::Deref, rc::Rc, sync::Arc},
+    crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::SysvarId},
+    bytemuck::{Pod, Zeroable},
+    std::{cell::RefCell, ops::Deref, rc::Rc, sync::Arc},
 };
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
@@ -128,30 +126,39 @@ impl StakeHistoryGetEntry for Arc<StakeHistory> {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Zeroable, Pod)]
+struct StakeHistoryEpochEntry {
+    pub epoch: Epoch,
+    pub effective: u64,
+    pub activating: u64,
+    pub deactivating: u64,
+}
+
 impl StakeHistoryGetEntry for StakeHistoryData<'_> {
     fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
-        // TODO binary search
         let data = self.0.borrow();
-        let mut cursor = Cursor::new(&*data);
-        let entry_count = read_u64(&mut cursor).unwrap();
+        if let Ok(history) = bytemuck::try_cast_slice::<u8, StakeHistoryEpochEntry>(&data[8..]) {
+            history
+                .binary_search_by(|probe| epoch.cmp(&probe.epoch))
+                .ok()
+                .map(|index| {
+                    let StakeHistoryEpochEntry {
+                        epoch: _,
+                        effective,
+                        activating,
+                        deactivating,
+                    } = history[index];
 
-        for _ in 0..entry_count {
-            // TODO skip reading next three and just adjust the cursor
-            let entry_epoch = read_u64(&mut cursor).unwrap();
-            let effective = read_u64(&mut cursor).unwrap();
-            let activating = read_u64(&mut cursor).unwrap();
-            let deactivating = read_u64(&mut cursor).unwrap();
-
-            if epoch == entry_epoch {
-                return Some(StakeHistoryEntry {
-                    effective,
-                    activating,
-                    deactivating,
-                });
-            }
+                    StakeHistoryEntry {
+                        effective,
+                        activating,
+                        deactivating,
+                    }
+                })
+        } else {
+            None
         }
-
-        None
     }
 }
 
