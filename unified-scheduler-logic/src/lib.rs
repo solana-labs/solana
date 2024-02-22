@@ -1217,7 +1217,7 @@ mod tests {
             Some(101)
         );
         assert_matches!(state_machine.schedule_task(task2.clone()), None);
-        let pages = pages.lock().unwrap();
+        let pages = pages.borrow_mut().unwrap();
         let page = pages.get(&conflicting_address).unwrap();
         assert_matches!(
             page.0.borrow_mut(&mut state_machine.page_token).usage,
