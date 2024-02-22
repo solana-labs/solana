@@ -1273,7 +1273,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "bad task index: 102 <= 101")]
+    #[should_panic(expected = "task should have been scheduled")]
     fn test_deschedule_new_task_wihout_scheduling() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
