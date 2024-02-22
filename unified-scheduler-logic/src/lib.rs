@@ -1255,4 +1255,20 @@ mod tests {
         state_machine.schedule_task(task.clone());
         state_machine.schedule_task(task.clone());
     }
+
+    #[test]
+    #[should_panic(expected = "bad task index: 101 > 101")]
+    fn test_schedule_task_out_of_order() {
+        let conflicting_address = Pubkey::new_unique();
+        let sanitized = transaction_with_writable_address(conflicting_address);
+        let address_loader = &mut create_address_loader(None);
+        let task1 = SchedulingStateMachine::create_task(sanitized, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized, 102, address_loader);
+
+        let mut state_machine = unsafe {
+            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
+        };
+        state_machine.schedule_task(task2.clone());
+        state_machine.schedule_task(task1.clone());
+    }
 }
