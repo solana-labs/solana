@@ -792,7 +792,7 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", Page::default()),
-            "aa"
+            "Page(TokenCell(UnsafeCell { .. }))"
         )
     }
 
