@@ -676,7 +676,7 @@ impl SchedulingStateMachine {
         })
     }
 
-    /// Rewind the state to the initialized state
+    /// Rewind the inactive SchedulingStateMachine state to be initialized
     ///
     /// This isn't _reset_. This panics if the state machine hasn't properly been finished (i.e.
     /// there should be no active task)
