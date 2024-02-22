@@ -468,7 +468,7 @@ pub struct SchedulingStateMachine {
     count_token: BlockedPageCountToken,
     page_token: PageToken,
 }
-const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 57);
+const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 58);
 
 impl SchedulingStateMachine {
     pub fn has_no_active_task(&self) -> bool {
