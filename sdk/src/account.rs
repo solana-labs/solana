@@ -63,15 +63,14 @@ mod account_serialize {
         #[serde(with = "serde_bytes")]
         // a slice so we don't have to make a copy just to serialize this
         data: &'a [u8],
-        // can't be &pubkey because abi example doesn't support it
-        owner: Pubkey,
+        owner: &'a Pubkey,
         executable: bool,
         rent_epoch: Epoch,
     }
 
     /// allows us to implement serialize on AccountSharedData that is equivalent to Account::serialize without making a copy of the Vec<u8>
     pub fn serialize_account<S>(
-        account: &(impl ReadableAccount + Serialize),
+        account: &impl ReadableAccount,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
@@ -80,7 +79,7 @@ mod account_serialize {
         let temp = Account {
             lamports: account.lamports(),
             data: account.data(),
-            owner: *account.owner(),
+            owner: account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         };
@@ -846,9 +845,12 @@ pub fn is_executable(account: &impl ReadableAccount, feature_set: &FeatureSet) -
     }
 }
 
-/// Return true if the account program is a builtin program. Note that for
-/// builtin program, even when its account data is empty, it is still be
-/// executable, such as vote program etc.
+/// Return true if the account program is a builtin program.
+///
+/// This function also ensures that all valid builtin programs have non-empty
+/// program data. Typically, the program data contains only the "name" for the
+/// program. If, for some reason, the program account's data is empty, we should
+/// exclude such a program from `builtins`.
 pub fn is_builtin(account: &impl ReadableAccount) -> bool {
     native_loader::check_id(account.owner()) && !account.data().is_empty()
 }

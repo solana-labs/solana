@@ -19,7 +19,6 @@ use {
     },
     dashmap::DashMap,
     derivative::Derivative,
-    lazy_static::lazy_static,
     log::*,
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
@@ -50,7 +49,7 @@ use {
         fmt::Debug,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
-            Arc, Mutex, RwLock, RwLockReadGuard, Weak,
+            Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, Weak,
         },
         thread::{self, JoinHandle},
         time::{Duration, Instant, SystemTime},
@@ -220,11 +219,12 @@ where
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<Self> {
+        let handler_count = handler_count.unwrap_or(Self::default_handler_count());
+        assert!(handler_count >= 1);
+
         let (scheduler_pool_sender, scheduler_pool_receiver) = bounded(1);
         let (cleaner_sender, cleaner_receiver) = unbounded();
         let (cleaner_exit_signal_sender, cleaner_exit_signal_receiver) = unbounded();
-        let handler_count = handler_count.unwrap_or(Self::default_handler_count());
-        assert!(handler_count >= 1);
 
         let cleaner_main_loop = || {
             move || {
@@ -368,15 +368,15 @@ where
     }
 
     pub fn cli_message() -> &'static str {
-        lazy_static! {
-            static ref MESSAGE: String = format!(
+        static MESSAGE: OnceLock<String> = OnceLock::new();
+
+        MESSAGE.get_or_init(|| {
+            format!(
                 "Change the number of the unified scheduler's transaction execution threads \
                  dedicated to each block, otherwise calculated as cpu_cores/4 [default: {}]",
-                DefaultSchedulerPool::default_handler_count()
-            );
-        };
-
-        &MESSAGE
+                Self::default_handler_count()
+            )
+        })
     }
 }
 

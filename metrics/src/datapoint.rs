@@ -167,9 +167,6 @@ macro_rules! create_datapoint {
             point
         }
     };
-    (@point $name:expr $(,)?) => {
-        $crate::datapoint::DataPoint::new(&$name)
-    };
 }
 
 #[macro_export]
@@ -224,11 +221,6 @@ macro_rules! create_datapoint_at {
 
 #[macro_export]
 macro_rules! datapoint {
-    ($level:expr, $name:expr $(,)?) => {
-        if log::log_enabled!($level) {
-            $crate::submit($crate::create_datapoint!(@point $name), $level);
-        }
-    };
     ($level:expr, $name:expr, $($fields:tt)+) => {
         if log::log_enabled!($level) {
             $crate::submit($crate::create_datapoint!(@point $name, $($fields)+), $level);
@@ -252,9 +244,6 @@ macro_rules! datapoint_at {
 
 #[macro_export]
 macro_rules! datapoint_error {
-    ($name:expr $(,)?) => {
-        $crate::datapoint!(log::Level::Error, $name);
-    };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Error, $name, $($fields)+);
     };
@@ -262,9 +251,6 @@ macro_rules! datapoint_error {
 
 #[macro_export]
 macro_rules! datapoint_warn {
-    ($name:expr $(,)?) => {
-        $crate::datapoint!(log::Level::Warn, $name);
-    };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Warn, $name, $($fields)+);
     };
@@ -272,9 +258,6 @@ macro_rules! datapoint_warn {
 
 #[macro_export]
 macro_rules! datapoint_info {
-    ($name:expr) => {
-        $crate::datapoint!(log::Level::Info, $name);
-    };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Info, $name, $($fields)+);
     };
@@ -292,9 +275,6 @@ macro_rules! datapoint_info_at {
 
 #[macro_export]
 macro_rules! datapoint_debug {
-    ($name:expr) => {
-        $crate::datapoint!(log::Level::Debug, $name);
-    };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Debug, $name, $($fields)+);
     };
@@ -302,9 +282,6 @@ macro_rules! datapoint_debug {
 
 #[macro_export]
 macro_rules! datapoint_trace {
-    ($name:expr) => {
-        $crate::datapoint!(log::Level::Trace, $name);
-    };
     ($name:expr, $($fields:tt)+) => {
         $crate::datapoint!(log::Level::Trace, $name, $($fields)+);
     };

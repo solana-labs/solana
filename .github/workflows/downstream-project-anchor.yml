@@ -17,6 +17,9 @@ on:
       - "cargo-test-bpf"
       - "cargo-build-sbf"
       - "cargo-test-sbf"
+      - "scripts/build-downstream-anchor-projects.sh"
+      - ".github/scripts/purge-ubuntu-runner.sh"
+      - ".github/scripts/downstream-project-spl-install-deps.sh"
       - ".github/workflows/downstream-project-anchor.yml"
   workflow_call:
     inputs:

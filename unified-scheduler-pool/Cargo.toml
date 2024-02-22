@@ -15,7 +15,6 @@ cpu-time = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 derivative = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
 qualifier_attr = { workspace = true }
 rustix = { workspace = true }

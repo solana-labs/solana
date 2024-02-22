@@ -5,6 +5,7 @@ spl() {
     # Mind the order!
     PROGRAMS=(
       instruction-padding/program
+      token/transfer-hook/example
       token/program
       token/program-2022
       token/program-2022-test

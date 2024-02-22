@@ -71,7 +71,7 @@ use {
     },
     serde::Serialize,
     solana_accounts_db::{
-        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot, TransactionLoadResult},
+        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
@@ -89,9 +89,6 @@ use {
         sorted_storages::SortedStorages,
         stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
@@ -160,12 +157,15 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_svm::{
-        account_loader::TransactionCheckResult,
+        account_loader::{TransactionCheckResult, TransactionLoadResult},
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
             TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+        },
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -1363,7 +1363,7 @@ impl Bank {
                     drop(loaded_programs_cache);
                     let recompiled = new.load_program(&key, false, Some(program_to_recompile));
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                    loaded_programs_cache.replenish(key, recompiled);
+                    loaded_programs_cache.assign_program(key, recompiled);
                 }
             } else if new.epoch() != loaded_programs_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -4525,13 +4525,6 @@ impl Bank {
         balances
     }
 
-    pub fn clear_program_cache(&self) {
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .unload_all_programs();
-    }
-
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -7056,7 +7049,7 @@ impl Bank {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .replenish(program_id, Arc::new(builtin));
+            .assign_program(program_id, Arc::new(builtin));
         debug!("Added program {} under {:?}", name, program_id);
     }
 

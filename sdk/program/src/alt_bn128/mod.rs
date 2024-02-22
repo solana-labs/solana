@@ -165,13 +165,13 @@ mod target_arch {
         input.resize(ALT_BN128_ADDITION_INPUT_LEN, 0);
 
         let p: G1 = PodG1(
-            convert_edianness_64(&input[..64])
+            convert_endianness_64(&input[..64])
                 .try_into()
                 .map_err(AltBn128Error::TryIntoVecError)?,
         )
         .try_into()?;
         let q: G1 = PodG1(
-            convert_edianness_64(&input[64..ALT_BN128_ADDITION_INPUT_LEN])
+            convert_endianness_64(&input[64..ALT_BN128_ADDITION_INPUT_LEN])
                 .try_into()
                 .map_err(AltBn128Error::TryIntoVecError)?,
         )
@@ -191,7 +191,7 @@ mod target_arch {
             .serialize_with_mode(&mut result_point_data[32..], Compress::No)
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-        Ok(convert_edianness_64(&result_point_data[..]).to_vec())
+        Ok(convert_endianness_64(&result_point_data[..]).to_vec())
     }
 
     pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
@@ -203,13 +203,13 @@ mod target_arch {
         input.resize(ALT_BN128_MULTIPLICATION_INPUT_LEN, 0);
 
         let p: G1 = PodG1(
-            convert_edianness_64(&input[..64])
+            convert_endianness_64(&input[..64])
                 .try_into()
                 .map_err(AltBn128Error::TryIntoVecError)?,
         )
         .try_into()?;
         let fr = BigInteger256::deserialize_uncompressed_unchecked(
-            &convert_edianness_64(&input[64..96])[..],
+            &convert_endianness_64(&input[64..96])[..],
         )
         .map_err(|_| AltBn128Error::InvalidInputData)?;
 
@@ -227,7 +227,7 @@ mod target_arch {
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
         Ok(
-            convert_edianness_64(&result_point_data[..ALT_BN128_MULTIPLICATION_OUTPUT_LEN])
+            convert_endianness_64(&result_point_data[..ALT_BN128_MULTIPLICATION_OUTPUT_LEN])
                 .to_vec(),
         )
     }
@@ -247,7 +247,7 @@ mod target_arch {
         for i in 0..ele_len {
             vec_pairs.push((
                 PodG1(
-                    convert_edianness_64(
+                    convert_endianness_64(
                         &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
                             ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
                                 .saturating_add(ALT_BN128_POINT_SIZE)],
@@ -257,7 +257,7 @@ mod target_arch {
                 )
                 .try_into()?,
                 PodG2(
-                    convert_edianness_128(
+                    convert_endianness_128(
                         &input[i
                             .saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
                             .saturating_add(ALT_BN128_POINT_SIZE)
@@ -285,14 +285,14 @@ mod target_arch {
         Ok(output)
     }
 
-    fn convert_edianness_64(bytes: &[u8]) -> Vec<u8> {
+    fn convert_endianness_64(bytes: &[u8]) -> Vec<u8> {
         bytes
             .chunks(32)
             .flat_map(|b| b.iter().copied().rev().collect::<Vec<u8>>())
             .collect::<Vec<u8>>()
     }
 
-    fn convert_edianness_128(bytes: &[u8]) -> Vec<u8> {
+    fn convert_endianness_128(bytes: &[u8]) -> Vec<u8> {
         bytes
             .chunks(64)
             .flat_map(|b| b.iter().copied().rev().collect::<Vec<u8>>())

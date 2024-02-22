@@ -815,6 +815,12 @@ impl Validator {
         match &config.block_verification_method {
             BlockVerificationMethod::BlockstoreProcessor => {
                 info!("no scheduler pool is installed for block verification...");
+                if let Some(count) = config.unified_scheduler_handler_threads {
+                    warn!(
+                        "--unified-scheduler-handler-threads={count} is ignored because unified \
+                         scheduler isn't enabled"
+                    );
+                }
             }
             BlockVerificationMethod::UnifiedScheduler => {
                 let scheduler_pool = DefaultSchedulerPool::new_dyn(
@@ -1369,6 +1375,8 @@ impl Validator {
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
             ("cluster_type", genesis_config.cluster_type as u32, i64),
+            ("waited_for_supermajority", waited_for_supermajority, bool),
+            ("expected_shred_version", config.expected_shred_version, Option<i64>),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;

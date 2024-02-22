@@ -256,15 +256,23 @@ impl<'a> SnapshotMinimizer<'a> {
     fn get_minimized_slot_set(&self) -> DashSet<Slot> {
         let minimized_slot_set = DashSet::new();
         self.minimized_account_set.par_iter().for_each(|pubkey| {
-            if let Some(read_entry) = self
-                .accounts_db()
+            self.accounts_db()
                 .accounts_index
-                .get_account_read_entry(&pubkey)
-            {
-                if let Some(max_slot) = read_entry.slot_list().iter().map(|(slot, _)| *slot).max() {
-                    minimized_slot_set.insert(max_slot);
-                }
-            }
+                .get_and_then(&pubkey, |entry| {
+                    if let Some(entry) = entry {
+                        let max_slot = entry
+                            .slot_list
+                            .read()
+                            .unwrap()
+                            .iter()
+                            .map(|(slot, _)| *slot)
+                            .max();
+                        if let Some(max_slot) = max_slot {
+                            minimized_slot_set.insert(max_slot);
+                        }
+                    }
+                    (false, ())
+                });
         });
         minimized_slot_set
     }
@@ -321,12 +329,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 if self.minimized_account_set.contains(account.pubkey()) {
                     chunk_bytes += account.stored_size();
                     keep_accounts.push(account);
-                } else if self
-                    .accounts_db()
-                    .accounts_index
-                    .get_account_read_entry(account.pubkey())
-                    .is_some()
-                {
+                } else if self.accounts_db().accounts_index.contains(account.pubkey()) {
                     purge_pubkeys.push(account.pubkey());
                 }
             });
