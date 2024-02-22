@@ -519,7 +519,7 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        let largest_task_index = task.task_index();
+        let existing_task_index = task.task_index();
         if let Some(largest_task_index) = self.last_task_index {
             assert!(existing_task_index <= largest_task_index, "bad task index: {existing_task_index} <= {largest_task_index}");
         }
