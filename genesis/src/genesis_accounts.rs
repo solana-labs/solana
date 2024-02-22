@@ -230,9 +230,9 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-/// Add MainnetBeta accounts that should be present in genesis; do nothing for other cluster types
+/// Add acounts that should be present in genesis; skip for development clusters
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lamports: u64) {
-    if genesis_config.cluster_type != ClusterType::MainnetBeta {
+    if genesis_config.cluster_type == ClusterType::Development {
         return;
     }
 
@@ -279,8 +279,8 @@ mod tests {
     fn test_add_genesis_accounts() {
         let clusters_and_expected_lamports = [
             (ClusterType::MainnetBeta, 500_000_000 * LAMPORTS_PER_SOL),
-            (ClusterType::Testnet, 0),
-            (ClusterType::Devnet, 0),
+            (ClusterType::Testnet, 500_000_000 * LAMPORTS_PER_SOL),
+            (ClusterType::Devnet, 500_000_000 * LAMPORTS_PER_SOL),
             (ClusterType::Development, 0),
         ];
 
