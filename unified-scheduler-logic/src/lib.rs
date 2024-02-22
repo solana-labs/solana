@@ -955,15 +955,15 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_multiple_writable_tasks() {
+    fn test_schedule_no_blocking_redable_then_unblocked_writable() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
         let sanitized3 = transaction_with_writable_address(conflicting_address);
         let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized1, 3, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized2, 4, address_loader);
-        let task3 = SchedulingStateMachine::create_task(sanitized3, 5, address_loader);
+        let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
+        let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
+        let task3 = SchedulingStateMachine::create_task(sanitized3, 103, address_loader);
 
         let mut state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
@@ -972,17 +972,17 @@ mod tests {
             state_machine
                 .schedule_task(task1.clone())
                 .map(|t| t.task_index()),
-            Some(3)
+            Some(101)
         );
         assert_matches!(
             state_machine
                 .schedule_task(task2.clone())
                 .map(|t| t.task_index()),
-            Some(4)
+            Some(102)
         );
         assert_matches!(state_machine.schedule_task(task3.clone()), None);
 
-        assert_eq!(state_machine.active_task_count(), 3);
+        assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 0);
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task1);
