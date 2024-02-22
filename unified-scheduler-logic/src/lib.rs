@@ -1242,7 +1242,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "internal error: entered unreachable code")]
+    #[should_panic(expected = "bad task index: 101 > 101")]
     fn test_schedule_same_task() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized = transaction_with_writable_address(conflicting_address);
