@@ -693,7 +693,7 @@ impl SchedulingStateMachine {
     /// This method is intended to reuse SchedulingStateMachine instance (to avoid its `unsafe`
     /// [constructor](SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling)
     /// as much as possible) and its (possbily cached) associated [`Page`]s for processing other
-    /// slots. 
+    /// slots.
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
