@@ -1036,6 +1036,11 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(4)
         );
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task(),
+            None
+        );
         state_machine.deschedule_task(&task2);
     }
 
