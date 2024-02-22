@@ -1202,7 +1202,7 @@ mod tests {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_writable_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
-        let pages = Arc::new(Mutex::new(HashMap::new()));
+        let pages = Arc::new(RefCell::new(HashMap::new()));
         let address_loader = &mut create_address_loader(Some(pages.clone()));
         let task1 = SchedulingStateMachine::create_task(sanitized1, 101, address_loader);
         let task2 = SchedulingStateMachine::create_task(sanitized2, 102, address_loader);
