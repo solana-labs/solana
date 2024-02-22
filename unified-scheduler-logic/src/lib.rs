@@ -892,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_order_blocked_earlier_task_then_newly_scheduled_task() {
+    fn test_existing_blocking_task_then_newly_scheduled_task() {
         let sanitized = simplest_transaction();
         let address_loader = &mut create_address_loader(None);
         let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
@@ -926,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_multiple_readonly_task_and_counts() {
+    fn test_multiple_readonly_task_and_counts() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
@@ -955,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_no_blocking_redable_then_unblocked_writable() {
+    fn test_all_blocking_redable_tasks_block_writable_task() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
@@ -1001,7 +1001,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_readonly_then_writable_then_readonly_linearized() {
+    fn test_readonly_then_writable_then_readonly_linearized() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
@@ -1057,7 +1057,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_readonly_then_writable() {
+    fn test_readonly_then_writable() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_writable_address(conflicting_address);
