@@ -262,7 +262,7 @@ fn bank_forks_from_snapshot(
         // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
         // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
         // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
 
         let (bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
             &account_paths,

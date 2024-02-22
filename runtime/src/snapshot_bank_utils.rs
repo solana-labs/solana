@@ -1261,7 +1261,7 @@ mod tests {
             snapshot_utils::{
                 clean_orphaned_account_snapshot_dirs, create_tmp_accounts_dir_for_tests,
                 get_bank_snapshots, get_bank_snapshots_post, get_bank_snapshots_pre,
-                get_highest_bank_snapshot, purge_bank_snapshot,
+                get_highest_bank_snapshot, purge_all_bank_snapshots, purge_bank_snapshot,
                 purge_bank_snapshots_older_than_slot, purge_incomplete_bank_snapshots,
                 purge_old_bank_snapshots, purge_old_bank_snapshots_at_startup,
                 snapshot_storage_rebuilder::get_slot_and_append_vec_id, ArchiveFormat,
@@ -2403,6 +2403,19 @@ mod tests {
             deserialized_bank, bank,
             "Ensure rebuilding bank from the highest snapshot dir results in the highest bank",
         );
+    }
+
+    #[test]
+    fn test_purge_all_bank_snapshots() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
+        // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_all_bank_snapshots
+        // can clear the account hardlinks correctly.
+
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
+        purge_all_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
     }
 
     #[test]
