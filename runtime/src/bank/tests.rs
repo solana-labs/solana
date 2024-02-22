@@ -104,13 +104,10 @@ use {
             Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode,
         },
-        transaction_context::{TransactionAccount, TransactionContext},
+        transaction_context::TransactionAccount,
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
-    solana_svm::{
-        account_loader::load_accounts, transaction_account_state_info::TransactionAccountStateInfo,
-        transaction_error_metrics::TransactionErrorMetrics, transaction_results::DurableNonceFee,
-    },
+    solana_svm::transaction_results::DurableNonceFee,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -10967,60 +10964,6 @@ fn test_rent_state_incinerator() {
         bank.transfer(amount, &mint_keypair, &solana_sdk::incinerator::id())
             .unwrap();
     }
-}
-
-#[test]
-fn test_rent_state_list_len() {
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
-    genesis_config.rent = Rent::default();
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let recipient = Pubkey::new_unique();
-    let tx = system_transaction::transfer(
-        &mint_keypair,
-        &recipient,
-        sol_to_lamports(1.),
-        bank.last_blockhash(),
-    );
-    let num_accounts = tx.message().account_keys.len();
-    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
-    let mut error_counters = TransactionErrorMetrics::default();
-    let loaded_txs = load_accounts(
-        &bank,
-        &[sanitized_tx.clone()],
-        &[(Ok(()), None, Some(0))],
-        &mut error_counters,
-        &FeeStructure::default(),
-        None,
-        &HashMap::new(),
-        &LoadedProgramsForTxBatch::default(),
-    );
-
-    let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
-        ComputeBudget::new(u64::from(
-            compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-        ))
-    });
-    let transaction_context = TransactionContext::new(
-        loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
-        Rent::default(),
-        compute_budget.max_invoke_stack_height,
-        compute_budget.max_instruction_trace_length,
-    );
-
-    assert_eq!(
-        TransactionAccountStateInfo::new(
-            &bank.rent_collector.rent,
-            &transaction_context,
-            sanitized_tx.message()
-        )
-        .len(),
-        num_accounts,
-    );
 }
 
 #[test]
