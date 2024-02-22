@@ -1,13 +1,13 @@
 #![cfg(feature = "test-bpf")]
 
 use {
+    agave_validator::test_validator::*,
     solana_program::{
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         sysvar,
     },
     solana_sdk::{signature::Signer, transaction::Transaction},
-    solana_validator::test_validator::*,
 };
 
 #[test]

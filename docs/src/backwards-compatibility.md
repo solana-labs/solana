@@ -76,7 +76,7 @@ Major releases:
 - [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
 - [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
 - [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
-- [`solana-geyser-plugin-interface`](https://docs.rs/solana-geyser-plugin-interface/) - Rust interface for developing Solana Geyser plugins.
+- [`agave-geyser-plugin-interface`](https://docs.rs/agave-geyser-plugin-interface/) - Rust interface for developing Solana Geyser plugins.
 
 Patch releases:
 

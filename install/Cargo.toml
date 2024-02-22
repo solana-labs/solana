@@ -1,7 +1,7 @@
 [package]
-name = "solana-install"
+name = "agave-install"
 description = "The solana cluster software installer"
-documentation = "https://docs.rs/solana-install"
+documentation = "https://docs.rs/agave-install"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }

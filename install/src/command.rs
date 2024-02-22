@@ -540,7 +540,7 @@ pub fn init(
     explicit_release: Option<ExplicitRelease>,
 ) -> Result<(), String> {
     let config = {
-        // Write new config file only if different, so that running |solana-install init|
+        // Write new config file only if different, so that running |agave-install init|
         // repeatedly doesn't unnecessarily re-download
         let mut current_config = Config::load(config_file).unwrap_or_default();
         current_config.current_update_manifest = None;
@@ -870,7 +870,7 @@ fn check_for_newer_github_release(
     prerelease_allowed: bool,
 ) -> Result<Option<String>, String> {
     let client = reqwest::blocking::Client::builder()
-        .user_agent("solana-install")
+        .user_agent("agave-install")
         .build()
         .map_err(|err| err.to_string())?;
 

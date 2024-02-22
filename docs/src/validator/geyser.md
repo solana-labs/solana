@@ -24,20 +24,20 @@ implementation for the PostgreSQL database.
 
 ### Important Crates:
 
-- [`solana-geyser-plugin-interface`] &mdash; This crate defines the plugin
+- [`agave-geyser-plugin-interface`] &mdash; This crate defines the plugin
 interfaces.
 
 - [`solana-accountsdb-plugin-postgres`] &mdash; The crate for the referential
 plugin implementation for the PostgreSQL database.
 
-[`solana-geyser-plugin-interface`]: https://docs.rs/solana-geyser-plugin-interface
+[`agave-geyser-plugin-interface`]: https://docs.rs/agave-geyser-plugin-interface
 [`solana-accountsdb-plugin-postgres`]: https://docs.rs/solana-accountsdb-plugin-postgres
 [`solana-sdk`]: https://docs.rs/solana-sdk
 [`solana-transaction-status`]: https://docs.rs/solana-transaction-status
 
 ## The Plugin Interface
 
-The Plugin interface is declared in [`solana-geyser-plugin-interface`]. It
+The Plugin interface is declared in [`agave-geyser-plugin-interface`]. It
 is defined by the trait `GeyserPlugin`. The plugin should implement the
 trait and expose a "C" function `_create_plugin` to return the pointer to this
 trait. For example, in the referential implementation, the following code
@@ -166,7 +166,7 @@ please refer to [`solana-sdk`] and [`solana-transaction-status`]
 
 The `slot` points to the slot the transaction is executed at.
 For more details, please refer to the Rust documentation in
-[`solana-geyser-plugin-interface`].
+[`agave-geyser-plugin-interface`].
 
 ## Example PostgreSQL Plugin
 

@@ -108,7 +108,7 @@ For example
 
 Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent messages and `info` for performance-related logging.
 
-You can also attach to a running process with GDB. The leader's process is named _solana-validator_:
+You can also attach to a running process with GDB. The leader's process is named _agave-validator_:
 
 ```bash
 sudo gdb

@@ -13,16 +13,16 @@ This document proposes an easy to use software install and updater that can be u
 The easiest install method for supported platforms:
 
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/agave-install-init.sh | sh
 ```
 
-This script will check github for the latest tagged release and download and run the `solana-install-init` binary from there.
+This script will check github for the latest tagged release and download and run the `agave-install-init` binary from there.
 
 If additional arguments need to be specified during the installation, the following shell syntax is used:
 
 ```bash
-$ init_args=.... # arguments for `solana-install-init ...`
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - ${init_args}
+$ init_args=.... # arguments for `agave-install-init ...`
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/agave-install-init.sh | sh -s - ${init_args}
 ```
 
 ### Fetch and run a pre-built installer from a Github release
@@ -30,9 +30,9 @@ $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/
 With a well-known release URL, a pre-built binary can be obtained for supported platforms:
 
 ```bash
-$ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin
-$ chmod +x ./solana-install-init
-$ ./solana-install-init --help
+$ curl -o agave-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/agave-install-init-x86_64-apple-darwin
+$ chmod +x ./agave-install-init
+$ ./agave-install-init --help
 ```
 
 ### Build and run the installer from source
@@ -51,16 +51,16 @@ Given a solana release tarball \(as created by `ci/publish-tarball.sh`\) that ha
 
 ```bash
 $ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
-$ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
+$ agave-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
 ```
 
 ### Run a validator node that auto updates itself
 
 ```bash
-$ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
-$ export PATH=~/.local/share/solana-install/bin:$PATH
+$ agave-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
+$ export PATH=~/.local/share/agave-install/bin:$PATH
 $ solana-keygen ...  # <-- runs the latest solana-keygen
-$ solana-install run solana-validator ...  # <-- runs a validator, restarting it as necessary when an update is applied
+$ agave-install run agave-validator ...  # <-- runs a validator, restarting it as necessary when an update is applied
 ```
 
 ## On-chain Update Manifest
@@ -87,9 +87,9 @@ pub struct SignedUpdateManifest {
 }
 ```
 
-Note that the `manifest` field itself contains a corresponding signature \(`manifest_signature`\) to guard against man-in-the-middle attacks between the `solana-install` tool and the solana cluster RPC API.
+Note that the `manifest` field itself contains a corresponding signature \(`manifest_signature`\) to guard against man-in-the-middle attacks between the `agave-install` tool and the solana cluster RPC API.
 
-To guard against rollback attacks, `solana-install` will refuse to install an update with an older `timestamp_secs` than what is currently installed.
+To guard against rollback attacks, `agave-install` will refuse to install an update with an older `timestamp_secs` than what is currently installed.
 
 ## Release Archive Contents
 
@@ -101,17 +101,17 @@ A release archive is expected to be a tar file compressed with bzip2 with the fo
 
 - `/bin/` -- directory containing available programs in the release.
 
-  `solana-install` will symlink this directory to
+  `agave-install` will symlink this directory to
 
-  `~/.local/share/solana-install/bin` for use by the `PATH` environment
+  `~/.local/share/agave-install/bin` for use by the `PATH` environment
 
   variable.
 
 - `...` -- any additional files and directories are permitted
 
-## solana-install Tool
+## agave-install Tool
 
-The `solana-install` tool is used by the user to install and update their cluster software.
+The `agave-install` tool is used by the user to install and update their cluster software.
 
 It manages the following files and directories in the user's home directory:
 
@@ -122,11 +122,11 @@ It manages the following files and directories in the user's home directory:
 ### Command-line Interface
 
 ```text
-solana-install 0.16.0
+agave-install 0.16.0
 The solana cluster software installer
 
 USAGE:
-    solana-install [OPTIONS] <SUBCOMMAND>
+    agave-install [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
@@ -145,11 +145,11 @@ SUBCOMMANDS:
 ```
 
 ```text
-solana-install-init
+agave-install-init
 initializes a new installation
 
 USAGE:
-    solana-install init [OPTIONS]
+    agave-install init [OPTIONS]
 
 FLAGS:
     -h, --help    Prints help information
@@ -161,11 +161,11 @@ OPTIONS:
 ```
 
 ```text
-solana-install info
+agave-install info
 displays information about the current installation
 
 USAGE:
-    solana-install info [FLAGS]
+    agave-install info [FLAGS]
 
 FLAGS:
     -h, --help     Prints help information
@@ -173,11 +173,11 @@ FLAGS:
 ```
 
 ```text
-solana-install deploy
+agave-install deploy
 deploys a new update
 
 USAGE:
-    solana-install deploy <download_url> <update_manifest_keypair>
+    agave-install deploy <download_url> <update_manifest_keypair>
 
 FLAGS:
     -h, --help    Prints help information
@@ -188,22 +188,22 @@ ARGS:
 ```
 
 ```text
-solana-install update
+agave-install update
 checks for an update, and if available downloads and applies it
 
 USAGE:
-    solana-install update
+    agave-install update
 
 FLAGS:
     -h, --help    Prints help information
 ```
 
 ```text
-solana-install run
+agave-install run
 Runs a program while periodically checking and applying software updates
 
 USAGE:
-    solana-install run <program_name> [program_arguments]...
+    agave-install run <program_name> [program_arguments]...
 
 FLAGS:
     -h, --help    Prints help information

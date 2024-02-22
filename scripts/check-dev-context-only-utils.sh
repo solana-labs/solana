@@ -31,7 +31,7 @@ source ci/rust-version.sh nightly
 declare tainted_packages=(
   solana-accounts-bench
   solana-banking-bench
-  solana-ledger-tool
+  agave-ledger-tool
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)

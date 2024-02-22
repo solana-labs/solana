@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+agave-geyser-plugin-interface = { workspace = true }
 bs58 = { workspace = true }
 crossbeam-channel = { workspace = true }
 json5 = { workspace = true }
@@ -20,7 +21,6 @@ log = { workspace = true }
 serde_json = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-entry = { workspace = true }
-solana-geyser-plugin-interface = { workspace = true }
 solana-ledger = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }

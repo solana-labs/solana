@@ -16,10 +16,10 @@ test-bpf = []
 solana-program = { workspace = true }
 
 [dev-dependencies]
+agave-validator = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-test = { workspace = true }
 solana-sdk = { workspace = true }
-solana-validator = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "lib"]
