@@ -1036,6 +1036,7 @@ mod tests {
                 .map(|t| t.task_index()),
             Some(4)
         );
+        state_machine.deschedule_task(&task2);
     }
 
     #[test]
