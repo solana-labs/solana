@@ -133,7 +133,6 @@ pub fn invoke_builtin_function(
             .transaction_context
             .get_current_instruction_context()?,
         true, // copy_account_data // There is no VM so direct mapping can not be implemented here
-        &invoke_context.feature_set,
     )?;
 
     // Deserialize data back into instruction params
@@ -164,25 +163,18 @@ pub fn invoke_builtin_function(
         if borrowed_account.is_writable() {
             if let Some(account_info) = account_info_map.get(borrowed_account.get_key()) {
                 if borrowed_account.get_lamports() != account_info.lamports() {
-                    borrowed_account
-                        .set_lamports(account_info.lamports(), &invoke_context.feature_set)?;
+                    borrowed_account.set_lamports(account_info.lamports())?;
                 }
 
                 if borrowed_account
                     .can_data_be_resized(account_info.data_len())
                     .is_ok()
-                    && borrowed_account
-                        .can_data_be_changed(&invoke_context.feature_set)
-                        .is_ok()
+                    && borrowed_account.can_data_be_changed().is_ok()
                 {
-                    borrowed_account.set_data_from_slice(
-                        &account_info.data.borrow(),
-                        &invoke_context.feature_set,
-                    )?;
+                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
                 }
                 if borrowed_account.get_owner() != account_info.owner {
-                    borrowed_account
-                        .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)?;
+                    borrowed_account.set_owner(account_info.owner.as_ref())?;
                 }
             }
         }
@@ -293,17 +285,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .unwrap();
             if borrowed_account.get_lamports() != account_info.lamports() {
                 borrowed_account
-                    .set_lamports(account_info.lamports(), &invoke_context.feature_set)
+                    .set_lamports(account_info.lamports())
                     .unwrap();
             }
             let account_info_data = account_info.try_borrow_data().unwrap();
             // The redundant check helps to avoid the expensive data comparison if we can
             match borrowed_account
                 .can_data_be_resized(account_info_data.len())
-                .and_then(|_| borrowed_account.can_data_be_changed(&invoke_context.feature_set))
+                .and_then(|_| borrowed_account.can_data_be_changed())
             {
                 Ok(()) => borrowed_account
-                    .set_data_from_slice(&account_info_data, &invoke_context.feature_set)
+                    .set_data_from_slice(&account_info_data)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
                     panic!("{err:?}");
@@ -313,7 +305,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             // Change the owner at the end so that we are allowed to change the lamports and data before
             if borrowed_account.get_owner() != account_info.owner {
                 borrowed_account
-                    .set_owner(account_info.owner.as_ref(), &invoke_context.feature_set)
+                    .set_owner(account_info.owner.as_ref())
                     .unwrap();
             }
             if instruction_account.is_writable {

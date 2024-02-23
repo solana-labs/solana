@@ -73,13 +73,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         Ok(StakeInstruction::Initialize(authorized, lockup)) => {
             let mut me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            initialize(
-                &mut me,
-                &authorized,
-                &lockup,
-                &rent,
-                &invoke_context.feature_set,
-            )
+            initialize(&mut me, &authorized, &lockup, &rent)
         }
         Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
             let mut me = get_stake_account()?;
@@ -96,7 +90,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 stake_authorize,
                 &clock,
                 custodian_pubkey,
-                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
@@ -118,7 +111,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 args.stake_authorize,
                 &clock,
                 custodian_pubkey,
-                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::DelegateStake) => {
@@ -221,7 +213,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                     None
                 },
                 new_warmup_cooldown_rate_epoch(invoke_context),
-                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::Deactivate) => {
@@ -233,13 +224,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         Ok(StakeInstruction::SetLockup(lockup)) => {
             let mut me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            set_lockup(
-                &mut me,
-                &lockup,
-                &signers,
-                &clock,
-                &invoke_context.feature_set,
-            )
+            set_lockup(&mut me, &lockup, &signers, &clock)
         }
         Ok(StakeInstruction::InitializeChecked) => {
             let mut me = get_stake_account()?;
@@ -260,13 +245,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             };
 
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            initialize(
-                &mut me,
-                &authorized,
-                &Lockup::default(),
-                &rent,
-                &invoke_context.feature_set,
-            )
+            initialize(&mut me, &authorized, &Lockup::default(), &rent)
         }
         Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
             let mut me = get_stake_account()?;
@@ -289,7 +268,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 stake_authorize,
                 &clock,
                 custodian_pubkey,
-                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
@@ -318,7 +296,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 args.stake_authorize,
                 &clock,
                 custodian_pubkey,
-                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
@@ -332,13 +309,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 custodian: custodian_pubkey.cloned(),
             };
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            set_lockup(
-                &mut me,
-                &lockup,
-                &signers,
-                &clock,
-                &invoke_context.feature_set,
-            )
+            set_lockup(&mut me, &lockup, &signers, &clock)
         }
         Ok(StakeInstruction::GetMinimumDelegation) => {
             let feature_set = invoke_context.feature_set.as_ref();
