@@ -136,7 +136,7 @@ use {
         nonce_account,
         nonce_info::{NonceInfo, NoncePartial},
         packet::PACKET_DATA_SIZE,
-        precompiles::get_precompiles,
+        precompiles::{get_precompiles, VerifyDetailStats},
         pubkey::Pubkey,
         rent::RentDue,
         rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
@@ -6555,24 +6555,49 @@ impl Bank {
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
             || verification_mode == TransactionVerificationMode::FullVerification
         {
-            let report = |
-                program_id: &Pubkey,
-                num_verifies: u64,
-                ix_count: usize,
-                total_data_size: usize,
-                elapse: u128,
-                result: bool,
-            | {
+            let report = |program_id: &Pubkey,
+                          num_verifies: u64,
+                          ix_count: usize,
+                          elapse: u128,
+                          stats: Vec<VerifyDetailStats>| {
                 datapoint_info!(
                     "precompile_verify_stats",
                     ("slot", self.slot(), i64),
                     ("program_id", program_id.to_string(), String),
                     ("num_verifies", num_verifies, i64),
                     ("ix_count", ix_count, i64),
-                    ("tot_data_size", total_data_size, i64),
                     ("elapse", elapse, i64),
-                    ("result", result, bool),
                 );
+
+                if *program_id == solana_sdk::secp256k1_program::id() {
+                    stats.iter().for_each(|stat| {
+                        datapoint_info!(
+                            "precompiled_verify_stats_secp256k1",
+                            ("slot", self.slot(), i64),
+                            ("deserialize_offsets_us", stat.deserialize_offsets_us, i64),
+                            ("parse_signature_us", stat.parse_signature_us, i64),
+                            ("parse_recovery_id_us", stat.parse_recovery_id_us, i64),
+                            ("parse_pubkey_us", stat.parse_pubkey_us, i64),
+                            ("message_hash_us", stat.message_hash_us, i64),
+                            ("verify_us", stat.verify_us, i64),
+                            ("message_data_size", stat.message_data_size, i64),
+                        );
+                    });
+                }
+
+                if *program_id == solana_sdk::ed25519_program::id() {
+                    stats.iter().for_each(|stat| {
+                        datapoint_info!(
+                            "precompiled_verify_stats_ed25519",
+                            ("slot", self.slot(), i64),
+                            ("deserialize_offsets_us", stat.deserialize_offsets_us, i64),
+                            ("parse_signature_us", stat.parse_signature_us, i64),
+                            ("parse_pubkey_us", stat.parse_pubkey_us, i64),
+                            ("verify_us", stat.verify_us, i64),
+                            ("message_data_size", stat.message_data_size, i64),
+                        );
+                    });
+                }
             };
             sanitized_tx.verify_precompiles_with_reporting(&self.feature_set, &report)?;
         }

@@ -32,7 +32,11 @@ impl<T> DecodeError<T> for PrecompileError {
 }
 
 /// All precompiled programs must implement the `Verify` function
-pub type Verify = fn(&[u8], &[&[u8]], &FeatureSet) -> std::result::Result<(), PrecompileError>;
+pub type Verify = fn(
+    &[u8],
+    &[&[u8]],
+    &FeatureSet,
+) -> std::result::Result<Vec<VerifyDetailStats>, PrecompileError>;
 
 /// Information on a precompiled program
 pub struct Precompile {
@@ -68,7 +72,7 @@ impl Precompile {
         data: &[u8],
         instruction_datas: &[&[u8]],
         feature_set: &FeatureSet,
-    ) -> std::result::Result<(), PrecompileError> {
+    ) -> std::result::Result<Vec<VerifyDetailStats>, PrecompileError> {
         (self.verify_fn)(data, instruction_datas, feature_set)
     }
 }
@@ -116,11 +120,13 @@ pub fn verify_if_precompile(
                 .iter()
                 .map(|instruction| instruction.data.as_ref())
                 .collect();
-            return precompile.verify(
-                &precompile_instruction.data,
-                &instruction_datas,
-                feature_set,
-            );
+            return precompile
+                .verify(
+                    &precompile_instruction.data,
+                    &instruction_datas,
+                    feature_set,
+                )
+                .map(|_| ());
         }
     }
     Ok(())
@@ -132,7 +138,7 @@ pub fn verify_if_precompile_with_reporting(
     precompile_instruction: &CompiledInstruction,
     all_instructions: &[CompiledInstruction],
     feature_set: &FeatureSet,
-    f: &impl Fn(&Pubkey, u64, usize, usize, u128, bool),
+    f: &impl Fn(&Pubkey, u64, usize, u128, Vec<VerifyDetailStats>),
 ) -> Result<(), PrecompileError> {
     for precompile in PRECOMPILES.iter() {
         if precompile.check_id(program_id, |feature_id| feature_set.is_active(feature_id)) {
@@ -141,35 +147,41 @@ pub fn verify_if_precompile_with_reporting(
                 .map(|instruction| instruction.data.as_ref())
                 .collect();
 
-            // are num_verifiies ~= instrcution_count ? 
+            // are num_verifiies ~= instrcution_count ?
             let num_verifies = u64::from(*precompile_instruction.data.first().unwrap());
-            let instruction_count = instruction_datas.len();
-            // total instruction data size can be used to approximate message data bytes used for
-            // hashing (only applies to secp256k1, ed25519 does not hashing message)
-            let total_data_size = all_instructions
-                .iter()
-                .map(|instruction| instruction.data.len())
-                .sum();
-            let timer = std::time::Instant::now();
+            let instruction_count = all_instructions.len();
 
+            let timer = std::time::Instant::now();
             let result = precompile.verify(
                 &precompile_instruction.data,
                 &instruction_datas,
                 feature_set,
             );
-
             let elapse_us = timer.elapsed().as_micros();
-            f(
-                program_id,
-                num_verifies,
-                instruction_count,
-                total_data_size,
-                elapse_us,
-                result.is_ok(),
-            );
 
-            return result;
+            // only report stats for successful verification to get the most conservative timings
+            return result.map(|stats| {
+                f(
+                    program_id,
+                    num_verifies,
+                    instruction_count,
+                    elapse_us,
+                    stats,
+                );
+                ()
+            });
         }
     }
     Ok(())
+}
+
+#[derive(Debug, Default)]
+pub struct VerifyDetailStats {
+    pub deserialize_offsets_us: u128,
+    pub parse_signature_us: u128,
+    pub parse_recovery_id_us: u128,
+    pub parse_pubkey_us: u128,
+    pub message_data_size: u16,
+    pub message_hash_us: u128,
+    pub verify_us: u128,
 }

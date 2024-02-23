@@ -793,7 +793,7 @@ use {
             libsecp256k1_fail_on_bad_count, libsecp256k1_fail_on_bad_count2, FeatureSet,
         },
         instruction::Instruction,
-        precompiles::PrecompileError,
+        precompiles::{PrecompileError, VerifyDetailStats},
     },
     digest::Digest,
     serde_derive::{Deserialize, Serialize},
@@ -930,7 +930,7 @@ pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
     feature_set: &FeatureSet,
-) -> Result<(), PrecompileError> {
+) -> Result<Vec<VerifyDetailStats>, PrecompileError> {
     if data.is_empty() {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
@@ -951,7 +951,12 @@ pub fn verify(
     if data.len() < expected_data_size {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
+
+    let mut stats: Vec<VerifyDetailStats> = Vec::new();
     for i in 0..count {
+        let mut stat = VerifyDetailStats::default();
+
+        let timer = std::time::Instant::now();
         let start = i
             .saturating_mul(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
             .saturating_add(1);
@@ -959,7 +964,9 @@ pub fn verify(
 
         let offsets: SecpSignatureOffsets = bincode::deserialize(&data[start..end])
             .map_err(|_| PrecompileError::InvalidSignature)?;
+        stat.deserialize_offsets_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out signature
         let signature_index = offsets.signature_instruction_index as usize;
         if signature_index >= instruction_datas.len() {
@@ -976,10 +983,14 @@ pub fn verify(
             &signature_instruction[sig_start..sig_end],
         )
         .map_err(|_| PrecompileError::InvalidSignature)?;
+        stat.parse_signature_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         let recovery_id = libsecp256k1::RecoveryId::parse(signature_instruction[sig_end])
             .map_err(|_| PrecompileError::InvalidRecoveryId)?;
+        stat.parse_recovery_id_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out pubkey
         let eth_address_slice = get_data_slice(
             instruction_datas,
@@ -987,7 +998,9 @@ pub fn verify(
             offsets.eth_address_offset,
             HASHED_PUBKEY_SERIALIZED_SIZE,
         )?;
+        stat.parse_pubkey_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out message
         let message_slice = get_data_slice(
             instruction_datas,
@@ -999,7 +1012,9 @@ pub fn verify(
         let mut hasher = sha3::Keccak256::new();
         hasher.update(message_slice);
         let message_hash = hasher.finalize();
+        stat.message_hash_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         let pubkey = libsecp256k1::recover(
             &libsecp256k1::Message::parse_slice(&message_hash).unwrap(),
             &signature,
@@ -1011,8 +1026,11 @@ pub fn verify(
         if eth_address_slice != eth_address {
             return Err(PrecompileError::InvalidSignature);
         }
+        stat.verify_us = timer.elapsed().as_micros();
+        stat.message_data_size = offsets.message_data_size;
+        stats.push(stat);
     }
-    Ok(())
+    Ok(stats)
 }
 
 fn get_data_slice<'a>(

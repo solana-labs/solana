@@ -5,7 +5,11 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
+    crate::{
+        feature_set::FeatureSet,
+        instruction::Instruction,
+        precompiles::{PrecompileError, VerifyDetailStats},
+    },
     bytemuck::{bytes_of, Pod, Zeroable},
     ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
 };
@@ -86,7 +90,7 @@ pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
     _feature_set: &FeatureSet,
-) -> Result<(), PrecompileError> {
+) -> Result<Vec<VerifyDetailStats>, PrecompileError> {
     if data.len() < SIGNATURE_OFFSETS_START {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
@@ -101,7 +105,12 @@ pub fn verify(
     if data.len() < expected_data_size {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
+
+    let mut stats: Vec<VerifyDetailStats> = Vec::new();
     for i in 0..num_signatures {
+        let mut stat = VerifyDetailStats::default();
+
+        let timer = std::time::Instant::now();
         let start = i
             .saturating_mul(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
             .saturating_add(SIGNATURE_OFFSETS_START);
@@ -110,7 +119,9 @@ pub fn verify(
         // bytemuck wants structures aligned
         let offsets: &Ed25519SignatureOffsets = bytemuck::try_from_bytes(&data[start..end])
             .map_err(|_| PrecompileError::InvalidDataOffsets)?;
+        stat.deserialize_offsets_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out signature
         let signature = get_data_slice(
             data,
@@ -122,7 +133,9 @@ pub fn verify(
 
         let signature =
             Signature::from_bytes(signature).map_err(|_| PrecompileError::InvalidSignature)?;
+        stat.parse_signature_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out pubkey
         let pubkey = get_data_slice(
             data,
@@ -134,7 +147,9 @@ pub fn verify(
 
         let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey)
             .map_err(|_| PrecompileError::InvalidPublicKey)?;
+        stat.parse_pubkey_us = timer.elapsed().as_micros();
 
+        let timer = std::time::Instant::now();
         // Parse out message
         let message = get_data_slice(
             data,
@@ -147,8 +162,11 @@ pub fn verify(
         publickey
             .verify(message, &signature)
             .map_err(|_| PrecompileError::InvalidSignature)?;
+        stat.verify_us = timer.elapsed().as_micros();
+        stat.message_data_size = offsets.message_data_size;
+        stats.push(stat);
     }
-    Ok(())
+    Ok(stats)
 }
 
 fn get_data_slice<'a>(

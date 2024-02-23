@@ -117,7 +117,7 @@ use {
         instruction::{CompiledInstruction, Instruction},
         message::Message,
         nonce::NONCED_TX_MARKER_IX_INDEX,
-        precompiles::verify_if_precompile,
+        precompiles::{verify_if_precompile, VerifyDetailStats},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
@@ -1034,7 +1034,7 @@ impl Transaction {
     pub fn verify_precompiles_with_reporting(
         &self,
         feature_set: &feature_set::FeatureSet,
-        f: &impl Fn(&Pubkey, u64, usize, usize, u128, bool),
+        f: &impl Fn(&Pubkey, u64, usize, u128, Vec<VerifyDetailStats>),
     ) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
