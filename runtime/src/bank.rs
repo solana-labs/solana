@@ -1363,8 +1363,15 @@ impl Bank {
                 if let Some((key, program_to_recompile)) =
                     loaded_programs_cache.programs_to_recompile.pop()
                 {
+                    let effective_epoch = loaded_programs_cache.latest_root_epoch.saturating_add(1);
                     drop(loaded_programs_cache);
-                    let recompiled = new.load_program(&key, false, Some(program_to_recompile));
+                    let recompiled = new.load_program(&key, false, effective_epoch);
+                    recompiled
+                        .tx_usage_counter
+                        .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
+                    recompiled
+                        .ix_usage_counter
+                        .fetch_add(program_to_recompile.ix_usage_counter.load(Relaxed), Relaxed);
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
                     loaded_programs_cache.assign_program(key, recompiled);
                 }
@@ -7485,10 +7492,10 @@ impl Bank {
         &self,
         pubkey: &Pubkey,
         reload: bool,
-        recompile: Option<Arc<LoadedProgram>>,
+        effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
         self.transaction_processor
-            .load_program(self, pubkey, reload, recompile)
+            .load_program(self, pubkey, reload, effective_epoch)
     }
 }
 
