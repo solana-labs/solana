@@ -173,7 +173,7 @@ where
 
         let rpc_clients: Vec<_> = rpc_addrs
             .into_iter()
-            .map(|addr| RpcClient::new_socket_with_commitment(addr, commitment_config.clone()))
+            .map(|addr| RpcClient::new_socket_with_commitment(addr, commitment_config))
             .collect();
         let optimizer = ClientOptimizer::new(rpc_clients.len());
         Self {
