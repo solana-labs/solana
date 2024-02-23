@@ -7,14 +7,12 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, WritableAccount},
-        feature_set::FeatureSet,
         fee::FeeStructure,
         hash::Hash,
         native_loader,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
-        rent_collector::RentCollector,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::SanitizedTransaction,
@@ -23,44 +21,16 @@ use {
     solana_svm::{
         account_loader::load_accounts, transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_processor::TransactionProcessingCallback,
     },
-    std::{collections::HashMap, sync::Arc},
+    std::collections::HashMap,
 };
 
-#[derive(Default)]
-struct MockBankCallback {
-    rent_collector: RentCollector,
-    feature_set: Arc<FeatureSet>,
-    account_shared_data: HashMap<Pubkey, AccountSharedData>,
-}
-
-impl TransactionProcessingCallback for MockBankCallback {
-    fn account_matches_owners(&self, _account: &Pubkey, _owners: &[Pubkey]) -> Option<usize> {
-        todo!()
-    }
-
-    fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        self.account_shared_data.get(pubkey).cloned()
-    }
-
-    fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
-        todo!()
-    }
-
-    fn get_rent_collector(&self) -> &RentCollector {
-        &self.rent_collector
-    }
-
-    fn get_feature_set(&self) -> Arc<FeatureSet> {
-        self.feature_set.clone()
-    }
-}
+mod mock_bank;
 
 #[test]
 fn test_rent_state_list_len() {
     let mint_keypair = Keypair::new();
-    let mut bank = MockBankCallback::default();
+    let mut bank = mock_bank::MockBankCallback::default();
     let recipient = Pubkey::new_unique();
     let last_block_hash = Hash::new_unique();
 
