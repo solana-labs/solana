@@ -14,7 +14,6 @@ impl BenchTpsClient for RpcClient {
             self,
             &transaction,
             RpcSendTransactionConfig {
-                skip_preflight: true,
                 preflight_commitment: Some(self.commitment().commitment),
                 ..RpcSendTransactionConfig::default()
             },

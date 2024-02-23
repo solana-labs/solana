@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
@@ -117,7 +117,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
-            commitment_config: CommitmentConfig::processed(),
+            commitment_config: CommitmentConfig::confirmed(),
         }
     }
 }
@@ -404,7 +404,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("commitment-config")
                 .takes_value(true)
                 .possible_values(&["processed", "confirmed", "finalized"])
-                .help("Block commitment config for getting latest blockhash. default: processed"),
+                .default_value("confirmed")
+                .help("Block commitment config for getting latest blockhash"),
         )
 }
 
@@ -587,15 +588,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.client_node_id = Some(client_node_id);
     }
 
-    if let Some(commitment_config) = matches.value_of("commitment_config") {
-        // the * in the match will never be triggered. Validation done by ArgMatches
-        args.commitment_config = match commitment_config {
-            "processed" => CommitmentConfig::processed(),
-            "confirmed" => CommitmentConfig::confirmed(),
-            "finalized" => CommitmentConfig::finalized(),
-            _ => CommitmentConfig::processed(),
-        };
-    }
+    args.commitment_config = value_t_or_exit!(matches, "commitment_config", CommitmentConfig);
 
     Ok(args)
 }
