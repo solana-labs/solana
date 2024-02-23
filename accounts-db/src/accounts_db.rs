@@ -9771,9 +9771,7 @@ pub mod tests {
             account_info::StoredSize,
             account_storage::meta::{AccountMeta, StoredMeta},
             accounts_hash::MERKLE_FANOUT,
-            accounts_index::{
-                tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
-            },
+            accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
             ancient_append_vecs,
             append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data::CacheHashDataFile,
@@ -13366,22 +13364,10 @@ pub mod tests {
 
     const UPSERT_POPULATE_RECLAIMS: UpsertReclaim = UpsertReclaim::PopulateReclaims;
 
-    // returns the rooted entries and the storage ref count
-    fn roots_and_ref_count<T: IndexValue>(
-        index: &AccountsIndex<T, T>,
-        locked_account_entry: &ReadAccountMapEntry<T>,
-        max_inclusive: Option<Slot>,
-    ) -> (SlotList<T>, RefCount) {
-        (
-            index.get_rooted_entries(locked_account_entry.slot_list(), max_inclusive),
-            locked_account_entry.ref_count(),
-        )
-    }
-
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
-        let accounts_index = AccountsIndex::default_for_tests();
+        let accounts_index = AccountsIndex::<AccountInfo, AccountInfo>::default_for_tests();
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
@@ -13455,21 +13441,13 @@ pub mod tests {
         accounts_index.add_root(2);
         accounts_index.add_root(3);
         let mut purges = HashMap::new();
-        let (key0_entry, _) = accounts_index.get_for_tests(&key0, None, None).unwrap();
-        purges.insert(
-            key0,
-            roots_and_ref_count(&accounts_index, &key0_entry, None),
-        );
-        let (key1_entry, _) = accounts_index.get_for_tests(&key1, None, None).unwrap();
-        purges.insert(
-            key1,
-            roots_and_ref_count(&accounts_index, &key1_entry, None),
-        );
-        let (key2_entry, _) = accounts_index.get_for_tests(&key2, None, None).unwrap();
-        purges.insert(
-            key2,
-            roots_and_ref_count(&accounts_index, &key2_entry, None),
-        );
+        for key in [&key0, &key1, &key2] {
+            let index_entry = accounts_index.get_cloned(key).unwrap();
+            let rooted_entries = accounts_index
+                .get_rooted_entries(index_entry.slot_list.read().unwrap().as_slice(), None);
+            let ref_count = index_entry.ref_count();
+            purges.insert(*key, (rooted_entries, ref_count));
+        }
         for (key, (list, ref_count)) in &purges {
             info!(" purge {} ref_count {} =>", key, ref_count);
             for x in list {
