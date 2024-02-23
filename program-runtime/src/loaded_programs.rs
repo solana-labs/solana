@@ -1159,6 +1159,7 @@ mod tests {
                 Arc, RwLock,
             },
         },
+        test_case::{test_case, test_matrix},
     };
 
     static MOCK_ENVIRONMENT: std::sync::OnceLock<ProgramRuntimeEnvironment> =
@@ -1679,6 +1680,105 @@ mod tests {
                 assert_eq!(entry.effective_slot, *effective_slot);
             }
         }
+    }
+
+    #[test_matrix(
+        (
+            LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Closed,
+            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+        ),
+        (
+            LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Closed,
+            LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+        )
+    )]
+    #[test_matrix(
+        (LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),),
+        (
+            LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Closed,
+            LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+        )
+    )]
+    #[test_matrix(
+        (LoadedProgramType::Builtin(BuiltinProgram::new_mock()),),
+        (
+            LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::Closed,
+            LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+        )
+    )]
+    #[should_panic(expected = "Unexpected replacement of an entry")]
+    fn test_assign_program_failure(old: LoadedProgramType, new: LoadedProgramType) {
+        let mut cache = new_mock_cache::<TestForkGraph>();
+        let program_id = Pubkey::new_unique();
+        assert!(!cache.assign_program(
+            program_id,
+            Arc::new(LoadedProgram {
+                program: old,
+                account_size: 0,
+                deployment_slot: 10,
+                effective_slot: 11,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            }),
+        ));
+        cache.assign_program(
+            program_id,
+            Arc::new(LoadedProgram {
+                program: new,
+                account_size: 0,
+                deployment_slot: 10,
+                effective_slot: 11,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            }),
+        );
+    }
+
+    #[test_case(
+        LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+        LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock()))
+    )]
+    #[test_case(
+        LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+        LoadedProgramType::Builtin(BuiltinProgram::new_mock())
+    )]
+    fn test_assign_program_success(old: LoadedProgramType, new: LoadedProgramType) {
+        let mut cache = new_mock_cache::<TestForkGraph>();
+        let program_id = Pubkey::new_unique();
+        assert!(!cache.assign_program(
+            program_id,
+            Arc::new(LoadedProgram {
+                program: old,
+                account_size: 0,
+                deployment_slot: 10,
+                effective_slot: 11,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            }),
+        ));
+        assert!(!cache.assign_program(
+            program_id,
+            Arc::new(LoadedProgram {
+                program: new,
+                account_size: 0,
+                deployment_slot: 10,
+                effective_slot: 11,
+                tx_usage_counter: AtomicU64::default(),
+                ix_usage_counter: AtomicU64::default(),
+                latest_access_slot: AtomicU64::default(),
+            }),
+        ));
     }
 
     #[test]
