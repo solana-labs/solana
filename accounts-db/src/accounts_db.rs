@@ -5344,7 +5344,7 @@ impl AccountsDb {
                     storage_location,
                     load_hint,
                     new_storage_location,
-                    self.accounts_index.get_account_read_entry(pubkey)
+                    self.accounts_index.get_cloned(pubkey)
                 );
                 // Considering that we've failed to get accessor above and further that
                 // the index still returned the same (slot, store_id) tuple, offset must be same
