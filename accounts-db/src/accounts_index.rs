@@ -1175,7 +1175,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     }
 
     /// Is `pubkey`, with `ancestors` and `max_root`, in the index?
-    pub fn contains_with(
+    pub(crate) fn contains_with(
         &self,
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
