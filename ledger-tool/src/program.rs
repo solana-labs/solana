@@ -523,7 +523,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .clone(),
     );
     for key in cached_account_keys {
-        loaded_programs.replenish(key, bank.load_program(&key, false, None));
+        loaded_programs.replenish(key, bank.load_program(&key, false, bank.epoch()));
         debug!("Loaded program {}", key);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
