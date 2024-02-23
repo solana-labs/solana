@@ -713,6 +713,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// Insert a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
     pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> bool {
+        debug_assert!(!matches!(
+            &entry.program,
+            LoadedProgramType::DelayVisibility
+        ));
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
         match slot_versions.binary_search_by(|at| {
             at.effective_slot
@@ -1349,15 +1353,6 @@ mod tests {
                 programs.push((program2, *deployment_slot, usage_counter));
             });
 
-        for slot in 21..31 {
-            set_tombstone(
-                &mut cache,
-                program2,
-                slot,
-                LoadedProgramType::DelayVisibility,
-            );
-        }
-
         for slot in 31..41 {
             insert_unloaded_program(&mut cache, program2, slot);
         }
@@ -1409,12 +1404,12 @@ mod tests {
         // Test that the cache is constructed with the expected number of entries.
         assert_eq!(num_loaded, 8);
         assert_eq!(num_unloaded, 30);
-        assert_eq!(num_tombstones, 30);
+        assert_eq!(num_tombstones, 20);
 
         // Evicting to 2% should update cache with
         // * 5 active entries
         // * 33 unloaded entries (3 active programs will get unloaded)
-        // * 30 tombstones (tombstones are not evicted)
+        // * 20 tombstones (tombstones are not evicted)
         cache.evict_using_2s_random_selection(Percentage::from(2), 21);
 
         let num_loaded = num_matching_entries(&cache, |program_type| {
@@ -1435,7 +1430,7 @@ mod tests {
         // Test that expected number of loaded entries get evicted/unloaded.
         assert_eq!(num_loaded, 5);
         assert_eq!(num_unloaded, 33);
-        assert_eq!(num_tombstones, 30);
+        assert_eq!(num_tombstones, 20);
     }
 
     #[test]
@@ -1496,15 +1491,6 @@ mod tests {
                 programs.push((program2, *deployment_slot, usage_counter));
             });
 
-        for slot in 21..31 {
-            set_tombstone(
-                &mut cache,
-                program2,
-                slot,
-                LoadedProgramType::DelayVisibility,
-            );
-        }
-
         for slot in 31..41 {
             insert_unloaded_program(&mut cache, program2, slot);
         }
@@ -1555,12 +1541,12 @@ mod tests {
 
         assert_eq!(num_loaded, 8);
         assert_eq!(num_unloaded, 30);
-        assert_eq!(num_tombstones, 30);
+        assert_eq!(num_tombstones, 20);
 
         // Evicting to 2% should update cache with
         // * 5 active entries
         // * 33 unloaded entries (3 active programs will get unloaded)
-        // * 30 tombstones (tombstones are not evicted)
+        // * 20 tombstones (tombstones are not evicted)
         cache.sort_and_unload(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
@@ -1600,7 +1586,7 @@ mod tests {
 
         assert_eq!(num_loaded, 5);
         assert_eq!(num_unloaded, 33);
-        assert_eq!(num_tombstones, 30);
+        assert_eq!(num_tombstones, 20);
     }
 
     #[test]
@@ -2458,7 +2444,6 @@ mod tests {
         for loaded_program_type in [
             LoadedProgramType::FailedVerification(cache.environments.program_runtime_v1.clone()),
             LoadedProgramType::Closed,
-            LoadedProgramType::DelayVisibility, // Never inserted in the global cache
             LoadedProgramType::Unloaded(cache.environments.program_runtime_v1.clone()),
             LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
         ] {
