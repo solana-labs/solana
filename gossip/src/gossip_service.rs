@@ -8,6 +8,7 @@ use {
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -197,6 +198,7 @@ pub fn get_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
+    commitment_config: CommitmentConfig,
 ) -> ThinClient {
     let protocol = connection_cache.protocol();
     let nodes: Vec<_> = nodes
@@ -205,13 +207,14 @@ pub fn get_client(
         .collect();
     let select = thread_rng().gen_range(0..nodes.len());
     let (rpc, tpu) = nodes[select];
-    ThinClient::new(rpc, tpu, connection_cache)
+    ThinClient::new_with_commitment(rpc, tpu, connection_cache, commitment_config)
 }
 
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
+    commitment_config: CommitmentConfig,
 ) -> (ThinClient, usize) {
     let protocol = connection_cache.protocol();
     let (rpc_addrs, tpu_addrs): (Vec<_>, Vec<_>) = nodes
@@ -220,7 +223,7 @@ pub fn get_multi_client(
         .unzip();
     let num_nodes = tpu_addrs.len();
     (
-        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),
+        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache, commitment_config),
         num_nodes,
     )
 }

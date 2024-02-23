@@ -60,6 +60,32 @@ impl ThinClient {
         }
     }
 
+    pub fn new_with_commitment(
+        rpc_addr: SocketAddr,
+        tpu_addr: SocketAddr,
+        connection_cache: Arc<ConnectionCache>,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
+        match &*connection_cache {
+            ConnectionCache::Quic(connection_cache) => {
+                let thin_client = BackendThinClient::new_with_client(
+                    RpcClient::new_socket_with_commitment(rpc_addr, commitment_config),
+                    tpu_addr,
+                    connection_cache.clone(),
+                );
+                ThinClient::Quic(thin_client)
+            }
+            ConnectionCache::Udp(connection_cache) => {
+                let thin_client = BackendThinClient::new_with_client(
+                    RpcClient::new_socket_with_commitment(rpc_addr, commitment_config),
+                    tpu_addr,
+                    connection_cache.clone(),
+                );
+                ThinClient::Udp(thin_client)
+            }
+        }
+    }
+
     pub fn new_socket_with_timeout(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
@@ -92,6 +118,7 @@ impl ThinClient {
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
         connection_cache: Arc<ConnectionCache>,
+        commitment_config: CommitmentConfig,
     ) -> Self {
         match &*connection_cache {
             ConnectionCache::Quic(connection_cache) => {
@@ -99,6 +126,7 @@ impl ThinClient {
                     rpc_addrs,
                     tpu_addrs,
                     connection_cache.clone(),
+                    commitment_config,
                 );
                 ThinClient::Quic(thin_client)
             }
@@ -107,6 +135,7 @@ impl ThinClient {
                     rpc_addrs,
                     tpu_addrs,
                     connection_cache.clone(),
+                    commitment_config,
                 );
                 ThinClient::Udp(thin_client)
             }

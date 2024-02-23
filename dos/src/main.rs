@@ -56,6 +56,7 @@ use {
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         hash::Hash,
         instruction::CompiledInstruction,
         message::Message,
@@ -794,6 +795,7 @@ fn main() {
             &validators,
             &SocketAddrSpace::Unspecified,
             Arc::new(connection_cache),
+            CommitmentConfig::default(),
         );
         if validators.len() < num_clients {
             eprintln!(

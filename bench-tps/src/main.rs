@@ -143,7 +143,12 @@ fn create_client(
         ExternalClientType::ThinClient => {
             let connection_cache = Arc::new(connection_cache);
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
-                Arc::new(ThinClient::new(rpc, tpu, connection_cache))
+                Arc::new(ThinClient::new_with_commitment(
+                    rpc,
+                    tpu,
+                    connection_cache,
+                    commitment_config,
+                ))
             } else {
                 let nodes =
                     discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
@@ -152,8 +157,12 @@ fn create_client(
                             exit(1);
                         });
                 if multi_client {
-                    let (client, num_clients) =
-                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
+                    let (client, num_clients) = get_multi_client(
+                        &nodes,
+                        &SocketAddrSpace::Unspecified,
+                        connection_cache,
+                        commitment_config,
+                    );
                     if nodes.len() < num_clients {
                         eprintln!(
                             "Error: Insufficient nodes discovered.  Expecting {num_nodes} or more"
@@ -170,6 +179,7 @@ fn create_client(
                                 &[node],
                                 &SocketAddrSpace::Unspecified,
                                 connection_cache,
+                                commitment_config,
                             ));
                             break;
                         }
@@ -183,6 +193,7 @@ fn create_client(
                         &nodes,
                         &SocketAddrSpace::Unspecified,
                         connection_cache,
+                        commitment_config,
                     ))
                 }
             }

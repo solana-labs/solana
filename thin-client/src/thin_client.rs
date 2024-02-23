@@ -136,7 +136,7 @@ where
         tpu_addr: SocketAddr,
         connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
-        Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
+        Self::new_with_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
     }
 
     pub fn new_socket_with_timeout(
@@ -146,10 +146,10 @@ where
         connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
-        Self::new_from_client(rpc_client, tpu_addr, connection_cache)
+        Self::new_with_client(rpc_client, tpu_addr, connection_cache)
     }
 
-    fn new_from_client(
+    pub fn new_with_client(
         rpc_client: RpcClient,
         tpu_addr: SocketAddr,
         connection_cache: Arc<ConnectionCache<P, M, C>>,
@@ -166,11 +166,15 @@ where
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
         connection_cache: Arc<ConnectionCache<P, M, C>>,
+        commitment_config: CommitmentConfig,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
 
-        let rpc_clients: Vec<_> = rpc_addrs.into_iter().map(RpcClient::new_socket).collect();
+        let rpc_clients: Vec<_> = rpc_addrs
+            .into_iter()
+            .map(|addr| RpcClient::new_socket_with_commitment(addr, commitment_config.clone()))
+            .collect();
         let optimizer = ClientOptimizer::new(rpc_clients.len());
         Self {
             rpc_clients,
