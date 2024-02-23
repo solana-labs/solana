@@ -1143,6 +1143,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Gets the index's entry for `pubkey`, with `ancestors` and `max_root`,
     /// and applies `callback` to it
+    #[allow(dead_code)]
     pub(crate) fn get_with_and_then<R>(
         &self,
         pubkey: &Pubkey,
@@ -1175,6 +1176,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     }
 
     /// Is `pubkey`, with `ancestors` and `max_root`, in the index?
+    #[allow(dead_code)]
     pub(crate) fn contains_with(
         &self,
         pubkey: &Pubkey,
