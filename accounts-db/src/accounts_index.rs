@@ -1137,7 +1137,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Gets the index's entry for `pubkey`, with `ancestors` and `max_root`,
     /// and applies `callback` to it
-    #[cfg(test)]
     pub(crate) fn get_with_and_then<R>(
         &self,
         pubkey: &Pubkey,
