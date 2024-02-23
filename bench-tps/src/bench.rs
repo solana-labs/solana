@@ -435,9 +435,7 @@ where
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
-    let blockhash = Arc::new(RwLock::new(get_latest_blockhash_with_client_commitment(
-        client.as_ref(),
-    )));
+    let blockhash = Arc::new(RwLock::new(get_latest_blockhash(client.as_ref())));
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
     let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
@@ -1121,7 +1119,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
                 Sol(funding_key_balance),
                 Sol(total)
             );
-            let latest_blockhash = get_latest_blockhash_with_client_commitment(client.as_ref());
+            let latest_blockhash = get_latest_blockhash(client.as_ref());
             if client
                 .request_airdrop_with_blockhash(
                     &funding_key.pubkey(),

@@ -28,7 +28,7 @@ use {
     },
 };
 
-pub fn get_latest_blockhash_with_client_commitment<T: BenchTpsClient + ?Sized>(client: &T) -> Hash {
+pub fn get_latest_blockhash<T: BenchTpsClient + ?Sized>(client: &T) -> Hash {
     loop {
         match client.get_latest_blockhash() {
             Ok(blockhash) => return blockhash,
@@ -217,7 +217,7 @@ where
         let mut tries: usize = 0;
         while !self.is_empty() {
             log_progress(tries, self.len());
-            let blockhash = get_latest_blockhash_with_client_commitment(client.as_ref());
+            let blockhash = get_latest_blockhash(client.as_ref());
 
             // re-sign retained to_fund_txes with updated blockhash
             self.sign(blockhash);

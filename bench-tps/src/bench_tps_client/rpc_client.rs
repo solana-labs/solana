@@ -10,15 +10,7 @@ use {
 
 impl BenchTpsClient for RpcClient {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
-        RpcClient::send_transaction_with_config(
-            self,
-            &transaction,
-            RpcSendTransactionConfig {
-                preflight_commitment: Some(self.commitment().commitment),
-                ..RpcSendTransactionConfig::default()
-            },
-        )
-        .map_err(|err| err.into())
+        RpcClient::send_transaction(self, &transaction).map_err(|err| err.into())
     }
 
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
