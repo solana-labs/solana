@@ -2138,6 +2138,12 @@ pub fn verify_snapshot_archive(
     assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
 }
 
+/// Purges all bank snapshots
+pub fn purge_all_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
+    let bank_snapshots = get_bank_snapshots(&bank_snapshots_dir);
+    purge_bank_snapshots(&bank_snapshots);
+}
+
 /// Purges bank snapshots, retaining the newest `num_bank_snapshots_to_retain`
 pub fn purge_old_bank_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
