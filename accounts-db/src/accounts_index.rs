@@ -1124,12 +1124,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         }
     }
 
-    pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
-        let lock = self.get_bin(pubkey);
-        lock.get(pubkey)
-            .map(ReadAccountMapEntry::from_account_map_entry)
-    }
-
     /// Gets the index's entry for `pubkey` and applies `callback` to it
     ///
     /// If `callback`'s boolean return value is true, add this entry to the in-mem cache.
@@ -1457,7 +1451,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
-        self.get_account_read_entry(pubkey)
+        let read_account_map_entry = self
+            .get_bin(pubkey)
+            .get(pubkey)
+            .map(ReadAccountMapEntry::from_account_map_entry);
+
+        read_account_map_entry
             .and_then(|locked_entry| {
                 let slot_list = locked_entry.slot_list();
                 self.latest_slot(ancestors, slot_list, max_root)
