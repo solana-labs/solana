@@ -780,6 +780,10 @@ pub mod enable_chained_merkle_shreds {
     solana_sdk::declare_id!("7uZBkJXJ1HkuP6R3MJfZs7mLwymBcDbKdqbF51ZWLier");
 }
 
+pub mod remove_rounding_in_fee_calculation {
+    solana_sdk::declare_id!("BtVN7YjDzNE6Dk7kTT7YTDgMNUZTNgiSJgsdzAeTg2jF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -970,6 +974,7 @@ lazy_static! {
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
+        (remove_rounding_in_fee_calculation::id(), "Removing unwanted rounding in fee calculation #34982"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

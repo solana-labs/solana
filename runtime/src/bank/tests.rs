@@ -3333,7 +3333,6 @@ fn test_bank_parent_account_spend() {
     let key2 = Keypair::new();
     let (parent, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let amount = genesis_config.rent.minimum_balance(0);
-    println!("==== amount {}", amount);
 
     let tx =
         system_transaction::transfer(&mint_keypair, &key1.pubkey(), amount, genesis_config.hash());
@@ -10029,7 +10028,7 @@ fn calculate_test_fee(
         .unwrap_or_default()
         .into();
 
-    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false)
+    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false, true)
 }
 
 #[test]
