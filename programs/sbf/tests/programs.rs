@@ -1907,7 +1907,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
             assert_eq!(
                 result.unwrap_err(),
-                TransactionError::InstructionError(2, InstructionError::InvalidAccountData),
+                TransactionError::InstructionError(2, InstructionError::AccountNotExecutable),
             );
         }
     }

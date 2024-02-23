@@ -40,9 +40,6 @@ pub struct Account {
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
-    ///
-    /// When feature `deprecate_executable_meta_update_in_bpf_loader` is active,
-    /// `executable` is deprecated, please use `fn is_executable(&account)` instead.
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,

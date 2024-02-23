@@ -250,6 +250,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 rent_debits.insert(key, rent, account.lamports());
 
                 account
+                    .set_executable(is_builtin(&account) || is_executable(&account, &feature_set));
+
+                account
             };
 
             accounts_found.push(account_found);
@@ -289,7 +292,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 return Err(TransactionError::ProgramAccountNotFound);
             }
 
-            if !(is_builtin(program_account) || is_executable(program_account, &feature_set)) {
+            if !program_account.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -309,8 +312,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 let owner_index = accounts.len();
                 if let Some(owner_account) = callbacks.get_account_shared_data(owner_id) {
                     if !native_loader::check_id(owner_account.owner())
-                        || !(is_builtin(&owner_account)
-                            || is_executable(&owner_account, &feature_set))
+                        || !owner_account.executable()
                     {
                         error_counters.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);

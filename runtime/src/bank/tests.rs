@@ -7287,7 +7287,8 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     );
     assert_eq!(bank.get_balance(&buffer_address), 0);
     assert_eq!(None, bank.get_account(&buffer_address));
-    let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
+    let mut post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
+    post_program_account.set_executable(true);
     assert_eq!(post_program_account.lamports(), min_program_balance);
     assert_eq!(post_program_account.owner(), &bpf_loader_upgradeable::id());
     assert_eq!(
