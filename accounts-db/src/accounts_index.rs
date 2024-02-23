@@ -2333,24 +2333,11 @@ pub mod tests {
             index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
         assert_eq!(result.count, 1);
         index.set_startup(Startup::Normal);
-        if let AccountIndexGetResult::Found(entry, index) =
-            // the entry for
-            index.get_for_tests(pubkey, Some(&ancestors), None)
-        {
-            // make sure the one with the correct info is added
-            assert_eq!(entry.slot_list()[index], (slot, account_info2));
-            // make sure it wasn't inserted twice
-            assert_eq!(
-                entry
-                    .slot_list()
-                    .iter()
-                    .filter_map(|(entry_slot, _)| (entry_slot == &slot).then_some(true))
-                    .count(),
-                1
-            );
-        } else {
-            panic!("failed");
-        }
+        let index_entry = index.get_cloned(pubkey).unwrap();
+        let slot_list = index_entry.slot_list.read().unwrap();
+        // make sure the one with the correct info is added, and wasn't inserted twice
+        assert_eq!(slot_list.len(), 1);
+        assert_eq!(slot_list[0], (slot, account_info2));
     }
 
     #[test]
