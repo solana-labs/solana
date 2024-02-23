@@ -26,11 +26,12 @@ impl SamplePerformanceService {
     ) -> Self {
         let bank_forks = bank_forks.clone();
 
-        info!("Starting SamplePerformance service");
         let thread_hdl = Builder::new()
-            .name("sample-performance".to_string())
+            .name("solSamplePerf".to_string())
             .spawn(move || {
+                info!("SamplePerformanceService has started");
                 Self::run(bank_forks, blockstore, exit);
+                info!("SamplePerformanceService has stopped");
             })
             .unwrap();
 
