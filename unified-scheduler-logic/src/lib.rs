@@ -320,7 +320,7 @@ impl TaskInner {
         &self.transaction
     }
 
-    fn lock_attempts(&self) -> &Vec<LockAttempt> {
+    fn lock_attempts(&self) -> &[LockAttempt] {
         &self.lock_attempts
     }
 
