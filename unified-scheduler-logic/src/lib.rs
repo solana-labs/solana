@@ -78,21 +78,21 @@
 //! is needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
 //! Leveraging the fact it's the only state-mutating exclusive thread, it instead uses
 //! `UnsafeCell`, which is sugar-coated by a tailored wrapper called [`TokenCell`]. `TokenCell`
-//! imposes an overly restrictive aliasing rule via rust type system to maintain the memory
-//! safety. By localizing any synchronization to the message passing, the scheduling code itself
-//! attains maximally possible single-threaed execution without stalling cpu pipelines at all, only
+//! imposes an overly restrictive aliasing rule via rust type system to maintain the memory safety.
+//! By localizing any synchronization to the message passing, the scheduling code itself attains
+//! maximally possible single-threaed execution without stalling cpu pipelines at all, only
 //! constrained to mem access latency, while efficiently utilizing L1-L3 cpu cache with full of
 //! `Page`s.
 //!
 //! ### Buffer bloat insignificance
 //!
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
-//! unified scheduler, where a run of heavily linearized and blocked tasks could be severely hampered
-//! by very large number of interleaved runnable tasks along side.  The reason is again for
-//! separation of concerns. This is acceptable because the scheduling code itself isn't susceptible
-//! to the buffer bloat problem by itself as explained by the description and validated by the
-//! mentioned benchmark above. Thus, this should be solved elsewhere, specifically at the scheduler
-//! pool.
+//! unified scheduler, where a run of heavily linearized and blocked tasks could be severely
+//! hampered by very large number of interleaved runnable tasks along side.  The reason is again
+//! for separation of concerns. This is acceptable because the scheduling code itself isn't
+//! susceptible to the buffer bloat problem by itself as explained by the description and validated
+//! by the mentioned benchmark above. Thus, this should be solved elsewhere, specifically at the
+//! scheduler pool.
 use {
     crate::utils::{ShortCounter, Token, TokenCell},
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
