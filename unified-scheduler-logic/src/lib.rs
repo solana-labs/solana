@@ -3,12 +3,12 @@
 //!
 //! ### High-level API and design
 //!
-//! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactons) and
+//! The most important type is [`SchedulingStateMachine`]. It takes new tasks (= transactions) and
 //! may return back them if runnable via
 //! [`::schedule_task()`](SchedulingStateMachine::schedule_task) while maintaining the account
 //! readonly/writable lock rules. Those returned runnable tasks are guaranteed to be safe to
 //! execute in parallel. Lastly, `SchedulingStateMachine` should be notified about the completion
-//! of the exeuciton via [`::deschedule_task()`](SchedulingStateMachine::deschedule_task), so that
+//! of the exeuction via [`::deschedule_task()`](SchedulingStateMachine::deschedule_task), so that
 //! conflicting tasks can be returned from
 //! [`::schedule_unblocked_task()`](SchedulingStateMachine::schedule_unblocked_task) as
 //! newly-unblocked runnable ones.
@@ -39,13 +39,13 @@
 //! The last missing piece is that the scheduler actually tries to reschedule previously blocked
 //! tasks while deschduling, in addition to the above-mentioned book-keeping processing. Namely,
 //! when given address is ready for new fresh locking resulted from descheduling a task (i.e. write
-//! lock is released or read lock count is reached to zero), it pops out the first element of the
+//! lock is released or read lock count has reached zero), it pops out the first element of the
 //! FIFO blocked-task queue of the address. Then, it immediately marks the address as relocked. It
 //! also decrements the number of conflicting addresses of the popped-out task. As the final step,
 //! if the number reaches to the zero, it means the task has fully finished locking all of its
 //! addresses and is directly routed to be runnable.
 //!
-//! Put differently, this algorigthm tries to gradually lock all of addresses of tasks at different
+//! Put differently, this algorithm tries to gradually lock all of addresses of tasks at different
 //! timings while not deviating the execution order from the original task ingestion order. This
 //! implies there's no locking retries in general, which is the primary source of non-linear perf.
 //! degration.
@@ -69,25 +69,25 @@
 //! number of addresses in a given transaction. Note that this statement is held true, regardless
 //! of conflicts. This is because the preloading also pre-allocates some scratch-pad area
 //! ([`blocked_tasks`](PageInner::blocked_tasks)) to stash blocked ones. So, a conflict only incurs
-//! some additional fixed number of mem stores, within error magin of the constant complexity. And
-//! additional memory allocation for the scratchpad could said to be amortized, if such unsual
+//! some additional fixed number of mem stores, within error margin of the constant complexity. And
+//! additional memory allocation for the scratchpad could said to be amortized, if such an unusual
 //! event should occur.
 //!
 //! [`Arc`] is used to implement this preloading mechanism, because `Page`s are shared across tasks
 //! accessing the same account, and among threads due to the preloading. Also, interior mutability
 //! is needed. However, `SchedulingStateMachine` doesn't use conventional locks like RwLock.
-//! Leveraving the fact it's the only state-mutating exclusive thread, it instead uses
+//! Leveraging the fact it's the only state-mutating exclusive thread, it instead uses
 //! `UnsafeCell`, which is sugar-coated by a tailored wrapper called [`TokenCell`]. `TokenCell`
-//! improses an overly restrictive aliasing rule via rust type system to maintain the memory
+//! imposes an overly restrictive aliasing rule via rust type system to maintain the memory
 //! safety. By localizing any synchronization to the message passing, the scheduling code itself
 //! attains maximally possible single-threaed execution without stalling cpu pipelines at all, only
-//! constrained to mem access latency, while efficiently utilzing L1-L3 cpu cache with full of
+//! constrained to mem access latency, while efficiently utilizing L1-L3 cpu cache with full of
 //! `Page`s.
 //!
 //! ### Buffer bloat insignificance
 //!
 //! The scheduler code itself doesn't care about the buffer bloat problem, which can occur in
-//! unified scheduler, where a run of heavily linearized and blocked tasks could severely hampered
+//! unified scheduler, where a run of heavily linearized and blocked tasks could be severely hampered
 //! by very large number of interleaved runnable tasks along side.  The reason is again for
 //! separation of concerns. This is acceptable because the scheduling code itself isn't susceptible
 //! to the buffer bloat problem by itself as explained by the description and validated by the
@@ -387,7 +387,7 @@ enum RequestedUsage {
 
 /// Internal scheduling data about a particular address.
 ///
-/// Specifially, it holds the current [`PageUsage`] (or no usage with [`PageUsage::Unused`]) and
+/// Specifically, it holds the current [`PageUsage`] (or no usage with [`PageUsage::Unused`]) and
 /// which [`Task`]s are blocked to be executed after the current task is notified to be finished
 /// via [`::deschedule_task`](`SchedulingStateMachine::deschedule_task`)
 #[derive(Debug)]
