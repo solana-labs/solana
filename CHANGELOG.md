@@ -14,6 +14,8 @@ Release channels have their own copy of this changelog:
 
 <a name="edge-channel"></a>
 ## [2.0.0] - Unreleased
+* Changes
+  * `central-scheduler` as default option for `--block-production-method` (#34891)
 
 ## [1.18.0]
 * Changes
@@ -21,7 +23,6 @@ Release channels have their own copy of this changelog:
   * The default for `--use-snapshot-archives-at-startup` is now `when-newest` (#33883)
     * The default for `solana-ledger-tool`, however, remains `always` (#34228)
   * Added `central-scheduler` option for `--block-production-method` (#33890)
-    * `central-scheduler` as default option for `--block-production-method` (#34891)
   * Updated to Borsh v1
   * Added allow_commission_decrease_at_any_time feature which will allow commission on a vote account to be
     decreased even in the second half of epochs when the commission_updates_only_allowed_in_first_half_of_epoch

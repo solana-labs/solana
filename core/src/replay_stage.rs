@@ -16,7 +16,7 @@ use {
             progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
             tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
             BlockhashStatus, ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision,
-            Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
+            Tower, TowerError, VotedStakes, SWITCH_FORK_THRESHOLD,
         },
         cost_update_service::CostUpdate,
         repair::{
@@ -580,12 +580,25 @@ impl ReplayStage {
                 // set-identity was called during the startup procedure, ensure the tower is consistent
                 // before starting the loop. further calls to set-identity will reload the tower in the loop
                 let my_old_pubkey = tower.node_pubkey;
-                tower = Self::load_tower(
+                tower = match Self::load_tower(
                     tower_storage.as_ref(),
                     &my_pubkey,
                     &vote_account,
                     &bank_forks,
-                );
+                ) {
+                    Ok(tower) => tower,
+                    Err(err) => {
+                        error!(
+                            "Unable to load new tower when attempting to change identity from {} to {} on
+                            ReplayStage startup, Exiting: {}",
+                            my_old_pubkey,
+                            my_pubkey,
+                            err
+                        );
+                        // drop(_exit) will set the exit flag, eventually tearing down the entire process
+                        return;
+                    }
+                };
                 warn!(
                     "Identity changed during startup from {} to {}",
                     my_old_pubkey, my_pubkey
@@ -997,12 +1010,25 @@ impl ReplayStage {
                             my_pubkey = identity_keypair.pubkey();
 
                             // Load the new identity's tower
-                            tower = Self::load_tower(
+                            tower = match Self::load_tower(
                                 tower_storage.as_ref(),
                                 &my_pubkey,
                                 &vote_account,
                                 &bank_forks,
-                            );
+                            ) {
+                                Ok(tower) => tower,
+                                Err(err) => {
+                                    error!(
+                                        "Unable to load new tower when attempting to change identity
+                                        from {} to {} on set-identity, Exiting: {}",
+                                        my_old_pubkey,
+                                        my_pubkey,
+                                        err
+                                    );
+                                    // drop(_exit) will set the exit flag, eventually tearing down the entire process
+                                    return;
+                                }
+                            };
                             // Ensure the validator can land votes with the new identity before
                             // becoming leader
                             has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
@@ -1152,37 +1178,40 @@ impl ReplayStage {
         })
     }
 
+    /// Loads the tower from `tower_storage` with identity `node_pubkey`.
+    ///
+    /// If the tower is missing or too old, a tower is constructed from bank forks.
     fn load_tower(
         tower_storage: &dyn TowerStorage,
         node_pubkey: &Pubkey,
         vote_account: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
-    ) -> Tower {
-        Tower::restore(tower_storage, node_pubkey)
-            .and_then(|restored_tower| {
-                let root_bank = bank_forks.read().unwrap().root_bank();
-                let slot_history = root_bank.get_slot_history();
-                restored_tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
-            })
-            .unwrap_or_else(|err| {
-                if err.is_file_missing() {
-                    Tower::new_from_bankforks(
-                        &bank_forks.read().unwrap(),
-                        node_pubkey,
-                        vote_account,
-                    )
-                } else if err.is_too_old() {
-                    warn!("Failed to load tower, too old for {}: {}. Creating a new tower from bankforks.", node_pubkey, err);
-                    Tower::new_from_bankforks(
-                        &bank_forks.read().unwrap(),
-                        node_pubkey,
-                        vote_account,
-                    )
-                } else {
-                    error!("Failed to load tower for {}: {}", node_pubkey, err);
-                    std::process::exit(1);
-                }
-            })
+    ) -> Result<Tower, TowerError> {
+        let tower = Tower::restore(tower_storage, node_pubkey).and_then(|restored_tower| {
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            let slot_history = root_bank.get_slot_history();
+            restored_tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+        });
+        match tower {
+            Ok(tower) => Ok(tower),
+            Err(err) if err.is_file_missing() => {
+                warn!("Failed to load tower, file missing for {}: {}. Creating a new tower from bankforks.", node_pubkey, err);
+                Ok(Tower::new_from_bankforks(
+                    &bank_forks.read().unwrap(),
+                    node_pubkey,
+                    vote_account,
+                ))
+            }
+            Err(err) if err.is_too_old() => {
+                warn!("Failed to load tower, too old for {}: {}. Creating a new tower from bankforks.", node_pubkey, err);
+                Ok(Tower::new_from_bankforks(
+                    &bank_forks.read().unwrap(),
+                    node_pubkey,
+                    vote_account,
+                ))
+            }
+            Err(err) => Err(err),
+        }
     }
 
     fn check_for_vote_only_mode(
@@ -8643,7 +8672,8 @@ pub(crate) mod tests {
         let bank_forks = vote_simulator.bank_forks;
 
         let tower =
-            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks);
+            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks)
+                .unwrap();
         let expected_tower = Tower::new_for_tests(VOTE_THRESHOLD_DEPTH, VOTE_THRESHOLD_SIZE);
         assert_eq!(tower.vote_state, expected_tower.vote_state);
         assert_eq!(tower.node_pubkey, node_pubkey);
@@ -8670,7 +8700,8 @@ pub(crate) mod tests {
         expected_tower.save(&tower_storage, &node_keypair).unwrap();
 
         let tower =
-            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks);
+            ReplayStage::load_tower(&tower_storage, &node_pubkey, &vote_account, &bank_forks)
+                .unwrap();
         assert_eq!(tower.vote_state, expected_tower.vote_state);
         assert_eq!(tower.node_pubkey, expected_tower.node_pubkey);
     }

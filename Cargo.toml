@@ -301,7 +301,7 @@ serde_with = { version = "2.3.3", default-features = false }
 serde_yaml = "0.9.32"
 serial_test = "2.0.0"
 sha2 = "0.10.8"
-sha3 = "0.10.4"
+sha3 = "0.10.8"
 signal-hook = "0.3.17"
 siphasher = "0.3.11"
 smallvec = "1.13.1"
