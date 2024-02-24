@@ -1,12 +1,42 @@
 use {
     itertools::MinMaxResult,
-    solana_sdk::timing::AtomicInterval,
-    std::ops::{Deref, DerefMut},
+    solana_sdk::{clock::Slot, timing::AtomicInterval},
 };
 
 #[derive(Default)]
 pub struct SchedulerCountMetrics {
+    interval: IntervalSchedulerCountMetrics,
+    slot: SlotSchedulerCountMetrics,
+}
+
+impl SchedulerCountMetrics {
+    pub fn update(&mut self, update: impl Fn(&mut SchedulerCountMetricsInner)) {
+        update(&mut self.interval.metrics);
+        update(&mut self.slot.metrics);
+    }
+
+    pub fn maybe_report_and_reset_slot(&mut self, slot: Option<Slot>) {
+        self.slot.maybe_report_and_reset(slot);
+    }
+
+    pub fn maybe_report_and_reset_interval(&mut self, should_report: bool) {
+        self.interval.maybe_report_and_reset(should_report);
+    }
+
+    pub fn interval_has_data(&self) -> bool {
+        self.interval.metrics.has_data()
+    }
+}
+
+#[derive(Default)]
+struct IntervalSchedulerCountMetrics {
     interval: AtomicInterval,
+    metrics: SchedulerCountMetricsInner,
+}
+
+#[derive(Default)]
+struct SlotSchedulerCountMetrics {
+    slot: Option<Slot>,
     metrics: SchedulerCountMetricsInner,
 }
 
@@ -49,35 +79,36 @@ pub struct SchedulerCountMetricsInner {
     pub max_prioritization_fees: u64,
 }
 
-impl Deref for SchedulerCountMetrics {
-    type Target = SchedulerCountMetricsInner;
-    fn deref(&self) -> &Self::Target {
-        &self.metrics
-    }
-}
-
-impl DerefMut for SchedulerCountMetrics {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.metrics
-    }
-}
-
-impl SchedulerCountMetrics {
-    pub fn maybe_report_and_reset(&mut self, should_report: bool) {
+impl IntervalSchedulerCountMetrics {
+    fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report("banking_stage_scheduler_counts");
+                self.metrics.report("banking_stage_scheduler_counts", None);
             }
-            self.reset();
+            self.metrics.reset();
+        }
+    }
+}
+
+impl SlotSchedulerCountMetrics {
+    fn maybe_report_and_reset(&mut self, slot: Option<Slot>) {
+        if self.slot != slot {
+            // Only report if there was an assigned slot.
+            if self.slot.is_some() {
+                self.metrics
+                    .report("banking_stage_scheduler_slot_counts", self.slot);
+            }
+            self.metrics.reset();
+            self.slot = slot;
         }
     }
 }
 
 impl SchedulerCountMetricsInner {
-    fn report(&self, name: &'static str) {
-        datapoint_info!(
-            name,
+    fn report(&self, name: &'static str, slot: Option<Slot>) {
+        let mut datapoint = create_datapoint!(
+            @point name,
             ("num_received", self.num_received, i64),
             ("num_buffered", self.num_buffered, i64),
             ("num_scheduled", self.num_scheduled, i64),
@@ -115,6 +146,10 @@ impl SchedulerCountMetricsInner {
             ("min_priority", self.get_min_priority(), i64),
             ("max_priority", self.get_max_priority(), i64)
         );
+        if let Some(slot) = slot {
+            datapoint.add_field_i64("slot", slot as i64);
+        }
+        solana_metrics::submit(datapoint, log::Level::Info);
     }
 
     pub fn has_data(&self) -> bool {
@@ -186,7 +221,34 @@ impl SchedulerCountMetricsInner {
 
 #[derive(Default)]
 pub struct SchedulerTimingMetrics {
+    interval: IntervalSchedulerTimingMetrics,
+    slot: SlotSchedulerTimingMetrics,
+}
+
+impl SchedulerTimingMetrics {
+    pub fn update(&mut self, update: impl Fn(&mut SchedulerTimingMetricsInner)) {
+        update(&mut self.interval.metrics);
+        update(&mut self.slot.metrics);
+    }
+
+    pub fn maybe_report_and_reset_slot(&mut self, slot: Option<Slot>) {
+        self.slot.maybe_report_and_reset(slot);
+    }
+
+    pub fn maybe_report_and_reset_interval(&mut self, should_report: bool) {
+        self.interval.maybe_report_and_reset(should_report);
+    }
+}
+
+#[derive(Default)]
+struct IntervalSchedulerTimingMetrics {
     interval: AtomicInterval,
+    metrics: SchedulerTimingMetricsInner,
+}
+
+#[derive(Default)]
+struct SlotSchedulerTimingMetrics {
+    slot: Option<Slot>,
     metrics: SchedulerTimingMetricsInner,
 }
 
@@ -210,35 +272,36 @@ pub struct SchedulerTimingMetricsInner {
     pub receive_completed_time_us: u64,
 }
 
-impl Deref for SchedulerTimingMetrics {
-    type Target = SchedulerTimingMetricsInner;
-    fn deref(&self) -> &Self::Target {
-        &self.metrics
-    }
-}
-
-impl DerefMut for SchedulerTimingMetrics {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.metrics
-    }
-}
-
-impl SchedulerTimingMetrics {
-    pub fn maybe_report_and_reset(&mut self, should_report: bool) {
+impl IntervalSchedulerTimingMetrics {
+    fn maybe_report_and_reset(&mut self, should_report: bool) {
         const REPORT_INTERVAL_MS: u64 = 1000;
         if self.interval.should_update(REPORT_INTERVAL_MS) {
             if should_report {
-                self.report("banking_stage_scheduler_timing");
+                self.metrics.report("banking_stage_scheduler_timing", None);
             }
-            self.reset();
+            self.metrics.reset();
+        }
+    }
+}
+
+impl SlotSchedulerTimingMetrics {
+    fn maybe_report_and_reset(&mut self, slot: Option<Slot>) {
+        if self.slot != slot {
+            // Only report if there was an assigned slot.
+            if self.slot.is_some() {
+                self.metrics
+                    .report("banking_stage_scheduler_slot_counts", self.slot);
+            }
+            self.metrics.reset();
+            self.slot = slot;
         }
     }
 }
 
 impl SchedulerTimingMetricsInner {
-    fn report(&self, name: &'static str) {
-        datapoint_info!(
-            name,
+    fn report(&self, name: &'static str, slot: Option<Slot>) {
+        let mut datapoint = create_datapoint!(
+            @point name,
             ("decision_time_us", self.decision_time_us, i64),
             ("receive_time_us", self.receive_time_us, i64),
             ("buffer_time_us", self.buffer_time_us, i64),
@@ -252,6 +315,10 @@ impl SchedulerTimingMetricsInner {
                 i64
             )
         );
+        if let Some(slot) = slot {
+            datapoint.add_field_i64("slot", slot as i64);
+        }
+        solana_metrics::submit(datapoint, log::Level::Info);
     }
 
     fn reset(&mut self) {
