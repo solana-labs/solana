@@ -1,5 +1,5 @@
 use {
-    solana_program_test::{programs::spl_programs, ProgramTest},
+    solana_program_test::{program_library::KnownPrograms, ProgramTest},
     solana_sdk::{
         bpf_loader, bpf_loader_upgradeable,
         instruction::{AccountMeta, Instruction},
@@ -20,9 +20,13 @@ async fn programs_present() {
     let (token_2022_programdata_id, _) =
         Pubkey::find_program_address(&[token_2022_id.as_ref()], &bpf_loader_upgradeable::id());
 
-    for (program_id, _) in spl_programs(&rent) {
-        let program_account = banks_client.get_account(program_id).await.unwrap().unwrap();
-        if program_id == token_2022_id || program_id == token_2022_programdata_id {
+    for (program_id, _) in KnownPrograms::all_spl_program_accounts(&rent).iter() {
+        let program_account = banks_client
+            .get_account(*program_id)
+            .await
+            .unwrap()
+            .unwrap();
+        if *program_id == token_2022_id || *program_id == token_2022_programdata_id {
             assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
         } else {
             assert_eq!(program_account.owner, bpf_loader::id());

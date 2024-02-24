@@ -76,7 +76,9 @@ pub use {
     solana_sdk::transaction_context::IndexOfAccount,
 };
 
-pub mod programs;
+pub mod program_library;
+
+use program_library::KnownPrograms;
 
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -837,7 +839,9 @@ impl ProgramTest {
         );
 
         // Add commonly-used SPL programs as a convenience to the user
-        for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {
+        for (program_id, account) in
+            KnownPrograms::all_spl_program_accounts(&Rent::default()).iter()
+        {
             bank.store_account(program_id, account);
         }
 
