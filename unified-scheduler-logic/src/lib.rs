@@ -239,15 +239,24 @@ mod utils {
     pub(super) struct Token<V: 'static>(PhantomData<*mut V>);
 
     impl<V> Token<V> {
-        // Returns the token to acquire a mutable reference to the inner value of [TokenCell].
-        //
-        // Safety:
-        // This method should be called exactly once for each thread at most.
+        /// Returns the token to acquire a mutable reference to the inner value of [TokenCell].
+        ///
+        /// # Panics
+        ///
+        /// This function will `panic!()` if called multiple times with same type `V` from the same
+        /// thread to detect potential misuses.
+        ///
+        /// # Safety
+        ///
+        /// This method should be called exactly once for each thread at most to avoid undefined
+        /// behavior when used with [`Token`].
         #[must_use]
         pub(super) unsafe fn assume_exclusive_mutating_thread() -> Self {
             thread_local! {
                 static TOKENS: RefCell<BTreeSet<TypeId>> = const { RefCell::new(BTreeSet::new()) };
             }
+            // TOKEN.with_borrow_mut can't panic because it's the only non-overlapping
+            // bound-to-local-variable borrow of the _thread local_ variable.
             assert!(
                 TOKENS.with_borrow_mut(|tokens| tokens.insert(TypeId::of::<Self>())),
                 "{:?} is wrongly initialized twice on {:?}",
