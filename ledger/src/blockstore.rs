@@ -1155,7 +1155,7 @@ impl Blockstore {
     }
 
     /// Range-delete all entries which prefix matches the specified `slot`,
-    /// remove `slot` its' parents SlotMeta next_slots list, and
+    /// remove `slot`'s  parent's SlotMeta next_slots list, and
     /// clear `slot`'s SlotMeta (except for next_slots).
     ///
     /// This function currently requires `insert_shreds_lock`, as both
@@ -1166,7 +1166,7 @@ impl Blockstore {
         let _lock = self.insert_shreds_lock.lock().unwrap();
         // Clear all slot related information, and cleanup slot meta by removing
         // `slot` from parents `next_slots`, but retaining `slot`'s `next_slots`.
-        match self.run_purge(slot, slot, PurgeType::ExactAndCleanupChaining) {
+        match self.purge_slot_cleanup_chaining(slot) {
             Ok(_) => {}
             Err(BlockstoreError::SlotUnavailable) => error!(
                 "clear_unconfirmed_slot() called on slot {} with no SlotMeta",
