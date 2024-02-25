@@ -1490,28 +1490,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         });
     }
 
-    /// Get an account
-    /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub fn get(
-        &self,
-        pubkey: &Pubkey,
-        ancestors: Option<&Ancestors>,
-        max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<T> {
-        let read_account_map_entry = self
-            .get_bin(pubkey)
-            .get(pubkey)
-            .map(ReadAccountMapEntry::from_account_map_entry);
-
-        read_account_map_entry
-            .and_then(|locked_entry| {
-                let slot_list = locked_entry.slot_list();
-                self.latest_slot(ancestors, slot_list, max_root)
-                    .map(|found_index| AccountIndexGetResult::Found(locked_entry, found_index))
-            })
-            .unwrap_or(AccountIndexGetResult::NotFound)
-    }
-
     // Get the maximum root <= `max_allowed_root` from the given `slice`
     fn get_newest_root_in_slot_list(
         alive_roots: &RollingBitField,
