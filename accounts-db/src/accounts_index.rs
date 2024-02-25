@@ -339,12 +339,6 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<T: IndexValue> {
-    /// (index entry, index in slot list)
-    Found(ReadAccountMapEntry<T>, usize),
-    NotFound,
-}
-
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
@@ -2051,34 +2045,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             (reclaims, slot_list.is_empty())
         })
         .unwrap()
-    }
-}
-
-// These functions/fields are only usable from a dev context (i.e. tests and benches)
-#[cfg(feature = "dev-context-only-utils")]
-impl<T: IndexValue> AccountIndexGetResult<T> {
-    pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
-        match self {
-            AccountIndexGetResult::Found(lock, size) => (lock, size),
-            _ => {
-                panic!("trying to unwrap AccountIndexGetResult with non-Success result");
-            }
-        }
-    }
-
-    pub fn is_none(&self) -> bool {
-        !self.is_some()
-    }
-
-    pub fn is_some(&self) -> bool {
-        matches!(self, AccountIndexGetResult::Found(_lock, _size))
-    }
-
-    pub fn map<V, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> V>(self, f: F) -> Option<V> {
-        match self {
-            AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
-            _ => None,
-        }
     }
 }
 
