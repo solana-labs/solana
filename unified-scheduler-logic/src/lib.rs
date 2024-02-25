@@ -43,7 +43,9 @@
 //! FIFO blocked-task queue of the address. Then, it immediately marks the address as relocked. It
 //! also decrements the number of conflicting addresses of the popped-out task. As the final step,
 //! if the number reaches to the zero, it means the task has fully finished locking all of its
-//! addresses and is directly routed to be runnable.
+//! addresses and is directly routed to be runnable. Lastly, if the next first element of the
+//! blocked-task queue is trying to read-lock the address like the popped-out one, this
+//! rescheduling is repeated as an optimization to increase parallelism of task execution.
 //!
 //! Put differently, this algorithm tries to gradually lock all of addresses of tasks at different
 //! timings while not deviating the execution order from the original task ingestion order. This
