@@ -1242,6 +1242,15 @@ mod tests {
             page.0.borrow_mut(&mut state_machine.page_token).usage,
             PageUsage::Writable
         );
+        state_machine.deschedule_task(&task1);
+        assert_matches!(
+            state_machine
+                .schedule_unblocked_task()
+                .map(|t| t.task_index()),
+            Some(102)
+        );
+        state_machine.deschedule_task(&task2);
+        assert!(state_machine.has_no_active_task());
     }
 
     #[test]
