@@ -13,7 +13,6 @@ use {
         secondary_index::*,
     },
     log::*,
-    ouroboros::self_referencing,
     rand::{thread_rng, Rng},
     rayon::{
         iter::{IntoParallelIterator, ParallelIterator},
@@ -37,7 +36,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, Mutex, OnceLock, RwLock, RwLockWriteGuard,
         },
     },
     thiserror::Error,
@@ -336,42 +335,6 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
             Ordering::AcqRel,
             Ordering::Relaxed,
         );
-    }
-}
-
-#[self_referencing]
-pub struct ReadAccountMapEntry<T: IndexValue> {
-    owned_entry: AccountMapEntry<T>,
-    #[borrows(owned_entry)]
-    #[covariant]
-    slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
-}
-
-impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.borrow_owned_entry())
-    }
-}
-
-impl<T: IndexValue> ReadAccountMapEntry<T> {
-    pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
-        ReadAccountMapEntryBuilder {
-            owned_entry: account_map_entry,
-            slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
-        }
-        .build()
-    }
-
-    pub fn slot_list(&self) -> &SlotList<T> {
-        self.borrow_slot_list_guard()
-    }
-
-    pub fn ref_count(&self) -> RefCount {
-        self.borrow_owned_entry().ref_count()
-    }
-
-    pub fn addref(&self) {
-        self.borrow_owned_entry().addref();
     }
 }
 
