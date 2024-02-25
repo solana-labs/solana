@@ -5228,7 +5228,6 @@ dependencies = [
  "num-traits",
  "num_cpus",
  "num_enum",
- "ouroboros",
  "percentage",
  "qualifier_attr",
  "rand 0.8.5",
