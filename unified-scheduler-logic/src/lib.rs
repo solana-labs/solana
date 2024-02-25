@@ -204,7 +204,9 @@ mod utils {
         /// complex handling of non-`'static` heaped data in general. Instead, it's manually
         /// required to ensure this instance is accessed only via its associated Token for the
         /// entire lifetime.
-        // non-const to forbid unprotected sharing via static variables among threads.
+        ///
+        /// This is intentionally left to be non-`const` to forbid unprotected sharing via static
+        /// variables among threads.
         pub(super) fn new(value: V) -> Self {
             Self(UnsafeCell::new(value))
         }
@@ -240,6 +242,9 @@ mod utils {
 
     impl<V> Token<V> {
         /// Returns the token to acquire a mutable reference to the inner value of [TokenCell].
+        ///
+        /// This is intentionally left to be non-`const` to forbid unprotected sharing via static
+        /// variables among threads.
         ///
         /// # Panics
         ///
