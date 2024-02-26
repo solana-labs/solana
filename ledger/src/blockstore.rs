@@ -3293,7 +3293,6 @@ impl Blockstore {
         Ok(entries)
     }
 
-    // TODO: probably delete this entry point, used by completed_data_sets_service.rs
     pub fn get_entries_in_data_block(
         &self,
         slot: Slot,
