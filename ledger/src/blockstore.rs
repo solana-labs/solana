@@ -146,6 +146,7 @@ pub enum PossibleDuplicateShred {
     LastIndexConflict(/* original */ Shred, /* conflict */ Vec<u8>), // The index of this shred conflicts with `slot_meta.last_index`
     ErasureConflict(/* original */ Shred, /* conflict */ Vec<u8>), // The coding shred has a conflict in the erasure_meta
     MerkleRootConflict(/* original */ Shred, /* conflict */ Vec<u8>), // Merkle root conflict in the same fec set
+    ChainedMerkleRootConflict(/* original */ Shred, /* conflict */ Vec<u8>), // Merkle root chaining conflict with previous fec set
 }
 
 impl PossibleDuplicateShred {
@@ -155,6 +156,7 @@ impl PossibleDuplicateShred {
             Self::LastIndexConflict(shred, _) => shred.slot(),
             Self::ErasureConflict(shred, _) => shred.slot(),
             Self::MerkleRootConflict(shred, _) => shred.slot(),
+            Self::ChainedMerkleRootConflict(shred, _) => shred.slot(),
         }
     }
 }
@@ -1283,6 +1285,18 @@ impl Blockstore {
                     return false;
                 }
             }
+
+            // Check that the chaining between our current shred, the previous fec_set
+            // and the next fec_set
+            if !self.check_chained_merkle_root_consistency(
+                just_received_shreds,
+                &erasure_set,
+                merkle_root_metas,
+                &shred,
+                duplicate_shreds,
+            ) {
+                return false;
+            }
         }
 
         let erasure_meta_entry = erasure_metas.entry(erasure_set).or_insert_with(|| {
@@ -1517,6 +1531,18 @@ impl Blockstore {
                     return Err(InsertDataShredError::InvalidShred);
                 }
             }
+
+            // Check that the chaining between our current shred, the previous fec_set
+            // and the next fec_set
+            if !self.check_chained_merkle_root_consistency(
+                just_inserted_shreds,
+                &erasure_set,
+                merkle_root_metas,
+                &shred,
+                duplicate_shreds,
+            ) {
+                return Err(InsertDataShredError::InvalidShred);
+            }
         }
 
         let newly_completed_data_sets = self.insert_data_shred(
@@ -1643,6 +1669,113 @@ impl Blockstore {
             duplicate_shreds.push(PossibleDuplicateShred::MerkleRootConflict(
                 shred.clone(),
                 conflicting_shred,
+            ));
+        }
+        false
+    }
+
+    /// Returns true if there is no chaining conflict between
+    /// the `shred` and `merkle_root_meta` of the next or previous
+    /// FEC set, or if shreds from the next or previous set are
+    /// yet to be received.
+    ///
+    /// Otherwise return false and add duplicate proof to
+    /// `duplicate_shreds`.
+    fn check_chained_merkle_root_consistency(
+        &self,
+        just_inserted_shreds: &HashMap<ShredId, Shred>,
+        erasure_set: &ErasureSetId,
+        merkle_root_metas: &HashMap<ErasureSetId, WorkingEntry<MerkleRootMeta>>,
+        shred: &Shred,
+        duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
+    ) -> bool {
+        let (slot, fec_set_index) = erasure_set.store_key();
+
+        let next_erasure_set = ErasureSetId::new(slot, fec_set_index + 1);
+        if let Some(next_merkle_root_meta) =
+            merkle_root_metas.get(&next_erasure_set).map(AsRef::as_ref)
+        {
+            let next_shred_id = ShredId::new(
+                slot,
+                next_merkle_root_meta.first_received_shred_index(),
+                next_merkle_root_meta.first_received_shred_type(),
+            );
+            let next_shred =
+                Self::get_shred_from_just_inserted_or_db(self, just_inserted_shreds, next_shred_id)
+                    .expect("Shred indicated by merkle root meta must exist")
+                    .into_owned();
+            let next_shred = Shred::new_from_serialized_shred(next_shred)
+                .expect("Shred indicated by merkle root meta should deserialize");
+
+            if !self.check_chaining(shred, &next_shred, duplicate_shreds) {
+                return false;
+            }
+        }
+
+        if fec_set_index == 0 {
+            // Although the first fec set chains to the last fec set of the parent block,
+            // if this chain is incorrect we do not which block is the duplicate until votes
+            // are received. We instead delay this check until the block reaches duplicate
+            // confirmation.
+            return true;
+        }
+        let prev_erasure_set = ErasureSetId::new(slot, fec_set_index - 1);
+        if let Some(prev_merkle_root_meta) =
+            merkle_root_metas.get(&prev_erasure_set).map(AsRef::as_ref)
+        {
+            let prev_shred_id = ShredId::new(
+                slot,
+                prev_merkle_root_meta.first_received_shred_index(),
+                prev_merkle_root_meta.first_received_shred_type(),
+            );
+            let prev_shred =
+                Self::get_shred_from_just_inserted_or_db(self, just_inserted_shreds, prev_shred_id)
+                    .expect("Shred indicated by merkle root meta must exist")
+                    .into_owned();
+            let prev_shred = Shred::new_from_serialized_shred(prev_shred)
+                .expect("Shred indicated by merkle root meta should deserialize");
+            if !self.check_chaining(&prev_shred, shred, duplicate_shreds) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Checks if the chained merkle root of `next_shred` == `prev_shred`'s merkle root.
+    ///
+    /// Returns true if no conflict, otherwise updates duplicate_shreds
+    fn check_chaining(
+        &self,
+        prev_shred: &Shred,
+        next_shred: &Shred,
+        duplicate_shreds: &mut Vec<PossibleDuplicateShred>,
+    ) -> bool {
+        let Ok(chained_merkle_root) = next_shred.chained_merkle_root() else {
+            // Chained merkle roots have not been enabled yet
+            return true;
+        };
+        let merkle_root = prev_shred.merkle_root().ok();
+        if merkle_root == Some(chained_merkle_root) {
+            return true;
+        }
+        warn!(
+            "Received conflicting chained merkle roots for slot: {},
+                shred {:?} type {:?} has merkle root {:?}, however
+                next shred {:?} type {:?} chains to merkle root {:?}. Reporting as duplicate",
+            prev_shred.slot(),
+            prev_shred.erasure_set(),
+            prev_shred.shred_type(),
+            merkle_root,
+            next_shred.erasure_set(),
+            next_shred.shred_type(),
+            chained_merkle_root,
+        );
+
+        if !self.has_duplicate_shreds_in_slot(prev_shred.slot()) {
+            duplicate_shreds.push(PossibleDuplicateShred::ChainedMerkleRootConflict(
+                prev_shred.clone(),
+                next_shred.payload().clone(),
             ));
         }
         false

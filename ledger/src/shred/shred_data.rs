@@ -41,6 +41,13 @@ impl ShredData {
         }
     }
 
+    pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
+        match self {
+            Self::Legacy(_) => Err(Error::InvalidShredType),
+            Self::Merkle(shred) => shred.chained_merkle_root(),
+        }
+    }
+
     pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
         match self {
             Self::Legacy(_) => Err(Error::InvalidShredType),

@@ -286,6 +286,10 @@ impl ShredId {
 pub(crate) struct ErasureSetId(Slot, /*fec_set_index:*/ u32);
 
 impl ErasureSetId {
+    pub(crate) fn new(slot: Slot, fec_set_index: u32) -> Self {
+        Self(slot, fec_set_index)
+    }
+
     pub(crate) fn slot(&self) -> Slot {
         self.0
     }
@@ -342,6 +346,7 @@ impl Shred {
     dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
+    dispatch!(pub fn chained_merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(pub fn merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
