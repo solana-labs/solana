@@ -31,6 +31,7 @@ use {
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
+    std::sync::RwLock,
     std::{collections::HashMap, num::NonZeroUsize},
 };
 
@@ -48,7 +49,7 @@ pub struct LoadedTransaction {
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
 pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
 
-pub fn load_accounts<CB: TransactionProcessingCallback>(
+pub fn load_accounts<CB: TransactionProcessingCallback, AccountHash>(
     callbacks: &CB,
     txs: &[SanitizedTransaction],
     lock_results: &[TransactionCheckResult],
@@ -119,7 +120,7 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
         .collect()
 }
 
-fn load_transaction_accounts<CB: TransactionProcessingCallback>(
+fn load_transaction_accounts<CB: TransactionProcessingCallback, AccountHash>(
     callbacks: &CB,
     tx: &SanitizedTransaction,
     fee: u64,

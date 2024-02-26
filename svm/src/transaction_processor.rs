@@ -180,7 +180,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn load_and_execute_sanitized_transactions<'a, CB: TransactionProcessingCallback>(
+    pub fn load_and_execute_sanitized_transactions<
+        'a,
+        CB: TransactionProcessingCallback,
+        AccountHash,
+    >(
         &self,
         callbacks: &CB,
         sanitized_txs: &[SanitizedTransaction],
