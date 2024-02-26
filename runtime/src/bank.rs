@@ -4626,6 +4626,7 @@ impl Bank {
                 account_overrides,
                 self.builtin_programs.iter(),
                 log_messages_bytes_limit,
+                &self.old_written_accounts,
             );
 
         let mut signature_count = 0;

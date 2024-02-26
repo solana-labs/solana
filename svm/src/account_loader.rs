@@ -57,6 +57,9 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
     account_overrides: Option<&AccountOverrides>,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
+    old_written_accounts: &RwLock<
+        HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>,
+    >,
 ) -> Vec<TransactionLoadResult> {
     let feature_set = callbacks.get_feature_set();
     txs.iter()
@@ -88,6 +91,7 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
                     account_overrides,
                     program_accounts,
                     loaded_programs,
+                    old_written_accounts,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
                     Err(e) => return (Err(e), None),
@@ -123,6 +127,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     account_overrides: Option<&AccountOverrides>,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
+    old_written_accounts: &RwLock<
+        HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>,
+    >,
 ) -> Result<LoadedTransaction> {
     // NOTE: this check will never fail because `tx` is sanitized
     if tx.signatures().is_empty() && fee != 0 {
@@ -182,6 +189,16 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                         .get_account_shared_data(key)
                         .map(|mut account| {
                             if message.is_writable(i) {
+                                {
+                                    // todo: find all the places this has to happen
+                                    let mut old_written_accounts =
+                                        old_written_accounts.write().unwrap();
+                                    if !old_written_accounts.contains_key(key) {
+                                        old_written_accounts
+                                            .insert(*key, (Some(account.clone()), None));
+                                    }
+                                }
+
                                 if !feature_set
                                     .is_active(&feature_set::disable_rent_fees_collection::id())
                                 {

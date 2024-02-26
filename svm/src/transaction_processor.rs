@@ -193,6 +193,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         account_overrides: Option<&AccountOverrides>,
         builtin_programs: impl Iterator<Item = &'a Pubkey>,
         log_messages_bytes_limit: Option<usize>,
+        old_written_accounts: &RwLock<
+            HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>,
+        >,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = Self::filter_executable_program_accounts(
             callbacks,
@@ -219,6 +222,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             account_overrides,
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
+            old_written_accounts,
         );
         load_time.stop();
 
