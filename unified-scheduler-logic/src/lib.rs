@@ -514,7 +514,7 @@ impl SchedulingStateMachine {
         }
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
-        self.attempt_lock_for_task(task)
+        self.try_lock_for_task(task)
     }
 
     pub fn has_unblocked_task(&self) -> bool {
@@ -543,33 +543,7 @@ impl SchedulingStateMachine {
         self.unlock_for_task(task);
     }
 
-    #[must_use]
-    fn attempt_lock_pages(&mut self, task: &Task) -> ShortCounter {
-        let mut blocked_page_count = ShortCounter::zero();
-
-        for attempt in task.lock_attempts() {
-            let page = attempt.page_mut(&mut self.page_token);
-            let lock_status = if page.has_no_blocked_task() {
-                Self::attempt_lock_page(page, attempt.requested_usage)
-            } else {
-                LockResult::Err(())
-            };
-            match lock_status {
-                LockResult::Ok(PageUsage::Unused) => unreachable!(),
-                LockResult::Ok(new_usage) => {
-                    page.usage = new_usage;
-                }
-                LockResult::Err(()) => {
-                    blocked_page_count.increment_self();
-                    page.push_blocked_task(task.clone(), attempt.requested_usage);
-                }
-            }
-        }
-
-        blocked_page_count
-    }
-
-    fn attempt_lock_page(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
+    fn try_lock_page(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
         match page.usage {
             PageUsage::Unused => LockResult::Ok(PageUsage::from_requested_usage(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
@@ -612,14 +586,32 @@ impl SchedulingStateMachine {
     }
 
     #[must_use]
-    fn attempt_lock_for_task(&mut self, task: Task) -> Option<Task> {
-        let blocked_page_count = self.attempt_lock_pages(&task);
+    fn try_lock_for_task(&mut self, task: Task) -> Option<Task> {
+        let mut blocked_page_count = ShortCounter::zero();
 
+        for attempt in task.lock_attempts() {
+            let page = attempt.page_mut(&mut self.page_token);
+            let lock_result = if page.has_no_blocked_task() {
+                Self::try_lock_page(page, attempt.requested_usage)
+            } else {
+                LockResult::Err(())
+            };
+            match lock_result {
+                LockResult::Ok(PageUsage::Unused) => unreachable!(),
+                LockResult::Ok(new_usage) => {
+                    page.usage = new_usage;
+                }
+                LockResult::Err(()) => {
+                    blocked_page_count.increment_self();
+                    page.push_blocked_task(task.clone(), attempt.requested_usage);
+                }
+            }
+        }
+
+        // no blocked page means success
         if blocked_page_count.is_zero() {
-            // succeeded
             Some(task)
         } else {
-            // failed
             task.set_blocked_page_count(&mut self.count_token, blocked_page_count);
             None
         }
@@ -635,7 +627,7 @@ impl SchedulingStateMachine {
                     self.unblocked_task_queue.push_back(task);
                 }
 
-                match Self::attempt_lock_page(page, requested_usage) {
+                match Self::try_lock_page(page, requested_usage) {
                     LockResult::Ok(PageUsage::Unused) => unreachable!(),
                     LockResult::Ok(new_usage) => {
                         page.usage = new_usage;
