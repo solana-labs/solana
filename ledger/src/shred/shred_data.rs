@@ -97,8 +97,10 @@ impl ShredData {
     // Possibly zero pads bytes stored in blockstore.
     pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
         match shred::layout::get_shred_variant(&shred)? {
-            ShredVariant::LegacyCode | ShredVariant::MerkleCode(..) => Err(Error::InvalidShredType),
-            ShredVariant::MerkleData(..) => {
+            ShredVariant::LegacyCode | ShredVariant::MerkleCode { .. } => {
+                Err(Error::InvalidShredType)
+            }
+            ShredVariant::MerkleData { .. } => {
                 if shred.len() != merkle::ShredData::SIZE_OF_PAYLOAD {
                     return Err(Error::InvalidPayloadSize(shred.len()));
                 }
