@@ -1110,17 +1110,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         F: FnMut(&Pubkey, (&T, Slot)),
     {
         for pubkey in index.get(index_key) {
-            self.get_with_and_then(
-                &pubkey,
-                Some(ancestors),
-                max_root,
-                true,
-                |(slot, account_info)| func(&pubkey, (&account_info, slot)),
-            );
-
             if config.is_aborted() {
                 break;
             }
+            let Some(entry) = self.get_cloned(&pubkey) else {
+                continue;
+            };
+            let slot_list = entry.slot_list.read().unwrap();
+            let Some(found_index) = self.latest_slot(Some(ancestors), &slot_list, max_root) else {
+                continue;
+            };
+            let (slot, account_info) = slot_list[found_index];
+            func(&pubkey, (&account_info, slot));
         }
     }
 
