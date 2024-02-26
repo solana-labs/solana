@@ -3207,7 +3207,7 @@ impl Blockstore {
     ///   completed_ranges = [..., (s_i, e_i), (s_i+1, e_i+1), ...]
     /// Then, the following statements are true:
     ///   s_i < e_i < s_i+1 < e_i+1
-    ///   e_i == s_i+1
+    ///   e_i == s_i+1 + 1
     fn get_slot_entries_in_block(
         &self,
         slot: Slot,
