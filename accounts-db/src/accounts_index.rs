@@ -2170,18 +2170,6 @@ pub mod tests {
         }
     }
 
-    impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
-        /// provides the ability to refactor this function on the api without bloody changes
-        pub fn get_for_tests(
-            &self,
-            pubkey: &Pubkey,
-            ancestors: Option<&Ancestors>,
-            max_root: Option<Slot>,
-        ) -> AccountIndexGetResult<T> {
-            self.get(pubkey, ancestors, max_root)
-        }
-    }
-
     const COLLECT_ALL_UNSORTED_FALSE: bool = false;
 
     #[test]
