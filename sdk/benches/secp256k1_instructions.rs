@@ -40,12 +40,13 @@ fn create_test_transactions(message_length: u16) -> Vec<Transaction> {
 fn bench_secp256k1_len_032(b: &mut Bencher) {
     let feature_set = FeatureSet::all_enabled();
     let txs = create_test_transactions(32);
-    let mut n: usize = 0;
+    let mut tx_iter = txs.iter().cycle();
     b.iter(|| {
-        txs[n % TX_COUNT as usize]
+        tx_iter
+            .next()
+            .unwrap()
             .verify_precompiles(&feature_set)
             .unwrap();
-        n += 1;
     });
 }
 
@@ -53,12 +54,13 @@ fn bench_secp256k1_len_032(b: &mut Bencher) {
 fn bench_secp256k1_len_256(b: &mut Bencher) {
     let feature_set = FeatureSet::all_enabled();
     let txs = create_test_transactions(256);
-    let mut n: usize = 0;
+    let mut tx_iter = txs.iter().cycle();
     b.iter(|| {
-        txs[n % TX_COUNT as usize]
+        tx_iter
+            .next()
+            .unwrap()
             .verify_precompiles(&feature_set)
             .unwrap();
-        n += 1;
     });
 }
 
@@ -66,12 +68,13 @@ fn bench_secp256k1_len_256(b: &mut Bencher) {
 fn bench_secp256k1_len_32k(b: &mut Bencher) {
     let feature_set = FeatureSet::all_enabled();
     let txs = create_test_transactions(32 * 1024);
-    let mut n: usize = 0;
+    let mut tx_iter = txs.iter().cycle();
     b.iter(|| {
-        txs[n % TX_COUNT as usize]
+        tx_iter
+            .next()
+            .unwrap()
             .verify_precompiles(&feature_set)
             .unwrap();
-        n += 1;
     });
 }
 
@@ -80,11 +83,12 @@ fn bench_secp256k1_len_max(b: &mut Bencher) {
     let required_extra_space = 113_u16; // len for pubkey, sig, and offsets
     let feature_set = FeatureSet::all_enabled();
     let txs = create_test_transactions(u16::MAX - required_extra_space);
-    let mut n: usize = 0;
+    let mut tx_iter = txs.iter().cycle();
     b.iter(|| {
-        txs[n % TX_COUNT as usize]
+        tx_iter
+            .next()
+            .unwrap()
             .verify_precompiles(&feature_set)
             .unwrap();
-        n += 1;
     });
 }
