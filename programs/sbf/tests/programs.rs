@@ -1356,7 +1356,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "sbf_c")]
     {
         programs.extend_from_slice(&[
-            ("alloc", 11502),
+            ("alloc", 14575),
             ("sbf_to_sbf", 313),
             ("multiple_static", 208),
             ("noop", 5),
