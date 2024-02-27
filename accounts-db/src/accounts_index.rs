@@ -1444,39 +1444,37 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             // SAFETY: The caller must ensure that if `provide_entry_in_callback` is true, and
             // if it's possible for `callback` to clone the entry Arc, then it must also add
             // the entry to the in-mem cache if the entry is made dirty.
-            unsafe {
-                lock.as_ref().unwrap().get_internal(pubkey, |entry| {
-                    let mut cache = false;
-                    match entry {
-                        Some(locked_entry) => {
-                            let result = if let Some(result) = avoid_callback_result.as_ref() {
-                                *result
-                            } else {
-                                let slot_list = &locked_entry.slot_list.read().unwrap();
-                                callback(
-                                    pubkey,
-                                    Some((slot_list, locked_entry.ref_count())),
-                                    provide_entry_in_callback.then_some(locked_entry),
-                                )
-                            };
-                            cache = match result {
-                                AccountsIndexScanResult::Unref => {
-                                    if locked_entry.unref() {
-                                        info!("scan: refcount of item already at 0: {pubkey}");
-                                    }
-                                    true
+            lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+                let mut cache = false;
+                match entry {
+                    Some(locked_entry) => {
+                        let result = if let Some(result) = avoid_callback_result.as_ref() {
+                            *result
+                        } else {
+                            let slot_list = &locked_entry.slot_list.read().unwrap();
+                            callback(
+                                pubkey,
+                                Some((slot_list, locked_entry.ref_count())),
+                                provide_entry_in_callback.then_some(locked_entry),
+                            )
+                        };
+                        cache = match result {
+                            AccountsIndexScanResult::Unref => {
+                                if locked_entry.unref() {
+                                    info!("scan: refcount of item already at 0: {pubkey}");
                                 }
-                                AccountsIndexScanResult::KeepInMemory => true,
-                                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty => false,
-                            };
-                        }
-                        None => {
-                            avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
-                        }
+                                true
+                            }
+                            AccountsIndexScanResult::KeepInMemory => true,
+                            AccountsIndexScanResult::OnlyKeepInMemoryIfDirty => false,
+                        };
                     }
-                    (cache, ())
-                })
-            };
+                    None => {
+                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
+                    }
+                }
+                (cache, ())
+            });
         });
     }
 

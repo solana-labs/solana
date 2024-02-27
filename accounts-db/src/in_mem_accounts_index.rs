@@ -339,7 +339,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     ) -> RT {
         // SAFETY: The entry Arc is not passed to `callback`, so
         // it cannot live beyond this function call.
-        unsafe { self.get_internal(pubkey, |entry| callback(entry.map(Arc::as_ref))) }
+        self.get_internal(pubkey, |entry| callback(entry.map(Arc::as_ref)))
     }
 
     /// lookup 'pubkey' in the index (in_mem or disk).
@@ -351,7 +351,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     ) -> RT {
         // SAFETY: Since we're passing the entry Arc clone to `callback`, we must
         // also add the entry to the in-mem cache.
-        unsafe { self.get_internal(pubkey, |entry| (true, callback(entry.map(Arc::clone)))) }
+        self.get_internal(pubkey, |entry| (true, callback(entry.map(Arc::clone))))
     }
 
     /// lookup 'pubkey' in index (in_mem or disk).
@@ -364,7 +364,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// then the disk entry *must* also be added to the in-mem cache.
     ///
     /// Prefer `get_internal_inner()` or `get_internal_cloned()` for safe alternatives.
-    pub(crate) unsafe fn get_internal<RT>(
+    pub(crate) fn get_internal<RT>(
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache
