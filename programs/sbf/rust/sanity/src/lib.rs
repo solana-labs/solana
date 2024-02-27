@@ -16,12 +16,15 @@ struct SStruct {
     z: u64,
 }
 
+#[allow(dead_code)]
 #[repr(C)]
 enum TestEnum {
     VariantOne,
-    VariantTwo
+    VariantTwo,
 }
 
+#[allow(dead_code)]
+#[allow(clippy::enum_clike_unportable_variant)]
 #[repr(C)]
 enum Test64BitEnum {
     VariantOne,
