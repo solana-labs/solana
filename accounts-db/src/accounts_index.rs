@@ -1130,9 +1130,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn get_and_then<R>(
         &self,
         pubkey: &Pubkey,
-        callback: impl FnOnce(Option<&AccountMapEntry<T>>) -> (bool, R),
+        callback: impl FnOnce(Option<&AccountMapEntryInner<T>>) -> (bool, R),
     ) -> R {
-        self.get_bin(pubkey).get_internal(pubkey, callback)
+        self.get_bin(pubkey).get_internal_inner(pubkey, callback)
     }
 
     /// Gets the index's entry for `pubkey`, with `ancestors` and `max_root`,
@@ -1159,10 +1159,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     ///
     /// Prefer `get_and_then()` whenever possible.
     pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
-        // We *must* add the index entry to the in-mem cache!
-        // If the index entry is only on-disk, returning a clone would allow the entry
-        // to be modified, but those modifications would be lost on drop!
-        self.get_and_then(pubkey, |entry| (true, entry.cloned()))
+        self.get_bin(pubkey)
+            .get_internal_cloned(pubkey, |entry| entry)
     }
 
     /// Is `pubkey` in the index?
@@ -1443,6 +1441,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 lock = Some(&self.account_maps[bin]);
                 last_bin = bin;
             }
+            // SAFETY: The caller must ensure that if `provide_entry_in_callback` is true, and
+            // if it's possible for `callback` to clone the entry Arc, then it must also add
+            // the entry to the in-mem cache if the entry is made dirty.
             lock.as_ref().unwrap().get_internal(pubkey, |entry| {
                 let mut cache = false;
                 match entry {
@@ -1830,7 +1831,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
         let map = self.get_bin(pubkey);
-        map.get_internal(pubkey, |entry| {
+        map.get_internal_inner(pubkey, |entry| {
             (
                 false,
                 entry.map(|entry| entry.ref_count()).unwrap_or_default(),
@@ -4073,7 +4074,7 @@ pub mod tests {
 
         let map = index.get_bin(&key);
         for expected in [false, true] {
-            assert!(map.get_internal(&key, |entry| {
+            assert!(map.get_internal_inner(&key, |entry| {
                 // check refcount BEFORE the unref
                 assert_eq!(u64::from(!expected), entry.unwrap().ref_count());
                 // first time, ref count was at 1, we can unref once. Unref should return false.
