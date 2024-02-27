@@ -160,8 +160,7 @@ impl Blockstore {
             .batch()
             .expect("Database Error: Failed to get write batch");
 
-        let columns_purged = self.purge_range(&mut write_batch, slot, slot);
-        self.purge_special_columns_exact(&mut write_batch, slot, slot)?;
+        let columns_purged = self.purge_range(&mut write_batch, slot, slot, PurgeType::Exact)?;
 
         if let Some(parent_slot) = slot_meta.parent_slot {
             let parent_slot_meta = self.meta(parent_slot)?;
@@ -173,10 +172,11 @@ impl Blockstore {
                     .retain(|&next_slot| next_slot != slot);
                 write_batch.put::<cf::SlotMeta>(parent_slot, &parent_slot_meta)?;
             } else {
-                error!("Parent slot meta {} for child {} is missing. In the absence of a duplicate block this
-                        likely means a cluster restart was performed and your node contains invalid shreds generated
-                        with the wrong shred version, whose ancestors have been cleaned up.
-                        Falling back to duplicate block handling to remedy the situation", parent_slot, slot);
+                error!(
+                    "Parent slot meta {} for child {} is missing  or cleaned up.
+                       Falling back to orphan repair to remedy the situation",
+                    parent_slot, slot
+                );
             }
         }
 
@@ -214,20 +214,9 @@ impl Blockstore {
             .db
             .batch()
             .expect("Database Error: Failed to get write batch");
+
         let mut delete_range_timer = Measure::start("delete_range");
-        let columns_purged = self.purge_range(&mut write_batch, from_slot, to_slot);
-        match purge_type {
-            PurgeType::Exact => {
-                self.purge_special_columns_exact(&mut write_batch, from_slot, to_slot)?;
-            }
-            PurgeType::CompactionFilter => {
-                // No explicit action is required here because this purge type completely and
-                // indefinitely relies on the proper working of compaction filter for those
-                // special column families, never toggling the primary index from the current
-                // one. Overall, this enables well uniformly distributed writes, resulting
-                // in no spiky periodic huge delete_range for them.
-            }
-        }
+        let columns_purged = self.purge_range(&mut write_batch, from_slot, to_slot, purge_type)?;
         delete_range_timer.stop();
 
         let mut write_timer = Measure::start("write_batch");
@@ -264,8 +253,15 @@ impl Blockstore {
         Ok(columns_purged)
     }
 
-    fn purge_range(&self, write_batch: &mut WriteBatch, from_slot: Slot, to_slot: Slot) -> bool {
-        self.db
+    fn purge_range(
+        &self,
+        write_batch: &mut WriteBatch,
+        from_slot: Slot,
+        to_slot: Slot,
+        purge_type: PurgeType,
+    ) -> Result<bool> {
+        let columns_purged = self
+            .db
             .delete_range_cf::<cf::SlotMeta>(write_batch, from_slot, to_slot)
             .is_ok()
             & self
@@ -327,7 +323,21 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::MerkleRootMeta>(write_batch, from_slot, to_slot)
-                .is_ok()
+                .is_ok();
+
+        match purge_type {
+            PurgeType::Exact => {
+                self.purge_special_columns_exact(write_batch, from_slot, to_slot)?;
+            }
+            PurgeType::CompactionFilter => {
+                // No explicit action is required here because this purge type completely and
+                // indefinitely relies on the proper working of compaction filter for those
+                // special column families, never toggling the primary index from the current
+                // one. Overall, this enables well uniformly distributed writes, resulting
+                // in no spiky periodic huge delete_range for them.
+            }
+        }
+        Ok(columns_purged)
     }
 
     fn purge_files_in_range(&self, from_slot: Slot, to_slot: Slot) -> bool {
