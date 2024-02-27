@@ -1143,16 +1143,28 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
         should_add_to_in_mem_cache: bool,
-        mut callback: impl FnMut((Slot, T)) -> R,
+        callback: impl FnOnce((Slot, T)) -> R,
     ) -> Option<R> {
         self.get_and_then(pubkey, |entry| {
             let callback_result = entry.and_then(|entry| {
-                let slot_list = entry.slot_list.read().unwrap();
-                self.latest_slot(ancestors, &slot_list, max_root)
-                    .map(|found_index| callback(slot_list[found_index]))
+                self.get_account_info_with_and_then(entry, ancestors, max_root, callback)
             });
             (should_add_to_in_mem_cache, callback_result)
         })
+    }
+
+    /// Gets the account info (and slot) in `entry`, with `ancestors` and `max_root`,
+    /// and applies `callback` to it
+    fn get_account_info_with_and_then<R>(
+        &self,
+        entry: &AccountMapEntryInner<T>,
+        ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
+        callback: impl FnOnce((Slot, T)) -> R,
+    ) -> Option<R> {
+        let slot_list = entry.slot_list.read().unwrap();
+        self.latest_slot(ancestors, &slot_list, max_root)
+            .map(|found_index| callback(slot_list[found_index]))
     }
 
     /// Gets the index's entry for `pubkey` and clones it
