@@ -1887,9 +1887,9 @@ impl JsonRpcRequestProcessor {
         let token_balances = token_balances
             .into_sorted_vec()
             .into_iter()
-            .map(|Reverse(token)| RpcTokenAccountBalance {
-                address: token.1.to_string(),
-                amount: token_amount_to_ui_amount(token.0, decimals),
+            .map(|Reverse((amount, address))| RpcTokenAccountBalance {
+                address: address.to_string(),
+                amount: token_amount_to_ui_amount(amount, decimals),
             })
             .collect();
 
