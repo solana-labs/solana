@@ -252,6 +252,14 @@ impl AddAssign for SquashTiming {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CollectorFeeDetails {
+    pub transaction_fee: u64,
+    pub priority_fee: u64,
+    pub reserved: u64,
+}
+
 #[derive(Debug)]
 pub struct BankRc {
     /// where all the Accounts are stored
@@ -434,6 +442,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
     pub(crate) epoch_reward_status: EpochRewardStatus,
+    pub(crate) collector_fee_details: CollectorFeeDetails,
 }
 
 /// Bank's common fields shared by all supported snapshot versions for serialization.

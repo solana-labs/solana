@@ -5,7 +5,7 @@ use {
         *,
     },
     crate::{
-        bank::EpochRewardStatus,
+        bank::{CollectorFeeDetails, EpochRewardStatus},
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_accounts_db::{accounts_hash::AccountsHash, ancestors::AncestorsForSerialization},
@@ -87,6 +87,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             epoch: dvb.epoch,
             block_height: dvb.block_height,
             collector_id: dvb.collector_id,
+            // deprecating `collector_fees`, replacing it with `collector_fee_details`
             collector_fees: dvb.collector_fees,
             fee_calculator: dvb.fee_calculator,
             fee_rate_governor: dvb.fee_rate_governor,
@@ -100,6 +101,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
             epoch_reward_status: EpochRewardStatus::Inactive,
+            collector_fee_details: CollectorFeeDetails::default(),
         }
     }
 }
@@ -346,6 +348,9 @@ impl<'a> TypeContext<'a> for Context {
 
         let epoch_reward_status = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_reward_status = epoch_reward_status;
+
+        let collector_fee_details = ignore_eof_error(deserialize_from(&mut stream))?;
+        bank_fields.collector_fee_details = collector_fee_details;
 
         Ok((bank_fields, accounts_db_fields))
     }
