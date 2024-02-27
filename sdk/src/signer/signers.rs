@@ -14,14 +14,14 @@ pub trait Signers {
     fn is_interactive(&self) -> bool;
 }
 
-/// Any `T` where `&T` impls `IntoIterator` yielding
-/// references to `Signer`s implements `Signers`.
+/// Any `T` where `T` impls `IntoIterator` yielding
+/// `Signer`s implements `Signers`.
 ///
 /// This includes [&dyn Signer], [Box<dyn Signer>],
 /// [&dyn Signer; N], Vec<dyn Signer>, Vec<Keypair>, etc.
 ///
-/// When used as a generic function param, `&S`
-/// should be used instead of `S` where S: Signers, due to the `?Sized` bounds on T.
+/// When used as a generic function param, `&T`
+/// should be used instead of `T` where T: Signers, due to the `?Sized` bounds on T.
 /// E.g. [Signer] implements `Signers`, but `&[Signer]` does not
 impl<T: ?Sized, S: Signer + ?Sized> Signers for T
 where
