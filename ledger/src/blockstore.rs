@@ -28,6 +28,7 @@ use {
     bincode::{deserialize, serialize},
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     dashmap::DashSet,
+    itertools::Itertools,
     log::*,
     rand::Rng,
     rayon::{
@@ -3263,34 +3264,35 @@ impl Blockstore {
                 .collect();
         let data_shreds = data_shreds?;
 
-        let mut entries = vec![];
-        for (start_index, end_index) in completed_ranges.iter() {
-            // The indices from completed_ranges refer to shred indices in the
-            // block; map those indices to indices within data_shreds
-            let start_index = (*start_index - total_start_index) as usize;
-            let end_index = (*end_index - total_start_index) as usize;
-            let range_shreds = &data_shreds[start_index..=end_index];
+        completed_ranges
+            .into_iter()
+            .map(|(start_index, end_index)| {
+                // The indices from completed_ranges refer to shred indices in the
+                // block; map those indices to indices within data_shreds
+                let start_index = (start_index - total_start_index) as usize;
+                let end_index = (end_index - total_start_index) as usize;
+                let range_shreds = &data_shreds[start_index..=end_index];
 
-            let last_shred = range_shreds.last().unwrap();
-            assert!(last_shred.data_complete() || last_shred.last_in_slot());
-            trace!("{:?} data shreds in last FEC set", data_shreds.len());
+                let last_shred = range_shreds.last().unwrap();
+                assert!(last_shred.data_complete() || last_shred.last_in_slot());
+                trace!("{:?} data shreds in last FEC set", data_shreds.len());
 
-            let deshred_payload = Shredder::deshred(range_shreds).map_err(|e| {
-                BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
-                    "could not reconstruct entries buffer from shreds: {e:?}"
-                ))))
-            })?;
-
-            let range_entries =
-                bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|e| {
-                    BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                        format!("could not reconstruct entries: {e:?}"),
-                    )))
-                })?;
-
-            entries.extend(range_entries);
-        }
-        Ok(entries)
+                Shredder::deshred(range_shreds)
+                    .map_err(|e| {
+                        BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                            format!("could not reconstruct entries buffer from shreds: {e:?}"),
+                        )))
+                    })
+                    .and_then(|payload| {
+                        bincode::deserialize::<Vec<Entry>>(&payload).map_err(|e| {
+                            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                                format!("could not reconstruct entries: {e:?}"),
+                            )))
+                        })
+                    })
+            })
+            .flatten_ok()
+            .collect()
     }
 
     pub fn get_entries_in_data_block(
@@ -4800,7 +4802,6 @@ pub mod tests {
         assert_matches::assert_matches,
         bincode::serialize,
         crossbeam_channel::unbounded,
-        itertools::Itertools,
         rand::{seq::SliceRandom, thread_rng},
         solana_account_decoder::parse_token::UiTokenAmount,
         solana_entry::entry::{next_entry, next_entry_mut},
