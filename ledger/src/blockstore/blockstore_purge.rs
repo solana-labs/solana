@@ -184,13 +184,12 @@ impl Blockstore {
         slot_meta.clear_unconfirmed_slot();
         write_batch.put::<cf::SlotMeta>(slot, &slot_meta)?;
 
-        if let Err(e) = self.db.write(write_batch) {
+        self.db.write(write_batch).inspect_err(|e| {
             error!(
-                "Error: {:?} while submitting write batch for slot {:?} retrying...",
+                "Error: {:?} while submitting write batch for slot {:?}",
                 e, slot
-            );
-            return Err(e);
-        }
+            )
+        })?;
         Ok(columns_purged)
     }
 
@@ -220,13 +219,12 @@ impl Blockstore {
         delete_range_timer.stop();
 
         let mut write_timer = Measure::start("write_batch");
-        if let Err(e) = self.db.write(write_batch) {
+        self.db.write(write_batch).inspect(|e| {
             error!(
-                "Error: {:?} while submitting write batch for slot {:?} retrying...",
-                e, from_slot
-            );
-            return Err(e);
-        }
+                "Error: {:?} while submitting write batch for purge from_slot {} to_slot {}",
+                e, from_slot, to_slot
+            )
+        })?;
         write_timer.stop();
 
         let mut purge_files_in_range_timer = Measure::start("delete_file_in_range");

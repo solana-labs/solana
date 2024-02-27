@@ -1154,9 +1154,8 @@ impl Blockstore {
         self.completed_slots_senders.lock().unwrap().clear();
     }
 
-    /// Range-delete all entries which prefix matches the specified `slot`,
-    /// remove `slot`'s  parent's SlotMeta next_slots list, and
-    /// clear `slot`'s SlotMeta (except for next_slots).
+    /// Clear `slot` from the Blockstore, see ``Blockstore::purge_slot_cleanup_chaining`
+    /// for more details.
     ///
     /// This function currently requires `insert_shreds_lock`, as both
     /// `clear_unconfirmed_slot()` and `insert_shreds_handle_duplicate()`
@@ -1164,8 +1163,12 @@ impl Blockstore {
     /// family.
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
-        // Clear all slot related information, and cleanup slot meta by removing
-        // `slot` from parents `next_slots`, but retaining `slot`'s `next_slots`.
+        // Purge the slot and insert an empty `SlotMeta` with only the `next_slots` field preserved.
+        // Shreds inherently contain the slot of their parent which updates the parent's `next_slots`
+        // when the child is inserted through `Blockstore::handle_chaining()`.
+        // However we are only purging and repairing the parent slot here. Since the child will not be
+        // reinserted the chaining will be lost. In order for bank forks discovery to ingest the child,
+        // we must retain the chain by preserving `next_slots`.
         match self.purge_slot_cleanup_chaining(slot) {
             Ok(_) => {}
             Err(BlockstoreError::SlotUnavailable) => error!(
