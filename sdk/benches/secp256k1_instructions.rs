@@ -28,7 +28,7 @@ fn create_test_transaction(message_length: u16) -> Transaction {
 }
 
 #[bench]
-fn bench_ed25519_len_032(b: &mut Bencher) {
+fn bench_secp256k1_len_032(b: &mut Bencher) {
     let tx = create_test_transaction(32);
     let feature_set = FeatureSet::all_enabled();
 
@@ -38,7 +38,7 @@ fn bench_ed25519_len_032(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_ed25519_len_256(b: &mut Bencher) {
+fn bench_secp256k1_len_256(b: &mut Bencher) {
     let tx = create_test_transaction(256);
     let feature_set = FeatureSet::all_enabled();
 
@@ -48,7 +48,7 @@ fn bench_ed25519_len_256(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_ed25519_len_32k(b: &mut Bencher) {
+fn bench_secp256k1_len_32k(b: &mut Bencher) {
     let tx = create_test_transaction(32 * 1024);
     let feature_set = FeatureSet::all_enabled();
 
@@ -58,7 +58,7 @@ fn bench_ed25519_len_32k(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_ed25519_len_max(b: &mut Bencher) {
+fn bench_secp256k1_len_max(b: &mut Bencher) {
     let required_extra_space = 113_u16; // len for pubkey, sig, and offsets
     let tx = create_test_transaction(u16::MAX - required_extra_space);
     let feature_set = FeatureSet::all_enabled();
