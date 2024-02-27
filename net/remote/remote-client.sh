@@ -11,7 +11,7 @@ if [[ -n $4 ]]; then
 fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
-clientType="${7:-thin-client}"
+clientType="${7:-tpu-client}"
 maybeUseUnstakedConnection="$8"
 
 missing() {
