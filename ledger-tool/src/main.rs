@@ -28,7 +28,7 @@ use {
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            validate_maximum_full_snapshot_archives_to_retain,
+            is_within_range, validate_maximum_full_snapshot_archives_to_retain,
             validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
@@ -72,6 +72,7 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -95,6 +96,7 @@ use {
 mod args;
 mod bigtable;
 mod blockstore;
+mod error;
 mod ledger_path;
 mod ledger_utils;
 mod output;
@@ -604,7 +606,11 @@ fn main() {
         .long("accounts")
         .value_name("PATHS")
         .takes_value(true)
-        .help("Comma separated persistent accounts location");
+        .help(
+            "Persistent accounts location. \
+            May be specified multiple times. \
+            [default: <LEDGER>/accounts]",
+        );
     let accounts_hash_cache_path_arg = Arg::with_name("accounts_hash_cache_path")
         .long("accounts-hash-cache-path")
         .value_name("PATH")
@@ -616,8 +622,9 @@ fn main() {
         .takes_value(true)
         .multiple(true)
         .help(
-            "Persistent accounts-index location. May be specified multiple times. [default: \
-             [ledger]/accounts_index]",
+            "Persistent accounts-index location. \
+            May be specified multiple times. \
+            [default: <LEDGER>/accounts_index]",
         );
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
@@ -846,6 +853,16 @@ fn main() {
                 .global(true)
                 .hidden(hidden_unless_forced())
                 .help(BlockVerificationMethod::cli_message()),
+        )
+        .arg(
+            Arg::with_name("unified_scheduler_handler_threads")
+                .long("unified-scheduler-handler-threads")
+                .value_name("COUNT")
+                .takes_value(true)
+                .validator(|s| is_within_range(s, 1..))
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .help(DefaultSchedulerPool::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")
@@ -1295,6 +1312,12 @@ fn main() {
                         .takes_value(true)
                         .help("Snapshot archive format to use.")
                         .conflicts_with("no_snapshot"),
+                )
+                .arg(
+                    Arg::with_name("enable_capitalization_change")
+                        .long("enable-capitalization-change")
+                        .takes_value(false)
+                        .help("If snapshot creation should succeed with a capitalization delta."),
                 ),
         )
         .subcommand(
@@ -1806,6 +1829,9 @@ fn main() {
                         None
                     };
 
+                    let enable_capitalization_change =
+                        arg_matches.is_present("enable_capitalization_change");
+
                     let snapshot_type_str = if is_incremental {
                         "incremental "
                     } else if is_minimized {
@@ -2047,7 +2073,30 @@ fn main() {
                         }
                     }
 
+                    let pre_capitalization = bank.capitalization();
+
                     bank.set_capitalization();
+
+                    let post_capitalization = bank.capitalization();
+
+                    let capitalization_message = if pre_capitalization != post_capitalization {
+                        let amount = if pre_capitalization > post_capitalization {
+                            format!("-{}", pre_capitalization - post_capitalization)
+                        } else {
+                            (post_capitalization - pre_capitalization).to_string()
+                        };
+                        let msg = format!("Capitalization change: {amount} lamports");
+                        warn!("{msg}");
+                        if !enable_capitalization_change {
+                            eprintln!(
+                                "{msg}\nBut `--enable-capitalization-change flag not provided"
+                            );
+                            exit(1);
+                        }
+                        Some(msg)
+                    } else {
+                        None
+                    };
 
                     let bank = if let Some(warp_slot) = warp_slot {
                         // need to flush the write cache in order to use Storages to calculate
@@ -2175,6 +2224,9 @@ fn main() {
                         }
                     }
 
+                    if let Some(msg) = capitalization_message {
+                        println!("{msg}");
+                    }
                     println!(
                         "Shred version: {}",
                         compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))

@@ -1,11 +1,12 @@
 use {
-    clap::{crate_description, crate_name, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
@@ -80,6 +81,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
+    pub commitment_config: CommitmentConfig,
 }
 
 impl Eq for Config {}
@@ -115,6 +117,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
+            commitment_config: CommitmentConfig::confirmed(),
         }
     }
 }
@@ -396,6 +399,14 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
+        .arg(
+            Arg::with_name("commitment_config")
+                .long("commitment-config")
+                .takes_value(true)
+                .possible_values(&["processed", "confirmed", "finalized"])
+                .default_value("confirmed")
+                .help("Block commitment config for getting latest blockhash"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -576,6 +587,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         let client_node_id = read_keypair_file(client_node_id_filename).map_err(|_| "")?;
         args.client_node_id = Some(client_node_id);
     }
+
+    args.commitment_config = value_t_or_exit!(matches, "commitment_config", CommitmentConfig);
 
     Ok(args)
 }

@@ -37,7 +37,7 @@ To submit a new design proposal for Solana:
 Once a design proposal has been accepted, the PR will be merged into the `master` branch of the Solana repo. This also signifies the maintainers support your plan of attack.
 
 > **NOTE:** The merging of the PR will **automatically** create a link in the "Accepted Proposals" table of contents sidebar.
-> Once approved, continue to submit PRs that implement the proposal. When the implementation reveals the need for tweaks to the proposal, be sure to update the "accepted proposal" document and have these change reviewed by the same approving maintainers.
+> Once approved, continue to submit PRs that implement the proposal. When the implementation reveals the need for tweaks to the proposal, be sure to update the "accepted proposal" document and have these changes reviewed by the same approving maintainers.
 
 ### After Implemented
 

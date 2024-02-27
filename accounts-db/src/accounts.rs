@@ -7,7 +7,6 @@ use {
         accounts_index::{IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport},
         ancestors::Ancestors,
         storable_accounts::StorableAccounts,
-        transaction_results::TransactionExecutionResult,
     },
     dashmap::DashMap,
     log::*,
@@ -23,10 +22,12 @@ use {
         },
         nonce_info::{NonceFull, NonceInfo},
         pubkey::Pubkey,
-        rent_debits::RentDebits,
         slot_hashes::SlotHashes,
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
-        transaction_context::{IndexOfAccount, TransactionAccount},
+        transaction_context::TransactionAccount,
+    },
+    solana_svm::{
+        account_loader::TransactionLoadResult, transaction_results::TransactionExecutionResult,
     },
     std::{
         cmp::Reverse,
@@ -97,19 +98,6 @@ pub struct Accounts {
     /// being processed by banking/replay threads
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
-
-// for the load instructions
-pub type TransactionRent = u64;
-pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct LoadedTransaction {
-    pub accounts: Vec<TransactionAccount>,
-    pub program_indices: TransactionProgramIndices,
-    pub rent: TransactionRent,
-    pub rent_debits: RentDebits,
-}
-
-pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
 
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
@@ -804,7 +792,6 @@ fn prepare_if_nonce_account(
 mod tests {
     use {
         super::*,
-        crate::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         assert_matches::assert_matches,
         solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
         solana_sdk::{
@@ -814,9 +801,14 @@ mod tests {
             instruction::{CompiledInstruction, InstructionError},
             message::{Message, MessageHeader},
             native_loader, nonce, nonce_account,
+            rent_debits::RentDebits,
             signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
             system_instruction, system_program,
             transaction::{Transaction, MAX_TX_ACCOUNT_LOCKS},
+        },
+        solana_svm::{
+            account_loader::LoadedTransaction,
+            transaction_results::{DurableNonceFee, TransactionExecutionDetails},
         },
         std::{
             borrow::Cow,

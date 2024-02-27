@@ -6,8 +6,6 @@ use {
     crate::banking_stage::scheduler_messages::TransactionId,
     itertools::MinMaxResult,
     min_max_heap::MinMaxHeap,
-    solana_cost_model::transaction_cost::TransactionCost,
-    solana_runtime::compute_budget_details::ComputeBudgetDetails,
     std::collections::HashMap,
 };
 
@@ -99,14 +97,13 @@ impl TransactionStateContainer {
         &mut self,
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
-        compute_budget_details: ComputeBudgetDetails,
-        transaction_cost: TransactionCost,
+        priority: u64,
+        cost: u64,
     ) -> bool {
-        let priority_id =
-            TransactionPriorityId::new(compute_budget_details.compute_unit_price, transaction_id);
+        let priority_id = TransactionPriorityId::new(priority, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(transaction_ttl, compute_budget_details, transaction_cost),
+            TransactionState::new(transaction_ttl, priority, cost),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -121,8 +118,7 @@ impl TransactionStateContainer {
         let transaction_state = self
             .get_mut_transaction_state(&transaction_id)
             .expect("transaction must exist");
-        let priority_id =
-            TransactionPriorityId::new(transaction_state.compute_unit_price(), transaction_id);
+        let priority_id = TransactionPriorityId::new(transaction_state.priority(), transaction_id);
         transaction_state.transition_to_unprocessed(transaction_ttl);
         self.push_id_into_queue(priority_id);
     }
@@ -148,7 +144,7 @@ impl TransactionStateContainer {
             .expect("transaction must exist");
     }
 
-    pub(crate) fn get_min_max_prioritization_fees(&self) -> MinMaxResult<u64> {
+    pub(crate) fn get_min_max_priority(&self) -> MinMaxResult<u64> {
         match self.priority_queue.peek_min() {
             Some(min) => match self.priority_queue.peek_max() {
                 Some(max) => MinMaxResult::MinMax(min.priority, max.priority),
@@ -163,10 +159,8 @@ impl TransactionStateContainer {
 mod tests {
     use {
         super::*,
-        solana_cost_model::cost_model::CostModel,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
-            feature_set::FeatureSet,
             hash::Hash,
             message::Message,
             signature::Keypair,
@@ -177,13 +171,8 @@ mod tests {
         },
     };
 
-    fn test_transaction(
-        priority: u64,
-    ) -> (
-        SanitizedTransactionTTL,
-        ComputeBudgetDetails,
-        TransactionCost,
-    ) {
+    /// Returns (transaction_ttl, priority, cost)
+    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, u64, u64) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -199,31 +188,23 @@ mod tests {
             message,
             Hash::default(),
         ));
-        let transaction_cost = CostModel::calculate_cost(&tx, &FeatureSet::default());
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: tx,
             max_age_slot: Slot::MAX,
         };
-        (
-            transaction_ttl,
-            ComputeBudgetDetails {
-                compute_unit_price: priority,
-                compute_unit_limit: 0,
-            },
-            transaction_cost,
-        )
+        const TEST_TRANSACTION_COST: u64 = 5000;
+        (transaction_ttl, priority, TEST_TRANSACTION_COST)
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, compute_budget_details, transaction_cost) =
-                test_transaction(priority);
+            let (transaction_ttl, priority, cost) = test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
-                compute_budget_details,
-                transaction_cost,
+                priority,
+                cost,
             );
         }
     }
@@ -248,7 +229,7 @@ mod tests {
             container
                 .id_to_transaction_state
                 .iter()
-                .map(|ts| ts.1.compute_unit_price())
+                .map(|ts| ts.1.priority())
                 .next()
                 .unwrap(),
             4
