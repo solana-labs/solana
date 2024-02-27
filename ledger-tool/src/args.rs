@@ -139,7 +139,9 @@ pub fn get_accounts_db_config(
         test_partitioned_epoch_rewards,
         test_skip_rewrites_but_include_in_bank_hash: arg_matches
             .is_present("accounts_db_test_skip_rewrites"),
-        ..AccountsDbConfig::default()
+        enable_accumulate_account_hash_calculation: arg_matches
+            .is_present("enable_accumulate_account_hash_calculation")
+            ..AccountsDbConfig::default(),
     }
 }
 

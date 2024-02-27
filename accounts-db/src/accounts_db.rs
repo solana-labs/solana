@@ -502,6 +502,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
     test_skip_rewrites_but_include_in_bank_hash: false,
+    enable_accumulate_account_hash_calculation: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -515,6 +516,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     create_ancient_storage: CreateAncientStorage::Pack,
     test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
     test_skip_rewrites_but_include_in_bank_hash: false,
+    enable_accumulate_account_hash_calculation: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -560,6 +562,7 @@ pub struct AccountsDbConfig {
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
     pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
+    pub enable_accumulate_account_hash_calculation: bool,
 }
 
 #[cfg(not(test))]
@@ -1370,6 +1373,8 @@ pub struct AccountsDb {
 
     /// true if this client should skip rewrites but still include those rewrites in the bank hash as if rewrites had occurred.
     pub test_skip_rewrites_but_include_in_bank_hash: bool,
+
+    pub enable_accumulate_account_hash_calculation: bool,
 
     pub accounts_cache: AccountsCache,
 
@@ -2472,6 +2477,7 @@ impl AccountsDb {
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
             test_skip_rewrites_but_include_in_bank_hash: false,
+            enable_accumulate_account_hash_calculation: false,
         }
     }
 
@@ -2540,6 +2546,11 @@ impl AccountsDb {
             .map(|config| config.test_skip_rewrites_but_include_in_bank_hash)
             .unwrap_or_default();
 
+        let enable_accumulate_account_hash_calculation = accounts_db_config
+            .as_ref()
+            .map(|config| config.enable_accumulate_account_hash_calculation)
+            .unwrap_or_default();
+
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
             PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
 
@@ -2559,6 +2570,7 @@ impl AccountsDb {
             partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
             test_skip_rewrites_but_include_in_bank_hash,
+            enable_accumulate_account_hash_calculation,
             ..Self::default_with_accounts_index(
                 accounts_index,
                 base_working_path,
@@ -7897,7 +7909,10 @@ impl AccountsDb {
     ///
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
-    pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> (AccountsDeltaHash, Vec<(Pubkey, AccountHash)>) {
+    pub fn calculate_accounts_delta_hash(
+        &self,
+        slot: Slot,
+    ) -> (AccountsDeltaHash, Vec<(Pubkey, AccountHash)>) {
         self.calculate_accounts_delta_hash_internal(slot, None, HashMap::default())
     }
 
@@ -7907,28 +7922,36 @@ impl AccountsDb {
         mut ancestors: Ancestors,
         accumulated_accounts_hash: &mut Hash,
         pubkey_hash: Vec<(Pubkey, AccountHash)>,
-        old_written_accounts: &RwLock<HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>>
+        old_written_accounts: &RwLock<
+            HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>,
+        >,
     ) {
         // we are assuming it was easy to lookup a hash for everything written in `slot` when we were calculating the delta hash. So, caller passes in `pubkey_hash`
         // note we don't need rewrites in `pubkey_hash`. these accounts had the same hash before and after. So, we only have to consider what was written that changed.
         ancestors.remove(&slot);
         let old_written_accounts = old_written_accounts.read().unwrap();
         // if we want to look it up ourselves: let (hashes, _scan_us, _accumulate) = self.get_pubkey_hash_for_slot(slot);
-        let old = pubkey_hash.iter().map(|(k, _)| {
-            if let Some((account, hash)) = old_written_accounts.get(k) {
-                Some(hash.unwrap()) // todo on demand calculate, calculate in bg
-            }
-            else {
-                self.load_with_fixed_root(&ancestors, k).map(|(account, _)| Self::hash_account(&account, k))
-            }
-        }).collect::<Vec<_>>();
-        pubkey_hash.into_iter().zip(old.into_iter()).for_each(|((k, new_hash), old_hash)| {
-            if let Some(old) = old_hash {
-                // todo if old == new, then we can avoid this update altogether
-                // todo subtract accumulated_accounts_hash -= old_hash
-            }
-            // todo add accumulated_accounts_hash += new_hash
-        });
+        let old = pubkey_hash
+            .iter()
+            .map(|(k, _)| {
+                if let Some((account, hash)) = old_written_accounts.get(k) {
+                    Some(hash.unwrap()) // todo on demand calculate, calculate in bg
+                } else {
+                    self.load_with_fixed_root(&ancestors, k)
+                        .map(|(account, _)| Self::hash_account(&account, k))
+                }
+            })
+            .collect::<Vec<_>>();
+        pubkey_hash
+            .into_iter()
+            .zip(old.into_iter())
+            .for_each(|((k, new_hash), old_hash)| {
+                if let Some(old) = old_hash {
+                    // todo if old == new, then we can avoid this update altogether
+                    // todo subtract accumulated_accounts_hash -= old_hash
+                }
+                // todo add accumulated_accounts_hash += new_hash
+            });
     }
 
     /// Calculate accounts delta hash for `slot`

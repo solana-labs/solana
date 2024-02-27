@@ -1421,6 +1421,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced()),
         )
         .arg(
+            Arg::with_name("enable_accumulate_account_hash_calculation")
+                .long("enable-accumulate-account-hash-calculation")
+                .takes_value(false)
+                .help("Enable accumulate account hash calculation")
+                .hidden(hidden_unless_forced()),
+        )
+        .arg(
             Arg::with_name("accounts_index_path")
                 .long("accounts-index-path")
                 .value_name("PATH")
