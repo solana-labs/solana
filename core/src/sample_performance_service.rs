@@ -11,8 +11,8 @@ use {
     },
 };
 
-const SAMPLE_INTERVAL: u64 = 60;
-const SLEEP_INTERVAL: u64 = 500;
+const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct SamplePerformanceService {
     thread_hdl: JoinHandle<()>,
@@ -52,8 +52,7 @@ impl SamplePerformanceService {
             }
 
             let elapsed = now.elapsed();
-
-            if elapsed.as_secs() >= SAMPLE_INTERVAL {
+            if elapsed >= SAMPLE_INTERVAL {
                 now = Instant::now();
                 let new_snapshot = StatsSnapshot::from_forks(&bank_forks);
 
@@ -80,7 +79,7 @@ impl SamplePerformanceService {
                 }
             }
 
-            sleep(Duration::from_millis(SLEEP_INTERVAL));
+            sleep(SLEEP_INTERVAL);
         }
     }
 
