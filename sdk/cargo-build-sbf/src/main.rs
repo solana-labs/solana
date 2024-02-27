@@ -913,7 +913,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.39");
+    let platform_tools_version = String::from("v1.41");
     let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
     let version = format!(
         "{}\nplatform-tools {}\n{}",
