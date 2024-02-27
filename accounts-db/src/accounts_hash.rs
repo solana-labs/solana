@@ -5,6 +5,7 @@ use {
         ancestors::Ancestors,
         pubkey_bins::PubkeyBinCalculator24,
     },
+    blake3::OutputReader,
     bytemuck::{Pod, Zeroable},
     log::*,
     memmap2::MmapMut,
@@ -1239,12 +1240,40 @@ pub enum ZeroLamportAccounts {
 
 /// Hash of an account
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable, AbiExample)]
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable, AbiExample)]
 pub struct AccountHash(pub Hash);
 
 // Ensure the newtype wrapper never changes size from the underlying Hash
 // This also ensures there are no padding bytes, which is required to safely implement Pod
 const _: () = assert!(std::mem::size_of::<AccountHash>() == std::mem::size_of::<Hash>());
+
+/// Lattice hash of an account
+pub const LT_HASH_BYTES: usize = 1024;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable, AbiExample)]
+pub struct AccountLTHash(pub [u8; LT_HASH_BYTES]);
+
+impl Default for AccountLTHash {
+    fn default() -> Self {
+        Self([0; LT_HASH_BYTES])
+    }
+}
+
+impl AccountLTHash {
+    pub const fn new_from_array(hash_array: [u8; LT_HASH_BYTES]) -> Self {
+        Self(hash_array)
+    }
+
+    pub fn new_from_reader(mut reader: OutputReader) -> Self {
+        let mut output = [0; LT_HASH_BYTES];
+        reader.fill(&mut output);
+        Self(output)
+    }
+
+    pub fn to_bytes(self) -> [u8; LT_HASH_BYTES] {
+        self.0
+    }
+}
 
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -2449,5 +2478,11 @@ mod tests {
             &mut HashStats::default(),
             2, // accounts above are in 2 groups
         );
+    }
+
+    #[test]
+    fn test_lt_account_hash_default() {
+        let h = AccountLTHash::default();
+        assert!(h.0.iter().all(|&x| x == 0));
     }
 }

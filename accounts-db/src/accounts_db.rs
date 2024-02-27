@@ -18,8 +18,10 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+use crate::accounts_hash::AccountLTHash;
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
+
 use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
@@ -916,6 +918,17 @@ impl<'a> LoadedAccount<'a> {
             }
             LoadedAccount::Cached(cached_account) => {
                 AccountsDb::hash_account(&cached_account.account, pubkey)
+            }
+        }
+    }
+
+    pub fn compute_lt_hash(&self, pubkey: &Pubkey) -> AccountLTHash {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                AccountsDb::lt_hash_account(stored_account_meta, stored_account_meta.pubkey())
+            }
+            LoadedAccount::Cached(cached_account) => {
+                AccountsDb::lt_hash_account(&cached_account.account, pubkey)
             }
         }
     }
@@ -6128,17 +6141,14 @@ impl AccountsDb {
         )
     }
 
-    fn hash_account_data(
+    fn hash_account_data_internal(
         lamports: u64,
         owner: &Pubkey,
         executable: bool,
         rent_epoch: Epoch,
         data: &[u8],
         pubkey: &Pubkey,
-    ) -> AccountHash {
-        if lamports == 0 {
-            return AccountHash(Hash::default());
-        }
+    ) -> blake3::Hasher {
         let mut hasher = blake3::Hasher::new();
 
         // allocate 128 bytes buffer on the stack
@@ -6175,7 +6185,50 @@ impl AccountsDb {
         buffer.extend_from_slice(pubkey.as_ref());
         hasher.update(&buffer);
 
+        hasher
+    }
+
+    fn hash_account_data(
+        lamports: u64,
+        owner: &Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+        data: &[u8],
+        pubkey: &Pubkey,
+    ) -> AccountHash {
+        if lamports == 0 {
+            return AccountHash::default();
+        }
+        let hasher =
+            Self::hash_account_data_internal(lamports, owner, executable, rent_epoch, data, pubkey);
         AccountHash(Hash::new_from_array(hasher.finalize().into()))
+    }
+
+    pub fn lt_hash_account<T: ReadableAccount>(account: &T, pubkey: &Pubkey) -> AccountLTHash {
+        Self::lt_hash_account_data(
+            account.lamports(),
+            account.owner(),
+            account.executable(),
+            account.rent_epoch(),
+            account.data(),
+            pubkey,
+        )
+    }
+
+    fn lt_hash_account_data(
+        lamports: u64,
+        owner: &Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+        data: &[u8],
+        pubkey: &Pubkey,
+    ) -> AccountLTHash {
+        if lamports == 0 {
+            return AccountLTHash::default();
+        }
+        let hasher =
+            Self::hash_account_data_internal(lamports, owner, executable, rent_epoch, data, pubkey);
+        AccountLTHash::new_from_reader(hasher.finalize_xof())
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
@@ -7916,14 +7969,14 @@ impl AccountsDb {
         self.calculate_accounts_delta_hash_internal(slot, None, HashMap::default())
     }
 
-    pub fn accumulate_accounts_hash(
+    pub fn accumulate_accounts_lt_hash(
         &self,
         slot: Slot,
         mut ancestors: Ancestors,
-        accumulated_accounts_hash: &mut Hash,
+        accumulated_accounts_hash: &mut AccountLTHash,
         pubkey_hash: Vec<(Pubkey, AccountHash)>,
         old_written_accounts: &RwLock<
-            HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountHash>)>,
+            HashMap<Pubkey, (Option<AccountSharedData>, Option<AccountLTHash>)>,
         >,
     ) {
         // we are assuming it was easy to lookup a hash for everything written in `slot` when we were calculating the delta hash. So, caller passes in `pubkey_hash`
@@ -7938,7 +7991,7 @@ impl AccountsDb {
                     Some(hash.unwrap()) // todo on demand calculate, calculate in bg
                 } else {
                     self.load_with_fixed_root(&ancestors, k)
-                        .map(|(account, _)| Self::hash_account(&account, k))
+                        .map(|(account, _)| Self::lt_hash_account(&account, k))
                 }
             })
             .collect::<Vec<_>>();
