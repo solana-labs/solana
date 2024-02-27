@@ -3273,6 +3273,7 @@ impl Blockstore {
 
             let last_shred = range_shreds.last().unwrap();
             assert!(last_shred.data_complete() || last_shred.last_in_slot());
+            trace!("{:?} data shreds in last FEC set", data_shreds.len());
 
             let deshred_payload = Shredder::deshred(range_shreds).map_err(|e| {
                 BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
@@ -3280,7 +3281,6 @@ impl Blockstore {
                 ))))
             })?;
 
-            debug!("{:?} shreds in last FEC set", data_shreds.len());
             let range_entries =
                 bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|e| {
                     BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
