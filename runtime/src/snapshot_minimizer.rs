@@ -130,6 +130,18 @@ impl<'a> SnapshotMinimizer<'a> {
         sdk_ids::SDK_IDS.iter().for_each(|pubkey| {
             self.minimized_account_set.insert(*pubkey);
         });
+        // Add in new sysvars that are not part of SDK_IDS (ALL_IDS);
+        // features may not be activated yet (cluster dependent) so only add
+        // them if they're already present in the Bank
+        //
+        // See https://github.com/solana-labs/solana/pull/34365 for more context
+        use solana_sdk::sysvar::{epoch_rewards, last_restart_slot};
+        if self.bank.get_account(&last_restart_slot::id()).is_some() {
+            self.minimized_account_set.insert(last_restart_slot::id());
+        }
+        if self.bank.get_account(&epoch_rewards::id()).is_some() {
+            self.minimized_account_set.insert(epoch_rewards::id());
+        }
     }
 
     /// Used to get rent collection accounts in `minimize`
