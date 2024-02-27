@@ -3217,9 +3217,9 @@ impl Blockstore {
     ) -> Result<Vec<Entry>> {
         assert!(!completed_ranges.is_empty());
 
-        let (total_start_index, _) = *completed_ranges.first().unwrap();
-        let (_, total_end_index) = *completed_ranges.last().unwrap();
-        let keys: Vec<(Slot, u64)> = (total_start_index..=total_end_index)
+        let (all_ranges_start_index, _) = *completed_ranges.first().unwrap();
+        let (_, all_ranges_end_index) = *completed_ranges.last().unwrap();
+        let keys: Vec<(Slot, u64)> = (all_ranges_start_index..=all_ranges_end_index)
             .map(|index| (slot, u64::from(index)))
             .collect();
 
@@ -3244,8 +3244,8 @@ impl Blockstore {
                                     idx,
                                     slot_meta.consumed,
                                     slot_meta.completed_data_indexes,
-                                    total_start_index,
-                                    total_end_index
+                                    all_ranges_start_index,
+                                    all_ranges_end_index
                                 );
                             }
                         }
@@ -3268,10 +3268,10 @@ impl Blockstore {
             .into_iter()
             .map(|(start_index, end_index)| {
                 // The indices from completed_ranges refer to shred indices in the
-                // block; map those indices to indices within data_shreds
-                let start_index = (start_index - total_start_index) as usize;
-                let end_index = (end_index - total_start_index) as usize;
-                let range_shreds = &data_shreds[start_index..=end_index];
+                // entire block; map those indices to indices within data_shreds
+                let range_start_index = (start_index - all_ranges_start_index) as usize;
+                let range_end_index = (end_index - all_ranges_start_index) as usize;
+                let range_shreds = &data_shreds[range_start_index..=range_end_index];
 
                 let last_shred = range_shreds.last().unwrap();
                 assert!(last_shred.data_complete() || last_shred.last_in_slot());
