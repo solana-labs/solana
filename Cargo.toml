@@ -306,7 +306,7 @@ signal-hook = "0.3.17"
 siphasher = "0.3.11"
 smallvec = "1.13.1"
 smpl_jwt = "0.7.1"
-socket2 = "0.5.5"
+socket2 = "0.5.6"
 soketto = "0.7"
 solana-account-decoder = { path = "account-decoder", version = "=1.19.0" }
 solana-accounts-db = { path = "accounts-db", version = "=1.19.0" }

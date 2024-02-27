@@ -1137,7 +1137,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Gets the index's entry for `pubkey`, with `ancestors` and `max_root`,
     /// and applies `callback` to it
-    #[cfg(test)]
     pub(crate) fn get_with_and_then<R>(
         &self,
         pubkey: &Pubkey,
@@ -1159,9 +1158,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// Gets the index's entry for `pubkey` and clones it
     ///
     /// Prefer `get_and_then()` whenever possible.
-    /// NOTE: The entry is *not* added to the in-mem cache.
     pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
-        self.get_and_then(pubkey, |entry| (false, entry.cloned()))
+        // We *must* add the index entry to the in-mem cache!
+        // If the index entry is only on-disk, returning a clone would allow the entry
+        // to be modified, but those modifications would be lost on drop!
+        self.get_and_then(pubkey, |entry| (true, entry.cloned()))
     }
 
     /// Is `pubkey` in the index?
@@ -2167,18 +2168,6 @@ pub mod tests {
                 }
                 PreAllocatedAccountMapEntry::Raw(raw) => PreAllocatedAccountMapEntry::Raw(*raw),
             }
-        }
-    }
-
-    impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
-        /// provides the ability to refactor this function on the api without bloody changes
-        pub fn get_for_tests(
-            &self,
-            pubkey: &Pubkey,
-            ancestors: Option<&Ancestors>,
-            max_root: Option<Slot>,
-        ) -> AccountIndexGetResult<T> {
-            self.get(pubkey, ancestors, max_root)
         }
     }
 
