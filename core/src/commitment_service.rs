@@ -69,16 +69,10 @@ impl AggregateCommitmentService {
             Self {
                 t_commitment: Builder::new()
                     .name("solAggCommitSvc".to_string())
-                    .spawn(move || loop {
-                        if exit.load(Ordering::Relaxed) {
-                            break;
-                        }
-
-                        if let Err(RecvTimeoutError::Disconnected) =
-                            Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit)
-                        {
-                            break;
-                        }
+                    .spawn(move || {
+                        info!("AggregateCommitmentService has started");
+                        Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit);
+                        info!("AggregateCommitmentService has stopped");
                     })
                     .unwrap(),
             },
@@ -90,13 +84,17 @@ impl AggregateCommitmentService {
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
         subscriptions: &Arc<RpcSubscriptions>,
         exit: &AtomicBool,
-    ) -> Result<(), RecvTimeoutError> {
+    ) {
         loop {
             if exit.load(Ordering::Relaxed) {
-                return Ok(());
+                return;
             }
 
-            let aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
+            let aggregation_data = match receiver.recv_timeout(Duration::from_secs(1)) {
+                Ok(aggregation_data) => aggregation_data,
+                Err(RecvTimeoutError::Timeout) => continue,
+                _ => return,
+            };
             let aggregation_data = receiver.try_iter().last().unwrap_or(aggregation_data);
 
             let ancestors = aggregation_data.bank.status_cache_ancestors();
