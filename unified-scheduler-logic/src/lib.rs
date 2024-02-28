@@ -668,6 +668,12 @@ impl SchedulingStateMachine {
     /// implementation of [`Page`] look-up by [`pubkey`](Pubkey) to callers. It's the caller's
     /// responsibility to ensure the same instance is returned from the closure, given a particular
     /// pubkey.
+    ///
+    /// Closure is used here to delegate the responsibility of general ownership of `Page` (and
+    /// caching/pruning if any) to the caller. `SchedulingStateMachine` guarantees that all of
+    /// shared owndership of `Page`s are released and Page state is identical to just after
+    /// created, if `has_no_active_task()` is `true`. Also note that this is desired for separation
+    /// of concern.
     pub fn create_task(
         transaction: SanitizedTransaction,
         index: usize,
