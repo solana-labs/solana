@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+bitcoin = { workspace = true }
 console = { workspace = true }
 dialoguer = { workspace = true }
 hidapi = { workspace = true, optional = true }
@@ -21,10 +22,12 @@ qstring = { workspace = true }
 semver = { workspace = true }
 solana-sdk = { workspace = true }
 thiserror = { workspace = true }
+trezor-client = { workspace = true }
 uriparse = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+serial_test = { workspace = true }
 
 [features]
 default = ["linux-static-hidraw", "hidapi"]

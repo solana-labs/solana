@@ -54,7 +54,7 @@ some interface for signing transactions.
 ### Hardware Wallet Security
 
 A hardware wallet, such as the
-[Ledger hardware wallet](https://www.ledger.com/), offers a great blend of
+[Ledger hardware wallet](https://www.ledger.com/) and [Trezor hardware wallet](https://trezor.io/), offers a great blend of
 security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of a file
 system wallet.

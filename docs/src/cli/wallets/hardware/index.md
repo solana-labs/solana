@@ -23,6 +23,7 @@ hardware wallet.
 The Solana CLI supports the following hardware wallets:
 
 - [Ledger Nano S and Ledger Nano X](./ledger.md)
+- [Trezor Model T and Trezor Safe 3](./trezor.md)
 
 ## Specify a Keypair URL
 

@@ -6,6 +6,7 @@ use {
             RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
             RemoteWalletType,
         },
+        trezor::get_trezor_from_info,
     },
     solana_sdk::{
         derivation_path::DerivationPath,
@@ -30,6 +31,7 @@ impl RemoteKeypair {
     ) -> Result<Self, RemoteWalletError> {
         let pubkey = match &wallet_type {
             RemoteWalletType::Ledger(wallet) => wallet.get_pubkey(&derivation_path, confirm_key)?,
+            RemoteWalletType::Trezor(wallet) => wallet.get_pubkey(&derivation_path, confirm_key)?
         };
 
         Ok(Self {
@@ -51,6 +53,9 @@ impl Signer for RemoteKeypair {
             RemoteWalletType::Ledger(wallet) => wallet
                 .sign_message(&self.derivation_path, message)
                 .map_err(|e| e.into()),
+            RemoteWalletType::Trezor(wallet) => wallet
+            .sign_message(&self.derivation_path, message)
+            .map_err(|e| e.into()),
         }
     }
 
@@ -67,16 +72,27 @@ pub fn generate_remote_keypair(
     keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
     let remote_wallet_info = RemoteWalletInfo::parse_locator(locator);
-    if remote_wallet_info.manufacturer == Manufacturer::Ledger {
-        let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
-        let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());
-        Ok(RemoteKeypair::new(
-            RemoteWalletType::Ledger(ledger),
-            derivation_path,
-            confirm_key,
-            path,
-        )?)
-    } else {
-        Err(RemoteWalletError::DeviceTypeMismatch)
+    match remote_wallet_info.manufacturer {
+        Manufacturer::Ledger => {
+            let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
+            let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());
+            Ok(RemoteKeypair::new(
+                RemoteWalletType::Ledger(ledger),
+                derivation_path,
+                confirm_key,
+                path,
+            )?)
+        }
+        Manufacturer::Trezor => {
+            let trezor = get_trezor_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
+            let path = format!("{}{}", trezor.pretty_path, derivation_path.get_query());
+            Ok(RemoteKeypair::new(
+                RemoteWalletType::Trezor(trezor),
+                derivation_path,
+                confirm_key,
+                path,
+            )?)
+        }
+        _ => Err(RemoteWalletError::DeviceTypeMismatch)
     }
 }

@@ -12,6 +12,7 @@ use {
 pub enum Manufacturer {
     Unknown,
     Ledger,
+    Trezor,
 }
 
 impl Default for Manufacturer {
@@ -22,6 +23,7 @@ impl Default for Manufacturer {
 
 const MANUFACTURER_UNKNOWN: &str = "unknown";
 const MANUFACTURER_LEDGER: &str = "ledger";
+const MANUFACTURER_TREZOR: &str = "trezor";
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("not a manufacturer")]
@@ -39,6 +41,7 @@ impl FromStr for Manufacturer {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
             MANUFACTURER_LEDGER => Ok(Self::Ledger),
+            MANUFACTURER_TREZOR => Ok(Self::Trezor),
             _ => Err(ManufacturerError),
         }
     }
@@ -56,6 +59,7 @@ impl AsRef<str> for Manufacturer {
         match self {
             Self::Unknown => MANUFACTURER_UNKNOWN,
             Self::Ledger => MANUFACTURER_LEDGER,
+            Self::Trezor => MANUFACTURER_TREZOR,
         }
     }
 }
@@ -173,7 +177,11 @@ mod tests {
             matches!(Manufacturer::from_str(MANUFACTURER_LEDGER), Ok(v) if v == Manufacturer::Ledger)
         );
         assert_eq!(Manufacturer::Ledger.as_ref(), MANUFACTURER_LEDGER);
-
+        assert_eq!(MANUFACTURER_TREZOR.try_into(), Ok(Manufacturer::Trezor));
+        assert!(
+            matches!(Manufacturer::from_str(MANUFACTURER_TREZOR), Ok(v) if v == Manufacturer::Trezor)
+        );
+        assert_eq!(Manufacturer::Trezor.as_ref(), MANUFACTURER_TREZOR);
         assert!(
             matches!(Manufacturer::from_str("bad-manufacturer"), Err(e) if e == ManufacturerError)
         );
@@ -185,6 +193,35 @@ mod tests {
         let manufacturer_str = "ledger";
         let pubkey = Pubkey::new_unique();
         let pubkey_str = pubkey.to_string();
+
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+        };
+        assert_matches!(
+            Locator::new_from_parts(manufacturer, None::<Pubkey>),
+            Ok(e) if e == expect
+        );
+        assert_matches!(
+            Locator::new_from_parts(manufacturer_str, None::<Pubkey>),
+            Ok(e) if e == expect
+        );
+
+        let expect = Locator {
+            manufacturer,
+            pubkey: Some(pubkey),
+        };
+        assert_matches!(
+            Locator::new_from_parts(manufacturer, Some(pubkey)),
+            Ok(e) if e == expect
+        );
+        assert_matches!(
+            Locator::new_from_parts(manufacturer_str, Some(pubkey_str.as_str())),
+            Ok(e) if e == expect
+        );
+
+        let manufacturer = Manufacturer::Trezor;
+        let manufacturer_str = "trezor";
 
         let expect = Locator {
             manufacturer,
@@ -309,21 +346,6 @@ mod tests {
             Err(LocatorError::UnimplementedScheme)
         );
 
-        // usb://bad-manufacturer
-        let mut builder = URIReferenceBuilder::new();
-        builder
-            .try_scheme(Some("usb"))
-            .unwrap()
-            .try_authority(Some("bad-manufacturer"))
-            .unwrap()
-            .try_path("")
-            .unwrap();
-        let uri = builder.build().unwrap();
-        assert_eq!(
-            Locator::new_from_uri(&uri),
-            Err(LocatorError::ManufacturerError(ManufacturerError))
-        );
-
         // usb://ledger/bad-pubkey
         let mut builder = URIReferenceBuilder::new();
         builder
@@ -337,6 +359,119 @@ mod tests {
         assert_eq!(
             Locator::new_from_uri(&uri),
             Err(LocatorError::PubkeyError(ParsePubkeyError::Invalid))
+        );
+
+        let manufacturer = Manufacturer::Trezor;
+
+        // usb://trezor/{PUBKEY}?key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path(pubkey_str.as_str())
+            .unwrap()
+            .try_query(Some("key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        let expect = Locator {
+            manufacturer,
+            pubkey: Some(pubkey),
+        };
+        assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
+        // usb://trezor/{PUBKEY}
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path(pubkey_str.as_str())
+            .unwrap();
+        let uri = builder.build().unwrap();
+        let expect = Locator {
+            manufacturer,
+            pubkey: Some(pubkey),
+        };
+        assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
+        // usb://trezor
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path("")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+        };
+        assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
+        // usb://trezor/
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path("/")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+        };
+        assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
+        // bad-scheme://trezor
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("bad-scheme"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path("")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::UnimplementedScheme)
+        );
+
+        // usb://trezor/bad-pubkey
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Trezor.as_ref()))
+            .unwrap()
+            .try_path("bad-pubkey")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::PubkeyError(ParsePubkeyError::Invalid))
+        );
+
+        // usb://bad-manufacturer
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some("bad-manufacturer"))
+            .unwrap()
+            .try_path("")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::ManufacturerError(ManufacturerError))
         );
     }
 
@@ -386,18 +521,68 @@ mod tests {
             Err(LocatorError::UnimplementedScheme)
         );
 
-        // usb://bad-manufacturer
-        let path = "usb://bad-manufacturer";
-        assert_eq!(
-            Locator::new_from_path(path),
-            Err(LocatorError::ManufacturerError(ManufacturerError))
-        );
-
         // usb://ledger/bad-pubkey
         let path = "usb://ledger/bad-pubkey";
         assert_eq!(
             Locator::new_from_path(path),
             Err(LocatorError::PubkeyError(ParsePubkeyError::Invalid))
+        );
+
+        let manufacturer = Manufacturer::Trezor;
+        let path = format!("usb://trezor/{pubkey}?key=0/0");
+        Locator::new_from_path(path).unwrap();
+
+        // usb://trezor/{PUBKEY}?key=0'/0'
+        let path = format!("usb://trezor/{pubkey}?key=0'/0'");
+        let expect = Locator {
+            manufacturer,
+            pubkey: Some(pubkey),
+        };
+        assert_eq!(Locator::new_from_path(path), Ok(expect));
+
+        // usb://trezor/{PUBKEY}
+        let path = format!("usb://trezor/{pubkey}");
+        let expect = Locator {
+            manufacturer,
+            pubkey: Some(pubkey),
+        };
+        assert_eq!(Locator::new_from_path(path), Ok(expect));
+
+        // usb://trezor
+        let path = "usb://trezor";
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+        };
+        assert_eq!(Locator::new_from_path(path), Ok(expect));
+
+        // usb://trezor/
+        let path = "usb://trezor/";
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+        };
+        assert_eq!(Locator::new_from_path(path), Ok(expect));
+
+        // bad-scheme://trezor
+        let path = "bad-scheme://trezor";
+        assert_eq!(
+            Locator::new_from_path(path),
+            Err(LocatorError::UnimplementedScheme)
+        );
+
+        // usb://trezor/bad-pubkey
+        let path = "usb://trezor/bad-pubkey";
+        assert_eq!(
+            Locator::new_from_path(path),
+            Err(LocatorError::PubkeyError(ParsePubkeyError::Invalid))
+        );
+
+        // usb://bad-manufacturer
+        let path = "usb://bad-manufacturer";
+        assert_eq!(
+            Locator::new_from_path(path),
+            Err(LocatorError::ManufacturerError(ManufacturerError))
         );
     }
 }
