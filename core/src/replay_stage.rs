@@ -297,8 +297,9 @@ pub struct ReplayStageConfig {
     pub replay_slots_concurrently: bool,
 }
 
+/// Timing information for the ReplayStage main processing loop
 #[derive(Default)]
-pub struct ReplayTiming {
+struct ReplayLoopTiming {
     last_print: u64,
     collect_frozen_banks_elapsed: u64,
     compute_bank_stats_elapsed: u64,
@@ -326,9 +327,10 @@ pub struct ReplayTiming {
     generate_new_bank_forks_get_slots_since_us: u64,
     generate_new_bank_forks_loop_us: u64,
     generate_new_bank_forks_write_lock_us: u64,
-    replay_blockstore_us: u64, //< When processing forks concurrently, only captures the longest fork
+    // When processing multiple forks concurrently, only captures the longest fork
+    replay_blockstore_us: u64,
 }
-impl ReplayTiming {
+impl ReplayLoopTiming {
     #[allow(clippy::too_many_arguments)]
     fn update(
         &mut self,
@@ -504,7 +506,7 @@ impl ReplayTiming {
                     i64
                 ),
             );
-            *self = ReplayTiming::default();
+            *self = ReplayLoopTiming::default();
             self.last_print = now;
         }
     }
@@ -615,7 +617,7 @@ impl ReplayStage {
             let mut last_reset = Hash::default();
             let mut partition_info = PartitionInfo::new();
             let mut skipped_slots_info = SkippedSlotsInfo::default();
-            let mut replay_timing = ReplayTiming::default();
+            let mut replay_timing = ReplayLoopTiming::default();
             let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
             let mut duplicate_confirmed_slots: DuplicateConfirmedSlots =
                 DuplicateConfirmedSlots::default();
@@ -2272,7 +2274,7 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: &mut bool,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
         voting_sender: &Sender<VoteOp>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
@@ -2604,7 +2606,7 @@ impl ReplayStage {
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
         voting_sender: &Sender<VoteOp>,
         wait_to_vote_slot: Option<Slot>,
     ) {
@@ -2697,7 +2699,7 @@ impl ReplayStage {
         entry_notification_sender: Option<&EntryNotifierSender>,
         verify_recyclers: &VerifyRecyclers,
         replay_vote_sender: &ReplayVoteSender,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
         prioritization_fee_cache: &PrioritizationFeeCache,
@@ -2810,7 +2812,7 @@ impl ReplayStage {
         entry_notification_sender: Option<&EntryNotifierSender>,
         verify_recyclers: &VerifyRecyclers,
         replay_vote_sender: &ReplayVoteSender,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
         prioritization_fee_cache: &PrioritizationFeeCache,
@@ -3157,7 +3159,7 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierArc>,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
         log_messages_bytes_limit: Option<usize>,
         replay_slots_concurrently: bool,
         prioritization_fee_cache: &PrioritizationFeeCache,
@@ -4140,7 +4142,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress: &mut ProgressMap,
-        replay_timing: &mut ReplayTiming,
+        replay_timing: &mut ReplayLoopTiming,
     ) {
         // Find the next slot that chains to the old slot
         let mut generate_new_bank_forks_read_lock =
@@ -4530,7 +4532,7 @@ pub(crate) mod tests {
             .unwrap()
             .get(NUM_CONSECUTIVE_LEADER_SLOTS)
             .is_none());
-        let mut replay_timing = ReplayTiming::default();
+        let mut replay_timing = ReplayLoopTiming::default();
         ReplayStage::generate_new_bank_forks(
             &blockstore,
             &bank_forks,
@@ -6351,7 +6353,7 @@ pub(crate) mod tests {
             ..
         } = vote_simulator;
 
-        let mut replay_timing = ReplayTiming::default();
+        let mut replay_timing = ReplayLoopTiming::default();
 
         // Create bank 7 and insert to blockstore and bank forks
         let root_bank = bank_forks.read().unwrap().root_bank();
@@ -7543,7 +7545,7 @@ pub(crate) mod tests {
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,
-            &mut ReplayTiming::default(),
+            &mut ReplayLoopTiming::default(),
             &voting_sender,
             None,
         );
@@ -7618,7 +7620,7 @@ pub(crate) mod tests {
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,
-            &mut ReplayTiming::default(),
+            &mut ReplayLoopTiming::default(),
             &voting_sender,
             None,
         );
@@ -7819,7 +7821,7 @@ pub(crate) mod tests {
             &SwitchForkDecision::SameFork,
             voted_signatures,
             has_new_vote_been_rooted,
-            &mut ReplayTiming::default(),
+            &mut ReplayLoopTiming::default(),
             voting_sender,
             None,
         );
