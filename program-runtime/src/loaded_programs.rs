@@ -977,9 +977,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         {
             self.stats.lost_insertions.fetch_add(1, Ordering::Relaxed);
         }
-        let was_replaced = self.assign_program(key, loaded_program);
+        let was_occupied = self.assign_program(key, loaded_program);
         self.loading_task_waiter.notify();
-        was_replaced
+        was_occupied
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
