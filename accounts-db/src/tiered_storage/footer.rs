@@ -236,7 +236,12 @@ impl TieredStorageFooter {
 
         let mut magic_number = TieredStorageMagicNumber::zeroed();
         file.read_pod(&mut magic_number)?;
-        assert_eq!(magic_number, TieredStorageMagicNumber::default());
+        if magic_number != TieredStorageMagicNumber::default() {
+            return Err(TieredStorageError::MagicNumberMismatch(
+                TieredStorageMagicNumber::default().0,
+                magic_number.0,
+            ));
+        }
 
         let mut footer = Self::default();
         file.seek_from_end(-(footer_size as i64))?;
