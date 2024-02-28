@@ -512,6 +512,13 @@ impl SchedulingStateMachine {
         self.total_task_count.current()
     }
 
+    /// Schedules given `task`, returning it if successful.
+    ///
+    /// Returns `Some(task)` if it's immediately scheduled. Otherwise, returns `None`,
+    /// indicating the task is blocked currently.
+    ///
+    /// Note that this function's type signature is intentionally redundant to take the ownership
+    /// of given task _conditionally_ for future optimization.
     #[must_use]
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
         let new_task_index = task.task_index();
