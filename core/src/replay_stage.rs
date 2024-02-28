@@ -301,6 +301,7 @@ pub struct ReplayStageConfig {
 #[derive(Default)]
 struct ReplayLoopTiming {
     last_print: u64,
+    loop_count: u64,
     collect_frozen_banks_elapsed: u64,
     compute_bank_stats_elapsed: u64,
     select_vote_and_reset_forks_elapsed: u64,
@@ -355,6 +356,7 @@ impl ReplayLoopTiming {
         repair_correct_slots_elapsed: u64,
         retransmit_not_propagated_elapsed: u64,
     ) {
+        self.loop_count += 1;
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
         self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
@@ -391,6 +393,7 @@ impl ReplayLoopTiming {
             );
             datapoint_info!(
                 "replay-loop-timing-stats",
+                ("loop_count", self.loop_count as i64, i64),
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
                     "collect_frozen_banks_elapsed",
