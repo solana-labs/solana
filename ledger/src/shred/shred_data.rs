@@ -114,11 +114,18 @@ impl ShredData {
     // merkle_proof_size is the number of merkle proof entries.
     // None indicates a legacy data-shred.
     pub fn capacity(
-        merkle_variant: Option<(/*proof_size:*/ u8, /*chained:*/ bool)>,
+        merkle_variant: Option<(
+            u8,   // proof_size
+            bool, // chained
+            bool, // resigned
+        )>,
     ) -> Result<usize, Error> {
         match merkle_variant {
             None => Ok(legacy::ShredData::CAPACITY),
-            Some((proof_size, chained)) => merkle::ShredData::capacity(proof_size, chained),
+            Some((proof_size, chained, resigned)) => {
+                debug_assert!(chained || !resigned);
+                merkle::ShredData::capacity(proof_size, chained, resigned)
+            }
         }
     }
 
