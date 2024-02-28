@@ -6863,16 +6863,20 @@ impl AccountsDb {
                     let result: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
-                            self.accounts_index.get_with_and_then(
-                                pubkey,
+                            let index_entry = self.accounts_index.get_cloned(pubkey)?;
+                            self.accounts_index.get_account_info_with_and_then(
+                                &index_entry,
                                 config.ancestors,
                                 Some(max_slot),
-                                false,
                                 |(slot, account_info)| {
                                     if account_info.is_zero_lamport() { return None; }
-                                    self.get_account_accessor(slot, pubkey, &account_info.storage_location())
-                                        .get_loaded_account()
-                                        .and_then(|loaded_account| {
+                                    self.get_account_accessor(
+                                        slot,
+                                        pubkey,
+                                        &account_info.storage_location(),
+                                    )
+                                    .get_loaded_account()
+                                    .and_then(|loaded_account| {
                                             let mut loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             let hash_is_missing = loaded_hash == AccountHash(Hash::default());
@@ -6892,11 +6896,12 @@ impl AccountsDb {
 
                                             sum += balance as u128;
                                             Some(loaded_hash.0)
-                                        })
+                                    })
                                 },
                             )
                             .flatten()
-                        }).collect();
+                        })
+                        .collect();
                     let mut total = total_lamports.lock().unwrap();
                     *total =
                         AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
