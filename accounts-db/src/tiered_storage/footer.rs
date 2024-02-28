@@ -26,6 +26,8 @@ static_assertions::const_assert_eq!(mem::size_of::<TieredStorageFooter>(), 160);
 /// even when the footer's format changes.
 pub const FOOTER_TAIL_SIZE: usize = 24;
 
+pub const MAGIC_NUMBER_SIZE: usize = std::mem::size_of::<u64>();
+
 /// The ending 8 bytes of a valid tiered account storage file.
 pub const FOOTER_MAGIC_NUMBER: u64 = 0x502A2AB5; // SOLALABS -> SOLANA LABS
 
@@ -187,6 +189,7 @@ impl Default for TieredStorageFooter {
 impl TieredStorageFooter {
     pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
         let file = TieredStorageFile::new_readonly(path);
+        Self::check_magic_number(&file)?;
         Self::new_from_footer_block(&file)
     }
 
@@ -198,15 +201,9 @@ impl TieredStorageFooter {
         Ok(())
     }
 
-    pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
-        file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
-
-        let mut footer_version: u64 = 0;
-        let mut footer_size: u64 = 0;
+    fn check_magic_number(file: &TieredStorageFile) -> TieredStorageResult<()> {
+        file.seek_from_end(-(MAGIC_NUMBER_SIZE as i64))?;
         let mut magic_number = TieredStorageMagicNumber::zeroed();
-
-        file.read_pod(&mut footer_version)?;
-        file.read_pod(&mut footer_size)?;
         file.read_pod(&mut magic_number)?;
 
         if magic_number != TieredStorageMagicNumber::default() {
@@ -216,16 +213,30 @@ impl TieredStorageFooter {
             ));
         }
 
+        Ok(())
+    }
+
+    pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
+        file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
+
+        let mut footer_version: u64 = 0;
+        file.read_pod(&mut footer_version)?;
         if footer_version != FOOTER_FORMAT_VERSION {
             return Err(TieredStorageError::InvalidFooterVersion(footer_version));
         }
 
+        let mut footer_size: u64 = 0;
+        file.read_pod(&mut footer_size)?;
         if footer_size != FOOTER_SIZE as u64 {
             return Err(TieredStorageError::InvalidFooterSize(
                 footer_size,
                 FOOTER_SIZE as u64,
             ));
         }
+
+        let mut magic_number = TieredStorageMagicNumber::zeroed();
+        file.read_pod(&mut magic_number)?;
+        assert_eq!(magic_number, TieredStorageMagicNumber::default());
 
         let mut footer = Self::default();
         file.seek_from_end(-(footer_size as i64))?;
