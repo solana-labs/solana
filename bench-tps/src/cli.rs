@@ -24,9 +24,6 @@ const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS
 pub enum ExternalClientType {
     // Submits transactions to an Rpc node using an RpcClient
     RpcClient,
-    // Submits transactions directly to leaders using a ThinClient, broadcasting to multiple
-    // leaders when num_nodes > 1
-    ThinClient,
     // Submits transactions directly to leaders using a TpuClient, broadcasting to upcoming leaders
     // via TpuClient default configuration
     TpuClient,
@@ -330,28 +327,16 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .help("Submit transactions with a TpuClient")
         )
         .arg(
-            Arg::with_name("thin_client")
-                .long("use-thin-client")
-                .conflicts_with("rpc_client")
-                .conflicts_with("tpu_client")
-                .takes_value(false)
-                .hidden(hidden_unless_forced())
-                .help("Submit transactions with a ThinClient. Note: usage is discouraged. \
-                    ThinClient will be deprecated.")
-        )
-        .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Do not submit transactions via QUIC; only affects ThinClient \
-                    or TpuClient (default) sends"),
+                .help("Do not submit transactions via QUIC; only affects TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("tpu_connection_pool_size")
                 .long("tpu-connection-pool-size")
                 .takes_value(true)
-                .help("Controls the connection pool size per remote address; only affects ThinClient  \
-                    or TpuClient (default) sends"),
+                .help("Controls the connection pool size per remote address; only affects TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("compute_unit_price")
@@ -456,8 +441,6 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 
     if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
-    } else if matches.is_present("thin_client") {
-        args.external_client_type = ExternalClientType::ThinClient;
     }
 
     if matches.is_present("tpu_disable_quic") {

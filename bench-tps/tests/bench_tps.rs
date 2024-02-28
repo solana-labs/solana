@@ -1,34 +1,23 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use {
-    serial_test::serial,
-    solana_bench_tps::{
+    serial_test::serial, solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::{Config, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
-    },
-    solana_client::{
-        thin_client::ThinClient,
+    }, solana_client::{
+        connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
-    },
-    solana_core::validator::ValidatorConfig,
-    solana_faucet::faucet::run_local_faucet,
-    solana_local_cluster::{
-        local_cluster::{ClusterConfig, LocalCluster},
+    }, solana_connection_cache::connection_cache, solana_core::validator::ValidatorConfig, solana_faucet::faucet::run_local_faucet, solana_local_cluster::{
+        local_cluster::{self, ClusterConfig, LocalCluster},
         validator_configs::make_identical_validator_configs,
-    },
-    solana_rpc::rpc::JsonRpcConfig,
-    solana_rpc_client::rpc_client::RpcClient,
-    solana_sdk::{
+    }, solana_rpc::rpc::JsonRpcConfig, solana_rpc_client::rpc_client::RpcClient, solana_sdk::{
         account::{Account, AccountSharedData},
         commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         rent::Rent,
         signature::{Keypair, Signer},
-    },
-    solana_streamer::socket::SocketAddrSpace,
-    solana_test_validator::TestValidatorGenesis,
-    std::{sync::Arc, time::Duration},
+    }, solana_streamer::socket::SocketAddrSpace, solana_test_validator::TestValidatorGenesis, std::{sync::Arc, time::Duration}
 };
 
 fn program_account(program_data: &[u8]) -> AccountSharedData {
@@ -55,9 +44,8 @@ fn test_bench_tps_local_cluster(config: Config) {
     let faucet_addr = run_local_faucet(faucet_keypair, None);
 
     const NUM_NODES: usize = 1;
-    let cluster = LocalCluster::new(
-        &mut ClusterConfig {
-            node_stakes: vec![999_990; NUM_NODES],
+    let mut cluster_config = ClusterConfig {
+        node_stakes: vec![999_990; NUM_NODES],
             cluster_lamports: 200_000_000,
             validator_configs: make_identical_validator_configs(
                 &ValidatorConfig {
@@ -72,20 +60,39 @@ fn test_bench_tps_local_cluster(config: Config) {
             native_instruction_processors,
             additional_accounts,
             ..ClusterConfig::default()
-        },
+    };
+    let cluster = LocalCluster::new(
+        &mut cluster_config,
         SocketAddrSpace::Unspecified,
     );
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-    let client = Arc::new(ThinClient::new(
-        cluster.entry_point_info.rpc().unwrap(),
-        cluster
-            .entry_point_info
-            .tpu(cluster.connection_cache.protocol())
-            .unwrap(),
-        cluster.connection_cache.clone(),
-    ));
+    let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
+    println!("rpc_pubsub_url: {}", rpc_pubsub_url);
+
+    let rpc_endpoint = format!("http://{}", cluster.entry_point_info.rpc().unwrap());
+    println!("rpc endpoint: {}", rpc_endpoint);
+
+
+    let ConnectionCache::Quic(cache) = &*cluster.connection_cache else {
+        panic!("Expected a Quic cache, found something else.");
+    };
+
+    let client = match TpuClient::new_with_connection_cache(
+        Arc::new(RpcClient::new(
+            rpc_endpoint,
+        )),
+        rpc_pubsub_url.as_str(),
+        TpuClientConfig::default(),
+        cache.clone(),
+    ) {
+        Ok(client) => {
+            println!("all good");
+            Arc::new(client)
+        },
+        Err(err) => panic!("error: {}", err)
+    };
 
     let lamports_per_account = 100;
 

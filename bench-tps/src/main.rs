@@ -140,53 +140,6 @@ fn create_client(
             json_rpc_url.to_string(),
             commitment_config,
         )),
-        ExternalClientType::ThinClient => {
-            let connection_cache = Arc::new(connection_cache);
-            if let Some((rpc, tpu)) = rpc_tpu_sockets {
-                Arc::new(ThinClient::new(rpc, tpu, connection_cache))
-            } else {
-                let nodes =
-                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
-                        .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
-                            exit(1);
-                        });
-                if multi_client {
-                    let (client, num_clients) =
-                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
-                    if nodes.len() < num_clients {
-                        eprintln!(
-                            "Error: Insufficient nodes discovered.  Expecting {num_nodes} or more"
-                        );
-                        exit(1);
-                    }
-                    Arc::new(client)
-                } else if let Some(target_node) = target_node {
-                    info!("Searching for target_node: {:?}", target_node);
-                    let mut target_client = None;
-                    for node in nodes {
-                        if node.pubkey() == &target_node {
-                            target_client = Some(get_client(
-                                &[node],
-                                &SocketAddrSpace::Unspecified,
-                                connection_cache,
-                            ));
-                            break;
-                        }
-                    }
-                    Arc::new(target_client.unwrap_or_else(|| {
-                        eprintln!("Target node {target_node} not found");
-                        exit(1);
-                    }))
-                } else {
-                    Arc::new(get_client(
-                        &nodes,
-                        &SocketAddrSpace::Unspecified,
-                        connection_cache,
-                    ))
-                }
-            }
-        }
         ExternalClientType::TpuClient => {
             let rpc_client = Arc::new(RpcClient::new_with_commitment(
                 json_rpc_url.to_string(),

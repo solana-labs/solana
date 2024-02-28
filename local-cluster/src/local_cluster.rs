@@ -196,6 +196,9 @@ impl LocalCluster {
                     .collect()
             }
         };
+        if let Some(keys) = &config.validator_keys {
+            println!("validator key len 1: {}", keys.len());
+        }
 
         let vote_keys = {
             if let Some(ref node_vote_keys) = config.node_vote_keys {
@@ -312,7 +315,9 @@ impl LocalCluster {
         );
 
         validators.insert(leader_pubkey, cluster_leader);
-
+        if let Some(keys) = &config.validator_keys {
+            println!("validator key len 2: {}", keys.len());
+        }
         let mut cluster = Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_contact_info,
@@ -378,6 +383,10 @@ impl LocalCluster {
             socket_addr_space,
         )
         .unwrap();
+
+        if let Some(keys) = &config.validator_keys {
+            println!("validator key len 3: {}", keys.len());
+        }
 
         cluster
     }
