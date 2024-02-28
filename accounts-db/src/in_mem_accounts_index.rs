@@ -318,11 +318,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         result
     }
 
-    /// lookup 'pubkey' in index (in mem or on disk)
-    pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
-        self.get_internal_cloned(pubkey, |entry| entry)
-    }
-
     /// set age of 'entry' to the future
     /// if 'is_cached', age will be set farther
     fn set_age_to_future(&self, entry: &AccountMapEntry<T>, is_cached: bool) {
