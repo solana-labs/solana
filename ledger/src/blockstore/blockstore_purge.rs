@@ -155,10 +155,7 @@ impl Blockstore {
         let Some(mut slot_meta) = self.meta(slot)? else {
             return Err(BlockstoreError::SlotUnavailable);
         };
-        let mut write_batch = self
-            .db
-            .batch()
-            .expect("Database Error: Failed to get write batch");
+        let mut write_batch = self.db.batch()?;
 
         let columns_purged = self.purge_range(&mut write_batch, slot, slot, PurgeType::Exact)?;
 
@@ -209,10 +206,7 @@ impl Blockstore {
         purge_type: PurgeType,
         purge_stats: &mut PurgeStats,
     ) -> Result<bool> {
-        let mut write_batch = self
-            .db
-            .batch()
-            .expect("Database Error: Failed to get write batch");
+        let mut write_batch = self.db.batch()?;
 
         let mut delete_range_timer = Measure::start("delete_range");
         let columns_purged = self.purge_range(&mut write_batch, from_slot, to_slot, purge_type)?;
