@@ -336,7 +336,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .conflicts_with("tpu_client")
                 .takes_value(false)
                 .hidden(hidden_unless_forced())
-                .help("Submit transactions with a ThinClient")
+                .help("Submit transactions with a ThinClient. Note: usage is discouraged. \
+                    ThinClient will be deprecated.")
         )
         .arg(
             Arg::with_name("tpu_disable_quic")
@@ -455,8 +456,6 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 
     if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
-    } else if matches.is_present("tpu_client") {
-        args.external_client_type = ExternalClientType::TpuClient;
     } else if matches.is_present("thin_client") {
         args.external_client_type = ExternalClientType::ThinClient;
     }
