@@ -61,8 +61,18 @@ struct ReservedAccountKey {
 }
 
 impl ReservedAccountKey {
-    fn new(key: Pubkey, feature_id: Option<Pubkey>) -> Self {
-        Self { key, feature_id }
+    fn new_pending(key: Pubkey, feature_id: Pubkey) -> Self {
+        Self {
+            key,
+            feature_id: Some(feature_id),
+        }
+    }
+
+    fn new_active(key: Pubkey) -> Self {
+        Self {
+            key,
+            feature_id: None,
+        }
     }
 
     /// Returns true if no feature id is set or if the feature id is activated
@@ -78,42 +88,42 @@ impl ReservedAccountKey {
 lazy_static! {
     static ref RESERVED_ACCOUNT_KEYS: Vec<ReservedAccountKey> = [
         // builtin programs
-        ReservedAccountKey::new(address_lookup_table::program::id(), Some(feature_set::add_new_reserved_account_keys::id())),
-        ReservedAccountKey::new(bpf_loader::id(), None),
-        ReservedAccountKey::new(bpf_loader_deprecated::id(), None),
-        ReservedAccountKey::new(bpf_loader_upgradeable::id(), None),
-        ReservedAccountKey::new(compute_budget::id(), Some(feature_set::add_new_reserved_account_keys::id())),
-        ReservedAccountKey::new(config::program::id(), None),
-        ReservedAccountKey::new(ed25519_program::id(), Some(feature_set::add_new_reserved_account_keys::id())),
-        ReservedAccountKey::new(feature::id(), None),
-        ReservedAccountKey::new(loader_v4::id(), Some(feature_set::add_new_reserved_account_keys::id())),
-        ReservedAccountKey::new(secp256k1_program::id(), Some(feature_set::add_new_reserved_account_keys::id())),
+        ReservedAccountKey::new_pending(address_lookup_table::program::id(), feature_set::add_new_reserved_account_keys::id()),
+        ReservedAccountKey::new_active(bpf_loader::id()),
+        ReservedAccountKey::new_active(bpf_loader_deprecated::id()),
+        ReservedAccountKey::new_active(bpf_loader_upgradeable::id()),
+        ReservedAccountKey::new_pending(compute_budget::id(), feature_set::add_new_reserved_account_keys::id()),
+        ReservedAccountKey::new_active(config::program::id()),
+        ReservedAccountKey::new_pending(ed25519_program::id(), feature_set::add_new_reserved_account_keys::id()),
+        ReservedAccountKey::new_active(feature::id()),
+        ReservedAccountKey::new_pending(loader_v4::id(), feature_set::add_new_reserved_account_keys::id()),
+        ReservedAccountKey::new_pending(secp256k1_program::id(), feature_set::add_new_reserved_account_keys::id()),
         #[allow(deprecated)]
-        ReservedAccountKey::new(stake::config::id(), None),
-        ReservedAccountKey::new(stake::program::id(), None),
-        ReservedAccountKey::new(system_program::id(), None),
-        ReservedAccountKey::new(vote::program::id(), None),
-        ReservedAccountKey::new(zk_token_proof_program::id(), Some(feature_set::add_new_reserved_account_keys::id())),
+        ReservedAccountKey::new_active(stake::config::id()),
+        ReservedAccountKey::new_active(stake::program::id()),
+        ReservedAccountKey::new_active(system_program::id()),
+        ReservedAccountKey::new_active(vote::program::id()),
+        ReservedAccountKey::new_pending(zk_token_proof_program::id(), feature_set::add_new_reserved_account_keys::id()),
 
         // sysvars
-        ReservedAccountKey::new(sysvar::clock::id(), None),
-        ReservedAccountKey::new(sysvar::epoch_rewards::id(), Some(feature_set::add_new_reserved_account_keys::id())),
-        ReservedAccountKey::new(sysvar::epoch_schedule::id(), None),
+        ReservedAccountKey::new_active(sysvar::clock::id()),
+        ReservedAccountKey::new_pending(sysvar::epoch_rewards::id(), feature_set::add_new_reserved_account_keys::id()),
+        ReservedAccountKey::new_active(sysvar::epoch_schedule::id()),
         #[allow(deprecated)]
-        ReservedAccountKey::new(sysvar::fees::id(), None),
-        ReservedAccountKey::new(sysvar::instructions::id(), None),
-        ReservedAccountKey::new(sysvar::last_restart_slot::id(), Some(feature_set::add_new_reserved_account_keys::id())),
+        ReservedAccountKey::new_active(sysvar::fees::id()),
+        ReservedAccountKey::new_active(sysvar::instructions::id()),
+        ReservedAccountKey::new_pending(sysvar::last_restart_slot::id(), feature_set::add_new_reserved_account_keys::id()),
         #[allow(deprecated)]
-        ReservedAccountKey::new(sysvar::recent_blockhashes::id(), None),
-        ReservedAccountKey::new(sysvar::rent::id(), None),
-        ReservedAccountKey::new(sysvar::rewards::id(), None),
-        ReservedAccountKey::new(sysvar::slot_hashes::id(), None),
-        ReservedAccountKey::new(sysvar::slot_history::id(), None),
-        ReservedAccountKey::new(sysvar::stake_history::id(), None),
+        ReservedAccountKey::new_active(sysvar::recent_blockhashes::id()),
+        ReservedAccountKey::new_active(sysvar::rent::id()),
+        ReservedAccountKey::new_active(sysvar::rewards::id()),
+        ReservedAccountKey::new_active(sysvar::slot_hashes::id()),
+        ReservedAccountKey::new_active(sysvar::slot_history::id()),
+        ReservedAccountKey::new_active(sysvar::stake_history::id()),
 
         // other
-        ReservedAccountKey::new(native_loader::id(), None),
-        ReservedAccountKey::new(sysvar::id(), Some(feature_set::add_new_reserved_account_keys::id())),
+        ReservedAccountKey::new_active(native_loader::id()),
+        ReservedAccountKey::new_pending(sysvar::id(), feature_set::add_new_reserved_account_keys::id()),
     ].to_vec();
 }
 
@@ -127,9 +137,9 @@ mod tests {
     #[test]
     fn test_reserved_account_key_is_active() {
         let feature_id = Pubkey::new_unique();
-        let old_reserved_account_key = ReservedAccountKey::new(Pubkey::new_unique(), None);
+        let old_reserved_account_key = ReservedAccountKey::new_active(Pubkey::new_unique());
         let new_reserved_account_key =
-            ReservedAccountKey::new(Pubkey::new_unique(), Some(feature_id));
+            ReservedAccountKey::new_pending(Pubkey::new_unique(), feature_id);
 
         let mut feature_set = FeatureSet::default();
         assert!(
@@ -154,9 +164,9 @@ mod tests {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let test_account_keys = vec![
-            ReservedAccountKey::new(key0, None),
-            ReservedAccountKey::new(key1, Some(feature_id)),
-            ReservedAccountKey::new(Pubkey::new_unique(), Some(Pubkey::new_unique())),
+            ReservedAccountKey::new_active(key0),
+            ReservedAccountKey::new_pending(key1, feature_id),
+            ReservedAccountKey::new_pending(Pubkey::new_unique(), Pubkey::new_unique()),
         ];
 
         let mut feature_set = FeatureSet::default();
