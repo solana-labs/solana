@@ -11,6 +11,7 @@ edition = { workspace = true }
 publish = true
 
 [dependencies]
+anyhow = { workspace = true }
 log = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
@@ -21,7 +22,6 @@ solana-program = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-vote-program = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
