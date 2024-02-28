@@ -346,8 +346,10 @@ mod tests {
         crate::{
             append_vec::test_utils::get_append_vec_path, tiered_storage::file::TieredStorageFile,
         },
+        assert_matches::assert_matches,
         memoffset::offset_of,
         solana_sdk::hash::Hash,
+        tempfile::TempDir,
     };
 
     #[test]
@@ -384,6 +386,24 @@ mod tests {
             let footer = TieredStorageFooter::new_from_path(&path.path).unwrap();
             assert_eq!(expected_footer, footer);
         }
+    }
+
+    #[test]
+    fn test_footer_magic_number_mismatch() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_footer_magic_number_mismatch");
+
+        {
+            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let dummy_data = [17; 200];
+            file.write_bytes(&dummy_data).unwrap();
+        }
+
+        assert_matches!(
+            TieredStorageFooter::new_from_path(&path),
+            Err(TieredStorageError::MagicNumberMismatch(_, _))
+        );
     }
 
     #[test]
