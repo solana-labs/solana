@@ -1,6 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
 use {
-    clap::value_t,
     log::*,
     solana_bench_tps::{
         bench::{do_bench_tps, max_lamports_for_prioritization},
@@ -11,11 +10,9 @@ use {
     },
     solana_client::{
         connection_cache::ConnectionCache,
-        thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_genesis::Base64Account,
-    solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -24,12 +21,12 @@ use {
         signature::{Keypair, Signer},
         system_program,
     },
-    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashMap,
         fs::File,
         io::prelude::*,
-        net::{IpAddr, SocketAddr},
+        net::IpAddr,
         path::Path,
         process::exit,
         sync::{Arc, RwLock},
@@ -125,13 +122,8 @@ fn create_connection_cache(
 #[allow(clippy::too_many_arguments)]
 fn create_client(
     external_client_type: &ExternalClientType,
-    entrypoint_addr: &SocketAddr,
     json_rpc_url: &str,
     websocket_url: &str,
-    multi_client: bool,
-    rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
-    num_nodes: usize,
-    target_node: Option<Pubkey>,
     connection_cache: ConnectionCache,
     commitment_config: CommitmentConfig,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
@@ -189,20 +181,16 @@ fn main() {
     };
 
     let cli::Config {
-        entrypoint_addr,
         json_rpc_url,
         websocket_url,
         id,
-        num_nodes,
         tx_count,
         keypair_multiplier,
         client_ids_and_stake_file,
         write_to_client_file,
         read_from_client_file,
         target_lamports_per_signature,
-        multi_client,
         num_lamports_per_account,
-        target_node,
         external_client_type,
         use_quic,
         tpu_connection_pool_size,
@@ -248,25 +236,6 @@ fn main() {
         return;
     }
 
-    info!("Connecting to the cluster");
-    let rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)> =
-        if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
-            let rpc = rpc_addr.parse().unwrap_or_else(|e| {
-                eprintln!("RPC address should parse as socketaddr {e:?}");
-                exit(1);
-            });
-            let tpu = value_t!(matches, "tpu_addr", String)
-                .unwrap()
-                .parse()
-                .unwrap_or_else(|e| {
-                    eprintln!("TPU address should parse to a socket: {e:?}");
-                    exit(1);
-                });
-            Some((rpc, tpu))
-        } else {
-            None
-        };
-
     let connection_cache = create_connection_cache(
         json_rpc_url,
         *tpu_connection_pool_size,
@@ -277,13 +246,8 @@ fn main() {
     );
     let client = create_client(
         external_client_type,
-        entrypoint_addr,
         json_rpc_url,
         websocket_url,
-        *multi_client,
-        rpc_tpu_sockets,
-        *num_nodes,
-        *target_node,
         connection_cache,
         *commitment_config,
     );

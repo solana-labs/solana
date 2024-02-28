@@ -13,7 +13,7 @@ use {
     },
     solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr},
         time::Duration,
     },
 };
@@ -50,12 +50,10 @@ pub enum ComputeUnitPrice {
 /// Holds the configuration for a single run of the benchmark
 #[derive(PartialEq, Debug)]
 pub struct Config {
-    pub entrypoint_addr: SocketAddr,
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub id: Keypair,
     pub threads: usize,
-    pub num_nodes: usize,
     pub duration: Duration,
     pub tx_count: usize,
     pub keypair_multiplier: usize,
@@ -65,10 +63,8 @@ pub struct Config {
     pub write_to_client_file: bool,
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
-    pub multi_client: bool,
     pub num_lamports_per_account: u64,
     pub target_slots_per_epoch: u64,
-    pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
@@ -86,12 +82,10 @@ impl Eq for Config {}
 impl Default for Config {
     fn default() -> Config {
         Config {
-            entrypoint_addr: SocketAddr::from((Ipv4Addr::LOCALHOST, 8001)),
             json_rpc_url: ConfigInput::default().json_rpc_url,
             websocket_url: ConfigInput::default().websocket_url,
             id: Keypair::new(),
             threads: 4,
-            num_nodes: 1,
             duration: Duration::new(std::u64::MAX, 0),
             tx_count: 50_000,
             keypair_multiplier: 8,
@@ -101,10 +95,8 @@ impl Default for Config {
             write_to_client_file: false,
             read_from_client_file: false,
             target_lamports_per_signature: FeeRateGovernor::default().target_lamports_per_signature,
-            multi_client: true,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
             target_slots_per_epoch: 0,
-            target_node: None,
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
@@ -180,14 +172,6 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .help("Specify custom tpu_addr to create thin_client"),
         )
         .arg(
-            Arg::with_name("entrypoint")
-                .short("n")
-                .long("entrypoint")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Rendezvous with the cluster at this entry point; defaults to 127.0.0.1:8001"),
-        )
-        .arg(
             Arg::with_name("faucet")
                 .short("d")
                 .long("faucet")
@@ -203,14 +187,6 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("File containing a client identity (keypair)"),
-        )
-        .arg(
-            Arg::with_name("num-nodes")
-                .short("N")
-                .long("num-nodes")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Wait for NUM nodes to converge"),
         )
         .arg(
             Arg::with_name("threads")
@@ -231,19 +207,6 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("sustained")
                 .long("sustained")
                 .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
-        )
-        .arg(
-            Arg::with_name("no-multi-client")
-                .long("no-multi-client")
-                .help("Disable multi-client support, only transact with the entrypoint."),
-        )
-        .arg(
-            Arg::with_name("target_node")
-                .long("target-node")
-                .requires("no-multi-client")
-                .takes_value(true)
-                .value_name("PUBKEY")
-                .help("Specify an exact node to send transactions to."),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -454,17 +417,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .map_err(|_| "can't parse tpu-connection-pool-size")?;
     }
 
-    if let Some(addr) = matches.value_of("entrypoint") {
-        args.entrypoint_addr = solana_net_utils::parse_host_port(addr)
-            .map_err(|_| "failed to parse entrypoint address")?;
-    }
-
     if let Some(t) = matches.value_of("threads") {
         args.threads = t.to_string().parse().map_err(|_| "can't parse threads")?;
-    }
-
-    if let Some(n) = matches.value_of("num-nodes") {
-        args.num_nodes = n.to_string().parse().map_err(|_| "can't parse num-nodes")?;
     }
 
     if let Some(duration) = matches.value_of("duration") {
@@ -515,13 +469,6 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .parse()
             .map_err(|_| "can't parse target-lamports-per-signature")?;
     }
-
-    args.multi_client = !matches.is_present("no-multi-client");
-    args.target_node = matches
-        .value_of("target_node")
-        .map(|target_str| target_str.parse::<Pubkey>())
-        .transpose()
-        .map_err(|_| "Failed to parse target-node")?;
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
         args.num_lamports_per_account = v
@@ -594,7 +541,7 @@ mod tests {
         super::*,
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         std::{
-            net::{IpAddr, Ipv4Addr, SocketAddr},
+            net::{IpAddr, Ipv4Addr},
             time::Duration,
         },
         tempfile::{tempdir, TempDir},
@@ -669,7 +616,7 @@ mod tests {
                 threads: 4,
                 read_from_client_file: true,
                 client_ids_and_stake_file: "./client-accounts.yml".to_string(),
-                entrypoint_addr: SocketAddr::from((Ipv4Addr::new(192, 1, 2, 3), 8001)),
+                // entrypoint_addr: SocketAddr::from((Ipv4Addr::new(192, 1, 2, 3), 8001)),
                 ..Config::default()
             }
         );

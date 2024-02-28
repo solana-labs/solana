@@ -8,8 +8,8 @@ use {
     }, solana_client::{
         connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
-    }, solana_connection_cache::connection_cache, solana_core::validator::ValidatorConfig, solana_faucet::faucet::run_local_faucet, solana_local_cluster::{
-        local_cluster::{self, ClusterConfig, LocalCluster},
+    }, solana_core::validator::ValidatorConfig, solana_faucet::faucet::run_local_faucet, solana_local_cluster::{
+        local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::make_identical_validator_configs,
     }, solana_rpc::rpc::JsonRpcConfig, solana_rpc_client::rpc_client::RpcClient, solana_sdk::{
         account::{Account, AccountSharedData},
@@ -73,7 +73,7 @@ fn test_bench_tps_local_cluster(config: Config) {
     };
 
     let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
-    
+
     let client = match TpuClient::new_with_connection_cache(
         Arc::new(RpcClient::new(
             format!("http://{}", cluster.entry_point_info.rpc().unwrap()),
@@ -82,11 +82,8 @@ fn test_bench_tps_local_cluster(config: Config) {
         TpuClientConfig::default(),
         cache.clone(),
     ) {
-        Ok(client) => {
-            println!("all good");
-            Arc::new(client)
-        },
-        Err(err) => panic!("error: {}", err)
+        Ok(client) => Arc::new(client),
+        Err(err) => panic!("Error creating TpuClient: {}", err),
     };
 
     let lamports_per_account = 100;
