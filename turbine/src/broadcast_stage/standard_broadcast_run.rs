@@ -141,6 +141,7 @@ impl StandardBroadcastRun {
                         process_stats.num_extant_slots += 1;
                         // This is a faulty situation that should not happen.
                         // Refrain from generating shreds for the slot.
+                        warn!("Blockstore already has shreds. Don't recreate this slot.");
                         return Ok((Vec::default(), Vec::default()));
                     }
                 }
