@@ -416,7 +416,16 @@ impl Default for PageInner {
     fn default() -> Self {
         Self {
             usage: PageUsage::default(),
-            blocked_tasks: VecDeque::with_capacity(1024),
+            // Capacity should be configurable to create with large capacity like 1024 inside the
+            // (multi-threaded) closures passed to create_task(). In this way, reallocs can be
+            // avoided happening in the scheduler thread. Also, this configurability is desired for
+            // unified-scheduler-logic's motto: separation of concerns (the pure logic should be
+            // sufficiently distanced from any some random knob's constants needed for messy
+            // reality for author's personal preference...).
+            //
+            // Note that large cap should be accompanied with proper scheduler cleaning after use,
+            // which should be handled by higher layers (i.e. scheduler pool).
+            blocked_tasks: VecDeque::with_capacity(128),
         }
     }
 }
@@ -726,6 +735,8 @@ impl SchedulingStateMachine {
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
             last_task_index: None,
+            // It's very unlikely this is desired to be configurable, like
+            // `PageInner::blocked_tasks`'s cap.
             unblocked_task_queue: VecDeque::with_capacity(1024),
             active_task_count: ShortCounter::zero(),
             handled_task_count: ShortCounter::zero(),
