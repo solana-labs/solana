@@ -129,10 +129,10 @@ impl StakeHistoryGetEntry for Arc<StakeHistory> {
 #[repr(C)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Zeroable, Pod)]
 struct StakeHistoryEpochEntry {
-    pub epoch: Epoch,
-    pub effective: u64,
-    pub activating: u64,
-    pub deactivating: u64,
+    epoch: Epoch,
+    effective: u64,
+    activating: u64,
+    deactivating: u64,
 }
 
 impl StakeHistoryGetEntry for StakeHistoryData<'_> {
