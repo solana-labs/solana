@@ -598,7 +598,8 @@ impl Consumer {
                 transaction_status_sender_enabled,
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
-                self.log_messages_bytes_limit
+                self.log_messages_bytes_limit,
+                true,
             ));
         execute_and_commit_timings.load_execute_us = load_execute_us;
 

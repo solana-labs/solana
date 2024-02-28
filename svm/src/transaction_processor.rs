@@ -190,6 +190,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         account_overrides: Option<&AccountOverrides>,
         builtin_programs: impl Iterator<Item = &'a Pubkey>,
         log_messages_bytes_limit: Option<usize>,
+        limit_to_load_programs: bool,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = Self::filter_executable_program_accounts(
             callbacks,
@@ -202,9 +203,18 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
-        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
-            self.replenish_program_cache(callbacks, &program_accounts_map),
-        ));
+        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
+            callbacks,
+            &program_accounts_map,
+            limit_to_load_programs,
+        )));
+
+        if programs_loaded_for_tx_batch.borrow().hit_max_limit {
+            return LoadAndExecuteSanitizedTransactionsOutput {
+                loaded_transactions: vec![],
+                execution_results: vec![],
+            };
+        }
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
@@ -356,6 +366,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         &self,
         callback: &CB,
         program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
+        limit_to_load_programs: bool,
     ) -> LoadedProgramsForTxBatch {
         let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             if self.check_program_modification_slot {
@@ -401,7 +412,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
-                    loaded_programs_cache.finish_cooperative_loading_task(self.slot, key, program);
+                    if loaded_programs_cache
+                        .finish_cooperative_loading_task(self.slot, key, program)
+                        && limit_to_load_programs
+                    {
+                        let mut ret = LoadedProgramsForTxBatch::default();
+                        ret.hit_max_limit = true;
+                        return ret;
+                    }
                 }
                 // Figure out which program needs to be loaded next.
                 let program_to_load = loaded_programs_cache.extract(
