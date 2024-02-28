@@ -40,13 +40,9 @@ impl SamplePerformanceService {
 
     fn run(bank_forks: Arc<RwLock<BankForks>>, blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) {
         let mut snapshot = StatsSnapshot::from_forks(&bank_forks);
-
         let mut last_sample_time = Instant::now();
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
 
+        while !exit.load(Ordering::Relaxed) {
             let elapsed = last_sample_time.elapsed();
             if elapsed >= SAMPLE_INTERVAL {
                 last_sample_time = Instant::now();
@@ -74,7 +70,6 @@ impl SamplePerformanceService {
                     error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
                 }
             }
-
             sleep(SLEEP_INTERVAL);
         }
     }
