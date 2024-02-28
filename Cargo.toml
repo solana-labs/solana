@@ -258,7 +258,6 @@ num-traits = "0.2"
 num_cpus = "1.16.0"
 num_enum = "0.7.2"
 openssl = "0.10"
-ouroboros = "0.15.6"
 parking_lot = "0.12"
 pbkdf2 = { version = "0.11.0", default-features = false }
 pem = "1.1.1"
