@@ -302,28 +302,28 @@ pub struct ReplayStageConfig {
 struct ReplayLoopTiming {
     last_submit: u64,
     loop_count: u64,
-    collect_frozen_banks_elapsed: u64,
-    compute_bank_stats_elapsed: u64,
-    select_vote_and_reset_forks_elapsed: u64,
-    start_leader_elapsed: u64,
-    reset_bank_elapsed: u64,
-    voting_elapsed: u64,
+    collect_frozen_banks_elapsed_us: u64,
+    compute_bank_stats_elapsed_us: u64,
+    select_vote_and_reset_forks_elapsed_us: u64,
+    start_leader_elapsed_us: u64,
+    reset_bank_elapsed_us: u64,
+    voting_elapsed_us: u64,
     generate_vote_us: u64,
     update_commitment_cache_us: u64,
-    select_forks_elapsed: u64,
-    compute_slot_stats_elapsed: u64,
-    generate_new_bank_forks_elapsed: u64,
-    replay_active_banks_elapsed: u64,
-    wait_receive_elapsed: u64,
-    heaviest_fork_failures_elapsed: u64,
+    select_forks_elapsed_us: u64,
+    compute_slot_stats_elapsed_us: u64,
+    generate_new_bank_forks_elapsed_us: u64,
+    replay_active_banks_elapsed_us: u64,
+    wait_receive_elapsed_us: u64,
+    heaviest_fork_failures_elapsed_us: u64,
     bank_count: u64,
-    process_ancestor_hashes_duplicate_slots_elapsed: u64,
-    process_duplicate_confirmed_slots_elapsed: u64,
-    process_duplicate_slots_elapsed: u64,
-    process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
-    process_popular_pruned_forks_elapsed: u64,
-    repair_correct_slots_elapsed: u64,
-    retransmit_not_propagated_elapsed: u64,
+    process_ancestor_hashes_duplicate_slots_elapsed_us: u64,
+    process_duplicate_confirmed_slots_elapsed_us: u64,
+    process_duplicate_slots_elapsed_us: u64,
+    process_unfrozen_gossip_verified_vote_hashes_elapsed_us: u64,
+    process_popular_pruned_forks_elapsed_us: u64,
+    repair_correct_slots_elapsed_us: u64,
+    retransmit_not_propagated_elapsed_us: u64,
     generate_new_bank_forks_read_lock_us: u64,
     generate_new_bank_forks_get_slots_since_us: u64,
     generate_new_bank_forks_loop_us: u64,
@@ -335,50 +335,50 @@ impl ReplayLoopTiming {
     #[allow(clippy::too_many_arguments)]
     fn update(
         &mut self,
-        collect_frozen_banks_elapsed: u64,
-        compute_bank_stats_elapsed: u64,
-        select_vote_and_reset_forks_elapsed: u64,
-        start_leader_elapsed: u64,
-        reset_bank_elapsed: u64,
-        voting_elapsed: u64,
-        select_forks_elapsed: u64,
-        compute_slot_stats_elapsed: u64,
-        generate_new_bank_forks_elapsed: u64,
-        replay_active_banks_elapsed: u64,
-        wait_receive_elapsed: u64,
-        heaviest_fork_failures_elapsed: u64,
+        collect_frozen_banks_elapsed_us: u64,
+        compute_bank_stats_elapsed_us: u64,
+        select_vote_and_reset_forks_elapsed_us: u64,
+        start_leader_elapsed_us: u64,
+        reset_bank_elapsed_us: u64,
+        voting_elapsed_us: u64,
+        select_forks_elapsed_us: u64,
+        compute_slot_stats_elapsed_us: u64,
+        generate_new_bank_forks_elapsed_us: u64,
+        replay_active_banks_elapsed_us: u64,
+        wait_receive_elapsed_us: u64,
+        heaviest_fork_failures_elapsed_us: u64,
         bank_count: u64,
-        process_ancestor_hashes_duplicate_slots_elapsed: u64,
-        process_duplicate_confirmed_slots_elapsed: u64,
-        process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
-        process_popular_pruned_forks_elapsed: u64,
-        process_duplicate_slots_elapsed: u64,
-        repair_correct_slots_elapsed: u64,
-        retransmit_not_propagated_elapsed: u64,
+        process_ancestor_hashes_duplicate_slots_elapsed_us: u64,
+        process_duplicate_confirmed_slots_elapsed_us: u64,
+        process_unfrozen_gossip_verified_vote_hashes_elapsed_us: u64,
+        process_popular_pruned_forks_elapsed_us: u64,
+        process_duplicate_slots_elapsed_us: u64,
+        repair_correct_slots_elapsed_us: u64,
+        retransmit_not_propagated_elapsed_us: u64,
     ) {
         self.loop_count += 1;
-        self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
-        self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
-        self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
-        self.start_leader_elapsed += start_leader_elapsed;
-        self.reset_bank_elapsed += reset_bank_elapsed;
-        self.voting_elapsed += voting_elapsed;
-        self.select_forks_elapsed += select_forks_elapsed;
-        self.compute_slot_stats_elapsed += compute_slot_stats_elapsed;
-        self.generate_new_bank_forks_elapsed += generate_new_bank_forks_elapsed;
-        self.replay_active_banks_elapsed += replay_active_banks_elapsed;
-        self.wait_receive_elapsed += wait_receive_elapsed;
-        self.heaviest_fork_failures_elapsed += heaviest_fork_failures_elapsed;
+        self.collect_frozen_banks_elapsed_us += collect_frozen_banks_elapsed_us;
+        self.compute_bank_stats_elapsed_us += compute_bank_stats_elapsed_us;
+        self.select_vote_and_reset_forks_elapsed_us += select_vote_and_reset_forks_elapsed_us;
+        self.start_leader_elapsed_us += start_leader_elapsed_us;
+        self.reset_bank_elapsed_us += reset_bank_elapsed_us;
+        self.voting_elapsed_us += voting_elapsed_us;
+        self.select_forks_elapsed_us += select_forks_elapsed_us;
+        self.compute_slot_stats_elapsed_us += compute_slot_stats_elapsed_us;
+        self.generate_new_bank_forks_elapsed_us += generate_new_bank_forks_elapsed_us;
+        self.replay_active_banks_elapsed_us += replay_active_banks_elapsed_us;
+        self.wait_receive_elapsed_us += wait_receive_elapsed_us;
+        self.heaviest_fork_failures_elapsed_us += heaviest_fork_failures_elapsed_us;
         self.bank_count += bank_count;
-        self.process_ancestor_hashes_duplicate_slots_elapsed +=
-            process_ancestor_hashes_duplicate_slots_elapsed;
-        self.process_duplicate_confirmed_slots_elapsed += process_duplicate_confirmed_slots_elapsed;
-        self.process_unfrozen_gossip_verified_vote_hashes_elapsed +=
-            process_unfrozen_gossip_verified_vote_hashes_elapsed;
-        self.process_popular_pruned_forks_elapsed += process_popular_pruned_forks_elapsed;
-        self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
-        self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
-        self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
+        self.process_ancestor_hashes_duplicate_slots_elapsed_us +=
+            process_ancestor_hashes_duplicate_slots_elapsed_us;
+        self.process_duplicate_confirmed_slots_elapsed_us += process_duplicate_confirmed_slots_elapsed_us;
+        self.process_unfrozen_gossip_verified_vote_hashes_elapsed_us +=
+            process_unfrozen_gossip_verified_vote_hashes_elapsed_us;
+        self.process_popular_pruned_forks_elapsed_us += process_popular_pruned_forks_elapsed_us;
+        self.process_duplicate_slots_elapsed_us += process_duplicate_slots_elapsed_us;
+        self.repair_correct_slots_elapsed_us += repair_correct_slots_elapsed_us;
+        self.retransmit_not_propagated_elapsed_us += retransmit_not_propagated_elapsed_us;
 
         self.maybe_submit();
     }
@@ -402,91 +402,91 @@ impl ReplayLoopTiming {
                 ("loop_count", self.loop_count as i64, i64),
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
-                    "collect_frozen_banks_elapsed",
-                    self.collect_frozen_banks_elapsed as i64,
+                    "collect_frozen_banks_elapsed_us",
+                    self.collect_frozen_banks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "compute_bank_stats_elapsed",
-                    self.compute_bank_stats_elapsed as i64,
+                    "compute_bank_stats_elapsed_us",
+                    self.compute_bank_stats_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "select_vote_and_reset_forks_elapsed",
-                    self.select_vote_and_reset_forks_elapsed as i64,
+                    "select_vote_and_reset_forks_elapsed_us",
+                    self.select_vote_and_reset_forks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "start_leader_elapsed",
-                    self.start_leader_elapsed as i64,
+                    "start_leader_elapsed_us",
+                    self.start_leader_elapsed_us as i64,
                     i64
                 ),
-                ("reset_bank_elapsed", self.reset_bank_elapsed as i64, i64),
-                ("voting_elapsed", self.voting_elapsed as i64, i64),
+                ("reset_bank_elapsed_us", self.reset_bank_elapsed_us as i64, i64),
+                ("voting_elapsed_us", self.voting_elapsed_us as i64, i64),
                 (
-                    "select_forks_elapsed",
-                    self.select_forks_elapsed as i64,
-                    i64
-                ),
-                (
-                    "compute_slot_stats_elapsed",
-                    self.compute_slot_stats_elapsed as i64,
+                    "select_forks_elapsed_us",
+                    self.select_forks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "generate_new_bank_forks_elapsed",
-                    self.generate_new_bank_forks_elapsed as i64,
+                    "compute_slot_stats_elapsed_us",
+                    self.compute_slot_stats_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "replay_active_banks_elapsed",
-                    self.replay_active_banks_elapsed as i64,
+                    "generate_new_bank_forks_elapsed_us",
+                    self.generate_new_bank_forks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "process_ancestor_hashes_duplicate_slots_elapsed",
-                    self.process_ancestor_hashes_duplicate_slots_elapsed as i64,
+                    "replay_active_banks_elapsed_us",
+                    self.replay_active_banks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "process_duplicate_confirmed_slots_elapsed",
-                    self.process_duplicate_confirmed_slots_elapsed as i64,
+                    "process_ancestor_hashes_duplicate_slots_elapsed_us",
+                    self.process_ancestor_hashes_duplicate_slots_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "process_unfrozen_gossip_verified_vote_hashes_elapsed",
-                    self.process_unfrozen_gossip_verified_vote_hashes_elapsed as i64,
+                    "process_duplicate_confirmed_slots_elapsed_us",
+                    self.process_duplicate_confirmed_slots_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "process_popular_pruned_forks_elapsed",
-                    self.process_popular_pruned_forks_elapsed as i64,
+                    "process_unfrozen_gossip_verified_vote_hashes_elapsed_us",
+                    self.process_unfrozen_gossip_verified_vote_hashes_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "wait_receive_elapsed",
-                    self.wait_receive_elapsed as i64,
+                    "process_popular_pruned_forks_elapsed_us",
+                    self.process_popular_pruned_forks_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "heaviest_fork_failures_elapsed",
-                    self.heaviest_fork_failures_elapsed as i64,
+                    "wait_receive_elapsed_us",
+                    self.wait_receive_elapsed_us as i64,
+                    i64
+                ),
+                (
+                    "heaviest_fork_failures_elapsed_us",
+                    self.heaviest_fork_failures_elapsed_us as i64,
                     i64
                 ),
                 ("bank_count", self.bank_count as i64, i64),
                 (
-                    "process_duplicate_slots_elapsed",
-                    self.process_duplicate_slots_elapsed as i64,
+                    "process_duplicate_slots_elapsed_us",
+                    self.process_duplicate_slots_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "repair_correct_slots_elapsed",
-                    self.repair_correct_slots_elapsed as i64,
+                    "repair_correct_slots_elapsed_us",
+                    self.repair_correct_slots_elapsed_us as i64,
                     i64
                 ),
                 (
-                    "retransmit_not_propagated_elapsed",
-                    self.retransmit_not_propagated_elapsed as i64,
+                    "retransmit_not_propagated_elapsed_us",
+                    self.retransmit_not_propagated_elapsed_us as i64,
                     i64
                 ),
                 (
