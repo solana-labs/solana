@@ -9068,11 +9068,10 @@ impl AccountsDb {
                             let mut lookup_time = Measure::start("lookup_time");
                             for account_info in storage.accounts.account_iter() {
                                 let key = account_info.pubkey();
-                                let lock = self.accounts_index.get_bin(key);
-                                let x = lock.get(key).unwrap();
-                                let sl = x.slot_list.read().unwrap();
+                                let index_entry = self.accounts_index.get_cloned(key).unwrap();
+                                let slot_list = index_entry.slot_list.read().unwrap();
                                 let mut count = 0;
-                                for (slot2, account_info2) in sl.iter() {
+                                for (slot2, account_info2) in slot_list.iter() {
                                     if slot2 == slot {
                                         count += 1;
                                         let ai = AccountInfo::new(
