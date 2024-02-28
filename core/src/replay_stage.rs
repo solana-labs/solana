@@ -372,7 +372,8 @@ impl ReplayLoopTiming {
         self.bank_count += bank_count;
         self.process_ancestor_hashes_duplicate_slots_elapsed_us +=
             process_ancestor_hashes_duplicate_slots_elapsed_us;
-        self.process_duplicate_confirmed_slots_elapsed_us += process_duplicate_confirmed_slots_elapsed_us;
+        self.process_duplicate_confirmed_slots_elapsed_us +=
+            process_duplicate_confirmed_slots_elapsed_us;
         self.process_unfrozen_gossip_verified_vote_hashes_elapsed_us +=
             process_unfrozen_gossip_verified_vote_hashes_elapsed_us;
         self.process_popular_pruned_forks_elapsed_us += process_popular_pruned_forks_elapsed_us;
@@ -421,7 +422,11 @@ impl ReplayLoopTiming {
                     self.start_leader_elapsed_us as i64,
                     i64
                 ),
-                ("reset_bank_elapsed_us", self.reset_bank_elapsed_us as i64, i64),
+                (
+                    "reset_bank_elapsed_us",
+                    self.reset_bank_elapsed_us as i64,
+                    i64
+                ),
                 ("voting_elapsed_us", self.voting_elapsed_us as i64, i64),
                 (
                     "select_forks_elapsed_us",
