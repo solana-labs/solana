@@ -50,7 +50,9 @@ pub enum WenRestartError {
     InvalidLastVoteType(VoteTransaction),
     #[error("File IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Missing last voted fork slots")]
+    #[error("Malformed LastVotedForkSlots protobuf")]
+    MalformedLastVotedForkSlotsProtobuf(Option<LastVotedForkSlotsRecord>),
+    #[error("Missing LastVotedForkSlots")]
     MissingLastVotedForkSlots,
     #[error("Hash parse error: {0}")]
     ParseHashError(#[from] solana_sdk::hash::ParseHashError),
@@ -62,54 +64,40 @@ pub enum WenRestartError {
     UnexpectedState(wen_restart_proto::State),
 }
 
+// We need a WenRestartProgressInternalState so we can convert the protobuf written in file
+// into internal data structure in the initialize function. It should be easily
+// convertable to and from WenRestartProgress protobuf.
+#[derive(Debug, PartialEq)]
+pub(crate) enum WenRestartProgressInternalState {
+    Init {
+        last_voted_fork_slots: Vec<Slot>,
+        last_vote_bankhash: Hash,
+    },
+    LastVotedForkSlots {
+        last_voted_fork_slots: Vec<Slot>,
+    },
+    Done,
+}
+
 pub(crate) fn send_restart_last_voted_fork_slots(
-    last_vote: VoteTransaction,
-    blockstore: Arc<Blockstore>,
     cluster_info: Arc<ClusterInfo>,
-    progress: &mut WenRestartProgress,
-) -> Result<(), WenRestartError> {
-    let last_voted_fork_slots;
-    let last_vote_hash;
-    match &progress.my_last_voted_fork_slots {
-        Some(my_last_voted_fork_slots) => {
-            last_voted_fork_slots = my_last_voted_fork_slots.last_voted_fork_slots.clone();
-            last_vote_hash = Hash::from_str(&my_last_voted_fork_slots.last_vote_bankhash).unwrap();
-        }
-        None => {
-            // repair and restart option does not work without last voted slot.
-            if let VoteTransaction::Vote(ref vote) = last_vote {
-                if let Some(last_vote_slot) = vote.last_voted_slot() {
-                    last_vote_hash = vote.hash;
-                    last_voted_fork_slots =
-                        AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
-                            .take(RestartLastVotedForkSlots::MAX_SLOTS)
-                            .collect();
-                } else {
-                    return Err(WenRestartError::MissingLastVotedForkSlots);
-                }
-            } else {
-                return Err(WenRestartError::InvalidLastVoteType(last_vote));
-            }
-        }
-    }
-    info!(
-        "wen_restart last voted fork {} {:?}",
-        last_vote_hash, last_voted_fork_slots
-    );
-    cluster_info.push_restart_last_voted_fork_slots(&last_voted_fork_slots, last_vote_hash)?;
-    progress.my_last_voted_fork_slots = Some(LastVotedForkSlotsRecord {
-        last_voted_fork_slots,
-        last_vote_bankhash: last_vote.hash().to_string(),
+    last_voted_fork_slots: &[Slot],
+    last_vote_bankhash: Hash,
+) -> Result<LastVotedForkSlotsRecord, WenRestartError> {
+    cluster_info.push_restart_last_voted_fork_slots(last_voted_fork_slots, last_vote_bankhash)?;
+    Ok(LastVotedForkSlotsRecord {
+        last_voted_fork_slots: last_voted_fork_slots.to_vec(),
+        last_vote_bankhash: last_vote_bankhash.to_string(),
         shred_version: cluster_info.my_shred_version() as u32,
         wallclock: timestamp(),
-    });
-    Ok(())
+    })
 }
 
 pub(crate) fn aggregate_restart_last_voted_fork_slots(
     wen_restart_path: &PathBuf,
     wait_for_supermajority_threshold_percent: u64,
     cluster_info: Arc<ClusterInfo>,
+    last_voted_fork_slots: &Vec<Slot>,
     bank_forks: Arc<RwLock<BankForks>>,
     wen_restart_repair_slots: Arc<RwLock<Vec<Slot>>>,
     exit: Arc<AtomicBool>,
@@ -120,31 +108,28 @@ pub(crate) fn aggregate_restart_last_voted_fork_slots(
         root_bank = bank_forks.read().unwrap().root_bank().clone();
     }
     let root_slot = root_bank.slot();
-    if progress.my_last_voted_fork_slots.is_none() {
-        return Err(WenRestartError::MissingLastVotedForkSlots);
-    }
     let mut last_voted_fork_slots_aggregate = LastVotedForkSlotsAggregate::new(
         root_slot,
         REPAIR_THRESHOLD,
         root_bank.epoch_stakes(root_bank.epoch()).unwrap(),
-        &progress
-            .my_last_voted_fork_slots
-            .as_ref()
-            .unwrap()
-            .last_voted_fork_slots,
+        last_voted_fork_slots,
         &cluster_info.id(),
     );
-    let mut cursor = solana_gossip::crds::Cursor::default();
-    let mut is_full_slots = HashSet::new();
     if let Some(aggregate_record) = &progress.last_voted_fork_slots_aggregate {
         for (key_string, message) in &aggregate_record.received {
-            let _ = last_voted_fork_slots_aggregate.aggregate_from_record(key_string, message)?;
+            if let Err(e) =
+                last_voted_fork_slots_aggregate.aggregate_from_record(key_string, message)
+            {
+                error!("Failed to aggregate from record: {:?}", e);
+            }
         }
     } else {
         progress.last_voted_fork_slots_aggregate = Some(LastVotedForkSlotsAggregateRecord {
             received: HashMap::new(),
         });
     }
+    let mut cursor = solana_gossip::crds::Cursor::default();
+    let mut is_full_slots = HashSet::new();
     loop {
         if exit.load(Ordering::Relaxed) {
             return Err(WenRestartError::Exiting);
@@ -219,61 +204,74 @@ pub fn wait_for_wen_restart(
     wait_for_supermajority_threshold_percent: u64,
     exit: Arc<AtomicBool>,
 ) -> Result<(), WenRestartError> {
-    let mut progress = initialize(wen_restart_path)?;
+    let (mut state, mut progress) =
+        initialize(wen_restart_path, last_vote.clone(), blockstore.clone())?;
     loop {
-        match progress.state() {
-            RestartState::Init => send_restart_last_voted_fork_slots(
-                last_vote.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                &mut progress,
-            )?,
-            RestartState::LastVotedForkSlots => aggregate_restart_last_voted_fork_slots(
+        match &state {
+            WenRestartProgressInternalState::Init {
+                last_voted_fork_slots,
+                last_vote_bankhash,
+            } => {
+                progress.my_last_voted_fork_slots = Some(send_restart_last_voted_fork_slots(
+                    cluster_info.clone(),
+                    last_voted_fork_slots,
+                    *last_vote_bankhash,
+                )?)
+            }
+            WenRestartProgressInternalState::LastVotedForkSlots {
+                last_voted_fork_slots,
+            } => aggregate_restart_last_voted_fork_slots(
                 wen_restart_path,
                 wait_for_supermajority_threshold_percent,
                 cluster_info.clone(),
+                last_voted_fork_slots,
                 bank_forks.clone(),
                 wen_restart_repair_slots.clone().unwrap(),
                 exit.clone(),
                 &mut progress,
             )?,
-            RestartState::HeaviestFork => {
-                warn!("Not implemented yet, make it empty to complete test")
-            }
-            RestartState::FinishedSnapshot
-            | RestartState::GeneratingSnapshot
-            | RestartState::WaitingForSupermajority => {
-                return Err(WenRestartError::UnexpectedState(progress.state()))
-            }
-            RestartState::Done => return Ok(()),
-        }
-        increment_and_write_wen_restart_records(wen_restart_path, &mut progress)?;
+            WenRestartProgressInternalState::Done => return Ok(()),
+        };
+        state = increment_and_write_wen_restart_records(wen_restart_path, state, &mut progress)?;
     }
 }
 
 pub(crate) fn increment_and_write_wen_restart_records(
     records_path: &PathBuf,
-    new_progress: &mut WenRestartProgress,
-) -> Result<(), WenRestartError> {
-    let new_state = match new_progress.state() {
-        RestartState::Init => RestartState::LastVotedForkSlots,
-        RestartState::LastVotedForkSlots => RestartState::HeaviestFork,
-        RestartState::HeaviestFork => RestartState::Done,
-        RestartState::Done
-        | RestartState::FinishedSnapshot
-        | RestartState::GeneratingSnapshot
-        | RestartState::WaitingForSupermajority => {
-            return Err(WenRestartError::UnexpectedState(new_progress.state()));
+    current_state: WenRestartProgressInternalState,
+    progress: &mut WenRestartProgress,
+) -> Result<WenRestartProgressInternalState, WenRestartError> {
+    let new_state = match current_state {
+        WenRestartProgressInternalState::Init {
+            last_voted_fork_slots,
+            last_vote_bankhash: _,
+        } => {
+            progress.set_state(RestartState::LastVotedForkSlots);
+            WenRestartProgressInternalState::LastVotedForkSlots {
+                last_voted_fork_slots,
+            }
+        }
+        WenRestartProgressInternalState::LastVotedForkSlots {
+            last_voted_fork_slots: _,
+        } => {
+            progress.set_state(RestartState::Done);
+            WenRestartProgressInternalState::Done
+        }
+        WenRestartProgressInternalState::Done => {
+            return Err(WenRestartError::UnexpectedState(RestartState::Done))
         }
     };
-    new_progress.set_state(new_state);
-    write_wen_restart_records(records_path, new_progress)?;
-    Ok(())
+    write_wen_restart_records(records_path, progress)?;
+    Ok(new_state)
 }
 
-pub(crate) fn initialize(records_path: &PathBuf) -> Result<WenRestartProgress, WenRestartError> {
-    match read_wen_restart_records(records_path) {
-        Ok(progress) => Ok(progress),
+pub(crate) fn initialize(
+    records_path: &PathBuf,
+    last_vote: VoteTransaction,
+    blockstore: Arc<Blockstore>,
+) -> Result<(WenRestartProgressInternalState, WenRestartProgress), WenRestartError> {
+    let progress = match read_wen_restart_records(records_path) {
+        Ok(progress) => progress,
         Err(WenRestartError::IoError(e)) if e.kind() == std::io::ErrorKind::NotFound => {
             info!(
                 "wen restart proto file not found at {:?}, write init state",
@@ -285,9 +283,59 @@ pub(crate) fn initialize(records_path: &PathBuf) -> Result<WenRestartProgress, W
                 last_voted_fork_slots_aggregate: None,
             };
             write_wen_restart_records(records_path, &progress)?;
-            Ok(progress)
+            progress
         }
-        Err(err) => Err(err),
+        Err(err) => return Err(err),
+    };
+    match progress.state() {
+        RestartState::Done => Ok((WenRestartProgressInternalState::Done, progress)),
+        RestartState::Init => {
+            let last_voted_fork_slots;
+            let last_vote_bankhash;
+            match &progress.my_last_voted_fork_slots {
+                Some(my_last_voted_fork_slots) => {
+                    last_voted_fork_slots = my_last_voted_fork_slots.last_voted_fork_slots.clone();
+                    last_vote_bankhash =
+                        Hash::from_str(&my_last_voted_fork_slots.last_vote_bankhash).unwrap();
+                }
+                None => {
+                    // repair and restart option does not work without last voted slot.
+                    if let VoteTransaction::Vote(ref vote) = last_vote {
+                        if let Some(last_vote_slot) = vote.last_voted_slot() {
+                            last_vote_bankhash = vote.hash;
+                            last_voted_fork_slots =
+                                AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
+                                    .take(RestartLastVotedForkSlots::MAX_SLOTS)
+                                    .collect();
+                        } else {
+                            return Err(WenRestartError::MissingLastVotedForkSlots);
+                        }
+                    } else {
+                        return Err(WenRestartError::InvalidLastVoteType(last_vote));
+                    }
+                }
+            }
+            Ok((
+                WenRestartProgressInternalState::Init {
+                    last_voted_fork_slots,
+                    last_vote_bankhash,
+                },
+                progress,
+            ))
+        }
+        RestartState::LastVotedForkSlots => {
+            if let Some(record) = progress.my_last_voted_fork_slots.as_ref() {
+                Ok((
+                    WenRestartProgressInternalState::LastVotedForkSlots {
+                        last_voted_fork_slots: record.last_voted_fork_slots.clone(),
+                    },
+                    progress,
+                ))
+            } else {
+                Err(WenRestartError::MalformedLastVotedForkSlotsProtobuf(None))
+            }
+        }
+        _ => Err(WenRestartError::UnexpectedState(progress.state())),
     }
 }
 
@@ -642,10 +690,97 @@ mod tests {
     }
 
     #[test]
+    fn test_wen_restart_initialize_failures() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let test_state = wen_restart_test_init(&ledger_path);
+        let last_vote_bankhash = Hash::new_unique();
+        let mut last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
+        last_voted_fork_slots.reverse();
+        let mut file = File::create(&test_state.wen_restart_proto_path).unwrap();
+        file.write_all(b"garbage").unwrap();
+        assert_matches!(
+            initialize(
+                &test_state.wen_restart_proto_path,
+                VoteTransaction::from(Vote::new(last_voted_fork_slots.clone(), last_vote_bankhash)),
+                test_state.blockstore.clone()
+            ),
+            Err(WenRestartError::DecodeError(_))
+        );
+        remove_file(&test_state.wen_restart_proto_path).unwrap();
+        assert_matches!(
+            initialize(
+                &test_state.wen_restart_proto_path,
+                VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)])),
+                test_state.blockstore.clone()
+            ),
+            Err(WenRestartError::InvalidLastVoteType(
+                VoteTransaction::VoteStateUpdate(_)
+            ))
+        );
+        assert_matches!(
+            initialize(
+                &test_state.wen_restart_proto_path,
+                VoteTransaction::from(Vote::new(vec![], last_vote_bankhash)),
+                test_state.blockstore.clone()
+            ),
+            Err(WenRestartError::MissingLastVotedForkSlots)
+        );
+        // Test the case where the file is not found.
+        let _ = remove_file(&test_state.wen_restart_proto_path);
+        assert_matches!(
+            initialize(&test_state.wen_restart_proto_path, VoteTransaction::from(Vote::new(last_voted_fork_slots.clone(), last_vote_bankhash)), test_state.blockstore.clone()),
+            Ok((WenRestartProgressInternalState::Init { last_voted_fork_slots, last_vote_bankhash: bankhash }, progress)) => {
+                assert_eq!(last_voted_fork_slots, test_state.last_voted_fork_slots);
+                assert_eq!(bankhash, last_vote_bankhash);
+                assert_eq!(progress, WenRestartProgress {
+                    state: RestartState::Init.into(),
+                    my_last_voted_fork_slots: None,
+                    last_voted_fork_slots_aggregate: None,
+                });
+            }
+        );
+        let _ = write_wen_restart_records(
+            &test_state.wen_restart_proto_path,
+            &WenRestartProgress {
+                state: RestartState::LastVotedForkSlots.into(),
+                my_last_voted_fork_slots: None,
+                last_voted_fork_slots_aggregate: None,
+            },
+        );
+        assert_matches!(
+            initialize(
+                &test_state.wen_restart_proto_path,
+                VoteTransaction::from(Vote::new(last_voted_fork_slots.clone(), last_vote_bankhash)),
+                test_state.blockstore.clone()
+            ),
+            Err(WenRestartError::MalformedLastVotedForkSlotsProtobuf(None))
+        );
+        let _ = write_wen_restart_records(
+            &test_state.wen_restart_proto_path,
+            &WenRestartProgress {
+                state: RestartState::WaitingForSupermajority.into(),
+                my_last_voted_fork_slots: None,
+                last_voted_fork_slots_aggregate: None,
+            },
+        );
+        assert_matches!(
+            initialize(
+                &test_state.wen_restart_proto_path,
+                VoteTransaction::from(Vote::new(last_voted_fork_slots, last_vote_bankhash)),
+                test_state.blockstore.clone()
+            ),
+            Err(WenRestartError::UnexpectedState(
+                RestartState::WaitingForSupermajority
+            ))
+        );
+    }
+
+    #[test]
     fn test_wen_restart_send_last_voted_fork_failures() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let test_state = wen_restart_test_init(&ledger_path);
-        let mut progress = wen_restart_proto::WenRestartProgress {
+        let progress = wen_restart_proto::WenRestartProgress {
             state: RestartState::Init.into(),
             my_last_voted_fork_slots: None,
             last_voted_fork_slots_aggregate: None,
@@ -653,22 +788,13 @@ mod tests {
         let original_progress = progress.clone();
         assert_matches!(
             send_restart_last_voted_fork_slots(
-                VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)])),
-                test_state.blockstore.clone(),
                 test_state.cluster_info.clone(),
-                &mut progress
+                &[],
+                Hash::new_unique(),
             ),
-            Err(WenRestartError::InvalidLastVoteType(_))
-        );
-        assert_eq!(progress, original_progress);
-        assert_matches!(
-            send_restart_last_voted_fork_slots(
-                VoteTransaction::from(Vote::new(vec![], Hash::new_unique())),
-                test_state.blockstore.clone(),
-                test_state.cluster_info.clone(),
-                &mut progress
-            ),
-            Err(WenRestartError::MissingLastVotedForkSlots)
+            Err(WenRestartError::RestartLastVotedForkSlotsError(
+                RestartLastVotedForkSlotsError::LastVotedForkEmpty
+            ))
         );
         assert_eq!(progress, original_progress);
         let last_vote_bankhash = Hash::new_unique();
@@ -776,6 +902,7 @@ mod tests {
             let exit = Arc::new(AtomicBool::new(false));
             let exit_clone = exit.clone();
             let mut progress_clone = progress.clone();
+            let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
             let wen_restart_thread_handle = Builder::new()
                 .name("solana-wen-restart".to_string())
                 .spawn(move || {
@@ -784,6 +911,7 @@ mod tests {
                             &wen_restart_proto_path_clone,
                             80,
                             cluster_info_clone,
+                            &last_voted_fork_slots,
                             bank_forks_clone,
                             Arc::new(RwLock::new(Vec::new())),
                             exit_clone,
@@ -858,26 +986,58 @@ mod tests {
 
     #[test]
     fn test_increment_and_write_wen_restart_records() {
+        solana_logger::setup();
         let my_dir = TempDir::new().unwrap();
         let mut wen_restart_proto_path = my_dir.path().to_path_buf();
         wen_restart_proto_path.push("wen_restart_status.proto");
-        let mut progress = initialize(&wen_restart_proto_path).unwrap();
-        assert_eq!(progress.state(), RestartState::Init);
-        for expected_state in [
-            RestartState::LastVotedForkSlots,
-            RestartState::HeaviestFork,
-            RestartState::Done,
+        let last_vote_bankhash = Hash::new_unique();
+        let mut state = WenRestartProgressInternalState::Init {
+            last_voted_fork_slots: vec![0, 1],
+            last_vote_bankhash,
+        };
+        let my_last_voted_fork_slots = Some(LastVotedForkSlotsRecord {
+            last_voted_fork_slots: vec![0, 1],
+            last_vote_bankhash: last_vote_bankhash.to_string(),
+            shred_version: 0,
+            wallclock: 0,
+        });
+        let mut progress = WenRestartProgress {
+            state: RestartState::Init.into(),
+            my_last_voted_fork_slots: my_last_voted_fork_slots.clone(),
+            last_voted_fork_slots_aggregate: None,
+        };
+        for (expected_state, expected_progress) in [
+            (
+                WenRestartProgressInternalState::LastVotedForkSlots {
+                    last_voted_fork_slots: vec![0, 1],
+                },
+                WenRestartProgress {
+                    state: RestartState::LastVotedForkSlots.into(),
+                    my_last_voted_fork_slots: my_last_voted_fork_slots.clone(),
+                    last_voted_fork_slots_aggregate: None,
+                },
+            ),
+            (
+                WenRestartProgressInternalState::Done,
+                WenRestartProgress {
+                    state: RestartState::Done.into(),
+                    my_last_voted_fork_slots,
+                    last_voted_fork_slots_aggregate: None,
+                },
+            ),
         ] {
-            assert!(increment_and_write_wen_restart_records(
+            state = increment_and_write_wen_restart_records(
                 &wen_restart_proto_path,
-                &mut progress
+                state,
+                &mut progress,
             )
-            .is_ok());
-            assert_eq!(progress.state(), expected_state);
+            .unwrap();
+            assert_eq!(&state, &expected_state);
+            assert_eq!(&progress, &expected_progress);
         }
         assert_matches!(
-            increment_and_write_wen_restart_records(&wen_restart_proto_path, &mut progress),
-            Err(WenRestartError::UnexpectedState(_))
+            increment_and_write_wen_restart_records(&wen_restart_proto_path, state, &mut progress),
+            Err(WenRestartError::UnexpectedState(RestartState::Done))
         );
     }
 }
