@@ -7430,6 +7430,11 @@ impl AccountsDb {
         self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
+    /// Get all accounts hashes
+    pub fn get_accounts_hashes(&self) -> HashMap<Slot, (AccountsHash, /*capitalization*/ u64)> {
+        self.accounts_hashes.lock().unwrap().clone()
+    }
+
     /// Set the incremental accounts hash for `slot`
     ///
     /// returns the previous incremental accounts hash for `slot`
@@ -7464,6 +7469,13 @@ impl AccountsDb {
             .unwrap()
             .get(&slot)
             .cloned()
+    }
+
+    /// Get all incremental accounts hashes
+    pub fn get_incremental_accounts_hashes(
+        &self,
+    ) -> HashMap<Slot, (IncrementalAccountsHash, /*capitalization*/ u64)> {
+        self.incremental_accounts_hashes.lock().unwrap().clone()
     }
 
     /// Purge accounts hashes that are older than `last_full_snapshot_slot`
