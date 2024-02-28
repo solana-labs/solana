@@ -68,20 +68,15 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-    let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
-    println!("rpc_pubsub_url: {}", rpc_pubsub_url);
-
-    let rpc_endpoint = format!("http://{}", cluster.entry_point_info.rpc().unwrap());
-    println!("rpc endpoint: {}", rpc_endpoint);
-
-
     let ConnectionCache::Quic(cache) = &*cluster.connection_cache else {
         panic!("Expected a Quic cache, found something else.");
     };
 
+    let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
+    
     let client = match TpuClient::new_with_connection_cache(
         Arc::new(RpcClient::new(
-            rpc_endpoint,
+            format!("http://{}", cluster.entry_point_info.rpc().unwrap()),
         )),
         rpc_pubsub_url.as_str(),
         TpuClientConfig::default(),

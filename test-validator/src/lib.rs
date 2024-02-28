@@ -897,7 +897,6 @@ impl TestValidator {
         let vote_account_address = validator_vote_account.pubkey();
         let rpc_url = format!("http://{}", node.info.rpc().unwrap());
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
-        println!("greg: {}", rpc_pubsub_url);
         let tpu = node.info.tpu(Protocol::UDP).unwrap();
         let gossip = node.info.gossip().unwrap();
 
