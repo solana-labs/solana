@@ -297,11 +297,26 @@ impl AccountsHashVerifier {
                 else {
                     panic!("Calculating incremental accounts hash requires a base slot");
                 };
-                let (base_accounts_hash, base_capitalization) = accounts_package
-                    .accounts
-                    .accounts_db
-                    .get_accounts_hash(base_slot)
-                    .expect("incremental snapshot requires accounts hash and capitalization from the full snapshot it is based on");
+                let accounts_db = &accounts_package.accounts.accounts_db;
+                let Some((base_accounts_hash, base_capitalization)) =
+                    accounts_db.get_accounts_hash(base_slot)
+                else {
+                    panic!(
+                        "incremental snapshot requires accounts hash and capitalization \
+                         from the full snapshot it is based on \n\
+                         package: {accounts_package:?} \n\
+                         accounts hashes: {:?} \n\
+                         incremental accounts hashes: {:?} \n\
+                         full snapshot archives: {:?} \n\
+                         bank snapshots: {:?}",
+                        accounts_db.get_accounts_hashes(),
+                        accounts_db.get_incremental_accounts_hashes(),
+                        snapshot_utils::get_full_snapshot_archives(
+                            &snapshot_config.full_snapshot_archives_dir,
+                        ),
+                        snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir),
+                    );
+                };
                 let (incremental_accounts_hash, incremental_capitalization) =
                     Self::_calculate_incremental_accounts_hash(accounts_package, base_slot);
                 let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
