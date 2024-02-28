@@ -118,7 +118,7 @@ Operate a configured testnet
                                       - Enable UDP for tpu transactions
 
    --client-type
-                                      - Specify backend client type for bench-tps. Valid options are (thin-client|rpc-client|tpu-client), tpu-client is default
+                                      - Specify backend client type for bench-tps. Valid options are (rpc-client|tpu-client), tpu-client is default
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -972,7 +972,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --client-type ]]; then
       clientType=$2
       case "$clientType" in
-        thin-client|tpu-client|rpc-client)
+        tpu-client|rpc-client)
           ;;
         *)
           echo "Unexpected client type: \"$clientType\""

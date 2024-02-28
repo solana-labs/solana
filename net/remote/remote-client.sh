@@ -43,19 +43,12 @@ skip)
   exit 1
 esac
 
-THIN_CLIENT=false
 RPC_CLIENT=false
 case "$clientType" in
-  thin-client)
-    THIN_CLIENT=true
-    RPC_CLIENT=false
-    ;;
   tpu-client)
-    THIN_CLIENT=false
     RPC_CLIENT=false
     ;;
   rpc-client)
-    THIN_CLIENT=false
     RPC_CLIENT=true
     ;;
   *)
@@ -74,10 +67,7 @@ solana-bench-tps)
 
   args=()
 
-  if ${THIN_CLIENT}; then
-    args+=(--entrypoint "$entrypointIp:8001")
-    args+=(--use-thin-client)
-  elif ${RPC_CLIENT}; then
+  if ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
   fi
 
