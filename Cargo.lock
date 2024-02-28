@@ -6652,6 +6652,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana_rbpf",
+ "test-case",
  "thiserror",
 ]
 
