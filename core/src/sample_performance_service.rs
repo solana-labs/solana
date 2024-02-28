@@ -38,22 +38,18 @@ impl SamplePerformanceService {
         Self { thread_hdl }
     }
 
-    pub fn run(
-        bank_forks: Arc<RwLock<BankForks>>,
-        blockstore: Arc<Blockstore>,
-        exit: Arc<AtomicBool>,
-    ) {
+    fn run(bank_forks: Arc<RwLock<BankForks>>, blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) {
         let mut snapshot = StatsSnapshot::from_forks(&bank_forks);
 
-        let mut now = Instant::now();
+        let mut last_sample_time = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
-            let elapsed = now.elapsed();
+            let elapsed = last_sample_time.elapsed();
             if elapsed >= SAMPLE_INTERVAL {
-                now = Instant::now();
+                last_sample_time = Instant::now();
                 let new_snapshot = StatsSnapshot::from_forks(&bank_forks);
 
                 let (num_transactions, num_non_vote_transactions, num_slots) =
