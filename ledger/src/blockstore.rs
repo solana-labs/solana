@@ -1164,9 +1164,9 @@ impl Blockstore {
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
         // Purge the slot and insert an empty `SlotMeta` with only the `next_slots` field preserved.
-        // Shreds inherently contain the slot of their parent which updates the parent's `next_slots`
-        // when the child is inserted through `Blockstore::handle_chaining()`.
-        // However we are only purging and repairing the parent slot here. Since the child will not be
+        // Shreds inherently know their parent slot, and a parent's SlotMeta `next_slots` list
+        // will be updated when the child is inserted (see `Blockstore::handle_chaining()`).
+        // However, we are only purging and repairing the parent slot here. Since the child will not be
         // reinserted the chaining will be lost. In order for bank forks discovery to ingest the child,
         // we must retain the chain by preserving `next_slots`.
         match self.purge_slot_cleanup_chaining(slot) {

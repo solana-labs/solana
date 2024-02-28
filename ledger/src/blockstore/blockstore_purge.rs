@@ -147,7 +147,7 @@ impl Blockstore {
 
     /// Purges all columns relating to `slot`.
     ///
-    /// Additionally we cleanup the parent of `slot`, by clearing `slot` from
+    /// Additionally, we cleanup the parent of `slot` by clearing `slot` from
     /// the parent's `next_slots`. We reinsert an orphaned `slot_meta` for `slot`
     /// that preserves `slot`'s `next_slots`. This ensures that `slot`'s fork is
     /// replayable upon repair of `slot`.
@@ -177,7 +177,7 @@ impl Blockstore {
             }
         }
 
-        // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots` field.
+        // Retain a SlotMeta for `slot` with the `next_slots` field retained
         slot_meta.clear_unconfirmed_slot();
         write_batch.put::<cf::SlotMeta>(slot, &slot_meta)?;
 
