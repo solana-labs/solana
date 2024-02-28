@@ -1110,17 +1110,17 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         F: FnMut(&Pubkey, (&T, Slot)),
     {
         for pubkey in index.get(index_key) {
-            // Maybe these reads from the AccountsIndex can be batched every time it
-            // grabs the read lock as well...
-            if let AccountIndexGetResult::Found(list_r, index) =
-                self.get(&pubkey, Some(ancestors), max_root)
-            {
-                let entry = &list_r.slot_list()[index];
-                func(&pubkey, (&entry.1, entry.0));
-            }
             if config.is_aborted() {
                 break;
             }
+            if let Some(entry) = self.get_cloned(&pubkey) {
+                self.get_account_info_with_and_then(
+                    &entry,
+                    Some(ancestors),
+                    max_root,
+                    |(slot, account_info)| func(&pubkey, (&account_info, slot)),
+                );
+            };
         }
     }
 
