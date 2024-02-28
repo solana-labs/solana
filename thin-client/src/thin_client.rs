@@ -111,7 +111,7 @@ impl ClientOptimizer {
 }
 
 /// An object for querying and sending transactions to the network.
-#[deprecated(since = "1.18.4", note = "Use [RpcClient] or [TpuClient] instead.")]
+#[deprecated(since = "2.0.0", note = "Use [RpcClient] or [TpuClient] instead.")]
 pub struct ThinClient<
     P, // ConnectionPool
     M, // ConnectionManager
