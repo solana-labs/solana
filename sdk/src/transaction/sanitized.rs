@@ -271,6 +271,20 @@ impl SanitizedTransaction {
             Ok(())
         }
     }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn new_for_tests(
+        message: SanitizedMessage,
+        signatures: Vec<Signature>,
+        is_simple_vote_tx: bool,
+    ) -> SanitizedTransaction {
+        SanitizedTransaction {
+            message,
+            message_hash: Hash::new_unique(),
+            signatures,
+            is_simple_vote_tx,
+        }
+    }
 }
 
 #[cfg(test)]
