@@ -41,11 +41,10 @@ use {
             ZeroLamportAccounts,
         },
         accounts_index::{
-            AccountIndexGetResult, AccountMapEntry, AccountSecondaryIndexes, AccountsIndex,
-            AccountsIndexConfig, AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue,
-            IndexKey, IndexValue, IsCached, RefCount, ScanConfig, ScanResult, SlotList,
-            UpsertReclaim, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
-            ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+            AccountMapEntry, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
+            AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue, IndexKey, IndexValue,
+            IsCached, RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
+            ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
         accounts_partition::RentPayingAccountsByPartition,
@@ -6864,28 +6863,20 @@ impl AccountsDb {
                     let result: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
-                            if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, config.ancestors, Some(max_slot))
-                            {
-                                let (slot, account_info) = &lock.slot_list()[index];
-                                if !account_info.is_zero_lamport() {
-                                    // Because we're keeping the `lock' here, there is no need
-                                    // to use retry_to_get_account_accessor()
-                                    // In other words, flusher/shrinker/cleaner is blocked to
-                                    // cause any Accessor(None) situation.
-                                    // Anyway this race condition concern is currently a moot
-                                    // point because calculate_accounts_hash() should not
-                                    // currently race with clean/shrink because the full hash
-                                    // is synchronous with clean/shrink in
-                                    // AccountsBackgroundService
+                            let index_entry = self.accounts_index.get_cloned(pubkey)?;
+                            self.accounts_index.get_account_info_with_and_then(
+                                &index_entry,
+                                config.ancestors,
+                                Some(max_slot),
+                                |(slot, account_info)| {
+                                    if account_info.is_zero_lamport() { return None; }
                                     self.get_account_accessor(
-                                        *slot,
+                                        slot,
                                         pubkey,
                                         &account_info.storage_location(),
                                     )
                                     .get_loaded_account()
-                                    .and_then(
-                                        |loaded_account| {
+                                    .and_then(|loaded_account| {
                                             let mut loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             let hash_is_missing = loaded_hash == AccountHash(Hash::default());
@@ -6905,14 +6896,10 @@ impl AccountsDb {
 
                                             sum += balance as u128;
                                             Some(loaded_hash.0)
-                                        },
-                                    )
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
+                                    })
+                                },
+                            )
+                            .flatten()
                         })
                         .collect();
                     let mut total = total_lamports.lock().unwrap();

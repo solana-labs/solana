@@ -1155,7 +1155,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
 
     /// Gets the account info (and slot) in `entry`, with `ancestors` and `max_root`,
     /// and applies `callback` to it
-    fn get_account_info_with_and_then<R>(
+    pub(crate) fn get_account_info_with_and_then<R>(
         &self,
         entry: &AccountMapEntryInner<T>,
         ancestors: Option<&Ancestors>,
