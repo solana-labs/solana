@@ -300,7 +300,7 @@ pub struct ReplayStageConfig {
 /// Timing information for the ReplayStage main processing loop
 #[derive(Default)]
 struct ReplayLoopTiming {
-    last_print: u64,
+    last_submit: u64,
     loop_count: u64,
     collect_frozen_banks_elapsed: u64,
     compute_bank_stats_elapsed: u64,
@@ -379,8 +379,14 @@ impl ReplayLoopTiming {
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
         self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
+
+        self.maybe_submit();
+    }
+
+    fn maybe_submit(&mut self) {
         let now = timestamp();
-        let elapsed_ms = now - self.last_print;
+        let elapsed_ms = now - self.last_submit;
+
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "replay-loop-voting-stats",
@@ -510,7 +516,7 @@ impl ReplayLoopTiming {
                 ),
             );
             *self = ReplayLoopTiming::default();
-            self.last_print = now;
+            self.last_submit = now;
         }
     }
 }
