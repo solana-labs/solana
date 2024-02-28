@@ -384,8 +384,8 @@ enum PageUsage {
 }
 const_assert_eq!(mem::size_of::<PageUsage>(), 8);
 
-impl PageUsage {
-    fn from_requested_usage(requested_usage: RequestedUsage) -> Self {
+impl From<RequestedUsage> for PageUsage {
+    fn from(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
             RequestedUsage::Readonly => PageUsage::Readonly(ShortCounter::one()),
             RequestedUsage::Writable => PageUsage::Writable,
@@ -561,7 +561,7 @@ impl SchedulingStateMachine {
 
     fn try_lock_page(page: &PageInner, requested_usage: RequestedUsage) -> LockResult {
         match page.usage {
-            PageUsage::Unused => LockResult::Ok(PageUsage::from_requested_usage(requested_usage)),
+            PageUsage::Unused => LockResult::Ok(PageUsage::from(requested_usage)),
             PageUsage::Readonly(count) => match requested_usage {
                 RequestedUsage::Readonly => LockResult::Ok(PageUsage::Readonly(count.increment())),
                 RequestedUsage::Writable => LockResult::Err(()),
