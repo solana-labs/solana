@@ -1,3 +1,4 @@
+pub(crate) mod in_mem_accounts_index;
 use {
     crate::{
         accounts_index_storage::{AccountsIndexStorage, Startup},
@@ -5,13 +6,13 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, AtomicAge, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
         rolling_bit_field::RollingBitField,
         secondary_index::*,
     },
+    in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults, StartupStats},
     log::*,
     rand::{thread_rng, Rng},
     rayon::{
