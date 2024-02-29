@@ -2,7 +2,6 @@ use {
     bincode::{deserialize, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     futures::{future, prelude::stream::StreamExt},
-    solana_accounts_db::transaction_results::TransactionExecutionResult,
     solana_banks_interface::{
         Banks, BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
         BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
@@ -30,8 +29,8 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_svm::transaction_results::TransactionExecutionResult,
     std::{
-        convert::TryFrom,
         io,
         net::{Ipv4Addr, SocketAddr},
         sync::{atomic::AtomicBool, Arc, RwLock},
@@ -418,7 +417,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> Option<u64> {
         let bank = self.bank(commitment);
-        let sanitized_message = SanitizedMessage::try_from(message).ok()?;
+        let sanitized_message = SanitizedMessage::try_from_legacy_message(message).ok()?;
         bank.get_fee_for_message(&sanitized_message)
     }
 }

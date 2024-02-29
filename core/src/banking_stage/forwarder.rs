@@ -100,7 +100,7 @@ impl Forwarder {
                 slot_metrics_tracker.increment_forwardable_batches_count(1);
 
                 let batched_forwardable_packets_count = forward_batch.len();
-                let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
+                let (_forward_result, successful_forwarded_packets_count, leader_pubkey) = self
                     .forward_buffered_packets(
                         &forward_option,
                         forward_batch.get_forwardable_packets(),
@@ -114,7 +114,7 @@ impl Forwarder {
                     );
                 }
                 let failed_forwarded_packets_count = batched_forwardable_packets_count
-                    .saturating_sub(sucessful_forwarded_packets_count);
+                    .saturating_sub(successful_forwarded_packets_count);
 
                 if failed_forwarded_packets_count > 0 {
                     slot_metrics_tracker.increment_failed_forwarded_packets_count(
@@ -123,9 +123,9 @@ impl Forwarder {
                     slot_metrics_tracker.increment_packet_batch_forward_failure_count(1);
                 }
 
-                if sucessful_forwarded_packets_count > 0 {
+                if successful_forwarded_packets_count > 0 {
                     slot_metrics_tracker.increment_successful_forwarded_packets_count(
-                        sucessful_forwarded_packets_count as u64,
+                        successful_forwarded_packets_count as u64,
                     );
                 }
             });

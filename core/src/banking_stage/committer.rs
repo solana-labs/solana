@@ -1,10 +1,6 @@
 use {
     super::leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
     itertools::Itertools,
-    solana_accounts_db::{
-        accounts::TransactionLoadResult,
-        transaction_results::{TransactionExecutionResult, TransactionResults},
-    },
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
@@ -16,6 +12,10 @@ use {
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
+    solana_svm::{
+        account_loader::TransactionLoadResult,
+        transaction_results::{TransactionExecutionResult, TransactionResults},
+    },
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },

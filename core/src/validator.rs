@@ -267,6 +267,7 @@ pub struct ValidatorConfig {
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
     pub wen_restart_proto_path: Option<PathBuf>,
+    pub unified_scheduler_handler_threads: Option<usize>,
 }
 
 impl Default for ValidatorConfig {
@@ -334,6 +335,7 @@ impl Default for ValidatorConfig {
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
             wen_restart_proto_path: None,
+            unified_scheduler_handler_threads: None,
         }
     }
 }
@@ -818,9 +820,16 @@ impl Validator {
         match &config.block_verification_method {
             BlockVerificationMethod::BlockstoreProcessor => {
                 info!("no scheduler pool is installed for block verification...");
+                if let Some(count) = config.unified_scheduler_handler_threads {
+                    warn!(
+                        "--unified-scheduler-handler-threads={count} is ignored because unified \
+                         scheduler isn't enabled"
+                    );
+                }
             }
             BlockVerificationMethod::UnifiedScheduler => {
                 let scheduler_pool = DefaultSchedulerPool::new_dyn(
+                    config.unified_scheduler_handler_threads,
                     config.runtime_config.log_messages_bytes_limit,
                     transaction_status_sender.clone(),
                     Some(replay_vote_sender.clone()),
@@ -1381,6 +1390,8 @@ impl Validator {
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
             ("cluster_type", genesis_config.cluster_type as u32, i64),
+            ("waited_for_supermajority", waited_for_supermajority, bool),
+            ("expected_shred_version", config.expected_shred_version, Option<i64>),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
@@ -2112,12 +2123,13 @@ fn maybe_warp_slot(
     Ok(())
 }
 
-/// Searches the blockstore for data shreds with the incorrect shred version.
-fn blockstore_contains_bad_shred_version(
+/// Searches the blockstore for data shreds with a shred version that differs
+/// from the passed `expected_shred_version`
+fn blockstore_contains_incorrect_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
     expected_shred_version: u16,
-) -> Result<bool, BlockstoreError> {
+) -> Result<Option<u16>, BlockstoreError> {
     const TIMEOUT: Duration = Duration::from_secs(60);
     let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
@@ -2128,7 +2140,7 @@ fn blockstore_contains_bad_shred_version(
         let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
         for shred in &shreds {
             if shred.version() != expected_shred_version {
-                return Ok(true);
+                return Ok(Some(shred.version()));
             }
         }
         if timer.elapsed() > TIMEOUT {
@@ -2136,7 +2148,7 @@ fn blockstore_contains_bad_shred_version(
             break;
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
 /// If the blockstore contains any shreds with the incorrect shred version,
@@ -2149,10 +2161,13 @@ fn backup_and_clear_blockstore(
 ) -> Result<(), BlockstoreError> {
     let blockstore =
         Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))?;
-    let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version)?;
+    let incorrect_shred_version = blockstore_contains_incorrect_shred_version(
+        &blockstore,
+        start_slot,
+        expected_shred_version,
+    )?;
 
-    if do_copy_and_clear {
+    if let Some(incorrect_shred_version) = incorrect_shred_version {
         // .unwrap() safe because getting to this point implies blockstore has slots/shreds
         let end_slot = blockstore.highest_slot()?.unwrap();
 
@@ -2164,7 +2179,7 @@ fn backup_and_clear_blockstore(
                 .ledger_column_options
                 .shred_storage_type
                 .blockstore_directory(),
-            expected_shred_version,
+            incorrect_shred_version,
             start_slot,
             end_slot
         );

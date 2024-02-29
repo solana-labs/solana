@@ -71,7 +71,7 @@ use {
     },
     serde::Serialize,
     solana_accounts_db::{
-        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot, TransactionLoadResult},
+        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
@@ -89,9 +89,6 @@ use {
         sorted_storages::SortedStorages,
         stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
@@ -120,7 +117,10 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
-        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{
+            self, include_loaded_accounts_data_size_in_fee_calculation,
+            remove_rounding_in_fee_calculation, FeatureSet,
+        },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -160,12 +160,15 @@ use {
         self, InflationPointCalculationEvent, PointValue, StakeStateV2,
     },
     solana_svm::{
-        account_loader::TransactionCheckResult,
+        account_loader::{TransactionCheckResult, TransactionLoadResult},
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
             TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+        },
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -1360,10 +1363,17 @@ impl Bank {
                 if let Some((key, program_to_recompile)) =
                     loaded_programs_cache.programs_to_recompile.pop()
                 {
+                    let effective_epoch = loaded_programs_cache.latest_root_epoch.saturating_add(1);
                     drop(loaded_programs_cache);
-                    let recompiled = new.load_program(&key, false, Some(program_to_recompile));
+                    let recompiled = new.load_program(&key, false, effective_epoch);
+                    recompiled
+                        .tx_usage_counter
+                        .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
+                    recompiled
+                        .ix_usage_counter
+                        .fetch_add(program_to_recompile.ix_usage_counter.load(Relaxed), Relaxed);
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                    loaded_programs_cache.replenish(key, recompiled);
+                    loaded_programs_cache.assign_program(key, recompiled);
                 }
             } else if new.epoch() != loaded_programs_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -4016,6 +4026,8 @@ impl Bank {
                 .into(),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            self.feature_set
+                .is_active(&remove_rounding_in_fee_calculation::id()),
         )
     }
 
@@ -4287,6 +4299,7 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
+            true,
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4525,14 +4538,7 @@ impl Bank {
         balances
     }
 
-    pub fn clear_program_cache(&self) {
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .unload_all_programs();
-    }
-
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
@@ -4543,6 +4549,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
+        limit_to_load_programs: bool,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4609,6 +4616,7 @@ impl Bank {
                 account_overrides,
                 self.builtin_programs.iter(),
                 log_messages_bytes_limit,
+                limit_to_load_programs,
             );
 
         let mut signature_count = 0;
@@ -5658,6 +5666,7 @@ impl Bank {
             timings,
             None,
             log_messages_bytes_limit,
+            false,
         );
 
         let (last_blockhash, lamports_per_signature) =
@@ -7056,7 +7065,7 @@ impl Bank {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .replenish(program_id, Arc::new(builtin));
+            .assign_program(program_id, Arc::new(builtin));
         debug!("Added program {} under {:?}", name, program_id);
     }
 
@@ -7487,10 +7496,10 @@ impl Bank {
         &self,
         pubkey: &Pubkey,
         reload: bool,
-        recompile: Option<Arc<LoadedProgram>>,
+        effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
         self.transaction_processor
-            .load_program(self, pubkey, reload, recompile)
+            .load_program(self, pubkey, reload, effective_epoch)
     }
 }
 

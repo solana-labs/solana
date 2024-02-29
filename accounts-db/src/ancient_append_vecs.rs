@@ -1506,11 +1506,9 @@ pub mod tests {
                             if two_refs {
                                 original_results.iter().for_each(|results| {
                                     results.stored_accounts.iter().for_each(|account| {
-                                        let entry = db
-                                            .accounts_index
-                                            .get_account_read_entry(account.pubkey())
-                                            .unwrap();
-                                        entry.addref();
+                                        db.accounts_index.get_and_then(account.pubkey(), |entry| {
+                                            (false, entry.unwrap().addref())
+                                        });
                                     })
                                 });
                             }
@@ -1854,11 +1852,8 @@ pub mod tests {
             );
             original_results.iter().for_each(|results| {
                 results.stored_accounts.iter().for_each(|account| {
-                    let entry = db
-                        .accounts_index
-                        .get_account_read_entry(account.pubkey())
-                        .unwrap();
-                    entry.addref();
+                    db.accounts_index
+                        .get_and_then(account.pubkey(), |entry| (true, entry.unwrap().addref()));
                 })
             });
 

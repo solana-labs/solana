@@ -488,13 +488,32 @@ fn test_cli_program_deploy_with_authority() {
         program_data[..]
     );
 
-    // Set a new authority
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+    // Set a new authority sign offline first
     let new_upgrade_authority = Keypair::new();
-    config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
+    config.signers = vec![&keypair, &upgrade_authority, &new_upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
         program_pubkey,
-        upgrade_authority_index: Some(1),
-        new_upgrade_authority: Some(new_upgrade_authority.pubkey()),
+        upgrade_authority_index: 1,
+        new_upgrade_authority_index: 2,
+        sign_only: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    let sig_response = process_command(&config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_pre_signer = sign_only
+        .presigner_of(&new_upgrade_authority.pubkey())
+        .unwrap();
+
+    config.signers = vec![&keypair, &upgrade_authority, &offline_pre_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+        program_pubkey,
+        upgrade_authority_index: 1,
+        new_upgrade_authority_index: 2,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), false, None),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -577,6 +596,9 @@ fn test_cli_program_deploy_with_authority() {
         program_pubkey,
         upgrade_authority_index: Some(1),
         new_upgrade_authority: None,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();

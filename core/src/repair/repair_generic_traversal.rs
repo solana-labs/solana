@@ -270,7 +270,7 @@ pub mod test {
             &mut processed_slots,
             1,
         );
-        assert_eq!(repairs, [ShredRepairType::Shred(1, 3)]);
+        assert_eq!(repairs, [ShredRepairType::Shred(1, 4)]);
     }
 
     fn add_tree_with_missing_shreds(

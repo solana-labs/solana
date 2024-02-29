@@ -11,6 +11,7 @@ impl BenchTpsClient for RpcClient {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         RpcClient::send_transaction(self, &transaction).map_err(|err| err.into())
     }
+
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
         for transaction in transactions {
             BenchTpsClient::send_transaction(self, transaction)?;

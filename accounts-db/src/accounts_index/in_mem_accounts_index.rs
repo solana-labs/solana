@@ -318,11 +318,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         result
     }
 
-    /// lookup 'pubkey' in index (in mem or on disk)
-    pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
-        self.get_internal(pubkey, |entry| (true, entry.map(Arc::clone)))
-    }
-
     /// set age of 'entry' to the future
     /// if 'is_cached', age will be set farther
     fn set_age_to_future(&self, entry: &AccountMapEntry<T>, is_cached: bool) {
@@ -331,7 +326,40 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
-    pub fn get_internal<RT>(
+    pub(super) fn get_internal_inner<RT>(
+        &self,
+        pubkey: &K,
+        // return true if item should be added to in_mem cache
+        callback: impl for<'a> FnOnce(Option<&AccountMapEntryInner<T>>) -> (bool, RT),
+    ) -> RT {
+        // SAFETY: The entry Arc is not passed to `callback`, so
+        // it cannot live beyond this function call.
+        self.get_internal(pubkey, |entry| callback(entry.map(Arc::as_ref)))
+    }
+
+    /// lookup 'pubkey' in the index (in_mem or disk).
+    /// call 'callback' whether found or not
+    pub(super) fn get_internal_cloned<RT>(
+        &self,
+        pubkey: &K,
+        callback: impl for<'a> FnOnce(Option<AccountMapEntry<T>>) -> RT,
+    ) -> RT {
+        // SAFETY: Since we're passing the entry Arc clone to `callback`, we must
+        // also add the entry to the in-mem cache.
+        self.get_internal(pubkey, |entry| (true, callback(entry.map(Arc::clone))))
+    }
+
+    /// lookup 'pubkey' in index (in_mem or disk).
+    /// call 'callback' whether found or not
+    ///
+    /// # Safety
+    ///
+    /// If the item is on-disk (and not in-mem), add if the item is/could be made dirty
+    /// *after* `callback` finishes (e.g. the entry Arc is cloned and saved by the caller),
+    /// then the disk entry *must* also be added to the in-mem cache.
+    ///
+    /// Prefer `get_internal_inner()` or `get_internal_cloned()` for safe alternatives.
+    pub(super) fn get_internal<RT>(
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache
@@ -446,7 +474,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         pubkey: &Pubkey,
         user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
-        self.get_internal(pubkey, |entry| {
+        self.get_internal_inner(pubkey, |entry| {
             (
                 true,
                 entry.map(|entry| {

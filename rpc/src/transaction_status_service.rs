@@ -2,11 +2,11 @@ use {
     crate::transaction_notifier_interface::TransactionNotifierArc,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
-    solana_accounts_db::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
+    solana_svm::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
         extract_and_fmt_memos, map_inner_instructions, Reward, TransactionStatusMeta,
     },

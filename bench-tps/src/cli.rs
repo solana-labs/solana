@@ -1,11 +1,12 @@
 use {
-    clap::{crate_description, crate_name, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
@@ -33,7 +34,7 @@ pub enum ExternalClientType {
 
 impl Default for ExternalClientType {
     fn default() -> Self {
-        Self::ThinClient
+        Self::TpuClient
     }
 }
 
@@ -80,6 +81,7 @@ pub struct Config {
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
+    pub commitment_config: CommitmentConfig,
 }
 
 impl Eq for Config {}
@@ -115,6 +117,7 @@ impl Default for Config {
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
+            commitment_config: CommitmentConfig::confirmed(),
         }
     }
 }
@@ -164,19 +167,19 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("rpc-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .conflicts_with("tpu_client")
                 .conflicts_with("rpc_client")
                 .requires("tpu_addr")
+                .requires("thin_client")
                 .help("Specify custom rpc_addr to create thin_client"),
         )
         .arg(
             Arg::with_name("tpu_addr")
                 .long("tpu-addr")
                 .value_name("HOST:PORT")
-                .conflicts_with("tpu_client")
                 .conflicts_with("rpc_client")
                 .takes_value(true)
                 .requires("rpc_addr")
+                .requires("thin_client")
                 .help("Specify custom tpu_addr to create thin_client"),
         )
         .arg(
@@ -313,6 +316,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         .arg(
             Arg::with_name("rpc_client")
                 .long("use-rpc-client")
+                .conflicts_with("thin_client")
                 .conflicts_with("tpu_client")
                 .takes_value(false)
                 .help("Submit transactions with a RpcClient")
@@ -321,22 +325,33 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("tpu_client")
                 .long("use-tpu-client")
                 .conflicts_with("rpc_client")
+                .conflicts_with("thin_client")
                 .takes_value(false)
                 .help("Submit transactions with a TpuClient")
+        )
+        .arg(
+            Arg::with_name("thin_client")
+                .long("use-thin-client")
+                .conflicts_with("rpc_client")
+                .conflicts_with("tpu_client")
+                .takes_value(false)
+                .hidden(hidden_unless_forced())
+                .help("Submit transactions with a ThinClient. Note: usage is discouraged. \
+                    ThinClient will be deprecated.")
         )
         .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Do not submit transactions via QUIC; only affects ThinClient (default) \
-                    or TpuClient sends"),
+                .help("Do not submit transactions via QUIC; only affects ThinClient \
+                    or TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("tpu_connection_pool_size")
                 .long("tpu-connection-pool-size")
                 .takes_value(true)
-                .help("Controls the connection pool size per remote address; only affects ThinClient (default) \
-                    or TpuClient sends"),
+                .help("Controls the connection pool size per remote address; only affects ThinClient  \
+                    or TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("compute_unit_price")
@@ -396,6 +411,14 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
+        .arg(
+            Arg::with_name("commitment_config")
+                .long("commitment-config")
+                .takes_value(true)
+                .possible_values(&["processed", "confirmed", "finalized"])
+                .default_value("confirmed")
+                .help("Block commitment config for getting latest blockhash"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -431,10 +454,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         return Err("could not parse identity path");
     }
 
-    if matches.is_present("tpu_client") {
-        args.external_client_type = ExternalClientType::TpuClient;
-    } else if matches.is_present("rpc_client") {
+    if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
+    } else if matches.is_present("thin_client") {
+        args.external_client_type = ExternalClientType::ThinClient;
     }
 
     if matches.is_present("tpu_disable_quic") {
@@ -577,6 +600,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.client_node_id = Some(client_node_id);
     }
 
+    args.commitment_config = value_t_or_exit!(matches, "commitment_config", CommitmentConfig);
+
     Ok(args)
 }
 
@@ -666,7 +691,7 @@ mod tests {
             }
         );
 
-        // select different client type
+        // select different client type and CommitmentConfig
         let keypair = read_keypair_file(&keypair_file_name).unwrap();
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
@@ -674,7 +699,9 @@ mod tests {
             &keypair_file_name,
             "-u",
             "http://123.4.5.6:8899",
-            "--use-tpu-client",
+            "--use-rpc-client",
+            "--commitment-config",
+            "finalized",
         ]);
         let actual = parse_args(&matches).unwrap();
         assert_eq!(
@@ -683,7 +710,8 @@ mod tests {
                 json_rpc_url: "http://123.4.5.6:8899".to_string(),
                 websocket_url: "ws://123.4.5.6:8900/".to_string(),
                 id: keypair,
-                external_client_type: ExternalClientType::TpuClient,
+                external_client_type: ExternalClientType::RpcClient,
+                commitment_config: CommitmentConfig::finalized(),
                 ..Config::default()
             }
         );

@@ -236,9 +236,6 @@ impl Consumer {
         slot_metrics_tracker.accumulate_process_transactions_summary(&process_transactions_summary);
         slot_metrics_tracker.accumulate_transaction_errors(error_counters);
 
-        let retryable_tx_count = retryable_transaction_indexes.len();
-        inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);
-
         // Filter out the retryable transactions that are too old
         let (filtered_retryable_transaction_indexes, filter_retryable_packets_us) =
             measure_us!(Self::filter_pending_packets_from_pending_txs(
@@ -601,7 +598,8 @@ impl Consumer {
                 transaction_status_sender_enabled,
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
-                self.log_messages_bytes_limit
+                self.log_messages_bytes_limit,
+                true,
             ));
         execute_and_commit_timings.load_execute_us = load_execute_us;
 
@@ -750,6 +748,8 @@ impl Consumer {
             bank.feature_set.is_active(
                 &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
             ),
+            bank.feature_set
+                .is_active(&feature_set::remove_rounding_in_fee_calculation::id()),
         );
         let (mut fee_payer_account, _slot) = bank
             .rc

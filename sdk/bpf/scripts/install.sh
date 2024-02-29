@@ -109,16 +109,16 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-BPF
-version=v1.39
+version=v1.41
 if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
     rm -rf bpf-tools*
     rm -rf xargo
     job="download \
-           https://github.com/solana-labs/bpf-tools/releases/download \
+           https://github.com/anza-xyz/platform-tools/releases/download \
            $version \
-           solana-bpf-tools-${machine}-${arch}.tar.bz2 \
+           platform-tools-${machine}-${arch}.tar.bz2 \
            bpf-tools"
     get $version bpf-tools "$job"
   )
