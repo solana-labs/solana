@@ -685,14 +685,14 @@ impl SchedulingStateMachine {
         //
         // The safe variant has additional account-locking related verifications, which is crucial.
         //
-        // Currently the replaying stage is redundantly calling `get_accont_locks()` when unified
+        // Currently the replaying stage is redundantly calling `get_account_locks()` when unified
         // scheduler is enabled on the given transaction at the blockstore. This will be relaxed
         // for optimization in the future. As for banking stage with unified scheduler, it will
         // need to run .get_account_locks() at least once somewhere in the code path. In the
         // distant future, this function `create_task()` should be adjusted so that both stages do
         // the checks before calling this (say, with some ad-hoc type like
-        // `SanitizedTransactionWithCheckedAccountLocks`) or do the chccks here, resulting in
-        // eliminating the redudant one in the replaying stage and in the handler.
+        // `SanitizedTransactionWithCheckedAccountLocks`) or do the checks here, resulting in
+        // eliminating the redundant one in the replaying stage and in the handler.
         let locks = transaction.get_account_locks_unchecked();
 
         let writable_locks = locks
