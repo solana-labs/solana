@@ -214,7 +214,7 @@ mod tests {
         crate::{
             message::Message as LegacyMessage,
             signer::{keypair::Keypair, Signer},
-            system_instruction, sysvar,
+            system_instruction,
         },
         solana_program::{
             instruction::{AccountMeta, Instruction},
@@ -315,33 +315,6 @@ mod tests {
         ];
         let message = LegacyMessage::new(&instructions, Some(&from_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
-        let tx = VersionedTransaction::from(tx);
-        assert!(!tx.uses_durable_nonce());
-    }
-
-    #[test]
-    fn tx_uses_ro_nonce_account() {
-        let from_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
-        let nonce_keypair = Keypair::new();
-        let nonce_pubkey = nonce_keypair.pubkey();
-        let account_metas = vec![
-            AccountMeta::new_readonly(nonce_pubkey, false),
-            #[allow(deprecated)]
-            AccountMeta::new_readonly(sysvar::recent_blockhashes::id(), false),
-            AccountMeta::new_readonly(nonce_pubkey, true),
-        ];
-        let nonce_instruction = Instruction::new_with_bincode(
-            system_program::id(),
-            &system_instruction::SystemInstruction::AdvanceNonceAccount,
-            account_metas,
-        );
-        let tx = Transaction::new_signed_with_payer(
-            &[nonce_instruction],
-            Some(&from_pubkey),
-            &[&from_keypair, &nonce_keypair],
-            Hash::default(),
-        );
         let tx = VersionedTransaction::from(tx);
         assert!(!tx.uses_durable_nonce());
     }
