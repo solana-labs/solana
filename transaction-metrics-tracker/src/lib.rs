@@ -101,7 +101,7 @@ mod tests {
         // We generate a random one
         let mut rng = rand::thread_rng();
         let random_number: u8 = rng.gen_range(0..=15);
-        sig[61] = ((*TXN_MASK & 0xf as u16) << 4) as u8 | random_number;
+        sig[61] = ((*TXN_MASK & 0xf_u16) << 4) as u8 | random_number;
         sig[62] = (*TXN_MASK >> 4) as u8;
 
         let track = should_track_transaction(&sig);
