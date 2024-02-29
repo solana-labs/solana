@@ -66,6 +66,8 @@ impl std::ops::Add for StakeHistoryEntry {
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl StakeHistory {
+    // deprecated due to naming clash with `Sysvar::get()`
+    #[deprecated(note = "Please use `get_entry` instead")]
     pub fn get(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
         self.binary_search_by(|probe| epoch.cmp(&probe.0))
             .ok()

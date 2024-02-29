@@ -51,7 +51,7 @@ use {
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         stake_account::StakeAccount,
-        stake_history::StakeHistory,
+        stake_history::{StakeHistory, StakeHistoryGetEntry},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -2438,7 +2438,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes_cache.stakes().history().get(prev_epoch)
+            self.stakes_cache.stakes().history().get_entry(prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -2551,7 +2551,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes_cache.stakes().history().get(prev_epoch)
+            self.stakes_cache.stakes().history().get_entry(prev_epoch)
         {
             stake_history_entry.effective
         } else {

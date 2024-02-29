@@ -1,10 +1,8 @@
 //! This module implements clone-on-write semantics for the SDK's `StakeHistory` to reduce
 //! unnecessary cloning of the underlying vector.
+pub use solana_sdk::stake_history::StakeHistoryGetEntry;
 use {
-    solana_sdk::{
-        clock::Epoch,
-        stake_history::{StakeHistoryEntry, StakeHistoryGetEntry},
-    },
+    solana_sdk::{clock::Epoch, stake_history::StakeHistoryEntry},
     std::{
         ops::{Deref, DerefMut},
         sync::Arc,
