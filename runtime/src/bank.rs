@@ -4299,6 +4299,7 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
+            true,
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4537,7 +4538,7 @@ impl Bank {
         balances
     }
 
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
@@ -4548,6 +4549,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
+        limit_to_load_programs: bool,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4614,6 +4616,7 @@ impl Bank {
                 account_overrides,
                 self.builtin_programs.iter(),
                 log_messages_bytes_limit,
+                limit_to_load_programs,
             );
 
         let mut signature_count = 0;
@@ -5663,6 +5666,7 @@ impl Bank {
             timings,
             None,
             log_messages_bytes_limit,
+            false,
         );
 
         let (last_blockhash, lamports_per_signature) =
