@@ -10,6 +10,7 @@ use {
     },
 };
 
+#[derive(PartialEq, Debug)]
 pub struct TransactionAccountStateInfo {
     rent_state: Option<RentState>, // None: readonly account
 }
@@ -65,5 +66,173 @@ impl TransactionAccountStateInfo {
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use {
+        crate::{
+            account_rent_state::RentState,
+            transaction_account_state_info::TransactionAccountStateInfo,
+        },
+        solana_sdk::{
+            account::AccountSharedData,
+            hash::Hash,
+            instruction::CompiledInstruction,
+            message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
+            rent::Rent,
+            signature::{Keypair, Signer},
+            transaction::TransactionError,
+            transaction_context::TransactionContext,
+        },
+    };
+
+    #[test]
+    fn test_new() {
+        let rent = Rent::default();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let key3 = Keypair::new();
+        let key4 = Keypair::new();
+
+        let message = Message {
+            account_keys: vec![key2.pubkey(), key1.pubkey(), key4.pubkey()],
+            header: MessageHeader::default(),
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![0],
+                    data: vec![],
+                },
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![2],
+                    data: vec![],
+                },
+            ],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+
+        let transaction_accounts = vec![
+            (key1.pubkey(), AccountSharedData::default()),
+            (key2.pubkey(), AccountSharedData::default()),
+            (key3.pubkey(), AccountSharedData::default()),
+        ];
+
+        let context = TransactionContext::new(transaction_accounts, rent.clone(), 20, 20);
+        let result = TransactionAccountStateInfo::new(&rent, &context, &sanitized_message);
+        assert_eq!(
+            result,
+            vec![
+                TransactionAccountStateInfo {
+                    rent_state: Some(RentState::Uninitialized)
+                },
+                TransactionAccountStateInfo { rent_state: None },
+                TransactionAccountStateInfo {
+                    rent_state: Some(RentState::Uninitialized)
+                }
+            ]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "message and transaction context out of sync, fatal")]
+    fn test_new_panic() {
+        let rent = Rent::default();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let key3 = Keypair::new();
+        let key4 = Keypair::new();
+
+        let message = Message {
+            account_keys: vec![key2.pubkey(), key1.pubkey(), key4.pubkey(), key3.pubkey()],
+            header: MessageHeader::default(),
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![0],
+                    data: vec![],
+                },
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![2],
+                    data: vec![],
+                },
+            ],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+
+        let transaction_accounts = vec![
+            (key1.pubkey(), AccountSharedData::default()),
+            (key2.pubkey(), AccountSharedData::default()),
+            (key3.pubkey(), AccountSharedData::default()),
+        ];
+
+        let context = TransactionContext::new(transaction_accounts, rent.clone(), 20, 20);
+        let _result = TransactionAccountStateInfo::new(&rent, &context, &sanitized_message);
+    }
+
+    #[test]
+    fn test_verify_changes() {
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let pre_rent_state = vec![
+            TransactionAccountStateInfo {
+                rent_state: Some(RentState::Uninitialized),
+            },
+            TransactionAccountStateInfo {
+                rent_state: Some(RentState::Uninitialized),
+            },
+        ];
+        let post_rent_state = vec![TransactionAccountStateInfo {
+            rent_state: Some(RentState::Uninitialized),
+        }];
+
+        let transaction_accounts = vec![
+            (key1.pubkey(), AccountSharedData::default()),
+            (key2.pubkey(), AccountSharedData::default()),
+        ];
+
+        let context = TransactionContext::new(transaction_accounts, Rent::default(), 20, 20);
+
+        let result = TransactionAccountStateInfo::verify_changes(
+            &pre_rent_state,
+            &post_rent_state,
+            &context,
+        );
+        assert!(result.is_ok());
+
+        let pre_rent_state = vec![TransactionAccountStateInfo {
+            rent_state: Some(RentState::Uninitialized),
+        }];
+        let post_rent_state = vec![TransactionAccountStateInfo {
+            rent_state: Some(RentState::RentPaying {
+                data_size: 2,
+                lamports: 5,
+            }),
+        }];
+
+        let transaction_accounts = vec![
+            (key1.pubkey(), AccountSharedData::default()),
+            (key2.pubkey(), AccountSharedData::default()),
+        ];
+
+        let context = TransactionContext::new(transaction_accounts, Rent::default(), 20, 20);
+        let result = TransactionAccountStateInfo::verify_changes(
+            &pre_rent_state,
+            &post_rent_state,
+            &context,
+        );
+        assert_eq!(
+            result.err(),
+            Some(TransactionError::InsufficientFundsForRent { account_index: 0 })
+        );
     }
 }

@@ -29,3 +29,34 @@ impl AccountOverrides {
         self.accounts.get(pubkey)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use {
+        crate::account_overrides::AccountOverrides,
+        solana_sdk::{account::AccountSharedData, pubkey::Pubkey, sysvar},
+    };
+
+    #[test]
+    fn test_set_account() {
+        let mut accounts = AccountOverrides::default();
+        let data = AccountSharedData::default();
+        let key = Pubkey::new_unique();
+        accounts.set_account(&key, Some(data.clone()));
+        assert_eq!(accounts.get(&key), Some(&data));
+
+        accounts.set_account(&key, None);
+        assert!(accounts.get(&key).is_none());
+    }
+
+    #[test]
+    fn test_slot_history() {
+        let mut accounts = AccountOverrides::default();
+        let data = AccountSharedData::default();
+
+        assert_eq!(accounts.get(&sysvar::slot_history::id()), None);
+        accounts.set_slot_history(Some(data.clone()));
+
+        assert_eq!(accounts.get(&sysvar::slot_history::id()), Some(&data));
+    }
+}
