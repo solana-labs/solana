@@ -317,6 +317,12 @@ pub(crate) fn initialize(
                                     .take(RestartLastVotedForkSlots::MAX_SLOTS)
                                     .collect();
                         } else {
+                            error!("
+                                Cannot find last voted slot in the tower storage, it either means that this node has never \
+                                voted or the tower storage is corrupted. Unfotunately, since WenRestart is a consensus protocol \
+                                depending on each participant to send their last voted fork slots, your validator cannot participate.\
+                                Please wait in the discord channel for the result of WenRestart, then generate a snapshot and use \
+                                --wait-for-supermajority to restart the validator.");
                             return Err(WenRestartError::MissingLastVotedForkSlots.into());
                         }
                     } else {
