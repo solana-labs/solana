@@ -653,7 +653,12 @@ async fn packet_batch_sender(
                 || (!packet_batch.is_empty() && elapsed >= coalesce)
             {
                 let len = packet_batch.len();
-                track_streamer_fetch_packet_performance(&packet_batch, &mut packet_perf_measure);
+                track_streamer_fetch_packet_performance(
+                    &packet_batch,
+                    &mut packet_perf_measure,
+                    stats.clone(),
+                );
+
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
                         .total_packet_batch_send_err
@@ -699,8 +704,9 @@ async fn packet_batch_sender(
 
                 total_bytes += packet_batch[i].meta().size;
 
-                if let Some(signature) =
-                    signature_if_should_track_packet(&packet_batch[i]).unwrap_or(None)
+                if let Some(signature) = signature_if_should_track_packet(&packet_batch[i])
+                    .ok()
+                    .flatten()
                 {
                     packet_perf_measure.insert(*signature, packet_accumulator.start_time);
                     // we set the PERF_TRACK_PACKET on
@@ -717,6 +723,7 @@ async fn packet_batch_sender(
 fn track_streamer_fetch_packet_performance(
     packet_batch: &PacketBatch,
     packet_perf_measure: &mut HashMap<[u8; 64], Instant>,
+    stats: Arc<StreamStats>,
 ) {
     for packet in packet_batch.iter() {
         if packet.meta().is_perf_track_packet() {
@@ -728,10 +735,12 @@ fn track_streamer_fetch_packet_performance(
                         "QUIC streamer fetch stage took {duration:?} for transaction {:?}",
                         Signature::from(*signature)
                     );
-                    inc_new_counter_info!(
-                        "txn-metrics-quic-streamer-packet-fetch-us",
-                        duration.as_micros() as usize
-                    );
+                    stats
+                        .process_sampled_packets_us_hist
+                        .lock()
+                        .unwrap()
+                        .increment(duration.as_micros() as u64)
+                        .unwrap();
                 }
             }
         }

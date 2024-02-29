@@ -244,6 +244,9 @@ pub(crate) struct ProcessPacketsTimings {
     // Time spent running the cost model in processing transactions before executing
     // transactions
     pub cost_model_us: u64,
+
+    // banking stage processing time histogram for sampled packets
+    pub process_sampled_packets_us_hist: histogram::Histogram,
 }
 
 impl ProcessPacketsTimings {
@@ -264,6 +267,28 @@ impl ProcessPacketsTimings {
                 i64
             ),
             ("cost_model_us", self.cost_model_us, i64),
+            (
+                "process_sampled_packets_us_90pct",
+                self.process_sampled_packets_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_min",
+                self.process_sampled_packets_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_max",
+                self.process_sampled_packets_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "process_sampled_packets_us_mean",
+                self.process_sampled_packets_us_hist.mean().unwrap_or(0),
+                i64
+            ),
         );
     }
 }
