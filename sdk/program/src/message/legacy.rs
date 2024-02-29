@@ -558,6 +558,10 @@ impl Message {
                     - self.header.num_readonly_unsigned_accounts as usize)
     }
 
+    /// Returns true if the account at the specified index should be write
+    /// locked when loaded for transaction processing in the runtime. This
+    /// method differs from `is_maybe_writable` because it is aware of the
+    /// latest reserved accounts which are not allowed to be write locked.
     pub fn is_writable(&self, i: usize) -> bool {
         (self.is_writable_index(i))
             && !is_builtin_key_or_sysvar(&self.account_keys[i])

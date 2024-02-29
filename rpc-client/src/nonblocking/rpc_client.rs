@@ -675,7 +675,7 @@ impl RpcClient {
         'sending: for _ in 0..SEND_RETRIES {
             let signature = self.send_transaction(transaction).await?;
 
-            let recent_blockhash = if transaction.maybe_uses_durable_nonce() {
+            let recent_blockhash = if transaction.uses_durable_nonce() {
                 let (recent_blockhash, ..) = self
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .await?;
@@ -753,7 +753,7 @@ impl RpcClient {
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let recent_blockhash = if transaction.maybe_uses_durable_nonce() {
+        let recent_blockhash = if transaction.uses_durable_nonce() {
             self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                 .await?
                 .0

@@ -1074,7 +1074,8 @@ impl Transaction {
     }
 }
 
-pub fn maybe_uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
+/// Returns true if transaction begins with an advance nonce instruction.
+pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
     let message = tx.message();
     message
         .instructions
@@ -1089,11 +1090,6 @@ pub fn maybe_uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction
             && matches!(
                 limited_deserialize(&instruction.data),
                 Ok(SystemInstruction::AdvanceNonceAccount)
-            )
-            // Nonce account is writable
-            && matches!(
-                instruction.accounts.first(),
-                Some(index) if message.is_maybe_writable(*index as usize)
             )
         })
 }
@@ -1553,19 +1549,19 @@ mod tests {
     #[test]
     fn tx_uses_nonce_ok() {
         let (_, _, tx) = nonced_transfer_tx();
-        assert!(maybe_uses_durable_nonce(&tx).is_some());
+        assert!(uses_durable_nonce(&tx).is_some());
     }
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        assert!(maybe_uses_durable_nonce(&Transaction::default()).is_none());
+        assert!(uses_durable_nonce(&Transaction::default()).is_none());
     }
 
     #[test]
     fn tx_uses_nonce_bad_prog_id_idx_fail() {
         let (_, _, mut tx) = nonced_transfer_tx();
         tx.message.instructions.get_mut(0).unwrap().program_id_index = 255u8;
-        assert!(maybe_uses_durable_nonce(&tx).is_none());
+        assert!(uses_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -1580,7 +1576,7 @@ mod tests {
         ];
         let message = Message::new(&instructions, Some(&from_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
-        assert!(maybe_uses_durable_nonce(&tx).is_none());
+        assert!(uses_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -1606,7 +1602,7 @@ mod tests {
             &[&from_keypair, &nonce_keypair],
             Hash::default(),
         );
-        assert!(maybe_uses_durable_nonce(&tx).is_none());
+        assert!(uses_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -1626,13 +1622,13 @@ mod tests {
         ];
         let message = Message::new(&instructions, Some(&nonce_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
-        assert!(maybe_uses_durable_nonce(&tx).is_none());
+        assert!(uses_durable_nonce(&tx).is_none());
     }
 
     #[test]
     fn get_nonce_pub_from_ix_ok() {
         let (_, nonce_pubkey, tx) = nonced_transfer_tx();
-        let nonce_ix = maybe_uses_durable_nonce(&tx).unwrap();
+        let nonce_ix = uses_durable_nonce(&tx).unwrap();
         assert_eq!(
             get_nonce_pubkey_from_instruction(nonce_ix, &tx),
             Some(&nonce_pubkey),
@@ -1642,7 +1638,7 @@ mod tests {
     #[test]
     fn get_nonce_pub_from_ix_no_accounts_fail() {
         let (_, _, tx) = nonced_transfer_tx();
-        let nonce_ix = maybe_uses_durable_nonce(&tx).unwrap();
+        let nonce_ix = uses_durable_nonce(&tx).unwrap();
         let mut nonce_ix = nonce_ix.clone();
         nonce_ix.accounts.clear();
         assert_eq!(get_nonce_pubkey_from_instruction(&nonce_ix, &tx), None,);
@@ -1651,7 +1647,7 @@ mod tests {
     #[test]
     fn get_nonce_pub_from_ix_bad_acc_idx_fail() {
         let (_, _, tx) = nonced_transfer_tx();
-        let nonce_ix = maybe_uses_durable_nonce(&tx).unwrap();
+        let nonce_ix = uses_durable_nonce(&tx).unwrap();
         let mut nonce_ix = nonce_ix.clone();
         nonce_ix.accounts[0] = 255u8;
         assert_eq!(get_nonce_pubkey_from_instruction(&nonce_ix, &tx), None,);

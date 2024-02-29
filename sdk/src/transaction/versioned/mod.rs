@@ -185,11 +185,8 @@ impl VersionedTransaction {
             .collect()
     }
 
-    /// Returns true if transaction begins with a valid advance nonce
-    /// instruction. Since dynamically loaded addresses can't have write locks
-    /// demoted without loading addresses, this shouldn't be used in the
-    /// runtime.
-    pub fn maybe_uses_durable_nonce(&self) -> bool {
+    /// Returns true if transaction begins with an advance nonce instruction.
+    pub fn uses_durable_nonce(&self) -> bool {
         let message = &self.message;
         message
             .instructions()
@@ -204,11 +201,6 @@ impl VersionedTransaction {
                 && matches!(
                     limited_deserialize(&instruction.data),
                     Ok(SystemInstruction::AdvanceNonceAccount)
-                )
-                // Nonce account is writable
-                && matches!(
-                    instruction.accounts.first(),
-                    Some(index) if message.is_maybe_writable(*index as usize)
                 )
             })
             .is_some()
@@ -291,12 +283,12 @@ mod tests {
     #[test]
     fn tx_uses_nonce_ok() {
         let (_, _, tx) = nonced_transfer_tx();
-        assert!(tx.maybe_uses_durable_nonce());
+        assert!(tx.uses_durable_nonce());
     }
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        assert!(!VersionedTransaction::default().maybe_uses_durable_nonce());
+        assert!(!VersionedTransaction::default().uses_durable_nonce());
     }
 
     #[test]
@@ -308,7 +300,7 @@ mod tests {
             }
             VersionedMessage::V0(_) => unreachable!(),
         };
-        assert!(!tx.maybe_uses_durable_nonce());
+        assert!(!tx.uses_durable_nonce());
     }
 
     #[test]
@@ -324,7 +316,7 @@ mod tests {
         let message = LegacyMessage::new(&instructions, Some(&from_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
         let tx = VersionedTransaction::from(tx);
-        assert!(!tx.maybe_uses_durable_nonce());
+        assert!(!tx.uses_durable_nonce());
     }
 
     #[test]
@@ -351,7 +343,7 @@ mod tests {
             Hash::default(),
         );
         let tx = VersionedTransaction::from(tx);
-        assert!(!tx.maybe_uses_durable_nonce());
+        assert!(!tx.uses_durable_nonce());
     }
 
     #[test]
@@ -372,6 +364,6 @@ mod tests {
         let message = LegacyMessage::new(&instructions, Some(&nonce_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
         let tx = VersionedTransaction::from(tx);
-        assert!(!tx.maybe_uses_durable_nonce());
+        assert!(!tx.uses_durable_nonce());
     }
 }
