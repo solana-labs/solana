@@ -5,6 +5,7 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
+    serde::{Deserialize, Serialize},
     solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
     solana_sdk::{
         nonce_info::{NonceFull, NonceInfo},
@@ -69,7 +70,7 @@ impl TransactionExecutionResult {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionExecutionDetails {
     pub status: transaction::Result<()>,
     pub log_messages: Option<Vec<String>>,
@@ -82,7 +83,7 @@ pub struct TransactionExecutionDetails {
     pub accounts_data_len_delta: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DurableNonceFee {
     Valid(u64),
     Invalid,

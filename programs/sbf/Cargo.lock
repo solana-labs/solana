@@ -6280,6 +6280,7 @@ dependencies = [
  "log",
  "percentage",
  "rustc_version",
+ "serde",
  "solana-bpf-loader-program",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",

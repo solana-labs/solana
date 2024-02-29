@@ -17,7 +17,7 @@ use {
     },
     dashmap::DashMap,
     log::*,
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     solana_account_decoder::UiAccountEncoding,
     solana_accounts_db::{
         accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
@@ -41,7 +41,9 @@ use {
     solana_ledger::{
         blockstore::{create_new_ledger, Blockstore},
         blockstore_options::{AccessType, LedgerColumnOptions},
-        blockstore_processor::ProcessSlotCallback,
+        blockstore_processor::{
+            ProcessSlotCallback, TransactionStatusMessage, TransactionStatusSender,
+        },
         use_snapshot_archives_at_startup,
     },
     solana_measure::{measure, measure::Measure},
@@ -73,6 +75,7 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_svm::transaction_results::TransactionExecutionDetails,
     solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::{
         self,
@@ -1070,6 +1073,13 @@ fn main() {
                         .help("Record slots to a file"),
                 )
                 .arg(
+                    Arg::with_name("record_txs")
+                        .long("record-txs")
+                        .default_value("transactions.json")
+                        .value_name("FILENAME")
+                        .help("Record transactions to a file"),
+                )
+                .arg(
                     Arg::with_name("verify_slots")
                         .long("verify-slots")
                         .default_value("slots.json")
@@ -1602,6 +1612,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
 
                     println!(
@@ -1627,6 +1638,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
                     println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                 }
@@ -1658,6 +1670,14 @@ fn main() {
                         );
                         exit(1);
                     }
+
+                    let (sender, receiver) = if arg_matches.occurrences_of("record_txs") > 0 {
+                        let (sender, receiver) = crossbeam_channel::unbounded();
+
+                        (Some(TransactionStatusSender { sender }), Some(receiver))
+                    } else {
+                        (None, None)
+                    };
 
                     let (slot_callback, record_slots_file, recorded_slots) = if arg_matches
                         .occurrences_of("record_slots")
@@ -1769,6 +1789,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        sender,
                     );
 
                     if print_accounts_stats {
@@ -1782,6 +1803,115 @@ fn main() {
                                 warn!("Unable to write bank hash_details file: {err}");
                             })
                             .ok();
+                    }
+
+                    #[derive(Serialize, Deserialize, Default, Clone)]
+                    struct Transaction {
+                        index: usize,
+                        accounts: Vec<String>,
+                        instructions: Vec<Instruction>,
+                        is_simple_vote_tx: bool,
+                        execution_results: Option<TransactionExecutionDetails>,
+                    }
+
+                    #[derive(Serialize, Deserialize, Clone)]
+                    struct Instruction {
+                        program_id: String,
+                        accounts: Vec<String>,
+                        data: String,
+                    }
+
+                    #[derive(Serialize, Deserialize)]
+                    struct SlotDetails {
+                        slot: Slot,
+                        transactions: Vec<Transaction>,
+                    }
+
+                    if let Some(recv) = receiver {
+                        let mut slots: Vec<SlotDetails> = Vec::new();
+                        for tsm in recv {
+                            if let TransactionStatusMessage::Batch(batch) = tsm {
+                                let slot = batch.bank.slot();
+
+                                assert_eq!(batch.transactions.len(), batch.execution_results.len());
+
+                                let transactions: Vec<_> = batch
+                                    .transactions
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(no, tx)| {
+                                        let message = tx.message();
+
+                                        let accounts: Vec<String> = message
+                                            .account_keys()
+                                            .iter()
+                                            .map(|acc| acc.to_string())
+                                            .collect();
+
+                                        let instructions = message
+                                            .instructions()
+                                            .iter()
+                                            .map(|ix| {
+                                                let program_id =
+                                                    accounts[ix.program_id_index as usize].clone();
+
+                                                let accounts = ix
+                                                    .accounts
+                                                    .iter()
+                                                    .map(|idx| accounts[*idx as usize].clone())
+                                                    .collect();
+
+                                                let data = hex::encode(&ix.data);
+
+                                                Instruction {
+                                                    program_id,
+                                                    accounts,
+                                                    data,
+                                                }
+                                            })
+                                            .collect();
+
+                                        let execution_results = batch.execution_results[no].clone();
+
+                                        let is_simple_vote_tx = tx.is_simple_vote_transaction();
+
+                                        Transaction {
+                                            accounts,
+                                            instructions,
+                                            is_simple_vote_tx,
+                                            execution_results,
+                                            index: batch.transaction_indexes[no],
+                                        }
+                                    })
+                                    .collect();
+
+                                if let Some(recorded_slot) =
+                                    slots.iter_mut().find(|f| f.slot == slot)
+                                {
+                                    recorded_slot.transactions.extend(transactions);
+
+                                    recorded_slot
+                                        .transactions
+                                        .sort_by(|a, b| a.index.cmp(&b.index));
+                                } else {
+                                    slots.push(SlotDetails { slot, transactions });
+                                }
+                            }
+                        }
+
+                        let filename = Path::new(arg_matches.value_of_os("record_txs").unwrap());
+
+                        let file = File::open(filename).unwrap_or_else(|err| {
+                            eprintln!("Unable to read file: {}: {err:#}", filename.display());
+                            exit(1);
+                        });
+
+                        // writing the json file ends up with a syscall for each number, comma, indentation etc.
+                        // use BufWriter to speed things up
+
+                        let writer = std::io::BufWriter::new(file);
+
+                        serde_json::to_writer_pretty(writer, &slots).unwrap();
                     }
 
                     if let Some(recorded_slots_file) = record_slots_file {
@@ -1826,6 +1956,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
 
                     let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
@@ -1999,6 +2130,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
                     let mut bank = bank_forks
                         .read()
@@ -2392,6 +2524,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
                     let bank = bank_forks.read().unwrap().working_bank();
 
@@ -2444,6 +2577,7 @@ fn main() {
                         process_options,
                         snapshot_archive_path,
                         incremental_snapshot_archive_path,
+                        None,
                     );
                     let bank_forks = bank_forks.read().unwrap();
                     let slot = bank_forks.working_bank().slot();

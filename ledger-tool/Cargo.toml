@@ -17,6 +17,7 @@ crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 histogram = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }

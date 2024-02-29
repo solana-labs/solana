@@ -100,6 +100,7 @@ pub fn load_and_process_ledger_or_exit(
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
     load_and_process_ledger(
         arg_matches,
@@ -108,6 +109,7 @@ pub fn load_and_process_ledger_or_exit(
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
+        transaction_status_sender,
     )
     .unwrap_or_else(|err| {
         eprintln!("Exiting. Failed to load and process ledger: {err}");
@@ -122,6 +124,7 @@ pub fn load_and_process_ledger(
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), LoadAndProcessLedgerError> {
     let bank_snapshots_dir = if blockstore.is_primary_access() {
         blockstore.ledger_path().join("snapshot")
@@ -387,7 +390,7 @@ pub fn load_and_process_ledger(
             Some(transaction_status_service),
         )
     } else {
-        (None, None)
+        (transaction_status_sender, None)
     };
 
     let result = blockstore_processor::process_blockstore_from_root(
