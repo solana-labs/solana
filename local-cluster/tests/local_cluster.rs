@@ -3172,15 +3172,15 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // below only for slots <= `next_slot_on_a`, validator A will not know how it's last vote chains
     // to the other forks, and may violate switching proofs on restart.
     let mut default_config = ValidatorConfig::default_for_test();
-    // Ensure B can make leader blocks up till the fork slot, and give remaining to C, don't give validator A any slots because
-    // it's going to be deleting its ledger, so may create versions of slots it's already created, but
-    // on a different fork.
+    // Ensure B can make leader blocks up till the fork slot, and give the remaining slots to C.
+    // Don't give validator A any slots because it's going to be deleting its ledger, so it may create
+    // versions of slots it's already created, but on a different fork.
     let validator_to_slots = vec![
         // Ensure validator b is leader for slots <= `next_slot_on_a`
         (validator_b_pubkey, next_slot_on_a as usize + 1),
         (validator_c_pubkey, DEFAULT_SLOTS_PER_EPOCH as usize),
     ];
-    // Trick C into not producing any blocks, in case it takes too long to kill it
+    // Trick C into not producing any blocks, in case its leader slots come up before it gets killed
     let c_validator_to_slots = vec![(validator_b_pubkey, DEFAULT_SLOTS_PER_EPOCH as usize)];
 
     let c_leader_schedule = create_custom_leader_schedule(c_validator_to_slots.into_iter());
@@ -3370,9 +3370,9 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         );
         sleep(Duration::from_millis(100));
 
-        if let Some((latest_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey)
+        if let Some((newest_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey)
         {
-            last_vote = latest_vote;
+            last_vote = newest_vote;
             if last_vote != base_slot {
                 votes_on_c_fork.insert(last_vote);
                 // Collect 4 votes
