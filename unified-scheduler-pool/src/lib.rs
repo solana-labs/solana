@@ -1309,4 +1309,42 @@ mod tests {
             4
         );
     }
+
+    // See comment in SchedulingStateMachine::create_task() for the justification of this test
+    #[test]
+    fn test_enfoced_get_account_locks_validation() {
+        solana_logger::setup();
+
+        let GenesisConfigInfo {
+            genesis_config,
+            ref mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = &setup_dummy_fork_graph(bank);
+
+        let mut tx = system_transaction::transfer(
+            mint_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            2,
+            genesis_config.hash(),
+        );
+        // mangle the transfer tx to try to lock fee_payer (= mint_keypair) address twice!
+        tx.message.account_keys.push(tx.message.account_keys[0]);
+        let tx = &SanitizedTransaction::from_transaction_for_tests(tx);
+
+        // this internally should call SanitizedTransaction::get_account_locks().
+        let result = &mut Ok(());
+        let timings = &mut ExecuteTimings::default();
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let handler_context = &HandlerContext {
+            log_messages_bytes_limit: None,
+            transaction_status_sender: None,
+            replay_vote_sender: None,
+            prioritization_fee_cache,
+        };
+
+        DefaultTaskHandler::handle(result, timings, bank, tx, 0, handler_context);
+        assert_matches!(result, Err(TransactionError::AccountLoadedTwice));
+    }
 }
