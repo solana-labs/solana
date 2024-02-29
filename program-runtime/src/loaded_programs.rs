@@ -183,7 +183,7 @@ impl Stats {
             ("reloads", reloads, i64),
             ("insertions", insertions, i64),
             ("lost_insertions", lost_insertions, i64),
-            ("replacements", replacements, i64),
+            ("replace_entry", replacements, i64),
             ("one_hit_wonders", one_hit_wonders, i64),
             ("prunes_orphan", prunes_orphan, i64),
             ("prunes_environment", prunes_environment, i64),
@@ -568,6 +568,7 @@ pub struct LoadedProgramsForTxBatch {
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
     pub environments: ProgramRuntimeEnvironments,
+    pub hit_max_limit: bool,
 }
 
 impl LoadedProgramsForTxBatch {
@@ -576,6 +577,7 @@ impl LoadedProgramsForTxBatch {
             entries: HashMap::new(),
             slot,
             environments,
+            hit_max_limit: false,
         }
     }
 
@@ -934,7 +936,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         slot: Slot,
         key: Pubkey,
         loaded_program: Arc<LoadedProgram>,
-    ) {
+    ) -> bool {
         let second_level = self.entries.entry(key).or_default();
         debug_assert_eq!(
             second_level.cooperative_loading_lock,
@@ -955,8 +957,9 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         {
             self.stats.lost_insertions.fetch_add(1, Ordering::Relaxed);
         }
-        self.assign_program(key, loaded_program);
+        let was_occupied = self.assign_program(key, loaded_program);
         self.loading_task_waiter.notify();
+        was_occupied
     }
 
     pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
