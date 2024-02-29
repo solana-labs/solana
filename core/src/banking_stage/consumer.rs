@@ -223,10 +223,9 @@ impl Consumer {
                             "Banking stage processing took {duration:?} for transaction {:?}",
                             packet.transaction().get_signatures().first()
                         );
-                        inc_new_counter_info!(
-                            "txn-metrics-banking-stage-process-us",
-                            duration.as_micros() as usize
-                        );
+                        payload
+                            .slot_metrics_tracker
+                            .increment_process_sampled_packets_us(duration.as_micros() as u64);
                     } else {
                         // This packet is retried, advance the retry index to the next, as the next packet's index will
                         // certainly be > than this.

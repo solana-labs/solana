@@ -80,8 +80,9 @@ struct SigVerifierStats {
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    batches_hist: histogram::Histogram,         // number of packet batches per verify call
-    packets_hist: histogram::Histogram,         // number of packets per verify call
+    sampled_packets_pp_us_hist: histogram::Histogram, // per-packet time do do overall verify for sampled packets
+    batches_hist: histogram::Histogram,               // number of packet batches per verify call
+    packets_hist: histogram::Histogram,               // number of packets per verify call
     num_deduper_saturations: usize,
     total_batches: usize,
     total_packets: usize,
@@ -181,6 +182,28 @@ impl SigVerifierStats {
             (
                 "dedup_packets_pp_us_mean",
                 self.dedup_packets_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "sampled_verify_packets_pp_us_90pct",
+                self.sampled_packets_pp_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "sampled_verify_packets_pp_us_min",
+                self.sampled_packets_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "sampled_verify_packets_pp_us_max",
+                self.sampled_packets_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "sampled_verify_packets_pp_us_mean",
+                self.sampled_packets_pp_us_hist.mean().unwrap_or(0),
                 i64
             ),
             (
@@ -390,10 +413,10 @@ impl SigVerifyStage {
                 "Sigverify took {duration:?} for transaction {:?}",
                 Signature::from(signature)
             );
-            inc_new_counter_info!(
-                "txn-metrics-sigverify-packet-verify-us",
-                duration.as_micros() as usize
-            );
+            stats
+                .sampled_packets_pp_us_hist
+                .increment(duration.as_micros() as u64)
+                .unwrap();
         }
         stats
             .recv_batches_us_hist
