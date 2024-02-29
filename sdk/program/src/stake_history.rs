@@ -10,12 +10,15 @@ pub use crate::clock::Epoch;
 use {
     crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::SysvarId},
     bytemuck::{Pod, Zeroable},
-    std::{cell::RefCell, ops::Deref, rc::Rc, sync::Arc},
+    std::{ops::Deref, sync::Arc},
 };
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
+#[repr(C)]
+#[derive(
+    Debug, Serialize, Deserialize, PartialEq, Eq, Default, Copy, Clone, Pod, Zeroable, AbiExample,
+)]
 pub struct StakeHistoryEntry {
     pub effective: u64,    // effective stake at this epoch
     pub activating: u64,   // sum of portion of stakes not fully warmed up
@@ -85,77 +88,53 @@ impl Deref for StakeHistory {
     }
 }
 
-// HANA my stuff below
-
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
-pub struct StakeHistoryData<'a>(Rc<RefCell<&'a mut [u8]>>);
+pub struct StakeHistoryData<'a>(&'a [u8]);
 
-// HANA should i impl all of Sysvar for this?
 impl<'a> StakeHistoryData<'a> {
-    pub fn from_account_info(account_info: &AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn take_account_info(account_info: &AccountInfo<'a>) -> Result<Self, ProgramError> {
         if *account_info.unsigned_key() != StakeHistory::id() {
             return Err(ProgramError::InvalidArgument);
         }
-        Ok(StakeHistoryData(account_info.data.clone()))
+        Ok(StakeHistoryData(account_info.data.take()))
     }
 }
 
-// HANA i would like to change this to Option<&StakeHistoryEntry> but the types are complicated
-// i dont think its possible to take a reference to the data inside the RefCell
-// i also dont think theres any way to heap allocation in my new impl and get a normal reference
-// and i dont think theres a way to use something like AsRef to let me box my new one and not the old one
-// and anyway callers of the old one wouldnt have a type specialized to normal reference
-// so really i would need like... hmm i can put `ReturnType: AsRef<StakeHistoryEntry>`
-// and have each impl define its own return, Option<&StakeHistoryEntry> or Option<Box<StakeHistoryEntry>>
 pub trait StakeHistoryGetEntry {
-    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry>;
+    fn get_entry(&self, epoch: Epoch) -> Option<&StakeHistoryEntry>;
 }
 
 impl StakeHistoryGetEntry for StakeHistory {
-    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+    fn get_entry(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
         self.binary_search_by(|probe| epoch.cmp(&probe.0))
             .ok()
-            .map(|index| self[index].1.clone())
+            .map(|index| &self[index].1)
     }
 }
 
-// HANA this is only required as long as we use the sysvar cache
+// this is only required for SysvarCache
+// we dont impl for Deref directly because it would prevent a matching impl for StakeHistoryData
 impl StakeHistoryGetEntry for Arc<StakeHistory> {
-    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+    fn get_entry(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
         self.deref().get_entry(epoch)
     }
 }
 
 #[repr(C)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Zeroable, Pod)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Pod, Zeroable)]
 struct StakeHistoryEpochEntry {
     epoch: Epoch,
-    effective: u64,
-    activating: u64,
-    deactivating: u64,
+    entry: StakeHistoryEntry,
 }
 
 impl StakeHistoryGetEntry for StakeHistoryData<'_> {
-    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
-        let data = self.0.borrow();
+    fn get_entry(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
+        let data = self.0;
         if let Ok(history) = bytemuck::try_cast_slice::<u8, StakeHistoryEpochEntry>(&data[8..]) {
             history
                 .binary_search_by(|probe| epoch.cmp(&probe.epoch))
                 .ok()
-                .map(|index| {
-                    let StakeHistoryEpochEntry {
-                        epoch: _,
-                        effective,
-                        activating,
-                        deactivating,
-                    } = history[index];
-
-                    StakeHistoryEntry {
-                        effective,
-                        activating,
-                        deactivating,
-                    }
-                })
+                .map(|index| &history[index].entry)
         } else {
             None
         }
@@ -174,31 +153,6 @@ mod tests {
 
     #[test]
     fn test_stake_history() {
-        let mut stake_history = StakeHistory::default();
-
-        for i in 0..MAX_ENTRIES as u64 + 1 {
-            stake_history.add(
-                i,
-                StakeHistoryEntry {
-                    activating: i,
-                    ..StakeHistoryEntry::default()
-                },
-            );
-        }
-        assert_eq!(stake_history.len(), MAX_ENTRIES);
-        assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
-        assert_eq!(stake_history.get_entry(0), None);
-        assert_eq!(
-            stake_history.get_entry(1),
-            Some(StakeHistoryEntry {
-                activating: 1,
-                ..StakeHistoryEntry::default()
-            })
-        );
-    }
-
-    #[test]
-    fn test_stake_history_data() {
         let mut stake_history = StakeHistory::default();
 
         for i in 0..MAX_ENTRIES as u64 + 1 {
@@ -229,16 +183,18 @@ mod tests {
             0,
         );
         stake_history.to_account_info(&mut account_info).unwrap();
+        let stake_history_data = StakeHistoryData::take_account_info(&account_info).unwrap();
 
-        let stake_history_data = StakeHistoryData::from_account_info(&account_info).unwrap();
-
+        assert_eq!(stake_history.get_entry(0), None);
         assert_eq!(stake_history_data.get_entry(0), None);
-        assert_eq!(
-            stake_history_data.get_entry(1),
-            Some(StakeHistoryEntry {
-                activating: 1,
+        for i in 1..MAX_ENTRIES as u64 + 1 {
+            let expected = Some(StakeHistoryEntry {
+                activating: i,
                 ..StakeHistoryEntry::default()
-            })
-        );
+            });
+
+            assert_eq!(stake_history.get_entry(i), expected.as_ref());
+            assert_eq!(stake_history_data.get_entry(i), expected.as_ref());
+        }
     }
 }

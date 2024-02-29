@@ -29,7 +29,7 @@ impl DerefMut for StakeHistory {
 }
 
 impl StakeHistoryGetEntry for StakeHistory {
-    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+    fn get_entry(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
         self.0.get_entry(epoch)
     }
 }
