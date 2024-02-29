@@ -55,7 +55,7 @@ fn test_rent_state_list_len() {
         last_block_hash,
     );
     let num_accounts = tx.message().account_keys.len();
-    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
+    let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
     let mut error_counters = TransactionErrorMetrics::default();
     let loaded_txs = load_accounts(
         &bank,

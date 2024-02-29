@@ -133,7 +133,7 @@ mod tests {
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
     ) -> SanitizedMessage {
-        Message::new(instructions, payer).try_into().unwrap()
+        SanitizedMessage::try_from_legacy_message(Message::new(instructions, payer)).unwrap()
     }
 
     #[test]
