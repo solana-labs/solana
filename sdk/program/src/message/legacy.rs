@@ -548,12 +548,32 @@ impl Message {
         self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present()
     }
 
-    pub fn is_writable(&self, i: usize) -> bool {
-        (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
+    /// Returns true if the account at the specified index was requested to be
+    /// writable. This method should not be used directly.
+    fn is_writable_index(&self, i: usize) -> bool {
+        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_readonly_unsigned_accounts as usize))
+                    - self.header.num_readonly_unsigned_accounts as usize)
+    }
+
+    /// Returns true if the account at the specified index should be write
+    /// locked when loaded for transaction processing in the runtime. This
+    /// method differs from `is_maybe_writable` because it is aware of the
+    /// latest reserved accounts which are not allowed to be write locked.
+    pub fn is_writable(&self, i: usize) -> bool {
+        (self.is_writable_index(i))
+            && !is_builtin_key_or_sysvar(&self.account_keys[i])
+            && !self.demote_program_id(i)
+    }
+
+    /// Returns true if the account at the specified index is writable by the
+    /// instructions in this message. Since the dynamic set of reserved accounts
+    /// isn't used here to demote write locks, this shouldn't be used in the
+    /// runtime.
+    pub fn is_maybe_writable(&self, i: usize) -> bool {
+        (self.is_writable_index(i))
             && !is_builtin_key_or_sysvar(&self.account_keys[i])
             && !self.demote_program_id(i)
     }
