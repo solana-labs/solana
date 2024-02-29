@@ -24,7 +24,7 @@ use {
             stake_flags::StakeFlags,
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
-        stake_history::{StakeHistory, StakeHistoryEntry},
+        stake_history::{StakeHistory, StakeHistoryEntry, StakeHistoryGetEntry},
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
@@ -2381,7 +2381,7 @@ mod tests {
         }
 
         for epoch in 0..=stake.deactivation_epoch + 1 {
-            let history = stake_history.get(epoch).unwrap();
+            let history = stake_history.get_entry(epoch).unwrap();
             let other_activations: u64 = other_activations[..=epoch as usize].iter().sum();
             let expected_stake = history.effective - base_stake - other_activations;
             let (expected_activating, expected_deactivating) = if epoch < stake.deactivation_epoch {
