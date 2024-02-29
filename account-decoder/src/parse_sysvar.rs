@@ -79,7 +79,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                     .iter()
                     .map(|entry| UiStakeHistoryEntry {
                         epoch: entry.0,
-                        stake_history: entry.1.clone(),
+                        stake_history: entry.1,
                     })
                     .collect();
                 SysvarAccountType::StakeHistory(stake_history)
@@ -340,7 +340,7 @@ mod test {
             activating: 2,
             deactivating: 3,
         };
-        stake_history.add(1, stake_history_entry.clone());
+        stake_history.add(1, stake_history_entry);
         let stake_history_sysvar = create_account_for_test(&stake_history);
         assert_eq!(
             parse_sysvar(&stake_history_sysvar.data, &sysvar::stake_history::id()).unwrap(),
