@@ -326,7 +326,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
-    pub(crate) fn get_internal_inner<RT>(
+    pub(super) fn get_internal_inner<RT>(
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache
@@ -339,7 +339,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// lookup 'pubkey' in the index (in_mem or disk).
     /// call 'callback' whether found or not
-    pub(crate) fn get_internal_cloned<RT>(
+    pub(super) fn get_internal_cloned<RT>(
         &self,
         pubkey: &K,
         callback: impl for<'a> FnOnce(Option<AccountMapEntry<T>>) -> RT,
@@ -359,7 +359,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// then the disk entry *must* also be added to the in-mem cache.
     ///
     /// Prefer `get_internal_inner()` or `get_internal_cloned()` for safe alternatives.
-    pub(crate) fn get_internal<RT>(
+    pub(super) fn get_internal<RT>(
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache

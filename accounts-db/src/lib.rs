@@ -27,7 +27,6 @@ pub mod cache_hash_data_stats;
 pub mod contains;
 pub mod epoch_accounts_hash;
 pub mod hardened_unpack;
-pub mod in_mem_accounts_index;
 pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
 pub mod partitioned_rewards;
