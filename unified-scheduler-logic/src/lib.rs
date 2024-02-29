@@ -682,7 +682,7 @@ impl SchedulingStateMachine {
     /// caller's responsibility to ensure the same instance is returned from the closure, given a
     /// particular pubkey.
     ///
-    /// Closure is used here to delegate the responsibility of general ownership of `UsageQueue`
+    /// Closure is used here to delegate the responsibility of primary ownership of `UsageQueue`
     /// (and caching/pruning if any) to the caller. `SchedulingStateMachine` guarantees that all of
     /// shared owndership of `UsageQueue`s are released and UsageQueue state is identical to just
     /// after created, if `has_no_active_task()` is `true`. Also note that this is desired for
