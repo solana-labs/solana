@@ -344,7 +344,7 @@ fn bank_forks_from_snapshot(
         // snapshot expects.  This would cause the node to crash again.  To prevent that, purge all
         // the bank snapshots here.  In the above scenario, this will cause the node to load from a
         // snapshot archive next time, which is safe.
-        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
 
         bank
     };
