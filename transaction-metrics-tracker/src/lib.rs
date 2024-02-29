@@ -40,7 +40,6 @@ pub fn get_signature_from_packet(packet: &Packet) -> Result<&[u8; SIGNATURE_BYTE
         .and_then(|bytes| decode_shortu16_len(bytes).ok())
         .ok_or(PacketError::InvalidShortVec)?;
 
-    println!("Sig length is okay!!");
     if sig_len_untrusted < 1 {
         return Err(PacketError::InvalidSignatureLen);
     }
