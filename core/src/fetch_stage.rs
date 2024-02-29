@@ -159,8 +159,10 @@ impl FetchStage {
         let tpu_threads: Vec<_> = if tpu_enable_udp {
             tpu_sockets
                 .into_iter()
-                .map(|socket| {
+                .enumerate()
+                .map(|(i, socket)| {
                     streamer::receiver(
+                        format!("solRcvrTpu{i:02}"),
                         socket,
                         exit.clone(),
                         sender.clone(),
@@ -180,8 +182,10 @@ impl FetchStage {
         let tpu_forwards_threads: Vec<_> = if tpu_enable_udp {
             tpu_forwards_sockets
                 .into_iter()
-                .map(|socket| {
+                .enumerate()
+                .map(|(i, socket)| {
                     streamer::receiver(
+                        format!("solRcvrTpuFwd{i:02}"),
                         socket,
                         exit.clone(),
                         forward_sender.clone(),
@@ -200,8 +204,10 @@ impl FetchStage {
         let tpu_vote_stats = Arc::new(StreamerReceiveStats::new("tpu_vote_receiver"));
         let tpu_vote_threads: Vec<_> = tpu_vote_sockets
             .into_iter()
-            .map(|socket| {
+            .enumerate()
+            .map(|(i, socket)| {
                 streamer::receiver(
+                    format!("solRcvrTpuVot{i:02}"),
                     socket,
                     exit.clone(),
                     vote_sender.clone(),
