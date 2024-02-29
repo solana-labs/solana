@@ -6638,6 +6638,7 @@ dependencies = [
 name = "solana-wen-restart"
 version = "1.18.0"
 dependencies = [
+ "anyhow",
  "log",
  "prost",
  "prost-build",
@@ -6651,7 +6652,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
- "thiserror",
 ]
 
 [[package]]
