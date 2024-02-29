@@ -99,7 +99,7 @@ mod tests {
         let mut stake_history_inner = StakeHistoryInner::default();
         (2134..).take(11).for_each(|epoch| {
             let entry = rand_stake_history_entry();
-            stake_history_outer.add(epoch, entry.clone());
+            stake_history_outer.add(epoch, entry);
             stake_history_inner.add(epoch, entry);
         });
 
