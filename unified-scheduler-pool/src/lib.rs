@@ -36,7 +36,7 @@ use {
         pubkey::Pubkey,
         transaction::{Result, SanitizedTransaction},
     },
-    solana_unified_scheduler_logic::{Page, SchedulingStateMachine, Task},
+    solana_unified_scheduler_logic::{SchedulingStateMachine, Task, UsageQueue},
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
         fmt::Debug,
@@ -394,13 +394,13 @@ mod chained_channel {
 }
 
 #[derive(Default, Debug)]
-pub struct AddressBook {
-    book: DashMap<Pubkey, Page>,
+pub struct UsageQueueLoader {
+    usage_queues: DashMap<Pubkey, UsageQueue>,
 }
 
-impl AddressBook {
-    pub fn load(&self, address: Pubkey) -> Page {
-        self.book.entry(address).or_default().clone()
+impl UsageQueueLoader {
+    pub fn load(&self, address: Pubkey) -> UsageQueue {
+        self.usage_queues.entry(address).or_default().clone()
     }
 }
 
@@ -425,7 +425,7 @@ pub struct PooledScheduler<TH: TaskHandler> {
 #[derive(Debug)]
 pub struct PooledSchedulerInner<S: SpawnableScheduler<TH>, TH: TaskHandler> {
     thread_manager: ThreadManager<S, TH>,
-    address_book: AddressBook,
+    usage_queue_loader: UsageQueueLoader,
 }
 
 // This type manages the OS threads for scheduling and executing transactions. The term
@@ -451,7 +451,7 @@ impl<TH: TaskHandler> PooledScheduler<TH> {
         Self::from_inner(
             PooledSchedulerInner::<Self, TH> {
                 thread_manager: ThreadManager::new(pool),
-                address_book: AddressBook::default(),
+                usage_queue_loader: UsageQueueLoader::default(),
             },
             initial_context,
         )
@@ -802,7 +802,7 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
 
     fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
         let task = SchedulingStateMachine::create_task(transaction.clone(), index, &mut |pubkey| {
-            self.inner.address_book.load(pubkey)
+            self.inner.usage_queue_loader.load(pubkey)
         });
         self.inner.thread_manager.send_task(task);
     }
