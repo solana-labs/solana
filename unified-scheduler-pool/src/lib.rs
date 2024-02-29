@@ -606,9 +606,8 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
                             recv(dummy_receiver(state_machine.has_unblocked_task())) -> dummy => {
                                 assert_matches!(dummy, Err(RecvError));
 
-                                if let Some(task) = state_machine.schedule_unblocked_task() {
-                                    runnable_task_sender.send_payload(task).unwrap();
-                                }
+                                let task = state_machine.schedule_unblocked_task().expect("unblocked task");
+                                runnable_task_sender.send_payload(task).unwrap();
                             },
                             recv(new_task_receiver) -> message => {
                                 assert!(!session_ending);
