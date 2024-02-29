@@ -17,7 +17,7 @@ lazy_static! {
 pub fn should_track_transaction(signature: &[u8; SIGNATURE_BYTES]) -> bool {
     // We do not use the highest signature byte as it is not really random
     let match_portion: u16 = u16::from_le_bytes([signature[61], signature[62]]) >> 4;
-    trace!("Matching txn: {match_portion:b} {:b}", *TXN_MASK);
+    trace!("Matching txn: {match_portion:016b} {:016b}", *TXN_MASK);
     *TXN_MASK == match_portion
 }
 
@@ -57,12 +57,16 @@ pub fn get_signature_from_packet(packet: &Packet) -> Result<&[u8; SIGNATURE_BYTE
 mod tests {
     use {
         super::*,
-        solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signature},
+            system_transaction,
+        },
     };
 
     #[test]
     fn test_get_signature_from_packet() {
-        // default invalid txn packet
+        // Default invalid txn packet
         let packet = Packet::default();
         let sig = get_signature_from_packet(&packet);
         assert_eq!(sig, Err(PacketError::InvalidShortVec));
@@ -74,9 +78,80 @@ mod tests {
             1,
             Hash::new_unique(),
         );
-        let packet = Packet::from_data(None, tx).unwrap();
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let sig = get_signature_from_packet(&packet);
         assert!(sig.is_ok());
+
+        // Invalid signature length
+        packet.buffer_mut()[0] = 0x0;
+        let sig = get_signature_from_packet(&packet);
+        assert_eq!(sig, Err(PacketError::InvalidSignatureLen));
+    }
+
+    #[test]
+    fn test_should_track_transaction() {
+        let mut sig = [0x0; SIGNATURE_BYTES];
+        let track = should_track_transaction(&sig);
+        assert!(!track);
+
+        // Intentionally matching the randomly generated mask
+        // The lower four bits are ignored as only 12 highest bits from
+        // signature's 61 and 62 u8 are used for matching.
+        // We generate a random one
+        let mut rng = rand::thread_rng();
+        let random_number: u8 = rng.gen_range(0..=15);
+        sig[61] = ((*TXN_MASK & 0xf as u16) << 4) as u8 | random_number;
+        sig[62] = (*TXN_MASK >> 4) as u8;
+
+        let track = should_track_transaction(&sig);
+        assert!(track);
+    }
+
+    #[test]
+    fn test_signature_if_should_track_packet() {
+        // Default invalid txn packet
+        let packet = Packet::default();
+        let sig = signature_if_should_track_packet(&packet);
+        assert_eq!(sig, Err(PacketError::InvalidShortVec));
+
+        // Use a valid transaction which is not matched
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+            Hash::new_unique(),
+        );
+        let packet = Packet::from_data(None, tx).unwrap();
+        let sig = signature_if_should_track_packet(&packet);
+        assert_eq!(Ok(None), sig);
+
+        // Now simulate a txn matching the signature mask
+        let mut tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+            Hash::new_unique(),
+        );
+        let mut sig = [0x0; SIGNATURE_BYTES];
+        sig[61] = ((*TXN_MASK & 0xf as u16) << 4) as u8;
+        sig[62] = (*TXN_MASK >> 4) as u8;
+
+        let sig = Signature::from(sig);
+        tx.signatures[0] = sig;
+        let mut packet = Packet::from_data(None, tx).unwrap();
+        let sig2 = signature_if_should_track_packet(&packet);
+
+        match sig2 {
+            Ok(sig) => {
+                assert!(sig.is_some());
+            }
+            Err(_) => assert!(false, "Expected to get a matching signature!"),
+        }
+
+        // Invalid signature length
+        packet.buffer_mut()[0] = 0x0;
+        let sig = signature_if_should_track_packet(&packet);
+        assert_eq!(sig, Err(PacketError::InvalidSignatureLen));
     }
 }
