@@ -134,7 +134,7 @@ mod tests {
             Hash::new_unique(),
         );
         let mut sig = [0x0; SIGNATURE_BYTES];
-        sig[61] = ((*TXN_MASK & 0xf as u16) << 4) as u8;
+        sig[61] = ((*TXN_MASK & 0xf_u16) << 4) as u8;
         sig[62] = (*TXN_MASK >> 4) as u8;
 
         let sig = Signature::from(sig);
@@ -146,7 +146,7 @@ mod tests {
             Ok(sig) => {
                 assert!(sig.is_some());
             }
-            Err(_) => assert!(false, "Expected to get a matching signature!"),
+            Err(_) => panic!("Expected to get a matching signature!"),
         }
 
         // Invalid signature length
