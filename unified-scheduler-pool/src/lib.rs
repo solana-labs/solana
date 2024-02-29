@@ -393,6 +393,12 @@ mod chained_channel {
     }
 }
 
+/// The primary owner of all [`UsageQueue`]s used for particular [`PooledScheduler`].
+///
+/// Currently, the simplest implementation. This grows memory usage in unbounded way. Cleaning will
+/// be added later. This struct is here to be put outside `solana-unified-scheduler-logic` for the
+/// crate's original intent (separation of logics from this crate). Some practical and mundane
+/// pruning will be implemented in this type.
 #[derive(Default, Debug)]
 pub struct UsageQueueLoader {
     usage_queues: DashMap<Pubkey, UsageQueue>,
