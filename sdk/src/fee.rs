@@ -47,6 +47,23 @@ impl FeeDetails {
             (total_fee as f64).round() as u64
         }
     }
+
+    pub fn accumulate(&mut self, fee_details: &FeeDetails) {
+        self.transaction_fee = self
+            .transaction_fee
+            .saturating_add(fee_details.transaction_fee);
+        self.prioritization_fee = self
+            .prioritization_fee
+            .saturating_add(fee_details.prioritization_fee)
+    }
+
+    pub fn transaction_fee(&self) -> u64 {
+        self.transaction_fee
+    }
+
+    pub fn prioritization_fee(&self) -> u64 {
+        self.prioritization_fee
+    }
 }
 
 pub const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
