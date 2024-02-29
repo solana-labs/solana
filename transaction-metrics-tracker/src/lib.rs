@@ -40,6 +40,7 @@ pub fn get_signature_from_packet(packet: &Packet) -> Result<&[u8; SIGNATURE_BYTE
         .and_then(|bytes| decode_shortu16_len(bytes).ok())
         .ok_or(PacketError::InvalidShortVec)?;
 
+    println!("Sig length is okay!!");
     if sig_len_untrusted < 1 {
         return Err(PacketError::InvalidSignatureLen);
     }
@@ -51,4 +52,32 @@ pub fn get_signature_from_packet(packet: &Packet) -> Result<&[u8; SIGNATURE_BYTE
         .try_into()
         .map_err(|_| PacketError::InvalidSignatureLen)?;
     Ok(signature)
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+    };
+
+    #[test]
+    fn test_get_signature_from_packet() {
+        // default invalid txn packet
+        let packet = Packet::default();
+        let sig = get_signature_from_packet(&packet);
+        assert_eq!(sig, Err(PacketError::InvalidShortVec));
+
+        // Use a valid transaction, it should succeed
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+            Hash::new_unique(),
+        );
+        let packet = Packet::from_data(None, tx).unwrap();
+
+        let sig = get_signature_from_packet(&packet);
+        assert!(sig.is_ok());
+    }
 }
