@@ -78,7 +78,7 @@ pub trait TransactionProcessingCallback {
 
     fn check_account_access(
         &self,
-        _tx: &SanitizedTransaction,
+        _message: &SanitizedMessage,
         _account_index: usize,
         _account: &AccountSharedData,
         _error_counters: &mut TransactionErrorMetrics,
