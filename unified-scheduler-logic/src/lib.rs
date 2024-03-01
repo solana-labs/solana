@@ -738,11 +738,23 @@ impl SchedulingStateMachine {
     pub fn reinitialize(&mut self) {
         assert!(self.has_no_active_task());
         assert_eq!(self.unblocked_task_queue.len(), 0);
-        self.last_task_index = None;
-        self.active_task_count.reset_to_zero();
-        self.handled_task_count.reset_to_zero();
-        self.unblocked_task_count.reset_to_zero();
-        self.total_task_count.reset_to_zero();
+        // nice trick to ensure all fields are handled here if new one is added.
+        let Self {
+            last_task_index,
+            unblocked_task_queue: _,
+            active_task_count,
+            handled_task_count,
+            unblocked_task_count,
+            total_task_count,
+            count_token: _,
+            usage_queue_token: _,
+            // don't add ".." here
+        } = self;
+        *last_task_index = None;
+        active_task_count.reset_to_zero();
+        handled_task_count.reset_to_zero();
+        unblocked_task_count.reset_to_zero();
+        total_task_count.reset_to_zero();
     }
 
     /// Creates a new instance of [`SchedulingStateMachine`] with its `unsafe` fields created as
