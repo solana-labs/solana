@@ -75,16 +75,22 @@ impl<'accounts_file, M: TieredAccountMeta> ReadableAccount
     }
 
     /// Returns the epoch that this account will next owe rent by parsing
-    /// the specified account block.  Epoch::MAX will be returned if the account
-    /// is rent-exempt, and 0 for any zero-lamport account.
+    /// the specified account block.  RENT_EXEMPT_RENT_EPOCH will be returned
+    /// if the account is rent-exempt.
+    ///
+    /// For a zero-lamport account, Epoch::default() will be returned to
+    /// default states of an AccountSharedData.
     fn rent_epoch(&self) -> Epoch {
         self.meta
             .rent_epoch(self.account_block)
             .unwrap_or(if self.lamports() != 0 {
                 RENT_EXEMPT_RENT_EPOCH
             } else {
-                // 0 rent-epoch is used for zero-lamport accounts.
-                0
+                // While there is no valid-values for any fields of a zero
+                // lamport account, here we return Epoch::default() to
+                // match the default states of AccountSharedData.  Otherwise,
+                // a hash mismatch will occur.
+                Epoch::default()
             })
     }
 
