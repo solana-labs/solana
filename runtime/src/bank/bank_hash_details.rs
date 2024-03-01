@@ -22,7 +22,7 @@ use {
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct BankHashDetails {
+pub struct BankHashDetails {
     /// The client version
     pub version: String,
     /// The encoding format for account data buffers
@@ -66,15 +66,33 @@ impl BankHashDetails {
 }
 
 /// The components that go into a bank hash calculation for a single bank/slot.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct BankHashSlotDetails {
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+pub struct BankHashSlotDetails {
     pub slot: Slot,
     pub bank_hash: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub parent_bank_hash: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub accounts_delta_hash: String,
+    #[serde(skip_serializing_if = "u64_is_zero")]
+    #[serde(default)]
     pub signature_count: u64,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub last_blockhash: String,
+    #[serde(skip_serializing_if = "bankhashaccounts_is_empty")]
+    #[serde(default)]
     pub accounts: BankHashAccounts,
+}
+
+fn u64_is_zero(val: &u64) -> bool {
+    *val == 0
+}
+
+fn bankhashaccounts_is_empty(accounts: &BankHashAccounts) -> bool {
+    accounts.accounts.is_empty()
 }
 
 impl BankHashSlotDetails {
@@ -141,8 +159,8 @@ impl TryFrom<&Bank> for BankHashSlotDetails {
 
 /// Wrapper around a Vec<_> to facilitate custom Serialize/Deserialize trait
 /// implementations.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct BankHashAccounts {
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub struct BankHashAccounts {
     pub accounts: Vec<PubkeyHashAccount>,
 }
 
@@ -257,7 +275,12 @@ pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), Stri
         _ = std::fs::create_dir_all(parent_dir);
         let file = std::fs::File::create(&path)
             .map_err(|err| format!("Unable to create file at {}: {err}", path.display()))?;
-        serde_json::to_writer_pretty(file, &details)
+
+        // writing the json file ends up with a syscall for each number, comma, indentation etc.
+        // use BufWriter to speed things up
+        let writer = std::io::BufWriter::new(file);
+
+        serde_json::to_writer_pretty(writer, &details)
             .map_err(|err| format!("Unable to write file at {}: {err}", path.display()))?;
     }
     Ok(())
