@@ -86,8 +86,7 @@ pub fn calculate_points(
     }
 }
 
-pub(crate) fn calculate_stake_points(
-    // Remove pub(crate) in future commit
+fn calculate_stake_points(
     stake: &Stake,
     vote_state: &VoteState,
     stake_history: &StakeHistory,
