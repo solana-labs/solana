@@ -75,6 +75,7 @@ pub struct DisabledSigVerifier {}
 #[derive(Default)]
 struct SigVerifierStats {
     recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
+    verify_batches_us_hist: histogram::Histogram, // per-batch time to call verify_batch
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
@@ -117,6 +118,26 @@ impl SigVerifierStats {
             (
                 "recv_batches_us_mean",
                 self.recv_batches_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_us_90pct",
+                self.verify_batches_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_us_min",
+                self.verify_batches_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_us_max",
+                self.verify_batches_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_us_mean",
+                self.verify_batches_us_hist.mean().unwrap_or(0),
                 i64
             ),
             (
@@ -373,6 +394,10 @@ impl SigVerifyStage {
         stats
             .recv_batches_us_hist
             .increment(recv_duration.as_micros() as u64)
+            .unwrap();
+        stats
+            .verify_batches_us_hist
+            .increment(verify_time.as_us())
             .unwrap();
         stats
             .verify_batches_pp_us_hist
