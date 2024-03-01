@@ -119,7 +119,7 @@ use {
         feature,
         feature_set::{
             self, include_loaded_accounts_data_size_in_fee_calculation,
-            remove_rounding_in_fee_calculation, FeatureSet,
+            remove_rounding_in_fee_calculation, reward_full_priority_fee, FeatureSet,
         },
         fee::{FeeDetails, FeeStructure},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3703,7 +3703,11 @@ impl Bank {
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
             self.collect_rent_eagerly();
-            self.distribute_transaction_fees();
+            if self.feature_set.is_active(&reward_full_priority_fee::id()) {
+                self.distribute_transaction_fee_details();
+            } else {
+                self.distribute_transaction_fees();
+            }
             self.distribute_rent_fees();
             self.update_slot_history();
             self.run_incinerator();
@@ -5063,8 +5067,11 @@ impl Bank {
 
         let mut update_transaction_statuses_time = Measure::start("update_transaction_statuses");
         self.update_transaction_statuses(sanitized_txs, &execution_results);
-        let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
+        let fee_collection_results = if self.feature_set.is_active(&reward_full_priority_fee::id()) {
+            self.filter_program_errors_and_collect_fee_details(sanitized_txs, &execution_results)
+        } else {
+            self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results)
+        };
         update_transaction_statuses_time.stop();
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateTransactionStatuses,
