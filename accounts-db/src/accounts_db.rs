@@ -6120,18 +6120,16 @@ impl AccountsDb {
         let mut hasher = blake3::Hasher::new();
 
         // allocate 128 bytes buffer on the stack
-        const BUF_SIZE: usize = 128;
-        const TOTAL_FIELD_SIZE: usize = 8 /* lamports */ + 8 /* slot */ + 8 /* rent_epoch */ + 1 /* exec_flag */ + 32 /* owner_key */ + 32 /* pubkey */;
-        const DATA_SIZE_CAN_FIT: usize = BUF_SIZE - TOTAL_FIELD_SIZE;
+        const BUFFER_SIZE: usize = 128;
+        const METADATA_SIZE: usize = 8 /* lamports */ + 8 /* rent_epoch */ + 1 /* executable */ + 32 /* owner */ + 32 /* pubkey */;
+        const REMAINING_SIZE: usize = BUFFER_SIZE - METADATA_SIZE;
+        let mut buffer = SmallVec::<[u8; BUFFER_SIZE]>::new();
 
-        let mut buffer = SmallVec::<[u8; BUF_SIZE]>::new();
-
-        // collect lamports, slot, rent_epoch into buffer to hash
+        // collect lamports, rent_epoch into buffer to hash
         buffer.extend_from_slice(&lamports.to_le_bytes());
-
         buffer.extend_from_slice(&rent_epoch.to_le_bytes());
 
-        if data.len() > DATA_SIZE_CAN_FIT {
+        if data.len() > REMAINING_SIZE {
             // For larger accounts whose data can't fit into the buffer, update the hash now.
             hasher.update(&buffer);
             buffer.clear();
