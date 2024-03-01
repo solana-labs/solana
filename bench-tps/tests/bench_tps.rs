@@ -8,7 +8,7 @@ use {
         send_batch::generate_durable_nonce_accounts,
     },
     solana_client::{
-        thin_client::ThinClient,
+        connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_core::validator::ValidatorConfig,
@@ -78,14 +78,24 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-    let client = Arc::new(ThinClient::new(
-        cluster.entry_point_info.rpc().unwrap(),
-        cluster
-            .entry_point_info
-            .tpu(cluster.connection_cache.protocol())
-            .unwrap(),
-        cluster.connection_cache.clone(),
-    ));
+    let ConnectionCache::Quic(cache) = &*cluster.connection_cache else {
+        panic!("Expected a Quic ConnectionCache.");
+    };
+
+    let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
+    let rpc_url = format!("http://{}", cluster.entry_point_info.rpc().unwrap());
+
+    let client = Arc::new(
+        TpuClient::new_with_connection_cache(
+            Arc::new(RpcClient::new(rpc_url)),
+            rpc_pubsub_url.as_str(),
+            TpuClientConfig::default(),
+            cache.clone(),
+        )
+        .unwrap_or_else(|err| {
+            panic!("Could not create TpuClient {err:?}");
+        }),
+    );
 
     let lamports_per_account = 100;
 

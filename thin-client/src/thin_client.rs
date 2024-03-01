@@ -111,6 +111,7 @@ impl ClientOptimizer {
 }
 
 /// An object for querying and sending transactions to the network.
+#[deprecated(since = "1.19.0", note = "Use [RpcClient] or [TpuClient] instead.")]
 pub struct ThinClient<
     P, // ConnectionPool
     M, // ConnectionManager
@@ -122,6 +123,7 @@ pub struct ThinClient<
     connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
+#[allow(deprecated)]
 impl<P, M, C> ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
@@ -323,6 +325,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<P, M, C> Client for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
@@ -334,6 +337,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<P, M, C> SyncClient for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
@@ -619,6 +623,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<P, M, C> AsyncClient for ThinClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
