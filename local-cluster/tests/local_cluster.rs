@@ -3122,7 +3122,7 @@ fn test_optimistic_confirmation_violation_without_tower() {
 //    `A` should not be able to generate a switching proof.
 //
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
-    solana_logger::setup_with("debug");
+    solana_logger::setup_with("info");
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
@@ -3172,22 +3172,25 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // below only for slots <= `next_slot_on_a`, validator A will not know how it's last vote chains
     // to the other forks, and may violate switching proofs on restart.
     let mut default_config = ValidatorConfig::default_for_test();
-    // Split leader schedule 50-50 between validators B and C, don't give validator A any slots because
-    // it's going to be deleting its ledger, so may create versions of slots it's already created, but
-    // on a different fork.
+    // Ensure B can make leader blocks up till the fork slot, and give the remaining slots to C.
+    // Don't give validator A any slots because it's going to be deleting its ledger, so it may create
+    // versions of slots it's already created, but on a different fork.
     let validator_to_slots = vec![
         // Ensure validator b is leader for slots <= `next_slot_on_a`
         (validator_b_pubkey, next_slot_on_a as usize + 1),
-        (validator_c_pubkey, next_slot_on_a as usize + 1),
+        (validator_c_pubkey, DEFAULT_SLOTS_PER_EPOCH as usize),
     ];
+    // Trick C into not producing any blocks, in case its leader slots come up before it gets killed
+    let c_validator_to_slots = vec![(validator_b_pubkey, DEFAULT_SLOTS_PER_EPOCH as usize)];
 
+    let c_leader_schedule = create_custom_leader_schedule(c_validator_to_slots.into_iter());
     let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
     for slot in 0..=next_slot_on_a {
         assert_eq!(leader_schedule[slot], validator_b_pubkey);
     }
 
     default_config.fixed_leader_schedule = Some(FixedSchedule {
-        leader_schedule: Arc::new(leader_schedule),
+        leader_schedule: Arc::new(leader_schedule.clone()),
     });
     let mut validator_configs =
         make_identical_validator_configs(&default_config, node_stakes.len());
@@ -3195,6 +3198,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Disable voting on validators C, and D
     validator_configs[2].voting_disabled = true;
     validator_configs[3].voting_disabled = true;
+    // C should not produce any blocks at this time
+    validator_configs[2].fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(c_leader_schedule),
+    });
 
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
@@ -3336,6 +3343,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Run validator C only to make it produce and vote on its own fork.
     info!("Restart validator C again!!!");
     validator_c_info.config.voting_disabled = false;
+    // C should now produce blocks
+    validator_c_info.config.fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(leader_schedule),
+    });
     cluster.restart_node(
         &validator_c_pubkey,
         validator_c_info,
@@ -3343,10 +3354,25 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     );
 
     let mut votes_on_c_fork = std::collections::BTreeSet::new(); // S4 and S5
-    for _ in 0..100 {
+    let mut last_vote = 0;
+    let now = Instant::now();
+    loop {
+        let elapsed = now.elapsed();
+        assert!(
+            elapsed <= Duration::from_secs(30),
+            "C failed to create a fork past {} in {} second,s
+            last_vote {},
+            votes_on_c_fork: {:?}",
+            base_slot,
+            elapsed.as_secs(),
+            last_vote,
+            votes_on_c_fork,
+        );
         sleep(Duration::from_millis(100));
 
-        if let Some((last_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
+        if let Some((newest_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey)
+        {
+            last_vote = newest_vote;
             if last_vote != base_slot {
                 votes_on_c_fork.insert(last_vote);
                 // Collect 4 votes
@@ -3357,7 +3383,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         }
     }
     assert!(!votes_on_c_fork.is_empty());
-    info!("collected validator C's votes: {:?}", votes_on_c_fork);
+    info!("Collected validator C's votes: {:?}", votes_on_c_fork);
 
     // Step 4:
     // verify whether there was violation or not

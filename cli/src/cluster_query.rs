@@ -2399,7 +2399,7 @@ mod tests {
                     print_timestamp: true,
                     compute_unit_price: None,
                 },
-                signers: vec![default_keypair.into()],
+                signers: vec![Box::new(default_keypair)],
             }
         );
     }

@@ -85,17 +85,8 @@ pub trait Signer {
     fn is_interactive(&self) -> bool;
 }
 
-impl<T> From<T> for Box<dyn Signer>
-where
-    T: Signer + 'static,
-{
-    fn from(signer: T) -> Self {
-        Box::new(signer)
-    }
-}
-
-/// This impl allows using Signer with types like Box/Rc/Arc.
-impl<Container: Deref<Target = impl Signer>> Signer for Container {
+/// This implements `Signer` for all ptr types - `Box/Rc/Arc/&/&mut` etc
+impl<Container: Deref<Target = impl Signer + ?Sized>> Signer for Container {
     #[inline]
     fn pubkey(&self) -> Pubkey {
         self.deref().pubkey()

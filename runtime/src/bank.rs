@@ -156,8 +156,9 @@ use {
         },
         transaction_context::{TransactionAccount, TransactionReturnData},
     },
-    solana_stake_program::stake_state::{
-        self, InflationPointCalculationEvent, PointValue, StakeStateV2,
+    solana_stake_program::{
+        points::{InflationPointCalculationEvent, PointValue},
+        stake_state::StakeStateV2,
     },
     solana_svm::{
         account_loader::{TransactionCheckResult, TransactionLoadResult},
@@ -2989,7 +2990,7 @@ impl Bank {
                         return 0;
                     };
 
-                    stake_state::calculate_points(
+                    solana_stake_program::points::calculate_points(
                         stake_account.stake_state(),
                         vote_state,
                         stake_history,
@@ -3026,7 +3027,7 @@ impl Bank {
                     delegations
                         .par_iter()
                         .map(|(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
+                            solana_stake_program::points::calculate_points(
                                 stake_account.stake_state(),
                                 vote_state,
                                 stake_history,
@@ -3106,7 +3107,7 @@ impl Bank {
 
                     let pre_lamport = stake_account.lamports();
 
-                    let redeemed = stake_state::redeem_rewards(
+                    let redeemed = solana_stake_program::rewards::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
                         &mut stake_account,
@@ -3154,7 +3155,7 @@ impl Bank {
                         });
                     } else {
                         debug!(
-                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            "solana_stake_program::rewards::redeem_rewards() failed for {}: {:?}",
                             stake_pubkey, redeemed
                         );
                     }
@@ -3225,7 +3226,7 @@ impl Bank {
                     });
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
-                    let redeemed = stake_state::redeem_rewards(
+                    let redeemed = solana_stake_program::rewards::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
                         &mut stake_account,
@@ -3261,7 +3262,7 @@ impl Bank {
                         });
                     } else {
                         debug!(
-                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            "solana_stake_program::rewards::redeem_rewards() failed for {}: {:?}",
                             stake_pubkey, redeemed
                         );
                     }

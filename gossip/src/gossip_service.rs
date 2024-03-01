@@ -50,6 +50,7 @@ impl GossipService {
         );
         let socket_addr_space = *cluster_info.socket_addr_space();
         let t_receiver = streamer::receiver(
+            "solRcvrGossip".to_string(),
             gossip_socket.clone(),
             exit.clone(),
             request_sender,

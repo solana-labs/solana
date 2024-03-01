@@ -106,6 +106,8 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
                         &loaded_transaction.rent_debits,
                     ) {
                         Ok(nonce) => Some(nonce),
+                        // This error branch is never reached, because `load_transaction_accounts`
+                        // already validates the fee payer account.
                         Err(e) => return (Err(e), None),
                     }
                 } else {

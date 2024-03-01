@@ -65,6 +65,8 @@ impl ThreadAwareAccountLocks {
     /// `allowed_threads` is a set of threads that the caller restricts locking to.
     /// If accounts are schedulable, then they are locked for the thread
     /// selected by the `thread_selector` function.
+    /// `thread_selector` is only called if all accounts are schdulable, meaning
+    /// that the `thread_set` passed to `thread_selector` is non-empty.
     pub(crate) fn try_lock_accounts<'a>(
         &mut self,
         write_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
