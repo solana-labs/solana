@@ -416,7 +416,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         .finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
-                        let mut ret = LoadedProgramsForTxBatch::default();
+                        let mut ret = LoadedProgramsForTxBatch::new(
+                            self.slot,
+                            loaded_programs_cache
+                                .get_environments_for_epoch(self.epoch)
+                                .clone(),
+                        );
                         ret.hit_max_limit = true;
                         return ret;
                     }
