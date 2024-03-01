@@ -1560,34 +1560,65 @@ fn main() {
                     println!("{}", open_genesis_config_by(&output_directory, arg_matches));
                 }
                 ("shred-version", Some(arg_matches)) => {
-                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
-                    // Respect a user-set --halt-at-slot; otherwise, set Some(0) to avoid
-                    // processing any additional banks and just use the snapshot bank
-                    if process_options.halt_at_slot.is_none() {
-                        process_options.halt_at_slot = Some(0);
-                    }
-                    let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let blockstore = open_blockstore(
-                        &ledger_path,
-                        arg_matches,
-                        get_access_type(&process_options),
-                    );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        snapshot_archive_path,
-                        incremental_snapshot_archive_path,
-                    );
+                    use solana_core::banking_trace::TimedTracedEvent;
+                    use solana_core::banking_trace::TracedEvent;
+                    let path = PathBuf::new().join("/dev/stdin");
+                    use std::{fs::File, io::BufReader};
+                    let mut stream = BufReader::new(File::open(&path).unwrap());
+                    /*
+                    let mut bank_starts_by_slot = std::collections::BTreeMap::new();
+                    let mut packet_batches_by_time = std::collections::BTreeMap::new();
+                    let mut hashes_by_slot = std::collections::HashMap::new();
+                    */
 
-                    println!(
-                        "{}",
-                        compute_shred_version(
-                            &genesis_config.hash(),
-                            Some(&bank_forks.read().unwrap().working_bank().hard_forks())
-                        )
-                    );
+                    let mut packet_count = 0;
+                    /*
+                    let mut events = vec![];
+                    */
+                    use solana_sdk::message::AddressLoader;
+                    use solana_sdk::message::v0::LoadedAddresses;
+                    use solana_sdk::message::v0::MessageAddressTableLookup;
+                    #[derive(Clone)]
+                    struct A;
+                    impl AddressLoader for A {
+                        fn load_addresses(self, _: &[MessageAddressTableLookup]) -> Result<LoadedAddresses, solana_sdk::message::AddressLoaderError> { Ok(LoadedAddresses::default()) }
+                    }
+
+
+                    loop {
+                        let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
+                        let Ok(event) = d else {
+                            info!("deserialize error: {:?}", &d);
+                            break;
+                        };
+                        error!("{:?}", event);
+                        let event_time = event.0;
+                        let event = &event.1;
+                        let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
+                        match &event {
+
+                            TracedEvent::PacketBatch(_label, batch) => {
+                                let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
+                                packet_count += sum;
+                                let st = solana_core::banking_stage::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()], false).deserialized_packets.iter().filter_map(|ip| ip.build_sanitized_transaction(&Arc::new(FeatureSet::all_enabled()), false, A)).collect::<Vec<_>>();
+                                let st_label = format!("({:#?})", st);
+                                for transaction in st {
+                                    solana_cli_output::display::println_transaction(
+                                        &transaction.to_versioned_transaction(),
+                                        None,
+                                        "      ",
+                                        None,
+                                        None,
+                                    );
+                                }
+                                error!("event parsed: {}: <{}: {}{} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, st_label, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
+                            }
+                            _ => {
+                                error!("event parsed: {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
+                            }
+                        //events.push(event);
+                        }
+                    }
                 }
                 ("bank-hash", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);

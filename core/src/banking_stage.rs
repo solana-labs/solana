@@ -67,7 +67,7 @@ mod immutable_deserialized_packet;
 mod latest_unprocessed_votes;
 mod leader_slot_timing_metrics;
 mod multi_iterator_scanner;
-mod packet_deserializer;
+pub mod packet_deserializer;
 mod packet_receiver;
 mod read_write_account_set;
 #[allow(dead_code)]
