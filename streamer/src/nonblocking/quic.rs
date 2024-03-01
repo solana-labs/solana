@@ -17,6 +17,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
+    solana_measure::measure::Measure,
     solana_perf::packet::{PacketBatch, PACKETS_PER_BATCH},
     solana_sdk::{
         packet::{Meta, PACKET_DATA_SIZE},
@@ -720,6 +721,7 @@ fn track_streamer_fetch_packet_performance(
     if packet_perf_measure.is_empty() {
         return;
     }
+    let mut measure = Measure::start("track_perf");
     let mut process_sampled_packets_us_hist = stats.process_sampled_packets_us_hist.lock().unwrap();
 
     for (signature, start_time) in packet_perf_measure.iter() {
@@ -732,6 +734,10 @@ fn track_streamer_fetch_packet_performance(
             .increment(duration.as_micros() as u64)
             .unwrap();
     }
+    measure.stop();
+    stats
+        .perf_track_overhead_us
+        .fetch_add(measure.as_us(), Ordering::Relaxed);
 }
 
 async fn handle_connection(

@@ -16,7 +16,7 @@ use {
     std::{
         net::UdpSocket,
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
         },
         thread,
@@ -176,6 +176,7 @@ pub struct StreamStats {
     pub(crate) stream_load_ema_overflow: AtomicUsize,
     pub(crate) stream_load_capacity_overflow: AtomicUsize,
     pub(crate) process_sampled_packets_us_hist: Mutex<histogram::Histogram>,
+    pub(crate) perf_track_overhead_us: AtomicU64,
 }
 
 impl StreamStats {
@@ -447,6 +448,11 @@ impl StreamStats {
             (
                 "process_sampled_packets_us_mean",
                 process_sampled_packets_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "perf_track_overhead_us",
+                self.perf_track_overhead_us.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
