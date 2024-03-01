@@ -1,5 +1,6 @@
 use {
     super::Bank,
+    crate::bank::CollectorFeeDetails,
     log::{debug, warn},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -87,6 +88,70 @@ impl Bank {
             }
             self.capitalization.fetch_sub(burn, Relaxed);
         }
+    }
+
+    // NOTE: to replace `distribute_transaction_fees()`, it applies different burn/reward rate
+    //       on different fees:
+    //       transaction fee: same fee_rate_governor rule
+    //       priority fee: 100% reward
+    //       next PR will call it behind a feature gate
+    #[allow(dead_code)]
+    pub(super) fn distribute_transaction_fee_details(&self) {
+        let CollectorFeeDetails {
+            transaction_fee,
+            priority_fee,
+        } = *self.collector_fee_details.read().unwrap();
+
+        if transaction_fee.saturating_add(priority_fee) == 0 {
+            // nothing to distribute, exit early
+            return;
+        }
+
+        // apply distribution rules to fee details
+        let (mut deposit, mut burn) = if transaction_fee != 0 {
+            self.fee_rate_governor.burn(transaction_fee)
+        } else {
+            (0, 0)
+        };
+        deposit = deposit.saturating_add(priority_fee);
+
+        if deposit > 0 {
+            let validate_fee_collector = self.validate_fee_collector_account();
+            match self.deposit_fees(
+                &self.collector_id,
+                deposit,
+                DepositFeeOptions {
+                    check_account_owner: validate_fee_collector,
+                    check_rent_paying: validate_fee_collector,
+                },
+            ) {
+                Ok(post_balance) => {
+                    self.rewards.write().unwrap().push((
+                        self.collector_id,
+                        RewardInfo {
+                            reward_type: RewardType::Fee,
+                            lamports: deposit as i64,
+                            post_balance,
+                            commission: None,
+                        },
+                    ));
+                }
+                Err(err) => {
+                    debug!(
+                        "Burned {} lamport tx fee instead of sending to {} due to {}",
+                        deposit, self.collector_id, err
+                    );
+                    datapoint_warn!(
+                        "bank-burned_fee",
+                        ("slot", self.slot(), i64),
+                        ("num_lamports", deposit, i64),
+                        ("error", err.to_string(), String),
+                    );
+                    burn = burn.saturating_add(deposit);
+                }
+            }
+        }
+        self.capitalization.fetch_sub(burn, Relaxed);
     }
 
     // Deposits fees into a specified account and if successful, returns the new balance of that account
