@@ -388,7 +388,8 @@ impl PrioGraphScheduler {
     /// If the `chain_thread` is available, this thread will be selected, regardless of
     /// load-balancing.
     ///
-    /// Panics if the `thread_set` is empty.
+    /// Panics if the `thread_set` is empty. This should never happen, see comment
+    /// on `ThreadAwareAccountLocks::try_lock_accounts`.
     fn select_thread(
         thread_set: ThreadSet,
         batches_per_thread: &[Vec<SanitizedTransaction>],
