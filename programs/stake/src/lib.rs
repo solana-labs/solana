@@ -12,6 +12,7 @@ use solana_sdk::{
 };
 
 pub mod config;
+pub mod points;
 pub mod stake_instruction;
 pub mod stake_state;
 
