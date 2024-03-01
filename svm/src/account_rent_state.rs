@@ -237,4 +237,71 @@ mod tests {
             }),
         );
     }
+
+    #[test]
+    fn test_check_rent_state_with_account() {
+        let pre_rent_state = RentState::RentPaying {
+            data_size: 2,
+            lamports: 3,
+        };
+
+        let post_rent_state = RentState::RentPaying {
+            data_size: 2,
+            lamports: 5,
+        };
+        let account_index = 2 as IndexOfAccount;
+        let key = Pubkey::new_unique();
+        let result = RentState::check_rent_state_with_account(
+            &pre_rent_state,
+            &post_rent_state,
+            &key,
+            &AccountSharedData::default(),
+            account_index,
+        );
+        assert_eq!(
+            result.err(),
+            Some(TransactionError::InsufficientFundsForRent {
+                account_index: account_index as u8
+            })
+        );
+
+        let result = RentState::check_rent_state_with_account(
+            &pre_rent_state,
+            &post_rent_state,
+            &solana_sdk::incinerator::id(),
+            &AccountSharedData::default(),
+            account_index,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_check_rent_state() {
+        let context = TransactionContext::new(
+            vec![(Pubkey::new_unique(), AccountSharedData::default())],
+            Rent::default(),
+            20,
+            20,
+        );
+
+        let pre_rent_state = RentState::RentPaying {
+            data_size: 2,
+            lamports: 3,
+        };
+
+        let post_rent_state = RentState::RentPaying {
+            data_size: 2,
+            lamports: 5,
+        };
+
+        let result =
+            RentState::check_rent_state(Some(&pre_rent_state), Some(&post_rent_state), &context, 0);
+        assert_eq!(
+            result.err(),
+            Some(TransactionError::InsufficientFundsForRent { account_index: 0 })
+        );
+
+        let result = RentState::check_rent_state(None, Some(&post_rent_state), &context, 0);
+        assert!(result.is_ok());
+    }
 }
