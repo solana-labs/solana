@@ -715,7 +715,7 @@ async fn packet_batch_sender(
 }
 
 fn track_streamer_fetch_packet_performance(
-    packet_perf_measure: &mut Vec<([u8; 64], Instant)>,
+    packet_perf_measure: &mut [([u8; 64], Instant)],
     stats: &Arc<StreamStats>,
 ) {
     if packet_perf_measure.is_empty() {
