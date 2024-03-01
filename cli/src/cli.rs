@@ -1796,7 +1796,11 @@ mod tests {
         let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_clone_pubkey = keypair0.pubkey();
-        let signers = vec![None, Some(keypair0.into()), Some(keypair0_clone.into())];
+        let signers: Vec<Option<Box<dyn Signer>>> = vec![
+            None,
+            Some(Box::new(keypair0)),
+            Some(Box::new(keypair0_clone)),
+        ];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
             .unwrap();
@@ -1808,7 +1812,8 @@ mod tests {
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
-        let signers = vec![Some(keypair0.into()), Some(keypair0_clone.into())];
+        let signers: Vec<Option<Box<dyn Signer>>> =
+            vec![Some(Box::new(keypair0)), Some(Box::new(keypair0_clone))];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
             .unwrap();
@@ -1825,11 +1830,11 @@ mod tests {
         let presigner0_pubkey = presigner0.pubkey();
         let presigner1 = Presigner::new(&keypair1.pubkey(), &keypair1.sign_message(&message));
         let presigner1_pubkey = presigner1.pubkey();
-        let signers = vec![
-            Some(keypair0.into()),
-            Some(presigner0.into()),
-            Some(presigner1.into()),
-            Some(keypair1.into()),
+        let signers: Vec<Option<Box<dyn Signer>>> = vec![
+            Some(Box::new(keypair0)),
+            Some(Box::new(presigner0)),
+            Some(Box::new(presigner1)),
+            Some(Box::new(keypair1)),
         ];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
@@ -1913,7 +1918,7 @@ mod tests {
                     pubkey: None,
                     use_lamports_unit: true,
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -1978,7 +1983,7 @@ mod tests {
                     seed: "seed".to_string(),
                     program_id: stake::program::id(),
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2020,7 +2025,7 @@ mod tests {
                 command: CliCommand::SignOffchainMessage {
                     message: message.clone()
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2040,7 +2045,7 @@ mod tests {
                     signature,
                     message
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -2460,7 +2465,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2488,7 +2493,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2521,7 +2526,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2557,7 +2562,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2601,7 +2606,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
+                signers: vec![Box::new(Presigner::new(&from_pubkey, &from_sig))],
             }
         );
 
@@ -2647,8 +2652,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&nonce_authority_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&nonce_authority_file).unwrap())
                 ],
             }
         );
@@ -2686,7 +2691,7 @@ mod tests {
                     derived_address_program_id: Some(stake::program::id()),
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             }
         );
     }
