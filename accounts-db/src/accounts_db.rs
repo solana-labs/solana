@@ -6142,11 +6142,7 @@ impl AccountsDb {
         }
 
         // collect exec_flag, owner, pubkey into buffer to hash
-        if executable {
-            buffer.push(1_u8);
-        } else {
-            buffer.push(0_u8);
-        }
+        buffer.push(executable.into());
         buffer.extend_from_slice(owner.as_ref());
         buffer.extend_from_slice(pubkey.as_ref());
         hasher.update(&buffer);
