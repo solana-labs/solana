@@ -1049,6 +1049,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         }
     }
 
+<<<<<<< HEAD
     fn unload_program(&mut self, id: &Pubkey) {
         if let Some(second_level) = self.entries.get_mut(id) {
             for entry in second_level.slot_versions.iter_mut() {
@@ -1072,6 +1073,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     pub fn unload_all_programs(&mut self) {
         let keys = self.entries.keys().copied().collect::<Vec<Pubkey>>();
         keys.iter().for_each(|key| self.unload_program(key));
+=======
+    /// Returns the `slot_versions` of the second level for the given program id.
+    pub fn get_slot_versions_for_tests(&self, key: &Pubkey) -> &[Arc<LoadedProgram>] {
+        self.entries
+            .get(key)
+            .map(|second_level| second_level.slot_versions.as_ref())
+            .unwrap_or(&[])
+>>>>>>> ccc6a6bf6f (Fix - `test_feature_activation_loaded_programs_recompilation_phase()` (#35299))
     }
 
     /// This function removes the given entry for the given program from the cache.
