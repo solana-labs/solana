@@ -69,7 +69,7 @@ lazy_static! {
     static ref ASYNC_TASK_SEMAPHORE: AsyncTaskSemaphore =
         AsyncTaskSemaphore::new(MAX_OUTSTANDING_TASK);
     static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-client")
+        .thread_name("solQuicClientRt")
         .enable_all()
         .build()
         .unwrap();
