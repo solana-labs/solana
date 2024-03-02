@@ -18,7 +18,7 @@ use {
     solana_measure::measure_us,
     solana_sdk::{
         pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
-        transaction::SanitizedTransaction,
+        transaction::ExtendedSanitizedTransaction,
     },
 };
 
@@ -64,8 +64,8 @@ impl PrioGraphScheduler {
     pub(crate) fn schedule(
         &mut self,
         container: &mut TransactionStateContainer,
-        pre_graph_filter: impl Fn(&[&SanitizedTransaction], &mut [bool]),
-        pre_lock_filter: impl Fn(&SanitizedTransaction) -> bool,
+        pre_graph_filter: impl Fn(&[&ExtendedSanitizedTransaction], &mut [bool]),
+        pre_lock_filter: impl Fn(&ExtendedSanitizedTransaction) -> bool,
     ) -> Result<SchedulingSummary, SchedulerError> {
         let num_threads = self.consume_work_senders.len();
         let mut batches = Batches::new(num_threads);
@@ -161,15 +161,15 @@ impl PrioGraphScheduler {
                 }
 
                 // Check if this transaction conflicts with any blocked transactions
-                if !blocking_locks.check_locks(transaction.message()) {
-                    blocking_locks.take_locks(transaction.message());
+                if !blocking_locks.check_locks(transaction.transaction.message()) {
+                    blocking_locks.take_locks(transaction.transaction.message());
                     unschedulable_ids.push(id);
                     saturating_add_assign!(num_unschedulable, 1);
                     continue;
                 }
 
                 // Schedule the transaction if it can be.
-                let transaction_locks = transaction.get_account_locks_unchecked();
+                let transaction_locks = transaction.transaction.get_account_locks_unchecked();
                 let Some(thread_id) = self.account_locks.try_lock_accounts(
                     transaction_locks.writable.into_iter(),
                     transaction_locks.readonly.into_iter(),
@@ -182,7 +182,7 @@ impl PrioGraphScheduler {
                         )
                     },
                 ) else {
-                    blocking_locks.take_locks(transaction.message());
+                    blocking_locks.take_locks(transaction.transaction.message());
                     unschedulable_ids.push(id);
                     saturating_add_assign!(num_unschedulable, 1);
                     continue;
@@ -329,11 +329,11 @@ impl PrioGraphScheduler {
     fn complete_batch(
         &mut self,
         batch_id: TransactionBatchId,
-        transactions: &[SanitizedTransaction],
+        transactions: &[ExtendedSanitizedTransaction],
     ) {
         let thread_id = self.in_flight_tracker.complete_batch(batch_id);
         for transaction in transactions {
-            let account_locks = transaction.get_account_locks_unchecked();
+            let account_locks = transaction.transaction.get_account_locks_unchecked();
             self.account_locks.unlock_accounts(
                 account_locks.writable.into_iter(),
                 account_locks.readonly.into_iter(),
@@ -392,7 +392,7 @@ impl PrioGraphScheduler {
     /// on `ThreadAwareAccountLocks::try_lock_accounts`.
     fn select_thread(
         thread_set: ThreadSet,
-        batches_per_thread: &[Vec<SanitizedTransaction>],
+        batches_per_thread: &[Vec<ExtendedSanitizedTransaction>],
         in_flight_per_thread: &[usize],
     ) -> ThreadId {
         thread_set
@@ -412,7 +412,7 @@ impl PrioGraphScheduler {
     fn get_transaction_account_access(
         transaction: &SanitizedTransactionTTL,
     ) -> impl Iterator<Item = (Pubkey, AccessKind)> + '_ {
-        let message = transaction.transaction.message();
+        let message = transaction.transaction.transaction.message();
         message
             .account_keys()
             .iter()
@@ -442,7 +442,7 @@ pub(crate) struct SchedulingSummary {
 
 struct Batches {
     ids: Vec<Vec<TransactionId>>,
-    transactions: Vec<Vec<SanitizedTransaction>>,
+    transactions: Vec<Vec<ExtendedSanitizedTransaction>>,
     max_age_slots: Vec<Vec<Slot>>,
     total_cus: Vec<u64>,
 }
@@ -462,7 +462,7 @@ impl Batches {
         thread_id: ThreadId,
     ) -> (
         Vec<TransactionId>,
-        Vec<SanitizedTransaction>,
+        Vec<ExtendedSanitizedTransaction>,
         Vec<Slot>,
         u64,
     ) {

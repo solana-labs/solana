@@ -23,7 +23,10 @@ use {
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, MessageHash, SanitizedTransaction, VersionedTransaction},
+        transaction::{
+            self, ExtendedSanitizedTransaction, MessageHash, SanitizedTransaction,
+            VersionedTransaction,
+        },
     },
     solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -194,7 +197,10 @@ fn simulate_transaction(
         units_consumed,
         return_data,
         inner_instructions,
-    } = bank.simulate_transaction_unchecked(&sanitized_transaction, false);
+    } = bank.simulate_transaction_unchecked(
+        &ExtendedSanitizedTransaction::from(sanitized_transaction),
+        false,
+    );
 
     let simulation_details = TransactionSimulationDetails {
         logs,

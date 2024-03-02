@@ -1,8 +1,8 @@
-use solana_sdk::{clock::Slot, transaction::SanitizedTransaction};
+use solana_sdk::{clock::Slot, transaction::ExtendedSanitizedTransaction};
 
 /// Simple wrapper type to tie a sanitized transaction to max age slot.
 pub(crate) struct SanitizedTransactionTTL {
-    pub(crate) transaction: SanitizedTransaction,
+    pub(crate) transaction: ExtendedSanitizedTransaction,
     pub(crate) max_age_slot: Slot,
 }
 

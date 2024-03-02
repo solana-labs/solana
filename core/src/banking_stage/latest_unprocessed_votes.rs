@@ -11,6 +11,7 @@ use {
         clock::{Slot, UnixTimestamp},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        transaction::ExtendedSanitizedTransaction,
     },
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
@@ -286,7 +287,7 @@ impl LatestUnprocessedVotes {
                             )
                         {
                             if forward_packet_batches_by_accounts.try_add_packet(
-                                &sanitized_vote_transaction,
+                                &ExtendedSanitizedTransaction::from(sanitized_vote_transaction),
                                 deserialized_vote_packet,
                                 &bank.feature_set,
                             ) {

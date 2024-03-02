@@ -43,7 +43,7 @@ use {
         pubkey::Pubkey,
         rent_collector::RentCollector,
         saturating_add_assign,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{self, ExtendedSanitizedTransaction, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
     std::{
@@ -180,7 +180,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     pub fn load_and_execute_sanitized_transactions<'a, CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[ExtendedSanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
         error_counters: &mut TransactionErrorMetrics,
         enable_cpi_recording: bool,
@@ -244,7 +244,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
                             let maybe_compute_budget = ComputeBudget::try_from_instructions(
-                                tx.message().program_instructions_iter(),
+                                tx.transaction.message().program_instructions_iter(),
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -261,7 +261,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
                     let result = self.execute_loaded_transaction(
                         callbacks,
-                        tx,
+                        &tx.transaction,
                         loaded_transaction,
                         compute_budget,
                         nonce.as_ref().map(DurableNonceFee::from),
@@ -325,7 +325,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     /// blockhash or nonce.
     pub fn filter_executable_program_accounts<'a, CB: TransactionProcessingCallback>(
         callbacks: &CB,
-        txs: &[SanitizedTransaction],
+        txs: &[ExtendedSanitizedTransaction],
         lock_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
@@ -333,7 +333,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         lock_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
                 if lamports_per_signature.is_some() {
-                    tx.message()
+                    tx.transaction
+                        .message()
                         .account_keys()
                         .iter()
                         .for_each(|key| match result.entry(*key) {

@@ -43,13 +43,15 @@ pub fn collect_token_balances(
     let mut collect_time = Measure::start("collect_token_balances");
 
     for transaction in batch.sanitized_transactions() {
-        let account_keys = transaction.message().account_keys();
+        let account_keys = transaction.transaction.message().account_keys();
         let has_token_program = account_keys.iter().any(is_known_spl_token_id);
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
             for (index, account_id) in account_keys.iter().enumerate() {
-                if transaction.message().is_invoked(index) || is_known_spl_token_id(account_id) {
+                if transaction.transaction.message().is_invoked(index)
+                    || is_known_spl_token_id(account_id)
+                {
                     continue;
                 }
 

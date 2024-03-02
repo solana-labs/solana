@@ -3280,7 +3280,10 @@ pub mod rpc_accounts_scan {
 pub mod rpc_full {
     use {
         super::*,
-        solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
+        solana_sdk::{
+            message::{SanitizedVersionedMessage, VersionedMessage},
+            transaction::ExtendedSanitizedTransaction,
+        },
         solana_transaction_status::UiInnerInstructions,
     };
     #[rpc]
@@ -3693,7 +3696,8 @@ pub mod rpc_full {
                     units_consumed,
                     return_data,
                     inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
-                } = preflight_bank.simulate_transaction(&transaction, false)
+                } = preflight_bank
+                    .simulate_transaction(&ExtendedSanitizedTransaction::from(transaction), false)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3769,8 +3773,9 @@ pub mod rpc_full {
             }
 
             let transaction = sanitize_transaction(unsanitized_tx, bank)?;
+            let transaction = ExtendedSanitizedTransaction::from(transaction);
             if sig_verify {
-                verify_transaction(&transaction, &bank.feature_set)?;
+                verify_transaction(&transaction.transaction, &bank.feature_set)?;
             }
 
             let TransactionSimulationResult {
@@ -3782,7 +3787,7 @@ pub mod rpc_full {
                 inner_instructions,
             } = bank.simulate_transaction(&transaction, enable_cpi_recording);
 
-            let account_keys = transaction.message().account_keys();
+            let account_keys = transaction.transaction.message().account_keys();
             let number_of_accounts = account_keys.len();
 
             let accounts = if let Some(config_accounts) = config_accounts {

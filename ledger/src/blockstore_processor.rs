@@ -50,7 +50,7 @@ use {
         signature::{Keypair, Signature},
         timing,
         transaction::{
-            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+            ExtendedSanitizedTransaction, Result, TransactionError, TransactionVerificationMode,
             VersionedTransaction,
         },
     },
@@ -117,7 +117,7 @@ fn get_first_error(
     {
         if let Err(ref err) = result {
             if first_err.is_none() {
-                first_err = Some((result.clone(), *transaction.signature()));
+                first_err = Some((result.clone(), *transaction.transaction.signature()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -378,7 +378,7 @@ fn schedule_batches_for_execution(
 fn rebatch_transactions<'a>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
-    sanitized_txs: &'a [SanitizedTransaction],
+    sanitized_txs: &'a [ExtendedSanitizedTransaction],
     start: usize,
     end: usize,
     transaction_indexes: &'a [usize],
@@ -426,7 +426,7 @@ fn rebatch_and_execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
+            let tx_cost = CostModel::calculate_cost(&tx.transaction, &bank.feature_set);
             let cost = tx_cost.sum();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
@@ -507,7 +507,7 @@ pub fn process_entries_for_tests(
 ) -> Result<()> {
     let verify_transaction = {
         let bank = bank.clone_with_scheduler();
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<ExtendedSanitizedTransaction> {
             bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
     };
@@ -1286,7 +1286,7 @@ fn confirm_slot_entries(
         let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
-              -> Result<SanitizedTransaction> {
+              -> Result<ExtendedSanitizedTransaction> {
             bank.verify_transaction(versioned_tx, verification_mode)
         }
     };
@@ -1833,7 +1833,7 @@ pub enum TransactionStatusMessage {
 
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
-    pub transactions: Vec<SanitizedTransaction>,
+    pub transactions: Vec<ExtendedSanitizedTransaction>,
     pub execution_results: Vec<Option<TransactionExecutionDetails>>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
@@ -1850,7 +1850,7 @@ impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
         bank: Arc<Bank>,
-        transactions: Vec<SanitizedTransaction>,
+        transactions: Vec<ExtendedSanitizedTransaction>,
         execution_results: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,

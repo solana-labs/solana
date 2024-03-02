@@ -12,7 +12,7 @@ use {
         clock::Slot,
         feature_set::FeatureSet,
         saturating_add_assign,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{self, ExtendedSanitizedTransaction, TransactionError},
     },
     std::sync::atomic::{AtomicU64, Ordering},
 };
@@ -40,7 +40,7 @@ impl QosService {
     pub fn select_and_accumulate_transaction_costs(
         &self,
         bank: &Bank,
-        transactions: &[SanitizedTransaction],
+        transactions: &[ExtendedSanitizedTransaction],
         pre_results: impl Iterator<Item = transaction::Result<()>>,
     ) -> (Vec<transaction::Result<TransactionCost>>, usize) {
         let transaction_costs =
@@ -67,13 +67,15 @@ impl QosService {
     fn compute_transaction_costs<'a>(
         &self,
         feature_set: &FeatureSet,
-        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transactions: impl Iterator<Item = &'a ExtendedSanitizedTransaction>,
         pre_results: impl Iterator<Item = transaction::Result<()>>,
     ) -> Vec<transaction::Result<TransactionCost>> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
         let txs_costs: Vec<_> = transactions
             .zip(pre_results)
-            .map(|(tx, pre_result)| pre_result.map(|()| CostModel::calculate_cost(tx, feature_set)))
+            .map(|(tx, pre_result)| {
+                pre_result.map(|()| CostModel::calculate_cost(&tx.transaction, feature_set))
+            })
             .collect();
         compute_cost_time.stop();
         self.metrics
@@ -92,7 +94,7 @@ impl QosService {
     /// and a count of the number of transactions that would fit in the block
     fn select_transactions_per_cost<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a SanitizedTransaction>,
+        transactions: impl Iterator<Item = &'a ExtendedSanitizedTransaction>,
         transactions_costs: impl Iterator<Item = transaction::Result<TransactionCost>>,
         bank: &Bank,
     ) -> (Vec<transaction::Result<TransactionCost>>, usize) {

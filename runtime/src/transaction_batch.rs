@@ -1,6 +1,6 @@
 use {
     crate::bank::Bank,
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::transaction::{ExtendedSanitizedTransaction, Result},
     std::borrow::Cow,
 };
 
@@ -8,7 +8,7 @@ use {
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    sanitized_txs: Cow<'b, [SanitizedTransaction]>,
+    sanitized_txs: Cow<'b, [ExtendedSanitizedTransaction]>,
     needs_unlock: bool,
 }
 
@@ -16,7 +16,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        sanitized_txs: Cow<'b, [SanitizedTransaction]>,
+        sanitized_txs: Cow<'b, [ExtendedSanitizedTransaction]>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());
         Self {
@@ -31,7 +31,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn sanitized_transactions(&self) -> &[SanitizedTransaction] {
+    pub fn sanitized_transactions(&self) -> &[ExtendedSanitizedTransaction] {
         &self.sanitized_txs
     }
 

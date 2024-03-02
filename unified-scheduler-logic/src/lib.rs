@@ -1,12 +1,12 @@
-use solana_sdk::transaction::SanitizedTransaction;
+use solana_sdk::transaction::ExtendedSanitizedTransaction;
 
 pub struct Task {
-    transaction: SanitizedTransaction,
+    transaction: ExtendedSanitizedTransaction,
     index: usize,
 }
 
 impl Task {
-    pub fn create_task(transaction: SanitizedTransaction, index: usize) -> Self {
+    pub fn create_task(transaction: ExtendedSanitizedTransaction, index: usize) -> Self {
         Task { transaction, index }
     }
 
@@ -14,7 +14,7 @@ impl Task {
         self.index
     }
 
-    pub fn transaction(&self) -> &SanitizedTransaction {
+    pub fn transaction(&self) -> &ExtendedSanitizedTransaction {
         &self.transaction
     }
 }

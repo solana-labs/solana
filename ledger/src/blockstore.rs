@@ -3130,7 +3130,7 @@ impl Blockstore {
                             // Attempt to verify transaction and load addresses from the current bank,
                             // or manually scan the transaction for addresses if the transaction.
                             if let Ok(tx) = bank.fully_verify_transaction(tx.clone()) {
-                                add_to_set(&result, tx.message().account_keys().iter());
+                                add_to_set(&result, tx.transaction.message().account_keys().iter());
                             } else {
                                 add_to_set(&result, tx.message.static_account_keys());
 

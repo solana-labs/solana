@@ -6,7 +6,7 @@ use {
         cost_tracker::{CostTracker, CostTrackerError},
     },
     solana_perf::packet::Packet,
-    solana_sdk::{feature_set::FeatureSet, transaction::SanitizedTransaction},
+    solana_sdk::{feature_set::FeatureSet, transaction::ExtendedSanitizedTransaction},
     std::sync::Arc,
 };
 
@@ -58,11 +58,11 @@ impl ForwardBatch {
 
     fn try_add(
         &mut self,
-        sanitized_transaction: &SanitizedTransaction,
+        sanitized_transaction: &ExtendedSanitizedTransaction,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> Result<u64, CostTrackerError> {
-        let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
+        let tx_cost = CostModel::calculate_cost(&sanitized_transaction.transaction, feature_set);
         let res = self.cost_tracker.try_add(&tx_cost);
         if res.is_ok() {
             self.forwardable_packets.push(immutable_packet);
@@ -112,7 +112,7 @@ impl ForwardPacketBatchesByAccounts {
     /// packets are filled into first available 'batch' that have space to fit it.
     pub fn try_add_packet(
         &mut self,
-        sanitized_transaction: &SanitizedTransaction,
+        sanitized_transaction: &ExtendedSanitizedTransaction,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> bool {

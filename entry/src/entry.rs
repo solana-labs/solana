@@ -27,7 +27,7 @@ use {
         packet::Meta,
         timing,
         transaction::{
-            Result, SanitizedTransaction, Transaction, TransactionError,
+            ExtendedSanitizedTransaction, Result, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
     },
@@ -163,7 +163,7 @@ impl From<&Entry> for EntrySummary {
 
 /// Typed entry to distinguish between transaction and tick entries
 pub enum EntryType {
-    Transactions(Vec<SanitizedTransaction>),
+    Transactions(Vec<ExtendedSanitizedTransaction>),
     Tick(Hash),
 }
 
@@ -405,7 +405,7 @@ impl EntryVerificationState {
 
 pub fn verify_transactions(
     entries: Vec<Entry>,
-    verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
+    verify: Arc<dyn Fn(VersionedTransaction) -> Result<ExtendedSanitizedTransaction> + Send + Sync>,
 ) -> Result<Vec<EntryType>> {
     PAR_THREAD_POOL.install(|| {
         entries
@@ -432,7 +432,10 @@ pub fn start_verify_transactions(
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<ExtendedSanitizedTransaction>
             + Send
             + Sync,
     >,
@@ -469,7 +472,10 @@ fn start_verify_transactions_cpu(
     entries: Vec<Entry>,
     skip_verification: bool,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<ExtendedSanitizedTransaction>
             + Send
             + Sync,
     >,
@@ -498,13 +504,16 @@ fn start_verify_transactions_gpu(
     entries: Vec<Entry>,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<ExtendedSanitizedTransaction>
             + Send
             + Sync,
     >,
 ) -> Result<EntrySigVerificationState> {
     let verify_func = {
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<ExtendedSanitizedTransaction> {
             verify(
                 versioned_tx,
                 TransactionVerificationMode::HashAndVerifyPrecompiles,
@@ -514,7 +523,7 @@ fn start_verify_transactions_gpu(
 
     let entries = verify_transactions(entries, Arc::new(verify_func))?;
 
-    let entry_txs: Vec<&SanitizedTransaction> = entries
+    let entry_txs: Vec<&ExtendedSanitizedTransaction> = entries
         .iter()
         .filter_map(|entry_type| match entry_type {
             EntryType::Tick(_) => None,
@@ -552,7 +561,7 @@ fn start_verify_transactions_gpu(
             }
             let entry_tx_iter = slice
                 .into_par_iter()
-                .map(|tx| tx.to_versioned_transaction());
+                .map(|tx| tx.transaction.to_versioned_transaction());
 
             let res = packet_batch
                 .par_iter_mut()

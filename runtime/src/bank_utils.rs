@@ -7,7 +7,7 @@ use {
     solana_sdk::{pubkey::Pubkey, signature::Signer},
 };
 use {
-    solana_sdk::transaction::SanitizedTransaction,
+    solana_sdk::transaction::ExtendedSanitizedTransaction,
     solana_svm::transaction_results::TransactionResults,
     solana_vote::{vote_parser, vote_sender_types::ReplayVoteSender},
 };
@@ -37,7 +37,7 @@ pub fn setup_bank_and_vote_pubkeys_for_tests(
 }
 
 pub fn find_and_send_votes(
-    sanitized_txs: &[SanitizedTransaction],
+    sanitized_txs: &[ExtendedSanitizedTransaction],
     tx_results: &TransactionResults,
     vote_sender: Option<&ReplayVoteSender>,
 ) {
@@ -49,8 +49,11 @@ pub fn find_and_send_votes(
             .iter()
             .zip(execution_results.iter())
             .for_each(|(tx, result)| {
-                if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
-                    if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
+                if tx.transaction.is_simple_vote_transaction() && result.was_executed_successfully()
+                {
+                    if let Some(parsed_vote) =
+                        vote_parser::parse_sanitized_vote_transaction(&tx.transaction)
+                    {
                         if parsed_vote.1.last_voted_slot().is_some() {
                             let _ = vote_sender.send(parsed_vote);
                         }

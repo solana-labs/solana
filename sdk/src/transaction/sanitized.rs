@@ -19,6 +19,7 @@ use {
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::message::SanitizedVersionedMessage,
+    std::time::Instant,
 };
 
 /// Maximum number of accounts that a transaction may lock.
@@ -33,6 +34,22 @@ pub struct SanitizedTransaction {
     message_hash: Hash,
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
+}
+
+/// Sanitized transaction with option start_time
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ExtendedSanitizedTransaction {
+    pub transaction: SanitizedTransaction,
+    pub start_time: Option<Instant>,
+}
+
+impl From<SanitizedTransaction> for ExtendedSanitizedTransaction {
+    fn from(value: SanitizedTransaction) -> Self {
+        Self {
+            transaction: value,
+            start_time: None,
+        }
+    }
 }
 
 /// Set of accounts that must be locked for safe transaction processing

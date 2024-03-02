@@ -29,7 +29,7 @@ use {
         message::SanitizedMessage,
         saturating_add_assign,
         timing::timestamp,
-        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+        transaction::{self, AddressLoader, ExtendedSanitizedTransaction, TransactionError},
     },
     solana_svm::{
         account_loader::{validate_fee_payer, TransactionCheckResult},
@@ -241,7 +241,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        sanitized_transactions: &[SanitizedTransaction],
+        sanitized_transactions: &[ExtendedSanitizedTransaction],
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
@@ -297,7 +297,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        transactions: &[SanitizedTransaction],
+        transactions: &[ExtendedSanitizedTransaction],
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
@@ -431,7 +431,7 @@ impl Consumer {
     pub fn process_and_record_transactions(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[ExtendedSanitizedTransaction],
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
         let mut error_counters = TransactionErrorMetrics::default();
@@ -459,7 +459,7 @@ impl Consumer {
     pub fn process_and_record_aged_transactions(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[ExtendedSanitizedTransaction],
         max_slot_ages: &[Slot],
     ) -> ProcessTransactionBatchOutput {
         // Need to filter out transactions since they were sanitized earlier.
@@ -471,7 +471,7 @@ impl Consumer {
                 // Re-sanitized transaction should be equal to the original transaction,
                 // but whether it will pass sanitization needs to be checked.
                 let resanitized_tx =
-                    bank.fully_verify_transaction(tx.to_versioned_transaction())?;
+                    bank.fully_verify_transaction(tx.transaction.to_versioned_transaction())?;
                 if resanitized_tx != *tx {
                     // Sanitization before/after epoch give different transaction data - do not execute.
                     return Err(TransactionError::ResanitizationNeeded);
@@ -479,7 +479,7 @@ impl Consumer {
             } else {
                 // Any transaction executed between sanitization time and now may have closed the lookup table(s).
                 // Above re-sanitization already loads addresses, so don't need to re-check in that case.
-                let lookup_tables = tx.message().message_address_table_lookups();
+                let lookup_tables = tx.transaction.message().message_address_table_lookups();
                 if !lookup_tables.is_empty() {
                     bank.load_addresses(lookup_tables)?;
                 }
@@ -492,7 +492,7 @@ impl Consumer {
     fn process_and_record_transactions_with_pre_results(
         &self,
         bank: &Arc<Bank>,
-        txs: &[SanitizedTransaction],
+        txs: &[ExtendedSanitizedTransaction],
         chunk_offset: usize,
         pre_results: impl Iterator<Item = Result<(), TransactionError>>,
     ) -> ProcessTransactionBatchOutput {
@@ -608,6 +608,7 @@ impl Consumer {
             .filter_map(|transaction| {
                 let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
                 transaction
+                    .transaction
                     .get_compute_budget_details(round_compute_unit_price_enabled)
                     .map(|details| details.compute_unit_price)
             })
@@ -648,7 +649,7 @@ impl Consumer {
                 .zip(batch.sanitized_transactions())
                 .filter_map(|(execution_result, tx)| {
                     if execution_result.was_executed() {
-                        Some(tx.to_versioned_transaction())
+                        Some(tx.transaction.to_versioned_transaction())
                     } else {
                         None
                     }
@@ -812,7 +813,7 @@ impl Consumer {
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Bank,
-        transactions: &[SanitizedTransaction],
+        transactions: &[ExtendedSanitizedTransaction],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
         let filter =

@@ -26,7 +26,7 @@ use {
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::transaction::{ExtendedSanitizedTransaction, Result},
     solana_unified_scheduler_logic::Task,
     solana_vote::vote_sender_types::ReplayVoteSender,
     std::{
@@ -203,7 +203,7 @@ pub trait TaskHandler: Send + Sync + Debug + Sized + 'static {
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        transaction: &SanitizedTransaction,
+        transaction: &ExtendedSanitizedTransaction,
         index: usize,
         handler_context: &HandlerContext,
     );
@@ -217,7 +217,7 @@ impl TaskHandler for DefaultTaskHandler {
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        transaction: &SanitizedTransaction,
+        transaction: &ExtendedSanitizedTransaction,
         index: usize,
         handler_context: &HandlerContext,
     ) {
@@ -740,7 +740,7 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
         &self.context
     }
 
-    fn schedule_execution(&self, &(transaction, index): &(&SanitizedTransaction, usize)) {
+    fn schedule_execution(&self, &(transaction, index): &(&ExtendedSanitizedTransaction, usize)) {
         let task = Task::create_task(transaction.clone(), index);
         self.inner.thread_manager.send_task(task);
     }

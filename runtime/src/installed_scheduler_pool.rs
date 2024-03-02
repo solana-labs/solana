@@ -27,7 +27,7 @@ use {
     solana_sdk::{
         hash::Hash,
         slot_history::Slot,
-        transaction::{Result, SanitizedTransaction},
+        transaction::{ExtendedSanitizedTransaction, Result},
     },
     std::{
         fmt::Debug,
@@ -104,7 +104,7 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     // Calling this is illegal as soon as wait_for_termination is called.
     fn schedule_execution<'a>(
         &'a self,
-        transaction_with_index: &'a (&'a SanitizedTransaction, usize),
+        transaction_with_index: &'a (&'a ExtendedSanitizedTransaction, usize),
     );
 
     /// Wait for a scheduler to terminate after processing.
@@ -289,7 +289,9 @@ impl BankWithScheduler {
     // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
-        transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
+        transactions_with_indexes: impl ExactSizeIterator<
+            Item = (&'a ExtendedSanitizedTransaction, &'a usize),
+        >,
     ) {
         trace!(
             "schedule_transaction_executions(): {} txs",
