@@ -4200,14 +4200,12 @@ impl Bank {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| {
-                SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self).and_then(
-                    |txn| {
-                        Ok(ExtendedSanitizedTransaction {
-                            transaction: txn,
-                            start_time: None,
-                        })
-                    },
-                )
+                SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self).map(|txn| {
+                    ExtendedSanitizedTransaction {
+                        transaction: txn,
+                        start_time: None,
+                    }
+                })
             })
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
