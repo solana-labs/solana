@@ -7538,13 +7538,13 @@ impl TransactionProcessingCallback for Bank {
 
     fn check_account_access(
         &self,
-        tx: &SanitizedTransaction,
+        message: &SanitizedMessage,
         account_index: usize,
         account: &AccountSharedData,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Result<()> {
         if self.get_reward_interval() == RewardInterval::InsideInterval
-            && tx.message().is_writable(account_index)
+            && message.is_writable(account_index)
             && solana_stake_program::check_id(account.owner())
         {
             error_counters.program_execution_temporarily_restricted += 1;

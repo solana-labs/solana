@@ -66,15 +66,14 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
         .zip(lock_results)
         .map(|etx| match etx {
             (tx, (Ok(()), nonce, lamports_per_signature)) => {
+                let message = tx.message();
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
                     fee_structure.calculate_fee(
-                        tx.message(),
+                        message,
                         *lamports_per_signature,
-                        &process_compute_budget_instructions(
-                            tx.message().program_instructions_iter(),
-                        )
-                        .unwrap_or_default()
-                        .into(),
+                        &process_compute_budget_instructions(message.program_instructions_iter())
+                            .unwrap_or_default()
+                            .into(),
                         feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
@@ -86,7 +85,7 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
                 // load transactions
                 let loaded_transaction = match load_transaction_accounts(
                     callbacks,
-                    tx,
+                    message,
                     fee,
                     error_counters,
                     account_overrides,
@@ -101,7 +100,7 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
                 let nonce = if let Some(nonce) = nonce {
                     match NonceFull::from_partial(
                         nonce,
-                        tx.message(),
+                        message,
                         &loaded_transaction.accounts,
                         &loaded_transaction.rent_debits,
                     ) {
@@ -123,25 +122,19 @@ pub fn load_accounts<CB: TransactionProcessingCallback>(
 
 fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     callbacks: &CB,
-    tx: &SanitizedTransaction,
+    message: &SanitizedMessage,
     fee: u64,
     error_counters: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
 ) -> Result<LoadedTransaction> {
-    // NOTE: this check will never fail because `tx` is sanitized
-    if tx.signatures().is_empty() && fee != 0 {
-        return Err(TransactionError::MissingSignatureForFee);
-    }
-
     let feature_set = callbacks.get_feature_set();
 
     // There is no way to predict what program will execute without an error
     // If a fee can pay for execution then the program will be scheduled
     let mut validated_fee_payer = false;
     let mut tx_rent: TransactionRent = 0;
-    let message = tx.message();
     let account_keys = message.account_keys();
     let mut accounts_found = Vec::with_capacity(account_keys.len());
     let mut account_deps = Vec::with_capacity(account_keys.len());
@@ -149,7 +142,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     let rent_collector = callbacks.get_rent_collector();
 
     let requested_loaded_accounts_data_size_limit =
-        get_requested_loaded_accounts_data_size_limit(tx)?;
+        get_requested_loaded_accounts_data_size_limit(message)?;
     let mut accumulated_accounts_data_size: usize = 0;
 
     let instruction_accounts = message
@@ -231,7 +224,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
 
                 if !validated_fee_payer && message.is_non_loader_key(i) {
                     if i != 0 {
-                        warn!("Payer index should be 0! {:?}", tx);
+                        warn!("Payer index should be 0! {:?}", message);
                     }
 
                     validate_fee_payer(
@@ -246,7 +239,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     validated_fee_payer = true;
                 }
 
-                callbacks.check_account_access(tx, i, &account, error_counters)?;
+                callbacks.check_account_access(message, i, &account, error_counters)?;
 
                 tx_rent += rent;
                 rent_debits.insert(key, rent, account.lamports());
@@ -351,10 +344,10 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
 ///     user requested loaded accounts size.
 ///     Note, requesting zero bytes will result transaction error
 fn get_requested_loaded_accounts_data_size_limit(
-    tx: &SanitizedTransaction,
+    sanitized_message: &SanitizedMessage,
 ) -> Result<Option<NonZeroUsize>> {
     let compute_budget_limits =
-        process_compute_budget_instructions(tx.message().program_instructions_iter())
+        process_compute_budget_instructions(sanitized_message.program_instructions_iter())
             .unwrap_or_default();
     // sanitize against setting size limit to zero
     NonZeroUsize::new(
@@ -1149,7 +1142,7 @@ mod tests {
             ));
             assert_eq!(
                 *expected_result,
-                get_requested_loaded_accounts_data_size_limit(&tx)
+                get_requested_loaded_accounts_data_size_limit(tx.message())
             );
         }
 
@@ -1430,30 +1423,6 @@ mod tests {
     }
 
     #[test]
-    fn test_load_transaction_accounts_failure() {
-        let message = Message::default();
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
-        let mock_bank = TestCallbacks::default();
-        let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
-
-        let sanitized_transaction =
-            SanitizedTransaction::new_for_tests(sanitized_message, vec![], false);
-        let result = load_transaction_accounts(
-            &mock_bank,
-            &sanitized_transaction,
-            32,
-            &mut error_counter,
-            None,
-            &HashMap::new(),
-            &loaded_programs,
-        );
-
-        assert_eq!(result.err(), Some(TransactionError::MissingSignatureForFee));
-    }
-
-    #[test]
     fn test_load_transaction_accounts_fail_to_validate_fee_payer() {
         let message = Message {
             account_keys: vec![Pubkey::new_from_array([0; 32])],
@@ -1479,7 +1448,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1524,7 +1493,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1591,7 +1560,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1635,7 +1604,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1679,7 +1648,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1730,7 +1699,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1799,7 +1768,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1857,7 +1826,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -1920,7 +1889,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
@@ -2009,7 +1978,7 @@ mod tests {
         );
         let result = load_transaction_accounts(
             &mock_bank,
-            &sanitized_transaction,
+            sanitized_transaction.message(),
             32,
             &mut error_counter,
             None,
