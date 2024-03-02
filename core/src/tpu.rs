@@ -153,6 +153,7 @@ impl Tpu {
             thread: tpu_quic_t,
             key_updater,
         } = spawn_server(
+            "solQuicTpu",
             "quic_streamer_tpu",
             transactions_quic_sockets,
             keypair,
@@ -172,6 +173,7 @@ impl Tpu {
             thread: tpu_forwards_quic_t,
             key_updater: forwards_key_updater,
         } = spawn_server(
+            "solQuicTpuFwd",
             "quic_streamer_tpu_forwards",
             transactions_forwards_quic_sockets,
             keypair,
