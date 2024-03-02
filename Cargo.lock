@@ -2292,7 +2292,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "slab",
  "tokio",
  "tokio-util 0.7.1",
@@ -2668,9 +2668,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.3"
+version = "2.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233cf39063f058ea2caae4091bf4a3ef70a653afbc026f5c4a4135d114e3c177"
+checksum = "7b0b929d511467233429c45a44ac1dcaa21ba0f5ba11e4879e6ed28ddb4f9df4"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
@@ -4842,7 +4842,7 @@ version = "0.9.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd075d994154d4a774f95b51fb96bdc2832b0ea48425c92546073816cda1f2f"
 dependencies = [
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "itoa",
  "ryu",
  "serde",
@@ -5186,7 +5186,7 @@ dependencies = [
  "fnv",
  "im",
  "index_list",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "itertools",
  "lazy_static",
  "libsecp256k1",
@@ -5666,7 +5666,7 @@ dependencies = [
  "dashmap",
  "futures 0.3.30",
  "futures-util",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "indicatif",
  "log",
  "quinn",
@@ -5747,7 +5747,7 @@ dependencies = [
  "bincode",
  "crossbeam-channel",
  "futures-util",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "indicatif",
  "log",
  "rand 0.8.5",
@@ -6085,7 +6085,7 @@ dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
  "flate2",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "itertools",
  "log",
  "lru",
@@ -7178,7 +7178,7 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "histogram",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "itertools",
  "libc",
  "log",
@@ -7288,7 +7288,7 @@ dependencies = [
  "console",
  "csv",
  "ctrlc",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "indicatif",
  "pickledb",
  "serde",
@@ -7317,7 +7317,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "futures-util",
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "indicatif",
  "log",
  "rayon",
@@ -8534,7 +8534,7 @@ version = "0.20.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81"
 dependencies = [
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "toml_datetime",
  "winnow",
 ]
@@ -8545,7 +8545,7 @@ version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ffdf896f8daaabf9b66ba8e77ea1ed5ed0f72821b398aba62352e95062951"
 dependencies = [
- "indexmap 2.2.3",
+ "indexmap 2.2.5",
  "serde",
  "serde_spanned",
  "toml_datetime",
