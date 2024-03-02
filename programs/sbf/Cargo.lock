@@ -6581,6 +6581,7 @@ dependencies = [
 name = "solana-wen-restart"
 version = "1.19.0"
 dependencies = [
+ "anyhow",
  "log",
  "prost",
  "prost-build",

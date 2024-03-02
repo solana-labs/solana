@@ -138,6 +138,11 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+// Right now since we reuse the wait for supermajority code, the
+// following threshold should always greater than or equal to
+// WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT.
+const WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT: u64 =
+    WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -1236,6 +1241,11 @@ impl Validator {
             };
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
+        let wen_restart_repair_slots = if in_wen_restart {
+            Some(Arc::new(RwLock::new(Vec::new())))
+        } else {
+            None
+        };
         let tower = match process_blockstore.process_to_create_tower() {
             Ok(tower) => {
                 info!("Tower state: {:?}", tower);
@@ -1310,6 +1320,7 @@ impl Validator {
             repair_quic_endpoint_sender,
             outstanding_repair_requests.clone(),
             cluster_slots.clone(),
+            wen_restart_repair_slots.clone(),
         )?;
 
         if in_wen_restart {
@@ -1319,6 +1330,10 @@ impl Validator {
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
+                bank_forks.clone(),
+                wen_restart_repair_slots.clone(),
+                WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT,
+                exit.clone(),
             ) {
                 Ok(()) => {
                     return Err("wen_restart phase one completedy".to_string());

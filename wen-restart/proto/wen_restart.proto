@@ -11,13 +11,19 @@ enum State {
     DONE = 6;
 }
 
-message MyLastVotedForkSlots {
-    uint64 last_vote_slot = 1;
+message LastVotedForkSlotsRecord {
+    repeated uint64 last_voted_fork_slots = 1;
     string last_vote_bankhash = 2;
     uint32 shred_version = 3;
+    uint64 wallclock = 4;
+}
+
+message LastVotedForkSlotsAggregateRecord {
+    map<string, LastVotedForkSlotsRecord> received = 1;
 }
 
 message WenRestartProgress {
     State state = 1;
-    optional MyLastVotedForkSlots my_last_voted_fork_slots = 2;
+    optional LastVotedForkSlotsRecord my_last_voted_fork_slots = 2;
+    optional LastVotedForkSlotsAggregateRecord last_voted_fork_slots_aggregate = 3;
 }

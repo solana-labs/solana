@@ -186,7 +186,7 @@ pub fn get_closest_completion(
                 continue;
             }
             let slot_meta = slot_meta_cache.get(&path_slot).unwrap().as_ref().unwrap();
-            let new_repairs = RepairService::generate_repairs_for_slot(
+            let new_repairs = RepairService::generate_repairs_for_slot_throttled_by_tick(
                 blockstore,
                 path_slot,
                 slot_meta,

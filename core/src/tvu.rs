@@ -143,6 +143,7 @@ impl Tvu {
         repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
         outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
         cluster_slots: Arc<ClusterSlots>,
+        wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -214,6 +215,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
+                wen_restart_repair_slots,
             };
             WindowService::new(
                 blockstore.clone(),
@@ -499,6 +501,7 @@ pub mod tests {
             repair_quic_endpoint_sender,
             outstanding_repair_requests,
             cluster_slots,
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
