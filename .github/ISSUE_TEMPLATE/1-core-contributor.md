@@ -2,7 +2,9 @@
 name: Core Contributor Issue
 about: Create a report describing a problem and a proposed solution
 title: ''
+labels: ''
 assignees: ''
+
 ---
 
 #### Problem
