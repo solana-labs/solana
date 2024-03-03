@@ -48,7 +48,7 @@ Confirm you have the desired version of `solana` installed by running:
 solana --version
 ```
 
-After a successful install, `solana-install update` may be used to easily update the Solana software to a newer version at any time.
+After a successful install, `agave-install update` may be used to easily update the Solana software to a newer version at any time.
 
 </details>
 
@@ -70,7 +70,7 @@ After a successful install, `solana-install update` may be used to easily update
   installer into a temporary directory:
 
 ```bash
-cmd /c "curl https://release.solana.com/stable/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs"
+cmd /c "curl https://release.solana.com/stable/agave-install-init-x86_64-pc-windows-msvc.exe --output C:\agave-install-tmp\agave-install-init.exe --create-dirs"
 ```
 
 - Copy and paste the following command, then press Enter to install the latest
@@ -78,7 +78,7 @@ cmd /c "curl https://release.solana.com/stable/solana-install-init-x86_64-pc-win
   to allow the program to run.
 
 ```bash
-C:\solana-install-tmp\solana-install-init.exe stable
+C:\agave-install-tmp\agave-install-init.exe stable
 ```
 
 - When the installer is finished, press Enter.
@@ -91,7 +91,7 @@ C:\solana-install-tmp\solana-install-init.exe stable
 solana --version
 ```
 
-After a successful install, `solana-install update` may be used to easily update the Solana software to a newer version at any time.
+After a successful install, `agave-install update` may be used to easily update the Solana software to a newer version at any time.
 </details>
 
 

@@ -47,7 +47,7 @@ fn get_config() -> Config {
         .version(solana_version::version!())
         .after_help("ADDITIONAL HELP:
         To receive a Slack, Discord, PagerDuty and/or Telegram notification on sanity failure,
-        define environment variables before running `solana-watchtower`:
+        define environment variables before running `agave-watchtower`:
 
         export SLACK_WEBHOOK=...
         export DISCORD_WEBHOOK=...
@@ -63,7 +63,7 @@ fn get_config() -> Config {
 
         To receive a Twilio SMS notification on failure, having a Twilio account,
         and a sending number owned by that account,
-        define environment variable before running `solana-watchtower`:
+        define environment variable before running `agave-watchtower`:
 
         export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'")
         .arg({
@@ -166,7 +166,7 @@ fn get_config() -> Config {
                 .value_name("SUFFIX")
                 .takes_value(true)
                 .default_value("")
-                .help("Add this string into all notification messages after \"solana-watchtower\"")
+                .help("Add this string into all notification messages after \"agave-watchtower\"")
         )
         .get_matches();
 
@@ -381,7 +381,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if let Some((failure_test_name, failure_error_message)) = &failure {
             let notification_msg = format!(
-                "solana-watchtower{}: Error: {}: {}",
+                "agave-watchtower{}: Error: {}: {}",
                 config.name_suffix, failure_test_name, failure_error_message
             );
             num_consecutive_failures += 1;
@@ -415,7 +415,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 );
                 info!("{}", all_clear_msg);
                 notifier.send(
-                    &format!("solana-watchtower{}: {}", config.name_suffix, all_clear_msg),
+                    &format!("agave-watchtower{}: {}", config.name_suffix, all_clear_msg),
                     &NotificationType::Resolve { incident },
                 );
             }

@@ -56,7 +56,7 @@ As a data point of the number of accounts and potential data stored on-chain, be
 5. **BPF Program Loader v2**: 191 accounts
 6. **BPF Program Loader v1**: 150 accounts
 
-> _Note: this data was pulled with a modified `solana-ledger-tool` built from this branch: [https://github.com/jstarry/solana/tree/large-account-stats](https://github.com/jstarry/solana/tree/large-account-stats)_
+> _Note: this data was pulled with a modified `agave-ledger-tool` built from this branch: [https://github.com/jstarry/solana/tree/large-account-stats](https://github.com/jstarry/solana/tree/large-account-stats)_
 
 ### Reclaiming buffer accounts
 

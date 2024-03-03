@@ -202,8 +202,8 @@ killNodes() {
   # Try to use the RPC exit API to cleanly exit the first two nodes
   # (dynamic nodes, -x, are just killed)
   echo "--- RPC exit"
-  $solana_validator --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator exit --force || true
-  $solana_validator --ledger "$SOLANA_CONFIG_DIR"/validator exit --force || true
+  $agave_validator --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator exit --force || true
+  $agave_validator --ledger "$SOLANA_CONFIG_DIR"/validator exit --force || true
 
   # Give the nodes a splash of time to cleanly exit before killing them
   sleep 2

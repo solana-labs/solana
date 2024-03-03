@@ -16,7 +16,7 @@ fn press_enter() {
 }
 
 fn main() {
-    solana_install::main_init().unwrap_or_else(|err| {
+    agave_install::main_init().unwrap_or_else(|err| {
         println!("Error: {err}");
         press_enter();
         exit(1);

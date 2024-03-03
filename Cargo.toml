@@ -327,7 +327,7 @@ solana-frozen-abi = { path = "frozen-abi", version = "=1.17.25" }
 solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=1.17.25" }
 solana-genesis = { path = "genesis", version = "=1.17.25" }
 solana-genesis-utils = { path = "genesis-utils", version = "=1.17.25" }
-solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.17.25" }
+agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.17.25" }
 solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.17.25" }
 solana-gossip = { path = "gossip", version = "=1.17.25" }
 solana-loader-v4-program = { path = "programs/loader-v4", version = "=1.17.25" }

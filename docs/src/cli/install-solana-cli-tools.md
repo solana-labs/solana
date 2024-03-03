@@ -54,7 +54,7 @@ Please update your PATH environment variable to include the solana programs:
 solana --version
 ```
 
-- After a successful install, `solana-install update` may be used to easily
+- After a successful install, `agave-install update` may be used to easily
   update the Solana software to a newer version at any time.
 
 ---
@@ -72,7 +72,7 @@ solana --version
   installer into a temporary directory:
 
 ```bash
-cmd /c "curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs"
+cmd /c "curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/agave-install-init-x86_64-pc-windows-msvc.exe --output C:\agave-install-tmp\agave-install-init.exe --create-dirs"
 ```
 
 - Copy and paste the following command, then press Enter to install the latest
@@ -80,7 +80,7 @@ cmd /c "curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-ins
   to allow the program to run.
 
 ```bash
-C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSION
+C:\agave-install-tmp\agave-install-init.exe LATEST_SOLANA_RELEASE_VERSION
 ```
 
 - When the installer is finished, press Enter.
@@ -95,12 +95,12 @@ C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSION
 solana --version
 ```
 
-- After a successful install, `solana-install update` may be used to easily
+- After a successful install, `agave-install update` may be used to easily
   update the Solana software to a newer version at any time.
 
 ## Download Prebuilt Binaries
 
-If you would rather not use `solana-install` to manage the install, you can
+If you would rather not use `agave-install` to manage the install, you can
 manually download and install the binaries.
 
 ### Linux
@@ -161,7 +161,7 @@ You can then run the following command to obtain the same result as with
 prebuilt binaries:
 
 ```bash
-solana-install init
+agave-install init
 ```
 
 ## Use Homebrew

@@ -47,7 +47,7 @@ solana-sbf-rust-realloc = { path = "rust/realloc", version = "=1.17.25", default
 solana-sbf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.17.25" }
 solana-sdk = { path = "../../sdk", version = "=1.17.25" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.17.25" }
-solana-validator = { path = "../../validator", version = "=1.17.25" }
+agave-validator = { path = "../../validator", version = "=1.17.25" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.17.25" }
 static_assertions = "1.1.0"
 thiserror = "1.0"

@@ -32,7 +32,7 @@
 //! By default the [`block_subscribe`] and [`vote_subscribe`] events are
 //! disabled on RPC nodes. They can be enabled by passing
 //! `--rpc-pubsub-enable-block-subscription` and
-//! `--rpc-pubsub-enable-vote-subscription` to `solana-validator`. When these
+//! `--rpc-pubsub-enable-vote-subscription` to `agave-validator`. When these
 //! methods are disabled, the RPC server will return a "Method not found" error
 //! message.
 //!
@@ -416,7 +416,7 @@ impl PubsubClient {
     /// Receives messages of type [`RpcBlockUpdate`] when a block is confirmed or finalized.
     ///
     /// This method is disabled by default. It can be enabled by passing
-    /// `--rpc-pubsub-enable-block-subscription` to `solana-validator`.
+    /// `--rpc-pubsub-enable-block-subscription` to `agave-validator`.
     ///
     /// # RPC Reference
     ///
@@ -578,7 +578,7 @@ impl PubsubClient {
     /// votes are observed prior to confirmation and may never be confirmed.
     ///
     /// This method is disabled by default. It can be enabled by passing
-    /// `--rpc-pubsub-enable-vote-subscription` to `solana-validator`.
+    /// `--rpc-pubsub-enable-vote-subscription` to `agave-validator`.
     ///
     /// # RPC Reference
     ///

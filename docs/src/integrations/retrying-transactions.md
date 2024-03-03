@@ -106,7 +106,7 @@ according to three ports:
   unable to process all transactions
 
 For more information on the TPU, please refer to
-[this excellent writeup by Jito Labs](https://jito-labs.medium.com/solana-validator-101-transaction-processing-90bcdc271143).
+[this excellent writeup by Jito Labs](https://jito-labs.medium.com/agave-validator-101-transaction-processing-90bcdc271143).
 
 ## How Transactions Get Dropped
 

@@ -3,11 +3,11 @@ use {
         block_metadata_notifier_interface::BlockMetadataNotifier,
         geyser_plugin_manager::GeyserPluginManager,
     },
-    log::*,
-    solana_accounts_db::stake_rewards::RewardInfo,
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
+    agave_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaBlockInfoV3, ReplicaBlockInfoVersions,
     },
+    log::*,
+    solana_accounts_db::stake_rewards::RewardInfo,
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{clock::UnixTimestamp, pubkey::Pubkey},

@@ -281,7 +281,7 @@ pub fn main() -> Result<(), String> {
 pub fn main_init() -> Result<(), String> {
     solana_logger::setup();
 
-    let matches = App::new("solana-install-init")
+    let matches = App::new("agave-install-init")
         .about("Initializes a new installation")
         .version(solana_version::version!())
         .arg({

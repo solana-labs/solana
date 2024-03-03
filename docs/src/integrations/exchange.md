@@ -28,7 +28,7 @@ To run an api node:
 2. Start the validator with at least the following parameters:
 
 ```bash
-solana-validator \
+agave-validator \
   --ledger <LEDGER_PATH> \
   --identity <VALIDATOR_IDENTITY_KEYPAIR> \
   --entrypoint <CLUSTER_ENTRYPOINT> \
@@ -44,14 +44,14 @@ solana-validator \
 Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
 
 The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to the cluster you are joining.
-[Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
+[Current parameters for Mainnet Beta](../clusters.md#example-agave-validator-command-line-2)
 
 The `--limit-ledger-size` parameter allows you to specify how many ledger
 [shreds](../terminology.md#shred) your node retains on disk. If you do not
 include this parameter, the validator will keep the entire ledger until it runs
 out of disk space. The default value attempts to keep the ledger disk usage
 under 500GB. More or less disk usage may be requested by adding an argument to
-`--limit-ledger-size` if desired. Check `solana-validator --help` for the
+`--limit-ledger-size` if desired. Check `agave-validator --help` for the
 default limit value used by `--limit-ledger-size`. More information about
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
@@ -70,16 +70,16 @@ ensure you miss as little data as possible. Running the solana software as a
 systemd service is one great option.
 
 For monitoring, we provide
-[`solana-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
-which can monitor your validator and detect with the `solana-validator` process
+[`agave-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
+which can monitor your validator and detect with the `agave-validator` process
 is unhealthy. It can directly be configured to alert you via Slack, Telegram,
-Discord, or Twillio. For details, run `solana-watchtower --help`.
+Discord, or Twillio. For details, run `agave-watchtower --help`.
 
 ```bash
-solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
+agave-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
-> You can find more information about the [best practices for Solana Watchtower](../validator/best-practices/monitoring.md#solana-watchtower) here in the docs.
+> You can find more information about the [best practices for Solana Watchtower](../validator/best-practices/monitoring.md#agave-watchtower) here in the docs.
 
 #### New Software Release Announcements
 
@@ -103,7 +103,7 @@ known validators. This snapshot reflects the current state of the chain, but
 does not contain the complete historical ledger. If one of your node exits and
 boots from a new snapshot, there may be a gap in the ledger on that node. In
 order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
-`solana-validator` command to receive historical ledger data instead of a
+`agave-validator` command to receive historical ledger data instead of a
 snapshot.
 
 Do not pass the `--no-snapshot-fetch` parameter on your initial boot as it's not
