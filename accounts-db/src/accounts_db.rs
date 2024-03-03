@@ -14964,7 +14964,7 @@ pub mod tests {
                         return;
                     }
                     // Meddle load_limit to cover all branches of implementation.
-                    // There should absolutely no behaviorial difference; the load_limit triggered
+                    // There should absolutely no behavioral difference; the load_limit triggered
                     // slow branch should only affect the performance.
                     // Ordering::Relaxed is ok because of no data dependencies; the modified field is
                     // completely free-standing cfg(test) control-flow knob.

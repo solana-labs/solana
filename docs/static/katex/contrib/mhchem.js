@@ -3224,7 +3224,7 @@ var texify = {
     }
   }
 }; //
-// Helpers for code anaylsis
+// Helpers for code analysis
 // Will show type error at calling position
 //
 

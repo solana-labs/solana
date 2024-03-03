@@ -178,7 +178,7 @@ custodian must also sign the transaction.
 
 - `account[0]` - RW - The StakeStateV2.
 
-  `StakeStateV2::authorized_staker` or `authorized_withdrawer` is set to to
+  `StakeStateV2::authorized_staker` or `authorized_withdrawer` is set to
   `Pubkey`.
 
 ### StakeInstruction::Deactivate

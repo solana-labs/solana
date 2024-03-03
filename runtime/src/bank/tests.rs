@@ -4111,7 +4111,7 @@ fn test_is_empty() {
     let bank0 = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
     let key1 = Keypair::new();
 
-    // The zeroth bank is empty becasue there are no transactions
+    // The zeroth bank is empty because there are no transactions
     assert!(bank0.is_empty());
 
     // Set is_delta to true, bank is no longer empty
@@ -13566,7 +13566,7 @@ fn test_last_restart_slot() {
     let GenesisConfigInfo {
         mut genesis_config, ..
     } = create_genesis_config_with_leader(mint_lamports, &leader_pubkey, validator_stake_lamports);
-    // Remove last restart slot account so we can simluate its' activation
+    // Remove last restart slot account so we can simulate its' activation
     genesis_config
         .accounts
         .remove(&feature_set::last_restart_slot_sysvar::id())

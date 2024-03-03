@@ -59,7 +59,7 @@ const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 /// bytes in HotAccountOffset.
 pub(crate) const HOT_ACCOUNT_ALIGNMENT: usize = 8;
 
-/// The alignemnt for the blocks inside a hot accounts file.  A hot accounts
+/// The alignment for the blocks inside a hot accounts file.  A hot accounts
 /// file consists of accounts block, index block, owners block, and footer.
 /// This requirement allows the offset of each block properly aligned so
 /// that they can be readable under mmap.
