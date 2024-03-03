@@ -291,9 +291,17 @@ pub fn load_and_process_ledger(
         "Using: block-verification-method: {}",
         block_verification_method,
     );
+    let unified_scheduler_handler_threads =
+        value_t!(arg_matches, "unified_scheduler_handler_threads", usize).ok();
     match block_verification_method {
         BlockVerificationMethod::BlockstoreProcessor => {
             info!("no scheduler pool is installed for block verification...");
+            if let Some(count) = unified_scheduler_handler_threads {
+                warn!(
+                    "--unified-scheduler-handler-threads={count} is ignored because unified \
+                     scheduler isn't enabled"
+                );
+            }
         }
         BlockVerificationMethod::UnifiedScheduler => {
             let no_transaction_status_sender = None;
@@ -303,6 +311,7 @@ pub fn load_and_process_ledger(
                 .write()
                 .unwrap()
                 .install_scheduler_pool(DefaultSchedulerPool::new_dyn(
+                    unified_scheduler_handler_threads,
                     process_options.runtime_config.log_messages_bytes_limit,
                     no_transaction_status_sender,
                     no_replay_vote_sender,

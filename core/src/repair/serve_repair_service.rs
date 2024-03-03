@@ -38,6 +38,7 @@ impl ServeRepairService {
             serve_repair_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::receiver(
+            "solRcvrServeRep".to_string(),
             serve_repair_socket.clone(),
             exit.clone(),
             request_sender,

@@ -35,11 +35,9 @@ use {
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             bpf_account_data_direct_mapping, deprecate_executable_meta_update_in_bpf_loader,
-            disable_bpf_loader_instructions, enable_bpf_loader_set_authority_checked_ix,
-            FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
-        loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         native_loader,
         program_utils::limited_deserialize,
@@ -385,7 +383,11 @@ pub fn process_instruction_inner(
             process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             invoke_context.consume_checked(DEFAULT_LOADER_COMPUTE_UNITS)?;
-            process_loader_instruction(invoke_context)
+            ic_logger_msg!(
+                log_collector,
+                "BPF loader management instructions are no longer supported",
+            );
+            Err(InstructionError::UnsupportedProgramId)
         } else if bpf_loader_deprecated::check_id(program_id) {
             invoke_context.consume_checked(DEPRECATED_LOADER_COMPUTE_UNITS)?;
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
@@ -1349,72 +1351,6 @@ fn common_close_account(
     Ok(())
 }
 
-fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let instruction_data = instruction_context.get_instruction_data();
-    let program_id = instruction_context.get_last_program_key(transaction_context)?;
-    let mut program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-    if program.get_owner() != program_id {
-        ic_msg!(
-            invoke_context,
-            "Executable account not owned by the BPF loader"
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
-    // Return `UnsupportedProgramId` error for bpf_loader when
-    // `disable_bpf_loader_instruction` feature is activated.
-    if invoke_context
-        .feature_set
-        .is_active(&disable_bpf_loader_instructions::id())
-    {
-        ic_msg!(
-            invoke_context,
-            "BPF loader management instructions are no longer supported"
-        );
-        return Err(InstructionError::UnsupportedProgramId);
-    }
-
-    let is_program_signer = program.is_signer();
-    match limited_deserialize(instruction_data)? {
-        LoaderInstruction::Write { offset, bytes } => {
-            if !is_program_signer {
-                ic_msg!(invoke_context, "Program account did not sign");
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            drop(program);
-            write_program_data(offset as usize, &bytes, invoke_context)?;
-        }
-        LoaderInstruction::Finalize => {
-            if !is_program_signer {
-                ic_msg!(invoke_context, "key[0] did not sign the transaction");
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            deploy_program!(
-                invoke_context,
-                *program.get_key(),
-                program.get_owner(),
-                program.get_data().len(),
-                invoke_context.programs_loaded_for_tx_batch.slot(),
-                {},
-                program.get_data(),
-            );
-
-            // `deprecate_executable_meta_update_in_bpf_loader` feature doesn't
-            // apply to  bpf_loader v2. Instead, the deployment by bpf_loader
-            // will be deprecated by its own feature
-            // `disable_bpf_loader_instructions`. Before we activate
-            // deprecate_executable_meta_update_in_bpf_loader, we should
-            // activate `disable_bpf_loader_instructions` first.
-            program.set_executable(true)?;
-            ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
-        }
-    }
-
-    Ok(())
-}
-
 fn execute<'a, 'b: 'a>(
     executable: &'a Executable<InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
@@ -1694,7 +1630,6 @@ mod tests {
             Entrypoint::vm,
             |invoke_context| {
                 let mut features = FeatureSet::all_enabled();
-                features.deactivate(&disable_bpf_loader_instructions::id());
                 features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
                 invoke_context.feature_set = Arc::new(features);
                 test_utils::load_all_invoked_programs(invoke_context);
@@ -1713,137 +1648,6 @@ mod tests {
         program_account.set_data(elf);
         program_account.set_executable(true);
         program_account
-    }
-
-    #[test]
-    fn test_bpf_loader_write() {
-        let loader_id = bpf_loader::id();
-        let program_id = Pubkey::new_unique();
-        let mut program_account = AccountSharedData::new(1, 0, &loader_id);
-        let instruction_data = bincode::serialize(&LoaderInstruction::Write {
-            offset: 3,
-            bytes: vec![1, 2, 3],
-        })
-        .unwrap();
-
-        // Case: No program account
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            Vec::new(),
-            Vec::new(),
-            Err(InstructionError::NotEnoughAccountKeys),
-        );
-
-        // Case: Not signed
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account.clone())],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::MissingRequiredSignature),
-        );
-
-        // Case: Write bytes to an offset
-        program_account.set_data(vec![0; 6]);
-        let accounts = process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account.clone())],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: true,
-                is_writable: true,
-            }],
-            Ok(()),
-        );
-        assert_eq!(&vec![0, 0, 0, 1, 2, 3], accounts.first().unwrap().data());
-
-        // Case: Overflow
-        program_account.set_data(vec![0; 5]);
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account)],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: true,
-                is_writable: true,
-            }],
-            Err(InstructionError::AccountDataTooSmall),
-        );
-    }
-
-    #[test]
-    fn test_bpf_loader_finalize() {
-        let loader_id = bpf_loader::id();
-        let program_id = Pubkey::new_unique();
-        let mut program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
-        program_account.set_executable(false);
-        let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
-
-        // Case: No program account
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            Vec::new(),
-            Vec::new(),
-            Err(InstructionError::NotEnoughAccountKeys),
-        );
-
-        // Case: Not signed
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account.clone())],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::MissingRequiredSignature),
-        );
-
-        // Case: Finalize
-        let accounts = process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account.clone())],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: true,
-                is_writable: true,
-            }],
-            Ok(()),
-        );
-        assert!(accounts.first().unwrap().executable());
-
-        // Case: Finalize bad ELF
-        *program_account.data_as_mut_slice().get_mut(0).unwrap() = 0;
-        process_instruction(
-            &loader_id,
-            &[],
-            &instruction_data,
-            vec![(program_id, program_account)],
-            vec![AccountMeta {
-                pubkey: program_id,
-                is_signer: true,
-                is_writable: true,
-            }],
-            Err(InstructionError::InvalidAccountData),
-        );
     }
 
     #[test]
@@ -1867,7 +1671,7 @@ mod tests {
             &[],
             Vec::new(),
             Vec::new(),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
         // Case: Only a program account
@@ -1917,7 +1721,6 @@ mod tests {
             Entrypoint::vm,
             |invoke_context| {
                 let mut features = FeatureSet::all_enabled();
-                features.deactivate(&disable_bpf_loader_instructions::id());
                 features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
                 invoke_context.feature_set = Arc::new(features);
                 invoke_context.mock_set_remaining(0);
@@ -2467,7 +2270,6 @@ mod tests {
                 Entrypoint::vm,
                 |invoke_context| {
                     let mut features = FeatureSet::all_enabled();
-                    features.deactivate(&disable_bpf_loader_instructions::id());
                     features.deactivate(&deprecate_executable_meta_update_in_bpf_loader::id());
                     invoke_context.feature_set = Arc::new(features);
                 },

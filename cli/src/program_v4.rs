@@ -1666,9 +1666,9 @@ mod tests {
                     authority_signer_index: 2,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&program_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&program_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -1712,8 +1712,8 @@ mod tests {
                     buffer_signer_index: None,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -1744,9 +1744,9 @@ mod tests {
                     authority_signer_index: 2,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -1787,8 +1787,8 @@ mod tests {
                     authority_signer_index: 1,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -1829,8 +1829,8 @@ mod tests {
                     authority_signer_index: 1,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );

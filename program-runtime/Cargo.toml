@@ -35,6 +35,7 @@ assert_matches = { workspace = true }
 libsecp256k1 = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
+test-case = { workspace = true }
 
 [lib]
 crate-type = ["lib"]

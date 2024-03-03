@@ -118,11 +118,17 @@ pub enum ProgramCliCommand {
         program_pubkey: Pubkey,
         upgrade_authority_index: Option<SignerIndex>,
         new_upgrade_authority: Option<Pubkey>,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
     },
     SetUpgradeAuthorityChecked {
         program_pubkey: Pubkey,
         upgrade_authority_index: SignerIndex,
         new_upgrade_authority_index: SignerIndex,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
     },
     Show {
         account_pubkey: Option<Pubkey>,
@@ -384,7 +390,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                     "Set this flag if you don't want the new authority to sign \
                                      the set-upgrade-authority transaction.",
                                 ),
-                        ),
+                        )
+                        .offline_args(),
                 )
                 .subcommand(
                     SubCommand::with_name("show")
@@ -617,7 +624,6 @@ pub fn parse_program_subcommand(
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-
             let buffer_pubkey = pubkey_of_signer(matches, "buffer", wallet_manager)
                 .unwrap()
                 .unwrap();
@@ -723,6 +729,9 @@ pub fn parse_program_subcommand(
             }
         }
         ("set-upgrade-authority", Some(matches)) => {
+            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+            let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
+            let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let (upgrade_authority_signer, upgrade_authority_pubkey) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
             let program_pubkey = pubkey_of(matches, "program_id").unwrap();
@@ -753,6 +762,9 @@ pub fn parse_program_subcommand(
                         program_pubkey,
                         upgrade_authority_index: signer_info.index_of(upgrade_authority_pubkey),
                         new_upgrade_authority,
+                        sign_only,
+                        dump_transaction_message,
+                        blockhash_query,
                     }),
                     signers: signer_info.signers,
                 }
@@ -766,6 +778,9 @@ pub fn parse_program_subcommand(
                         new_upgrade_authority_index: signer_info
                             .index_of(new_upgrade_authority)
                             .expect("new upgrade authority is missing from signers"),
+                        sign_only,
+                        dump_transaction_message,
+                        blockhash_query,
                     }),
                     signers: signer_info.signers,
                 }
@@ -948,11 +963,17 @@ pub fn process_program_subcommand(
             Some(*buffer_pubkey),
             *buffer_authority_index,
             Some(*new_buffer_authority),
+            false,
+            false,
+            &BlockhashQuery::default(),
         ),
         ProgramCliCommand::SetUpgradeAuthority {
             program_pubkey,
             upgrade_authority_index,
             new_upgrade_authority,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
         } => process_set_authority(
             &rpc_client,
             config,
@@ -960,17 +981,26 @@ pub fn process_program_subcommand(
             None,
             *upgrade_authority_index,
             *new_upgrade_authority,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
         ),
         ProgramCliCommand::SetUpgradeAuthorityChecked {
             program_pubkey,
             upgrade_authority_index,
             new_upgrade_authority_index,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
         } => process_set_authority_checked(
             &rpc_client,
             config,
             *program_pubkey,
             *upgrade_authority_index,
             *new_upgrade_authority_index,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
         ),
         ProgramCliCommand::Show {
             account_pubkey,
@@ -1224,6 +1254,9 @@ fn process_program_deploy(
             None,
             Some(upgrade_authority_signer_index),
             None,
+            false,
+            false,
+            &BlockhashQuery::default(),
         )?;
     }
     if result.is_err() && !buffer_provided {
@@ -1437,6 +1470,9 @@ fn process_set_authority(
     buffer_pubkey: Option<Pubkey>,
     authority: Option<SignerIndex>,
     new_authority: Option<Pubkey>,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
 ) -> ProcessResult {
     let authority_signer = if let Some(index) = authority {
         config.signers[index]
@@ -1445,7 +1481,7 @@ fn process_set_authority(
     };
 
     trace!("Set a new authority");
-    let blockhash = rpc_client.get_latest_blockhash()?;
+    let blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
     let mut tx = if let Some(ref pubkey) = program_pubkey {
         Transaction::new_unsigned(Message::new(
@@ -1473,29 +1509,42 @@ fn process_set_authority(
         return Err("Program or Buffer not provided".into());
     };
 
-    tx.try_sign(&[config.signers[0], authority_signer], blockhash)?;
-    rpc_client
-        .send_and_confirm_transaction_with_spinner_and_config(
+    let signers = &[config.signers[0], authority_signer];
+
+    if sign_only {
+        tx.try_partial_sign(signers, blockhash)?;
+        return_signers_with_config(
             &tx,
-            config.commitment,
-            RpcSendTransactionConfig {
-                preflight_commitment: Some(config.commitment.commitment),
-                ..RpcSendTransactionConfig::default()
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
             },
         )
-        .map_err(|e| format!("Setting authority failed: {e}"))?;
+    } else {
+        tx.try_sign(signers, blockhash)?;
+        rpc_client
+            .send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                RpcSendTransactionConfig {
+                    preflight_commitment: Some(config.commitment.commitment),
+                    ..RpcSendTransactionConfig::default()
+                },
+            )
+            .map_err(|e| format!("Setting authority failed: {e}"))?;
 
-    let authority = CliProgramAuthority {
-        authority: new_authority
-            .map(|pubkey| pubkey.to_string())
-            .unwrap_or_else(|| "none".to_string()),
-        account_type: if program_pubkey.is_some() {
-            CliProgramAccountType::Program
-        } else {
-            CliProgramAccountType::Buffer
-        },
-    };
-    Ok(config.output_format.formatted_string(&authority))
+        let authority = CliProgramAuthority {
+            authority: new_authority
+                .map(|pubkey| pubkey.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            account_type: if program_pubkey.is_some() {
+                CliProgramAccountType::Program
+            } else {
+                CliProgramAccountType::Buffer
+            },
+        };
+        Ok(config.output_format.formatted_string(&authority))
+    }
 }
 
 fn process_set_authority_checked(
@@ -1504,12 +1553,15 @@ fn process_set_authority_checked(
     program_pubkey: Pubkey,
     authority_index: SignerIndex,
     new_authority_index: SignerIndex,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
 ) -> ProcessResult {
     let authority_signer = config.signers[authority_index];
     let new_authority_signer = config.signers[new_authority_index];
 
     trace!("Set a new (checked) authority");
-    let blockhash = rpc_client.get_latest_blockhash()?;
+    let blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
     let mut tx = Transaction::new_unsigned(Message::new(
         &[bpf_loader_upgradeable::set_upgrade_authority_checked(
@@ -1520,26 +1572,35 @@ fn process_set_authority_checked(
         Some(&config.signers[0].pubkey()),
     ));
 
-    tx.try_sign(
-        &[config.signers[0], authority_signer, new_authority_signer],
-        blockhash,
-    )?;
-    rpc_client
-        .send_and_confirm_transaction_with_spinner_and_config(
+    let signers = &[config.signers[0], authority_signer, new_authority_signer];
+    if sign_only {
+        tx.try_partial_sign(signers, blockhash)?;
+        return_signers_with_config(
             &tx,
-            config.commitment,
-            RpcSendTransactionConfig {
-                preflight_commitment: Some(config.commitment.commitment),
-                ..RpcSendTransactionConfig::default()
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
             },
         )
-        .map_err(|e| format!("Setting authority failed: {e}"))?;
+    } else {
+        tx.try_sign(signers, blockhash)?;
+        rpc_client
+            .send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                RpcSendTransactionConfig {
+                    preflight_commitment: Some(config.commitment.commitment),
+                    ..RpcSendTransactionConfig::default()
+                },
+            )
+            .map_err(|e| format!("Setting authority failed: {e}"))?;
 
-    let authority = CliProgramAuthority {
-        authority: new_authority_signer.pubkey().to_string(),
-        account_type: CliProgramAccountType::Program,
-    };
-    Ok(config.output_format.formatted_string(&authority))
+        let authority = CliProgramAuthority {
+            authority: new_authority_signer.pubkey().to_string(),
+            account_type: CliProgramAccountType::Program,
+        };
+        Ok(config.output_format.formatted_string(&authority))
+    }
 }
 
 const ACCOUNT_TYPE_SIZE: usize = 4;
@@ -2679,7 +2740,7 @@ mod tests {
         },
         serde_json::Value,
         solana_cli_output::OutputFormat,
-        solana_sdk::signature::write_keypair_file,
+        solana_sdk::{hash::Hash, signature::write_keypair_file},
     };
 
     fn make_tmp_path(name: &str) -> String {
@@ -2728,7 +2789,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2756,7 +2817,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2787,8 +2848,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2818,7 +2879,7 @@ mod tests {
                     allow_excessive_balance: false,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2850,8 +2911,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&program_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&program_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2884,8 +2945,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -2913,7 +2974,7 @@ mod tests {
                     skip_fee_check: false,
                     allow_excessive_balance: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -2947,7 +3008,7 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2972,7 +3033,7 @@ mod tests {
                     max_len: Some(42),
                     skip_fee_check: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3001,8 +3062,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3032,8 +3093,8 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3068,9 +3129,9 @@ mod tests {
                     skip_fee_check: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&buffer_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3088,6 +3149,8 @@ mod tests {
 
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
+        let blockhash = Hash::new_unique();
+
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
@@ -3096,6 +3159,10 @@ mod tests {
             "--new-upgrade-authority",
             &new_authority_pubkey.to_string(),
             "--skip-new-upgrade-authority-signer-check",
+            "--sign-only",
+            "--dump-transaction-message",
+            "--blockhash",
+            blockhash.to_string().as_str(),
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -3104,8 +3171,11 @@ mod tests {
                     program_pubkey,
                     upgrade_authority_index: Some(0),
                     new_upgrade_authority: Some(new_authority_pubkey),
+                    sign_only: true,
+                    dump_transaction_message: true,
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3129,11 +3199,15 @@ mod tests {
                     program_pubkey,
                     upgrade_authority_index: Some(0),
                     new_upgrade_authority: Some(new_authority_pubkey.pubkey()),
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
+        let blockhash = Hash::new_unique();
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Keypair::new();
         let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
@@ -3145,6 +3219,10 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey_file,
+            "--sign-only",
+            "--dump-transaction-message",
+            "--blockhash",
+            blockhash.to_string().as_str(),
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -3153,12 +3231,13 @@ mod tests {
                     program_pubkey,
                     upgrade_authority_index: 0,
                     new_upgrade_authority_index: 1,
+                    sign_only: true,
+                    dump_transaction_message: true,
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&new_authority_pubkey_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&new_authority_pubkey_file).unwrap()),
                 ],
             }
         );
@@ -3181,8 +3260,11 @@ mod tests {
                     program_pubkey,
                     upgrade_authority_index: Some(0),
                     new_upgrade_authority: None,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3206,10 +3288,13 @@ mod tests {
                     program_pubkey,
                     upgrade_authority_index: Some(1),
                     new_upgrade_authority: None,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3243,7 +3328,7 @@ mod tests {
                     buffer_authority_index: Some(0),
                     new_buffer_authority: new_authority_pubkey,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3267,7 +3352,7 @@ mod tests {
                     buffer_authority_index: Some(0),
                     new_buffer_authority: new_authority_keypair.pubkey(),
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -3434,7 +3519,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3457,7 +3542,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: true,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -3482,8 +3567,8 @@ mod tests {
                     bypass_warning: false,
                 }),
                 signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3507,7 +3592,7 @@ mod tests {
                     use_lamports_unit: false,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap()),],
             }
         );
 
@@ -3529,7 +3614,7 @@ mod tests {
                     use_lamports_unit: true,
                     bypass_warning: false,
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap()),],
             }
         );
     }
@@ -3561,7 +3646,7 @@ mod tests {
                     program_pubkey,
                     additional_bytes
                 }),
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }

@@ -30,8 +30,8 @@ use {
 
 pub fn get_latest_blockhash<T: BenchTpsClient + ?Sized>(client: &T) -> Hash {
     loop {
-        match client.get_latest_blockhash_with_commitment(CommitmentConfig::processed()) {
-            Ok((blockhash, _)) => return blockhash,
+        match client.get_latest_blockhash() {
+            Ok(blockhash) => return blockhash,
             Err(err) => {
                 info!("Couldn't get last blockhash: {:?}", err);
                 sleep(Duration::from_secs(1));

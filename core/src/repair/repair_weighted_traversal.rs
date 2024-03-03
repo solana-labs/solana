@@ -98,7 +98,7 @@ pub fn get_best_repair_shreds(
         if let Some(slot_meta) = slot_meta {
             match next {
                 Visit::Unvisited(slot) => {
-                    let new_repairs = RepairService::generate_repairs_for_slot(
+                    let new_repairs = RepairService::generate_repairs_for_slot_throttled_by_tick(
                         blockstore,
                         slot,
                         slot_meta,

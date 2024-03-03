@@ -71,7 +71,7 @@ use {
     },
     serde::Serialize,
     solana_accounts_db::{
-        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot, TransactionLoadResult},
+        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
@@ -89,9 +89,6 @@ use {
         sorted_storages::SortedStorages,
         stake_rewards::StakeReward,
         storable_accounts::StorableAccounts,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
@@ -120,7 +117,10 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         feature,
-        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{
+            self, include_loaded_accounts_data_size_in_fee_calculation,
+            remove_rounding_in_fee_calculation, FeatureSet,
+        },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -156,16 +156,20 @@ use {
         },
         transaction_context::{TransactionAccount, TransactionReturnData},
     },
-    solana_stake_program::stake_state::{
-        self, InflationPointCalculationEvent, PointValue, StakeStateV2,
+    solana_stake_program::{
+        points::{InflationPointCalculationEvent, PointValue},
+        stake_state::StakeStateV2,
     },
     solana_svm::{
-        account_loader::TransactionCheckResult,
+        account_loader::{TransactionCheckResult, TransactionLoadResult},
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
             TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+        },
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -1360,8 +1364,15 @@ impl Bank {
                 if let Some((key, program_to_recompile)) =
                     loaded_programs_cache.programs_to_recompile.pop()
                 {
+                    let effective_epoch = loaded_programs_cache.latest_root_epoch.saturating_add(1);
                     drop(loaded_programs_cache);
-                    let recompiled = new.load_program(&key, false, Some(program_to_recompile));
+                    let recompiled = new.load_program(&key, false, effective_epoch);
+                    recompiled
+                        .tx_usage_counter
+                        .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
+                    recompiled
+                        .ix_usage_counter
+                        .fetch_add(program_to_recompile.ix_usage_counter.load(Relaxed), Relaxed);
                     let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
                     loaded_programs_cache.assign_program(key, recompiled);
                 }
@@ -2979,7 +2990,7 @@ impl Bank {
                         return 0;
                     };
 
-                    stake_state::calculate_points(
+                    solana_stake_program::points::calculate_points(
                         stake_account.stake_state(),
                         vote_state,
                         stake_history,
@@ -3016,7 +3027,7 @@ impl Bank {
                     delegations
                         .par_iter()
                         .map(|(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
+                            solana_stake_program::points::calculate_points(
                                 stake_account.stake_state(),
                                 vote_state,
                                 stake_history,
@@ -3096,7 +3107,7 @@ impl Bank {
 
                     let pre_lamport = stake_account.lamports();
 
-                    let redeemed = stake_state::redeem_rewards(
+                    let redeemed = solana_stake_program::rewards::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
                         &mut stake_account,
@@ -3144,7 +3155,7 @@ impl Bank {
                         });
                     } else {
                         debug!(
-                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            "solana_stake_program::rewards::redeem_rewards() failed for {}: {:?}",
                             stake_pubkey, redeemed
                         );
                     }
@@ -3215,7 +3226,7 @@ impl Bank {
                     });
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
-                    let redeemed = stake_state::redeem_rewards(
+                    let redeemed = solana_stake_program::rewards::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
                         &mut stake_account,
@@ -3251,7 +3262,7 @@ impl Bank {
                         });
                     } else {
                         debug!(
-                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            "solana_stake_program::rewards::redeem_rewards() failed for {}: {:?}",
                             stake_pubkey, redeemed
                         );
                     }
@@ -4016,6 +4027,8 @@ impl Bank {
                 .into(),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            self.feature_set
+                .is_active(&remove_rounding_in_fee_calculation::id()),
         )
     }
 
@@ -4287,14 +4300,13 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
+            true,
         );
 
         let post_simulation_accounts = loaded_transactions
             .into_iter()
             .next()
-            .unwrap()
-            .0
-            .ok()
+            .and_then(|(loaded_transactions_res, _)| loaded_transactions_res.ok())
             .map(|loaded_transaction| {
                 loaded_transaction
                     .accounts
@@ -4316,7 +4328,12 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        let execution_result = execution_results.pop().unwrap();
+        let execution_result =
+            execution_results
+                .pop()
+                .unwrap_or(TransactionExecutionResult::NotExecuted(
+                    TransactionError::InvalidProgramForExecution,
+                ));
         let flattened_result = execution_result.flattened_result();
         let (logs, return_data, inner_instructions) = match execution_result {
             TransactionExecutionResult::Executed { details, .. } => (
@@ -4525,7 +4542,7 @@ impl Bank {
         balances
     }
 
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
@@ -4536,6 +4553,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
+        limit_to_load_programs: bool,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4602,6 +4620,7 @@ impl Bank {
                 account_overrides,
                 self.builtin_programs.iter(),
                 log_messages_bytes_limit,
+                limit_to_load_programs,
             );
 
         let mut signature_count = 0;
@@ -5651,6 +5670,7 @@ impl Bank {
             timings,
             None,
             log_messages_bytes_limit,
+            false,
         );
 
         let (last_blockhash, lamports_per_signature) =
@@ -7480,10 +7500,10 @@ impl Bank {
         &self,
         pubkey: &Pubkey,
         reload: bool,
-        recompile: Option<Arc<LoadedProgram>>,
+        effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
         self.transaction_processor
-            .load_program(self, pubkey, reload, recompile)
+            .load_program(self, pubkey, reload, effective_epoch)
     }
 }
 
@@ -7518,13 +7538,13 @@ impl TransactionProcessingCallback for Bank {
 
     fn check_account_access(
         &self,
-        tx: &SanitizedTransaction,
+        message: &SanitizedMessage,
         account_index: usize,
         account: &AccountSharedData,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Result<()> {
         if self.get_reward_interval() == RewardInterval::InsideInterval
-            && tx.message().is_writable(account_index)
+            && message.is_writable(account_index)
             && solana_stake_program::check_id(account.owner())
         {
             error_counters.program_execution_temporarily_restricted += 1;

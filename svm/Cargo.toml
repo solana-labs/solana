@@ -13,7 +13,6 @@ edition = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 percentage = { workspace = true }
-solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -29,7 +28,6 @@ crate-type = ["lib"]
 name = "solana_svm"
 
 [dev-dependencies]
-solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 

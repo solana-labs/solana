@@ -95,8 +95,7 @@ mod tests {
         );
 
         // assert for SanitizedTransaction
-        let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
             sanitized_transaction.get_compute_budget_details(false),
             Some(ComputeBudgetDetails {
@@ -133,8 +132,7 @@ mod tests {
         );
 
         // assert for SanitizedTransaction
-        let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
             sanitized_transaction.get_compute_budget_details(false),
             Some(ComputeBudgetDetails {
@@ -171,8 +169,7 @@ mod tests {
         );
 
         // assert for SanitizedTransaction
-        let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
             sanitized_transaction.get_compute_budget_details(false),
             Some(ComputeBudgetDetails {

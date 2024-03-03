@@ -1,19 +1,18 @@
 use {
     crate::{
-        account_loader::{load_accounts, TransactionCheckResult},
+        account_loader::{
+            load_accounts, LoadedTransaction, TransactionCheckResult, TransactionLoadResult,
+        },
         account_overrides::AccountOverrides,
         runtime_config::RuntimeConfig,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
-    },
-    log::debug,
-    percentage::Percentage,
-    solana_accounts_db::{
-        accounts::{LoadedTransaction, TransactionLoadResult},
         transaction_results::{
             DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
         },
     },
+    log::debug,
+    percentage::Percentage,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -52,10 +51,7 @@ use {
         collections::{hash_map::Entry, HashMap},
         fmt::{Debug, Formatter},
         rc::Rc,
-        sync::{
-            atomic::{AtomicU64, Ordering},
-            Arc, RwLock,
-        },
+        sync::{atomic::Ordering, Arc, RwLock},
     },
 };
 
@@ -82,7 +78,7 @@ pub trait TransactionProcessingCallback {
 
     fn check_account_access(
         &self,
-        _tx: &SanitizedTransaction,
+        _message: &SanitizedMessage,
         _account_index: usize,
         _account: &AccountSharedData,
         _error_counters: &mut TransactionErrorMetrics,
@@ -194,6 +190,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         account_overrides: Option<&AccountOverrides>,
         builtin_programs: impl Iterator<Item = &'a Pubkey>,
         log_messages_bytes_limit: Option<usize>,
+        limit_to_load_programs: bool,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_accounts_map = Self::filter_executable_program_accounts(
             callbacks,
@@ -206,9 +203,18 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_accounts_map.insert(*builtin_program, (&native_loader, 0));
         }
 
-        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
-            self.replenish_program_cache(callbacks, &program_accounts_map),
-        ));
+        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
+            callbacks,
+            &program_accounts_map,
+            limit_to_load_programs,
+        )));
+
+        if programs_loaded_for_tx_batch.borrow().hit_max_limit {
+            return LoadAndExecuteSanitizedTransactionsOutput {
+                loaded_transactions: vec![],
+                execution_results: vec![],
+            };
+        }
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
@@ -360,6 +366,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         &self,
         callback: &CB,
         program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
+        limit_to_load_programs: bool,
     ) -> LoadedProgramsForTxBatch {
         let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             if self.check_program_modification_slot {
@@ -405,7 +412,19 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
-                    loaded_programs_cache.finish_cooperative_loading_task(self.slot, key, program);
+                    if loaded_programs_cache
+                        .finish_cooperative_loading_task(self.slot, key, program)
+                        && limit_to_load_programs
+                    {
+                        let mut ret = LoadedProgramsForTxBatch::new(
+                            self.slot,
+                            loaded_programs_cache
+                                .get_environments_for_epoch(self.epoch)
+                                .clone(),
+                        );
+                        ret.hit_max_limit = true;
+                        return ret;
+                    }
                 }
                 // Figure out which program needs to be loaded next.
                 let program_to_load = loaded_programs_cache.extract(
@@ -420,7 +439,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
             if let Some((key, count)) = program_to_load {
                 // Load, verify and compile one program.
-                let program = self.load_program(callback, &key, false, None);
+                let program = self.load_program(callback, &key, false, self.epoch);
                 program.tx_usage_counter.store(count, Ordering::Relaxed);
                 program_to_store = Some((key, program));
             } else if missing_programs.is_empty() {
@@ -655,14 +674,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         callbacks: &CB,
         pubkey: &Pubkey,
         reload: bool,
-        recompile: Option<Arc<LoadedProgram>>,
+        effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
         let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-        let effective_epoch = if recompile.is_some() {
-            loaded_programs_cache.latest_root_epoch.saturating_add(1)
-        } else {
-            self.epoch
-        };
         let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
@@ -740,14 +754,20 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut timings = ExecuteDetailsTimings::default();
         load_program_metrics.submit_datapoint(&mut timings);
-        if let Some(recompile) = recompile {
+        if !Arc::ptr_eq(
+            &environments.program_runtime_v1,
+            &loaded_programs_cache.environments.program_runtime_v1,
+        ) || !Arc::ptr_eq(
+            &environments.program_runtime_v2,
+            &loaded_programs_cache.environments.program_runtime_v2,
+        ) {
+            // There can be two entries per program when the environment changes.
+            // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
+            // These two entries have the same deployment slot, so they must differ in their effective slot instead.
+            // This is done by setting the effective slot of the entry for the new environment to the epoch boundary.
             loaded_program.effective_slot = loaded_program
                 .effective_slot
                 .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
-            loaded_program.tx_usage_counter =
-                AtomicU64::new(recompile.tx_usage_counter.load(Ordering::Relaxed));
-            loaded_program.ix_usage_counter =
-                AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
         }
         loaded_program.update_access_slot(self.slot);
         Arc::new(loaded_program)

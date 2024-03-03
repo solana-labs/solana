@@ -91,7 +91,9 @@ impl PubSubService {
         let thread_hdl = Builder::new()
             .name("solRpcPubSub".to_string())
             .spawn(move || {
+                info!("PubSubService has started");
                 let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .thread_name("solRpcPubSubRt")
                     .worker_threads(pubsub_config.worker_threads)
                     .enable_all()
                     .build()
@@ -102,8 +104,9 @@ impl PubSubService {
                     subscription_control,
                     tripwire,
                 )) {
-                    error!("pubsub service failed: {}", err);
+                    error!("PubSubService has stopped due to error: {err}");
                 };
+                info!("PubSubService has stopped");
             })
             .expect("thread spawn failed");
 

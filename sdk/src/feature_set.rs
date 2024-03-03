@@ -262,10 +262,6 @@ pub mod allow_votes_to_directly_update_vote_state {
     solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
 }
 
-pub mod cap_accounts_data_len {
-    solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
-}
-
 pub mod max_tx_account_locks {
     solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
 }
@@ -452,10 +448,6 @@ pub mod nonce_must_be_advanceable {
 
 pub mod vote_authorize_with_seed {
     solana_sdk::declare_id!("6tRxEYKuy2L5nnv5bgn7iT28MxUbYxp5h7F3Ncf1exrT");
-}
-
-pub mod cap_accounts_data_size_per_block {
-    solana_sdk::declare_id!("qywiJyZmqTKspFg2LeuUHqcA5nNvBgobqb9UprywS9N");
 }
 
 pub mod preserve_rent_epoch_for_rent_exempt_accounts {
@@ -676,7 +668,7 @@ pub mod reduce_stake_warmup_cooldown {
     solana_sdk::declare_id!("GwtDQBghCTBgmX2cpEGNPxTEBUTQRaDMGTr5qychdGMj");
 }
 
-pub mod revise_turbine_epoch_stakes {
+mod revise_turbine_epoch_stakes {
     solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
 }
 
@@ -780,6 +772,10 @@ pub mod enable_chained_merkle_shreds {
     solana_sdk::declare_id!("7uZBkJXJ1HkuP6R3MJfZs7mLwymBcDbKdqbF51ZWLier");
 }
 
+pub mod remove_rounding_in_fee_calculation {
+    solana_sdk::declare_id!("BtVN7YjDzNE6Dk7kTT7YTDgMNUZTNgiSJgsdzAeTg2jF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -839,7 +835,6 @@ lazy_static! {
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
-        (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
@@ -886,7 +881,6 @@ lazy_static! {
         (nonce_must_be_authorized::id(), "nonce must be authorized"),
         (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
         (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
-        (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
@@ -970,6 +964,7 @@ lazy_static! {
         (cost_model_requested_write_lock_cost::id(), "cost model uses number of requested write locks #34819"),
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
+        (remove_rounding_in_fee_calculation::id(), "Removing unwanted rounding in fee calculation #34982"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

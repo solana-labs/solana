@@ -442,7 +442,7 @@ The following are the tables in the Postgres database
 When a validator lacks sufficient compute power, the overhead of saving the
 account data can cause it to fall behind the network especially when all
 accounts or a large number of accounts are selected. The node hosting the
-PostgreSQL database need to be powerful enough to handle the database loads
+PostgreSQL database needs to be powerful enough to handle the database loads
 as well. It has been found using GCP n2-standard-64 machine type for the
 validator and n2-highmem-32 for the PostgreSQL node is adequate for handling
 transmitting all accounts while keeping up with the network. In addition, it is

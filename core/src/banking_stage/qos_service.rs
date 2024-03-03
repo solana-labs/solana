@@ -407,11 +407,11 @@ struct QosServiceMetricsStats {
     /// overhead introduced by cost_model
     compute_cost_time: AtomicU64,
 
-    /// total nummber of transactions in the reporting period to be computed for theit cost. It is
+    /// total number of transactions in the reporting period to be computed for their cost. It is
     /// usually the number of sanitized transactions leader receives.
     compute_cost_count: AtomicU64,
 
-    /// acumulated time in micro-sec spent in tracking each bank's cost. It is the second part of
+    /// accumulated time in micro-sec spent in tracking each bank's cost. It is the second part of
     /// overhead introduced
     cost_tracking_time: AtomicU64,
 
@@ -424,7 +424,7 @@ struct QosServiceMetricsStats {
     /// accumulated estimated write locks Compute Units to be packed into block
     estimated_write_lock_cu: AtomicU64,
 
-    /// accumulated estimated instructino data Compute Units to be packed into block
+    /// accumulated estimated instruction data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
     /// accumulated estimated builtin programs Compute Units to be packed into block
@@ -732,7 +732,7 @@ mod tests {
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             // all transactions are committed with actual units more than estimated
-            let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
+            let committed_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
                     compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
@@ -742,7 +742,7 @@ mod tests {
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
 
             // All transactions are committed, no costs should be removed
-            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::remove_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
             assert_eq!(
                 total_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
@@ -752,7 +752,7 @@ mod tests {
                 bank.read_cost_tracker().unwrap().transaction_count()
             );
 
-            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::update_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
             assert_eq!(
                 final_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
@@ -835,7 +835,7 @@ mod tests {
             .collect();
         let execute_units_adjustment = 10u64;
 
-        // assert only commited tx_costs are applied cost_tracker
+        // assert only committed tx_costs are applied cost_tracker
         {
             let qos_service = QosService::new(1);
             let txs_costs = qos_service.compute_transaction_costs(
@@ -854,7 +854,7 @@ mod tests {
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             // Half of transactions are not committed, the rest with cost adjustment
-            let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
+            let committed_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .enumerate()
                 .map(|(n, tx_cost)| {
@@ -869,8 +869,8 @@ mod tests {
                 })
                 .collect();
 
-            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
-            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::remove_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
+            QosService::update_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
 
             // assert the final block cost
             let mut expected_final_txs_count = 0u64;

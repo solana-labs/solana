@@ -262,7 +262,7 @@ fn bank_forks_from_snapshot(
         // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
         // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
         // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
 
         let (bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
             &account_paths,
@@ -337,6 +337,15 @@ fn bank_forks_from_snapshot(
             source: err,
             path: bank_snapshot.snapshot_path(),
         })?;
+
+        // If the node crashes before taking the next bank snapshot, the next startup will attempt
+        // to load from the same bank snapshot again.  And if `shrink` has run, the account storage
+        // files that are hard linked in bank snapshot will be *different* than what the bank
+        // snapshot expects.  This would cause the node to crash again.  To prevent that, purge all
+        // the bank snapshots here.  In the above scenario, this will cause the node to load from a
+        // snapshot archive next time, which is safe.
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
+
         bank
     };
 

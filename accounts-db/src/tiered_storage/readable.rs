@@ -11,7 +11,10 @@ use {
             TieredStorageResult,
         },
     },
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, stake_history::Epoch},
+    solana_sdk::{
+        account::ReadableAccount, pubkey::Pubkey, rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        stake_history::Epoch,
+    },
     std::path::Path,
 };
 
@@ -72,12 +75,23 @@ impl<'accounts_file, M: TieredAccountMeta> ReadableAccount
     }
 
     /// Returns the epoch that this account will next owe rent by parsing
-    /// the specified account block.  Epoch::MAX will be returned if the account
-    /// is rent-exempt.
+    /// the specified account block.  RENT_EXEMPT_RENT_EPOCH will be returned
+    /// if the account is rent-exempt.
+    ///
+    /// For a zero-lamport account, Epoch::default() will be returned to
+    /// default states of an AccountSharedData.
     fn rent_epoch(&self) -> Epoch {
         self.meta
             .rent_epoch(self.account_block)
-            .unwrap_or(Epoch::MAX)
+            .unwrap_or(if self.lamports() != 0 {
+                RENT_EXEMPT_RENT_EPOCH
+            } else {
+                // While there is no valid-values for any fields of a zero
+                // lamport account, here we return Epoch::default() to
+                // match the default states of AccountSharedData.  Otherwise,
+                // a hash mismatch will occur.
+                Epoch::default()
+            })
     }
 
     /// Returns the data associated to this account.

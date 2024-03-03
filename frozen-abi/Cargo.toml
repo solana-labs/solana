@@ -12,7 +12,6 @@ edition = { workspace = true }
 [dependencies]
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
-lazy_static = { workspace = true }
 log = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_bytes = { workspace = true }

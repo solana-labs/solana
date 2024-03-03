@@ -21,7 +21,7 @@ pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
-            writable: message.is_writable(i),
+            writable: message.is_maybe_writable(i),
             signer: message.is_signer(i),
             source: Some(ParsedAccountSource::Transaction),
         });

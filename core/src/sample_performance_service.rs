@@ -11,8 +11,8 @@ use {
     },
 };
 
-const SAMPLE_INTERVAL: u64 = 60;
-const SLEEP_INTERVAL: u64 = 500;
+const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct SamplePerformanceService {
     thread_hdl: JoinHandle<()>,
@@ -26,34 +26,26 @@ impl SamplePerformanceService {
     ) -> Self {
         let bank_forks = bank_forks.clone();
 
-        info!("Starting SamplePerformance service");
         let thread_hdl = Builder::new()
-            .name("sample-performance".to_string())
+            .name("solSamplePerf".to_string())
             .spawn(move || {
+                info!("SamplePerformanceService has started");
                 Self::run(bank_forks, blockstore, exit);
+                info!("SamplePerformanceService has stopped");
             })
             .unwrap();
 
         Self { thread_hdl }
     }
 
-    pub fn run(
-        bank_forks: Arc<RwLock<BankForks>>,
-        blockstore: Arc<Blockstore>,
-        exit: Arc<AtomicBool>,
-    ) {
+    fn run(bank_forks: Arc<RwLock<BankForks>>, blockstore: Arc<Blockstore>, exit: Arc<AtomicBool>) {
         let mut snapshot = StatsSnapshot::from_forks(&bank_forks);
+        let mut last_sample_time = Instant::now();
 
-        let mut now = Instant::now();
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
-            let elapsed = now.elapsed();
-
-            if elapsed.as_secs() >= SAMPLE_INTERVAL {
-                now = Instant::now();
+        while !exit.load(Ordering::Relaxed) {
+            let elapsed = last_sample_time.elapsed();
+            if elapsed >= SAMPLE_INTERVAL {
+                last_sample_time = Instant::now();
                 let new_snapshot = StatsSnapshot::from_forks(&bank_forks);
 
                 let (num_transactions, num_non_vote_transactions, num_slots) =
@@ -78,8 +70,7 @@ impl SamplePerformanceService {
                     error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
                 }
             }
-
-            sleep(Duration::from_millis(SLEEP_INTERVAL));
+            sleep(SLEEP_INTERVAL);
         }
     }
 

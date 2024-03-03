@@ -108,6 +108,7 @@ fn main() -> Result<()> {
         let (s_reader, r_reader) = unbounded();
         read_channels.push(r_reader);
         read_threads.push(receiver(
+            "solRcvrBenStrmr".to_string(),
             Arc::new(read),
             exit.clone(),
             s_reader,
