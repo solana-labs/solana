@@ -1111,9 +1111,8 @@ impl Blockstore {
         self.completed_slots_senders.lock().unwrap().clear();
     }
 
-    /// Range-delete all entries which prefix matches the specified `slot`,
-    /// remove `slot` its' parents SlotMeta next_slots list, and
-    /// clear `slot`'s SlotMeta (except for next_slots).
+    /// Clear `slot` from the Blockstore, see ``Blockstore::purge_slot_cleanup_chaining`
+    /// for more details.
     ///
     /// This function currently requires `insert_shreds_lock`, as both
     /// `clear_unconfirmed_slot()` and `insert_shreds_handle_duplicate()`
@@ -1121,6 +1120,7 @@ impl Blockstore {
     /// family.
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
+<<<<<<< HEAD
         if let Some(mut slot_meta) = self
             .meta(slot)
             .expect("Couldn't fetch from SlotMeta column family")
@@ -1152,9 +1152,21 @@ impl Blockstore {
                 .expect("Couldn't insert into SlotMeta column family");
         } else {
             error!(
+=======
+        // Purge the slot and insert an empty `SlotMeta` with only the `next_slots` field preserved.
+        // Shreds inherently know their parent slot, and a parent's SlotMeta `next_slots` list
+        // will be updated when the child is inserted (see `Blockstore::handle_chaining()`).
+        // However, we are only purging and repairing the parent slot here. Since the child will not be
+        // reinserted the chaining will be lost. In order for bank forks discovery to ingest the child,
+        // we must retain the chain by preserving `next_slots`.
+        match self.purge_slot_cleanup_chaining(slot) {
+            Ok(_) => {}
+            Err(BlockstoreError::SlotUnavailable) => error!(
+>>>>>>> cc4072bce8 (blockstore: atomize slot clearing, relax parent slot meta check  (#35124))
                 "clear_unconfirmed_slot() called on slot {} with no SlotMeta",
                 slot
-            );
+            ),
+            Err(e) => panic!("Purge database operations failed {}", e),
         }
     }
 
