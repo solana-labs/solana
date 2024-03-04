@@ -10,7 +10,10 @@ use {
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     log::*,
-    solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
+    solana_accounts_db::{
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        starting_snapshot_storages::StartingSnapshotStorages,
+    },
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank_forks::BankForks,
@@ -67,6 +70,7 @@ pub type LoadResult = result::Result<
         Arc<RwLock<BankForks>>,
         LeaderScheduleCache,
         Option<StartingSnapshotHashes>,
+        StartingSnapshotStorages,
     ),
     BankForksUtilsError,
 >;
@@ -88,7 +92,13 @@ pub fn load(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
 ) -> LoadResult {
-    let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) = load_bank_forks(
+    let (
+        bank_forks,
+        leader_schedule_cache,
+        starting_snapshot_hashes,
+        starting_snapshot_storages,
+        ..,
+    ) = load_bank_forks(
         genesis_config,
         blockstore,
         account_paths,
@@ -111,7 +121,12 @@ pub fn load(
     )
     .map_err(BankForksUtilsError::ProcessBlockstoreFromRoot)?;
 
-    Ok((bank_forks, leader_schedule_cache, starting_snapshot_hashes))
+    Ok((
+        bank_forks,
+        leader_schedule_cache,
+        starting_snapshot_hashes,
+        starting_snapshot_storages,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -161,7 +176,7 @@ pub fn load_bank_forks(
         ))
     }
 
-    let (bank_forks, starting_snapshot_hashes) =
+    let (bank_forks, starting_snapshot_hashes, starting_snapshot_storages) =
         if let Some((full_snapshot_archive_info, incremental_snapshot_archive_info)) =
             get_snapshots_to_load(snapshot_config)
         {
@@ -173,17 +188,22 @@ pub fn load_bank_forks(
             );
             std::fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
                 .expect("create bank snapshots dir");
-            let (bank_forks, starting_snapshot_hashes) = bank_forks_from_snapshot(
-                full_snapshot_archive_info,
-                incremental_snapshot_archive_info,
-                genesis_config,
-                account_paths,
-                snapshot_config,
-                process_options,
-                accounts_update_notifier,
-                exit,
-            )?;
-            (bank_forks, Some(starting_snapshot_hashes))
+            let (bank_forks, starting_snapshot_hashes, starting_snapshot_storages) =
+                bank_forks_from_snapshot(
+                    full_snapshot_archive_info,
+                    incremental_snapshot_archive_info,
+                    genesis_config,
+                    account_paths,
+                    snapshot_config,
+                    process_options,
+                    accounts_update_notifier,
+                    exit,
+                )?;
+            (
+                bank_forks,
+                Some(starting_snapshot_hashes),
+                starting_snapshot_storages,
+            )
         } else {
             info!("Processing ledger from genesis");
             let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
@@ -202,7 +222,7 @@ pub fn load_bank_forks(
                 .root_bank()
                 .set_startup_verification_complete();
 
-            (bank_forks, None)
+            (bank_forks, None, StartingSnapshotStorages::Genesis)
         };
 
     let mut leader_schedule_cache =
@@ -218,7 +238,12 @@ pub fn load_bank_forks(
             .for_each(|hard_fork_slot| root_bank.register_hard_fork(*hard_fork_slot));
     }
 
-    Ok((bank_forks, leader_schedule_cache, starting_snapshot_hashes))
+    Ok((
+        bank_forks,
+        leader_schedule_cache,
+        starting_snapshot_hashes,
+        starting_snapshot_storages,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -231,7 +256,14 @@ fn bank_forks_from_snapshot(
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> Result<(Arc<RwLock<BankForks>>, StartingSnapshotHashes), BankForksUtilsError> {
+) -> Result<
+    (
+        Arc<RwLock<BankForks>>,
+        StartingSnapshotHashes,
+        StartingSnapshotStorages,
+    ),
+    BankForksUtilsError,
+> {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         return Err(BankForksUtilsError::AccountPathsNotPresent);
@@ -257,7 +289,7 @@ fn bank_forks_from_snapshot(
             .unwrap_or(true),
     };
 
-    let bank = if will_startup_from_snapshot_archives {
+    let (bank, starting_snapshot_storages) = if will_startup_from_snapshot_archives {
         // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
         // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
         // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
@@ -292,7 +324,7 @@ fn bank_forks_from_snapshot(
                 .map(|archive| archive.path().display().to_string())
                 .unwrap_or("none".to_string()),
         })?;
-        bank
+        (bank, StartingSnapshotStorages::Archive)
     } else {
         let bank_snapshot =
             latest_bank_snapshot.ok_or_else(|| BankForksUtilsError::NoBankSnapshotDirectory {
@@ -346,7 +378,8 @@ fn bank_forks_from_snapshot(
         // snapshot archive next time, which is safe.
         snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
 
-        bank
+        let storages = bank.get_snapshot_storages(None);
+        (bank, StartingSnapshotStorages::Fastboot(storages))
     };
 
     let full_snapshot_hash = FullSnapshotHash((
@@ -365,5 +398,9 @@ fn bank_forks_from_snapshot(
         incremental: incremental_snapshot_hash,
     };
 
-    Ok((BankForks::new_rw_arc(bank), starting_snapshot_hashes))
+    Ok((
+        BankForks::new_rw_arc(bank),
+        starting_snapshot_hashes,
+        starting_snapshot_storages,
+    ))
 }

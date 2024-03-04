@@ -268,19 +268,24 @@ pub fn load_and_process_ledger(
     };
 
     let exit = Arc::new(AtomicBool::new(false));
-    let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
-        bank_forks_utils::load_bank_forks(
-            genesis_config,
-            blockstore.as_ref(),
-            account_paths,
-            snapshot_config.as_ref(),
-            &process_options,
-            None,
-            None, // Maybe support this later, though
-            accounts_update_notifier,
-            exit.clone(),
-        )
-        .map_err(LoadAndProcessLedgerError::LoadBankForks)?;
+    let (
+        bank_forks,
+        leader_schedule_cache,
+        starting_snapshot_hashes,
+        starting_snapshot_storages,
+        ..,
+    ) = bank_forks_utils::load_bank_forks(
+        genesis_config,
+        blockstore.as_ref(),
+        account_paths,
+        snapshot_config.as_ref(),
+        &process_options,
+        None,
+        None, // Maybe support this later, though
+        accounts_update_notifier,
+        exit.clone(),
+    )
+    .map_err(LoadAndProcessLedgerError::LoadBankForks)?;
     let block_verification_method = value_t!(
         arg_matches,
         "block_verification_method",
@@ -325,6 +330,7 @@ pub fn load_and_process_ledger(
         accounts_package_sender.clone(),
         accounts_package_receiver,
         None,
+        starting_snapshot_storages,
         exit.clone(),
         SnapshotConfig::new_load_only(),
     );
