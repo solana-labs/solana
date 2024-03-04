@@ -70,6 +70,7 @@ name = "solana_accounts_db"
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+criterion = { workspace = true }
 ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
@@ -89,3 +90,7 @@ rustc_version = { workspace = true }
 
 [features]
 dev-context-only-utils = []
+
+[[bench]]
+name = "bench_hashing"
+harness = false
