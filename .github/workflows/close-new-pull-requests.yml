@@ -1,0 +1,20 @@
+name: Close new pull requests
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  comment-and-close:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          COMMENT: >
+            This repository is no longer in use. Please re-open this
+            pull request in the agave repo: https://github.com/anza-xyz/agave
+        run: >
+          gh pr close "$PR_NUMBER" --comment "$COMMENT"
