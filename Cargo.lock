@@ -5390,6 +5390,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bzip2",
+ "criterion",
  "crossbeam-channel",
  "dashmap",
  "ed25519-dalek",
