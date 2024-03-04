@@ -67,7 +67,7 @@ pub enum LoadedProgramType {
     ///
     /// These can potentially come back alive if the environment changes.
     FailedVerification(ProgramRuntimeEnvironment),
-    /// Tombstone for programs which were explicitly undeployoed / closed.
+    /// Tombstone for programs which were explicitly undeployed / closed.
     #[default]
     Closed,
     /// Tombstone for programs which have recently been modified but the new version is not visible yet.
