@@ -9,6 +9,7 @@ use {
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         epoch_accounts_hash::EpochAccountsHash,
+        starting_snapshot_storages::StartingSnapshotStorages,
     },
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
@@ -196,6 +197,7 @@ impl BackgroundServices {
             accounts_package_sender.clone(),
             accounts_package_receiver,
             Some(snapshot_package_sender),
+            StartingSnapshotStorages::Genesis,
             exit.clone(),
             snapshot_config.clone(),
         );
