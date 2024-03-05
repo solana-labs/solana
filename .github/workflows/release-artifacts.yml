@@ -70,7 +70,7 @@ jobs:
           name: windows-artifact
           path: windows-release/
 
-  windows-gcs-upload:
+  windows-s3-upload:
     if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
     needs: [windows-build]
     runs-on: ubuntu-20.04
@@ -79,7 +79,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: windows-artifact
-          path: ./windows-release
+          path: .windows-release/
 
       - name: Setup crediential
         uses: "google-github-actions/auth@v2"
