@@ -1,7 +1,7 @@
 //! The account meta and related structs for the tiered storage.
 
 use {
-    crate::{accounts_hash::AccountHash, tiered_storage::owners::OwnerOffset},
+    crate::tiered_storage::owners::OwnerOffset,
     bytemuck::{Pod, Zeroable},
     modular_bitfield::prelude::*,
     solana_sdk::stake_history::Epoch,
@@ -14,12 +14,10 @@ use {
 pub struct AccountMetaFlags {
     /// whether the account meta has rent epoch
     pub has_rent_epoch: bool,
-    /// whether the account meta has account hash
-    pub has_account_hash: bool,
     /// whether the account is executable
     pub executable: bool,
     /// the reserved bits.
-    reserved: B29,
+    reserved: B30,
 }
 
 // Ensure there are no implicit padding bytes
@@ -70,10 +68,6 @@ pub trait TieredAccountMeta: Sized {
     /// does not persist this optional field.
     fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch>;
 
-    /// Returns the account hash by parsing the specified account block.  None
-    /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a AccountHash>;
-
     /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, _account_block: &[u8]) -> usize;
@@ -91,7 +85,6 @@ impl AccountMetaFlags {
     pub fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
         let mut flags = AccountMetaFlags::default();
         flags.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
-        flags.set_has_account_hash(optional_fields.account_hash.is_some());
         flags.set_executable(false);
         flags
     }
@@ -102,20 +95,15 @@ impl AccountMetaFlags {
 /// Note that the storage representation of the optional fields might be
 /// different from its in-memory representation.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct AccountMetaOptionalFields<'a> {
+pub struct AccountMetaOptionalFields {
     /// the epoch at which its associated account will next owe rent
     pub rent_epoch: Option<Epoch>,
-    /// the hash of its associated account
-    pub account_hash: Option<&'a AccountHash>,
 }
 
-impl<'a> AccountMetaOptionalFields<'a> {
+impl AccountMetaOptionalFields {
     /// The size of the optional fields in bytes (excluding the boolean flags).
     pub fn size(&self) -> usize {
         self.rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
-            + self
-                .account_hash
-                .map_or(0, |_| std::mem::size_of::<AccountHash>())
     }
 
     /// Given the specified AccountMetaFlags, returns the size of its
@@ -124,9 +112,6 @@ impl<'a> AccountMetaOptionalFields<'a> {
         let mut fields_size = 0;
         if flags.has_rent_epoch() {
             fields_size += std::mem::size_of::<Epoch>();
-        }
-        if flags.has_account_hash() {
-            fields_size += std::mem::size_of::<AccountHash>();
         }
 
         fields_size
@@ -137,29 +122,17 @@ impl<'a> AccountMetaOptionalFields<'a> {
     pub fn rent_epoch_offset(_flags: &AccountMetaFlags) -> usize {
         0
     }
-
-    /// Given the specified AccountMetaFlags, returns the relative offset
-    /// of its account_hash field to the offset of its optional fields entry.
-    pub fn account_hash_offset(flags: &AccountMetaFlags) -> usize {
-        let mut offset = Self::rent_epoch_offset(flags);
-        // rent_epoch is the previous field to account hash
-        if flags.has_rent_epoch() {
-            offset += std::mem::size_of::<Epoch>();
-        }
-        offset
-    }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, solana_sdk::hash::Hash};
+    use super::*;
 
     #[test]
     fn test_account_meta_flags_new() {
         let flags = AccountMetaFlags::new();
 
         assert!(!flags.has_rent_epoch());
-        assert!(!flags.has_account_hash());
         assert_eq!(flags.reserved(), 0u32);
 
         assert_eq!(
@@ -179,20 +152,11 @@ pub mod tests {
         flags.set_has_rent_epoch(true);
 
         assert!(flags.has_rent_epoch());
-        assert!(!flags.has_account_hash());
-        assert!(!flags.executable());
-        verify_flags_serialization(&flags);
-
-        flags.set_has_account_hash(true);
-
-        assert!(flags.has_rent_epoch());
-        assert!(flags.has_account_hash());
         assert!(!flags.executable());
         verify_flags_serialization(&flags);
 
         flags.set_executable(true);
         assert!(flags.has_rent_epoch());
-        assert!(flags.has_account_hash());
         assert!(flags.executable());
         verify_flags_serialization(&flags);
 
@@ -203,84 +167,58 @@ pub mod tests {
     fn update_and_verify_flags(opt_fields: &AccountMetaOptionalFields) {
         let flags: AccountMetaFlags = AccountMetaFlags::new_from(opt_fields);
         assert_eq!(flags.has_rent_epoch(), opt_fields.rent_epoch.is_some());
-        assert_eq!(flags.has_account_hash(), opt_fields.account_hash.is_some());
         assert_eq!(flags.reserved(), 0u32);
     }
 
     #[test]
     fn test_optional_fields_update_flags() {
         let test_epoch = 5432312;
-        let acc_hash = AccountHash(Hash::new_unique());
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(&acc_hash)] {
-                update_and_verify_flags(&AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                });
-            }
+            update_and_verify_flags(&AccountMetaOptionalFields { rent_epoch });
         }
     }
 
     #[test]
     fn test_optional_fields_size() {
         let test_epoch = 5432312;
-        let acc_hash = AccountHash(Hash::new_unique());
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(&acc_hash)] {
-                let opt_fields = AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                };
-                assert_eq!(
-                    opt_fields.size(),
-                    rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
-                        + account_hash.map_or(0, |_| std::mem::size_of::<AccountHash>())
-                );
-                assert_eq!(
-                    opt_fields.size(),
-                    AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
-                        &opt_fields
-                    ))
-                );
-            }
+            let opt_fields = AccountMetaOptionalFields { rent_epoch };
+            assert_eq!(
+                opt_fields.size(),
+                rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>()),
+            );
+            assert_eq!(
+                opt_fields.size(),
+                AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
+                    &opt_fields
+                ))
+            );
         }
     }
 
     #[test]
     fn test_optional_fields_offset() {
         let test_epoch = 5432312;
-        let acc_hash = AccountHash(Hash::new_unique());
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(&acc_hash)] {
-                let rent_epoch_offset = 0;
-                let account_hash_offset =
-                    rent_epoch_offset + rent_epoch.as_ref().map(std::mem::size_of_val).unwrap_or(0);
-                let derived_size = account_hash_offset
-                    + account_hash
-                        .as_ref()
-                        .map(|acc_hash| std::mem::size_of_val(*acc_hash))
-                        .unwrap_or(0);
-                let opt_fields = AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                };
-                let flags = AccountMetaFlags::new_from(&opt_fields);
-                assert_eq!(
-                    AccountMetaOptionalFields::rent_epoch_offset(&flags),
-                    rent_epoch_offset
-                );
-                assert_eq!(
-                    AccountMetaOptionalFields::account_hash_offset(&flags),
-                    account_hash_offset
-                );
-                assert_eq!(
-                    AccountMetaOptionalFields::size_from_flags(&flags),
-                    derived_size
-                );
-            }
+            let rent_epoch_offset = 0;
+            let derived_size = if rent_epoch.is_some() {
+                std::mem::size_of::<Epoch>()
+            } else {
+                0
+            };
+            let opt_fields = AccountMetaOptionalFields { rent_epoch };
+            let flags = AccountMetaFlags::new_from(&opt_fields);
+            assert_eq!(
+                AccountMetaOptionalFields::rent_epoch_offset(&flags),
+                rent_epoch_offset
+            );
+            assert_eq!(
+                AccountMetaOptionalFields::size_from_flags(&flags),
+                derived_size
+            );
         }
     }
 }

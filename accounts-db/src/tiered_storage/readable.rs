@@ -42,7 +42,7 @@ impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file,
 
     /// Returns the hash of this account.
     pub fn hash(&self) -> Option<&'accounts_file AccountHash> {
-        self.meta.account_hash(self.account_block)
+        None
     }
 
     /// Returns the index to this account in its AccountsFile.

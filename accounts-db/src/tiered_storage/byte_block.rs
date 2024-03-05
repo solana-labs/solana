@@ -95,9 +95,6 @@ impl ByteBlockWriter {
         if let Some(rent_epoch) = opt_fields.rent_epoch {
             size += self.write_pod(&rent_epoch)?;
         }
-        if let Some(hash) = opt_fields.account_hash {
-            size += self.write_pod(hash)?;
-        }
 
         debug_assert_eq!(size, opt_fields.size());
 
@@ -191,11 +188,7 @@ impl ByteBlockReader {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::accounts_hash::AccountHash,
-        solana_sdk::{hash::Hash, stake_history::Epoch},
-    };
+    use {super::*, solana_sdk::stake_history::Epoch};
 
     fn read_type_unaligned<T>(buffer: &[u8], offset: usize) -> (T, usize) {
         let size = std::mem::size_of::<T>();
@@ -352,19 +345,13 @@ mod tests {
         let mut writer = ByteBlockWriter::new(format);
         let mut opt_fields_vec = vec![];
         let mut some_count = 0;
-        let acc_hash = AccountHash(Hash::new_unique());
 
         // prepare a vector of optional fields that contains all combinations
         // of Some and None.
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(&acc_hash)] {
-                some_count += rent_epoch.iter().count() + account_hash.iter().count();
+            some_count += rent_epoch.iter().count();
 
-                opt_fields_vec.push(AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                });
-            }
+            opt_fields_vec.push(AccountMetaOptionalFields { rent_epoch });
             test_epoch += 1;
         }
 
@@ -395,12 +382,6 @@ mod tests {
                 assert_eq!(*rent_epoch, expected_rent_epoch);
                 verified_count += 1;
                 offset += std::mem::size_of::<Epoch>();
-            }
-            if let Some(expected_hash) = opt_fields.account_hash {
-                let hash = read_pod::<AccountHash>(&decoded_buffer, offset).unwrap();
-                assert_eq!(hash, expected_hash);
-                verified_count += 1;
-                offset += std::mem::size_of::<AccountHash>();
             }
         }
 
