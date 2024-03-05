@@ -100,9 +100,9 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn rt() -> Runtime {
+fn rt(name: String) -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-server")
+        .thread_name(name)
         .enable_all()
         .build()
         .unwrap()
@@ -431,7 +431,8 @@ impl StreamStats {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
-    name: &'static str,
+    thread_name: &'static str,
+    metrics_name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
     packet_sender: Sender<PacketBatch>,
@@ -443,11 +444,11 @@ pub fn spawn_server(
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) -> Result<SpawnServerResult, QuicServerError> {
-    let runtime = rt();
+    let runtime = rt(format!("{thread_name}Rt"));
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
-            name,
+            metrics_name,
             sock,
             keypair,
             packet_sender,
@@ -461,7 +462,7 @@ pub fn spawn_server(
         )
     }?;
     let handle = thread::Builder::new()
-        .name("solQuicServer".into())
+        .name(thread_name.into())
         .spawn(move || {
             if let Err(e) = runtime.block_on(task) {
                 warn!("error from runtime.block_on: {:?}", e);
@@ -505,6 +506,7 @@ mod test {
             thread: t,
             key_updater: _,
         } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
@@ -532,7 +534,7 @@ mod test {
     fn test_quic_timeout() {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_timeout(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -543,7 +545,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, _receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_block_multiple_connections(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -563,6 +565,7 @@ mod test {
             thread: t,
             key_updater: _,
         } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
@@ -577,7 +580,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_multiple_streams(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -588,7 +591,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_multiple_writes(receiver, server_address, None));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -608,6 +611,7 @@ mod test {
             thread: t,
             key_updater: _,
         } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
@@ -622,7 +626,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_unstaked_node_connect_failure(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
