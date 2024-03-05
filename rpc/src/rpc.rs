@@ -1786,16 +1786,10 @@ impl JsonRpcRequestProcessor {
         } else {
             StakeActivationState::Inactive
         };
-        let inactive_stake = match stake_activation_state {
-            StakeActivationState::Activating => activating,
-            StakeActivationState::Active => 0,
-            StakeActivationState::Deactivating => stake_account
-                .lamports()
-                .saturating_sub(effective + rent_exempt_reserve),
-            StakeActivationState::Inactive => {
-                stake_account.lamports().saturating_sub(rent_exempt_reserve)
-            }
-        };
+        let inactive_stake = stake_account
+            .lamports()
+            .saturating_sub(effective)
+            .saturating_sub(rent_exempt_reserve);
         Ok(RpcStakeActivation {
             state: stake_activation_state,
             active: effective,
@@ -2991,14 +2985,6 @@ pub mod rpc_accounts {
             block: Slot,
         ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
 
-        #[rpc(meta, name = "getStakeActivation")]
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation>;
-
         // SPL Token-specific RPC endpoints
         // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
         // program details
@@ -3069,20 +3055,6 @@ pub mod rpc_accounts {
         ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
             debug!("get_block_commitment rpc request received");
             Ok(meta.get_block_commitment(block))
-        }
-
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation> {
-            debug!(
-                "get_stake_activation rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_stake_activation(&pubkey, config)
         }
 
         fn get_token_account_balance(
@@ -4091,7 +4063,43 @@ fn rpc_perf_sample_from_perf_sample(slot: u64, sample: PerfSample) -> RpcPerfSam
     }
 }
 
-// RPC methods deprecated in v1.8
+pub mod rpc_deprecated_v1_18 {
+    use super::*;
+    #[rpc]
+    pub trait DeprecatedV1_18 {
+        type Metadata;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getStakeActivation")]
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcEpochConfig>,
+        ) -> Result<RpcStakeActivation>;
+    }
+
+    pub struct DeprecatedV1_18Impl;
+    impl DeprecatedV1_18 for DeprecatedV1_18Impl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcEpochConfig>,
+        ) -> Result<RpcStakeActivation> {
+            debug!(
+                "get_stake_activation rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.get_stake_activation(&pubkey, config)
+        }
+    }
+}
+
+// RPC methods deprecated in v1.9
 pub mod rpc_deprecated_v1_9 {
     #![allow(deprecated)]
     use super::*;
