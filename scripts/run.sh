@@ -23,11 +23,9 @@ fi
 PATH=$PWD/target/$profile:$PATH
 
 ok=true
-for program in solana-{faucet,genesis,keygen}; do
+for program in solana-{faucet,genesis,keygen,validator}; do
   $program -V || ok=false
 done
-agave-validator -V || ok=false
-
 $ok || {
   echo
   echo "Unable to locate required programs.  Try building them first with:"
@@ -117,7 +115,7 @@ args=(
   --no-os-network-limits-test
 )
 # shellcheck disable=SC2086
-agave-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS &
+solana-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS &
 validator=$!
 
 wait "$validator"

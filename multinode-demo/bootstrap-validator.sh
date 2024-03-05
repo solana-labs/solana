@@ -14,9 +14,9 @@ if [[ "$SOLANA_GPU_MISSING" -eq 1 ]]; then
 fi
 
 if [[ -n $SOLANA_CUDA ]]; then
-  program=$agave_validator_cuda
+  program=$solana_validator_cuda
 else
-  program=$agave_validator
+  program=$solana_validator
 fi
 
 no_restart=0

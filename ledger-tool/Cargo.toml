@@ -1,7 +1,7 @@
 [package]
-name = "agave-ledger-tool"
+name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-documentation = "https://docs.rs/agave-ledger-tool"
+documentation = "https://docs.rs/solana-ledger-tool"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
