@@ -1,0 +1,94 @@
+branches:
+  only:
+    - master
+    - /^v\d+\.\d+/
+
+notifications:
+  email: false
+  slack:
+    on_success: change
+    if: NOT type = pull_request
+    secure: F4IjOE05MyaMOdPRL+r8qhs7jBvv4yDM3RmFKE1zNXnfUOqV4X38oQM1EI+YVsgpMQLj/pxnEB7wcTE4Bf86N6moLssEULCpvAuMVoXj4QbWdomLX+01WbFa6fLVeNQIg45NHrz2XzVBhoKOrMNnl+QI5mbR2AlS5oqsudHsXDnyLzZtd4Y5SDMdYG1zVWM01+oNNjgNfjcCGmOE/K0CnOMl6GPi3X9C34tJ19P2XT7MTDsz1/IfEF7fro2Q8DHEYL9dchJMoisXSkem5z7IDQkGzXsWdWT4NnndUvmd1MlTCE9qgoXDqRf95Qh8sB1Dz08HtvgfaosP2XjtNTfDI9BBYS15Ibw9y7PchAJE1luteNjF35EOy6OgmCLw/YpnweqfuNViBZz+yOPWXVC0kxnPIXKZ1wyH9ibeH6E4hr7a8o9SV/6SiWIlbYF+IR9jPXyTCLP/cc3sYljPWxDnhWFwFdRVIi3PbVAhVu7uWtVUO17Oc9gtGPgs/GrhOMkJfwQPXaudRJDpVZowxTX4x9kefNotlMAMRgq+Drbmgt4eEBiCNp0ITWgh17BiE1U09WS3myuduhoct85+FoVeaUkp1sxzHVtGsNQH0hcz7WcpZyOM+AwistJA/qzeEDQao5zi1eKWPbO2xAhi2rV1bDH6bPf/4lDBwLRqSiwvlWU=
+
+os: linux
+dist: bionic
+language: minimal
+
+jobs:
+  include:
+    - &release-artifacts
+      if: type IN (api, cron) OR tag IS present
+      name: "macOS release artifacts"
+      os: osx
+      osx_image: xcode12
+      language: rust
+      rust:
+        - stable
+      install:
+        - source ci/rust-version.sh
+        - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+        - readlink -f .
+        - brew install gnu-tar
+        - PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+        - tar --version
+      script:
+        - source ci/env.sh
+        - rustup set profile default
+        - ci/publish-tarball.sh
+      deploy:
+        - provider: s3
+          access_key_id: $AWS_ACCESS_KEY_ID
+          secret_access_key: $AWS_SECRET_ACCESS_KEY
+          bucket: release.solana.com
+          region: us-west-1
+          skip_cleanup: true
+          acl: public_read
+          local_dir: travis-s3-upload
+          on:
+            all_branches: true
+        - provider: releases
+          token: $GITHUB_TOKEN
+          skip_cleanup: true
+          file_glob: true
+          file: travis-release-upload/*
+          on:
+            tags: true
+    - <<: *release-artifacts
+      name: "Windows release artifacts"
+      os: windows
+      install:
+        - choco install openssl
+        - export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+        - source ci/rust-version.sh
+        - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+        - readlink -f .
+    #  Linux release artifacts are still built by ci/buildkite-secondary.yml
+    #- <<: *release-artifacts
+    #  name: "Linux release artifacts"
+    #  os: linux
+    #  before_install:
+    #    - sudo apt-get install libssl-dev libudev-dev
+
+    # docs pull request
+    - name: "docs"
+      if: type IN (push, pull_request) OR tag IS present
+      language: node_js
+      node_js:
+        - "lts/*"
+
+      services:
+        - docker
+
+      cache:
+        directories:
+          - ~/.npm
+
+      before_install:
+        - source ci/env.sh
+        - .travis/channel_restriction.sh edge beta || travis_terminate 0
+        - .travis/affects.sh docs/ .travis || travis_terminate 0
+        - cd docs/
+        - source .travis/before_install.sh
+
+      script:
+        - source .travis/script.sh
