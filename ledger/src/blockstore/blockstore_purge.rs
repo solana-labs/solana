@@ -213,7 +213,7 @@ impl Blockstore {
         delete_range_timer.stop();
 
         let mut write_timer = Measure::start("write_batch");
-        self.db.write(write_batch).inspect(|e| {
+        self.db.write(write_batch).inspect_err(|e| {
             error!(
                 "Error: {:?} while submitting write batch for purge from_slot {} to_slot {}",
                 e, from_slot, to_slot
