@@ -7,7 +7,11 @@ on:
         required: false
         type: string
     secrets:
-      GCS_RELEASE_BUCKET_WRITER_CREDIENTIAL:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_S3_BUCKET:
         required: true
 
 jobs:
@@ -58,17 +62,17 @@ jobs:
         shell: bash
         run: |
           FOLDER_NAME=${{ steps.build.outputs.tag || steps.build.outputs.channel }}
-          mkdir -p "windows-release/$FOLDER_NAME"
-          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "windows-release/$FOLDER_NAME/"
-          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "windows-release/$FOLDER_NAME/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "windows-release/$FOLDER_NAME"
+          mkdir -p "github-action-s3-upload/$FOLDER_NAME"
+          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/$FOLDER_NAME/"
+          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/$FOLDER_NAME/"
+          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/$FOLDER_NAME"
 
       - name: Upload Artifacts
         if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-artifact
-          path: windows-release/
+          path: github-action-s3-upload/
 
   windows-s3-upload:
     if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
@@ -79,16 +83,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: windows-artifact
-          path: .windows-release/
-
-      - name: Setup crediential
-        uses: "google-github-actions/auth@v2"
-        with:
-          credentials_json: "${{ secrets.GCS_RELEASE_BUCKET_WRITER_CREDIENTIAL }}"
-
-      - name: Upload files to GCS
-        run: |
-          gcloud storage cp --recursive windows-release/* gs://anza-release/
+          path: ./github-action-s3-upload
 
       - name: Upload
         uses: jakejarvis/s3-sync-action@master
@@ -99,7 +94,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_REGION: "us-west-1"
-          SOURCE_DIR: "windows-release"
+          SOURCE_DIR: "github-action-s3-upload"
 
   windows-gh-release:
     if: ${{ needs.windows-build.outputs.tag != '' }}
@@ -110,7 +105,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: windows-artifact
-          path: .windows-release/
+          path: ./github-action-s3-upload
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -118,4 +113,4 @@ jobs:
           tag_name: ${{ needs.windows-build.outputs.tag }}
           draft: true
           files: |
-            windows-release/${{ needs.windows-build.outputs.tag }}/*
+            github-action-s3-upload/${{ needs.windows-build.outputs.tag }}/*

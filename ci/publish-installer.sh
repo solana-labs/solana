@@ -26,14 +26,14 @@ fi
 # upload install script
 source ci/upload-ci-artifact.sh
 
-cat >release.anza.xyz-install <<EOF
+cat >release.solana.com-install <<EOF
 SOLANA_RELEASE=$CHANNEL_OR_TAG
 SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
-SOLANA_DOWNLOAD_ROOT=https://release.anza.xyz
+SOLANA_DOWNLOAD_ROOT=https://release.solana.com
 EOF
-cat install/solana-install-init.sh >>release.anza.xyz-install
+cat install/solana-install-init.sh >>release.solana.com-install
 
-echo --- GCS: "install"
-upload-gcs-artifact "/solana/release.anza.xyz-install" "gs://anza-release/$CHANNEL_OR_TAG/install"
+echo --- AWS S3 Store: "install"
+upload-s3-artifact "/solana/release.solana.com-install" "s3://release.solana.com/$CHANNEL_OR_TAG/install"
 echo Published to:
-ci/format-url.sh https://release.anza.xyz/"$CHANNEL_OR_TAG"/install
+ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/install
