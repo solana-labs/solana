@@ -6119,17 +6119,18 @@ impl AccountsDb {
         }
         let mut hasher = blake3::Hasher::new();
 
-        // allocate 128 bytes buffer on the stack
-        const BUFFER_SIZE: usize = 128;
-        const METADATA_SIZE: usize = 8 /* lamports */ + 8 /* rent_epoch */ + 1 /* executable */ + 32 /* owner */ + 32 /* pubkey */;
-        const REMAINING_SIZE: usize = BUFFER_SIZE - METADATA_SIZE;
+        // allocate a buffer on the stack that's big enough
+        // to hold a token account or a stake account
+        const META_SIZE: usize = 8 /* lamports */ + 8 /* rent_epoch */ + 1 /* executable */ + 32 /* owner */ + 32 /* pubkey */;
+        const DATA_SIZE: usize = 200; // stake acounts are 200 B and token accounts are 165-182ish B
+        const BUFFER_SIZE: usize = META_SIZE + DATA_SIZE;
         let mut buffer = SmallVec::<[u8; BUFFER_SIZE]>::new();
 
         // collect lamports, rent_epoch into buffer to hash
         buffer.extend_from_slice(&lamports.to_le_bytes());
         buffer.extend_from_slice(&rent_epoch.to_le_bytes());
 
-        if data.len() > REMAINING_SIZE {
+        if data.len() > DATA_SIZE {
             // For larger accounts whose data can't fit into the buffer, update the hash now.
             hasher.update(&buffer);
             buffer.clear();
