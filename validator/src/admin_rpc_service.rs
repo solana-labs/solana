@@ -816,7 +816,11 @@ pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Clie
 }
 
 pub fn runtime() -> Runtime {
-    Runtime::new().expect("new tokio runtime")
+    tokio::runtime::Builder::new_multi_thread()
+        .thread_name("solAdminRpcRt")
+        .enable_all()
+        .build()
+        .expect("new tokio runtime")
 }
 
 #[derive(Default, Deserialize, Clone)]
