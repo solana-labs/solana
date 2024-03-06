@@ -190,14 +190,19 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(non_vote_sender);
-            SigVerifyStage::new(packet_receiver, verifier, "tpu-verifier")
+            SigVerifyStage::new(packet_receiver, verifier, "solSigVerTpu", "tpu-verifier")
         };
 
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
-            SigVerifyStage::new(vote_packet_receiver, verifier, "tpu-vote-verifier")
+            SigVerifyStage::new(
+                vote_packet_receiver,
+                verifier,
+                "solSigVerTpuVot",
+                "tpu-vote-verifier",
+            )
         };
 
         let (gossip_vote_sender, gossip_vote_receiver) =
