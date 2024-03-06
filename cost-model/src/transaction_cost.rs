@@ -18,8 +18,19 @@ pub enum TransactionCost {
 
 impl TransactionCost {
     pub fn sum(&self) -> u64 {
+        #![allow(clippy::assertions_on_constants)]
         match self {
-            Self::SimpleVote { .. } => SIMPLE_VOTE_USAGE_COST,
+            Self::SimpleVote { .. } => {
+                const _: () = assert!(
+                    SIMPLE_VOTE_USAGE_COST
+                        == solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS
+                            + block_cost_limits::SIGNATURE_COST
+                            + 2 * block_cost_limits::WRITE_LOCK_UNITS
+                            + 8
+                );
+
+                SIMPLE_VOTE_USAGE_COST
+            }
             Self::Transaction(usage_cost) => usage_cost.sum(),
         }
     }
