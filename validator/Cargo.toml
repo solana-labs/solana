@@ -24,7 +24,6 @@ jsonrpc-core = { workspace = true }
 jsonrpc-core-client = { workspace = true, features = ["ipc"] }
 jsonrpc-derive = { workspace = true }
 jsonrpc-ipc-server = { workspace = true }
-jsonrpc-server-utils = { workspace = true }
 lazy_static = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
@@ -66,6 +65,7 @@ solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 solana-account-decoder = { workspace = true }

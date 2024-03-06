@@ -90,7 +90,6 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-ipc-server",
- "jsonrpc-server-utils",
  "lazy_static",
  "libc",
  "libloading",
@@ -135,6 +134,7 @@ dependencies = [
  "symlink",
  "thiserror",
  "tikv-jemallocator",
+ "tokio",
 ]
 
 [[package]]
@@ -5127,7 +5127,6 @@ dependencies = [
  "crossbeam-channel",
  "json5",
  "jsonrpc-core",
- "jsonrpc-server-utils",
  "libloading",
  "log",
  "serde_json",
@@ -5141,6 +5140,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

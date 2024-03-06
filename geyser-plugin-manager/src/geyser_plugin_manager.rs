@@ -1,13 +1,13 @@
 use {
     agave_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
     jsonrpc_core::{ErrorCode, Result as JsonRpcResult},
-    jsonrpc_server_utils::tokio::sync::oneshot::Sender as OneShotSender,
     libloading::Library,
     log::*,
     std::{
         ops::{Deref, DerefMut},
         path::Path,
     },
+    tokio::sync::oneshot::Sender as OneShotSender,
 };
 
 #[derive(Debug)]

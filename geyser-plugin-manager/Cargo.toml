@@ -15,7 +15,6 @@ bs58 = { workspace = true }
 crossbeam-channel = { workspace = true }
 json5 = { workspace = true }
 jsonrpc-core = { workspace = true }
-jsonrpc-server-utils = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
 serde_json = { workspace = true }
@@ -29,6 +28,7 @@ solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-transaction-status = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
