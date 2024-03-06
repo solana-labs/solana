@@ -1,6 +1,5 @@
 use {
     jsonrpc_core::{ErrorCode, Result as JsonRpcResult},
-    jsonrpc_server_utils::tokio::sync::oneshot::Sender as OneShotSender,
     libloading::Library,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
@@ -8,6 +7,7 @@ use {
         ops::{Deref, DerefMut},
         path::Path,
     },
+    tokio::sync::oneshot::Sender as OneShotSender,
 };
 
 #[derive(Debug)]

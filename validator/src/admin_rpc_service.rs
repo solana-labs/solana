@@ -6,7 +6,6 @@ use {
     jsonrpc_ipc_server::{
         tokio::sync::oneshot::channel as oneshot_channel, RequestContext, ServerBuilder,
     },
-    jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
     solana_accounts_db::accounts_index::AccountIndex,
@@ -35,6 +34,7 @@ use {
         thread::{self, Builder},
         time::{Duration, SystemTime},
     },
+    tokio::runtime::Runtime,
 };
 
 #[derive(Clone)]
@@ -815,8 +815,8 @@ pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Clie
     }
 }
 
-pub fn runtime() -> jsonrpc_server_utils::tokio::runtime::Runtime {
-    jsonrpc_server_utils::tokio::runtime::Runtime::new().expect("new tokio runtime")
+pub fn runtime() -> Runtime {
+    Runtime::new().expect("new tokio runtime")
 }
 
 #[derive(Default, Deserialize, Clone)]
