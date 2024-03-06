@@ -160,7 +160,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = BankingTracer::channel_for_test();
     let verifier = TransactionSigVerifier::new(verified_s);
-    let stage = SigVerifyStage::new(packet_r, verifier, "bench");
+    let stage = SigVerifyStage::new(packet_r, verifier, "solSigVerBench", "bench");
 
     bencher.iter(move || {
         let now = Instant::now();
