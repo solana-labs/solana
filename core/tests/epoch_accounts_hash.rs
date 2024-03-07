@@ -16,6 +16,7 @@ use {
         snapshot_packager_service::SnapshotPackagerService,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
@@ -39,7 +40,6 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_svm::runtime_config::RuntimeConfig,
     std::{
         mem::ManuallyDrop,
         sync::{

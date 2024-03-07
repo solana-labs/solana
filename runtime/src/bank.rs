@@ -99,6 +99,7 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms},
+        runtime_config::RuntimeConfig,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
@@ -163,7 +164,6 @@ use {
     solana_svm::{
         account_loader::{TransactionCheckResult, TransactionLoadResult},
         account_overrides::AccountOverrides,
-        runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
             TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,

@@ -17,6 +17,7 @@ pub mod loaded_programs;
 pub mod log_collector;
 pub mod message_processor;
 pub mod prioritization_fee;
+pub mod runtime_config;
 pub mod stable_log;
 pub mod sysvar_cache;
 pub mod timings;
