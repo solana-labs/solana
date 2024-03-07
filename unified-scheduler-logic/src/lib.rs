@@ -475,7 +475,6 @@ const_assert_eq!(mem::size_of::<UsageQueue>(), 8);
 /// A high-level `struct`, managing the overall scheduling of [tasks](Task), to be used by
 /// `solana-unified-scheduler-pool`.
 pub struct SchedulingStateMachine {
-    last_task_index: Option<usize>,
     unblocked_task_queue: VecDeque<Task>,
     active_task_count: ShortCounter,
     handled_task_count: ShortCounter,
@@ -484,7 +483,7 @@ pub struct SchedulingStateMachine {
     count_token: BlockedUsageCountToken,
     usage_queue_token: UsageQueueToken,
 }
-const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 64);
+const_assert_eq!(mem::size_of::<SchedulingStateMachine>(), 48);
 
 impl SchedulingStateMachine {
     pub fn has_no_active_task(&self) -> bool {
@@ -524,13 +523,6 @@ impl SchedulingStateMachine {
     /// of given task _conditionally_ for future optimization.
     #[must_use]
     pub fn schedule_task(&mut self, task: Task) -> Option<Task> {
-        let new_task_index = task.task_index();
-        if let Some(old_task_index) = self.last_task_index.replace(new_task_index) {
-            assert!(
-                new_task_index > old_task_index,
-                "bad new task index: {new_task_index} > {old_task_index}"
-            );
-        }
         self.total_task_count.increment_self();
         self.active_task_count.increment_self();
         self.try_lock_for_task(task)
@@ -544,14 +536,6 @@ impl SchedulingStateMachine {
     }
 
     pub fn deschedule_task(&mut self, task: &Task) {
-        let descheduled_task_index = task.task_index();
-        let largest_task_index = self
-            .last_task_index
-            .expect("task should have been scheduled");
-        assert!(
-            descheduled_task_index <= largest_task_index,
-            "bad descheduled task index: {descheduled_task_index} <= {largest_task_index}"
-        );
         self.active_task_count.decrement_self();
         self.handled_task_count.increment_self();
         self.unlock_for_task(task);
@@ -740,7 +724,6 @@ impl SchedulingStateMachine {
         assert_eq!(self.unblocked_task_queue.len(), 0);
         // nice trick to ensure all fields are handled here if new one is added.
         let Self {
-            last_task_index,
             unblocked_task_queue: _,
             active_task_count,
             handled_task_count,
@@ -750,7 +733,6 @@ impl SchedulingStateMachine {
             usage_queue_token: _,
             // don't add ".." here
         } = self;
-        *last_task_index = None;
         active_task_count.reset_to_zero();
         handled_task_count.reset_to_zero();
         unblocked_task_count.reset_to_zero();
@@ -765,7 +747,6 @@ impl SchedulingStateMachine {
     #[must_use]
     pub unsafe fn exclusively_initialize_current_thread_for_scheduling() -> Self {
         Self {
-            last_task_index: None,
             // It's very unlikely this is desired to be configurable, like
             // `UsageQueueInner::blocked_usages_from_tasks`'s cap.
             unblocked_task_queue: VecDeque::with_capacity(1024),
@@ -854,10 +835,8 @@ mod tests {
         };
         state_machine.total_task_count.increment_self();
         assert_eq!(state_machine.total_task_count(), 1);
-        state_machine.last_task_index = Some(1);
         state_machine.reinitialize();
         assert_eq!(state_machine.total_task_count(), 0);
-        assert_eq!(state_machine.last_task_index, None);
     }
 
     #[test]
@@ -1316,66 +1295,5 @@ mod tests {
                 .borrow_mut(&mut state_machine.usage_queue_token),
             &LockAttempt::new(usage_queue, RequestedUsage::Writable),
         );
-    }
-
-    #[test]
-    #[should_panic(expected = "bad new task index: 101 > 101")]
-    fn test_schedule_same_task() {
-        let conflicting_address = Pubkey::new_unique();
-        let sanitized = transaction_with_writable_address(conflicting_address);
-        let address_loader = &mut create_address_loader(None);
-        let task = SchedulingStateMachine::create_task(sanitized, 101, address_loader);
-
-        let mut state_machine = unsafe {
-            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
-        };
-        let _ = state_machine.schedule_task(task.clone());
-        let _ = state_machine.schedule_task(task.clone());
-    }
-
-    #[test]
-    #[should_panic(expected = "bad new task index: 101 > 102")]
-    fn test_schedule_task_out_of_order() {
-        let conflicting_address = Pubkey::new_unique();
-        let sanitized = transaction_with_writable_address(conflicting_address);
-        let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
-
-        let mut state_machine = unsafe {
-            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
-        };
-        let _ = state_machine.schedule_task(task2.clone());
-        let _ = state_machine.schedule_task(task1.clone());
-    }
-
-    #[test]
-    #[should_panic(expected = "task should have been scheduled")]
-    fn test_deschedule_new_task_wihout_scheduling() {
-        let conflicting_address = Pubkey::new_unique();
-        let sanitized = transaction_with_writable_address(conflicting_address);
-        let address_loader = &mut create_address_loader(None);
-        let task = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
-
-        let mut state_machine = unsafe {
-            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
-        };
-        state_machine.deschedule_task(&task);
-    }
-
-    #[test]
-    #[should_panic(expected = "bad descheduled task index: 102 <= 101")]
-    fn test_deschedule_new_task_out_of_order() {
-        let conflicting_address = Pubkey::new_unique();
-        let sanitized = transaction_with_writable_address(conflicting_address);
-        let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
-
-        let mut state_machine = unsafe {
-            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
-        };
-        let _ = state_machine.schedule_task(task1.clone());
-        state_machine.deschedule_task(&task2);
     }
 }
