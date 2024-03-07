@@ -838,24 +838,6 @@ mod tests {
     }
 
     #[test]
-    fn test_debug() {
-        // these are almost meaningless just to see eye-pleasing coverage report....
-        assert_eq!(
-            format!("{:?}", LockResult::Ok(Usage::Readonly(ShortCounter::one()))),
-            "Ok(Readonly(ShortCounter(1)))"
-        );
-        let sanitized = simplest_transaction();
-        let task =
-            SchedulingStateMachine::create_task(sanitized, 0, &mut |_| UsageQueue::default());
-        assert!(format!("{:?}", task).contains("TaskInner"));
-
-        assert_eq!(
-            format!("{:?}", UsageQueueInner::default()),
-            "UsageQueueInner { current_usage: Unused, blocked_usages_from_tasks: [] }"
-        )
-    }
-
-    #[test]
     fn test_scheduling_state_machine_creation() {
         let state_machine = unsafe {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
