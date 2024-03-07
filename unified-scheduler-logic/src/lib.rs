@@ -928,14 +928,23 @@ mod tests {
         state_machine.deschedule_task(&task1);
         assert!(state_machine.has_unblocked_task());
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
+
+        // unblocked_task_count() should be incremented
+        assert_eq!(state_machine.unblocked_task_count(), 0);
         assert_eq!(
             state_machine
                 .schedule_unblocked_task()
-                .unwrap()
-                .task_index(),
-            task2.task_index()
+                .map(|t| t.task_index()),
+            Some(102)
         );
+        assert_eq!(state_machine.unblocked_task_count(), 1);
+
+        // there's no blocked task anymore; calling schedule_unblocked_task should be noop and
+        // shouldn't increment the unblocked_task_count().
         assert!(!state_machine.has_unblocked_task());
+        assert_matches!(state_machine.schedule_unblocked_task(), None);
+        assert_eq!(state_machine.unblocked_task_count(), 1);
+
         assert_eq!(state_machine.unblocked_task_queue_count(), 0);
         state_machine.deschedule_task(&task2);
 
@@ -946,43 +955,6 @@ mod tests {
             Some(103)
         );
         state_machine.deschedule_task(&task3);
-        assert!(state_machine.has_no_active_task());
-    }
-
-    #[test]
-    fn test_unblocked_task_related_counts() {
-        let sanitized = simplest_transaction();
-        let address_loader = &mut create_address_loader(None);
-        let task1 = SchedulingStateMachine::create_task(sanitized.clone(), 101, address_loader);
-        let task2 = SchedulingStateMachine::create_task(sanitized.clone(), 102, address_loader);
-
-        let mut state_machine = unsafe {
-            SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
-        };
-        assert_matches!(
-            state_machine
-                .schedule_task(task1.clone())
-                .map(|t| t.task_index()),
-            Some(101)
-        );
-        assert_matches!(state_machine.schedule_task(task2.clone()), None);
-
-        state_machine.deschedule_task(&task1);
-
-        assert_eq!(state_machine.unblocked_task_count(), 0);
-        assert_matches!(
-            state_machine
-                .schedule_unblocked_task()
-                .map(|t| t.task_index()),
-            Some(102)
-        );
-        assert_eq!(state_machine.unblocked_task_count(), 1);
-        // there's no blocked task anymore; calling schedule_unblocked_task should be noop and
-        // shouldn't increment the unblocked_task_count().
-        assert_matches!(state_machine.schedule_unblocked_task(), None);
-        assert_eq!(state_machine.unblocked_task_count(), 1);
-
-        state_machine.deschedule_task(&task2);
         assert!(state_machine.has_no_active_task());
     }
 
