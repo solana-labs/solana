@@ -236,14 +236,10 @@ impl QosService {
             batched_transaction_details.costs.batched_data_bytes_cost,
             Ordering::Relaxed,
         );
-        self.metrics.stats.estimated_builtins_execute_cu.fetch_add(
+        self.metrics.stats.estimated_programs_execute_cu.fetch_add(
             batched_transaction_details
                 .costs
-                .batched_builtins_execute_cost,
-            Ordering::Relaxed,
-        );
-        self.metrics.stats.estimated_bpf_execute_cu.fetch_add(
-            batched_transaction_details.costs.batched_bpf_execute_cost,
+                .batched_programs_execute_cost,
             Ordering::Relaxed,
         );
 
@@ -297,7 +293,7 @@ impl QosService {
     pub fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
             .stats
-            .actual_bpf_execute_cu
+            .actual_programs_execute_cu
             .fetch_add(units, Ordering::Relaxed);
     }
 
@@ -331,12 +327,8 @@ impl QosService {
                 saturating_add_assign!(
                     batched_transaction_details
                         .costs
-                        .batched_builtins_execute_cost,
-                    cost.builtins_execution_cost()
-                );
-                saturating_add_assign!(
-                    batched_transaction_details.costs.batched_bpf_execute_cost,
-                    cost.bpf_execution_cost()
+                        .batched_programs_execute_cost,
+                    cost.programs_execution_cost()
                 );
             }
             Err(transaction_error) => match transaction_error {
@@ -427,14 +419,11 @@ struct QosServiceMetricsStats {
     /// accumulated estimated instruction data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
-    /// accumulated estimated builtin programs Compute Units to be packed into block
-    estimated_builtins_execute_cu: AtomicU64,
-
-    /// accumulated estimated SBF program Compute Units to be packed into block
-    estimated_bpf_execute_cu: AtomicU64,
+    /// accumulated estimated program Compute Units to be packed into block
+    estimated_programs_execute_cu: AtomicU64,
 
     /// accumulated actual program Compute Units that have been packed into block
-    actual_bpf_execute_cu: AtomicU64,
+    actual_programs_execute_cu: AtomicU64,
 
     /// accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
@@ -515,22 +504,17 @@ impl QosServiceMetrics {
                     i64
                 ),
                 (
-                    "estimated_builtins_execute_cu",
+                    "estimated_programs_execute_cu",
                     self.stats
-                        .estimated_builtins_execute_cu
+                        .estimated_programs_execute_cu
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
-                    "estimated_bpf_execute_cu",
+                    "actual_programs_execute_cu",
                     self.stats
-                        .estimated_bpf_execute_cu
+                        .actual_programs_execute_cu
                         .swap(0, Ordering::Relaxed),
-                    i64
-                ),
-                (
-                    "actual_bpf_execute_cu",
-                    self.stats.actual_bpf_execute_cu.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -735,7 +719,7 @@ mod tests {
             let committed_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                    compute_units: tx_cost.as_ref().unwrap().programs_execution_cost()
                         + execute_units_adjustment,
                 })
                 .collect();
@@ -862,7 +846,7 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                            compute_units: tx_cost.as_ref().unwrap().programs_execution_cost()
                                 + execute_units_adjustment,
                         }
                     }
@@ -898,8 +882,7 @@ mod tests {
         let signature_cost = 1;
         let write_lock_cost = 2;
         let data_bytes_cost = 3;
-        let builtins_execution_cost = 4;
-        let bpf_execution_cost = 10;
+        let programs_execution_cost = 10;
         let num_txs = 4;
 
         let tx_cost_results: Vec<_> = (0..num_txs)
@@ -909,8 +892,7 @@ mod tests {
                         signature_cost,
                         write_lock_cost,
                         data_bytes_cost,
-                        builtins_execution_cost,
-                        bpf_execution_cost,
+                        programs_execution_cost,
                         ..UsageCostDetails::default()
                     }))
                 } else {
@@ -922,8 +904,7 @@ mod tests {
         let expected_signatures = signature_cost * (num_txs / 2);
         let expected_write_locks = write_lock_cost * (num_txs / 2);
         let expected_data_bytes = data_bytes_cost * (num_txs / 2);
-        let expected_builtins_execution_costs = builtins_execution_cost * (num_txs / 2);
-        let expected_bpf_execution_costs = bpf_execution_cost * (num_txs / 2);
+        let expected_programs_execution_costs = programs_execution_cost * (num_txs / 2);
         let batched_transaction_details =
             QosService::accumulate_batched_transaction_costs(tx_cost_results.iter());
         assert_eq!(
@@ -939,14 +920,10 @@ mod tests {
             batched_transaction_details.costs.batched_data_bytes_cost
         );
         assert_eq!(
-            expected_builtins_execution_costs,
+            expected_programs_execution_costs,
             batched_transaction_details
                 .costs
-                .batched_builtins_execute_cost
-        );
-        assert_eq!(
-            expected_bpf_execution_costs,
-            batched_transaction_details.costs.batched_bpf_execute_cost
+                .batched_programs_execute_cost
         );
     }
 }
