@@ -51,7 +51,14 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
 // Unlock all locked accounts in destructor.
 impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
     fn drop(&mut self) {
-        self.bank.unlock_accounts(self)
+        if self.needs_unlock() {
+            self.set_needs_unlock(false);
+            self.bank.unlock_accounts(
+                self.sanitized_transactions()
+                    .iter()
+                    .zip(self.lock_results()),
+            )
+        }
     }
 }
 

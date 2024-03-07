@@ -80,11 +80,20 @@ impl AccountLocks {
             if *count == 0 {
                 occupied_entry.remove_entry();
             }
+        } else {
+            debug_assert!(
+                false,
+                "Attempted to remove a read-lock for a key that wasn't read-locked"
+            );
         }
     }
 
     fn unlock_write(&mut self, key: &Pubkey) {
-        self.write_locks.remove(key);
+        let removed = self.write_locks.remove(key);
+        debug_assert!(
+            removed,
+            "Attempted to remove a write-lock for a key that wasn't write-locked"
+        );
     }
 }
 
@@ -618,14 +627,16 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: &[Result<()>],
+        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
     ) {
-        let keys: Vec<_> = txs
-            .zip(results)
+        let keys: Vec<_> = txs_and_results
             .filter(|(_, res)| res.is_ok())
             .map(|(tx, _)| tx.get_account_locks_unchecked())
             .collect();
+        if keys.is_empty() {
+            return;
+        }
+
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         keys.into_iter().for_each(|keys| {
@@ -812,6 +823,7 @@ mod tests {
         },
         std::{
             borrow::Cow,
+            iter,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1099,8 +1111,8 @@ mod tests {
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
             let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-            assert_eq!(results[0], Ok(()));
-            accounts.unlock_accounts(txs.iter(), &results);
+            assert_eq!(results, vec![Ok(())]);
+            accounts.unlock_accounts(txs.iter().zip(&results));
         }
 
         // Disallow over MAX_TX_ACCOUNT_LOCKS
@@ -1156,7 +1168,7 @@ mod tests {
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
         let results0 = accounts.lock_accounts([tx.clone()].iter(), MAX_TX_ACCOUNT_LOCKS);
 
-        assert!(results0[0].is_ok());
+        assert_eq!(results0, vec![Ok(())]);
         assert_eq!(
             *accounts
                 .account_locks
@@ -1190,9 +1202,13 @@ mod tests {
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
         let results1 = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-
-        assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
-        assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
+        assert_eq!(
+            results1,
+            vec![
+                Ok(()), // Read-only account (keypair1) can be referenced multiple times
+                Err(TransactionError::AccountInUse), // Read-only account (keypair1) cannot also be locked as writable
+            ],
+        );
         assert_eq!(
             *accounts
                 .account_locks
@@ -1204,8 +1220,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter(), &results0);
-        accounts.unlock_accounts(txs.iter(), &results1);
+        accounts.unlock_accounts(iter::once(&tx).zip(&results0));
+        accounts.unlock_accounts(txs.iter().zip(&results1));
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1217,7 +1233,10 @@ mod tests {
         );
         let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let results2 = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
-        assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
+        assert_eq!(
+            results2,
+            vec![Ok(())] // Now keypair1 account can be locked as writable
+        );
 
         // Check that read-only lock with zero references is deleted
         assert!(accounts
@@ -1285,7 +1304,7 @@ mod tests {
                     counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
             }
-            accounts_clone.unlock_accounts(txs.iter(), &results);
+            accounts_clone.unlock_accounts(txs.iter().zip(&results));
             if exit_clone.clone().load(Ordering::Relaxed) {
                 break;
             }
@@ -1301,7 +1320,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter(), &results);
+            accounts_arc.unlock_accounts(txs.iter().zip(&results));
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -1442,9 +1461,14 @@ mod tests {
             MAX_TX_ACCOUNT_LOCKS,
         );
 
-        assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times
-        assert!(results[1].is_err()); // is not locked due to !qos_results[1].is_ok()
-        assert!(results[2].is_ok()); // Read-only account (keypair0) can be referenced multiple times
+        assert_eq!(
+            results,
+            vec![
+                Ok(()), // Read-only account (keypair0) can be referenced multiple times
+                Err(TransactionError::WouldExceedMaxBlockCostLimit), // is not locked due to !qos_results[1].is_ok()
+                Ok(()), // Read-only account (keypair0) can be referenced multiple times
+            ],
+        );
 
         // verify that keypair0 read-only lock twice (for tx0 and tx2)
         assert_eq!(
@@ -1466,7 +1490,7 @@ mod tests {
             .get(&keypair2.pubkey())
             .is_none());
 
-        accounts.unlock_accounts(txs.iter(), &results);
+        accounts.unlock_accounts(txs.iter().zip(&results));
 
         // check all locks to be removed
         assert!(accounts
