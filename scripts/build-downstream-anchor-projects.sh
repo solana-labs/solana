@@ -8,6 +8,7 @@ cd "$(dirname "$0")"/..
 source ci/_
 source scripts/patch-crates.sh
 source scripts/read-cargo-variable.sh
+source scripts/patch-spl-crates-for-anchor.sh
 
 anchor_version=$1
 solana_ver=$(readCargoVariable version Cargo.toml)
@@ -43,6 +44,14 @@ EOF
 # NOTE This isn't run in a subshell to get $anchor_dir and $anchor_ver
 anchor() {
   set -x
+
+  rm -rf spl
+  git clone https://github.com/solana-labs/solana-program-library.git spl
+  cd spl || exit 1
+  spl_dir=$PWD
+  get_spl_versions "$spl_dir"
+  cd ..
+
   rm -rf anchor
   git clone https://github.com/coral-xyz/anchor.git
   cd anchor || exit 1
@@ -57,9 +66,13 @@ anchor() {
 
   update_solana_dependencies . "$solana_ver"
   patch_crates_io_solana Cargo.toml "$solana_dir"
+  patch_spl_crates . Cargo.toml "$spl_dir"
 
   $cargo test
-  (cd spl && $cargo_build_sbf --features dex metadata stake)
+  # serum_dex and mpl-token-metadata are using caret versions of solana and SPL dependencies
+  # rather pull and patch those as well, ignore for now
+  # (cd spl && $cargo_build_sbf --features dex metadata stake)
+  (cd spl && $cargo_build_sbf --features stake)
   (cd client && $cargo test --all-features)
 
   anchor_dir=$PWD
