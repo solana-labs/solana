@@ -47,6 +47,7 @@ use {
     },
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
@@ -67,7 +68,6 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
-    solana_svm::runtime_config::RuntimeConfig,
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     std::{
         collections::{HashSet, VecDeque},

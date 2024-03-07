@@ -17,7 +17,8 @@ use {
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
         compute_budget::ComputeBudget, ic_msg, invoke_context::BuiltinFunctionWithContext,
-        loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
+        loaded_programs::LoadedProgram, runtime_config::RuntimeConfig, stable_log,
+        timings::ExecuteTimings,
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -45,7 +46,6 @@ use {
         stable_layout::stable_instruction::StableInstruction,
         sysvar::{Sysvar, SysvarId},
     },
-    solana_svm::runtime_config::RuntimeConfig,
     solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
     std::{
         cell::RefCell,

@@ -74,6 +74,7 @@ use {
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
     },
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -116,7 +117,6 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_svm::runtime_config::RuntimeConfig,
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::vote_state,

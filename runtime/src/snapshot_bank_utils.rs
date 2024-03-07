@@ -37,6 +37,7 @@ use {
         utils::delete_contents_of_path,
     },
     solana_measure::{measure, measure::Measure},
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::Slot,
         feature_set,
@@ -45,7 +46,6 @@ use {
         pubkey::Pubkey,
         slot_history::{Check, SlotHistory},
     },
-    solana_svm::runtime_config::RuntimeConfig,
     std::{
         collections::HashSet,
         fs,
