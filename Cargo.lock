@@ -7501,6 +7501,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "test-case",
  "thiserror",
  "tokio",
 ]
