@@ -45,7 +45,7 @@ const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 114;
 pub const VOTE_CREDITS_GRACE_SLOTS: u8 = 2;
 
 // Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within the grace period. After that grace period, vote credits are reduced.
-pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 8;
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 16;
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
