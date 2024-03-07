@@ -1,6 +1,7 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_client::thin_client::ThinClient,
+    solana_rpc_client_api::config::RpcBlockConfig,
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
@@ -10,8 +11,10 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
+        slot_history::Slot,
         transaction::Transaction,
     },
+    solana_transaction_status::UiConfirmedBlock,
 };
 
 impl BenchTpsClient for ThinClient {
@@ -108,6 +111,33 @@ impl BenchTpsClient for ThinClient {
     fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
         self.rpc_client()
             .get_multiple_accounts(pubkeys)
+            .map_err(|err| err.into())
+    }
+
+    fn get_slot_with_commitment(&self, commitment_config: CommitmentConfig) -> Result<Slot> {
+        self.rpc_client()
+            .get_slot_with_commitment(commitment_config)
+            .map_err(|err| err.into())
+    }
+
+    fn get_blocks_with_commitment(
+        &self,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Vec<Slot>> {
+        self.rpc_client()
+            .get_blocks_with_commitment(start_slot, end_slot, commitment_config)
+            .map_err(|err| err.into())
+    }
+
+    fn get_block_with_config(
+        &self,
+        slot: Slot,
+        rpc_block_config: RpcBlockConfig,
+    ) -> Result<UiConfirmedBlock> {
+        self.rpc_client()
+            .get_block_with_config(slot, rpc_block_config)
             .map_err(|err| err.into())
     }
 }

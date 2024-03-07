@@ -5590,6 +5590,7 @@ dependencies = [
  "solana-test-validator",
  "solana-thin-client",
  "solana-tpu-client",
+ "solana-transaction-status",
  "solana-version",
  "spl-instruction-padding",
  "tempfile",
