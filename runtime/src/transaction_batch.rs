@@ -46,6 +46,39 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn needs_unlock(&self) -> bool {
         self.needs_unlock
     }
+
+    /// For every error result, if the corresponding transaction is
+    /// still locked, unlock the transaction and then record the new error.
+    pub fn unlock_failures(&mut self, transaction_results: Vec<Result<()>>) {
+        assert_eq!(self.lock_results.len(), transaction_results.len());
+        // Shouldn't happen but if a batch was marked as not needing an unlock,
+        // don't unlock failures.
+        if !self.needs_unlock() {
+            return;
+        }
+
+        let txs_and_results = transaction_results
+            .iter()
+            .enumerate()
+            .inspect(|(index, result)| {
+                // It's not valid to update a previously recorded lock error to
+                // become an "ok" result because this could lead to serious
+                // account lock violations where accounts are later unlocked
+                // when they were not currently locked.
+                assert!(!(result.is_ok() && self.lock_results[*index].is_err()))
+            })
+            .filter(|(index, result)| result.is_err() && self.lock_results[*index].is_ok())
+            .map(|(index, _)| (&self.sanitized_txs[index], &self.lock_results[index]));
+
+        // Unlock the accounts for all transactions which will be updated to an
+        // lock error below.
+        self.bank.unlock_accounts(txs_and_results);
+
+        // Record all new errors by overwriting lock results. Note that it's
+        // not valid to update from err -> ok and the assertion above enforces
+        // that validity constraint.
+        self.lock_results = transaction_results;
+    }
 }
 
 // Unlock all locked accounts in destructor.
@@ -67,12 +100,12 @@ mod tests {
     use {
         super::*,
         crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_sdk::{signature::Keypair, system_transaction, transaction::TransactionError},
     };
 
     #[test]
     fn test_transaction_batch() {
-        let (bank, txs) = setup();
+        let (bank, txs) = setup(false);
 
         // Test getting locked accounts
         let batch = bank.prepare_sanitized_batch(&txs);
@@ -94,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_simulation_batch() {
-        let (bank, txs) = setup();
+        let (bank, txs) = setup(false);
 
         // Prepare batch without locks
         let batch = bank.prepare_unlocked_batch_from_single_tx(&txs[0]);
@@ -109,7 +142,37 @@ mod tests {
         assert!(batch3.lock_results().iter().all(|x| x.is_ok()));
     }
 
-    fn setup() -> (Bank, Vec<SanitizedTransaction>) {
+    #[test]
+    fn test_unlock_failures() {
+        let (bank, txs) = setup(true);
+
+        // Test getting locked accounts
+        let mut batch = bank.prepare_sanitized_batch(&txs);
+        assert_eq!(
+            batch.lock_results,
+            vec![Ok(()), Err(TransactionError::AccountInUse), Ok(())]
+        );
+
+        let qos_results = vec![
+            Ok(()),
+            Err(TransactionError::AccountInUse),
+            Err(TransactionError::WouldExceedMaxBlockCostLimit),
+        ];
+        batch.unlock_failures(qos_results.clone());
+        assert_eq!(batch.lock_results, qos_results);
+
+        // Dropping the batch should unlock remaining locked transactions
+        drop(batch);
+
+        // The next batch should be able to lock all but the conflicting tx
+        let batch2 = bank.prepare_sanitized_batch(&txs);
+        assert_eq!(
+            batch2.lock_results,
+            vec![Ok(()), Err(TransactionError::AccountInUse), Ok(())]
+        );
+    }
+
+    fn setup(insert_conflicting_tx: bool) -> (Bank, Vec<SanitizedTransaction>) {
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
             genesis_config,
@@ -122,20 +185,17 @@ mod tests {
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
-        let txs = vec![
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &mint_keypair,
-                &pubkey,
-                1,
-                genesis_config.hash(),
-            )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &keypair2,
-                &pubkey2,
-                1,
-                genesis_config.hash(),
-            )),
-        ];
+        let mut txs = vec![SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+        )];
+        if insert_conflicting_tx {
+            txs.push(SanitizedTransaction::from_transaction_for_tests(
+                system_transaction::transfer(&mint_keypair, &pubkey2, 1, genesis_config.hash()),
+            ));
+        }
+        txs.push(SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
+        ));
 
         (bank, txs)
     }
