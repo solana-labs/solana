@@ -4379,13 +4379,11 @@ impl Bank {
         account_overrides
     }
 
-    pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
-        if batch.needs_unlock() {
-            batch.set_needs_unlock(false);
-            self.rc
-                .accounts
-                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
-        }
+    pub fn unlock_accounts<'a>(
+        &self,
+        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+    ) {
+        self.rc.accounts.unlock_accounts(txs_and_results)
     }
 
     pub fn remove_unrooted_slots(&self, slots: &[(Slot, BankId)]) {
