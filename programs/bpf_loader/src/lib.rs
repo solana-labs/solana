@@ -39,7 +39,7 @@ use {
         },
         instruction::{AccountMeta, InstructionError},
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        native_loader,
+        loader_v4, native_loader,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -193,6 +193,7 @@ pub fn check_loader_id(id: &Pubkey) -> bool {
     bpf_loader::check_id(id)
         || bpf_loader_deprecated::check_id(id)
         || bpf_loader_upgradeable::check_id(id)
+        || loader_v4::check_id(id)
 }
 
 /// Only used in macro, do not use directly!

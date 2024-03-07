@@ -7288,6 +7288,7 @@ dependencies = [
 name = "solana-svm"
 version = "1.19.0"
 dependencies = [
+ "bincode",
  "itertools",
  "log",
  "percentage",
