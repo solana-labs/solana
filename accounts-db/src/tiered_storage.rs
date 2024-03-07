@@ -362,15 +362,15 @@ mod tests {
 
         let mut expected_accounts_map = HashMap::new();
         for i in 0..num_accounts {
-            let (account, address, account_hash, _write_version) = storable_accounts.get(i);
-            expected_accounts_map.insert(address, (account, account_hash));
+            let (account, address, _account_hash, _write_version) = storable_accounts.get(i);
+            expected_accounts_map.insert(address, account);
         }
 
         let mut index_offset = IndexOffset(0);
         let mut verified_accounts = HashSet::new();
         while let Some((stored_meta, next)) = reader.get_account(index_offset).unwrap() {
-            if let Some((account, account_hash)) = expected_accounts_map.get(stored_meta.pubkey()) {
-                verify_test_account(&stored_meta, *account, stored_meta.pubkey(), account_hash);
+            if let Some(account) = expected_accounts_map.get(stored_meta.pubkey()) {
+                verify_test_account(&stored_meta, *account, stored_meta.pubkey());
                 verified_accounts.insert(stored_meta.pubkey());
             }
             index_offset = next;

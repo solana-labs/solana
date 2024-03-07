@@ -2,7 +2,6 @@ use {
     crate::{
         account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
-        accounts_hash::AccountHash,
         tiered_storage::{
             footer::{AccountMetaFormat, TieredStorageFooter},
             hot::HotStorageReader,
@@ -38,11 +37,6 @@ impl<'accounts_file, M: TieredAccountMeta> TieredReadableAccount<'accounts_file,
     /// Returns the address of this account.
     pub fn address(&self) -> &'accounts_file Pubkey {
         self.address
-    }
-
-    /// Returns the hash of this account.
-    pub fn hash(&self) -> Option<&'accounts_file AccountHash> {
-        self.meta.account_hash(self.account_block)
     }
 
     /// Returns the index to this account in its AccountsFile.
