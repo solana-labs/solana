@@ -1075,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    fn test_all_blocking_redable_tasks_block_writable_task() {
+    fn test_all_blocking_readable_tasks_block_writable_task() {
         let conflicting_address = Pubkey::new_unique();
         let sanitized1 = transaction_with_readonly_address(conflicting_address);
         let sanitized2 = transaction_with_readonly_address(conflicting_address);
@@ -1114,7 +1114,7 @@ mod tests {
         assert_eq!(state_machine.active_task_count(), 1);
         assert_eq!(state_machine.handled_task_count(), 2);
         assert_eq!(state_machine.unblocked_task_queue_count(), 1);
-        // task3 is finally unblocked after all of readble tasks (task1 and task2) is finished.
+        // task3 is finally unblocked after all of readable tasks (task1 and task2) is finished.
         assert_matches!(
             state_machine
                 .schedule_unblocked_task()
