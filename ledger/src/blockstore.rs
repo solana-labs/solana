@@ -31,10 +31,7 @@ use {
     itertools::Itertools,
     log::*,
     rand::Rng,
-    rayon::{
-        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-        ThreadPool,
-    },
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     rocksdb::{DBRawIterator, LiveFile},
     solana_accounts_db::hardened_unpack::{
         unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
@@ -93,16 +90,6 @@ pub use {
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-// get_max_thread_count to match number of threads in the old code.
-// see: https://github.com/solana-labs/solana/pull/24853
-lazy_static! {
-    static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .thread_name(|i| format!("solBstoreAll{i:02}"))
-        .build()
-        .unwrap();
-}
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
@@ -3281,27 +3268,6 @@ impl Blockstore {
         slot_meta: Option<&SlotMeta>,
     ) -> Result<Vec<Entry>> {
         self.get_slot_entries_in_block(slot, vec![(start_index, end_index)], slot_meta)
-    }
-
-    fn get_any_valid_slot_entries(&self, slot: Slot, start_index: u64) -> Vec<Entry> {
-        let (completed_ranges, slot_meta) = self
-            .get_completed_ranges(slot, start_index)
-            .unwrap_or_default();
-        if completed_ranges.is_empty() {
-            return vec![];
-        }
-        let slot_meta = slot_meta.unwrap();
-
-        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL_ALL_CPUS.install(|| {
-            completed_ranges
-                .par_iter()
-                .map(|(start_index, end_index)| {
-                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
-                        .unwrap_or_default()
-                })
-                .collect()
-        });
-        entries.into_iter().flatten().collect()
     }
 
     /// Returns a mapping from each elements of `slots` to a list of the
