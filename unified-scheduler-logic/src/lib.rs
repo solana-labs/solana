@@ -225,13 +225,13 @@ mod utils {
         }
     }
 
-    // Safety: Access to `TokenCell` is assumed to be only from a single thread by proper use of
-    // Token once after `TokenCell` is sent to the thread from other threads; So, both implementing
-    // Send and Sync can be thought as safe.
+    // Safety: Once after a (`Send`-able) `TokenCell` is transferred to a thread from other
+    // threads, access to `TokenCell` is assumed to be only from the single thread by proper use of
+    // Token. Thereby, implementing `Sync` can be thought as safe and doing so is needed for the
+    // particular implementation pattern in the unified scheduler (multi-threaded off-loading).
     //
-    // In other words, TokenCell is technically still `!Send` and `!Sync`. But there should be no
-    // legalized usage which depends on real `Send` and `Sync` to avoid undefined behaviors.
-    unsafe impl<V> Send for TokenCell<V> {}
+    // In other words, TokenCell is technically still `!Sync`. But there should be no
+    // legalized usage which depends on real `Sync` to avoid undefined behaviors.
     unsafe impl<V> Sync for TokenCell<V> {}
 
     /// A auxiliary zero-sized type to enforce aliasing rule to [`TokenCell`] via rust type system
