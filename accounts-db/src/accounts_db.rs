@@ -7882,6 +7882,7 @@ impl AccountsDb {
     ///
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
         self.calculate_accounts_delta_hash_internal(slot, None, HashMap::default())
     }
