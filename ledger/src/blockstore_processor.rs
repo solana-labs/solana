@@ -57,8 +57,11 @@ use {
             VersionedTransaction,
         },
     },
-    solana_svm::transaction_results::{
-        TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+    solana_svm::{
+        transaction_processor::ExecutionRecordingConfig,
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+        },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
@@ -163,9 +166,7 @@ pub fn execute_batch(
         batch,
         MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
+        ExecutionRecordingConfig::new_single_setting(transaction_status_sender.is_some()),
         timings,
         log_messages_bytes_limit,
     );
@@ -1972,6 +1973,7 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
+        solana_svm::transaction_processor::ExecutionRecordingConfig,
         solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
@@ -3962,9 +3964,7 @@ pub mod tests {
             &batch,
             MAX_PROCESSING_AGE,
             false,
-            false,
-            false,
-            false,
+            ExecutionRecordingConfig::new_single_setting(false),
             &mut ExecuteTimings::default(),
             None,
         );

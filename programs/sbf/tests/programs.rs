@@ -48,6 +48,7 @@ use {
         sysvar::{self, clock},
         transaction::VersionedTransaction,
     },
+    solana_svm::transaction_processor::ExecutionRecordingConfig,
     solana_svm::transaction_results::{
         DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
         TransactionResults,
@@ -104,9 +105,11 @@ fn process_transaction_and_record_inner(
             &tx_batch,
             MAX_PROCESSING_AGE,
             false,
-            true,
-            true,
-            false,
+            ExecutionRecordingConfig {
+                enable_cpi_recording: true,
+                enable_log_recording: true,
+                enable_return_data_recording: false,
+            },
             &mut ExecuteTimings::default(),
             None,
         )
@@ -152,9 +155,7 @@ fn execute_transactions(
         &batch,
         std::usize::MAX,
         true,
-        true,
-        true,
-        true,
+        ExecutionRecordingConfig::new_single_setting(true),
         &mut timings,
         None,
     );
