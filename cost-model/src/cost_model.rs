@@ -43,7 +43,7 @@ impl CostModel {
         } else {
             let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
-            tx_cost.signature_cost = Self::get_signature_cost(transaction);
+            Self::get_signature_cost(&mut tx_cost, transaction);
             Self::get_write_lock_cost(&mut tx_cost, transaction, feature_set);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
             tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
@@ -53,8 +53,26 @@ impl CostModel {
         }
     }
 
-    fn get_signature_cost(transaction: &SanitizedTransaction) -> u64 {
-        transaction.signatures().len() as u64 * SIGNATURE_COST
+    fn get_signature_cost(tx_cost: &mut UsageCostDetails, transaction: &SanitizedTransaction) {
+        let signatures_count_detail = transaction.message().get_signature_details();
+        tx_cost.num_transaction_signatures = signatures_count_detail.num_transaction_signatures();
+        tx_cost.num_secp256k1_instruction_signatures =
+            signatures_count_detail.num_secp256k1_instruction_signatures();
+        tx_cost.num_ed25519_instruction_signatures =
+            signatures_count_detail.num_ed25519_instruction_signatures();
+        tx_cost.signature_cost = signatures_count_detail
+            .num_transaction_signatures()
+            .saturating_mul(SIGNATURE_COST)
+            .saturating_add(
+                signatures_count_detail
+                    .num_secp256k1_instruction_signatures()
+                    .saturating_mul(SECP256K1_VERIFY_COST),
+            )
+            .saturating_add(
+                signatures_count_detail
+                    .num_ed25519_instruction_signatures()
+                    .saturating_mul(ED25519_VERIFY_COST),
+            );
     }
 
     fn get_writable_accounts(transaction: &SanitizedTransaction) -> Vec<Pubkey> {
