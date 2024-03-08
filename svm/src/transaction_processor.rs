@@ -195,6 +195,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
+    /// Main entrypoint to the SVM.
     #[allow(clippy::too_many_arguments)]
     pub fn load_and_execute_sanitized_transactions<'a, CB: TransactionProcessingCallback>(
         &self,
@@ -377,6 +378,112 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         result
     }
 
+    /// Load program with a specific pubkey from loaded programs
+    /// cache, and update the program's access slot as a side-effect.
+    pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
+        &self,
+        callbacks: &CB,
+        pubkey: &Pubkey,
+        reload: bool,
+        effective_epoch: Epoch,
+    ) -> Arc<LoadedProgram> {
+        let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+        let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
+        let mut load_program_metrics = LoadProgramMetrics {
+            program_id: pubkey.to_string(),
+            ..LoadProgramMetrics::default()
+        };
+
+        let mut loaded_program =
+            match self.load_program_accounts(callbacks, pubkey, environments) {
+                ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
+                    self.slot,
+                    LoadedProgramType::Closed,
+                )),
+
+                ProgramAccountLoadResult::InvalidAccountData(env) => Err((self.slot, env)),
+
+                ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
+                    Self::load_program_from_bytes(
+                        &mut load_program_metrics,
+                        program_account.data(),
+                        program_account.owner(),
+                        program_account.data().len(),
+                        0,
+                        environments.program_runtime_v1.clone(),
+                        reload,
+                    )
+                    .map_err(|_| (0, environments.program_runtime_v1.clone()))
+                }
+
+                ProgramAccountLoadResult::ProgramOfLoaderV3(
+                    program_account,
+                    programdata_account,
+                    slot,
+                ) => programdata_account
+                    .data()
+                    .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                    .ok_or(Box::new(InstructionError::InvalidAccountData).into())
+                    .and_then(|programdata| {
+                        Self::load_program_from_bytes(
+                            &mut load_program_metrics,
+                            programdata,
+                            program_account.owner(),
+                            program_account
+                                .data()
+                                .len()
+                                .saturating_add(programdata_account.data().len()),
+                            slot,
+                            environments.program_runtime_v1.clone(),
+                            reload,
+                        )
+                    })
+                    .map_err(|_| (slot, environments.program_runtime_v1.clone())),
+
+                ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                    program_account
+                        .data()
+                        .get(LoaderV4State::program_data_offset()..)
+                        .ok_or(Box::new(InstructionError::InvalidAccountData).into())
+                        .and_then(|elf_bytes| {
+                            Self::load_program_from_bytes(
+                                &mut load_program_metrics,
+                                elf_bytes,
+                                &loader_v4::id(),
+                                program_account.data().len(),
+                                slot,
+                                environments.program_runtime_v2.clone(),
+                                reload,
+                            )
+                        })
+                        .map_err(|_| (slot, environments.program_runtime_v2.clone()))
+                }
+            }
+            .unwrap_or_else(|(slot, env)| {
+                LoadedProgram::new_tombstone(slot, LoadedProgramType::FailedVerification(env))
+            });
+
+        let mut timings = ExecuteDetailsTimings::default();
+        load_program_metrics.submit_datapoint(&mut timings);
+        if !Arc::ptr_eq(
+            &environments.program_runtime_v1,
+            &loaded_programs_cache.environments.program_runtime_v1,
+        ) || !Arc::ptr_eq(
+            &environments.program_runtime_v2,
+            &loaded_programs_cache.environments.program_runtime_v2,
+        ) {
+            // There can be two entries per program when the environment changes.
+            // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
+            // These two entries have the same deployment slot, so they must differ in their effective slot instead.
+            // This is done by setting the effective slot of the entry for the new environment to the epoch boundary.
+            loaded_program.effective_slot = loaded_program
+                .effective_slot
+                .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
+        }
+        loaded_program.update_access_slot(self.slot);
+        Arc::new(loaded_program)
+    }
+
     fn replenish_program_cache<CB: TransactionProcessingCallback>(
         &self,
         callback: &CB,
@@ -454,7 +561,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
             if let Some((key, count)) = program_to_load {
                 // Load, verify and compile one program.
-                let program = self.load_program(callback, &key, false, self.epoch);
+                let program = self.load_program_with_pubkey(callback, &key, false, self.epoch);
                 program.tx_usage_counter.store(count, Ordering::Relaxed);
                 program_to_store = Some((key, program));
             } else if missing_programs.is_empty() {
@@ -681,110 +788,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         } else {
             Ok(0)
         }
-    }
-
-    pub fn load_program<CB: TransactionProcessingCallback>(
-        &self,
-        callbacks: &CB,
-        pubkey: &Pubkey,
-        reload: bool,
-        effective_epoch: Epoch,
-    ) -> Arc<LoadedProgram> {
-        let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-        let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
-        let mut load_program_metrics = LoadProgramMetrics {
-            program_id: pubkey.to_string(),
-            ..LoadProgramMetrics::default()
-        };
-
-        let mut loaded_program =
-            match self.load_program_accounts(callbacks, pubkey, environments) {
-                ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
-                    self.slot,
-                    LoadedProgramType::Closed,
-                )),
-
-                ProgramAccountLoadResult::InvalidAccountData(env) => Err((self.slot, env)),
-
-                ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
-                    Self::load_program_from_bytes(
-                        &mut load_program_metrics,
-                        program_account.data(),
-                        program_account.owner(),
-                        program_account.data().len(),
-                        0,
-                        environments.program_runtime_v1.clone(),
-                        reload,
-                    )
-                    .map_err(|_| (0, environments.program_runtime_v1.clone()))
-                }
-
-                ProgramAccountLoadResult::ProgramOfLoaderV3(
-                    program_account,
-                    programdata_account,
-                    slot,
-                ) => programdata_account
-                    .data()
-                    .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
-                    .ok_or(Box::new(InstructionError::InvalidAccountData).into())
-                    .and_then(|programdata| {
-                        Self::load_program_from_bytes(
-                            &mut load_program_metrics,
-                            programdata,
-                            program_account.owner(),
-                            program_account
-                                .data()
-                                .len()
-                                .saturating_add(programdata_account.data().len()),
-                            slot,
-                            environments.program_runtime_v1.clone(),
-                            reload,
-                        )
-                    })
-                    .map_err(|_| (slot, environments.program_runtime_v1.clone())),
-
-                ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
-                    program_account
-                        .data()
-                        .get(LoaderV4State::program_data_offset()..)
-                        .ok_or(Box::new(InstructionError::InvalidAccountData).into())
-                        .and_then(|elf_bytes| {
-                            Self::load_program_from_bytes(
-                                &mut load_program_metrics,
-                                elf_bytes,
-                                &loader_v4::id(),
-                                program_account.data().len(),
-                                slot,
-                                environments.program_runtime_v2.clone(),
-                                reload,
-                            )
-                        })
-                        .map_err(|_| (slot, environments.program_runtime_v2.clone()))
-                }
-            }
-            .unwrap_or_else(|(slot, env)| {
-                LoadedProgram::new_tombstone(slot, LoadedProgramType::FailedVerification(env))
-            });
-
-        let mut timings = ExecuteDetailsTimings::default();
-        load_program_metrics.submit_datapoint(&mut timings);
-        if !Arc::ptr_eq(
-            &environments.program_runtime_v1,
-            &loaded_programs_cache.environments.program_runtime_v1,
-        ) || !Arc::ptr_eq(
-            &environments.program_runtime_v2,
-            &loaded_programs_cache.environments.program_runtime_v2,
-        ) {
-            // There can be two entries per program when the environment changes.
-            // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
-            // These two entries have the same deployment slot, so they must differ in their effective slot instead.
-            // This is done by setting the effective slot of the entry for the new environment to the epoch boundary.
-            loaded_program.effective_slot = loaded_program
-                .effective_slot
-                .max(self.epoch_schedule.get_first_slot_in_epoch(effective_epoch));
-        }
-        loaded_program.update_access_slot(self.slot);
-        Arc::new(loaded_program)
     }
 
     fn load_program_from_bytes(
@@ -1242,7 +1245,7 @@ mod tests {
         let key = Pubkey::new_unique();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 50);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 50);
 
         let loaded_program = LoadedProgram::new_tombstone(0, LoadedProgramType::Closed);
         assert_eq!(result, Arc::new(loaded_program));
@@ -1259,7 +1262,7 @@ mod tests {
             .account_shared_data
             .insert(key, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 20);
 
         let loaded_program = LoadedProgram::new_tombstone(
             0,
@@ -1288,7 +1291,7 @@ mod tests {
             .insert(key, account_data.clone());
 
         // This should return an error
-        let result = batch_processor.load_program(&mock_bank, &key, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 20);
         let loaded_program = LoadedProgram::new_tombstone(
             0,
             LoadedProgramType::FailedVerification(
@@ -1316,7 +1319,7 @@ mod tests {
             .account_shared_data
             .insert(key, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 20);
 
         let environments = ProgramRuntimeEnvironments::default();
         let expected = TransactionBatchProcessor::<TestForkGraph>::load_program_from_bytes(
@@ -1361,7 +1364,7 @@ mod tests {
             .insert(key2, account_data2.clone());
 
         // This should return an error
-        let result = batch_processor.load_program(&mock_bank, &key1, false, 0);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key1, false, 0);
         let loaded_program = LoadedProgram::new_tombstone(
             0,
             LoadedProgramType::FailedVerification(
@@ -1399,7 +1402,7 @@ mod tests {
             .account_shared_data
             .insert(key2, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key1, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key1, false, 20);
 
         let data = account_data.data();
         account_data
@@ -1441,7 +1444,7 @@ mod tests {
             .account_shared_data
             .insert(key, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 0);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 0);
         let loaded_program = LoadedProgram::new_tombstone(
             0,
             LoadedProgramType::FailedVerification(
@@ -1475,7 +1478,7 @@ mod tests {
             .account_shared_data
             .insert(key, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 20);
 
         let data = account_data.data()[LoaderV4State::program_data_offset()..].to_vec();
         account_data.set_data(data);
@@ -1513,7 +1516,7 @@ mod tests {
             .account_shared_data
             .insert(key, account_data.clone());
 
-        let result = batch_processor.load_program(&mock_bank, &key, false, 20);
+        let result = batch_processor.load_program_with_pubkey(&mock_bank, &key, false, 20);
 
         let slot = batch_processor.epoch_schedule.get_first_slot_in_epoch(20);
         assert_eq!(result.effective_slot, slot);

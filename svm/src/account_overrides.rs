@@ -10,6 +10,7 @@ pub struct AccountOverrides {
 }
 
 impl AccountOverrides {
+    /// Insert or remove an account with a given pubkey to/from the list of overrides.
     pub fn set_account(&mut self, pubkey: &Pubkey, account: Option<AccountSharedData>) {
         match account {
             Some(account) => self.accounts.insert(*pubkey, account),
