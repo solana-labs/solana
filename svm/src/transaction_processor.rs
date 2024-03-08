@@ -65,6 +65,24 @@ pub struct LoadAndExecuteSanitizedTransactionsOutput {
     pub execution_results: Vec<TransactionExecutionResult>,
 }
 
+/// Configuration of the recording capabilities for transaction execution
+#[derive(Copy, Clone)]
+pub struct ExecutionRecordingConfig {
+    pub enable_cpi_recording: bool,
+    pub enable_log_recording: bool,
+    pub enable_return_data_recording: bool,
+}
+
+impl ExecutionRecordingConfig {
+    pub fn new_single_setting(option: bool) -> Self {
+        ExecutionRecordingConfig {
+            enable_return_data_recording: option,
+            enable_log_recording: option,
+            enable_cpi_recording: option,
+        }
+    }
+}
+
 pub trait TransactionProcessingCallback {
     fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize>;
 
@@ -184,9 +202,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
         error_counters: &mut TransactionErrorMetrics,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
-        enable_return_data_recording: bool,
+        recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         builtin_programs: impl Iterator<Item = &'a Pubkey>,
@@ -266,9 +282,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         loaded_transaction,
                         compute_budget,
                         nonce.as_ref().map(DurableNonceFee::from),
-                        enable_cpi_recording,
-                        enable_log_recording,
-                        enable_return_data_recording,
+                        recording_config,
                         timings,
                         error_counters,
                         log_messages_bytes_limit,
@@ -466,9 +480,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         loaded_transaction: &mut LoadedTransaction,
         compute_budget: ComputeBudget,
         durable_nonce_fee: Option<DurableNonceFee>,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
-        enable_return_data_recording: bool,
+        recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
@@ -506,7 +518,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             tx.message(),
         );
 
-        let log_collector = if enable_log_recording {
+        let log_collector = if recording_config.enable_log_recording {
             match log_messages_bytes_limit {
                 None => Some(LogCollector::new_ref()),
                 Some(log_messages_bytes_limit) => Some(LogCollector::new_ref_with_limit(Some(
@@ -585,7 +597,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     .ok()
             });
 
-        let inner_instructions = if enable_cpi_recording {
+        let inner_instructions = if recording_config.enable_cpi_recording {
             Some(Self::inner_instructions_list_from_instruction_trace(
                 &transaction_context,
             ))
@@ -616,11 +628,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         );
         saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
 
-        let return_data = if enable_return_data_recording && !return_data.data.is_empty() {
-            Some(return_data)
-        } else {
-            None
-        };
+        let return_data =
+            if recording_config.enable_return_data_recording && !return_data.data.is_empty() {
+                Some(return_data)
+            } else {
+                None
+            };
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {

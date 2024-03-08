@@ -34,6 +34,7 @@ use {
     solana_svm::{
         account_loader::{validate_fee_payer, TransactionCheckResult},
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_processor::ExecutionRecordingConfig,
     },
     std::{
         sync::{atomic::Ordering, Arc},
@@ -593,9 +594,7 @@ impl Consumer {
             .load_and_execute_transactions(
                 batch,
                 MAX_PROCESSING_AGE,
-                transaction_status_sender_enabled,
-                transaction_status_sender_enabled,
-                transaction_status_sender_enabled,
+                ExecutionRecordingConfig::new_single_setting(transaction_status_sender_enabled),
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
                 self.log_messages_bytes_limit,
