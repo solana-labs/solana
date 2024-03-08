@@ -23,6 +23,7 @@ pub enum RentState {
 }
 
 impl RentState {
+    /// Return a new RentState instance for a given account and rent.
     pub fn from_account(account: &AccountSharedData, rent: &Rent) -> Self {
         if account.lamports() == 0 {
             Self::Uninitialized
@@ -36,6 +37,8 @@ impl RentState {
         }
     }
 
+    /// Check whether a transition from the pre_rent_state to this
+    /// state is valid.
     pub fn transition_allowed_from(&self, pre_rent_state: &RentState) -> bool {
         match self {
             Self::Uninitialized | Self::RentExempt => true,
@@ -54,21 +57,6 @@ impl RentState {
                     }
                 }
             }
-        }
-    }
-
-    fn submit_rent_state_metrics(pre_rent_state: &Self, post_rent_state: &Self) {
-        match (pre_rent_state, post_rent_state) {
-            (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
-                inc_new_counter_info!("rent_paying_err-new_account", 1);
-            }
-            (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {
-                inc_new_counter_info!("rent_paying_ok-legacy", 1);
-            }
-            (_, &RentState::RentPaying { .. }) => {
-                inc_new_counter_info!("rent_paying_err-other", 1);
-            }
-            _ => {}
         }
     }
 
@@ -116,6 +104,21 @@ impl RentState {
             Err(TransactionError::InsufficientFundsForRent { account_index })
         } else {
             Ok(())
+        }
+    }
+
+    fn submit_rent_state_metrics(pre_rent_state: &Self, post_rent_state: &Self) {
+        match (pre_rent_state, post_rent_state) {
+            (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_err-new_account", 1);
+            }
+            (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_ok-legacy", 1);
+            }
+            (_, &RentState::RentPaying { .. }) => {
+                inc_new_counter_info!("rent_paying_err-other", 1);
+            }
+            _ => {}
         }
     }
 }

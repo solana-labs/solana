@@ -7499,7 +7499,7 @@ impl Bank {
         effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
         self.transaction_processor
-            .load_program(self, pubkey, reload, effective_epoch)
+            .load_program_with_pubkey(self, pubkey, reload, effective_epoch)
     }
 }
 

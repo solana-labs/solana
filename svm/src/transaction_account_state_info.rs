@@ -11,12 +11,12 @@ use {
 };
 
 #[derive(PartialEq, Debug)]
-pub struct TransactionAccountStateInfo {
+pub(crate) struct TransactionAccountStateInfo {
     rent_state: Option<RentState>, // None: readonly account
 }
 
 impl TransactionAccountStateInfo {
-    pub fn new(
+    pub(crate) fn new(
         rent: &Rent,
         transaction_context: &TransactionContext,
         message: &SanitizedMessage,
