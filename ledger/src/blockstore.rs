@@ -1179,18 +1179,25 @@ impl Blockstore {
 
             // Clear this slot as a next slot from parent
             if let Some(parent_slot) = slot_meta.parent_slot {
-                let mut parent_slot_meta = self
+                if let Some(mut parent_slot_meta) = self
                     .meta(parent_slot)
                     .expect("Couldn't fetch from SlotMeta column family")
-                    .expect("Unconfirmed slot should have had parent slot set");
-                // .retain() is a linear scan; however, next_slots should
-                // only contain several elements so this isn't so bad
-                parent_slot_meta
-                    .next_slots
-                    .retain(|&next_slot| next_slot != slot);
-                self.meta_cf
-                    .put(parent_slot, &parent_slot_meta)
-                    .expect("Couldn't insert into SlotMeta column family");
+                {
+                    // .retain() is a linear scan; however, next_slots should
+                    // only contain several elements so this isn't so bad
+                    parent_slot_meta
+                        .next_slots
+                        .retain(|&next_slot| next_slot != slot);
+                    self.meta_cf
+                        .put(parent_slot, &parent_slot_meta)
+                        .expect("Couldn't insert into SlotMeta column family");
+                } else {
+                    error!(
+                        "Parent slot meta {} for child {} is missing  or cleaned up.
+                       Falling back to orphan repair to remedy the situation",
+                        parent_slot, slot
+                    );
+                }
             }
             // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots`
             // field.
