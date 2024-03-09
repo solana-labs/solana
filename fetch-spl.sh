@@ -6,6 +6,7 @@
 
 set -e
 
+
 upgradeableLoader=BPFLoaderUpgradeab1e11111111111111111111111
 
 fetch_program() {
