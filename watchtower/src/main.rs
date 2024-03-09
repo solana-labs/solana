@@ -269,15 +269,14 @@ fn get_all_latencies_and_lowest_latency_client(config: &Config) -> (HashMap<Stri
 
         let mut latency = now.elapsed().as_millis();
 
-        if latency < lowest_latency && result.is_ok() {
+        if latency < lowest_latency {
             lowest_latency = latency;
             best_url = url.clone();
-        } else if result.is_err() {
-            latency = u128::MAX;
         }
 
-        if latency == u128::MAX {
+        if result.is_err() {
             error!("{} is unhealthy!", url);
+            latency = u128::MAX;
         } else {
             info!("{} is healthy!", url);
         }
