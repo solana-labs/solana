@@ -39,7 +39,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
 pub struct DownloadProgressRecord {
     // Duration since the beginning of the download
     pub elapsed_time: Duration,
-    // Duration since the the last notification
+    // Duration since the last notification
     pub last_elapsed_time: Duration,
     // the bytes/sec speed measured for the last notification period
     pub last_throughput: f32,
@@ -51,7 +51,7 @@ pub struct DownloadProgressRecord {
     pub current_bytes: usize,
     // percentage downloaded
     pub percentage_done: f32,
-    // Estimated remaining time (in seconds) to finish the download if it keeps at the the last download speed
+    // Estimated remaining time (in seconds) to finish the download if it keeps at the last download speed
     pub estimated_remaining_time: f32,
     // The times of the progress is being notified, it starts from 1 and increments by 1 each time
     pub notification_count: u64,
