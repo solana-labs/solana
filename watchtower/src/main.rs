@@ -31,7 +31,7 @@ struct Config {
     address_labels: HashMap<String, String>,
     ignore_http_bad_gateway: bool,
     interval: Duration,
-    json_rpc_url: String,
+    json_rpc_urls: Vec<String>,
     rpc_timeout: Duration,
     minimum_validator_identity_balance: u64,
     monitor_active_stake: bool,
@@ -81,12 +81,14 @@ fn get_config() -> Config {
             }
         })
         .arg(
-            Arg::with_name("json_rpc_url")
+            Arg::with_name("json_rpc_urls")
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
                 .validator(is_url)
-                .help("JSON RPC URL for the cluster"),
+                .multiple(true)
+                .required(true)
+                .help("JSON RPC URL(s) for the cluster"),
         )
         .arg(
             Arg::with_name("rpc_timeout")
@@ -183,8 +185,12 @@ fn get_config() -> Config {
         "minimum_validator_identity_balance",
         f64
     ));
-    let json_rpc_url =
-        value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url.clone());
+    let json_rpc_urls: Vec<String> = matches
+        .values_of("json_rpc_urls")
+        .unwrap()
+        .map(|v| v.to_string())
+        .collect();
+    // let json_rpc_urls = value_t!(matches, "json_rpc_urls", Vec<String>).unwrap_or_else(|_| vec![]);
     let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
     let rpc_timeout = Duration::from_secs(rpc_timeout);
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
@@ -203,7 +209,7 @@ fn get_config() -> Config {
         address_labels: config.address_labels,
         ignore_http_bad_gateway,
         interval,
-        json_rpc_url,
+        json_rpc_urls,
         rpc_timeout,
         minimum_validator_identity_balance,
         monitor_active_stake,
@@ -213,7 +219,7 @@ fn get_config() -> Config {
         name_suffix,
     };
 
-    info!("RPC URL: {}", config.json_rpc_url);
+    info!("RPC URLs: {:?}", config.json_rpc_urls);
     info!(
         "Monitored validators: {:?}",
         config.validator_identity_pubkeys
@@ -245,13 +251,43 @@ fn get_cluster_info(
     ))
 }
 
+// Evaluate the lowest latency URL, return an RPC client and a HashMap of all the latencies
+// This hashmap will be updated regularly
+fn get_lowest_latency_client(config: &Config) -> (HashMap<String, u128>, RpcClient) {
+    let mut best_url = String::from("");
+    let mut lowest_latency = u128::MAX;
+    let mut urls_and_latencies: HashMap<String, u128> = HashMap::new();
+
+    for url in config.json_rpc_urls.iter() {
+        let rpc = RpcClient::new_with_timeout(url, config.rpc_timeout);
+
+        let now = Instant::now();
+
+        let result = rpc.get_latest_blockhash();
+
+        let latency = now.elapsed().as_millis();
+
+        if latency < lowest_latency && result.is_ok() {
+            lowest_latency = latency;
+            best_url = url.clone();
+        }
+
+        urls_and_latencies.insert(url.clone(), latency);
+    }
+
+    (
+        urls_and_latencies,
+        RpcClient::new_with_timeout(best_url, config.rpc_timeout)
+    )
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower", /*version:*/ None);
 
     let config = get_config();
 
-    let rpc_client = RpcClient::new_with_timeout(config.json_rpc_url.clone(), config.rpc_timeout);
+    let (urls_with_latencies, rpc_client) = get_lowest_latency_client(&config);
     let notifier = Notifier::default();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
@@ -259,8 +295,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut num_consecutive_failures = 0;
     let mut last_success = Instant::now();
     let mut incident = Hash::new_unique();
+    let mut current_latency = u128::MAX;
 
     loop {
+        info!("Current RPC: {}", rpc_client.url());
         let failure = match get_cluster_info(&config, &rpc_client) {
             Ok((transaction_count, recent_blockhash, vote_accounts, validator_balances)) => {
                 info!("Current transaction count: {}", transaction_count);
