@@ -106,6 +106,7 @@ fn test_bench_tps_local_cluster(config: Config) {
         keypair_count,
         lamports_per_account,
         false,
+        false,
     )
     .unwrap();
 
@@ -151,6 +152,7 @@ fn test_bench_tps_test_validator(config: Config) {
         &config.id,
         keypair_count,
         lamports_per_account,
+        false,
         false,
     )
     .unwrap();
