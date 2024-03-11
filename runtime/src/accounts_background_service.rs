@@ -39,14 +39,6 @@ use {
 const INTERVAL_MS: u64 = 100;
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
-// This value is chosen to spread the dropping cost over 3 expiration checks
-// RecycleStores are fully populated almost all of its lifetime. So, otherwise
-// this would drop MAX_RECYCLE_STORES mmaps at once in the worst case...
-// (Anyway, the dropping part is outside the AccountsDb::recycle_stores lock
-// and dropped in this AccountsBackgroundServe, so this shouldn't matter much)
-const RECYCLE_STORE_EXPIRATION_INTERVAL_SECS: u64 =
-    solana_accounts_db::accounts_db::EXPIRATION_TTL_SECONDS / 3;
-
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
 pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
@@ -605,7 +597,6 @@ impl AccountsBackgroundService {
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
-        let mut last_expiration_check_time = Instant::now();
         let t_background = Builder::new()
             .name("solBgAccounts".to_string())
             .spawn(move || {
@@ -630,8 +621,6 @@ impl AccountsBackgroundService {
                             &mut removed_slots_count,
                             &mut total_remove_slots_time,
                         );
-
-                    Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
                     let non_snapshot_time = last_snapshot_end_time
                         .map(|last_snapshot_end_time: Instant| {
@@ -758,16 +747,6 @@ impl AccountsBackgroundService {
 
     pub fn join(self) -> thread::Result<()> {
         self.t_background.join()
-    }
-
-    fn expire_old_recycle_stores(bank: &Bank, last_expiration_check_time: &mut Instant) {
-        let now = Instant::now();
-        if now.duration_since(*last_expiration_check_time).as_secs()
-            > RECYCLE_STORE_EXPIRATION_INTERVAL_SECS
-        {
-            bank.expire_old_recycle_stores();
-            *last_expiration_check_time = now;
-        }
     }
 }
 

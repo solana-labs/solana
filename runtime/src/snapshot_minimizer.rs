@@ -239,12 +239,8 @@ impl<'a> SnapshotMinimizer<'a> {
             measure!(self.purge_dead_slots(dead_slots), "purge dead slots");
         info!("{purge_dead_slots_measure}");
 
-        let (_, drop_or_recycle_stores_measure) = measure!(
-            self.accounts_db()
-                .drop_or_recycle_stores(dead_storages, &self.accounts_db().shrink_stats),
-            "drop or recycle stores"
-        );
-        info!("{drop_or_recycle_stores_measure}");
+        let (_, drop_storages_measure) = measure!(drop(dead_storages), "drop storages");
+        info!("{drop_storages_measure}");
 
         // Turn logging back on after minimization
         self.accounts_db()
