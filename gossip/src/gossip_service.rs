@@ -4,7 +4,11 @@ use {
     crate::{cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_client::{
+        connection_cache::ConnectionCache,
+        rpc_client::RpcClient,
+        tpu_client::{TpuClient, TpuClientConfig, TpuClientWrapper},
+    },
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -197,35 +201,37 @@ pub fn discover(
 #[deprecated(since = "1.18.6", note = "Interface will change")]
 pub fn get_client(
     nodes: &[ContactInfo],
-    socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
-) -> ThinClient {
-    let protocol = connection_cache.protocol();
-    let nodes: Vec<_> = nodes
-        .iter()
-        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
-        .collect();
+) -> TpuClientWrapper {
     let select = thread_rng().gen_range(0..nodes.len());
-    let (rpc, tpu) = nodes[select];
-    ThinClient::new(rpc, tpu, connection_cache)
-}
 
-#[deprecated(since = "1.18.6", note = "Will be removed in favor of get_client")]
-pub fn get_multi_client(
-    nodes: &[ContactInfo],
-    socket_addr_space: &SocketAddrSpace,
-    connection_cache: Arc<ConnectionCache>,
-) -> (ThinClient, usize) {
-    let protocol = connection_cache.protocol();
-    let (rpc_addrs, tpu_addrs): (Vec<_>, Vec<_>) = nodes
-        .iter()
-        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
-        .unzip();
-    let num_nodes = tpu_addrs.len();
-    (
-        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),
-        num_nodes,
-    )
+    let rpc_pubsub_url = format!("ws://{}/", nodes[select].rpc_pubsub().unwrap());
+    let rpc_url = format!("http://{}", nodes[select].rpc().unwrap());
+
+    match &*connection_cache {
+        ConnectionCache::Quic(cache) => TpuClientWrapper::Quic(
+            TpuClient::new_with_connection_cache(
+                Arc::new(RpcClient::new(rpc_url)),
+                rpc_pubsub_url.as_str(),
+                TpuClientConfig::default(),
+                cache.clone(),
+            )
+            .unwrap_or_else(|err| {
+                panic!("Could not create TpuClient with Quic Cache {err:?}");
+            }),
+        ),
+        ConnectionCache::Udp(cache) => TpuClientWrapper::Udp(
+            TpuClient::new_with_connection_cache(
+                Arc::new(RpcClient::new(rpc_url)),
+                rpc_pubsub_url.as_str(),
+                TpuClientConfig::default(),
+                cache.clone(),
+            )
+            .unwrap_or_else(|err| {
+                panic!("Could not create TpuClient with Udp Cache {err:?}");
+            }),
+        ),
+    }
 }
 
 fn spy(
