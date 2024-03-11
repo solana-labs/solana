@@ -1,4 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
+#![allow(deprecated)]
 use {
     clap::value_t,
     log::*,
