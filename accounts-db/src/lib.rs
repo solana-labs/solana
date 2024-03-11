@@ -37,7 +37,6 @@ pub mod secondary_index;
 pub mod shared_buffer_reader;
 pub mod sorted_storages;
 pub mod stake_rewards;
-pub mod starting_snapshot_storages;
 pub mod storable_accounts;
 pub mod tiered_storage;
 pub mod utils;
