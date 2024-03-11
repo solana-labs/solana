@@ -99,7 +99,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: windows-artifact
-          path: .windows-release/
+          path: ./windows-release/
 
       - name: Release
         uses: softprops/action-gh-release@v1
