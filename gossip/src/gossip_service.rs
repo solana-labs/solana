@@ -194,7 +194,7 @@ pub fn discover(
 }
 
 /// Creates a ThinClient by selecting a valid node at random
-#[deprecated(since = "1.18.0", note = "Interface will change")]
+#[deprecated(since = "1.18.6", note = "Interface will change")]
 pub fn get_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
@@ -210,7 +210,7 @@ pub fn get_client(
     ThinClient::new(rpc, tpu, connection_cache)
 }
 
-#[deprecated(since = "1.18.0", note = "Will be removed in favor of get_client")]
+#[deprecated(since = "1.18.6", note = "Will be removed in favor of get_client")]
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
