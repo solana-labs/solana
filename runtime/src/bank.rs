@@ -253,8 +253,7 @@ impl AddAssign for SquashTiming {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default, PartialEq)]
 pub(crate) struct CollectorFeeDetails {
     pub transaction_fee: u64,
     pub priority_fee: u64,
