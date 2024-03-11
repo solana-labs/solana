@@ -538,6 +538,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         .finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
+                        // This branch is taken when there is an error in assigning a program to a
+                        // cache slot. It is not possible to mock this error for SVM unit
+                        // tests purposes.
                         let mut ret = LoadedProgramsForTxBatch::new(
                             self.slot,
                             loaded_programs_cache
@@ -571,6 +574,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 // Once a task completes we'll wake up and try to load the
                 // missing programs inside the tx batch again.
                 let _new_cookie = task_waiter.wait(task_cookie);
+
+                // This branch is not tested in the SVM because it requires concurrent threads.
+                // In addition, one of them must be holding the mutex while the other must be
+                // trying to lock it.
             }
         }
 
@@ -942,7 +949,12 @@ mod tests {
             loaded_programs::BlockRelation, solana_rbpf::program::BuiltinProgram,
         },
         solana_sdk::{
-            account::WritableAccount, bpf_loader, sysvar::rent::Rent,
+            account::WritableAccount,
+            bpf_loader,
+            message::{LegacyMessage, Message, MessageHeader},
+            rent_debits::RentDebits,
+            signature::Signature,
+            sysvar::rent::Rent,
             transaction_context::TransactionContext,
         },
         std::{
@@ -960,7 +972,7 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     pub struct MockBankCallback {
         rent_collector: RentCollector,
         feature_set: Arc<FeatureSet>,
@@ -985,7 +997,7 @@ mod tests {
         }
 
         fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
-            todo!()
+            (Hash::new_unique(), 2)
         }
 
         fn get_rent_collector(&self) -> &RentCollector {
@@ -1520,5 +1532,421 @@ mod tests {
 
         let slot = batch_processor.epoch_schedule.get_first_slot_in_epoch(20);
         assert_eq!(result.effective_slot, slot);
+    }
+
+    #[test]
+    fn test_program_modification_slot_account_not_found() {
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        let mut mock_bank = MockBankCallback::default();
+        let key = Pubkey::new_unique();
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key);
+        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(bpf_loader_upgradeable::id());
+        mock_bank
+            .account_shared_data
+            .insert(key, account_data.clone());
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key);
+        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
+
+        let state = UpgradeableLoaderState::Program {
+            programdata_address: Pubkey::new_unique(),
+        };
+        account_data.set_data(bincode::serialize(&state).unwrap());
+        mock_bank
+            .account_shared_data
+            .insert(key, account_data.clone());
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key);
+        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
+
+        account_data.set_owner(loader_v4::id());
+        mock_bank
+            .account_shared_data
+            .insert(key, account_data.clone());
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key);
+        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
+    }
+
+    #[test]
+    fn test_program_modification_slot_success() {
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        let mut mock_bank = MockBankCallback::default();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(bpf_loader_upgradeable::id());
+
+        let state = UpgradeableLoaderState::Program {
+            programdata_address: key2,
+        };
+        account_data.set_data(bincode::serialize(&state).unwrap());
+        mock_bank.account_shared_data.insert(key1, account_data);
+
+        let state = UpgradeableLoaderState::ProgramData {
+            slot: 77,
+            upgrade_authority_address: None,
+        };
+        let mut account_data = AccountSharedData::default();
+        account_data.set_data(bincode::serialize(&state).unwrap());
+        mock_bank.account_shared_data.insert(key2, account_data);
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key1);
+        assert_eq!(result.unwrap(), 77);
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(loader_v4::id());
+        let state = LoaderV4State {
+            slot: 58,
+            authority_address: Pubkey::new_unique(),
+            status: LoaderV4Status::Deployed,
+        };
+
+        let encoded = unsafe {
+            std::mem::transmute::<&LoaderV4State, &[u8; LoaderV4State::program_data_offset()]>(
+                &state,
+            )
+        };
+        account_data.set_data(encoded.to_vec());
+        mock_bank
+            .account_shared_data
+            .insert(key1, account_data.clone());
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key1);
+        assert_eq!(result.unwrap(), 58);
+
+        account_data.set_owner(Pubkey::new_unique());
+        mock_bank.account_shared_data.insert(key2, account_data);
+
+        let result = batch_processor.program_modification_slot(&mock_bank, &key2);
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_execute_loaded_transaction_recordings() {
+        // Setting all the arguments correctly is too burdensome for testing
+        // execute_loaded_transaction separately.This function will be tested in an integration
+        // test with load_and_execute_sanitized_transactions
+        let message = Message {
+            account_keys: vec![Pubkey::new_from_array([0; 32])],
+            header: MessageHeader::default(),
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let mock_bank = MockBankCallback::default();
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+
+        let sanitized_transaction = SanitizedTransaction::new_for_tests(
+            sanitized_message,
+            vec![Signature::new_unique()],
+            false,
+        );
+
+        let mut loaded_transaction = LoadedTransaction {
+            accounts: vec![(Pubkey::new_unique(), AccountSharedData::default())],
+            program_indices: vec![vec![0]],
+            rent: 0,
+            rent_debits: RentDebits::default(),
+        };
+
+        let mut record_config = ExecutionRecordingConfig {
+            enable_cpi_recording: false,
+            enable_log_recording: true,
+            enable_return_data_recording: false,
+        };
+
+        let result = batch_processor.execute_loaded_transaction(
+            &mock_bank,
+            &sanitized_transaction,
+            &mut loaded_transaction,
+            ComputeBudget::default(),
+            None,
+            record_config,
+            &mut ExecuteTimings::default(),
+            &mut TransactionErrorMetrics::default(),
+            None,
+            &loaded_programs,
+        );
+
+        let TransactionExecutionResult::Executed {
+            details: TransactionExecutionDetails { log_messages, .. },
+            ..
+        } = result
+        else {
+            panic!("Unexpected result")
+        };
+        assert!(log_messages.is_some());
+
+        let result = batch_processor.execute_loaded_transaction(
+            &mock_bank,
+            &sanitized_transaction,
+            &mut loaded_transaction,
+            ComputeBudget::default(),
+            None,
+            record_config,
+            &mut ExecuteTimings::default(),
+            &mut TransactionErrorMetrics::default(),
+            Some(2),
+            &loaded_programs,
+        );
+
+        let TransactionExecutionResult::Executed {
+            details:
+                TransactionExecutionDetails {
+                    log_messages,
+                    inner_instructions,
+                    ..
+                },
+            ..
+        } = result
+        else {
+            panic!("Unexpected result")
+        };
+        assert!(log_messages.is_some());
+        assert!(inner_instructions.is_none());
+
+        record_config.enable_log_recording = false;
+        record_config.enable_cpi_recording = true;
+
+        let result = batch_processor.execute_loaded_transaction(
+            &mock_bank,
+            &sanitized_transaction,
+            &mut loaded_transaction,
+            ComputeBudget::default(),
+            None,
+            record_config,
+            &mut ExecuteTimings::default(),
+            &mut TransactionErrorMetrics::default(),
+            None,
+            &loaded_programs,
+        );
+
+        let TransactionExecutionResult::Executed {
+            details:
+                TransactionExecutionDetails {
+                    log_messages,
+                    inner_instructions,
+                    ..
+                },
+            ..
+        } = result
+        else {
+            panic!("Unexpected result")
+        };
+        assert!(log_messages.is_none());
+        assert!(inner_instructions.is_some());
+    }
+
+    #[test]
+    fn test_execute_loaded_transaction_error_metrics() {
+        // Setting all the arguments correctly is too burdensome for testing
+        // execute_loaded_transaction separately.This function will be tested in an integration
+        // test with load_and_execute_sanitized_transactions
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let message = Message {
+            account_keys: vec![key1, key2],
+            header: MessageHeader::default(),
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![2],
+                data: vec![],
+            }],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let mock_bank = MockBankCallback::default();
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+
+        let sanitized_transaction = SanitizedTransaction::new_for_tests(
+            sanitized_message,
+            vec![Signature::new_unique()],
+            false,
+        );
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(bpf_loader::id());
+        let mut loaded_transaction = LoadedTransaction {
+            accounts: vec![
+                (key1, AccountSharedData::default()),
+                (key2, AccountSharedData::default()),
+            ],
+            program_indices: vec![vec![0]],
+            rent: 0,
+            rent_debits: RentDebits::default(),
+        };
+
+        let record_config = ExecutionRecordingConfig::new_single_setting(false);
+        let mut error_metrics = TransactionErrorMetrics::new();
+
+        let _ = batch_processor.execute_loaded_transaction(
+            &mock_bank,
+            &sanitized_transaction,
+            &mut loaded_transaction,
+            ComputeBudget::default(),
+            None,
+            record_config,
+            &mut ExecuteTimings::default(),
+            &mut error_metrics,
+            None,
+            &loaded_programs,
+        );
+
+        assert_eq!(error_metrics.instruction_error, 1);
+    }
+
+    #[test]
+    fn test_replenish_program_cache() {
+        // Case 1
+        let mut mock_bank = MockBankCallback::default();
+        let mut batch_processor = TransactionBatchProcessor::<TestForkGraph> {
+            check_program_modification_slot: true,
+            ..TransactionBatchProcessor::default()
+        };
+        batch_processor
+            .loaded_programs_cache
+            .write()
+            .unwrap()
+            .fork_graph = Some(Arc::new(RwLock::new(TestForkGraph {})));
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(bpf_loader::id());
+        mock_bank.account_shared_data.insert(key2, account_data);
+
+        let mut account_maps: HashMap<Pubkey, (&Pubkey, u64)> = HashMap::new();
+        account_maps.insert(key1, (&owner, 2));
+
+        account_maps.insert(key2, (&owner, 4));
+        let result = batch_processor.replenish_program_cache(&mock_bank, &account_maps, false);
+
+        let program1 = result.find(&key1).unwrap();
+        assert!(matches!(program1.program, LoadedProgramType::Closed));
+        assert!(!result.hit_max_limit);
+        let program2 = result.find(&key2).unwrap();
+        assert!(matches!(
+            program2.program,
+            LoadedProgramType::FailedVerification(_)
+        ));
+
+        // Case 2
+        batch_processor.check_program_modification_slot = false;
+
+        let result = batch_processor.replenish_program_cache(&mock_bank, &account_maps, true);
+
+        let program1 = result.find(&key1).unwrap();
+        assert!(matches!(program1.program, LoadedProgramType::Closed));
+        assert!(!result.hit_max_limit);
+        let program2 = result.find(&key2).unwrap();
+        assert!(matches!(
+            program2.program,
+            LoadedProgramType::FailedVerification(_)
+        ));
+    }
+
+    #[test]
+    fn test_filter_executable_program_accounts() {
+        let mut mock_bank = MockBankCallback::default();
+        let key1 = Pubkey::new_unique();
+        let owner1 = Pubkey::new_unique();
+
+        let mut data = AccountSharedData::default();
+        data.set_owner(owner1);
+        data.set_lamports(93);
+        mock_bank.account_shared_data.insert(key1, data);
+
+        let message = Message {
+            account_keys: vec![key1],
+            header: MessageHeader::default(),
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+
+        let sanitized_transaction_1 = SanitizedTransaction::new_for_tests(
+            sanitized_message,
+            vec![Signature::new_unique()],
+            false,
+        );
+
+        let key2 = Pubkey::new_unique();
+        let owner2 = Pubkey::new_unique();
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_owner(owner2);
+        account_data.set_lamports(90);
+        mock_bank.account_shared_data.insert(key2, account_data);
+
+        let message = Message {
+            account_keys: vec![key1, key2],
+            header: MessageHeader::default(),
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            recent_blockhash: Hash::default(),
+        };
+
+        let legacy = LegacyMessage::new(message);
+        let sanitized_message = SanitizedMessage::Legacy(legacy);
+
+        let sanitized_transaction_2 = SanitizedTransaction::new_for_tests(
+            sanitized_message,
+            vec![Signature::new_unique()],
+            false,
+        );
+
+        let transactions = vec![
+            sanitized_transaction_1.clone(),
+            sanitized_transaction_2.clone(),
+            sanitized_transaction_2,
+            sanitized_transaction_1,
+        ];
+        let mut lock_results = vec![
+            (Ok(()), None, Some(25)),
+            (Ok(()), None, Some(25)),
+            (Ok(()), None, None),
+            (Err(TransactionError::ProgramAccountNotFound), None, None),
+        ];
+        let owners = vec![owner1, owner2];
+
+        let result = TransactionBatchProcessor::<TestForkGraph>::filter_executable_program_accounts(
+            &mock_bank,
+            &transactions,
+            lock_results.as_mut_slice(),
+            &owners,
+        );
+
+        assert_eq!(
+            lock_results[2],
+            (Err(TransactionError::BlockhashNotFound), None, None)
+        );
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&key1], (&owner1, 2));
+        assert_eq!(result[&key2], (&owner2, 1));
     }
 }
