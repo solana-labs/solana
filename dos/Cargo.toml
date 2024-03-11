@@ -26,6 +26,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-perf = { workspace = true }
+solana-quic-client = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-sdk = { workspace = true }
@@ -38,4 +39,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
 solana-local-cluster = { workspace = true }
-solana-thin-client = { workspace = true }

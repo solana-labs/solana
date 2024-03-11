@@ -13,12 +13,18 @@ use {
         transport::Result as TransportResult,
     },
     solana_tpu_client::tpu_client::{Result, TpuClient as BackendTpuClient},
+    solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::sync::Arc,
 };
 pub use {
     crate::nonblocking::tpu_client::TpuSenderError,
     solana_tpu_client::tpu_client::{TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS},
 };
+
+pub enum TpuClientWrapper {
+    Quic(TpuClient<QuicPool, QuicConnectionManager, QuicConfig>),
+    Udp(TpuClient<UdpPool, UdpConnectionManager, UdpConfig>),
+}
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info

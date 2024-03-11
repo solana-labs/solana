@@ -46,12 +46,15 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::ConnectionCache, tpu_client::TpuClientWrapper,
+        tpu_connection::TpuConnection,
+    },
     solana_core::repair::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::Protocol,
-        gossip_service::{discover, get_multi_client},
+        gossip_service::{discover, get_client},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_measure::measure::Measure,
@@ -791,33 +794,30 @@ fn main() {
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             ),
         };
-        let (client, num_clients) = get_multi_client(
-            &validators,
-            &SocketAddrSpace::Unspecified,
-            Arc::new(connection_cache),
-        );
-        if validators.len() < num_clients {
-            eprintln!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                validators.len()
-            );
-            exit(1);
-        }
-        (gossip_nodes, Some(Arc::new(client)))
+        let client = get_client(&validators, Arc::new(connection_cache));
+        (gossip_nodes, Some(client))
     } else {
         (vec![], None)
     };
 
     info!("done found {} nodes", nodes.len());
-
-    run_dos(&nodes, 0, client, cmd_params);
+    if let Some(tpu_client) = client {
+        match tpu_client {
+            TpuClientWrapper::Quic(quic_client) => {
+                run_dos(&nodes, 0, Some(Arc::new(quic_client)), cmd_params);
+            }
+            TpuClientWrapper::Udp(udp_client) => {
+                run_dos(&nodes, 0, Some(Arc::new(udp_client)), cmd_params);
+            }
+        };
+    }
 }
 
 #[cfg(test)]
 pub mod test {
     use {
         super::*,
-        solana_client::thin_client::ThinClient,
+        solana_client::tpu_client::TpuClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_gossip::contact_info::LegacyContactInfo,
@@ -826,8 +826,10 @@ pub mod test {
             local_cluster::{ClusterConfig, LocalCluster},
             validator_configs::make_identical_validator_configs,
         },
+        solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
         solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::timing::timestamp,
+        solana_tpu_client::tpu_client::TpuClientConfig,
     };
 
     const TEST_SEND_BATCH_SIZE: usize = 1;
@@ -835,7 +837,32 @@ pub mod test {
     // thin wrapper for the run_dos function
     // to avoid specifying everywhere generic parameters
     fn run_dos_no_client(nodes: &[ContactInfo], iterations: usize, params: DosClientParameters) {
-        run_dos::<ThinClient>(nodes, iterations, None, params);
+        run_dos::<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>>(
+            nodes, iterations, None, params,
+        );
+    }
+
+    fn build_tpu_quic_client(
+        cluster: &LocalCluster,
+    ) -> Arc<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>> {
+        let rpc_pubsub_url = format!("ws://{}/", cluster.entry_point_info.rpc_pubsub().unwrap());
+        let rpc_url = format!("http://{}", cluster.entry_point_info.rpc().unwrap());
+
+        let ConnectionCache::Quic(cache) = &*cluster.connection_cache else {
+            panic!("Expected a Quic ConnectionCache.");
+        };
+
+        Arc::new(
+            TpuClient::new_with_connection_cache(
+                Arc::new(RpcClient::new(rpc_url)),
+                rpc_pubsub_url.as_str(),
+                TpuClientConfig::default(),
+                cache.clone(),
+            )
+            .unwrap_or_else(|err| {
+                panic!("Could not create TpuClient with Quic Cache {err:?}");
+            }),
+        )
     }
 
     #[test]
@@ -975,14 +1002,7 @@ pub mod test {
             .unwrap();
         let nodes_slice = [node];
 
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc().unwrap(),
-            cluster
-                .entry_point_info
-                .tpu(cluster.connection_cache.protocol())
-                .unwrap(),
-            cluster.connection_cache.clone(),
-        ));
+        let client = build_tpu_quic_client(&cluster);
 
         // creates one transaction with 8 valid signatures and sends it 10 times
         run_dos(
@@ -1114,14 +1134,7 @@ pub mod test {
             .unwrap();
         let nodes_slice = [node];
 
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc().unwrap(),
-            cluster
-                .entry_point_info
-                .tpu(cluster.connection_cache.protocol())
-                .unwrap(),
-            cluster.connection_cache.clone(),
-        ));
+        let client = build_tpu_quic_client(&cluster);
 
         // creates one transaction and sends it 10 times
         // this is done in single thread
