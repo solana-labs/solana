@@ -39,6 +39,7 @@
 //! ```
 //!
 #![allow(clippy::arithmetic_side_effects)]
+#![allow(deprecated)]
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
