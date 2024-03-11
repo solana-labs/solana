@@ -9,7 +9,6 @@ use {
             IncrementalAccountsHash,
         },
         sorted_storages::SortedStorages,
-        starting_snapshot_storages::StartingSnapshotStorages,
     },
     solana_measure::measure_us,
     solana_runtime::{
@@ -43,7 +42,6 @@ impl AccountsHashVerifier {
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
-        starting_snapshot_storages: StartingSnapshotStorages,
         exit: Arc<AtomicBool>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
@@ -53,14 +51,6 @@ impl AccountsHashVerifier {
             .name("solAcctHashVer".to_string())
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
-                // To support fastboot, we must ensure the storages used in the latest POST snapshot are
-                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
-                // expiring.
-                let mut fastboot_storages = match starting_snapshot_storages {
-                    StartingSnapshotStorages::Genesis => None,
-                    StartingSnapshotStorages::Archive => None,
-                    StartingSnapshotStorages::Fastboot(storages) => Some(storages),
-                };
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -81,39 +71,12 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    // If this accounts package is for a snapshot, then clone the storages to
-                    // save for fastboot.
-                    let snapshot_storages_for_fastboot = accounts_package
-                        .snapshot_info
-                        .is_some()
-                        .then(|| accounts_package.snapshot_storages.clone());
-
-                    let slot = accounts_package.slot;
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         snapshot_package_sender.as_ref(),
                         &snapshot_config,
                         &exit,
                     ));
-
-                    if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
-                        // Get the number of storages that are being kept alive for fastboot.
-                        // Looking at the storage Arc's strong reference count, we know that one
-                        // ref is for fastboot, and one ref is for snapshot packaging.  If there
-                        // are no others, then the storage will be kept alive because of fastboot.
-                        let num_storages_kept_alive = snapshot_storages_for_fastboot
-                            .iter()
-                            .filter(|storage| Arc::strong_count(storage) == 2)
-                            .count();
-                        let num_storages_total = snapshot_storages_for_fastboot.len();
-                        fastboot_storages = Some(snapshot_storages_for_fastboot);
-                        datapoint_info!(
-                            "fastboot",
-                            ("slot", slot, i64),
-                            ("num_storages_total", num_storages_total, i64),
-                            ("num_storages_kept_alive", num_storages_kept_alive, i64),
-                        );
-                    }
 
                     datapoint_info!(
                         "accounts_hash_verifier",
@@ -132,13 +95,6 @@ impl AccountsHashVerifier {
                     );
                 }
                 info!("AccountsHashVerifier has stopped");
-                debug!(
-                    "Number of storages kept alive for fastboot: {}",
-                    fastboot_storages
-                        .as_ref()
-                        .map(|storages| storages.len())
-                        .unwrap_or(0)
-                );
             })
             .unwrap();
         Self {

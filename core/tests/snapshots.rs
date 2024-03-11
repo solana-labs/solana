@@ -11,7 +11,6 @@ use {
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         epoch_accounts_hash::EpochAccountsHash,
-        starting_snapshot_storages::StartingSnapshotStorages,
     },
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
@@ -1044,7 +1043,6 @@ fn test_snapshots_with_background_services(
         accounts_package_sender,
         accounts_package_receiver,
         Some(snapshot_package_sender),
-        StartingSnapshotStorages::Genesis,
         exit.clone(),
         snapshot_test_config.snapshot_config.clone(),
     );
