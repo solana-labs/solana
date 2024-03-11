@@ -1279,26 +1279,6 @@ fn test_rent_complex() {
     assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
 }
 
-fn test_rent_collection_partitions(bank: &Bank) -> Vec<Partition> {
-    let partitions = bank.rent_collection_partitions();
-    let slot = bank.slot();
-    if slot.saturating_sub(1) == bank.parent_slot() {
-        let partition = accounts_partition::variable_cycle_partition_from_previous_slot(
-            bank.epoch_schedule(),
-            bank.slot(),
-        );
-        assert_eq!(
-            partitions.last().unwrap(),
-            &partition,
-            "slot: {}, slots per epoch: {}, partitions: {:?}",
-            bank.slot(),
-            bank.epoch_schedule().slots_per_epoch,
-            partitions
-        );
-    }
-    partitions
-}
-
 #[test]
 fn test_rent_eager_across_epoch_without_gap() {
     let mut bank = create_simple_test_arc_bank(1).0;
@@ -1321,16 +1301,16 @@ fn test_rent_eager_across_epoch_without_gap_mnb() {
     genesis_config.cluster_type = ClusterType::MainnetBeta;
 
     let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-    assert_eq!(test_rent_collection_partitions(&bank), vec![(0, 0, 32)]);
+    assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
     bank = Arc::new(new_from_parent(bank));
-    assert_eq!(test_rent_collection_partitions(&bank), vec![(0, 1, 32)]);
+    assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 32)]);
     for _ in 2..32 {
         bank = Arc::new(new_from_parent(bank));
     }
-    assert_eq!(test_rent_collection_partitions(&bank), vec![(30, 31, 32)]);
+    assert_eq!(bank.rent_collection_partitions(), vec![(30, 31, 32)]);
     bank = Arc::new(new_from_parent(bank));
-    assert_eq!(test_rent_collection_partitions(&bank), vec![(0, 0, 64)]);
+    assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 64)]);
 }
 
 #[test]
