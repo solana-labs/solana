@@ -30,11 +30,7 @@ if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
     if [[ -z $program ]]; then
       printf "solana"
     else
-      if [[ $program == "validator" || $program == "ledger-tool" || $program == "watchtower" || $program == "install" ]]; then
-        printf "agave-%s" "$program"
-      else
-        printf "solana-%s" "$program"
-      fi
+      printf "solana-%s" "$program"
     fi
   }
 else
