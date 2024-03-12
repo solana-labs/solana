@@ -321,14 +321,14 @@ impl EncodingConfig for RpcTransactionConfig {
 #[serde(untagged)]
 pub enum RpcBlocksConfigWrapper {
     EndSlotOnly(Option<Slot>),
-    CommitmentOnly(Option<CommitmentConfig>),
+    ConfigOnly(Option<RpcContextConfig>),
 }
 
 impl RpcBlocksConfigWrapper {
-    pub fn unzip(&self) -> (Option<Slot>, Option<CommitmentConfig>) {
+    pub fn unzip(&self) -> (Option<Slot>, Option<RpcContextConfig>) {
         match &self {
             RpcBlocksConfigWrapper::EndSlotOnly(end_slot) => (*end_slot, None),
-            RpcBlocksConfigWrapper::CommitmentOnly(commitment) => (None, *commitment),
+            RpcBlocksConfigWrapper::ConfigOnly(config) => (None, *config),
         }
     }
 }
