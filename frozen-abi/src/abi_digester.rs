@@ -4,10 +4,7 @@ use {
         hash::{Hash, Hasher},
     },
     log::*,
-    serde::{
-        ser::{Error as SerdeError, *},
-        Serialize, Serializer,
-    },
+    serde::ser::{Error as SerdeError, *},
     std::{any::type_name, io::Write},
     thiserror::Error,
 };
