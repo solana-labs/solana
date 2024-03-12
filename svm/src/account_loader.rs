@@ -196,7 +196,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     let mut tx_rent: TransactionRent = 0;
     let account_keys = message.account_keys();
     let mut accounts_found = Vec::with_capacity(account_keys.len());
-    let mut account_deps = Vec::with_capacity(account_keys.len());
     let mut rent_debits = RentDebits::default();
     let rent_collector = callbacks.get_rent_collector();
 
@@ -315,13 +314,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         error_counters.account_not_found += 1;
         return Err(TransactionError::AccountNotFound);
     }
-
-    // Appends the account_deps at the end of the accounts,
-    // this way they can be accessed in a uniform way.
-    // At places where only the accounts are needed,
-    // the account_deps are truncated using e.g:
-    // accounts.iter().take(message.account_keys.len())
-    accounts.append(&mut account_deps);
 
     let builtins_start_index = accounts.len();
     let program_indices = message
