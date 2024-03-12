@@ -26,6 +26,7 @@ use {
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_ledger::use_snapshot_archives_at_startup,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
+    solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
     solana_runtime::{
@@ -1079,6 +1080,11 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
+                .default_value_if(
+                    "full_rpc_api",
+                    None,
+                    &default_args.rpc_pubsub_notification_threads,
+                )
                 .help(
                     "The maximum number of threads that RPC PubSub will use for generating \
                      notifications. 0 will disable RPC PubSub notifications",
@@ -2138,6 +2144,7 @@ pub struct DefaultArgs {
     pub rpc_bigtable_max_message_size: String,
     pub rpc_max_request_body_size: String,
     pub rpc_pubsub_worker_threads: String,
+    pub rpc_pubsub_notification_threads: String,
 
     pub maximum_local_snapshot_age: String,
     pub maximum_full_snapshot_archives_to_retain: String,
@@ -2225,6 +2232,7 @@ impl DefaultArgs {
             rpc_bigtable_max_message_size: solana_storage_bigtable::DEFAULT_MAX_MESSAGE_SIZE
                 .to_string(),
             rpc_pubsub_worker_threads: "4".to_string(),
+            rpc_pubsub_notification_threads: get_thread_count().to_string(),
             maximum_full_snapshot_archives_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN
                 .to_string(),
             maximum_incremental_snapshot_archives_to_retain:
