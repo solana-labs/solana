@@ -260,7 +260,7 @@ pub(crate) struct CollectorFeeDetails {
 }
 
 impl CollectorFeeDetails {
-    pub(crate) fn add(&mut self, fee_details: &FeeDetails) {
+    pub(crate) fn accumulate(&mut self, fee_details: &FeeDetails) {
         self.transaction_fee = self
             .transaction_fee
             .saturating_add(fee_details.transaction_fee());
@@ -565,7 +565,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             epoch_reward_status: _,
             transaction_processor: _,
-            collector_fee_details,
+            collector_fee_details: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -599,8 +599,6 @@ impl PartialEq for Bank {
             && *stakes_cache.stakes() == *other.stakes_cache.stakes()
             && epoch_stakes == &other.epoch_stakes
             && is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
-            && *collector_fee_details.read().unwrap()
-                == *other.collector_fee_details.read().unwrap()
     }
 }
 
@@ -4954,7 +4952,7 @@ impl Bank {
         self.collector_fee_details
             .write()
             .unwrap()
-            .add(&accumulated_fee_details);
+            .accumulate(&accumulated_fee_details);
         results
     }
 
