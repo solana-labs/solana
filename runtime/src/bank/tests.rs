@@ -13794,3 +13794,73 @@ fn test_failed_simulation_compute_units() {
     let simulation = bank.simulate_transaction(&sanitized, false);
     assert_eq!(expected_consumed_units, simulation.units_consumed);
 }
+
+#[test]
+fn test_filter_program_errors_and_collect_fee_details() {
+    // TX  | EXECUTION RESULT                        | COLLECT            | ADDITIONAL          | COLLECT
+    //                                               | (TX_FEE, PRIO_FEE) | WITHDRAW FROM PAYER | RESULT
+    // --------------------------------------------------------------------------------------------------
+    // tx1 | executed and no error                   | (5_000, 1_000)     | 0                   | Ok
+    // tx2 | executed has error                      | (5_000, 1_000)     | 6_000               | Ok
+    // tx3 | not executed                            | (0    , 0)         | 0                   | Original Err
+    // tx4 | executed error, payer insufficient fund | (0    , 0)         | 0                   | InsufficientFundsForFee
+    //
+    let initial_payer_balance = 7_000;
+    let additional_payer_withdraw = 6_000;
+    let expected_collected_fee_details = CollectorFeeDetails {
+        transaction_fee: 10_000,
+        priority_fee: 2_000,
+    };
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config_with_leader(initial_payer_balance, &Pubkey::new_unique(), 3);
+    genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
+        &[
+            system_instruction::transfer(&mint_keypair.pubkey(), &Pubkey::new_unique(), 2),
+            ComputeBudgetInstruction::set_compute_unit_limit(1_000),
+            ComputeBudgetInstruction::set_compute_unit_price(1_000_000),
+        ],
+        Some(&mint_keypair.pubkey()),
+        &[&mint_keypair],
+        genesis_config.hash(),
+    ));
+    let txs = vec![tx.clone(), tx.clone(), tx.clone(), tx];
+
+    let results = vec![
+        new_execution_result(Ok(()), None),
+        new_execution_result(
+            Err(TransactionError::InstructionError(
+                1,
+                SystemError::ResultWithNegativeLamports.into(),
+            )),
+            None,
+        ),
+        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
+        new_execution_result(Err(TransactionError::AccountNotFound), None),
+    ];
+
+    let expected_collect_results = vec![
+        Ok(()),
+        Ok(()),
+        Err(TransactionError::AccountNotFound),
+        Err(TransactionError::InsufficientFundsForFee),
+    ];
+
+    let results = bank.filter_program_errors_and_collect_fee_details(&txs, &results);
+
+    assert_eq!(
+        expected_collected_fee_details,
+        *bank.collector_fee_details.read().unwrap()
+    );
+    assert_eq!(
+        initial_payer_balance - additional_payer_withdraw,
+        bank.get_balance(&mint_keypair.pubkey())
+    );
+    assert_eq!(expected_collect_results, results);
+}
