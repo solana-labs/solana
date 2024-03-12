@@ -745,6 +745,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("wait_for_supermajority")
                 .long("wait-for-supermajority")
                 .requires("expected_bank_hash")
+                .requires("expected_shred_version")
                 .value_name("SLOT")
                 .validator(is_slot)
                 .help(
