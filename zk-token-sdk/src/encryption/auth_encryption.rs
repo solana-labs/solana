@@ -102,7 +102,7 @@ impl AuthenticatedEncryption {
     }
 }
 
-#[derive(Debug, Zeroize)]
+#[derive(Debug, Zeroize, Eq, PartialEq)]
 pub struct AeKey([u8; AE_KEY_LEN]);
 impl AeKey {
     /// Deterministically derives an authenticated encryption key from a Solana signer and a public
@@ -156,6 +156,21 @@ impl AeKey {
 
     pub fn decrypt(&self, ciphertext: &AeCiphertext) -> Option<u64> {
         AuthenticatedEncryption::decrypt(self, ciphertext)
+    }
+
+    pub fn to_bytes(&self) -> [u8; AE_KEY_LEN] {
+        self.0
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != AE_KEY_LEN {
+            return None;
+        }
+        let Ok(sized_array) = bytes[..AE_KEY_LEN].try_into() else {
+            return None;
+        };
+
+        Some(Self(sized_array))
     }
 }
 
@@ -297,5 +312,13 @@ mod tests {
 
         let too_long_seed = vec![0; 65536];
         assert!(AeKey::from_seed(&too_long_seed).is_err());
+    }
+
+    #[test]
+    fn test_aes_key_from_to_bytes() {
+        let key = AeKey::from_seed(&vec![0; 32]).unwrap();
+        let key_bytes = key.to_bytes();
+
+        assert_eq!(key, AeKey::from_bytes(&key_bytes).unwrap());
     }
 }
