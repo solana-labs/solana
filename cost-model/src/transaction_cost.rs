@@ -87,6 +87,27 @@ impl TransactionCost {
             Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
         }
     }
+
+    pub fn num_transaction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 1,
+            Self::Transaction(usage_cost) => usage_cost.num_transaction_signatures,
+        }
+    }
+
+    pub fn num_secp256k1_instruction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.num_secp256k1_instruction_signatures,
+        }
+    }
+
+    pub fn num_ed25519_instruction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.num_ed25519_instruction_signatures,
+        }
+    }
 }
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -102,6 +123,9 @@ pub struct UsageCostDetails {
     pub bpf_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub account_data_size: u64,
+    pub num_transaction_signatures: u64,
+    pub num_secp256k1_instruction_signatures: u64,
+    pub num_ed25519_instruction_signatures: u64,
 }
 
 impl Default for UsageCostDetails {
@@ -115,6 +139,9 @@ impl Default for UsageCostDetails {
             bpf_execution_cost: 0u64,
             loaded_accounts_data_size_cost: 0u64,
             account_data_size: 0u64,
+            num_transaction_signatures: 0u64,
+            num_secp256k1_instruction_signatures: 0u64,
+            num_ed25519_instruction_signatures: 0u64,
         }
     }
 }
@@ -133,6 +160,10 @@ impl PartialEq for UsageCostDetails {
             && self.bpf_execution_cost == other.bpf_execution_cost
             && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
             && self.account_data_size == other.account_data_size
+            && self.num_transaction_signatures == other.num_transaction_signatures
+            && self.num_secp256k1_instruction_signatures
+                == other.num_secp256k1_instruction_signatures
+            && self.num_ed25519_instruction_signatures == other.num_ed25519_instruction_signatures
             && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
     }
 }
