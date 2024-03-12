@@ -118,6 +118,7 @@ dependencies = [
  "solana-perf",
  "solana-poh",
  "solana-program-runtime",
+ "solana-rayon-threadlimit",
  "solana-rpc",
  "solana-rpc-client",
  "solana-rpc-client-api",

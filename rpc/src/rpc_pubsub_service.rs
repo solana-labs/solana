@@ -12,10 +12,12 @@ use {
     jsonrpc_core::IoHandler,
     soketto::handshake::{server, Server},
     solana_metrics::TokenCounter,
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::timing::AtomicInterval,
     std::{
         io,
         net::SocketAddr,
+        num::NonZeroUsize,
         str,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -43,7 +45,7 @@ pub struct PubSubConfig {
     pub queue_capacity_items: usize,
     pub queue_capacity_bytes: usize,
     pub worker_threads: usize,
-    pub notification_threads: Option<usize>,
+    pub notification_threads: Option<NonZeroUsize>,
 }
 
 impl Default for PubSubConfig {
@@ -55,7 +57,7 @@ impl Default for PubSubConfig {
             queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
             worker_threads: DEFAULT_WORKER_THREADS,
-            notification_threads: None,
+            notification_threads: NonZeroUsize::new(get_thread_count()),
         }
     }
 }
@@ -69,7 +71,7 @@ impl PubSubConfig {
             queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
             worker_threads: DEFAULT_WORKER_THREADS,
-            notification_threads: Some(2),
+            notification_threads: NonZeroUsize::new(2),
         }
     }
 }

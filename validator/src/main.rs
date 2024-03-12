@@ -1382,11 +1382,9 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: if full_api {
-                value_of(&matches, "rpc_pubsub_notification_threads")
-            } else {
-                Some(0)
-            },
+            notification_threads: value_t!(matches, "rpc_pubsub_notification_threads", usize)
+                .ok()
+                .and_then(NonZeroUsize::new),
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
