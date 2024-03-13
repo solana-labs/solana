@@ -11,7 +11,6 @@ pub mod mmap_utils;
 pub mod owners;
 pub mod readable;
 mod test_utils;
-pub mod writer;
 
 use {
     crate::{
