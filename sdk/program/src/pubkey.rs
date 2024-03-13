@@ -631,7 +631,7 @@ impl Pubkey {
         }
     }
 
-    pub fn to_bytes(self) -> [u8; 32] {
+    pub const fn to_bytes(self) -> [u8; 32] {
         self.0
     }
 
