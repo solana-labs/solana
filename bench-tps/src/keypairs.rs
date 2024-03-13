@@ -16,6 +16,7 @@ pub fn get_keypairs<T>(
     num_lamports_per_account: u64,
     client_ids_and_stake_file: &str,
     read_from_client_file: bool,
+    skip_tx_account_data_size: bool,
     enable_padding: bool,
 ) -> Vec<Keypair>
 where
@@ -57,6 +58,7 @@ where
             &keypairs,
             keypairs.len().saturating_sub(keypair_count) as u64,
             last_balance,
+            skip_tx_account_data_size,
             enable_padding,
         )
         .unwrap_or_else(|e| {
@@ -70,6 +72,7 @@ where
             id,
             keypair_count,
             num_lamports_per_account,
+            skip_tx_account_data_size,
             enable_padding,
         )
         .unwrap_or_else(|e| {

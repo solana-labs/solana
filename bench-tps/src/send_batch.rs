@@ -66,7 +66,7 @@ pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     total: u64,
     max_fee: u64,
     lamports_per_account: u64,
-    data_size_limit: u32,
+    data_size_limit: Option<u32>,
 ) {
     let mut funded: Vec<&Keypair> = vec![source];
     let mut funded_funds = total;
@@ -354,7 +354,7 @@ trait FundingTransactions<'a>: SendBatchTransactions<'a, FundingSigners<'a>> {
         client: &Arc<T>,
         to_fund: &FundingChunk<'a>,
         to_lamports: u64,
-        data_size_limit: u32,
+        data_size_limit: Option<u32>,
     );
 }
 
@@ -364,13 +364,15 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
         client: &Arc<T>,
         to_fund: &FundingChunk<'a>,
         to_lamports: u64,
-        data_size_limit: u32,
+        data_size_limit: Option<u32>,
     ) {
         self.make(to_fund, |(k, t)| -> (FundingSigners<'a>, Transaction) {
             let mut instructions = system_instruction::transfer_many(&k.pubkey(), t);
-            instructions.push(
-                ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size_limit),
-            );
+            if let Some(data_size_limit) = data_size_limit {
+                instructions.push(
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size_limit),
+                );
+            }
             let message = Message::new(&instructions, Some(&k.pubkey()));
             (*k, Transaction::new_unsigned(message))
         });

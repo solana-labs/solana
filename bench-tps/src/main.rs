@@ -194,6 +194,7 @@ fn main() {
         external_client_type,
         use_quic,
         tpu_connection_pool_size,
+        skip_tx_account_data_size,
         compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
@@ -267,6 +268,7 @@ fn main() {
         *num_lamports_per_account,
         client_ids_and_stake_file,
         *read_from_client_file,
+        *skip_tx_account_data_size,
         instruction_padding_config.is_some(),
     );
 

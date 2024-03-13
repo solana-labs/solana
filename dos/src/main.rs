@@ -560,6 +560,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
             size,
             1_000_000,
             false,
+            false,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {e:?}");
