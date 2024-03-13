@@ -16,6 +16,7 @@ Release channels have their own copy of this changelog:
 ## [2.0.0] - Unreleased
 * Changes
   * `central-scheduler` as default option for `--block-production-method` (#34891)
+  * `solana-rpc-client-api`: `RpcFilterError` depends on `base64` version 0.22, so users may need to upgrade to `base64` version 0.22
 
 ## [1.18.0]
 * Changes
