@@ -214,6 +214,15 @@ pub struct JsonRpcRequestProcessor {
 impl Metadata for JsonRpcRequestProcessor {}
 
 impl JsonRpcRequestProcessor {
+    pub fn clone_without_bigtable(&self) -> JsonRpcRequestProcessor {
+        Self {
+            bigtable_ledger_storage: None, // Disable BigTable
+            ..self.clone()
+        }
+    }
+}
+
+impl JsonRpcRequestProcessor {
     fn get_bank_with_config(&self, config: RpcContextConfig) -> Result<Arc<Bank>> {
         let RpcContextConfig {
             commitment,

@@ -525,7 +525,14 @@ impl JsonRpcService {
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
-                    move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
+                    move |req: &hyper::Request<hyper::Body>| {
+                        let xbigtable = req.headers().get("x-bigtable");
+                        if xbigtable.is_some_and(|v| v == "disabled") {
+                            request_processor.clone_without_bigtable()
+                        } else {
+                            request_processor.clone()
+                        }
+                    },
                 )
                 .event_loop_executor(runtime.handle().clone())
                 .threads(1)
