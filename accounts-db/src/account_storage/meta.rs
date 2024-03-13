@@ -3,7 +3,7 @@ use {
         accounts_hash::AccountHash,
         append_vec::AppendVecStoredAccountMeta,
         storable_accounts::StorableAccounts,
-        tiered_storage::{hot::HotAccountMeta, readable::TieredReadableAccount},
+        tiered_storage::hot::{HotAccount, HotAccountMeta},
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, marker::PhantomData},
@@ -114,7 +114,7 @@ impl<
 #[derive(PartialEq, Eq, Debug)]
 pub enum StoredAccountMeta<'storage> {
     AppendVec(AppendVecStoredAccountMeta<'storage>),
-    Hot(TieredReadableAccount<'storage, HotAccountMeta>),
+    Hot(HotAccount<'storage, HotAccountMeta>),
 }
 
 impl<'storage> StoredAccountMeta<'storage> {
