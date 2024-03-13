@@ -445,14 +445,14 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     dot.join("\n")
 }
 
-fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
-    if blockstore.is_dead(slot) {
-        return Err("Dead slot".to_string());
-    }
-
+fn compute_slot_cost(
+    blockstore: &Blockstore,
+    slot: Slot,
+    allow_dead_slots: bool,
+) -> Result<(), String> {
     let (entries, _num_shreds, _is_full) = blockstore
-        .get_slot_entries_with_shred_info(slot, 0, false)
-        .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
+        .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
+        .map_err(|err| format!("Slot: {slot}, Failed to load entries, err {err:?}"))?;
 
     let num_entries = entries.len();
     let mut num_transactions = 0;
@@ -1482,7 +1482,8 @@ fn main() {
                             "Slots that their blocks are computed for cost, default to all slots \
                              in ledger",
                         ),
-                ),
+                )
+                .arg(&allow_dead_slots_arg),
         )
         .program_subcommand()
         .get_matches();
@@ -2947,9 +2948,10 @@ fn main() {
                     } else {
                         slots = values_t_or_exit!(arg_matches, "slots", Slot);
                     }
+                    let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
 
                     for slot in slots {
-                        if let Err(err) = compute_slot_cost(&blockstore, slot) {
+                        if let Err(err) = compute_slot_cost(&blockstore, slot, allow_dead_slots) {
                             eprintln!("{err}");
                         }
                     }
