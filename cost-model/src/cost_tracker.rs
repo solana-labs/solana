@@ -62,6 +62,9 @@ pub struct CostTracker {
     /// The amount of total account data size remaining.  If `Some`, then do not add transactions
     /// that would cause `account_data_size` to exceed this limit.
     account_data_size_limit: Option<u64>,
+    transaction_signature_count: u64,
+    secp256k1_instruction_signature_count: u64,
+    ed25519_instruction_signature_count: u64,
 }
 
 impl Default for CostTracker {
@@ -82,6 +85,9 @@ impl Default for CostTracker {
             transaction_count: 0,
             account_data_size: 0,
             account_data_size_limit: None,
+            transaction_signature_count: 0,
+            secp256k1_instruction_signature_count: 0,
+            ed25519_instruction_signature_count: 0,
         }
     }
 }
@@ -167,6 +173,21 @@ impl CostTracker {
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
             ("account_data_size", self.account_data_size, i64),
+            (
+                "transaction_signature_count",
+                self.transaction_signature_count,
+                i64
+            ),
+            (
+                "secp256k1_instruction_signature_count",
+                self.secp256k1_instruction_signature_count,
+                i64
+            ),
+            (
+                "ed25519_instruction_signature_count",
+                self.ed25519_instruction_signature_count,
+                i64
+            ),
         );
     }
 
@@ -234,6 +255,18 @@ impl CostTracker {
         self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
         saturating_add_assign!(self.account_data_size, tx_cost.account_data_size());
         saturating_add_assign!(self.transaction_count, 1);
+        saturating_add_assign!(
+            self.transaction_signature_count,
+            tx_cost.num_transaction_signatures()
+        );
+        saturating_add_assign!(
+            self.secp256k1_instruction_signature_count,
+            tx_cost.num_secp256k1_instruction_signatures()
+        );
+        saturating_add_assign!(
+            self.ed25519_instruction_signature_count,
+            tx_cost.num_ed25519_instruction_signatures()
+        );
     }
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
@@ -243,6 +276,15 @@ impl CostTracker {
             .account_data_size
             .saturating_sub(tx_cost.account_data_size());
         self.transaction_count = self.transaction_count.saturating_sub(1);
+        self.transaction_signature_count = self
+            .transaction_signature_count
+            .saturating_sub(tx_cost.num_transaction_signatures());
+        self.secp256k1_instruction_signature_count = self
+            .secp256k1_instruction_signature_count
+            .saturating_sub(tx_cost.num_secp256k1_instruction_signatures());
+        self.ed25519_instruction_signature_count = self
+            .ed25519_instruction_signature_count
+            .saturating_sub(tx_cost.num_ed25519_instruction_signatures());
     }
 
     /// Apply additional actual execution units to cost_tracker
