@@ -69,6 +69,7 @@ pub struct Config {
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
     pub compute_unit_price: Option<ComputeUnitPrice>,
+    pub skip_tx_account_data_size: bool,
     pub use_durable_nonce: bool,
     pub instruction_padding_config: Option<InstructionPaddingConfig>,
     pub num_conflict_groups: Option<usize>,
@@ -101,6 +102,7 @@ impl Default for Config {
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             compute_unit_price: None,
+            skip_tx_account_data_size: false,
             use_durable_nonce: false,
             instruction_padding_config: None,
             num_conflict_groups: None,
@@ -359,6 +361,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
         )
         .arg(
+            Arg::with_name("skip_tx_account_data_size")
+                .long("skip-tx-account-data-size")
+                .takes_value(false)
+                .conflicts_with("instruction_padding_data_size")
+                .help("Skips setting the account data size for each transaction"),
+        )
+        .arg(
             Arg::with_name("use_durable_nonce")
                 .long("use-durable-nonce")
                 .help("Use durable transaction nonce instead of recent blockhash"),
@@ -535,6 +544,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 
     if matches.is_present("use_randomized_compute_unit_price") {
         args.compute_unit_price = Some(ComputeUnitPrice::Random);
+    }
+
+    if matches.is_present("skip_tx_account_data_size") {
+        args.skip_tx_account_data_size = true;
     }
 
     if matches.is_present("use_durable_nonce") {

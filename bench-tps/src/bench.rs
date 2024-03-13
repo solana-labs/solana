@@ -139,6 +139,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     reclaim_lamports_back_to_source_account: bool,
     compute_unit_price: Option<ComputeUnitPrice>,
     instruction_padding_config: Option<InstructionPaddingConfig>,
+    skip_tx_account_data_size: bool,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -153,6 +154,7 @@ where
         compute_unit_price: Option<ComputeUnitPrice>,
         instruction_padding_config: Option<InstructionPaddingConfig>,
         num_conflict_groups: Option<usize>,
+        skip_tx_account_data_size: bool,
     ) -> Self {
         let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
             KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
@@ -170,6 +172,7 @@ where
             reclaim_lamports_back_to_source_account: false,
             compute_unit_price,
             instruction_padding_config,
+            skip_tx_account_data_size,
         }
     }
 
@@ -195,6 +198,7 @@ where
                 source_nonce_chunk,
                 dest_nonce_chunk,
                 self.reclaim_lamports_back_to_source_account,
+                self.skip_tx_account_data_size,
                 &self.instruction_padding_config,
             )
         } else {
@@ -206,6 +210,7 @@ where
                 blockhash.unwrap(),
                 &self.instruction_padding_config,
                 &self.compute_unit_price,
+                self.skip_tx_account_data_size,
             )
         };
 
@@ -397,6 +402,7 @@ where
         sustained,
         target_slots_per_epoch,
         compute_unit_price,
+        skip_tx_account_data_size,
         use_durable_nonce,
         instruction_padding_config,
         num_conflict_groups,
@@ -412,6 +418,7 @@ where
         compute_unit_price,
         instruction_padding_config,
         num_conflict_groups,
+        skip_tx_account_data_size,
     );
 
     let first_tx_count = loop {
@@ -538,6 +545,7 @@ fn generate_system_txs(
     blockhash: &Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: &Option<ComputeUnitPrice>,
+    skip_tx_account_data_size: bool,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -575,6 +583,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         Some(**compute_unit_price),
+                        skip_tx_account_data_size,
                     ),
                     Some(timestamp()),
                 )
@@ -592,6 +601,7 @@ fn generate_system_txs(
                         *blockhash,
                         instruction_padding_config,
                         None,
+                        skip_tx_account_data_size,
                     ),
                     Some(timestamp()),
                 )
@@ -607,6 +617,7 @@ fn transfer_with_compute_unit_price_and_padding(
     recent_blockhash: Hash,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
     compute_unit_price: Option<u64>,
+    skip_tx_account_data_size: bool,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
@@ -621,12 +632,15 @@ fn transfer_with_compute_unit_price_and_padding(
     } else {
         transfer_instruction
     };
-    let mut instructions = vec![
-        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
-            get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
-        ),
-        instruction,
-    ];
+    let mut instructions = vec![];
+    if !skip_tx_account_data_size {
+        instructions.push(
+            ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+                get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
+            ),
+        )
+    }
+    instructions.push(instruction);
     if instruction_padding_config.is_some() {
         // By default, CU budget is DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT which is much larger than needed
         instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(
@@ -711,6 +725,7 @@ fn nonced_transfer_with_padding(
     nonce_account: &Pubkey,
     nonce_authority: &Keypair,
     nonce_hash: Hash,
+    skip_tx_account_data_size: bool,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
@@ -726,12 +741,15 @@ fn nonced_transfer_with_padding(
     } else {
         transfer_instruction
     };
-    let instructions = vec![
-        ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
-            get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
-        ),
-        instruction,
-    ];
+    let mut instructions = vec![];
+    if !skip_tx_account_data_size {
+        instructions.push(
+            ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(
+                get_transaction_loaded_accounts_data_size(instruction_padding_config.is_some()),
+            ),
+        )
+    }
+    instructions.push(instruction);
     let message = Message::new_with_nonce(
         instructions,
         Some(&from_pubkey),
@@ -748,6 +766,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
     source_nonce: &[&Keypair],
     dest_nonce: &VecDeque<&Keypair>,
     reclaim: bool,
+    skip_tx_account_data_size: bool,
     instruction_padding_config: &Option<InstructionPaddingConfig>,
 ) -> Vec<TimestampedTransaction> {
     let length = source.len();
@@ -768,6 +787,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
                     &source_nonce[i].pubkey(),
                     source[i],
                     blockhashes[i],
+                    skip_tx_account_data_size,
                     instruction_padding_config,
                 ),
                 None,
@@ -786,6 +806,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
                     &dest_nonce[i].pubkey(),
                     dest[i],
                     blockhashes[i],
+                    skip_tx_account_data_size,
                     instruction_padding_config,
                 ),
                 None,
@@ -1046,6 +1067,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?S
     funding_key: &Keypair,
     keypair_count: usize,
     lamports_per_account: u64,
+    skip_tx_account_data_size: bool,
     enable_padding: bool,
 ) -> Result<Vec<Keypair>> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
@@ -1059,6 +1081,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?S
         &keypairs,
         extra,
         lamports_per_account,
+        skip_tx_account_data_size,
         enable_padding,
     )?;
 
@@ -1074,6 +1097,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     keypairs: &[Keypair],
     extra: u64,
     lamports_per_account: u64,
+    skip_tx_account_data_size: bool,
     enable_padding: bool,
 ) -> Result<()> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
@@ -1131,6 +1155,8 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
                 return Err(BenchTpsError::AirdropFailure);
             }
         }
+        let data_size_limit = (!skip_tx_account_data_size)
+            .then(|| get_transaction_loaded_accounts_data_size(enable_padding));
 
         fund_keys(
             client,
@@ -1139,7 +1165,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
             total,
             max_fee,
             lamports_per_account,
-            get_transaction_loaded_accounts_data_size(enable_padding),
+            data_size_limit,
         );
     }
     Ok(())
@@ -1181,7 +1207,7 @@ mod tests {
 
         let keypair_count = config.tx_count * config.keypair_multiplier;
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20, false)
+            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20, false, false)
                 .unwrap();
 
         do_bench_tps(client, config, keypairs, None);
@@ -1197,7 +1223,7 @@ mod tests {
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false, false)
                 .unwrap();
 
         for kp in &keypairs {
@@ -1222,7 +1248,7 @@ mod tests {
         let rent = client.get_minimum_balance_for_rent_exemption(0).unwrap();
 
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false, false)
                 .unwrap();
 
         for kp in &keypairs {
@@ -1239,7 +1265,7 @@ mod tests {
         let lamports = 10_000_000;
 
         let authority_keypairs =
-            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false)
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports, false, false)
                 .unwrap();
 
         let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
