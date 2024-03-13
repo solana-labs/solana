@@ -1721,6 +1721,14 @@ struct FlushStats {
     total_size: u64,
 }
 
+impl FlushStats {
+    fn accumulate(&mut self, other: &Self) {
+        saturating_add_assign!(self.num_flushed, other.num_flushed);
+        saturating_add_assign!(self.num_purged, other.num_purged);
+        saturating_add_assign!(self.total_size, other.total_size);
+    }
+}
+
 #[derive(Debug, Default)]
 struct LatestAccountsIndexRootsStats {
     roots_len: AtomicUsize,
@@ -6078,9 +6086,7 @@ impl AccountsDb {
                 if old_slot > max_flushed_root {
                     if self.should_aggressively_flush_cache() {
                         if let Some(stats) = self.flush_slot_cache(old_slot) {
-                            flush_stats.num_flushed += stats.num_flushed;
-                            flush_stats.num_purged += stats.num_purged;
-                            flush_stats.total_size += stats.total_size;
+                            flush_stats.accumulate(&stats);
                         }
                     }
                 } else {
