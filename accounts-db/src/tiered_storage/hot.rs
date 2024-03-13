@@ -13,7 +13,6 @@ use {
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
             mmap_utils::{get_pod, get_slice},
             owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
-            readable::TieredReadableAccount,
             StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
             TieredStorageFormat, TieredStorageResult,
         },
@@ -264,6 +263,81 @@ impl TieredAccountMeta for HotAccountMeta {
     }
 }
 
+/// The struct that offers read APIs for accessing a hot account.
+#[derive(PartialEq, Eq, Debug)]
+pub struct HotAccount<'accounts_file, M: TieredAccountMeta> {
+    /// TieredAccountMeta
+    pub meta: &'accounts_file M,
+    /// The address of the account
+    pub address: &'accounts_file Pubkey,
+    /// The address of the account owner
+    pub owner: &'accounts_file Pubkey,
+    /// The index for accessing the account inside its belonging AccountsFile
+    pub index: IndexOffset,
+    /// The account block that contains this account.  Note that this account
+    /// block may be shared with other accounts.
+    pub account_block: &'accounts_file [u8],
+}
+
+impl<'accounts_file, M: TieredAccountMeta> HotAccount<'accounts_file, M> {
+    /// Returns the address of this account.
+    pub fn address(&self) -> &'accounts_file Pubkey {
+        self.address
+    }
+
+    /// Returns the index to this account in its AccountsFile.
+    pub fn index(&self) -> IndexOffset {
+        self.index
+    }
+
+    /// Returns the data associated to this account.
+    pub fn data(&self) -> &'accounts_file [u8] {
+        self.meta.account_data(self.account_block)
+    }
+}
+
+impl<'accounts_file, M: TieredAccountMeta> ReadableAccount for HotAccount<'accounts_file, M> {
+    /// Returns the balance of the lamports of this account.
+    fn lamports(&self) -> u64 {
+        self.meta.lamports()
+    }
+
+    /// Returns the address of the owner of this account.
+    fn owner(&self) -> &'accounts_file Pubkey {
+        self.owner
+    }
+
+    /// Returns true if the data associated to this account is executable.
+    fn executable(&self) -> bool {
+        self.meta.flags().executable()
+    }
+
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  RENT_EXEMPT_RENT_EPOCH will be returned
+    /// if the account is rent-exempt.
+    ///
+    /// For a zero-lamport account, Epoch::default() will be returned to
+    /// default states of an AccountSharedData.
+    fn rent_epoch(&self) -> Epoch {
+        self.meta
+            .rent_epoch(self.account_block)
+            .unwrap_or(if self.lamports() != 0 {
+                RENT_EXEMPT_RENT_EPOCH
+            } else {
+                // While there is no valid-values for any fields of a zero
+                // lamport account, here we return Epoch::default() to
+                // match the default states of AccountSharedData.  Otherwise,
+                // a hash mismatch will occur.
+                Epoch::default()
+            })
+    }
+
+    /// Returns the data associated to this account.
+    fn data(&self) -> &'accounts_file [u8] {
+        self.data()
+    }
+}
+
 /// The reader to a hot accounts file.
 #[derive(Debug)]
 pub struct HotStorageReader {
@@ -437,7 +511,7 @@ impl HotStorageReader {
         let account_block = self.get_account_block(account_offset, index_offset)?;
 
         Ok(Some((
-            StoredAccountMeta::Hot(TieredReadableAccount {
+            StoredAccountMeta::Hot(HotAccount {
                 meta,
                 address,
                 owner,
