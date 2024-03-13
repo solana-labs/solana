@@ -253,21 +253,10 @@ impl AddAssign for SquashTiming {
     }
 }
 
-#[derive(AbiExample, Debug, Default, PartialEq)]
+#[derive(AbiExample, Debug, Default)]
 pub(crate) struct CollectorFeeDetails {
-    pub transaction_fee: u64,
-    pub priority_fee: u64,
-}
-
-impl CollectorFeeDetails {
-    pub(crate) fn accumulate(&mut self, fee_details: &FeeDetails) {
-        self.transaction_fee = self
-            .transaction_fee
-            .saturating_add(fee_details.transaction_fee());
-        self.priority_fee = self
-            .priority_fee
-            .saturating_add(fee_details.prioritization_fee());
-    }
+    pub transaction_fee: AtomicU64,
+    pub priority_fee: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -828,7 +817,7 @@ pub struct Bank {
     transaction_processor: TransactionBatchProcessor<BankForks>,
 
     /// Collected fee details
-    collector_fee_details: Mutex<CollectorFeeDetails>,
+    collector_fee_details: Arc<CollectorFeeDetails>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1015,7 +1004,7 @@ impl Bank {
             ))),
             epoch_reward_status: EpochRewardStatus::default(),
             transaction_processor: TransactionBatchProcessor::default(),
-            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
+            collector_fee_details: Arc::new(CollectorFeeDetails::default()),
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -1334,7 +1323,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             epoch_reward_status: parent.epoch_reward_status.clone(),
             transaction_processor: TransactionBatchProcessor::default(),
-            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
+            collector_fee_details: Arc::new(CollectorFeeDetails::default()),
         };
 
         new.transaction_processor = TransactionBatchProcessor::new(
@@ -1856,7 +1845,7 @@ impl Bank {
             epoch_reward_status: fields.epoch_reward_status,
             transaction_processor: TransactionBatchProcessor::default(),
             // collector_fee_details is not serialized to snapshot
-            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
+            collector_fee_details: Arc::new(CollectorFeeDetails::default()),
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -3712,10 +3701,8 @@ impl Bank {
 
             // to bench target function
             {
-                let CollectorFeeDetails {
-                    transaction_fee: _,
-                    priority_fee: _,
-                } = *self.collector_fee_details.lock().unwrap();
+                let _transaction_fee = self.collector_fee_details.transaction_fee.load(Relaxed);
+                let _priority_fee = self.collector_fee_details.priority_fee.load(Relaxed);
             }
 
             // freeze is a one-way trip, idempotent
@@ -4957,10 +4944,8 @@ impl Bank {
             })
             .collect();
 
-        self.collector_fee_details
-            .lock()
-            .unwrap()
-            .accumulate(&accumulated_fee_details);
+        self.collector_fee_details.transaction_fee.fetch_add(accumulated_fee_details.transaction_fee(), Relaxed);
+        self.collector_fee_details.priority_fee.fetch_add(accumulated_fee_details.prioritization_fee(), Relaxed);
         results
     }
 
