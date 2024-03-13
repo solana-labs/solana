@@ -197,8 +197,7 @@ pub fn discover(
     ))
 }
 
-/// Creates a ThinClient by selecting a valid node at random
-#[deprecated(since = "1.18.6", note = "Interface will change")]
+/// Creates a TpuClient by selecting a valid node at random
 pub fn get_client(
     nodes: &[ContactInfo],
     connection_cache: Arc<ConnectionCache>,

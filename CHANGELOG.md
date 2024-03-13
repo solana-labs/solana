@@ -37,6 +37,7 @@ Release channels have their own copy of this changelog:
   * New program deployments default to the exact size of a program, instead of
     double the size. Program accounts must be extended with `solana program extend`
     before an upgrade if they need to accommodate larger programs.
+  * Interface for `gossip_service::get_client()` has changed. `gossip_service::get_multi_client()` has been removed.
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.
