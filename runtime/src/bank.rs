@@ -828,7 +828,7 @@ pub struct Bank {
     transaction_processor: TransactionBatchProcessor<BankForks>,
 
     /// Collected fee details
-    collector_fee_details: RwLock<CollectorFeeDetails>,
+    collector_fee_details: Mutex<CollectorFeeDetails>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1015,7 +1015,7 @@ impl Bank {
             ))),
             epoch_reward_status: EpochRewardStatus::default(),
             transaction_processor: TransactionBatchProcessor::default(),
-            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -1334,7 +1334,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             epoch_reward_status: parent.epoch_reward_status.clone(),
             transaction_processor: TransactionBatchProcessor::default(),
-            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
         };
 
         new.transaction_processor = TransactionBatchProcessor::new(
@@ -1856,7 +1856,7 @@ impl Bank {
             epoch_reward_status: fields.epoch_reward_status,
             transaction_processor: TransactionBatchProcessor::default(),
             // collector_fee_details is not serialized to snapshot
-            collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            collector_fee_details: Mutex::new(CollectorFeeDetails::default()),
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -3715,7 +3715,7 @@ impl Bank {
                 let CollectorFeeDetails {
                     transaction_fee: _,
                     priority_fee: _,
-                } = *self.collector_fee_details.read().unwrap();
+                } = *self.collector_fee_details.lock().unwrap();
             }
 
             // freeze is a one-way trip, idempotent
@@ -4958,7 +4958,7 @@ impl Bank {
             .collect();
 
         self.collector_fee_details
-            .write()
+            .lock()
             .unwrap()
             .accumulate(&accumulated_fee_details);
         results
