@@ -3710,6 +3710,14 @@ impl Bank {
             self.update_slot_history();
             self.run_incinerator();
 
+            // to bench target function
+            {
+                let CollectorFeeDetails {
+                    transaction_fee: _,
+                    priority_fee: _,
+                } = *self.collector_fee_details.read().unwrap();
+            }
+
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
@@ -5069,6 +5077,8 @@ impl Bank {
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
+        // to bench target function
+        let _ = self.filter_program_errors_and_collect_fee_details(sanitized_txs, &execution_results);
         update_transaction_statuses_time.stop();
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateTransactionStatuses,
