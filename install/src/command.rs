@@ -377,6 +377,51 @@ fn get_windows_path_var() -> Result<Option<String>, String> {
 }
 
 #[cfg(windows)]
+fn check_administrator_privileges() -> Result<(), String> {
+    use std::io::Error;
+    use std::ptr;
+    use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
+    use winapi::um::securitybaseapi::GetTokenInformation;
+    use winapi::um::winnt::{TokenElevation, HANDLE, TOKEN_ELEVATION, TOKEN_QUERY};
+
+    unsafe {
+        let mut handle: HANDLE = ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut handle) == 0 {
+            return Err(format!("{}", Error::last_os_error()));
+        }
+
+        let mut elevation = TOKEN_ELEVATION::default();
+        let size = std::mem::size_of::<TOKEN_ELEVATION>() as u32;
+        let mut ret_size = size;
+        let result = GetTokenInformation(
+            handle,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            size,
+            &mut ret_size,
+        );
+        if result == 0 {
+            return Err(format!("{}", Error::last_os_error()));
+        }
+
+        if elevation.TokenIsElevated != 0 {
+            Ok(())
+        } else {
+            Err(
+                "You need to run this command with administrator privileges."
+                    .parse()
+                    .unwrap(),
+            )
+        }
+    }
+}
+
+#[cfg(unix)]
+fn check_administrator_privileges() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(windows)]
 fn add_to_path(new_path: &str) -> bool {
     use {
         std::ptr,
@@ -967,6 +1012,8 @@ pub fn update(config_file: &str, check_only: bool) -> Result<bool, String> {
 pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Result<bool, String> {
     let mut config = Config::load(config_file)?;
 
+    check_administrator_privileges()?;
+
     let (updated_version, download_url_and_sha256, release_dir) = if let Some(explicit_release) =
         &config.explicit_release
     {
@@ -1171,13 +1218,14 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         release_dir.join("solana-release"),
         config.active_release_dir(),
     )
-    .map_err(|err| {
-        format!(
+    .map_err(|err| match err.raw_os_error() {
+        Some(1314) => "You need to run this command with administrator privileges.".to_string(),
+        _ => format!(
             "Unable to symlink {:?} to {:?}: {}",
             release_dir,
             config.active_release_dir(),
             err
-        )
+        ),
     })?;
 
     config.save(config_file)?;
