@@ -616,6 +616,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4602,7 +4608,7 @@ name = "solana-account-decoder"
 version = "2.0.0"
 dependencies = [
  "Inflector",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bs58",
  "bv",
@@ -4835,7 +4841,7 @@ name = "solana-cli-output"
 version = "2.0.0"
 dependencies = [
  "Inflector",
- "base64 0.21.7",
+ "base64 0.22.0",
  "chrono",
  "clap 2.33.3",
  "console",
@@ -4929,7 +4935,7 @@ dependencies = [
 name = "solana-core"
 version = "2.0.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bs58",
  "bytes",
@@ -5384,7 +5390,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-serialize",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bitflags 2.4.2",
  "blake3",
@@ -5433,7 +5439,7 @@ dependencies = [
 name = "solana-program-runtime"
 version = "2.0.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "eager",
  "enum-iterator",
@@ -5461,7 +5467,7 @@ version = "2.0.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "chrono-humanize",
  "crossbeam-channel",
@@ -5560,7 +5566,7 @@ dependencies = [
 name = "solana-rpc"
 version = "2.0.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bs58",
  "crossbeam-channel",
@@ -5617,7 +5623,7 @@ name = "solana-rpc-client"
 version = "2.0.0"
 dependencies = [
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bs58",
  "indicatif",
@@ -5640,7 +5646,7 @@ dependencies = [
 name = "solana-rpc-client-api"
 version = "2.0.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bs58",
  "jsonrpc-core",
  "reqwest",
@@ -5673,7 +5679,7 @@ version = "2.0.0"
 dependencies = [
  "aquamarine",
  "arrayref",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "blake3",
  "bv",
@@ -6170,7 +6176,7 @@ name = "solana-sdk"
 version = "2.0.0"
 dependencies = [
  "assert_matches",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bitflags 2.4.2",
  "borsh 1.2.1",
@@ -6372,7 +6378,7 @@ dependencies = [
 name = "solana-test-validator"
 version = "2.0.0"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "crossbeam-channel",
  "log",
@@ -6438,7 +6444,7 @@ name = "solana-transaction-status"
 version = "2.0.0"
 dependencies = [
  "Inflector",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "borsh 0.10.3",
  "bs58",
@@ -6614,7 +6620,7 @@ name = "solana-zk-token-sdk"
 version = "2.0.0"
 dependencies = [
  "aes-gcm-siv",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bytemuck",
  "byteorder 1.5.0",
