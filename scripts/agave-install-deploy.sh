@@ -57,7 +57,7 @@ esac
 
 case $TAG in
 edge|beta)
-  DOWNLOAD_URL=https://release.agave.xyz/"$TAG"/solana-release-$TARGET.tar.bz2
+  DOWNLOAD_URL=https://release.anza.xyz/"$TAG"/solana-release-$TARGET.tar.bz2
   ;;
 *)
   DOWNLOAD_URL=https://github.com/anza-xyz/agave/releases/download/"$TAG"/solana-release-$TARGET.tar.bz2
