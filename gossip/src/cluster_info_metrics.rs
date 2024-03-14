@@ -316,6 +316,11 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         (
+            "num_redundant_pull_responses",
+            crds_stats.num_redundant_pull_responses,
+            i64
+        ),
+        (
             "push_response_count",
             stats.push_response_count.clear(),
             i64
