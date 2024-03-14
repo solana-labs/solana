@@ -56,6 +56,7 @@ use {
         },
         stake_history::{Epoch, StakeHistory},
         system_instruction::{self, SystemError},
+        system_program,
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
@@ -1980,15 +1981,26 @@ pub fn process_split_stake(
 
     let rent_exempt_reserve = if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == stake::program::id() {
-                format!("Stake account {split_stake_account_address} already exists")
+            if stake_account.owner == stake::program::id() {
+                return Err(CliError::BadParameter(format!(
+                    "Stake account {split_stake_account_address} already exists"
+                ))
+                .into());
+            } else if stake_account.owner == system_program::id() {
+                if !stake_account.data.is_empty() {
+                    return Err(CliError::BadParameter(format!(
+                        "Account {split_stake_account_address} has data and cannot be used to split stake"
+                    ))
+                    .into());
+                }
+            // if `stake_account`'s owner is the system_program and its data is
+            // empty, `stake_account` is allowed to receive the stake split
             } else {
-                format!(
-                    "Account {split_stake_account_address} already exists and is not a stake \
-                     account"
-                )
-            };
-            return Err(CliError::BadParameter(err_msg).into());
+                return Err(CliError::BadParameter(format!(
+                    "Account {split_stake_account_address} already exists and cannot be used to split stake"
+                ))
+                .into());
+            }
         }
 
         let minimum_balance =
