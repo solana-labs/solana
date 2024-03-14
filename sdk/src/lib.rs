@@ -94,6 +94,7 @@ pub mod quic;
 pub mod recent_blockhashes_account;
 pub mod rent_collector;
 pub mod rent_debits;
+pub mod reserved_account_keys;
 pub mod reward_info;
 pub mod reward_type;
 pub mod rpc_port;
