@@ -765,7 +765,7 @@ impl ClusterInfo {
                         ""
                     },
                     now.saturating_sub(last_updated),
-                    node.pubkey(),
+                    node.pubkey().to_string(),
                     if let Some(node_version) = node_version {
                         node_version.to_string()
                     } else {
@@ -827,7 +827,7 @@ impl ClusterInfo {
                             .unwrap_or_else(|| String::from("none")),
                         if node.pubkey() == &my_pubkey { "me" } else { "" },
                         now.saturating_sub(last_updated),
-                        node.pubkey(),
+                        node.pubkey().to_string(),
                         if let Some(node_version) = node_version {
                             node_version.to_string()
                         } else {
@@ -849,7 +849,7 @@ impl ClusterInfo {
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
              | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVU Q |ServeR|ShredVer\n\
-             ------------------+-------+---------------------------------------\
+             ------------------+-------+----------------------------------------------\
              +---------+------+-------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
@@ -4681,5 +4681,58 @@ mod tests {
         let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut Cursor::default());
         assert_eq!(heaviest_forks.len(), 1);
         assert_eq!(heaviest_forks[0].from, pubkey2);
+    }
+
+    #[test]
+    fn test_contact_trace() {
+        solana_logger::setup();
+        let keypair43 = Arc::new(
+            Keypair::from_bytes(&[
+                198, 203, 8, 178, 196, 71, 119, 152, 31, 96, 221, 142, 115, 224, 45, 34, 173, 138,
+                254, 39, 181, 238, 168, 70, 183, 47, 210, 91, 221, 179, 237, 153, 14, 58, 154, 59,
+                67, 220, 235, 106, 241, 99, 4, 72, 60, 245, 53, 30, 225, 122, 145, 225, 8, 40, 30,
+                174, 26, 228, 125, 127, 125, 21, 96, 28,
+            ])
+            .unwrap(),
+        );
+        let keypair44 = Arc::new(
+            Keypair::from_bytes(&[
+                66, 88, 3, 70, 228, 215, 125, 64, 130, 183, 180, 98, 22, 166, 201, 234, 89, 80,
+                135, 24, 228, 35, 20, 52, 105, 130, 50, 51, 46, 229, 244, 108, 70, 57, 45, 247, 57,
+                177, 39, 126, 190, 238, 50, 96, 186, 208, 28, 168, 148, 56, 9, 106, 92, 213, 63,
+                205, 252, 225, 244, 101, 77, 182, 4, 2,
+            ])
+            .unwrap(),
+        );
+
+        let cluster_info44 = Arc::new({
+            let mut node = Node::new_localhost_with_pubkey(&keypair44.pubkey());
+            node.sockets.gossip = UdpSocket::bind("127.0.0.1:65534").unwrap();
+            info!("{:?}", node);
+            ClusterInfo::new(node.info, keypair44.clone(), SocketAddrSpace::Unspecified)
+        });
+        let cluster_info43 = Arc::new({
+            let node = Node::new_localhost_with_pubkey(&keypair43.pubkey());
+            ClusterInfo::new(node.info, keypair43.clone(), SocketAddrSpace::Unspecified)
+        });
+
+        assert_eq!(keypair43.pubkey().to_string().len(), 43);
+        assert_eq!(keypair44.pubkey().to_string().len(), 44);
+
+        let trace = cluster_info44.contact_info_trace();
+        info!("cluster:\n{}", trace);
+        assert_eq!(trace.len(), 431);
+
+        let trace = cluster_info44.rpc_info_trace();
+        info!("rpc:\n{}", trace);
+        assert_eq!(trace.len(), 335);
+
+        let trace = cluster_info43.contact_info_trace();
+        info!("cluster:\n{}", trace);
+        assert_eq!(trace.len(), 431);
+
+        let trace = cluster_info43.rpc_info_trace();
+        info!("rpc:\n{}", trace);
+        assert_eq!(trace.len(), 335);
     }
 }
