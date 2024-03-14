@@ -736,6 +736,10 @@ pub mod allow_commission_decrease_at_any_time {
     solana_sdk::declare_id!("decoMktMcnmiq6t3u7g5BfgcQu91nKZr6RvMYf9z1Jb");
 }
 
+pub mod add_new_reserved_account_keys {
+    solana_sdk::declare_id!("8U4skmMVnF6k2kMvrWbQuRUT3qQSiTYpSjqmhmgfthZu");
+}
+
 pub mod consume_blockstore_duplicate_proofs {
     solana_sdk::declare_id!("6YsBCejwK96GZCkJ6mkZ4b68oP63z2PLoQmWjC7ggTqZ");
 }
@@ -955,6 +959,7 @@ lazy_static! {
         (drop_legacy_shreds::id(), "drops legacy shreds #34328"),
         (allow_commission_decrease_at_any_time::id(), "Allow commission decrease at any time in epoch #33843"),
         (consume_blockstore_duplicate_proofs::id(), "consume duplicate proofs from blockstore in consensus #34372"),
+        (add_new_reserved_account_keys::id(), "add new unwritable reserved accounts #34899"),
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
         (merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for merkle root conflicts #34270"),
         (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
