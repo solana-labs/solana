@@ -13,7 +13,7 @@ use {
 };
 
 fn main() {
-    solana_logger::setup_with_default("solana=info");
+    solana_logger::setup_with_default_filter();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())

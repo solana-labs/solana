@@ -41,10 +41,9 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
         env::set_var("RUST_BACKTRACE", "1")
     }
 
-    let filter = "solana=info";
     match logfile {
         None => {
-            solana_logger::setup_with_default(filter);
+            solana_logger::setup_with_default_filter();
             None
         }
         Some(logfile) => {
@@ -58,7 +57,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
                             exit(1);
                         });
 
-                solana_logger::setup_with_default(filter);
+                solana_logger::setup_with_default_filter();
                 redirect_stderr(&logfile);
                 Some(
                     std::thread::Builder::new()
