@@ -4,25 +4,16 @@
 extern crate test;
 
 use {
-    rand::{seq::SliceRandom, Rng},
-    raptorq::{Decoder, Encoder},
+    rand::Rng,
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
         max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, ReedSolomonCache,
         Shred, ShredFlags, Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_perf::test_tx,
-    solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
+    solana_sdk::{hash::Hash, signature::Keypair},
     test::Bencher,
 };
-
-// Copied these values here to avoid exposing shreds
-// internals only for the sake of benchmarks.
-
-// size of nonce: 4
-// size of common shred header: 83
-// size of coding shred header: 6
-const VALID_SHRED_DATA_LEN: usize = PACKET_DATA_SIZE - 4 - 83 - 6;
 
 fn make_test_entry(txs_per_entry: u64) -> Entry {
     Entry {
@@ -59,17 +50,6 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     );
     assert!(data_shreds.len() >= num_shreds);
     data_shreds
-}
-
-fn make_concatenated_shreds(num_shreds: usize) -> Vec<u8> {
-    let data_shreds = make_shreds(num_shreds);
-    let mut data: Vec<u8> = vec![0; num_shreds * VALID_SHRED_DATA_LEN];
-    for (i, shred) in (data_shreds[0..num_shreds]).iter().enumerate() {
-        data[i * VALID_SHRED_DATA_LEN..(i + 1) * VALID_SHRED_DATA_LEN]
-            .copy_from_slice(&shred.payload()[..VALID_SHRED_DATA_LEN]);
-    }
-
-    data
 }
 
 #[bench]
@@ -195,39 +175,5 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
     );
     bencher.iter(|| {
         Shredder::try_recovery(coding_shreds[..].to_vec(), &reed_solomon_cache).unwrap();
-    })
-}
-
-#[bench]
-fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
-    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
-    let data = make_concatenated_shreds(symbol_count);
-    bencher.iter(|| {
-        let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
-        encoder.get_encoded_packets(symbol_count as u32);
-    })
-}
-
-#[bench]
-fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
-    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
-    let data = make_concatenated_shreds(symbol_count);
-    let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
-    let mut packets = encoder.get_encoded_packets(symbol_count as u32);
-    packets.shuffle(&mut rand::thread_rng());
-
-    // Here we simulate losing 1 less than 50% of the packets randomly
-    packets.truncate(packets.len() - packets.len() / 2 + 1);
-
-    bencher.iter(|| {
-        let mut decoder = Decoder::new(encoder.get_config());
-        let mut result = None;
-        for packet in &packets {
-            result = decoder.decode(packet.clone());
-            if result.is_some() {
-                break;
-            }
-        }
-        assert_eq!(result.unwrap(), data);
     })
 }
