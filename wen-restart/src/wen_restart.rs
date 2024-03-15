@@ -104,6 +104,7 @@ pub(crate) fn aggregate_restart_last_voted_fork_slots(
     cluster_info: Arc<ClusterInfo>,
     last_voted_fork_slots: &Vec<Slot>,
     bank_forks: Arc<RwLock<BankForks>>,
+    blockstore: Arc<Blockstore>,
     wen_restart_repair_slots: Arc<RwLock<Vec<Slot>>>,
     exit: Arc<AtomicBool>,
     progress: &mut WenRestartProgress,
@@ -160,20 +161,18 @@ pub(crate) fn aggregate_restart_last_voted_fork_slots(
         let active_percent = last_voted_fork_slots_aggregate.active_percent();
         let mut filtered_slots: Vec<Slot>;
         {
-            let my_bank_forks = bank_forks.read().unwrap();
             filtered_slots = last_voted_fork_slots_aggregate
                 .slots_to_repair_iter()
                 .filter(|slot| {
                     if *slot <= &root_slot || is_full_slots.contains(*slot) {
                         return false;
                     }
-                    let is_full = my_bank_forks
-                        .get(**slot)
-                        .map_or(false, |bank| bank.is_frozen());
-                    if is_full {
+                    if blockstore.is_full(**slot) {
                         is_full_slots.insert(**slot);
+                        false
+                    } else {
+                        true
                     }
-                    !is_full
                 })
                 .cloned()
                 .collect();
@@ -234,6 +233,7 @@ pub fn wait_for_wen_restart(
                 cluster_info.clone(),
                 last_voted_fork_slots,
                 bank_forks.clone(),
+                blockstore.clone(),
                 wen_restart_repair_slots.clone().unwrap(),
                 exit.clone(),
                 &mut progress,
@@ -382,7 +382,6 @@ mod tests {
     use {
         crate::wen_restart::*,
         assert_matches::assert_matches,
-        solana_entry::entry,
         solana_gossip::{
             cluster_info::ClusterInfo,
             contact_info::ContactInfo,
@@ -391,7 +390,10 @@ mod tests {
             legacy_contact_info::LegacyContactInfo,
             restart_crds_values::RestartLastVotedForkSlots,
         },
-        solana_ledger::{blockstore, get_tmp_ledger_path_auto_delete},
+        solana_ledger::{
+            blockstore::{make_chaining_slot_entries, Blockstore},
+            get_tmp_ledger_path_auto_delete,
+        },
         solana_program::{
             hash::Hash,
             vote::state::{Vote, VoteStateUpdate},
@@ -403,7 +405,6 @@ mod tests {
             },
         },
         solana_sdk::{
-            pubkey::Pubkey,
             signature::{Keypair, Signer},
             timing::timestamp,
         },
@@ -454,6 +455,16 @@ mod tests {
         pub wen_restart_proto_path: PathBuf,
     }
 
+    fn insert_slots_into_blockstore(
+        blockstore: Arc<Blockstore>,
+        first_parent: Slot,
+        slots_to_insert: &[Slot],
+    ) {
+        for (shreds, _) in make_chaining_slot_entries(slots_to_insert, 2, first_parent) {
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+        }
+    }
+
     fn wen_restart_test_init(ledger_path: &TempDir) -> WenRestartTestInitResult {
         let validator_voting_keypairs: Vec<_> =
             (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
@@ -468,7 +479,7 @@ mod tests {
             node_keypair.clone(),
             SocketAddrSpace::Unspecified,
         ));
-        let blockstore = Arc::new(blockstore::Blockstore::open(ledger_path.path()).unwrap());
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             10_000,
             &validator_voting_keypairs,
@@ -479,42 +490,16 @@ mod tests {
             .try_into()
             .unwrap();
         let mut last_voted_fork_slots = Vec::new();
+        last_voted_fork_slots.extend([1, last_parent]);
         for i in 0..EXPECTED_SLOTS {
-            let entries = entry::create_ticks(1, 0, Hash::default());
-            let parent_slot = if i > 0 {
-                (RestartLastVotedForkSlots::MAX_SLOTS.saturating_add(i))
-                    .try_into()
-                    .unwrap()
-            } else {
-                last_parent
-            };
-            let slot = (RestartLastVotedForkSlots::MAX_SLOTS
-                .saturating_add(i)
-                .saturating_add(1)) as Slot;
-            let shreds = blockstore::entries_to_test_shreds(
-                &entries,
-                slot,
-                parent_slot,
-                false,
-                0,
-                true, // merkle_variant
+            last_voted_fork_slots.push(
+                (RestartLastVotedForkSlots::MAX_SLOTS
+                    .saturating_add(i)
+                    .saturating_add(1)) as Slot,
             );
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            last_voted_fork_slots.push(slot);
         }
-        // link directly to slot 1 whose distance to last_vote > RestartLastVotedForkSlots::MAX_SLOTS so it will not be included.
-        let entries = entry::create_ticks(1, 0, Hash::default());
-        let shreds = blockstore::entries_to_test_shreds(
-            &entries,
-            last_parent,
-            1,
-            false,
-            0,
-            true, // merkle_variant
-        );
-        last_voted_fork_slots.extend([last_parent, 1]);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-        last_voted_fork_slots.sort();
+        insert_slots_into_blockstore(blockstore.clone(), 0, &last_voted_fork_slots);
+        last_voted_fork_slots.insert(0, 0);
         last_voted_fork_slots.reverse();
         let mut wen_restart_proto_path = ledger_path.path().to_path_buf();
         wen_restart_proto_path.push("wen_restart_status.proto");
@@ -599,23 +584,6 @@ mod tests {
         let _ = remove_file(&test_state.wen_restart_proto_path);
     }
 
-    fn insert_and_freeze_slots(
-        bank_forks: Arc<RwLock<BankForks>>,
-        expected_slots_to_repair: Vec<Slot>,
-    ) {
-        let mut parent_bank = bank_forks.read().unwrap().root_bank();
-        for slot in expected_slots_to_repair {
-            let mut bank_forks_rw = bank_forks.write().unwrap();
-            bank_forks_rw.insert(Bank::new_from_parent(
-                parent_bank.clone(),
-                &Pubkey::default(),
-                slot,
-            ));
-            parent_bank = bank_forks_rw.get(slot).unwrap();
-            parent_bank.freeze();
-        }
-    }
-
     #[test]
     fn test_wen_restart_normal_flow() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -673,7 +641,11 @@ mod tests {
         }
 
         // Simulating successful repair of missing blocks.
-        insert_and_freeze_slots(test_state.bank_forks.clone(), expected_slots_to_repair);
+        insert_slots_into_blockstore(
+            test_state.blockstore.clone(),
+            last_vote_slot,
+            &expected_slots_to_repair,
+        );
 
         let _ = wen_restart_thread_handle.join();
         let progress = read_wen_restart_records(&test_state.wen_restart_proto_path).unwrap();
@@ -934,6 +906,7 @@ mod tests {
             let wen_restart_proto_path_clone = test_state.wen_restart_proto_path.clone();
             let cluster_info_clone = test_state.cluster_info.clone();
             let bank_forks_clone = test_state.bank_forks.clone();
+            let blockstore_clone = test_state.blockstore.clone();
             let exit = Arc::new(AtomicBool::new(false));
             let exit_clone = exit.clone();
             let mut progress_clone = progress.clone();
@@ -947,6 +920,7 @@ mod tests {
                         cluster_info_clone,
                         &last_voted_fork_slots,
                         bank_forks_clone,
+                        blockstore_clone,
                         Arc::new(RwLock::new(Vec::new())),
                         exit_clone,
                         &mut progress_clone,
@@ -995,7 +969,11 @@ mod tests {
         }
 
         // Simulating successful repair of missing blocks.
-        insert_and_freeze_slots(test_state.bank_forks.clone(), expected_slots_to_repair);
+        insert_slots_into_blockstore(
+            test_state.blockstore.clone(),
+            last_vote_slot,
+            &expected_slots_to_repair,
+        );
 
         let last_voted_fork_slots = test_state.last_voted_fork_slots.clone();
         wen_restart_test_succeed_after_failure(

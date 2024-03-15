@@ -4658,12 +4658,13 @@ pub fn make_many_slot_shreds(
 pub fn make_chaining_slot_entries(
     chain: &[u64],
     entries_per_slot: u64,
+    first_parent: u64,
 ) -> Vec<(Vec<Shred>, Vec<Entry>)> {
     let mut slots_shreds_and_entries = vec![];
     for (i, slot) in chain.iter().enumerate() {
         let parent_slot = {
             if *slot == 0 || i == 0 {
-                0
+                first_parent
             } else {
                 chain[i - 1]
             }
@@ -5609,7 +5610,7 @@ pub mod tests {
 
         let entries_per_slot = 10;
         let slots = [2, 5, 10];
-        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot, 0);
 
         // Get the shreds for slot 10, chaining to slot 5
         let (mut orphan_child, _) = all_shreds.remove(2);
@@ -5654,7 +5655,7 @@ pub mod tests {
 
         let entries_per_slot = 10;
         let mut slots = vec![2, 5, 10];
-        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot);
+        let mut all_shreds = make_chaining_slot_entries(&slots[..], entries_per_slot, 0);
         let disconnected_slot = 4;
 
         let (shreds0, _) = all_shreds.remove(0);
@@ -7428,7 +7429,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let shreds_per_slot = 10;
         let slots = vec![2, 4, 8, 12];
-        let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
+        let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot, 0);
         let slot_8_shreds = all_shreds[2].0.clone();
         for (slot_shreds, _) in all_shreds {
             blockstore.insert_shreds(slot_shreds, None, false).unwrap();
@@ -9963,7 +9964,7 @@ pub mod tests {
         let slots = vec![2, unconfirmed_slot, unconfirmed_child_slot];
 
         // Insert into slot 9, mark it as dead
-        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1)
+        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1, 0)
             .into_iter()
             .flat_map(|x| x.0)
             .collect();
@@ -10005,7 +10006,7 @@ pub mod tests {
         let unconfirmed_slot = 8;
         let slots = vec![confirmed_slot, unconfirmed_slot];
 
-        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1)
+        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1, 0)
             .into_iter()
             .flat_map(|x| x.0)
             .collect();
