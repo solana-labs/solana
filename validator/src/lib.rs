@@ -77,7 +77,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             #[cfg(not(unix))]
             {
                 println!("logrotate is not supported on this platform");
-                solana_logger::setup_file_with_default(&logfile, filter);
+                solana_logger::setup_file_with_default(&logfile, solana_logger::DEFAULT_FILTER);
                 None
             }
         }
