@@ -58,7 +58,7 @@ const MAX_HOT_OWNER_OFFSET: OwnerOffset = OwnerOffset((1 << 29) - 1);
 /// bytes in HotAccountOffset.
 pub(crate) const HOT_ACCOUNT_ALIGNMENT: usize = 8;
 
-/// The alignemnt for the blocks inside a hot accounts file.  A hot accounts
+/// The alignment for the blocks inside a hot accounts file.  A hot accounts
 /// file consists of accounts block, index block, owners block, and footer.
 /// This requirement allows the offset of each block properly aligned so
 /// that they can be readable under mmap.
@@ -190,7 +190,7 @@ impl TieredAccountMeta for HotAccountMeta {
     /// A builder function that initializes the account data size.
     fn with_account_data_size(self, _account_data_size: u64) -> Self {
         // Hot meta does not store its data size as it derives its data length
-        // by comparing the offets of two consecutive account meta entries.
+        // by comparing the offsets of two consecutive account meta entries.
         self
     }
 
