@@ -1326,7 +1326,7 @@ mod test {
         let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
         let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
-        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
+        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot, 0);
         for (mut slot_shreds, _) in shreds.into_iter() {
             slot_shreds.remove(0);
             blockstore.insert_shreds(slot_shreds, None, false).unwrap();
@@ -1621,7 +1621,7 @@ mod test {
         let slots: Vec<u64> = vec![2, 3, 5, 7];
         let num_entries_per_slot = max_ticks_per_n_shreds(3, None) + 1;
 
-        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
+        let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot, 0);
         for (i, (mut slot_shreds, _)) in shreds.into_iter().enumerate() {
             slot_shreds.remove(i);
             blockstore.insert_shreds(slot_shreds, None, false).unwrap();
