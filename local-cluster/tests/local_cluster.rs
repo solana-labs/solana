@@ -3114,7 +3114,7 @@ fn test_optimistic_confirmation_violation_without_tower() {
 //             |
 //             -> S4 (C) -> S5
 //
-// Step 5:
+// Step 4:
 // Without the persisted tower:
 //    `A` would choose to vote on the fork with `S4 -> S5`.
 //
