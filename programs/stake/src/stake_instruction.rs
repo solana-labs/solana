@@ -468,12 +468,6 @@ mod tests {
         feature_set
     }
 
-    fn feature_set_without_require_rent_exempt_split_destination() -> Arc<FeatureSet> {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&feature_set::require_rent_exempt_split_destination::id());
-        Arc::new(feature_set)
-    }
-
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
     }
@@ -6013,7 +6007,6 @@ mod tests {
         }
     }
 
-    #[test_case(feature_set_without_require_rent_exempt_split_destination(), Ok(()); "without_require_rent_exempt_split_destination")]
     #[test_case(feature_set_all_enabled(), Err(InstructionError::InsufficientFunds); "all_enabled")]
     fn test_split_require_rent_exempt_destination(
         feature_set: Arc<FeatureSet>,
