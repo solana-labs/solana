@@ -154,34 +154,37 @@ pub(crate) fn aggregate_restart_last_voted_fork_slots(
                     .insert(from, record);
             }
         }
-        let result = last_voted_fork_slots_aggregate.get_aggregate_result();
+        // Because all operations on the aggregate are called from this single thread, we can
+        // fetch all results separately without worrying about them being out of sync. We can
+        // also use returned iterator without the vector changing underneath us.
+        let active_percent = last_voted_fork_slots_aggregate.active_percent();
         let mut filtered_slots: Vec<Slot>;
         {
             let my_bank_forks = bank_forks.read().unwrap();
-            filtered_slots = result
-                .slots_to_repair
-                .into_iter()
+            filtered_slots = last_voted_fork_slots_aggregate
+                .slots_to_repair_iter()
                 .filter(|slot| {
-                    if slot <= &root_slot || is_full_slots.contains(slot) {
+                    if *slot <= &root_slot || is_full_slots.contains(*slot) {
                         return false;
                     }
                     let is_full = my_bank_forks
-                        .get(*slot)
+                        .get(**slot)
                         .map_or(false, |bank| bank.is_frozen());
                     if is_full {
-                        is_full_slots.insert(*slot);
+                        is_full_slots.insert(**slot);
                     }
                     !is_full
                 })
+                .cloned()
                 .collect();
         }
         filtered_slots.sort();
         info!(
             "Active peers: {} Slots to repair: {:?}",
-            result.active_percent, &filtered_slots
+            active_percent, &filtered_slots
         );
         if filtered_slots.is_empty()
-            && result.active_percent > wait_for_supermajority_threshold_percent as f64
+            && active_percent > wait_for_supermajority_threshold_percent as f64
         {
             *wen_restart_repair_slots.write().unwrap() = vec![];
             break;
