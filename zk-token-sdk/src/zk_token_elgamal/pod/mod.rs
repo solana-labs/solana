@@ -10,6 +10,7 @@ use {
     crate::zk_token_proof_instruction::ProofType,
     num_traits::{FromPrimitive, ToPrimitive},
     solana_program::instruction::InstructionError,
+    thiserror::Error,
 };
 pub use {
     auth_encryption::AeCiphertext,
@@ -25,6 +26,14 @@ pub use {
         PubkeyValidityProof, ZeroBalanceProof,
     },
 };
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum ParseError {
+    #[error("String is the wrong size")]
+    WrongSize,
+    #[error("Invalid Base64 string")]
+    Invalid,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
@@ -73,3 +82,27 @@ impl TryFrom<PodProofType> for ProofType {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
+
+macro_rules! impl_from_str {
+    (TYPE = $type:ident, BYTES_LEN = $bytes_len:expr, BASE64_LEN = $base64_len:expr) => {
+        impl std::str::FromStr for $type {
+            type Err = crate::zk_token_elgamal::pod::ParseError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                if s.len() > $base64_len {
+                    return Err(Self::Err::WrongSize);
+                }
+                let mut bytes = [0u8; $bytes_len];
+                let decoded_len = BASE64_STANDARD
+                    .decode_slice(s, &mut bytes)
+                    .map_err(|_| Self::Err::Invalid)?;
+                if decoded_len != $bytes_len {
+                    Err(Self::Err::WrongSize)
+                } else {
+                    Ok($type(bytes))
+                }
+            }
+        }
+    };
+}
+pub(crate) use impl_from_str;

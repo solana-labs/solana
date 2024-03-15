@@ -15,6 +15,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 solana-program = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 tiny-bip39 = { workspace = true }
@@ -34,7 +35,6 @@ serde_json = { workspace = true }
 sha3 = "0.9"
 solana-sdk = { workspace = true }
 subtle = { workspace = true }
-thiserror = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }
 
 [lib]
