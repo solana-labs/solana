@@ -4486,12 +4486,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "raptorq"
-version = "1.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cc8cd0bcb2d520fff368264b5a6295e064c60955349517d09b14473afae4856"
-
-[[package]]
 name = "rayon"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5978,7 +5972,6 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
- "raptorq",
  "rayon",
  "rolling-file",
  "rustc_version 0.4.0",
