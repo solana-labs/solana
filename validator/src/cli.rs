@@ -839,7 +839,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .help(
                     "A list of validators to gossip with.  If specified, gossip will not \
-                     push/pull from from validators outside this set. [default: all validators]",
+                     push/pull from validators outside this set. [default: all validators]",
                 ),
         )
         .arg(

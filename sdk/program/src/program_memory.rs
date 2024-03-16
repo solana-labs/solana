@@ -14,7 +14,7 @@
 /// # Errors
 ///
 /// When executed within a SBF program, the memory regions spanning `n` bytes
-/// from from the start of `dst` and `src` must be mapped program memory. If not,
+/// from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
 /// The memory regions spanning `n` bytes from `dst` and `src` from the start
@@ -53,7 +53,7 @@ pub fn sol_memcpy(dst: &mut [u8], src: &[u8], n: usize) {
 /// # Errors
 ///
 /// When executed within a SBF program, the memory regions spanning `n` bytes
-/// from from `dst` and `src` must be mapped program memory. If not, the program
+/// from `dst` and `src` must be mapped program memory. If not, the program
 /// will abort.
 ///
 /// # Safety
@@ -81,7 +81,7 @@ pub unsafe fn sol_memmove(dst: *mut u8, src: *mut u8, n: usize) {
 /// # Errors
 ///
 /// When executed within a SBF program, the memory regions spanning `n` bytes
-/// from from the start of `dst` and `src` must be mapped program memory. If not,
+/// from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
 /// # Safety
@@ -120,7 +120,7 @@ pub fn sol_memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
 /// # Errors
 ///
 /// When executed within a SBF program, the memory region spanning `n` bytes
-/// from from the start of `s` must be mapped program memory. If not, the program
+/// from the start of `s` must be mapped program memory. If not, the program
 /// will abort.
 ///
 /// # Safety

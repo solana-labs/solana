@@ -51,7 +51,7 @@ Let `remaining_set` be all other nodes with contact info not contained in
 `epoch_set`.
 
 If `epoch_set.len < 2*FANOUT` then we may randomly select up to
-`2*FANOUT - epoch_set.len` nodes to to retransmit to from `remaining_set`.
+`2*FANOUT - epoch_set.len` nodes to retransmit to from `remaining_set`.
 
 ## Receiving retransmitted shred
 

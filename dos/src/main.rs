@@ -551,7 +551,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
     // Assume that if we use valid blockhash, we also have a payer
     if valid_blockhash {
         // each payer is used to fund transaction
-        // transactions are built to be invalid so the the amount here is arbitrary
+        // transactions are built to be invalid so the amount here is arbitrary
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
         let res = generate_and_fund_keypairs(

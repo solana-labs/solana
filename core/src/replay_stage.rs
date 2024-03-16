@@ -3586,7 +3586,7 @@ impl ReplayStage {
             SwitchForkDecision::SameFork
         } else {
             // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
-            // reset to the the next votable bank on the same fork as our last vote,
+            // reset to the next votable bank on the same fork as our last vote,
             // but don't vote.
 
             // We don't just reset to the heaviest fork when switch threshold fails because

@@ -14,7 +14,7 @@
 //! `Transaction` type has constructors that build the `Message` so that clients
 //! don't need to interact with them directly.
 //!
-//! Prior to submission to the network, transactions must be signed by one or or
+//! Prior to submission to the network, transactions must be signed by one or
 //! more keypairs, and this signing is typically performed by an abstract
 //! [`Signer`], which may be a [`Keypair`] but may also be other types of
 //! signers including remote wallets, such as Ledger devices, as represented by
