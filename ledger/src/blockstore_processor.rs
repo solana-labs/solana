@@ -2013,7 +2013,7 @@ pub mod tests {
     // Convenience wrapper to optionally process blockstore with Secondary access.
     //
     // Setting up the ledger for a test requires Primary access as items will need to be inserted.
-    // However, once a Secondary access has been opened, it won't automaticaly see updates made by
+    // However, once a Secondary access has been opened, it won't automatically see updates made by
     // the Primary access. So, open (and close) the Secondary access within this function to ensure
     // that "stale" Secondary accesses don't propagate.
     fn test_process_blockstore_with_custom_options(

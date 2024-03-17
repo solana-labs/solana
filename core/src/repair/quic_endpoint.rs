@@ -73,7 +73,7 @@ pub struct LocalRequest {
     pub(crate) response_sender: Sender<(SocketAddr, Vec<u8>)>,
 }
 
-// Incomming requests from remote nodes.
+// Incoming requests from remote nodes.
 // remote_pubkey and response_sender are None only when adapting UDP packets.
 pub struct RemoteRequest {
     pub(crate) remote_pubkey: Option<Pubkey>,

@@ -1202,7 +1202,7 @@ impl ServeRepair {
                 if !ping.verify() {
                     // Do _not_ set `discard` to allow shred processing to attempt to
                     // handle the packet.
-                    // Ping error count may include false posities for shreds of size
+                    // Ping error count may include false positives for shreds of size
                     // `REPAIR_RESPONSE_SERIALIZED_PING_BYTES` whose first 4 bytes
                     // match `RepairResponse` discriminator (these 4 bytes overlap
                     // with the shred signature field).
@@ -2402,7 +2402,7 @@ mod tests {
             Shred::new_from_data(slot, index, 1, &[], ShredFlags::empty(), 0, 0, 0)
         }
         let repair = ShredRepairType::Orphan(9);
-        // Ensure new options are addded to this test
+        // Ensure new options are added to this test
         match repair {
             ShredRepairType::Orphan(_)
             | ShredRepairType::HighestShred(_, _)

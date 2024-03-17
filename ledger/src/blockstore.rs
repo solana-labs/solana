@@ -3847,7 +3847,7 @@ impl Blockstore {
     ///   to traverse the graph.
     /// `passed_visited_slots`: all the traversed slots which have passed the
     ///   slot_function.  This may also include the input `slot`.
-    /// `slot_function`: a function which updates the SlotMeta of the visisted
+    /// `slot_function`: a function which updates the SlotMeta of the visited
     ///   slots and determine whether to further traverse the children slots of
     ///   a given slot.
     fn traverse_children_mut<F>(
