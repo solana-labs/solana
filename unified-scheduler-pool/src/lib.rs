@@ -941,10 +941,7 @@ mod tests {
         let slot = bank.slot();
         let bank_fork = BankForks::new_rw_arc(bank);
         let bank = bank_fork.read().unwrap().get(slot).unwrap();
-        bank.loaded_programs_cache
-            .write()
-            .unwrap()
-            .set_fork_graph(bank_fork);
+        bank.set_fork_graph_in_program_cache(bank_fork);
         bank
     }
 
