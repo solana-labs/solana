@@ -126,12 +126,7 @@ impl BankForks {
             scheduler_pool: None,
         }));
 
-        root_bank
-            .loaded_programs_cache
-            .write()
-            .unwrap()
-            .set_fork_graph(bank_forks.clone());
-
+        root_bank.set_fork_graph_in_program_cache(bank_forks.clone());
         bank_forks
     }
 
@@ -451,11 +446,7 @@ impl BankForks {
 
     pub fn prune_program_cache(&self, root: Slot) {
         if let Some(root_bank) = self.banks.get(&root) {
-            root_bank
-                .loaded_programs_cache
-                .write()
-                .unwrap()
-                .prune(root, root_bank.epoch());
+            root_bank.prune_program_cache(root, root_bank.epoch());
         }
     }
 

@@ -98,7 +98,9 @@ use {
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramType, LoadedPrograms, ProgramRuntimeEnvironments,
+        },
         runtime_config::RuntimeConfig,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
@@ -803,7 +805,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
+    loaded_programs_cache: Arc<RwLock<LoadedPrograms<BankForks>>>,
 
     epoch_reward_status: EpochRewardStatus,
 
@@ -1465,6 +1467,36 @@ impl Bank {
 
         new.loaded_programs_cache.write().unwrap().stats.reset();
         new
+    }
+
+    pub fn set_fork_graph_in_program_cache(&self, fork_graph: Arc<RwLock<BankForks>>) {
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .set_fork_graph(fork_graph);
+    }
+
+    pub fn prune_program_cache(&self, new_root_slot: Slot, new_root_epoch: Epoch) {
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .prune(new_root_slot, new_root_epoch);
+    }
+
+    pub fn prune_program_cache_by_deployment_slot(&self, deployment_slot: Slot) {
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .prune_by_deployment_slot(deployment_slot);
+    }
+
+    pub fn get_runtime_environments_for_slot(&self, slot: Slot) -> ProgramRuntimeEnvironments {
+        let epoch = self.epoch_schedule.get_epoch(slot);
+        self.loaded_programs_cache
+            .read()
+            .unwrap()
+            .get_environments_for_epoch(epoch)
+            .clone()
     }
 
     /// Epoch in which the new cooldown warmup rate for stake was activated
