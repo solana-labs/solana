@@ -134,8 +134,6 @@ where
         }
         let parts = parts.unwrap();
 
-        let account_filename =
-            (parts.len() == 2 && parts[0] == "accounts").then(|| PathBuf::from(parts[1]));
         let unpack_dir = match entry_checker(parts.as_slice(), kind) {
             UnpackPath::Invalid => {
                 return Err(UnpackError::Archive(format!(
@@ -162,13 +160,23 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
-        let target = sanitize_path(&entry.path()?, unpack_dir)?; // ? handles file system errors
-        if target.is_none() {
-            continue; // skip it
-        }
-        let target = target.unwrap();
+        let account_filename =
+            (parts.len() == 2 && parts[0] == "accounts").then(|| PathBuf::from(parts[1]));
+        let entry_path = if let Some(account) = account_filename {
+            // Special case account files. We're unpacking an account entry inside one of the
+            // account_paths returned by `entry_checker`. We want to unpack into
+            // account_path/<account> instead of account_path/accounts/<account> so we strip the
+            // accounts/ prefix.
+            sanitize_path(&account, unpack_dir)
+        } else {
+            sanitize_path(&*path, unpack_dir)
+        }?; // ? handles file system errors
+        let entry_path = match entry_path {
+            Some(path) => path,
+            None => continue, // skip it
+        };
 
-        let unpack = entry.unpack(target);
+        let unpack = entry.unpack(&entry_path);
         check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
 
         // Sanitize permissions.
@@ -176,16 +184,7 @@ where
             GNUSparse | Regular => 0o644,
             _ => 0o755,
         };
-        let entry_path_buf = unpack_dir.join(entry.path()?);
-        set_perms(&entry_path_buf, mode)?;
-
-        let entry_path = if let Some(account_filename) = account_filename {
-            let stripped_path = unpack_dir.join(account_filename); // strip away "accounts"
-            fs::rename(&entry_path_buf, &stripped_path)?;
-            stripped_path
-        } else {
-            entry_path_buf
-        };
+        set_perms(&entry_path, mode)?;
 
         // Process entry after setting permissions
         entry_processor(entry_path);
@@ -1031,5 +1030,28 @@ mod tests {
             Err(UnpackError::Archive(ref message))
                 if message == "too many files in snapshot: 1000000000000"
         );
+    }
+
+    #[test]
+    fn test_archive_unpack_account_path() {
+        let mut header = Header::new_gnu();
+        header.set_path("accounts/123.456").unwrap();
+        header.set_size(4);
+        header.set_cksum();
+        let data: &[u8] = &[1, 2, 3, 4];
+
+        let mut archive = Builder::new(Vec::new());
+        archive.append(&header, data).unwrap();
+        let result = with_finalize_and_unpack(archive, |a, b| {
+            unpack_snapshot_with_processors(
+                a,
+                b,
+                &[PathBuf::from("accounts_dest")],
+                None,
+                |_, _| {},
+                |path| assert_eq!(path, PathBuf::from("accounts_dest/123.456")),
+            )
+        });
+        assert_matches!(result, Ok(()));
     }
 }
