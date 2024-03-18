@@ -220,7 +220,12 @@ mod utils {
         /// instances of [`TokenCell<V>`] conceptually owned by the instance of [`Token<V>`] (a
         /// particular thread), unless previous borrow is released. After the release, the used
         /// singleton token should be free to be reused for reborrows.
-        pub(super) fn borrow_mut<'t>(&self, _token: &'t mut Token<V>) -> &'t mut V {
+        ///
+        /// Note that the returned reference's lifetime is restricted to 'self, not 'token to avoid
+        /// use-after-free undefined behaviors.
+        // As it's protected by token, it's okay to suppress this clippy lint
+        #[allow(clippy::mut_from_ref)]
+        pub(super) fn borrow_mut(&self, _token: &mut Token<V>) -> &mut V {
             unsafe { &mut *self.0.get() }
         }
     }
@@ -332,10 +337,7 @@ impl TaskInner {
         &self.lock_attempts
     }
 
-    fn blocked_usage_count_mut<'t>(
-        &self,
-        token: &'t mut BlockedUsageCountToken,
-    ) -> &'t mut ShortCounter {
+    fn blocked_usage_count_mut(&self, token: &mut BlockedUsageCountToken) -> &mut ShortCounter {
         self.blocked_usage_count.borrow_mut(token)
     }
 
@@ -369,10 +371,7 @@ impl LockAttempt {
         }
     }
 
-    fn usage_queue_mut<'t>(
-        &self,
-        usage_queue_token: &'t mut UsageQueueToken,
-    ) -> &'t mut UsageQueueInner {
+    fn usage_queue_mut(&self, usage_queue_token: &mut UsageQueueToken) -> &mut UsageQueueInner {
         self.usage_queue.0.borrow_mut(usage_queue_token)
     }
 }
@@ -1251,11 +1250,12 @@ mod tests {
             SchedulingStateMachine::exclusively_initialize_current_thread_for_scheduling()
         };
         let usage_queue = UsageQueue::default();
+        let usage_queue_for_lock_attempt = UsageQueue::default();
         let _ = SchedulingStateMachine::unlock_usage_queue(
             usage_queue
                 .0
                 .borrow_mut(&mut state_machine.usage_queue_token),
-            &LockAttempt::new(usage_queue, RequestedUsage::Writable),
+            &LockAttempt::new(usage_queue_for_lock_attempt, RequestedUsage::Writable),
         );
     }
 
@@ -1270,11 +1270,12 @@ mod tests {
             .0
             .borrow_mut(&mut state_machine.usage_queue_token)
             .current_usage = Usage::Writable;
+        let usage_queue_for_lock_attempt = UsageQueue::default();
         let _ = SchedulingStateMachine::unlock_usage_queue(
             usage_queue
                 .0
                 .borrow_mut(&mut state_machine.usage_queue_token),
-            &LockAttempt::new(usage_queue, RequestedUsage::Readonly),
+            &LockAttempt::new(usage_queue_for_lock_attempt, RequestedUsage::Readonly),
         );
     }
 
@@ -1289,11 +1290,12 @@ mod tests {
             .0
             .borrow_mut(&mut state_machine.usage_queue_token)
             .current_usage = Usage::Readonly(ShortCounter::one());
+        let usage_queue_for_lock_attempt = UsageQueue::default();
         let _ = SchedulingStateMachine::unlock_usage_queue(
             usage_queue
                 .0
                 .borrow_mut(&mut state_machine.usage_queue_token),
-            &LockAttempt::new(usage_queue, RequestedUsage::Writable),
+            &LockAttempt::new(usage_queue_for_lock_attempt, RequestedUsage::Writable),
         );
     }
 }
