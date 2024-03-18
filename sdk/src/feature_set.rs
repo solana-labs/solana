@@ -748,6 +748,10 @@ pub mod disable_bpf_loader_instructions {
     solana_sdk::declare_id!("7WeS1vfPRgeeoXArLh7879YcB9mgE9ktjPDtajXeWfXn");
 }
 
+pub mod deprecate_unused_legacy_vote_plumbing {
+    solana_sdk::declare_id!("6Uf8S75PVh91MYgPQSHnjRAPQq6an5BDv9vomrCwDqLe");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -930,6 +934,7 @@ lazy_static! {
         (index_erasure_conflict_duplicate_proofs::id(), "generate duplicate proofs for index and erasure conflicts #34360"),
         (curve25519_restrict_msm_length::id(), "restrict curve25519 multiscalar multiplication vector lengths #34763"),
         (disable_bpf_loader_instructions::id(), "disable bpf loader management instructions #34194"),
+        (deprecate_unused_legacy_vote_plumbing::id(), "Deprecate unused legacy vote tx plumbing"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
