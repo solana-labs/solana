@@ -326,7 +326,7 @@ fn process_rpc_url(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup_with_default("solana=info");
+    solana_logger::setup_with_default_filter();
 
     let matches = parse_matches();
     let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
