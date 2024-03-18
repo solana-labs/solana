@@ -1171,13 +1171,17 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         release_dir.join("solana-release"),
         config.active_release_dir(),
     )
-    .map_err(|err| {
-        format!(
+    .map_err(|err| match err.raw_os_error() {
+        #[cfg(windows)]
+        Some(os_err) if os_err == winapi::shared::winerror::ERROR_PRIVILEGE_NOT_HELD => {
+            "You need to run this command with administrator privileges.".to_string()
+        }
+        _ => format!(
             "Unable to symlink {:?} to {:?}: {}",
             release_dir,
             config.active_release_dir(),
             err
-        )
+        ),
     })?;
 
     config.save(config_file)?;
