@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
+        file::TieredWritableFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     indexmap::set::IndexSet,
@@ -47,7 +47,7 @@ impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
     pub fn write_owners_block(
         &self,
-        file: &TieredStorageFile,
+        file: &TieredWritableFile,
         owners_table: &OwnersTable,
     ) -> TieredStorageResult<usize> {
         match self {
@@ -116,7 +116,7 @@ impl<'a> OwnersTable<'a> {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions,
+        super::*, crate::tiered_storage::file::TieredWritableFile, memmap2::MmapOptions,
         std::fs::OpenOptions, tempfile::TempDir,
     };
 
@@ -139,7 +139,7 @@ mod tests {
         };
 
         {
-            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let file = TieredWritableFile::new(&path).unwrap();
 
             let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {

@@ -1,7 +1,7 @@
 use {
     crate::tiered_storage::{
         error::TieredStorageError,
-        file::TieredStorageFile,
+        file::{TieredReadableFile, TieredWritableFile},
         index::IndexBlockFormat,
         mmap_utils::{get_pod, get_type},
         owners::OwnersBlockFormat,
@@ -186,11 +186,11 @@ impl Default for TieredStorageFooter {
 
 impl TieredStorageFooter {
     pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
-        let file = TieredStorageFile::new_readonly(path);
+        let file = TieredReadableFile::new(path);
         Self::new_from_footer_block(&file)
     }
 
-    pub fn write_footer_block(&self, file: &TieredStorageFile) -> TieredStorageResult<()> {
+    pub fn write_footer_block(&self, file: &TieredWritableFile) -> TieredStorageResult<()> {
         // SAFETY: The footer does not contain any uninitialized bytes.
         unsafe { file.write_type(self)? };
         file.write_pod(&TieredStorageMagicNumber::default())?;
@@ -198,7 +198,7 @@ impl TieredStorageFooter {
         Ok(())
     }
 
-    pub fn new_from_footer_block(file: &TieredStorageFile) -> TieredStorageResult<Self> {
+    pub fn new_from_footer_block(file: &TieredReadableFile) -> TieredStorageResult<Self> {
         file.seek_from_end(-(FOOTER_TAIL_SIZE as i64))?;
 
         let mut footer_version: u64 = 0;
@@ -326,7 +326,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            append_vec::test_utils::get_append_vec_path, tiered_storage::file::TieredStorageFile,
+            append_vec::test_utils::get_append_vec_path, tiered_storage::file::TieredWritableFile,
         },
         memoffset::offset_of,
         solana_sdk::hash::Hash,
@@ -356,7 +356,7 @@ mod tests {
 
         // Persist the expected footer.
         {
-            let file = TieredStorageFile::new_writable(&path.path).unwrap();
+            let file = TieredWritableFile::new(&path.path).unwrap();
             expected_footer.write_footer_block(&file).unwrap();
         }
 
