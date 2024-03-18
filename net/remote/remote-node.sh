@@ -264,7 +264,8 @@ EOF
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
         bankHash=$(agave-ledger-tool -l config/bootstrap-validator bank-hash --halt-at-slot 0)
-        extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
+        shredVersion="$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
+        extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash --expected-shred-version $shredVersion"
         echo "$bankHash" > config/bank-hash
       fi
     fi
