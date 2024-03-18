@@ -542,7 +542,7 @@ impl HotStorageReader {
 }
 
 fn write_optional_fields(
-    file: &TieredWritableFile,
+    file: &mut TieredWritableFile,
     opt_fields: &AccountMetaOptionalFields,
 ) -> TieredStorageResult<usize> {
     let mut size = 0;
@@ -572,7 +572,7 @@ impl HotStorageWriter {
     /// Persists an account with the specified information and returns
     /// the stored size of the account.
     fn write_account(
-        &self,
+        &mut self,
         lamports: u64,
         owner_offset: OwnerOffset,
         account_data: &[u8],
@@ -599,7 +599,7 @@ impl HotStorageWriter {
         stored_size += self
             .storage
             .write_bytes(&PADDING_BUFFER[0..(padding_len as usize)])?;
-        stored_size += write_optional_fields(&self.storage, &optional_fields)?;
+        stored_size += write_optional_fields(&mut self.storage, &optional_fields)?;
 
         Ok(stored_size)
     }
@@ -614,7 +614,7 @@ impl HotStorageWriter {
         U: StorableAccounts<'a, T>,
         V: Borrow<AccountHash>,
     >(
-        &self,
+        &mut self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
@@ -677,7 +677,7 @@ impl HotStorageWriter {
         footer.index_block_offset = cursor as u64;
         cursor += footer
             .index_block_format
-            .write_index_block(&self.storage, &index)?;
+            .write_index_block(&mut self.storage, &index)?;
         if cursor % HOT_BLOCK_ALIGNMENT != 0 {
             // In case it is not yet aligned, it is due to the fact that
             // the index block has an odd number of entries.  In such case,
@@ -692,9 +692,9 @@ impl HotStorageWriter {
         footer.owner_count = owners_table.len() as u32;
         footer
             .owners_block_format
-            .write_owners_block(&self.storage, &owners_table)?;
+            .write_owners_block(&mut self.storage, &owners_table)?;
 
-        footer.write_footer_block(&self.storage)?;
+        footer.write_footer_block(&mut self.storage)?;
 
         Ok(stored_infos)
     }
@@ -892,8 +892,8 @@ pub mod tests {
         };
 
         {
-            let file = TieredWritableFile::new(&path).unwrap();
-            expected_footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            expected_footer.write_footer_block(&mut file).unwrap();
         }
 
         // Reopen the same storage, and expect the persisted footer is
@@ -928,7 +928,7 @@ pub mod tests {
             ..TieredStorageFooter::default()
         };
         {
-            let file = TieredWritableFile::new(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
             let mut current_offset = 0;
 
             account_offsets = hot_account_metas
@@ -942,7 +942,7 @@ pub mod tests {
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
             footer.index_block_offset = current_offset as u64;
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -971,8 +971,8 @@ pub mod tests {
         };
 
         {
-            let file = TieredWritableFile::new(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -1016,14 +1016,14 @@ pub mod tests {
             ..TieredStorageFooter::default()
         };
         {
-            let file = TieredWritableFile::new(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
 
             let cursor = footer
                 .index_block_format
-                .write_index_block(&file, &index_writer_entries)
+                .write_index_block(&mut file, &index_writer_entries)
                 .unwrap();
             footer.owners_block_offset = cursor as u64;
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -1059,7 +1059,7 @@ pub mod tests {
         };
 
         {
-            let file = TieredWritableFile::new(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
 
             let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {
@@ -1067,12 +1067,12 @@ pub mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners_table)
+                .write_owners_block(&mut file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -1118,7 +1118,7 @@ pub mod tests {
         let account_offsets: Vec<_>;
 
         {
-            let file = TieredWritableFile::new(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
             let mut current_offset = 0;
 
             account_offsets = hot_account_metas
@@ -1141,12 +1141,12 @@ pub mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners_table)
+                .write_owners_block(&mut file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -1237,7 +1237,7 @@ pub mod tests {
         };
 
         {
-            let file = TieredWritableFile::new(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
             let mut current_offset = 0;
 
             // write accounts blocks
@@ -1264,7 +1264,7 @@ pub mod tests {
             footer.index_block_offset = current_offset as u64;
             current_offset += footer
                 .index_block_format
-                .write_index_block(&file, &index_writer_entries)
+                .write_index_block(&mut file, &index_writer_entries)
                 .unwrap();
 
             // write owners block
@@ -1275,10 +1275,10 @@ pub mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners_table)
+                .write_owners_block(&mut file, &owners_table)
                 .unwrap();
 
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
@@ -1358,7 +1358,7 @@ pub mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("test_write_account_and_index_blocks");
         let stored_infos = {
-            let writer = HotStorageWriter::new(&path).unwrap();
+            let mut writer = HotStorageWriter::new(&path).unwrap();
             writer.write_accounts(&storable_accounts, 0).unwrap()
         };
 

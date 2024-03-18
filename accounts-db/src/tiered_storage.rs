@@ -125,7 +125,7 @@ impl TieredStorage {
 
         if format == &HOT_FORMAT {
             let result = {
-                let writer = HotStorageWriter::new(&self.path)?;
+                let mut writer = HotStorageWriter::new(&self.path)?;
                 writer.write_accounts(accounts, skip)
             };
 
