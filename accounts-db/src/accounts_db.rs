@@ -1719,6 +1719,8 @@ struct FlushStats {
     num_flushed: usize,
     num_purged: usize,
     total_size: u64,
+    store_accounts_timing: StoreAccountsTiming,
+    store_accounts_total_us: u64,
 }
 
 impl FlushStats {
@@ -1726,6 +1728,9 @@ impl FlushStats {
         saturating_add_assign!(self.num_flushed, other.num_flushed);
         saturating_add_assign!(self.num_purged, other.num_purged);
         saturating_add_assign!(self.total_size, other.total_size);
+        self.store_accounts_timing
+            .accumulate(&other.store_accounts_timing);
+        saturating_add_assign!(self.store_accounts_total_us, other.store_accounts_total_us);
     }
 }
 
@@ -6050,7 +6055,7 @@ impl AccountsDb {
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
         // cleaning due to an ongoing scan
-        let (total_new_cleaned_roots, num_cleaned_roots_flushed) = self
+        let (total_new_cleaned_roots, num_cleaned_roots_flushed, mut flush_stats) = self
             .flush_rooted_accounts_cache(
                 requested_flush_root,
                 Some((&mut account_bytes_saved, &mut num_accounts_saved)),
@@ -6062,7 +6067,7 @@ impl AccountsDb {
         // banks
 
         // If 'should_aggressively_flush_cache', then flush the excess ones to storage
-        let (total_new_excess_roots, num_excess_roots_flushed) =
+        let (total_new_excess_roots, num_excess_roots_flushed, flush_stats_aggressively) =
             if self.should_aggressively_flush_cache() {
                 // Start by flushing the roots
                 //
@@ -6071,8 +6076,9 @@ impl AccountsDb {
                 // for `should_clean`.
                 self.flush_rooted_accounts_cache(None, None)
             } else {
-                (0, 0)
+                (0, 0, FlushStats::default())
             };
+        flush_stats.accumulate(&flush_stats_aggressively);
 
         let mut excess_slot_count = 0;
         let mut unflushable_unrooted_slot_count = 0;
@@ -6123,6 +6129,26 @@ impl AccountsDb {
             ),
             ("account_bytes_saved", account_bytes_saved, i64),
             ("num_accounts_saved", num_accounts_saved, i64),
+            (
+                "store_accounts_total_us",
+                flush_stats.store_accounts_total_us,
+                i64
+            ),
+            (
+                "update_index_us",
+                flush_stats.store_accounts_timing.update_index_elapsed,
+                i64
+            ),
+            (
+                "store_accounts_elapsed_us",
+                flush_stats.store_accounts_timing.store_accounts_elapsed,
+                i64
+            ),
+            (
+                "handle_reclaims_elapsed_us",
+                flush_stats.store_accounts_timing.handle_reclaims_elapsed,
+                i64
+            ),
         );
     }
 
@@ -6130,7 +6156,7 @@ impl AccountsDb {
         &self,
         requested_flush_root: Option<Slot>,
         should_clean: Option<(&mut usize, &mut usize)>,
-    ) -> (usize, usize) {
+    ) -> (usize, usize, FlushStats) {
         let max_clean_root = should_clean.as_ref().and_then(|_| {
             // If there is a long running scan going on, this could prevent any cleaning
             // based on updates from slots > `max_clean_root`.
@@ -6161,12 +6187,13 @@ impl AccountsDb {
         // Iterate from highest to lowest so that we don't need to flush earlier
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
+        let mut flush_stats = FlushStats::default();
         for &root in cached_roots.iter().rev() {
-            if self
-                .flush_slot_cache_with_clean(root, should_flush_f.as_mut(), max_clean_root)
-                .is_some()
+            if let Some(stats) =
+                self.flush_slot_cache_with_clean(root, should_flush_f.as_mut(), max_clean_root)
             {
                 num_roots_flushed += 1;
+                flush_stats.accumulate(&stats);
             }
 
             // Regardless of whether this slot was *just* flushed from the cache by the above
@@ -6183,7 +6210,7 @@ impl AccountsDb {
         // so that clean will actually be able to clean the slots.
         let num_new_roots = cached_roots.len();
         self.accounts_index.add_uncleaned_roots(cached_roots);
-        (num_new_roots, num_roots_flushed)
+        (num_new_roots, num_roots_flushed, flush_stats)
     }
 
     fn do_flush_slot_cache(
@@ -6246,18 +6273,23 @@ impl AccountsDb {
             &HashSet::default(),
         );
 
+        let mut store_accounts_timing = StoreAccountsTiming::default();
+        let mut store_accounts_total_us = 0;
         if !is_dead_slot {
             // This ensures that all updates are written to an AppendVec, before any
             // updates to the index happen, so anybody that sees a real entry in the index,
             // will be able to find the account in storage
             let flushed_store = self.create_and_insert_store(slot, total_size, "flush_slot_cache");
-            self.store_accounts_frozen(
-                (slot, &accounts[..]),
-                Some(hashes),
-                &flushed_store,
-                None,
-                StoreReclaims::Default,
-            );
+            let (store_accounts_timing_inner, store_accounts_total_inner_us) = measure_us!(self
+                .store_accounts_frozen(
+                    (slot, &accounts[..]),
+                    Some(hashes),
+                    &flushed_store,
+                    None,
+                    StoreReclaims::Default,
+                ));
+            store_accounts_timing = store_accounts_timing_inner;
+            store_accounts_total_us = store_accounts_total_inner_us;
 
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
@@ -6273,6 +6305,8 @@ impl AccountsDb {
             num_flushed,
             num_purged,
             total_size,
+            store_accounts_timing,
+            store_accounts_total_us,
         }
     }
 
