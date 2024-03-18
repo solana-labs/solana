@@ -2,7 +2,7 @@ use {
     bytemuck::{AnyBitPattern, NoUninit},
     std::{
         fs::{File, OpenOptions},
-        io::{Read, Result as IoResult, Seek, SeekFrom, Write},
+        io::{BufWriter, Read, Result as IoResult, Seek, SeekFrom, Write},
         mem,
         path::Path,
     },
@@ -77,22 +77,22 @@ impl TieredReadableFile {
 }
 
 #[derive(Debug)]
-pub struct TieredWritableFile(pub File);
+pub struct TieredWritableFile(pub BufWriter<File>);
 
 impl TieredWritableFile {
     pub fn new(file_path: impl AsRef<Path>) -> IoResult<Self> {
-        Ok(Self(
+        Ok(Self(BufWriter::new(
             OpenOptions::new()
                 .create_new(true)
                 .write(true)
                 .open(file_path)?,
-        ))
+        )))
     }
 
     /// Writes `value` to the file.
     ///
     /// `value` must be plain ol' data.
-    pub fn write_pod<T: NoUninit>(&self, value: &T) -> IoResult<usize> {
+    pub fn write_pod<T: NoUninit>(&mut self, value: &T) -> IoResult<usize> {
         // SAFETY: Since T is NoUninit, it does not contain any uninitialized bytes.
         unsafe { self.write_type(value) }
     }
@@ -107,22 +107,22 @@ impl TieredWritableFile {
     /// Caller must ensure casting T to bytes is safe.
     /// Refer to the Safety sections in std::slice::from_raw_parts()
     /// and bytemuck's Pod and NoUninit for more information.
-    pub unsafe fn write_type<T>(&self, value: &T) -> IoResult<usize> {
+    pub unsafe fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
         let ptr = value as *const _ as *const u8;
         let bytes = unsafe { std::slice::from_raw_parts(ptr, mem::size_of::<T>()) };
         self.write_bytes(bytes)
     }
 
-    pub fn seek(&self, offset: u64) -> IoResult<u64> {
-        (&self.0).seek(SeekFrom::Start(offset))
+    pub fn seek(&mut self, offset: u64) -> IoResult<u64> {
+        self.0.seek(SeekFrom::Start(offset))
     }
 
-    pub fn seek_from_end(&self, offset: i64) -> IoResult<u64> {
-        (&self.0).seek(SeekFrom::End(offset))
+    pub fn seek_from_end(&mut self, offset: i64) -> IoResult<u64> {
+        self.0.seek(SeekFrom::End(offset))
     }
 
-    pub fn write_bytes(&self, bytes: &[u8]) -> IoResult<usize> {
-        (&self.0).write_all(bytes)?;
+    pub fn write_bytes(&mut self, bytes: &[u8]) -> IoResult<usize> {
+        self.0.write_all(bytes)?;
 
         Ok(bytes.len())
     }
