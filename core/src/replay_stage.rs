@@ -655,14 +655,14 @@ impl ReplayStage {
             };
             // Thread pool to (maybe) replay multiple threads in parallel
             let replay_mode = if replay_slots_concurrently {
-                ForkReplayMode::Serial
-            } else {
                 let pool = rayon::ThreadPoolBuilder::new()
                     .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
                     .thread_name(|i| format!("solReplayFork{i:02}"))
                     .build()
                     .expect("new rayon threadpool");
                 ForkReplayMode::Parallel(pool)
+            } else {
+                ForkReplayMode::Serial
             };
             // Thread pool to replay multiple transactions within one block in parallel
             let replay_tx_thread_pool = rayon::ThreadPoolBuilder::new()
