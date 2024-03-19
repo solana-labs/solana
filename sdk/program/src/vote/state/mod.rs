@@ -47,6 +47,9 @@ pub const VOTE_CREDITS_GRACE_SLOTS: u8 = 2;
 // Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within the grace period. After that grace period, vote credits are reduced.
 pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 16;
 
+// Previous max per slot
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT_OLD: u8 = 8;
+
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {
@@ -597,6 +600,11 @@ impl VoteState {
             .votes
             .get(index)
             .map_or(0, |landed_vote| landed_vote.latency);
+        let max_credits = if deprecate_unused_legacy_vote_plumbing {
+            VOTE_CREDITS_MAXIMUM_PER_SLOT
+        } else {
+            VOTE_CREDITS_MAXIMUM_PER_SLOT_OLD
+        };
 
         // If latency is 0, this means that the Lockout was created and stored from a software version that did not
         // store vote latencies; in this case, 1 credit is awarded
@@ -606,13 +614,13 @@ impl VoteState {
             match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
                 None | Some(0) => {
                     // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
-                    VOTE_CREDITS_MAXIMUM_PER_SLOT as u64
+                    max_credits as u64
                 }
 
                 Some(diff) => {
                     // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
                     // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
-                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
+                    match max_credits.checked_sub(diff) {
                         // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
                         None | Some(0) => 1,
 
