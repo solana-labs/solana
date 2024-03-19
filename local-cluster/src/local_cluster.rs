@@ -7,7 +7,12 @@ use {
     itertools::izip,
     log::*,
     solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_client::{
+        connection_cache::ConnectionCache,
+        rpc_client::RpcClient,
+        thin_client::ThinClient,
+        tpu_client::{QuicTpuClient, TpuClient, TpuClientConfig},
+    },
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -802,6 +807,34 @@ impl LocalCluster {
             ..SnapshotConfig::new_load_only()
         }
     }
+
+    fn build_tpu_client<F>(&self, rpc_client_builder: F) -> Result<QuicTpuClient>
+    where
+        F: FnOnce(String) -> Arc<RpcClient>,
+    {
+        let rpc_pubsub_url = format!("ws://{}/", self.entry_point_info.rpc_pubsub().unwrap());
+        let rpc_url = format!("http://{}", self.entry_point_info.rpc().unwrap());
+
+        let cache = match &*self.connection_cache {
+            ConnectionCache::Quic(cache) => cache,
+            ConnectionCache::Udp(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Expected a Quic ConnectionCache. Got UDP",
+                ))
+            }
+        };
+
+        let tpu_client = TpuClient::new_with_connection_cache(
+            rpc_client_builder(rpc_url),
+            rpc_pubsub_url.as_str(),
+            TpuClientConfig::default(),
+            cache.clone(),
+        )
+        .map_err(|err| Error::new(ErrorKind::Other, format!("TpuSenderError: {}", err)))?;
+
+        Ok(tpu_client)
+    }
 }
 
 impl Cluster for LocalCluster {
@@ -817,6 +850,19 @@ impl Cluster for LocalCluster {
                 })
                 .unwrap();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
+        })
+    }
+
+    fn build_tpu_quic_client(&self) -> Result<QuicTpuClient> {
+        self.build_tpu_client(|rpc_url| Arc::new(RpcClient::new(rpc_url)))
+    }
+
+    fn build_tpu_quic_client_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<QuicTpuClient> {
+        self.build_tpu_client(|rpc_url| {
+            Arc::new(RpcClient::new_with_commitment(rpc_url, commitment_config))
         })
     }
 
