@@ -21,6 +21,8 @@ pub use {
     solana_tpu_client::tpu_client::{TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS},
 };
 
+pub type QuicTpuClient = TpuClient<QuicPool, QuicConnectionManager, QuicConfig>;
+
 pub enum TpuClientWrapper {
     Quic(TpuClient<QuicPool, QuicConnectionManager, QuicConfig>),
     Udp(TpuClient<UdpPool, UdpConnectionManager, UdpConfig>),
