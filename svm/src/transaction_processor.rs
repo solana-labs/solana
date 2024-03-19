@@ -342,11 +342,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     fn filter_executable_program_accounts<'a, CB: TransactionProcessingCallback>(
         callbacks: &CB,
         txs: &[SanitizedTransaction],
-        lock_results: &mut [TransactionCheckResult],
+        check_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
-        lock_results.iter_mut().zip(txs).for_each(|etx| {
+        check_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
                 if lamports_per_signature.is_some() {
                     tx.message()
@@ -361,9 +361,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                                 if let Some(index) =
                                     callbacks.account_matches_owners(key, program_owners)
                                 {
-                                    program_owners
-                                        .get(index)
-                                        .map(|owner| entry.insert((owner, 1)));
+                                    if let Some(owner) = program_owners.get(index) {
+                                        entry.insert((owner, 1));
+                                    }
                                 }
                             }
                         });
