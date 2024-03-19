@@ -2173,6 +2173,7 @@ mod tests {
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // For each vote group, process all vote groups leading up to it and it itself, and ensure that the number of
         // credits earned is correct for both regular votes and vote state updates
@@ -2307,6 +2308,7 @@ mod tests {
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // Retroactive voting is only possible with VoteStateUpdate transactions, which is why Vote transactions are
         // not tested here
