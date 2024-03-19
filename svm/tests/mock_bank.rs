@@ -35,7 +35,8 @@ impl TransactionProcessingCallback for MockBankCallback {
     }
 
     fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
-        todo!()
+        // Mock a hash and a value
+        (Hash::new_unique(), 2)
     }
 
     fn get_rent_collector(&self) -> &RentCollector {

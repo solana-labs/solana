@@ -1215,7 +1215,7 @@ mod tests {
     fn test_load_program_from_bytes() {
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1321,7 +1321,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1394,7 +1394,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1479,7 +1479,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
