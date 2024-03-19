@@ -1173,7 +1173,7 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
     )
     .map_err(|err| match err.raw_os_error() {
         #[cfg(windows)]
-        Some(os_err) if os_err == winapi::shared::winerror::ERROR_PRIVILEGE_NOT_HELD => {
+        Some(os_err) if os_err == winapi::shared::winerror::ERROR_PRIVILEGE_NOT_HELD as i32 => {
             "You need to run this command with administrator privileges.".to_string()
         }
         _ => format!(
