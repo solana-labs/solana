@@ -11910,14 +11910,14 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
     goto_end_of_slot(bank.clone());
     let bank = new_bank_from_parent_with_bank_forks(&bank_forks, bank, &Pubkey::default(), 16);
     let current_env = bank
-        .loaded_programs_cache
+        .program_cache
         .read()
         .unwrap()
         .get_environments_for_epoch(0)
         .program_runtime_v1
         .clone();
     let upcoming_env = bank
-        .loaded_programs_cache
+        .program_cache
         .read()
         .unwrap()
         .get_environments_for_epoch(1)
@@ -11926,9 +11926,8 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
 
     // Advance the bank to recompile the program.
     {
-        let loaded_programs_cache = bank.loaded_programs_cache.read().unwrap();
-        let slot_versions =
-            loaded_programs_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
+        let program_cache = bank.program_cache.read().unwrap();
+        let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert_eq!(slot_versions.len(), 1);
         assert!(Arc::ptr_eq(
             slot_versions[0].program.get_environment().unwrap(),
@@ -11938,9 +11937,8 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
     goto_end_of_slot(bank.clone());
     let bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     {
-        let loaded_programs_cache = bank.loaded_programs_cache.read().unwrap();
-        let slot_versions =
-            loaded_programs_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
+        let program_cache = bank.program_cache.read().unwrap();
+        let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert_eq!(slot_versions.len(), 2);
         assert!(Arc::ptr_eq(
             slot_versions[0].program.get_environment().unwrap(),
