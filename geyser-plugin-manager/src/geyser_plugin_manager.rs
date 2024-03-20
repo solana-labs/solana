@@ -451,9 +451,13 @@ mod tests {
         plugin: P,
         config_path: &'static str,
     ) -> (LoadedGeyserPlugin, Library, &'static str) {
+        #[cfg(unix)]
+        let library = libloading::os::unix::Library::this();
+        #[cfg(windows)]
+        let library = libloading::os::windows::Library::this().unwrap();
         (
             LoadedGeyserPlugin::new(Box::new(plugin), None),
-            Library::from(libloading::os::unix::Library::this()),
+            Library::from(library),
             config_path,
         )
     }
