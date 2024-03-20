@@ -54,7 +54,7 @@ fn curve_to_sigma_unpack(bytes: impl AsRef<[u8]>) -> Option<Scalar> {
         return None;
     }
     let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&r_bytes);
+    bytes.copy_from_slice(r_bytes);
     let attempt = Scalar::from_canonical_bytes(bytes);
     if attempt.is_some().into() {
         Some(attempt.unwrap())

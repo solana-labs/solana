@@ -1281,9 +1281,9 @@ mod tests {
                 thread_rng().fill(&mut input);
                 let ans = get_checked_scalar(&input);
                 let ref_ans = Scalar::from_canonical_bytes(input);
-                if let Some(ref_ans) = ref_ans {
+                if ref_ans.is_some().into() {
                     passed += 1;
-                    assert_eq!(ans.unwrap(), ref_ans.to_bytes());
+                    assert_eq!(ans.unwrap(), ref_ans.unwrap().to_bytes());
                 } else {
                     failed += 1;
                     assert!(ans.is_err());
@@ -1316,7 +1316,7 @@ mod tests {
                 thread_rng().fill(&mut input);
                 let ans = check_packed_ge_small_order(&input);
                 let ref_ge = CompressedEdwardsY::from_slice(&input);
-                if let Some(ref_element) = ref_ge.decompress() {
+                if let Some(ref_element) = ref_ge.unwrap().decompress() {
                     if ref_element.is_small_order() {
                         assert!(!ans);
                     } else {

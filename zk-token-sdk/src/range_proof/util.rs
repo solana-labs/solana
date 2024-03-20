@@ -1,8 +1,8 @@
+use crate::{SCALAR_ONE, SCALAR_ZERO};
 /// Utility functions for Bulletproofs.
 ///
 /// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
 use curve25519_dalek::scalar::Scalar;
-use crate::{SCALAR_ONE, SCALAR_ZERO};
 
 /// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
 pub struct VecPoly1(pub Vec<Scalar>, pub Vec<Scalar>);

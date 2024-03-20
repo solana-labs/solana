@@ -1,10 +1,10 @@
 use {
-    sha3::digest::{ExtendableOutput, Update, XofReader},
     crate::range_proof::errors::RangeProofGeneratorError,
-    curve25519_dalek::{
-        ristretto::RistrettoPoint,
+    curve25519_dalek::ristretto::RistrettoPoint,
+    sha3::{
+        digest::{core_api::XofReaderCoreWrapper, ExtendableOutput, Update, XofReader},
+        Shake256, Shake256ReaderCore,
     },
-    sha3::{Sha3XofReader, Shake256},
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -12,7 +12,7 @@ const MAX_GENERATOR_LENGTH: usize = u32::MAX as usize;
 
 /// Generators for Pedersen vector commitments that are used for inner-product proofs.
 struct GeneratorsChain {
-    reader: Sha3XofReader,
+    reader: XofReaderCoreWrapper<Shake256ReaderCore>,
 }
 
 impl GeneratorsChain {

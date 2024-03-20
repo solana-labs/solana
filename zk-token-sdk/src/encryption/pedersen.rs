@@ -1,6 +1,5 @@
 //! Pedersen commitment implementation using the Ristretto prime-order group.
 
-use sha3::Keccak512;
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{RISTRETTO_POINT_LEN, SCALAR_LEN},
@@ -11,13 +10,12 @@ use {
         scalar::Scalar,
         traits::MultiscalarMul,
     },
+    rand_core::OsRng,
     serde::{Deserialize, Serialize},
     sha3::Sha3_512,
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
-    rand_core::OsRng,
     zeroize::Zeroize,
-    sha3::digest::{Update, XofReader},
 };
 
 /// Byte length of a Pedersen opening.
@@ -31,7 +29,7 @@ lazy_static::lazy_static! {
     pub static ref G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
     /// Pedersen base point for encoding the commitment openings.
     pub static ref H: RistrettoPoint =
-        RistrettoPoint::hash_from_bytes::<Keccak512>(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
+        RistrettoPoint::hash_from_bytes::<Sha3_512>(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 }
 
 /// Algorithm handle for the Pedersen commitment scheme.
@@ -101,7 +99,9 @@ impl PedersenOpening {
 
     pub fn from_bytes(bytes: &[u8]) -> Option<PedersenOpening> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(PedersenOpening).into(),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes)
+                .map(PedersenOpening)
+                .into(),
             _ => None,
         }
     }

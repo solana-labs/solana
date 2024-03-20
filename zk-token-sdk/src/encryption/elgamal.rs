@@ -13,7 +13,7 @@
 //! As the messages are encrypted as scalar elements (a.k.a. in the "exponent"), one must solve the
 //! discrete log to recover the originally encrypted value.
 
-use sha3::{Digest, Keccak512, Sha3_512};
+use crate::SCALAR_ZERO;
 use {
     crate::{
         encryption::{
@@ -32,6 +32,7 @@ use {
         traits::Identity,
     },
     serde::{Deserialize, Serialize},
+    sha3::*,
     solana_sdk::{
         derivation_path::DerivationPath,
         signature::Signature,
@@ -54,7 +55,6 @@ use {
         path::Path,
     },
 };
-use crate::SCALAR_ZERO;
 
 /// Byte length of a decrypt handle
 const DECRYPT_HANDLE_LEN: usize = RISTRETTO_POINT_LEN;
@@ -464,7 +464,7 @@ impl ElGamalSecretKey {
         if seed.len() > MAXIMUM_SEED_LEN {
             return Err(ElGamalError::SeedLengthTooLong);
         }
-        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Keccak512>(seed)))
+        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }
 
     pub fn get_scalar(&self) -> &Scalar {
@@ -494,7 +494,9 @@ impl ElGamalSecretKey {
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey).into(),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes)
+                .map(ElGamalSecretKey)
+                .into(),
             _ => None,
         }
     }
