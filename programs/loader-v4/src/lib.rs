@@ -247,7 +247,7 @@ pub fn process_instruction_write(
     }
     let end_offset = (offset as usize).saturating_add(bytes.len());
     program
-        .get_data_mut(&invoke_context.feature_set)?
+        .get_data_mut()?
         .get_mut(
             LoaderV4State::program_data_offset().saturating_add(offset as usize)
                 ..LoaderV4State::program_data_offset().saturating_add(end_offset),
@@ -325,20 +325,19 @@ pub fn process_instruction_truncate(
                 return Err(InstructionError::InvalidArgument);
             }
             let lamports_to_receive = program.get_lamports().saturating_sub(required_lamports);
-            program.checked_sub_lamports(lamports_to_receive, &invoke_context.feature_set)?;
-            recipient.checked_add_lamports(lamports_to_receive, &invoke_context.feature_set)?;
+            program.checked_sub_lamports(lamports_to_receive)?;
+            recipient.checked_add_lamports(lamports_to_receive)?;
         }
         std::cmp::Ordering::Equal => {}
     }
     if new_size == 0 {
-        program.set_data_length(0, &invoke_context.feature_set)?;
+        program.set_data_length(0)?;
     } else {
         program.set_data_length(
             LoaderV4State::program_data_offset().saturating_add(new_size as usize),
-            &invoke_context.feature_set,
         )?;
         if is_initialization {
-            let state = get_state_mut(program.get_data_mut(&invoke_context.feature_set)?)?;
+            let state = get_state_mut(program.get_data_mut()?)?;
             state.slot = 0;
             state.status = LoaderV4Status::Retracted;
             state.authority_address = *authority_address;
@@ -432,12 +431,12 @@ pub fn process_instruction_deploy(
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent.minimum_balance(source_program.get_data().len());
         let transfer_lamports = required_lamports.saturating_sub(program.get_lamports());
-        program.set_data_from_slice(source_program.get_data(), &invoke_context.feature_set)?;
-        source_program.set_data_length(0, &invoke_context.feature_set)?;
-        source_program.checked_sub_lamports(transfer_lamports, &invoke_context.feature_set)?;
-        program.checked_add_lamports(transfer_lamports, &invoke_context.feature_set)?;
+        program.set_data_from_slice(source_program.get_data())?;
+        source_program.set_data_length(0)?;
+        source_program.checked_sub_lamports(transfer_lamports)?;
+        program.checked_add_lamports(transfer_lamports)?;
     }
-    let state = get_state_mut(program.get_data_mut(&invoke_context.feature_set)?)?;
+    let state = get_state_mut(program.get_data_mut()?)?;
     state.slot = current_slot;
     state.status = LoaderV4Status::Deployed;
 
@@ -486,7 +485,7 @@ pub fn process_instruction_retract(
         ic_logger_msg!(log_collector, "Program is not deployed");
         return Err(InstructionError::InvalidArgument);
     }
-    let state = get_state_mut(program.get_data_mut(&invoke_context.feature_set)?)?;
+    let state = get_state_mut(program.get_data_mut()?)?;
     state.status = LoaderV4Status::Retracted;
     Ok(())
 }
@@ -516,7 +515,7 @@ pub fn process_instruction_transfer_authority(
         ic_logger_msg!(log_collector, "New authority did not sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
-    let state = get_state_mut(program.get_data_mut(&invoke_context.feature_set)?)?;
+    let state = get_state_mut(program.get_data_mut()?)?;
     if let Some(new_authority_address) = new_authority_address {
         state.authority_address = new_authority_address;
     } else if matches!(state.status, LoaderV4Status::Deployed) {

@@ -11,10 +11,7 @@ use {
         loaded_programs::LoadedProgramsForTxBatch,
     },
     solana_sdk::{
-        account::{
-            create_executable_meta, is_builtin, is_executable, Account, AccountSharedData,
-            ReadableAccount, WritableAccount,
-        },
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         feature_set::{
             self, include_loaded_accounts_data_size_in_fee_calculation,
             remove_rounding_in_fee_calculation,
@@ -336,7 +333,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 return Err(TransactionError::ProgramAccountNotFound);
             }
 
-            if !(is_builtin(program_account) || is_executable(program_account, &feature_set)) {
+            if !program_account.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -356,8 +353,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 let owner_index = accounts.len();
                 if let Some(owner_account) = callbacks.get_account_shared_data(owner_id) {
                     if !native_loader::check_id(owner_account.owner())
-                        || !(is_builtin(&owner_account)
-                            || is_executable(&owner_account, &feature_set))
+                        || !owner_account.executable()
                     {
                         error_counters.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);
@@ -423,7 +419,6 @@ fn account_shared_data_from_program(
         .ok_or(TransactionError::AccountNotFound)?;
     program_account.set_owner(**program_owner);
     program_account.set_executable(true);
-    program_account.set_data_from_slice(create_executable_meta(program_owner));
     Ok(program_account)
 }
 
@@ -887,7 +882,7 @@ mod tests {
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.set_owner(bpf_loader_upgradeable::id());
-        account.set_data(create_executable_meta(account.owner()).to_vec());
+        account.set_executable(true);
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -967,7 +962,6 @@ mod tests {
         account.set_executable(true);
         account.set_rent_epoch(1);
         account.set_owner(key1);
-        account.set_data(create_executable_meta(account.owner()).to_vec());
         accounts.push((key2, account));
 
         let instructions = vec![
@@ -1428,7 +1422,6 @@ mod tests {
         let mut expected = AccountSharedData::default();
         expected.set_owner(other_key);
         expected.set_executable(true);
-        expected.set_data_from_slice(create_executable_meta(&other_key));
 
         assert_eq!(result.unwrap(), expected);
     }
