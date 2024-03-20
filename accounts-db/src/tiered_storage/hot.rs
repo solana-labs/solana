@@ -7,7 +7,7 @@ use {
         accounts_hash::AccountHash,
         tiered_storage::{
             byte_block,
-            file::TieredWritableFile,
+            file::{TieredReadableFile, TieredWritableFile},
             footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter},
             index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
             meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
@@ -24,7 +24,7 @@ use {
         account::ReadableAccount, pubkey::Pubkey, rent_collector::RENT_EXEMPT_RENT_EPOCH,
         stake_history::Epoch,
     },
-    std::{borrow::Borrow, fs::OpenOptions, option::Option, path::Path},
+    std::{borrow::Borrow, option::Option, path::Path},
 };
 
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
@@ -346,10 +346,8 @@ pub struct HotStorageReader {
 }
 
 impl HotStorageReader {
-    /// Constructs a HotStorageReader from the specified path.
-    pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
-        let file = OpenOptions::new().read(true).open(path)?;
-        let mmap = unsafe { MmapOptions::new().map(&file)? };
+    pub fn new(file: TieredReadableFile) -> TieredStorageResult<Self> {
+        let mmap = unsafe { MmapOptions::new().map(&file.0)? };
         // Here we are copying the footer, as accessing any data in a
         // TieredStorage instance requires accessing its Footer.
         // This can help improve cache locality and reduce the overhead
@@ -899,7 +897,8 @@ pub mod tests {
         // Reopen the same storage, and expect the persisted footer is
         // the same as what we have written.
         {
-            let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+            let file = TieredReadableFile::new(&path).unwrap();
+            let hot_storage = HotStorageReader::new(file).unwrap();
             assert_eq!(expected_footer, *hot_storage.footer());
         }
     }
@@ -945,7 +944,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
 
         for (offset, expected_meta) in account_offsets.iter().zip(hot_account_metas.iter()) {
             let meta = hot_storage.get_account_meta_from_offset(*offset).unwrap();
@@ -975,7 +975,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
         let offset = HotAccountOffset::new(footer.index_block_offset as usize).unwrap();
         // Read from index_block_offset, which offset doesn't belong to
         // account blocks.  Expect assert failure here
@@ -1026,7 +1027,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
         for (i, index_writer_entry) in index_writer_entries.iter().enumerate() {
             let account_offset = hot_storage
                 .get_account_offset(IndexOffset(i as u32))
@@ -1075,7 +1077,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
         for (i, address) in addresses.iter().enumerate() {
             assert_eq!(
                 hot_storage
@@ -1149,7 +1152,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
 
         // First, verify whether we can find the expected owners.
         let mut owner_candidates = owner_addresses.clone();
@@ -1281,7 +1285,8 @@ pub mod tests {
             footer.write_footer_block(&mut file).unwrap();
         }
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
 
         for i in 0..NUM_ACCOUNTS {
             let (stored_meta, next) = hot_storage
@@ -1362,10 +1367,10 @@ pub mod tests {
             writer.write_accounts(&storable_accounts, 0).unwrap()
         };
 
-        let hot_storage = HotStorageReader::new_from_path(&path).unwrap();
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
 
         let num_accounts = account_data_sizes.len();
-
         for i in 0..num_accounts {
             let (stored_meta, next) = hot_storage
                 .get_account(IndexOffset(i as u32))

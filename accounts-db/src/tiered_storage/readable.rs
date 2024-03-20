@@ -3,6 +3,7 @@ use {
         account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
         tiered_storage::{
+            file::TieredReadableFile,
             footer::{AccountMetaFormat, TieredStorageFooter},
             hot::HotStorageReader,
             index::IndexOffset,
@@ -22,9 +23,10 @@ pub enum TieredStorageReader {
 impl TieredStorageReader {
     /// Creates a reader for the specified tiered storage accounts file.
     pub fn new_from_path(path: impl AsRef<Path>) -> TieredStorageResult<Self> {
-        let footer = TieredStorageFooter::new_from_path(&path)?;
+        let file = TieredReadableFile::new(&path)?;
+        let footer = TieredStorageFooter::new_from_footer_block(&file)?;
         match footer.account_meta_format {
-            AccountMetaFormat::Hot => Ok(Self::Hot(HotStorageReader::new_from_path(path)?)),
+            AccountMetaFormat::Hot => Ok(Self::Hot(HotStorageReader::new(file)?)),
         }
     }
 

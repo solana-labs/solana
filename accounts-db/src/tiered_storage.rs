@@ -170,7 +170,8 @@ mod tests {
     use {
         super::*,
         crate::account_storage::meta::StoredMetaWriteVersion,
-        footer::{TieredStorageFooter, TieredStorageMagicNumber},
+        file::TieredStorageMagicNumber,
+        footer::TieredStorageFooter,
         hot::HOT_FORMAT,
         index::IndexOffset,
         solana_sdk::{
