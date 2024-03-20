@@ -99,7 +99,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
-            LoadedProgram, LoadedProgramType, LoadedPrograms, ProgramRuntimeEnvironments,
+            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
+            ProgramRuntimeEnvironments,
         },
         runtime_config::RuntimeConfig,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -168,7 +169,8 @@ use {
         account_overrides::AccountOverrides,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
-            TransactionBatchProcessor, TransactionLogMessages, TransactionProcessingCallback,
+            ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
+            TransactionProcessingCallback,
         },
         transaction_results::{
             TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
@@ -271,7 +273,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_svm::transaction_processor::ExecutionRecordingConfig;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -550,6 +551,7 @@ impl PartialEq for Bank {
             loaded_programs_cache: _,
             epoch_reward_status: _,
             transaction_processor: _,
+            check_program_modification_slot: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -810,6 +812,8 @@ pub struct Bank {
     epoch_reward_status: EpochRewardStatus,
 
     transaction_processor: TransactionBatchProcessor<BankForks>,
+
+    check_program_modification_slot: bool,
 }
 
 struct VoteWithStakeDelegations {
@@ -996,6 +1000,7 @@ impl Bank {
             ))),
             epoch_reward_status: EpochRewardStatus::default(),
             transaction_processor: TransactionBatchProcessor::default(),
+            check_program_modification_slot: false,
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -1314,6 +1319,7 @@ impl Bank {
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             epoch_reward_status: parent.epoch_reward_status.clone(),
             transaction_processor: TransactionBatchProcessor::default(),
+            check_program_modification_slot: false,
         };
 
         new.transaction_processor = TransactionBatchProcessor::new(
@@ -1864,6 +1870,7 @@ impl Bank {
             ))),
             epoch_reward_status: fields.epoch_reward_status,
             transaction_processor: TransactionBatchProcessor::default(),
+            check_program_modification_slot: false,
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
@@ -7517,7 +7524,7 @@ impl Bank {
     }
 
     pub fn check_program_modification_slot(&mut self) {
-        self.transaction_processor.check_program_modification_slot = true;
+        self.check_program_modification_slot = true;
     }
 
     pub fn load_program(
@@ -7577,6 +7584,18 @@ impl TransactionProcessingCallback for Bank {
             })
         } else {
             Ok(())
+        }
+    }
+
+    fn get_program_match_criteria(&self, program: &Pubkey) -> LoadedProgramMatchCriteria {
+        if self.check_program_modification_slot {
+            self.transaction_processor
+                .program_modification_slot(self, program)
+                .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
+                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                })
+        } else {
+            LoadedProgramMatchCriteria::NoCriteria
         }
     }
 }
