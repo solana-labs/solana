@@ -1,5 +1,6 @@
 use {
-    bytemuck::{AnyBitPattern, NoUninit},
+    super::{error::TieredStorageError, TieredStorageResult},
+    bytemuck::{AnyBitPattern, NoUninit, Pod, Zeroable},
     std::{
         fs::{File, OpenOptions},
         io::{BufWriter, Read, Result as IoResult, Seek, SeekFrom, Write},
@@ -8,23 +9,37 @@ use {
     },
 };
 
+/// The ending 8 bytes of a valid tiered account storage file.
+pub const FILE_MAGIC_NUMBER: u64 = u64::from_le_bytes(*b"AnzaTech");
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TieredStorageMagicNumber(pub u64);
+
+// Ensure there are no implicit padding bytes
+const _: () = assert!(std::mem::size_of::<TieredStorageMagicNumber>() == 8);
+
+impl Default for TieredStorageMagicNumber {
+    fn default() -> Self {
+        Self(FILE_MAGIC_NUMBER)
+    }
+}
+
 #[derive(Debug)]
 pub struct TieredReadableFile(pub File);
 
 impl TieredReadableFile {
-    pub fn new(file_path: impl AsRef<Path>) -> Self {
-        Self(
+    pub fn new(file_path: impl AsRef<Path>) -> TieredStorageResult<Self> {
+        let file = Self(
             OpenOptions::new()
                 .read(true)
                 .create(false)
-                .open(&file_path)
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "[TieredStorageError] Unable to open {} as read-only: {err}",
-                        file_path.as_ref().display(),
-                    );
-                }),
-        )
+                .open(&file_path)?,
+        );
+
+        file.check_magic_number()?;
+
+        Ok(file)
     }
 
     pub fn new_writable(file_path: impl AsRef<Path>) -> IoResult<Self> {
@@ -34,6 +49,19 @@ impl TieredReadableFile {
                 .write(true)
                 .open(file_path)?,
         ))
+    }
+
+    fn check_magic_number(&self) -> TieredStorageResult<()> {
+        self.seek_from_end(-(std::mem::size_of::<TieredStorageMagicNumber>() as i64))?;
+        let mut magic_number = TieredStorageMagicNumber::zeroed();
+        self.read_pod(&mut magic_number)?;
+        if magic_number != TieredStorageMagicNumber::default() {
+            return Err(TieredStorageError::MagicNumberMismatch(
+                TieredStorageMagicNumber::default().0,
+                magic_number.0,
+            ));
+        }
+        Ok(())
     }
 
     /// Reads a value of type `T` from the file.
@@ -125,5 +153,41 @@ impl TieredWritableFile {
         self.0.write_all(bytes)?;
 
         Ok(bytes.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::tiered_storage::{
+            error::TieredStorageError,
+            file::{TieredReadableFile, TieredWritableFile, FILE_MAGIC_NUMBER},
+        },
+        std::path::Path,
+        tempfile::TempDir,
+    };
+
+    fn generate_test_file_with_number(path: impl AsRef<Path>, number: u64) {
+        let mut file = TieredWritableFile::new(path).unwrap();
+        file.write_pod(&number).unwrap();
+    }
+
+    #[test]
+    fn test_new() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_new");
+        generate_test_file_with_number(&path, FILE_MAGIC_NUMBER);
+        assert!(TieredReadableFile::new(&path).is_ok());
+    }
+
+    #[test]
+    fn test_magic_number_mismatch() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test_magic_number_mismatch");
+        generate_test_file_with_number(&path, !FILE_MAGIC_NUMBER);
+        assert!(matches!(
+            TieredReadableFile::new(&path),
+            Err(TieredStorageError::MagicNumberMismatch(_, _))
+        ));
     }
 }
