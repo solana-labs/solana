@@ -6,7 +6,7 @@ use {
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
         bootstrap,
-        cli::{app, warn_for_deprecated_arguments, DefaultArgs},
+        cli::{self, app, warn_for_deprecated_arguments, DefaultArgs},
         dashboard::Dashboard,
         ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
         redirect_stderr_to_file,
@@ -1331,6 +1331,11 @@ pub fn main() {
 
     let full_api = matches.is_present("full_rpc_api");
 
+    let cli::thread_args::NumThreadConfig {
+        replay_forks_threads,
+        replay_transactions_threads,
+    } = cli::thread_args::parse_num_threads_args(&matches);
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -1464,12 +1469,13 @@ pub fn main() {
             ..RuntimeConfig::default()
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
-        replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         use_snapshot_archives_at_startup: value_t_or_exit!(
             matches,
             use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
         ),
+        replay_forks_threads,
+        replay_transactions_threads,
         ..ValidatorConfig::default()
     };
 

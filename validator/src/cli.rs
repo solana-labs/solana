@@ -52,6 +52,9 @@ use {
     std::{path::PathBuf, str::FromStr},
 };
 
+pub mod thread_args;
+use thread_args::{thread_args, DefaultThreadArgs};
+
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
 // The default minimal snapshot download speed (bytes/second)
@@ -1467,11 +1470,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Maximum number of bytes written to the program log before truncation"),
         )
         .arg(
-            Arg::with_name("replay_slots_concurrently")
-                .long("replay-slots-concurrently")
-                .help("Allow concurrent replay of slots on different forks"),
-        )
-        .arg(
             Arg::with_name("banking_trace_dir_byte_limit")
                 // expose friendly alternative name to cli than internal
                 // implementation-oriented one
@@ -1555,6 +1553,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 ",
                 ),
         )
+        .args(&thread_args(&default_args.thread_args))
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -2073,6 +2072,13 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .long("no-rocksdb-compaction")
         .takes_value(false)
         .help("Disable manual compaction of the ledger database"));
+    add_arg!(
+        Arg::with_name("replay_slots_concurrently")
+            .long("replay-slots-concurrently")
+            .help("Allow concurrent replay of slots on different forks")
+            .conflicts_with("replay_forks_threads"),
+        replaced_by: "replay_forks_threads",
+        usage_warning: "Equivalent behavior to this flag would be --replay-forks-threads 4");
     add_arg!(Arg::with_name("rocksdb_compaction_interval")
         .long("rocksdb-compaction-interval-slots")
         .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
@@ -2195,6 +2201,8 @@ pub struct DefaultArgs {
     pub banking_trace_dir_byte_limit: String,
 
     pub wen_restart_path: String,
+
+    pub thread_args: DefaultThreadArgs,
 }
 
 impl DefaultArgs {
@@ -2277,6 +2285,7 @@ impl DefaultArgs {
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
             wen_restart_path: "wen_restart_progress.proto".to_string(),
+            thread_args: DefaultThreadArgs::default(),
         }
     }
 }
