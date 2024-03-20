@@ -31,6 +31,7 @@ jobs:
       matrix:
         os:
           - macos-latest-large
+          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +54,7 @@ jobs:
       matrix:
         os:
           - macos-latest-large
+          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

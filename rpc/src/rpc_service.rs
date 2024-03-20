@@ -878,24 +878,21 @@ mod tests {
             panic!("Unexpected RequestMiddlewareAction variant");
         }
 
-        #[cfg(unix)]
+        std::fs::remove_file(&genesis_path).unwrap();
         {
-            std::fs::remove_file(&genesis_path).unwrap();
-            {
-                let mut file = std::fs::File::create(ledger_path.path().join("wrong")).unwrap();
-                file.write_all(b"wrong file").unwrap();
-            }
-            symlink::symlink_file("wrong", &genesis_path).unwrap();
+            let mut file = std::fs::File::create(ledger_path.path().join("wrong")).unwrap();
+            file.write_all(b"wrong file").unwrap();
+        }
+        symlink::symlink_file("wrong", &genesis_path).unwrap();
 
-            // File is a symbolic link => request should fail.
-            let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
-            if let RequestMiddlewareAction::Respond { response, .. } = action {
-                let response = runtime.block_on(response);
-                let response = response.unwrap();
-                assert_ne!(response.status(), 200);
-            } else {
-                panic!("Unexpected RequestMiddlewareAction variant");
-            }
+        // File is a symbolic link => request should fail.
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
+        if let RequestMiddlewareAction::Respond { response, .. } = action {
+            let response = runtime.block_on(response);
+            let response = response.unwrap();
+            assert_ne!(response.status(), 200);
+        } else {
+            panic!("Unexpected RequestMiddlewareAction variant");
         }
     }
 }
