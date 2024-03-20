@@ -10,7 +10,9 @@ use {
             file::{TieredReadableFile, TieredWritableFile},
             footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter},
             index::{AccountIndexWriterEntry, AccountOffset, IndexBlockFormat, IndexOffset},
-            meta::{AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta},
+            meta::{
+                AccountAddressRange, AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta,
+            },
             mmap_utils::{get_pod, get_slice},
             owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
             StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
@@ -620,6 +622,7 @@ impl HotStorageWriter {
         let mut index = vec![];
         let mut owners_table = OwnersTable::default();
         let mut cursor = 0;
+        let mut address_range = AccountAddressRange::default();
 
         // writing accounts blocks
         let len = accounts.accounts.len();
@@ -631,6 +634,7 @@ impl HotStorageWriter {
                 address,
                 offset: HotAccountOffset::new(cursor)?,
             };
+            address_range.update(address);
 
             // Obtain necessary fields from the account, or default fields
             // for a zero-lamport account in the None case.
@@ -691,7 +695,8 @@ impl HotStorageWriter {
         footer
             .owners_block_format
             .write_owners_block(&mut self.storage, &owners_table)?;
-
+        footer.min_account_address = *address_range.min;
+        footer.max_account_address = *address_range.max;
         footer.write_footer_block(&mut self.storage)?;
 
         Ok(stored_infos)

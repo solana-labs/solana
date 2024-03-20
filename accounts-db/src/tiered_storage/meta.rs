@@ -4,7 +4,7 @@ use {
     crate::tiered_storage::owners::OwnerOffset,
     bytemuck::{Pod, Zeroable},
     modular_bitfield::prelude::*,
-    solana_sdk::stake_history::Epoch,
+    solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
 };
 
 /// The struct that handles the account meta flags.
@@ -124,6 +124,38 @@ impl AccountMetaOptionalFields {
     }
 }
 
+const MIN_ACCOUNT_ADDRESS: Pubkey = Pubkey::new_from_array([0x00u8; 32]);
+const MAX_ACCOUNT_ADDRESS: Pubkey = Pubkey::new_from_array([0xFFu8; 32]);
+
+#[derive(Debug)]
+/// A struct that maintains an address-range using its min and max fields.
+pub struct AccountAddressRange<'a> {
+    /// The minimum address observed via update()
+    pub min: &'a Pubkey,
+    /// The maximum address observed via update()
+    pub max: &'a Pubkey,
+}
+
+impl Default for AccountAddressRange<'_> {
+    fn default() -> Self {
+        Self {
+            min: &MAX_ACCOUNT_ADDRESS,
+            max: &MIN_ACCOUNT_ADDRESS,
+        }
+    }
+}
+
+impl<'a> AccountAddressRange<'a> {
+    pub fn update(&mut self, address: &'a Pubkey) {
+        if *self.min > *address {
+            self.min = address;
+        }
+        if *self.max < *address {
+            self.max = address;
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -220,5 +252,48 @@ pub mod tests {
                 derived_size
             );
         }
+    }
+
+    #[test]
+    fn test_pubkey_range_update_single() {
+        let address = solana_sdk::pubkey::new_rand();
+        let mut address_range = AccountAddressRange::default();
+
+        address_range.update(&address);
+        // For a single update, the min and max should equal to the address
+        assert_eq!(*address_range.min, address);
+        assert_eq!(*address_range.max, address);
+    }
+
+    #[test]
+    fn test_pubkey_range_update_multiple() {
+        const NUM_PUBKEYS: usize = 20;
+
+        let mut address_range = AccountAddressRange::default();
+        let mut addresses = Vec::with_capacity(NUM_PUBKEYS);
+
+        let mut min_index = 0;
+        let mut max_index = 0;
+
+        // Generate random addresses and track expected min and max indices
+        for i in 0..NUM_PUBKEYS {
+            let address = solana_sdk::pubkey::new_rand();
+            addresses.push(address);
+
+            // Update expected min and max indices
+            if address < addresses[min_index] {
+                min_index = i;
+            }
+            if address > addresses[max_index] {
+                max_index = i;
+            }
+        }
+
+        addresses
+            .iter()
+            .for_each(|address| address_range.update(address));
+
+        assert_eq!(*address_range.min, addresses[min_index]);
+        assert_eq!(*address_range.max, addresses[max_index]);
     }
 }
