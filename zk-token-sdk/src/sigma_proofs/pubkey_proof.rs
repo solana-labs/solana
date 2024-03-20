@@ -3,6 +3,7 @@
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
+use crate::{SCALAR_ONE, SCALAR_ZERO};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -13,7 +14,7 @@ use {
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
         UNIT_LEN,
     },
-    rand::rngs::OsRng,
+    rand_core::OsRng,
     zeroize::Zeroize,
 };
 use {
@@ -65,7 +66,7 @@ impl PubkeyValidityProof {
         // extract the relevant scalar and Ristretto points from the input
         let s = elgamal_keypair.secret().get_scalar();
 
-        assert!(s != &Scalar::zero());
+        assert_ne!(s, &*SCALAR_ZERO);
         let s_inv = s.invert();
 
         // generate a random masking factor that also serves as a nonce
@@ -109,7 +110,7 @@ impl PubkeyValidityProof {
             .ok_or(SigmaProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
-            vec![&self.z, &(-&c), &(-&Scalar::one())],
+            vec![&self.z, &(-&c), &(-&SCALAR_ONE.to_owned())],
             vec![&(*H), P, &Y],
         );
 

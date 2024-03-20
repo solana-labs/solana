@@ -8,6 +8,7 @@
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
+use crate::SCALAR_ONE;
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -19,7 +20,7 @@ use {
         UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
-    rand::rngs::OsRng,
+    rand_core::OsRng,
     zeroize::Zeroize,
 };
 use {
@@ -172,7 +173,7 @@ impl GroupedCiphertext2HandlesValidityProof {
                 &self.z_r,           // z_r
                 &self.z_x,           // z_x
                 &(-&c),              // -c
-                &-(&Scalar::one()),  // -identity
+                &-(&*SCALAR_ONE),    // -identity
                 &(&w * &self.z_r),   // w * z_r
                 &(&w_negated * &c),  // -w * c
                 &w_negated,          // -w

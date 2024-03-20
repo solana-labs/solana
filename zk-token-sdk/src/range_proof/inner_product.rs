@@ -411,10 +411,16 @@ impl InnerProductProof {
         }
 
         let pos = 2 * lg_n * 32;
-        let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
-            .ok_or(RangeProofVerificationError::Deserialization)?;
-        let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]))
-            .ok_or(RangeProofVerificationError::Deserialization)?;
+        let attempt = Scalar::from_canonical_bytes(util::read32(&slice[pos..]));
+        if attempt.is_none().into() {
+            return Err(RangeProofVerificationError::Deserialization)
+        }
+        let a = attempt.unwrap();
+        let attempt = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]));
+        if attempt.is_none().into() {
+            return Err(RangeProofVerificationError::Deserialization)
+        }
+        let b = attempt.unwrap();
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
     }
@@ -423,8 +429,9 @@ impl InnerProductProof {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::range_proof::generators::BulletproofGens, rand::rngs::OsRng,
-        sha3::Sha3_512,
+        super::*, crate::range_proof::generators::BulletproofGens, rand_core::OsRng,
+        crate::SCALAR_ONE,
+        sha3::digest::{FixedOutput, Update},
     };
 
     #[test]
@@ -436,13 +443,13 @@ mod tests {
         let G: Vec<RistrettoPoint> = bp_gens.G(n).cloned().collect();
         let H: Vec<RistrettoPoint> = bp_gens.H(n).cloned().collect();
 
-        let Q = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"test point");
+        let Q = RistrettoPoint::hash_from_bytes::<sha3::Sha3_512>(b"test point");
 
         let a: Vec<_> = (0..n).map(|_| Scalar::random(&mut OsRng)).collect();
         let b: Vec<_> = (0..n).map(|_| Scalar::random(&mut OsRng)).collect();
         let c = util::inner_product(&a, &b).unwrap();
 
-        let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(n).collect();
+        let G_factors: Vec<Scalar> = iter::repeat(*SCALAR_ONE).take(n).collect();
 
         let y_inv = Scalar::random(&mut OsRng);
         let H_factors: Vec<Scalar> = util::exp_iter(y_inv).take(n).collect();
@@ -479,7 +486,7 @@ mod tests {
         assert!(proof
             .verify(
                 n,
-                iter::repeat(Scalar::one()).take(n),
+                iter::repeat(*SCALAR_ONE).take(n),
                 util::exp_iter(y_inv).take(n),
                 &P,
                 &Q,
@@ -494,7 +501,7 @@ mod tests {
         assert!(proof
             .verify(
                 n,
-                iter::repeat(Scalar::one()).take(n),
+                iter::repeat(*SCALAR_ONE).take(n),
                 util::exp_iter(y_inv).take(n),
                 &P,
                 &Q,

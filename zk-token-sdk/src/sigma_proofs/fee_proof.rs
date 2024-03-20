@@ -10,6 +10,7 @@
 //!
 //! [`ZK Token proof program`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
+use crate::SCALAR_ONE;
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -17,7 +18,7 @@ use {
         sigma_proofs::{canonical_scalar_from_optional_slice, ristretto_point_from_optional_slice},
         UNIT_LEN,
     },
-    rand::rngs::OsRng,
+    rand_core::OsRng,
 };
 use {
     crate::{
@@ -358,7 +359,7 @@ impl FeeSigmaProof {
                 c_max_proof,
                 -c_max_proof * m,
                 -z_max,
-                Scalar::one(),
+                SCALAR_ONE.to_owned(),
                 w * z_x,
                 w * z_delta_real,
                 -w * c_equality,

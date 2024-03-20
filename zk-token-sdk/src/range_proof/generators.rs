@@ -1,7 +1,7 @@
 use {
+    sha3::digest::{ExtendableOutput, Update, XofReader},
     crate::range_proof::errors::RangeProofGeneratorError,
     curve25519_dalek::{
-        digest::{ExtendableOutput, Update, XofReader},
         ristretto::RistrettoPoint,
     },
     sha3::{Sha3XofReader, Shake256},

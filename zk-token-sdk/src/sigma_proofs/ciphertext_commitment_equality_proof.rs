@@ -8,6 +8,7 @@
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
+use crate::SCALAR_ONE;
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -19,7 +20,7 @@ use {
         UNIT_LEN,
     },
     curve25519_dalek::traits::MultiscalarMul,
-    rand::rngs::OsRng,
+    rand_core::OsRng,
     zeroize::Zeroize,
 };
 use {
@@ -177,7 +178,7 @@ impl CiphertextCommitmentEqualityProof {
             vec![
                 &self.z_s,           // z_s
                 &(-&c),              // -c
-                &(-&Scalar::one()),  // -identity
+                &(-&*SCALAR_ONE),    // -identity
                 &(&w * &self.z_x),   // w * z_x
                 &(&w * &self.z_s),   // w * z_s
                 &(&w_negated * &c),  // -w * c

@@ -17,6 +17,9 @@
 //
 // `clippy::op_ref` is turned off to prevent clippy from warning that this is not idiomatic code.
 
+use curve25519_dalek::Scalar;
+use lazy_static::lazy_static;
+
 #[cfg(not(target_os = "solana"))]
 #[macro_use]
 pub(crate) mod macros;
@@ -45,3 +48,10 @@ const UNIT_LEN: usize = 32;
 const RISTRETTO_POINT_LEN: usize = UNIT_LEN;
 /// Byte length of a scalar in Curve25519
 const SCALAR_LEN: usize = UNIT_LEN;
+
+lazy_static! {
+    /// Replacement for Scalar::one()
+    pub static ref SCALAR_ONE: Scalar = Scalar::from_bytes_mod_order([0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    /// Replacement for Scalar::zero()
+    pub static ref SCALAR_ZERO: Scalar = Scalar::from_bytes_mod_order([0u8; 32]);
+}

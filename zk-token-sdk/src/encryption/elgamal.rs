@@ -13,6 +13,7 @@
 //! As the messages are encrypted as scalar elements (a.k.a. in the "exponent"), one must solve the
 //! discrete log to recover the originally encrypted value.
 
+use sha3::{Digest, Keccak512, Sha3_512};
 use {
     crate::{
         encryption::{
@@ -46,14 +47,14 @@ use {
 };
 #[cfg(not(target_os = "solana"))]
 use {
-    rand::rngs::OsRng,
-    sha3::{Digest, Sha3_512},
+    rand_core::OsRng,
     std::{
         error, fmt,
         io::{Read, Write},
         path::Path,
     },
 };
+use crate::SCALAR_ZERO;
 
 /// Byte length of a decrypt handle
 const DECRYPT_HANDLE_LEN: usize = RISTRETTO_POINT_LEN;
@@ -334,7 +335,7 @@ impl ElGamalPubkey {
     #[allow(non_snake_case)]
     pub fn new(secret: &ElGamalSecretKey) -> Self {
         let s = &secret.0;
-        assert!(s != &Scalar::zero());
+        assert_ne!(s, &*SCALAR_ZERO);
 
         ElGamalPubkey(s.invert() * &(*H))
     }
@@ -353,7 +354,7 @@ impl ElGamalPubkey {
         }
 
         Some(ElGamalPubkey(
-            CompressedRistretto::from_slice(bytes).decompress()?,
+            CompressedRistretto::from_slice(bytes).ok()?.decompress()?,
         ))
     }
 
@@ -463,7 +464,7 @@ impl ElGamalSecretKey {
         if seed.len() > MAXIMUM_SEED_LEN {
             return Err(ElGamalError::SeedLengthTooLong);
         }
-        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
+        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Keccak512>(seed)))
     }
 
     pub fn get_scalar(&self) -> &Scalar {
@@ -493,7 +494,7 @@ impl ElGamalSecretKey {
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey).into(),
             _ => None,
         }
     }
@@ -716,7 +717,7 @@ impl DecryptHandle {
         }
 
         Some(DecryptHandle(
-            CompressedRistretto::from_slice(bytes).decompress()?,
+            CompressedRistretto::from_slice(bytes).ok()?.decompress()?,
         ))
     }
 }
