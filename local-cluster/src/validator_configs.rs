@@ -61,7 +61,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         wait_to_vote_slot: config.wait_to_vote_slot,
         ledger_column_options: config.ledger_column_options.clone(),
         runtime_config: config.runtime_config.clone(),
-        replay_slots_concurrently: config.replay_slots_concurrently,
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
         block_verification_method: config.block_verification_method.clone(),
         block_production_method: config.block_production_method.clone(),
@@ -69,6 +68,8 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         wen_restart_proto_path: config.wen_restart_proto_path.clone(),
         unified_scheduler_handler_threads: config.unified_scheduler_handler_threads,
+        replay_forks_threads: config.replay_forks_threads,
+        replay_transactions_threads: config.replay_transactions_threads,
     }
 }
 

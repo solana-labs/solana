@@ -53,6 +53,7 @@ use {
     std::{
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
+        num::NonZeroUsize,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
     },
@@ -81,7 +82,6 @@ pub struct TvuSockets {
     pub ancestor_hashes_requests: UdpSocket,
 }
 
-#[derive(Default)]
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
@@ -90,7 +90,22 @@ pub struct TvuConfig {
     // Validators which should be given priority when serving repairs
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     pub wait_for_vote_to_start_leader: bool,
-    pub replay_slots_concurrently: bool,
+    pub replay_forks_threads: NonZeroUsize,
+    pub replay_transactions_threads: NonZeroUsize,
+}
+
+impl Default for TvuConfig {
+    fn default() -> Self {
+        Self {
+            max_ledger_shreds: None,
+            shred_version: 0,
+            repair_validators: None,
+            repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
+            wait_for_vote_to_start_leader: false,
+            replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
+            replay_transactions_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
+        }
+    }
 }
 
 impl Tvu {
@@ -265,7 +280,8 @@ impl Tvu {
             ancestor_hashes_replay_update_sender,
             tower_storage: tower_storage.clone(),
             wait_to_vote_slot,
-            replay_slots_concurrently: tvu_config.replay_slots_concurrently,
+            replay_forks_threads: tvu_config.replay_forks_threads,
+            replay_transactions_threads: tvu_config.replay_transactions_threads,
         };
 
         let (voting_sender, voting_receiver) = unbounded();

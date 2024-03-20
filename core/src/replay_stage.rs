@@ -51,7 +51,6 @@ use {
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
-    solana_rayon_threadlimit::get_max_thread_count,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSenderConfig},
         rpc_subscriptions::RpcSubscriptions,
@@ -80,6 +79,7 @@ use {
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
+        num::NonZeroUsize,
         result,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -95,11 +95,9 @@ pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
+
 const MAX_VOTE_SIGNATURES: usize = 200;
 const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
-// Expect this number to be small enough to minimize thread pool overhead while large enough
-// to be able to replay all active forks at the same time in most cases.
-const MAX_CONCURRENT_FORKS_TO_REPLAY: usize = 4;
 const MAX_REPAIR_RETRY_LOOP_ATTEMPTS: usize = 10;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -291,7 +289,8 @@ pub struct ReplayStageConfig {
     // Stops voting until this slot has been reached. Should be used to avoid
     // duplicate voting which can lead to slashing.
     pub wait_to_vote_slot: Option<Slot>,
-    pub replay_slots_concurrently: bool,
+    pub replay_forks_threads: NonZeroUsize,
+    pub replay_transactions_threads: NonZeroUsize,
 }
 
 /// Timing information for the ReplayStage main processing loop
@@ -574,7 +573,8 @@ impl ReplayStage {
             ancestor_hashes_replay_update_sender,
             tower_storage,
             wait_to_vote_slot,
-            replay_slots_concurrently,
+            replay_forks_threads,
+            replay_transactions_threads,
         } = config;
 
         trace!("replay stage");
@@ -654,19 +654,19 @@ impl ReplayStage {
                 )
             };
             // Thread pool to (maybe) replay multiple threads in parallel
-            let replay_mode = if replay_slots_concurrently {
+            let replay_mode = if replay_forks_threads.get() == 1 {
+                ForkReplayMode::Serial
+            } else {
                 let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
+                    .num_threads(replay_forks_threads.get())
                     .thread_name(|i| format!("solReplayFork{i:02}"))
                     .build()
                     .expect("new rayon threadpool");
                 ForkReplayMode::Parallel(pool)
-            } else {
-                ForkReplayMode::Serial
             };
             // Thread pool to replay multiple transactions within one block in parallel
             let replay_tx_thread_pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(get_max_thread_count())
+                .num_threads(replay_transactions_threads.get())
                 .thread_name(|i| format!("solReplayTx{i:02}"))
                 .build()
                 .expect("new rayon threadpool");
