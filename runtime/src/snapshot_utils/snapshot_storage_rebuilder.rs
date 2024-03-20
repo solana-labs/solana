@@ -25,6 +25,7 @@ use {
         fs::File,
         io::{BufReader, Error as IoError},
         path::{Path, PathBuf},
+        str::FromStr as _,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, Mutex,
@@ -36,8 +37,6 @@ use {
 lazy_static! {
     static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
     static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+(\.pre)?$").unwrap();
-    static ref STORAGE_FILE_REGEX: Regex =
-        Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
 }
 
 /// Convenient wrapper for snapshot version and rebuilt storages
@@ -268,8 +267,7 @@ impl SnapshotStorageRebuilder {
     /// Process an append_vec_file
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), SnapshotError> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
-        if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
-            let (slot, append_vec_id) = get_slot_and_append_vec_id(&filename);
+        if let Ok((slot, append_vec_id)) = get_slot_and_append_vec_id(&filename) {
             if self.snapshot_from == SnapshotFrom::Dir {
                 // Keep track of the highest append_vec_id in the system, so the future append_vecs
                 // can be assigned to unique IDs.  This is only needed when loading from a snapshot
@@ -305,7 +303,7 @@ impl SnapshotStorageRebuilder {
             .iter()
             .map(|path| {
                 let filename = path.file_name().unwrap().to_str().unwrap();
-                let (_, old_append_vec_id) = get_slot_and_append_vec_id(filename);
+                let (_, old_append_vec_id) = get_slot_and_append_vec_id(filename)?;
                 let current_len = *self
                     .snapshot_storage_lengths
                     .get(&slot)
@@ -439,7 +437,7 @@ fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
         Some(SnapshotFileKind::Version)
     } else if BANK_FIELDS_FILE_REGEX.is_match(filename) {
         Some(SnapshotFileKind::BankFields)
-    } else if STORAGE_FILE_REGEX.is_match(filename) {
+    } else if get_slot_and_append_vec_id(filename).is_ok() {
         Some(SnapshotFileKind::Storage)
     } else {
         None
@@ -447,17 +445,13 @@ fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
 }
 
 /// Get the slot and append vec id from the filename
-pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
-    STORAGE_FILE_REGEX
-        .captures(filename)
-        .map(|cap| {
-            let slot_str = cap.name("slot").map(|m| m.as_str()).unwrap();
-            let id_str = cap.name("id").map(|m| m.as_str()).unwrap();
-            let slot = slot_str.parse().unwrap();
-            let id = id_str.parse().unwrap();
-            (slot, id)
-        })
-        .unwrap()
+pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> Result<(Slot, usize), SnapshotError> {
+    let mut parts = filename.splitn(2, '.');
+    let slot = parts.next().and_then(|s| Slot::from_str(s).ok());
+    let id = parts.next().and_then(|s| usize::from_str(s).ok());
+
+    slot.zip(id)
+        .ok_or_else(|| SnapshotError::InvalidAppendVecPath(PathBuf::from(filename)))
 }
 
 #[cfg(test)]
@@ -510,7 +504,7 @@ mod tests {
         let expected_slot = 12345;
         let expected_id = 9987;
         let (slot, id) =
-            get_slot_and_append_vec_id(&AppendVec::file_name(expected_slot, expected_id));
+            get_slot_and_append_vec_id(&AppendVec::file_name(expected_slot, expected_id)).unwrap();
         assert_eq!(expected_slot, slot);
         assert_eq!(expected_id, id);
     }
