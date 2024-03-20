@@ -7,7 +7,7 @@ use {
         compute_budget::ComputeBudget,
         invoke_context::InvokeContext,
         loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedPrograms, ProgramRuntimeEnvironments,
+            BlockRelation, ForkGraph, LoadedProgram, ProgramCache, ProgramRuntimeEnvironments,
         },
         runtime_config::RuntimeConfig,
         solana_rbpf::{
@@ -113,8 +113,8 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
 
 fn create_executable_environment(
     mock_bank: &mut MockBankCallback,
-) -> (LoadedPrograms<MockForkGraph>, Vec<Pubkey>) {
-    let mut programs_cache = LoadedPrograms::<MockForkGraph>::new(0, 20);
+) -> (ProgramCache<MockForkGraph>, Vec<Pubkey>) {
+    let mut program_cache = ProgramCache::<MockForkGraph>::new(0, 20);
 
     // We must register the bpf loader account as a loadable account, otherwise programs
     // won't execute.
@@ -127,7 +127,7 @@ fn create_executable_environment(
         .insert(bpf_loader::id(), account_data);
 
     // The bpf loader needs an executable as well
-    programs_cache.assign_program(
+    program_cache.assign_program(
         bpf_loader::id(),
         Arc::new(LoadedProgram::new_builtin(
             DEPLOYMENT_SLOT,
@@ -136,7 +136,7 @@ fn create_executable_environment(
         )),
     );
 
-    programs_cache.environments = ProgramRuntimeEnvironments {
+    program_cache.environments = ProgramRuntimeEnvironments {
         program_runtime_v1: Arc::new(create_custom_environment()),
         // We are not using program runtime v2
         program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
@@ -145,11 +145,11 @@ fn create_executable_environment(
         )),
     };
 
-    programs_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
+    program_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
 
     // Inform SVM of the registered builins
     let registered_built_ins = vec![bpf_loader::id()];
-    (programs_cache, registered_built_ins)
+    (program_cache, registered_built_ins)
 }
 
 fn prepare_transactions(
@@ -224,15 +224,15 @@ fn prepare_transactions(
 fn svm_integration() {
     let mut mock_bank = MockBankCallback::default();
     let (transactions, mut check_results) = prepare_transactions(&mut mock_bank);
-    let (programs_cache, builtins) = create_executable_environment(&mut mock_bank);
-    let programs_cache = Arc::new(RwLock::new(programs_cache));
+    let (program_cache, builtins) = create_executable_environment(&mut mock_bank);
+    let program_cache = Arc::new(RwLock::new(program_cache));
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
         EpochSchedule::default(),
         FeeStructure::default(),
         Arc::new(RuntimeConfig::default()),
-        programs_cache.clone(),
+        program_cache.clone(),
     );
 
     let mut error_counter = TransactionErrorMetrics::default();

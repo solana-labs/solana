@@ -17,7 +17,7 @@ use {
         compute_budget::ComputeBudget,
         loaded_programs::{
             ForkGraph, LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria,
-            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            LoadedProgramType, LoadedProgramsForTxBatch, ProgramCache, ProgramRuntimeEnvironment,
             ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
@@ -137,7 +137,8 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
 
     pub sysvar_cache: RwLock<SysvarCache>,
 
-    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
+    /// Programs required for transaction batch processing
+    pub program_cache: Arc<RwLock<ProgramCache<FG>>>,
 }
 
 impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
@@ -149,7 +150,7 @@ impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
             .field("fee_structure", &self.fee_structure)
             .field("runtime_config", &self.runtime_config)
             .field("sysvar_cache", &self.sysvar_cache)
-            .field("loaded_programs_cache", &self.loaded_programs_cache)
+            .field("program_cache", &self.program_cache)
             .finish()
     }
 }
@@ -163,7 +164,7 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
             fee_structure: FeeStructure::default(),
             runtime_config: Arc::<RuntimeConfig>::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            loaded_programs_cache: Arc::new(RwLock::new(LoadedPrograms::new(
+            program_cache: Arc::new(RwLock::new(ProgramCache::new(
                 Slot::default(),
                 Epoch::default(),
             ))),
@@ -178,7 +179,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         epoch_schedule: EpochSchedule,
         fee_structure: FeeStructure,
         runtime_config: Arc<RuntimeConfig>,
-        loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
+        program_cache: Arc<RwLock<ProgramCache<FG>>>,
     ) -> Self {
         Self {
             slot,
@@ -187,7 +188,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             fee_structure,
             runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            loaded_programs_cache,
+            program_cache,
         }
     }
 
@@ -308,7 +309,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         execution_time.stop();
 
         const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
-        self.loaded_programs_cache
+        self.program_cache
             .write()
             .unwrap()
             .evict_using_2s_random_selection(
@@ -374,8 +375,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         result
     }
 
-    /// Load program with a specific pubkey from loaded programs
-    /// cache, and update the program's access slot as a side-effect.
+    /// Load program with a specific pubkey from program cache, and
+    /// update the program's access slot as a side-effect.
     pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
@@ -383,8 +384,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         reload: bool,
         effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
-        let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-        let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
+        let program_cache = self.program_cache.read().unwrap();
+        let environments = program_cache.get_environments_for_epoch(effective_epoch);
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
             ..LoadProgramMetrics::default()
@@ -463,10 +464,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         load_program_metrics.submit_datapoint(&mut timings);
         if !Arc::ptr_eq(
             &environments.program_runtime_v1,
-            &loaded_programs_cache.environments.program_runtime_v1,
+            &program_cache.environments.program_runtime_v1,
         ) || !Arc::ptr_eq(
             &environments.program_runtime_v2,
-            &loaded_programs_cache.environments.program_runtime_v2,
+            &program_cache.environments.program_runtime_v2,
         ) {
             // There can be two entries per program when the environment changes.
             // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
@@ -502,21 +503,18 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         loop {
             let (program_to_load, task_cookie, task_waiter) = {
                 // Lock the global cache.
-                let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+                let mut program_cache = self.program_cache.write().unwrap();
                 // Initialize our local cache.
                 let is_first_round = loaded_programs_for_txs.is_none();
                 if is_first_round {
                     loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
                         self.slot,
-                        loaded_programs_cache
-                            .get_environments_for_epoch(self.epoch)
-                            .clone(),
+                        program_cache.get_environments_for_epoch(self.epoch).clone(),
                     ));
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
-                    if loaded_programs_cache
-                        .finish_cooperative_loading_task(self.slot, key, program)
+                    if program_cache.finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
                         // This branch is taken when there is an error in assigning a program to a
@@ -524,21 +522,19 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         // tests purposes.
                         let mut ret = LoadedProgramsForTxBatch::new(
                             self.slot,
-                            loaded_programs_cache
-                                .get_environments_for_epoch(self.epoch)
-                                .clone(),
+                            program_cache.get_environments_for_epoch(self.epoch).clone(),
                         );
                         ret.hit_max_limit = true;
                         return ret;
                     }
                 }
                 // Figure out which program needs to be loaded next.
-                let program_to_load = loaded_programs_cache.extract(
+                let program_to_load = program_cache.extract(
                     &mut missing_programs,
                     loaded_programs_for_txs.as_mut().unwrap(),
                     is_first_round,
                 );
-                let task_waiter = Arc::clone(&loaded_programs_cache.loading_task_waiter);
+                let task_waiter = Arc::clone(&program_cache.loading_task_waiter);
                 (program_to_load, task_waiter.cookie(), task_waiter)
                 // Unlock the global cache again.
             };
@@ -1266,7 +1262,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(20)
@@ -1294,7 +1290,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(20)
@@ -1367,7 +1363,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(0)
@@ -1447,7 +1443,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(0)
@@ -1506,7 +1502,7 @@ mod tests {
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
         batch_processor
-            .loaded_programs_cache
+            .program_cache
             .write()
             .unwrap()
             .upcoming_environments = Some(ProgramRuntimeEnvironments::default());
@@ -1801,11 +1797,8 @@ mod tests {
         // Case 1
         let mut mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        batch_processor
-            .loaded_programs_cache
-            .write()
-            .unwrap()
-            .fork_graph = Some(Arc::new(RwLock::new(TestForkGraph {})));
+        batch_processor.program_cache.write().unwrap().fork_graph =
+            Some(Arc::new(RwLock::new(TestForkGraph {})));
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
