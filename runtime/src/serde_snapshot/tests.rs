@@ -3,8 +3,8 @@ mod serde_snapshot_tests {
     use {
         crate::{
             serde_snapshot::{
-                newer, reconstruct_accountsdb_from_fields, SerdeStyle, SerializableAccountsDb,
-                SnapshotAccountsDbFields, TypeContext,
+                newer, reconstruct_accountsdb_from_fields, remap_append_vec_file, SerdeStyle,
+                SerializableAccountsDb, SnapshotAccountsDbFields, TypeContext,
             },
             snapshot_utils::{get_storages_to_serialize, StorageAndNextAppendVecId},
         },
@@ -34,12 +34,17 @@ mod serde_snapshot_tests {
             rent_collector::RentCollector,
         },
         std::{
+            fs::File,
             io::{BufReader, Cursor, Read, Write},
             ops::RangeFull,
             path::{Path, PathBuf},
-            sync::{atomic::Ordering, Arc},
+            sync::{
+                atomic::{AtomicUsize, Ordering},
+                Arc,
+            },
         },
         tempfile::TempDir,
+        test_case::test_case,
     };
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
@@ -844,5 +849,57 @@ mod serde_snapshot_tests {
                 accounts.all_account_count_in_append_vec(shrink_slot)
             );
         }
+    }
+
+    // no remap needed
+    #[test_case(456, 456, 456, 0, |_| {})]
+    // remap from 456 to 457, no collisions
+    #[test_case(456, 457, 457, 0, |_| {})]
+    // attempt to remap from 456 to 457, but there's a collision, so we get 458
+    #[test_case(456, 457, 458, 1, |tmp| {
+        File::create(tmp.join("123.457")).unwrap();
+    })]
+    fn test_remap_append_vec_file(
+        old_id: usize,
+        next_id: usize,
+        expected_remapped_id: usize,
+        expected_collisions: usize,
+        become_ungovernable: impl FnOnce(&Path),
+    ) {
+        let tmp = tempfile::tempdir().unwrap();
+        let old_path = tmp.path().join(format!("123.{old_id}"));
+        let expected_remapped_path = tmp.path().join(format!("123.{expected_remapped_id}"));
+        File::create(&old_path).unwrap();
+
+        become_ungovernable(tmp.path());
+
+        let next_append_vec_id = AtomicAppendVecId::new(next_id as u32);
+        let num_collisions = AtomicUsize::new(0);
+        let (remapped_id, remapped_path) =
+            remap_append_vec_file(123, old_id, &old_path, &next_append_vec_id, &num_collisions)
+                .unwrap();
+        assert_eq!(remapped_id as usize, expected_remapped_id);
+        assert_eq!(&remapped_path, &expected_remapped_path);
+        assert_eq!(num_collisions.load(Ordering::Relaxed), expected_collisions);
+    }
+
+    #[test]
+    #[should_panic(expected = "No such file or directory")]
+    fn test_remap_append_vec_file_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let original_path = tmp.path().join("123.456");
+
+        // In remap_append_vec() we want to handle EEXIST (collisions), but we want to return all
+        // other errors
+        let next_append_vec_id = AtomicAppendVecId::new(457);
+        let num_collisions = AtomicUsize::new(0);
+        remap_append_vec_file(
+            123,
+            456,
+            &original_path,
+            &next_append_vec_id,
+            &num_collisions,
+        )
+        .unwrap();
     }
 }

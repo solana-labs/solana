@@ -5695,6 +5695,7 @@ dependencies = [
  "index_list",
  "itertools",
  "lazy_static",
+ "libc",
  "log",
  "lru",
  "lz4",

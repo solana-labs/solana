@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use std::ffi::{CStr, CString};
 use {
     crate::{
         bank::{builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankRc},
@@ -655,30 +657,55 @@ pub(crate) fn reconstruct_single_storage(
     )))
 }
 
-fn remap_append_vec_file(
+// Remap the AppendVec ID to handle any duplicate IDs that may previously existed
+// due to full snapshots and incremental snapshots generated from different
+// nodes
+pub(crate) fn remap_append_vec_file(
     slot: Slot,
     old_append_vec_id: SerializedAppendVecId,
     append_vec_path: &Path,
     next_append_vec_id: &AtomicAppendVecId,
     num_collisions: &AtomicUsize,
 ) -> io::Result<(AppendVecId, PathBuf)> {
-    // Remap the AppendVec ID to handle any duplicate IDs that may previously existed
-    // due to full snapshots and incremental snapshots generated from different nodes
+    #[cfg(target_os = "linux")]
+    let append_vec_path_cstr = cstring_from_path(append_vec_path)?;
+
+    let mut remapped_append_vec_path = append_vec_path.to_path_buf();
+
+    // Break out of the loop in the following situations:
+    // 1. The new ID is the same as the original ID.  This means we do not need to
+    //    rename the file, since the ID is the "correct" one already.
+    // 2. There is not a file already at the new path.  This means it is safe to
+    //    rename the file to this new path.
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
-        let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
-        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
-        // Break out of the loop in the following situations:
-        // 1. The new ID is the same as the original ID.  This means we do not need to
-        //    rename the file, since the ID is the "correct" one already.
-        // 2. There is not a file already at the new path.  This means it is safe to
-        //    rename the file to this new path.
-        //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
-        //    possible.
-        if old_append_vec_id == remapped_append_vec_id as SerializedAppendVecId
-            || std::fs::metadata(&remapped_append_vec_path).is_err()
+        // this can only happen in the first iteration of the loop
+        if old_append_vec_id == remapped_append_vec_id as SerializedAppendVecId {
+            break (remapped_append_vec_id, remapped_append_vec_path);
+        }
+
+        let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
+        remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
+
+        #[cfg(target_os = "linux")]
         {
+            let remapped_append_vec_path_cstr = cstring_from_path(&remapped_append_vec_path)?;
+
+            // On linux we use renameat2(NO_REPLACE) instead of IF metadata(path).is_err() THEN
+            // rename() in order to save a statx() syscall.
+            match rename_no_replace(&append_vec_path_cstr, &remapped_append_vec_path_cstr) {
+                // If the file was successfully renamed, break out of the loop
+                Ok(_) => break (remapped_append_vec_id, remapped_append_vec_path),
+                // If there's already a file at the new path, continue so we try
+                // the next ID
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e),
+            }
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        if std::fs::metadata(&remapped_append_vec_path).is_err() {
             break (remapped_append_vec_id, remapped_append_vec_path);
         }
 
@@ -686,7 +713,10 @@ fn remap_append_vec_file(
         // and try again.
         num_collisions.fetch_add(1, Ordering::Relaxed);
     };
-    // Only rename the file if the new ID is actually different from the original.
+
+    // Only rename the file if the new ID is actually different from the original. In the target_os
+    // = linux case, we have already renamed if necessary.
+    #[cfg(not(target_os = "linux"))]
     if old_append_vec_id != remapped_append_vec_id as SerializedAppendVecId {
         std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
     }
@@ -952,4 +982,33 @@ where
         Arc::try_unwrap(accounts_db).unwrap(),
         ReconstructedAccountsDbInfo { accounts_data_len },
     ))
+}
+
+// Rename `src` to `dest` only if `dest` doesn't already exist.
+#[cfg(target_os = "linux")]
+fn rename_no_replace(src: &CStr, dest: &CStr) -> io::Result<()> {
+    let ret = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            src.as_ptr() as *const _,
+            libc::AT_FDCWD,
+            dest.as_ptr() as *const _,
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if ret == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn cstring_from_path(path: &Path) -> io::Result<CString> {
+    // It is better to allocate here than use the stack. Jemalloc is going to give us a chunk of a
+    // preallocated small arena anyway. Instead if we used the stack since PATH_MAX=4096 it would
+    // result in LLVM inserting a stack probe, see
+    // https://docs.rs/compiler_builtins/latest/compiler_builtins/probestack/index.html.
+    CString::new(path.as_os_str().as_encoded_bytes())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
 }

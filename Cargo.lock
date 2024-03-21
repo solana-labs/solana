@@ -6997,6 +6997,7 @@ dependencies = [
  "index_list",
  "itertools",
  "lazy_static",
+ "libc",
  "libsecp256k1",
  "log",
  "lru",
