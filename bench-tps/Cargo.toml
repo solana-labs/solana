@@ -28,6 +28,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
+solana-quic-client = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }

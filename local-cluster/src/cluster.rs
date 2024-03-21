@@ -1,12 +1,16 @@
 use {
-    solana_client::{thin_client::ThinClient, tpu_client::QuicTpuClient},
+    solana_client::thin_client::ThinClient,
     solana_core::validator::{Validator, ValidatorConfig},
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::shred::Shred,
+    solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair},
     solana_streamer::socket::SocketAddrSpace,
+    solana_tpu_client::tpu_client::TpuClient,
     std::{io::Result, path::PathBuf, sync::Arc},
 };
+
+pub type QuicTpuClient = TpuClient<QuicPool, QuicConnectionManager, QuicConfig>;
 
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,

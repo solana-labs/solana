@@ -5,9 +5,7 @@ use {
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        tpu_client::{TpuClient, TpuClientConfig, TpuClientWrapper},
+        connection_cache::ConnectionCache, rpc_client::RpcClient, tpu_client::TpuClientWrapper,
     },
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
@@ -19,6 +17,7 @@ use {
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
     },
+    solana_tpu_client::tpu_client::{TpuClient, TpuClientConfig},
     std::{
         collections::HashSet,
         net::{SocketAddr, TcpListener, UdpSocket},

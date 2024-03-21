@@ -8,10 +8,7 @@ use {
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
+    solana_client::connection_cache::ConnectionCache,
     solana_genesis::Base64Account,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
@@ -22,6 +19,7 @@ use {
         system_program,
     },
     solana_streamer::streamer::StakedNodes,
+    solana_tpu_client::tpu_client::{TpuClient, TpuClientConfig},
     std::{
         collections::HashMap,
         fs::File,

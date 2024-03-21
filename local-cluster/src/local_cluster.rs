@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
+        cluster::{Cluster, ClusterValidatorInfo, QuicTpuClient, ValidatorInfo},
         cluster_tests,
         validator_configs::*,
     },
@@ -8,10 +8,7 @@ use {
     log::*,
     solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
     solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        thin_client::ThinClient,
-        tpu_client::{QuicTpuClient, TpuClient, TpuClientConfig},
+        connection_cache::ConnectionCache, rpc_client::RpcClient, thin_client::ThinClient,
     },
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
@@ -52,7 +49,8 @@ use {
     solana_stake_program::stake_state,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+        TpuClient, TpuClientConfig, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+        DEFAULT_TPU_USE_QUIC,
     },
     solana_vote_program::{
         vote_instruction,
