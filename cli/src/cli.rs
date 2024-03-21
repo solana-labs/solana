@@ -2254,7 +2254,7 @@ mod tests {
             memo: None,
             split_stake_account: 1,
             seed: None,
-            lamports: 30,
+            lamports: 200_000_000,
             fee_payer: 0,
             compute_unit_price: None,
             rent_exempt_reserve: None,
