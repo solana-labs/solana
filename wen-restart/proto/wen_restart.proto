@@ -20,10 +20,23 @@ message LastVotedForkSlotsRecord {
 
 message LastVotedForkSlotsAggregateRecord {
     map<string, LastVotedForkSlotsRecord> received = 1;
+    optional LastVotedForkSlotsAggregateFinal final_result = 2;
+}
+
+message LastVotedForkSlotsAggregateFinal {
+    map<uint64, uint64> slots_stake_map = 1;
+    uint64 total_active_stake = 2;
+}
+
+message HeaviestFork {
+    uint64 slot = 1;
+    string bankhash = 2;
+    uint64 total_active_stake = 3;
 }
 
 message WenRestartProgress {
     State state = 1;
     optional LastVotedForkSlotsRecord my_last_voted_fork_slots = 2;
     optional LastVotedForkSlotsAggregateRecord last_voted_fork_slots_aggregate = 3;
+    optional HeaviestFork my_heaviest_fork = 4;
 }
