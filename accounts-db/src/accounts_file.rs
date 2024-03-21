@@ -103,12 +103,6 @@ impl AccountsFile {
         }
     }
 
-    pub fn is_recyclable(&self) -> bool {
-        match self {
-            Self::AppendVec(_) => true,
-        }
-    }
-
     pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
         format!("{slot}.{id}")
     }
