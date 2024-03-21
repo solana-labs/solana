@@ -1,7 +1,7 @@
 use {
-    crate::{
-        input_parsers::{keypair_of, keypairs_of, pubkey_of, pubkeys_of},
-        keypair::{pubkey_from_path, resolve_signer_from_path, signer_from_path, ASK_KEYWORD},
+    crate::keypair::{
+        keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+        ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     clap::{builder::ValueParser, ArgMatches},
     solana_remote_wallet::{
@@ -11,7 +11,7 @@ use {
     solana_sdk::{
         derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
+        signature::{read_keypair_file, Keypair, Signature, Signer},
     },
     std::{error, rc::Rc, str::FromStr},
     thiserror::Error,
@@ -236,16 +236,35 @@ pub fn try_keypair_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Keypair>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypair_of(matches, name))
+    if let Some(value) = matches.try_get_one::<String>(name)? {
+        extract_keypair(matches, name, value)
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn try_keypairs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Keypair>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(keypairs_of(matches, name))
+    Ok(matches.try_get_many::<String>(name)?.map(|values| {
+        values
+            .filter_map(|value| extract_keypair(matches, name, value).ok().flatten())
+            .collect()
+    }))
+}
+
+fn extract_keypair(
+    matches: &ArgMatches,
+    name: &str,
+    path: &str,
+) -> Result<Option<Keypair>, Box<dyn error::Error>> {
+    if path == ASK_KEYWORD {
+        let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+        keypair_from_seed_phrase(name, skip_validation, true, None, true).map(Some)
+    } else {
+        read_keypair_file(path).map(Some)
+    }
 }
 
 // Return a `Result` wrapped pubkey for an argument that can itself be parsed into a pubkey,
@@ -254,19 +273,31 @@ pub fn try_pubkey_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Pubkey>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkey_of(matches, name))
+    if let Some(pubkey) = matches.try_get_one::<Pubkey>(name)? {
+        Ok(Some(*pubkey))
+    } else {
+        Ok(try_keypair_of(matches, name)?.map(|keypair| keypair.pubkey()))
+    }
 }
 
 pub fn try_pubkeys_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_of(matches, name))
+    if let Some(pubkey_strings) = matches.try_get_many::<String>(name)? {
+        let mut pubkeys = Vec::with_capacity(pubkey_strings.len());
+        for pubkey_string in pubkey_strings {
+            pubkeys.push(pubkey_string.parse::<Pubkey>()?);
+        }
+        Ok(Some(pubkeys))
+    } else {
+        Ok(None)
+    }
 }
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
+#[deprecated(since = "2.0.0", note = "Please use `try_pubkeys_sigs_of` instead")]
+#[allow(deprecated)]
 pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
         values
@@ -286,8 +317,20 @@ pub fn try_pubkeys_sigs_of(
     matches: &ArgMatches,
     name: &str,
 ) -> Result<Option<Vec<(Pubkey, Signature)>>, Box<dyn error::Error>> {
-    matches.try_contains_id(name)?;
-    Ok(pubkeys_sigs_of(matches, name))
+    if let Some(pubkey_signer_strings) = matches.try_get_many::<String>(name)? {
+        let mut pubkey_sig_pairs = Vec::with_capacity(pubkey_signer_strings.len());
+        for pubkey_signer_string in pubkey_signer_strings {
+            let (pubkey_string, sig_string) = pubkey_signer_string
+                .split_once('=')
+                .ok_or("failed to parse `pubkey=signature` pair")?;
+            let pubkey = Pubkey::from_str(pubkey_string)?;
+            let sig = Signature::from_str(sig_string)?;
+            pubkey_sig_pairs.push((pubkey, sig));
+        }
+        Ok(Some(pubkey_sig_pairs))
+    } else {
+        Ok(None)
+    }
 }
 
 // Return a signer from matches at `name`
@@ -376,12 +419,14 @@ impl FromStr for PubkeySignature {
     }
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use {
         super::*,
+        crate::input_parsers::{keypair_of, pubkey_of, pubkeys_of},
         assert_matches::assert_matches,
-        clap::{Arg, Command},
+        clap::{Arg, ArgAction, Command},
         solana_remote_wallet::locator::Manufacturer,
         solana_sdk::signature::write_keypair_file,
         std::fs,
@@ -512,7 +557,7 @@ mod tests {
                 Arg::new("multiple")
                     .long("multiple")
                     .takes_value(true)
-                    .multiple_occurrences(true)
+                    .action(ArgAction::Append)
                     .multiple_values(true),
             )
             .arg(Arg::new("single").takes_value(true).long("single"))

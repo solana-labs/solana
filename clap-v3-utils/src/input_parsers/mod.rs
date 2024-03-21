@@ -21,12 +21,18 @@ pub mod signer;
     since = "1.17.0",
     note = "Please use the functions in `solana_clap_v3_utils::input_parsers::signer` directly instead"
 )]
+#[allow(deprecated)]
 pub use signer::{
     pubkey_of_signer, pubkeys_of_multiple_signers, pubkeys_sigs_of, resolve_signer, signer_of,
     STDOUT_OUTFILE_TOKEN,
 };
 
 // Return parsed values from matches at `name`
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use the functions `ArgMatches::get_many` or `ArgMatches::try_get_many` instead"
+)]
+#[allow(deprecated)]
 pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
 where
     T: std::str::FromStr,
@@ -38,6 +44,11 @@ where
 }
 
 // Return a parsed value from matches at `name`
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use the functions `ArgMatches::get_one` or `ArgMatches::try_get_one` instead"
+)]
+#[allow(deprecated)]
 pub fn value_of<T>(matches: &ArgMatches, name: &str) -> Option<T>
 where
     T: std::str::FromStr,
@@ -48,6 +59,11 @@ where
         .and_then(|value| value.parse::<T>().ok())
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `ArgMatches::get_one::<UnixTimestamp>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn unix_timestamp_from_rfc3339_datetime(
     matches: &ArgMatches,
     name: &str,
@@ -63,14 +79,25 @@ pub fn unix_timestamp_from_rfc3339_datetime(
     since = "1.17.0",
     note = "please use `Amount::parse_decimal` and `Amount::sol_to_lamport` instead"
 )]
+#[allow(deprecated)]
 pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `ArgMatches::get_one::<ClusterType>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn cluster_type_of(matches: &ArgMatches, name: &str) -> Option<ClusterType> {
     value_of(matches, name)
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `ArgMatches::get_one::<CommitmentConfig>(...)` instead"
+)]
+#[allow(deprecated)]
 pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfig> {
     matches
         .value_of(name)
@@ -246,6 +273,11 @@ pub fn parse_derived_address_seed(arg: &str) -> Result<String, String> {
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `input_parsers::signer::try_keypair_of` instead"
+)]
+#[allow(deprecated)]
 pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
@@ -259,6 +291,11 @@ pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     }
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `input_parsers::signer::try_keypairs_of` instead"
+)]
+#[allow(deprecated)]
 pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values
@@ -276,10 +313,20 @@ pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
 
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `input_parsers::signer::try_pubkey_of` instead"
+)]
+#[allow(deprecated)]
 pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `input_parsers::signer::try_pubkeys_of` instead"
+)]
+#[allow(deprecated)]
 pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     matches.values_of(name).map(|values| {
         values
@@ -294,12 +341,13 @@ pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     })
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        clap::{Arg, Command},
-        solana_sdk::{hash::Hash, pubkey::Pubkey},
+        clap::{Arg, ArgAction, Command},
+        solana_sdk::{commitment_config::CommitmentLevel, hash::Hash, pubkey::Pubkey},
     };
 
     fn app<'ab>() -> Command<'ab> {
@@ -308,7 +356,7 @@ mod tests {
                 Arg::new("multiple")
                     .long("multiple")
                     .takes_value(true)
-                    .multiple_occurrences(true)
+                    .action(ArgAction::Append)
                     .multiple_values(true),
             )
             .arg(Arg::new("single").takes_value(true).long("single"))
@@ -544,5 +592,88 @@ mod tests {
                 assert_eq!(matches.get_one::<String>("derivation").unwrap(), arg);
             }
         }
+    }
+
+    #[test]
+    fn test_unix_timestamp_from_rfc3339_datetime() {
+        let command = Command::new("test").arg(
+            Arg::new("timestamp")
+                .long("timestamp")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(UnixTimestamp)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--timestamp", "1234"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<UnixTimestamp>("timestamp").unwrap(),
+            1234,
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--timestamp", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_cluster_type() {
+        let command = Command::new("test").arg(
+            Arg::new("cluster")
+                .long("cluster")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(ClusterType)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--cluster", "testnet"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<ClusterType>("cluster").unwrap(),
+            ClusterType::Testnet
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--cluster", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_commitment_config() {
+        let command = Command::new("test").arg(
+            Arg::new("commitment")
+                .long("commitment")
+                .takes_value(true)
+                .value_parser(clap::value_parser!(CommitmentConfig)),
+        );
+
+        // success case
+        let matches = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--commitment", "finalized"])
+            .unwrap();
+        assert_eq!(
+            *matches.get_one::<CommitmentConfig>("commitment").unwrap(),
+            CommitmentConfig {
+                commitment: CommitmentLevel::Finalized
+            },
+        );
+
+        // validation fails
+        let matches_error = command
+            .clone()
+            .try_get_matches_from(vec!["test", "--commitment", "this_is_an_invalid_arg"])
+            .unwrap_err();
+        assert_eq!(matches_error.kind, clap::error::ErrorKind::ValueValidation);
     }
 }
