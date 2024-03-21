@@ -1,7 +1,6 @@
 use {
     crate::{
-        bank::{Bank, BankFieldsToDeserialize, BankRc},
-        builtins::BuiltinPrototype,
+        bank::{builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankRc},
         epoch_stakes::EpochStakes,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{

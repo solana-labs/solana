@@ -9,7 +9,6 @@ pub mod bank;
 pub mod bank_client;
 pub mod bank_forks;
 pub mod bank_utils;
-pub mod builtins;
 pub mod commitment;
 pub mod compute_budget_details;
 mod epoch_rewards_hasher;

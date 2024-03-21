@@ -42,9 +42,11 @@ use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
-        bank::metrics::*,
+        bank::{
+            builtins::{BuiltinPrototype, BUILTINS},
+            metrics::*,
+        },
         bank_forks::BankForks,
-        builtins::{BuiltinPrototype, BUILTINS},
         epoch_rewards_hasher::hash_rewards_into_partitions,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
@@ -210,6 +212,7 @@ struct VerifyAccountsHashConfig {
 mod address_lookup_table;
 pub mod bank_hash_details;
 mod builtin_programs;
+pub mod builtins;
 pub mod epoch_accounts_hash_utils;
 mod fee_distribution;
 mod metrics;
@@ -5994,7 +5997,7 @@ impl Bank {
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
             {
-                if builtin.feature_id.is_none() {
+                if builtin.enable_feature_id.is_none() {
                     self.add_builtin(
                         builtin.program_id,
                         builtin.name.to_string(),
@@ -7340,7 +7343,7 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         for builtin in BUILTINS.iter() {
-            if let Some(feature_id) = builtin.feature_id {
+            if let Some(feature_id) = builtin.enable_feature_id {
                 let should_apply_action_for_feature_transition =
                     if only_apply_transitions_for_new_features {
                         new_feature_activations.contains(&feature_id)

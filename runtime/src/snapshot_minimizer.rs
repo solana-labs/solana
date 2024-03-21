@@ -1,7 +1,10 @@
 //! Used to create minimal snapshots - separated here to keep accounts_db simpler
 
 use {
-    crate::{bank::Bank, builtins::BUILTINS, static_ids},
+    crate::{
+        bank::{builtins::BUILTINS, Bank},
+        static_ids,
+    },
     dashmap::DashSet,
     log::info,
     rayon::{
