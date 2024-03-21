@@ -1195,19 +1195,26 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_load_program_from_bytes() {
+    fn load_test_program() -> Vec<u8> {
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
+        dir.push("example-programs");
+        dir.push("hello-solana");
         dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
         file.read_exact(&mut buffer).expect("Buffer overflow");
+        buffer
+    }
+
+    #[test]
+    fn test_load_program_from_bytes() {
+        let buffer = load_test_program();
 
         let mut metrics = LoadProgramMetrics::default();
         let loader = bpf_loader_upgradeable::id();
-        let size = metadata.len() as usize;
+        let size = buffer.len();
         let slot = 2;
         let environment = ProgramRuntimeEnvironment::new(BuiltinProgram::new_mock());
 
@@ -1303,13 +1310,7 @@ mod tests {
         );
         assert_eq!(result, Arc::new(loaded_program));
 
-        let mut dir = env::current_dir().unwrap();
-        dir.push("tests");
-        dir.push("hello_solana_program.so");
-        let mut file = File::open(dir.clone()).expect("file not found");
-        let metadata = fs::metadata(dir).expect("Unable to read metadata");
-        let mut buffer = vec![0; metadata.len() as usize];
-        file.read_exact(&mut buffer).expect("buffer overflow");
+        let buffer = load_test_program();
         account_data.set_data(buffer);
 
         mock_bank
@@ -1376,13 +1377,7 @@ mod tests {
         );
         assert_eq!(result, Arc::new(loaded_program));
 
-        let mut dir = env::current_dir().unwrap();
-        dir.push("tests");
-        dir.push("hello_solana_program.so");
-        let mut file = File::open(dir.clone()).expect("file not found");
-        let metadata = fs::metadata(dir).expect("Unable to read metadata");
-        let mut buffer = vec![0; metadata.len() as usize];
-        file.read_exact(&mut buffer).expect("buffer overflow");
+        let mut buffer = load_test_program();
         let mut header = bincode::serialize(&state).unwrap();
         let mut complement = vec![
             0;
@@ -1461,13 +1456,7 @@ mod tests {
             vec![0; std::cmp::max(0, LoaderV4State::program_data_offset() - header.len())];
         header.append(&mut complement);
 
-        let mut dir = env::current_dir().unwrap();
-        dir.push("tests");
-        dir.push("hello_solana_program.so");
-        let mut file = File::open(dir.clone()).expect("file not found");
-        let metadata = fs::metadata(dir).expect("Unable to read metadata");
-        let mut buffer = vec![0; metadata.len() as usize];
-        file.read_exact(&mut buffer).expect("buffer overflow");
+        let mut buffer = load_test_program();
         header.append(&mut buffer);
 
         account_data.set_data(header);

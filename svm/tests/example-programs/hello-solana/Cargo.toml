@@ -1,0 +1,12 @@
+[package]
+name = "hello-solana-program"
+version = "2.0.0"
+edition = "2021"
+
+[dependencies]
+solana-program = { path = "../../../../sdk/program", version = "=2.0.0" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[workspace]

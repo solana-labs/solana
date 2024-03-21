@@ -188,8 +188,8 @@ fn prepare_transactions(
     // Loading the program file
     let mut dir = env::current_dir().unwrap();
     dir.push("tests");
-    // File compiled from
-    // https://github.com/solana-developers/program-examples/blob/feb82f254a4633ce2107d06060f2d0558dc987f5/basics/hello-solana/native/program/src/lib.rs
+    dir.push("example-programs");
+    dir.push("hello-solana");
     dir.push("hello_solana_program.so");
     let mut file = File::open(dir.clone()).expect("file not found");
     let metadata = fs::metadata(dir).expect("Unable to read metadata");
