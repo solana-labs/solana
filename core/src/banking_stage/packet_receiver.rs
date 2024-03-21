@@ -49,6 +49,7 @@ impl PacketReceiver {
                 .receive_packets(
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
+                    |packet| packet.compute_unit_limit_above_static_builtins(),
                 )
                 // Consumes results if Ok, otherwise we keep the Err
                 .map(|receive_packet_results| {

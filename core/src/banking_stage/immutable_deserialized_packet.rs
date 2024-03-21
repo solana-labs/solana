@@ -1,4 +1,5 @@
 use {
+    solana_cost_model::block_cost_limits::BUILT_IN_INSTRUCTION_COSTS,
     solana_perf::packet::Packet,
     solana_runtime::compute_budget_details::{ComputeBudgetDetails, GetComputeBudgetDetails},
     solana_sdk::{
@@ -6,6 +7,7 @@ use {
         hash::Hash,
         message::Message,
         sanitize::SanitizeError,
+        saturating_add_assign,
         short_vec::decode_shortu16_len,
         signature::Signature,
         transaction::{
@@ -98,6 +100,22 @@ impl ImmutableDeserializedPacket {
         self.compute_budget_details.clone()
     }
 
+    /// Returns true if the transaction's compute unit limit is at least as
+    /// large as the sum of the static builtins' costs.
+    /// This is a simple sanity check so the leader can discard transactions
+    /// which are statically known to exceed the compute budget, and will
+    /// result in no useful state-change.
+    pub fn compute_unit_limit_above_static_builtins(&self) -> bool {
+        let mut static_builtin_cost_sum: u64 = 0;
+        for (program_id, _) in self.transaction.get_message().program_instructions_iter() {
+            if let Some(ix_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
+                saturating_add_assign!(static_builtin_cost_sum, *ix_cost);
+            }
+        }
+
+        self.compute_unit_limit() >= static_builtin_cost_sum
+    }
+
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
     // messages, and verifies secp256k1 instructions.
     pub fn build_sanitized_transaction(
@@ -150,7 +168,10 @@ fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_sdk::{
+            compute_budget, instruction::Instruction, pubkey::Pubkey, signature::Keypair,
+            signer::Signer, system_instruction, system_transaction, transaction::Transaction,
+        },
     };
 
     #[test]
@@ -165,5 +186,34 @@ mod tests {
         let deserialized_packet = ImmutableDeserializedPacket::new(packet);
 
         assert!(deserialized_packet.is_ok());
+    }
+
+    #[test]
+    fn compute_unit_limit_above_static_builtins() {
+        // Cases:
+        // 1. compute_unit_limit under static builtins
+        // 2. compute_unit_limit equal to static builtins
+        // 3. compute_unit_limit above static builtins
+        for (cu_limit, expectation) in [(250, false), (300, true), (350, true)] {
+            let keypair = Keypair::new();
+            let bpf_program_id = Pubkey::new_unique();
+            let ixs = vec![
+                system_instruction::transfer(&keypair.pubkey(), &Pubkey::new_unique(), 1),
+                compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(cu_limit),
+                Instruction::new_with_bytes(bpf_program_id, &[], vec![]), // non-builtin - not counted in filter
+            ];
+            let tx = Transaction::new_signed_with_payer(
+                &ixs,
+                Some(&keypair.pubkey()),
+                &[&keypair],
+                Hash::new_unique(),
+            );
+            let packet = Packet::from_data(None, tx).unwrap();
+            let deserialized_packet = ImmutableDeserializedPacket::new(packet).unwrap();
+            assert_eq!(
+                deserialized_packet.compute_unit_limit_above_static_builtins(),
+                expectation
+            );
+        }
     }
 }

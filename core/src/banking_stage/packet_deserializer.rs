@@ -50,6 +50,7 @@ impl PacketDeserializer {
         &self,
         recv_timeout: Duration,
         capacity: usize,
+        packet_filter: impl Fn(&ImmutableDeserializedPacket) -> bool,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
 
@@ -62,6 +63,7 @@ impl PacketDeserializer {
             packet_count,
             &packet_batches,
             round_compute_unit_price_enabled,
+            &packet_filter,
         ))
     }
 
@@ -71,6 +73,7 @@ impl PacketDeserializer {
         packet_count: usize,
         banking_batches: &[BankingPacketBatch],
         round_compute_unit_price_enabled: bool,
+        packet_filter: &impl Fn(&ImmutableDeserializedPacket) -> bool,
     ) -> ReceivePacketResults {
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
@@ -88,6 +91,7 @@ impl PacketDeserializer {
                     packet_batch,
                     &packet_indexes,
                     round_compute_unit_price_enabled,
+                    packet_filter,
                 ));
             }
 
@@ -158,13 +162,16 @@ impl PacketDeserializer {
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
         round_compute_unit_price_enabled: bool,
+        packet_filter: &'a (impl Fn(&ImmutableDeserializedPacket) -> bool + 'a),
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
             let mut packet_clone = packet_batch[*packet_index].clone();
             packet_clone
                 .meta_mut()
                 .set_round_compute_unit_price(round_compute_unit_price_enabled);
-            ImmutableDeserializedPacket::new(packet_clone).ok()
+            ImmutableDeserializedPacket::new(packet_clone)
+                .ok()
+                .filter(packet_filter)
         })
     }
 }
@@ -186,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_and_collect_packets_empty() {
-        let results = PacketDeserializer::deserialize_and_collect_packets(0, &[], false);
+        let results = PacketDeserializer::deserialize_and_collect_packets(0, &[], false, &|_| true);
         assert_eq!(results.deserialized_packets.len(), 0);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 0);
@@ -204,6 +211,7 @@ mod tests {
             packet_count,
             &[BankingPacketBatch::new((packet_batches, None))],
             false,
+            &|_| true,
         );
         assert_eq!(results.deserialized_packets.len(), 2);
         assert!(results.new_tracer_stats_option.is_none());
@@ -223,6 +231,7 @@ mod tests {
             packet_count,
             &[BankingPacketBatch::new((packet_batches, None))],
             false,
+            &|_| true,
         );
         assert_eq!(results.deserialized_packets.len(), 1);
         assert!(results.new_tracer_stats_option.is_none());
