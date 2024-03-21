@@ -1046,6 +1046,22 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("The size of transactions to be sent in batch."),
         )
         .arg(
+            Arg::with_name("rpc_send_transaction_tpu_peer")
+                .long("rpc-send-transaction-tpu-peer")
+                .takes_value(true)
+                .number_of_values(1)
+                .multiple(true)
+                .value_name("HOST:PORT")
+                .validator(solana_net_utils::is_host_port)
+                .help("Peer(s) to broadcast transactions to instead of the current leader")
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_also_leader")
+                .long("rpc-send-transaction-also-leader")
+                .requires("rpc_send_transaction_tpu_peer")
+                .help("With `--rpc-send-transaction-tpu-peer HOST:PORT`, also send to the current leader")
+        )
+        .arg(
             Arg::with_name("rpc_scan_and_fix_roots")
                 .long("rpc-scan-and-fix-roots")
                 .takes_value(false)

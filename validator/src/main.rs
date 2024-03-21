@@ -1281,6 +1281,27 @@ pub fn main() {
         );
         exit(1);
     }
+    let rpc_send_transaction_tpu_peers = matches
+        .values_of("rpc_send_transaction_tpu_peer")
+        .map(|values| {
+            values
+                .map(solana_net_utils::parse_host_port)
+                .collect::<Result<Vec<SocketAddr>, String>>()
+        })
+        .transpose()
+        .unwrap_or_else(|e| {
+            eprintln!("failed to parse rpc send-transaction-service tpu peer address: {e}");
+            exit(1);
+        });
+    let rpc_send_transaction_also_leader = matches.is_present("rpc_send_transaction_also_leader");
+    let leader_forward_count =
+        if rpc_send_transaction_tpu_peers.is_some() && !rpc_send_transaction_also_leader {
+            // rpc-sts is configured to send only to specific tpu peers. disable leader forwards
+            0
+        } else {
+            value_t_or_exit!(matches, "rpc_send_transaction_leader_forward_count", u64)
+        };
+
     let full_api = matches.is_present("full_rpc_api");
 
     let mut validator_config = ValidatorConfig {
@@ -1374,11 +1395,7 @@ pub fn main() {
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
             retry_rate_ms: rpc_send_retry_rate_ms,
-            leader_forward_count: value_t_or_exit!(
-                matches,
-                "rpc_send_transaction_leader_forward_count",
-                u64
-            ),
+            leader_forward_count,
             default_max_retries: value_t!(
                 matches,
                 "rpc_send_transaction_default_max_retries",
@@ -1392,6 +1409,7 @@ pub fn main() {
             ),
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
+            tpu_peers: rpc_send_transaction_tpu_peers,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),

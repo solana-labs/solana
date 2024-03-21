@@ -114,6 +114,7 @@ pub struct Config {
     pub batch_size: usize,
     /// How frequently batches are sent
     pub batch_send_rate_ms: u64,
+    pub tpu_peers: Option<Vec<SocketAddr>>,
 }
 
 impl Default for Config {
@@ -125,6 +126,7 @@ impl Default for Config {
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
+            tpu_peers: None,
         }
     }
 }
@@ -565,12 +567,18 @@ impl SendTransactionService {
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses_with_slots(
+        let mut addresses = config
+            .tpu_peers
+            .as_ref()
+            .map(|addrs| addrs.iter().map(|a| (a, 0)).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let leader_addresses = Self::get_tpu_addresses_with_slots(
             tpu_address,
             leader_info,
             config,
             connection_cache.protocol(),
         );
+        addresses.extend(leader_addresses);
 
         let wire_transactions = transactions
             .iter()
@@ -583,8 +591,8 @@ impl SendTransactionService {
             })
             .collect::<Vec<&[u8]>>();
 
-        for address in &addresses {
-            Self::send_transactions(address.0, &wire_transactions, connection_cache, stats);
+        for (address, _) in &addresses {
+            Self::send_transactions(address, &wire_transactions, connection_cache, stats);
         }
     }
 
@@ -701,14 +709,20 @@ impl SendTransactionService {
 
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
+                let mut addresses = config
+                    .tpu_peers
+                    .as_ref()
+                    .map(|addrs| addrs.iter().collect::<Vec<_>>())
+                    .unwrap_or_default();
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
                 let leader_info = leader_info_provider.get_leader_info();
-                let addresses = Self::get_tpu_addresses(
+                let leader_addresses = Self::get_tpu_addresses(
                     tpu_address,
                     leader_info,
                     config,
                     connection_cache.protocol(),
                 );
+                addresses.extend(leader_addresses);
 
                 for address in &addresses {
                     Self::send_transactions(address, chunk, connection_cache, stats);
