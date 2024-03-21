@@ -1,8 +1,4 @@
-use {
-    solana_cost_model::transaction_cost::TransactionCost,
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-    solana_sdk::{slot_history::Slot, transaction::SanitizedTransaction},
-};
+use solana_sdk::{clock::Slot, transaction::SanitizedTransaction};
 
 /// Simple wrapper type to tie a sanitized transaction to max age slot.
 pub(crate) struct SanitizedTransactionTTL {
@@ -34,33 +30,24 @@ pub(crate) enum TransactionState {
     /// The transaction is available for scheduling.
     Unprocessed {
         transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
-        transaction_cost: TransactionCost,
-        forwarded: bool,
+        priority: u64,
+        cost: u64,
     },
     /// The transaction is currently scheduled or being processed.
-    Pending {
-        transaction_priority_details: TransactionPriorityDetails,
-        transaction_cost: TransactionCost,
-        forwarded: bool,
-    },
+    Pending { priority: u64, cost: u64 },
 }
 
 impl TransactionState {
     /// Creates a new `TransactionState` in the `Unprocessed` state.
-    pub(crate) fn new(
-        transaction_ttl: SanitizedTransactionTTL,
-        transaction_priority_details: TransactionPriorityDetails,
-        transaction_cost: TransactionCost,
-    ) -> Self {
+    pub(crate) fn new(transaction_ttl: SanitizedTransactionTTL, priority: u64, cost: u64) -> Self {
         Self::Unprocessed {
             transaction_ttl,
-            transaction_priority_details,
-            transaction_cost,
-            forwarded: false,
+            priority,
+            cost,
         }
     }
 
+    /*
     /// Returns a reference to the priority details of the transaction.
     pub(crate) fn transaction_priority_details(&self) -> &TransactionPriorityDetails {
         match self {
@@ -107,6 +94,25 @@ impl TransactionState {
             Self::Pending { forwarded, .. } => *forwarded = true,
         }
     }
+    */
+
+    /// Return the priority of the transaction.
+    /// This is *not* the same as the `compute_unit_price` of the transaction.
+    /// The priority is used to order transactions for processing.
+    pub(crate) fn priority(&self) -> u64 {
+        match self {
+            Self::Unprocessed { priority, .. } => *priority,
+            Self::Pending { priority, .. } => *priority,
+        }
+    }
+
+    /// Return the cost of the transaction.
+    pub(crate) fn cost(&self) -> u64 {
+        match self {
+            Self::Unprocessed { cost, .. } => *cost,
+            Self::Pending { cost, .. } => *cost,
+        }
+    }
 
     /// Intended to be called when a transaction is scheduled. This method will
     /// transition the transaction from `Unprocessed` to `Pending` and return the
@@ -119,15 +125,10 @@ impl TransactionState {
         match self.take() {
             TransactionState::Unprocessed {
                 transaction_ttl,
-                transaction_priority_details,
-                transaction_cost,
-                forwarded,
+                priority,
+                cost,
             } => {
-                *self = TransactionState::Pending {
-                    transaction_priority_details,
-                    transaction_cost,
-                    forwarded,
-                };
+                *self = TransactionState::Pending { priority, cost };
                 transaction_ttl
             }
             TransactionState::Pending { .. } => {
@@ -145,16 +146,11 @@ impl TransactionState {
     pub(crate) fn transition_to_unprocessed(&mut self, transaction_ttl: SanitizedTransactionTTL) {
         match self.take() {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
-            TransactionState::Pending {
-                transaction_priority_details,
-                transaction_cost,
-                forwarded,
-            } => {
+            TransactionState::Pending { priority, cost } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
-                    transaction_priority_details,
-                    transaction_cost,
-                    forwarded,
+                    priority,
+                    cost,
                 }
             }
         }
@@ -179,14 +175,8 @@ impl TransactionState {
         core::mem::replace(
             self,
             Self::Pending {
-                transaction_priority_details: TransactionPriorityDetails {
-                    priority: 0,
-                    compute_unit_limit: 0,
-                },
-                transaction_cost: TransactionCost::SimpleVote {
-                    writable_accounts: vec![],
-                },
-                forwarded: false,
+                priority: 0,
+                cost: 0,
             },
         )
     }
@@ -196,7 +186,6 @@ impl TransactionState {
 mod tests {
     use {
         super::*,
-        solana_cost_model::transaction_cost::UsageCostDetails,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
             signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
@@ -215,24 +204,13 @@ mod tests {
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[&from_keypair], message, Hash::default());
-        let transaction_cost = TransactionCost::Transaction(UsageCostDetails {
-            signature_cost: 5000,
-            ..UsageCostDetails::default()
-        });
 
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: SanitizedTransaction::from_transaction_for_tests(tx),
             max_age_slot: Slot::MAX,
         };
-
-        TransactionState::new(
-            transaction_ttl,
-            TransactionPriorityDetails {
-                priority,
-                compute_unit_limit: 0,
-            },
-            transaction_cost,
-        )
+        const TEST_TRANSACTION_COST: u64 = 5000;
+        TransactionState::new(transaction_ttl, priority, TEST_TRANSACTION_COST)
     }
 
     #[test]
@@ -294,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_priority_details() {
+    fn test_priority() {
         let priority = 15;
         let mut transaction_state = create_transaction_state(priority);
         assert_eq!(transaction_state.priority(), priority);
