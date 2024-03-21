@@ -104,7 +104,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data_length(space as usize, &invoke_context.feature_set)?;
+    account.set_data_length(space as usize)?;
 
     Ok(())
 }
@@ -126,7 +126,7 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(&owner.to_bytes(), &invoke_context.feature_set)
+    account.set_owner(&owner.to_bytes())
 }
 
 fn allocate_and_assign(
@@ -203,11 +203,11 @@ fn transfer_verified(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    from.checked_sub_lamports(lamports, &invoke_context.feature_set)?;
+    from.checked_sub_lamports(lamports)?;
     drop(from);
     let mut to = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to.checked_add_lamports(lamports, &invoke_context.feature_set)?;
+    to.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -481,9 +481,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
             match nonce_versions.upgrade() {
                 None => Err(InstructionError::InvalidArgument),
-                Some(nonce_versions) => {
-                    nonce_account.set_state(&nonce_versions, &invoke_context.feature_set)
-                }
+                Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
             }
         }
         SystemInstruction::Allocate { space } => {
@@ -2064,5 +2062,55 @@ mod tests {
             accounts[0].deserialize_data::<NonceVersions>().unwrap(),
             upgraded_nonce_account
         );
+    }
+
+    #[test]
+    fn test_assign_native_loader_and_transfer() {
+        for size in [0, 10] {
+            let pubkey = Pubkey::new_unique();
+            let account = AccountSharedData::new(100, size, &system_program::id());
+            let accounts = process_instruction(
+                &bincode::serialize(&SystemInstruction::Assign {
+                    owner: solana_sdk::native_loader::id(),
+                })
+                .unwrap(),
+                vec![(pubkey, account.clone())],
+                vec![AccountMeta {
+                    pubkey,
+                    is_signer: true,
+                    is_writable: true,
+                }],
+                Ok(()),
+            );
+            assert_eq!(accounts[0].owner(), &solana_sdk::native_loader::id());
+            assert_eq!(accounts[0].lamports(), 100);
+
+            let pubkey2 = Pubkey::new_unique();
+            let accounts = process_instruction(
+                &bincode::serialize(&SystemInstruction::Transfer { lamports: 50 }).unwrap(),
+                vec![
+                    (
+                        pubkey2,
+                        AccountSharedData::new(100, 0, &system_program::id()),
+                    ),
+                    (pubkey, accounts[0].clone()),
+                ],
+                vec![
+                    AccountMeta {
+                        pubkey: pubkey2,
+                        is_signer: true,
+                        is_writable: true,
+                    },
+                    AccountMeta {
+                        pubkey,
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                ],
+                Ok(()),
+            );
+            assert_eq!(accounts[1].owner(), &solana_sdk::native_loader::id());
+            assert_eq!(accounts[1].lamports(), 150);
+        }
     }
 }

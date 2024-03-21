@@ -35,7 +35,7 @@ use {
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
-        feature_set::{self, FeatureSet},
+        feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_loader,
@@ -186,14 +186,10 @@ fn bench_program_alu(bencher: &mut Bencher) {
 #[bench]
 fn bench_program_execute_noop(bencher: &mut Bencher) {
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
-
-    genesis_config
-        .accounts
-        .remove(&feature_set::deprecate_executable_meta_update_in_bpf_loader::id());
 
     let bank = Bank::new_for_benches(&genesis_config);
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
@@ -258,7 +254,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
             .get_current_instruction_context()
             .unwrap(),
         !direct_mapping, // copy_account_data,
-        &invoke_context.feature_set,
     )
     .unwrap();
 
@@ -293,7 +288,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             .get_current_instruction_context()
             .unwrap(),
         !direct_mapping, // copy_account_data
-        &invoke_context.feature_set,
     )
     .unwrap();
 

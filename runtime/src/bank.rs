@@ -125,9 +125,9 @@ use {
     },
     solana_sdk::{
         account::{
-            create_account_shared_data_with_fields as create_account, create_executable_meta,
-            from_account, Account, AccountSharedData, InheritableAccountFields, ReadableAccount,
-            WritableAccount, PROGRAM_OWNERS,
+            create_account_shared_data_with_fields as create_account, from_account, Account,
+            AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
+            PROGRAM_OWNERS,
         },
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -3903,12 +3903,10 @@ impl Bank {
         // Add a bogus executable account, which will be loaded and ignored.
         let (lamports, rent_epoch) = self.inherit_specially_retained_account_fields(&None);
 
-        // Mock account_data with executable_meta so that the account is executable.
-        let account_data = create_executable_meta(&owner);
         let account = AccountSharedData::from(Account {
             lamports,
             owner,
-            data: account_data.to_vec(),
+            data: vec![],
             executable: true,
             rent_epoch,
         });

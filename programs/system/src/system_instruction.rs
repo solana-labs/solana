@@ -56,10 +56,7 @@ pub fn advance_nonce_account(
                 next_durable_nonce,
                 invoke_context.lamports_per_signature,
             );
-            account.set_state(
-                &Versions::new(State::Initialized(new_data)),
-                &invoke_context.feature_set,
-            )
+            account.set_state(&Versions::new(State::Initialized(new_data)))
         }
         State::Uninitialized => {
             ic_msg!(
@@ -117,10 +114,7 @@ pub fn withdraw_nonce_account(
                     );
                     return Err(SystemError::NonceBlockhashNotExpired.into());
                 }
-                from.set_state(
-                    &Versions::new(State::Uninitialized),
-                    &invoke_context.feature_set,
-                )?;
+                from.set_state(&Versions::new(State::Uninitialized))?;
             } else {
                 let min_balance = rent.minimum_balance(from.get_data().len());
                 let amount = checked_add(lamports, min_balance)?;
@@ -147,11 +141,11 @@ pub fn withdraw_nonce_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    from.checked_sub_lamports(lamports, &invoke_context.feature_set)?;
+    from.checked_sub_lamports(lamports)?;
     drop(from);
     let mut to = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to.checked_add_lamports(lamports, &invoke_context.feature_set)?;
+    to.checked_add_lamports(lamports)?;
 
     Ok(())
 }
@@ -190,7 +184,7 @@ pub fn initialize_nonce_account(
                 invoke_context.lamports_per_signature,
             );
             let state = State::Initialized(data);
-            account.set_state(&Versions::new(state), &invoke_context.feature_set)
+            account.set_state(&Versions::new(state))
         }
         State::Initialized(_) => {
             ic_msg!(
@@ -221,7 +215,7 @@ pub fn authorize_nonce_account(
         .get_state::<Versions>()?
         .authorize(signers, *nonce_authority)
     {
-        Ok(versions) => account.set_state(&versions, &invoke_context.feature_set),
+        Ok(versions) => account.set_state(&versions),
         Err(AuthorizeNonceError::Uninitialized) => {
             ic_msg!(
                 invoke_context,
@@ -1002,9 +996,7 @@ mod test {
         let mut nonce_account = instruction_context
             .try_borrow_instruction_account(transaction_context, NONCE_ACCOUNT_INDEX)
             .unwrap();
-        nonce_account
-            .checked_sub_lamports(42 * 2, &invoke_context.feature_set)
-            .unwrap();
+        nonce_account.checked_sub_lamports(42 * 2).unwrap();
         set_invoke_context_blockhash!(invoke_context, 63);
         let authorized = *nonce_account.get_key();
         let result =

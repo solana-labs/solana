@@ -156,24 +156,22 @@ fn set_vote_account_state(
             && (!vote_account
                 .is_rent_exempt_at_data_length(VoteStateVersions::vote_state_size_of(true))
                 || vote_account
-                    .set_data_length(VoteStateVersions::vote_state_size_of(true), feature_set)
+                    .set_data_length(VoteStateVersions::vote_state_size_of(true))
                     .is_err())
         {
             // Account cannot be resized to the size of a vote state as it will not be rent exempt, or failed to be
             // resized for other reasons.  So store the V1_14_11 version.
-            return vote_account.set_state(
-                &VoteStateVersions::V1_14_11(Box::new(VoteState1_14_11::from(vote_state))),
-                feature_set,
-            );
+            return vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
+                VoteState1_14_11::from(vote_state),
+            )));
         }
         // Vote account is large enough to store the newest version of vote state
-        vote_account.set_state(&VoteStateVersions::new_current(vote_state), feature_set)
+        vote_account.set_state(&VoteStateVersions::new_current(vote_state))
     // Else when the vote_state_add_vote_latency feature is not enabled, then the V1_14_11 version is stored
     } else {
-        vote_account.set_state(
-            &VoteStateVersions::V1_14_11(Box::new(VoteState1_14_11::from(vote_state))),
-            feature_set,
-        )
+        vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
+            VoteState1_14_11::from(vote_state),
+        )))
     }
 }
 
@@ -1023,11 +1021,11 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         }
     }
 
-    vote_account.checked_sub_lamports(lamports, feature_set)?;
+    vote_account.checked_sub_lamports(lamports)?;
     drop(vote_account);
     let mut to_account = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to_account.checked_add_lamports(lamports, feature_set)?;
+    to_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -1373,7 +1371,7 @@ mod tests {
         // Test that when the feature is enabled, if the vote account does have sufficient lamports, the
         // new vote state is written out
         assert_eq!(
-            borrowed_account.set_lamports(rent.minimum_balance(VoteState::size_of()), &feature_set),
+            borrowed_account.set_lamports(rent.minimum_balance(VoteState::size_of()),),
             Ok(())
         );
         assert_eq!(
