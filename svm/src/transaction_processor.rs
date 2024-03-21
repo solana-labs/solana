@@ -135,6 +135,9 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Optional config parameters that can override runtime behavior
     runtime_config: Arc<RuntimeConfig>,
 
+    /// SysvarCache is a collection of system variables that are
+    /// accessible from on chain programs. It is passed to SVM from
+    /// client code (e.g. Bank) and forwarded to the MessageProcessor.
     pub sysvar_cache: RwLock<SysvarCache>,
 
     /// Programs required for transaction batch processing
