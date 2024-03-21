@@ -2031,32 +2031,32 @@ mod tests {
                 vec![32],
                 35,
                 // root: 1
-                // when slot 1 was voted on in slot 9, it earned 2 credits
-                2,
+                // when slot 1 was voted on in slot 9, it earned 10 credits
+                10,
             ),
             // Now another vote, should earn one credit
             (
                 vec![33],
                 36,
                 // root: 2
-                // when slot 2 was voted on in slot 9, it earned 3 credits
-                2 + 3, // 5
+                // when slot 2 was voted on in slot 9, it earned 11 credits
+                10 + 11, // 21
             ),
             // Two votes in sequence
             (
                 vec![34, 35],
                 37,
                 // root: 4
-                // when slots 3 and 4 were voted on in slot 9, they earned 4 and 5 credits
-                5 + 4 + 5, // 14
+                // when slots 3 and 4 were voted on in slot 9, they earned 12 and 13 credits
+                21 + 12 + 13, // 46
             ),
             // 3 votes in sequence
             (
                 vec![36, 37, 38],
                 39,
                 // root: 7
-                // slots 5, 6, and 7 earned 6, 7, and 8 credits when voted in slot 9
-                14 + 6 + 7 + 8, // 35
+                // slots 5, 6, and 7 earned 14, 15, and 16 credits when voted in slot 9
+                46 + 14 + 15 + 16, // 91
             ),
             (
                 // 30 votes in sequence
@@ -2066,14 +2066,36 @@ mod tests {
                 ],
                 69,
                 // root: 37
-                // slot 8 was voted in slot 9, earning 8 credits
-                // slots 9 - 25 earned 1 credit when voted in slot 34
-                // slot 26, 27, 28, 29, 30, 31 earned 2, 3, 4, 5, 6, 7 credits when voted in slot 34
-                // slot 32 earned 7 credits when voted in slot 35
-                // slot 33 earned 7 credits when voted in slot 36
-                // slot 34 and 35 earned 7 and 8 credits when voted in slot 37
-                // slot 36 and 37 earned 7 and 8 credits when voted in slot 39
-                35 + 8 + ((25 - 9) + 1) + 2 + 3 + 4 + 5 + 6 + 7 + 7 + 7 + 7 + 8 + 7 + 8, // 131
+                // slot 8 was voted in slot 9, earning 16 credits
+                // slots 9 - 25 earned 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, and 9 credits when voted in
+                //   slot 34
+                // slot 26, 27, 28, 29, 30, 31 earned 10, 11, 12, 13, 14, 15 credits when voted in slot 34
+                // slot 32 earned 15 credits when voted in slot 35
+                // slot 33 earned 15 credits when voted in slot 36
+                // slot 34 and 35 earned 15 and 16 credits when voted in slot 37
+                // slot 36 and 37 earned 15 and 16 credits when voted in slot 39
+                91 + 16
+                    + 9 // * 1
+                    + 2
+                    + 3
+                    + 4
+                    + 5
+                    + 6
+                    + 7
+                    + 8
+                    + 9
+                    + 10
+                    + 11
+                    + 12
+                    + 13
+                    + 14
+                    + 15
+                    + 15
+                    + 15
+                    + 15
+                    + 16
+                    + 15
+                    + 16, // 327
             ),
             // 31 votes in sequence
             (
@@ -2083,11 +2105,29 @@ mod tests {
                 ],
                 100,
                 // root: 68
-                // slot 38 earned 8 credits when voted in slot 39
-                // slot 39 - 60 earned 1 credit each when voted in slot 69
-                // slot 61, 62, 63, 64, 65, 66, 67, 68 earned 2, 3, 4, 5, 6, 7, 8, and 8 credits when
+                // slot 38 earned 16 credits when voted in slot 39
+                // slot 39 - 60 earned 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, and 9 credits
+                //   when voted in slot 69
+                // slot 61, 62, 63, 64, 65, 66, 67, 68 earned 10, 11, 12, 13, 14, 15, 16, and 16 credits when
                 //   voted in slot 69
-                131 + 8 + ((60 - 39) + 1) + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 8, // 204
+                327 + 16
+                    + 14 // * 1
+                    + 2
+                    + 3
+                    + 4
+                    + 5
+                    + 6
+                    + 7
+                    + 8
+                    + 9
+                    + 10
+                    + 11
+                    + 12
+                    + 13
+                    + 14
+                    + 15
+                    + 16
+                    + 16, // 508
             ),
             // Votes with expiry
             (
@@ -2096,7 +2136,7 @@ mod tests {
                 // root: 74
                 // slots 96 - 114 expire
                 // slots 69 - 74 earned 1 credit when voted in slot 100
-                204 + ((74 - 69) + 1), // 210
+                508 + ((74 - 69) + 1), // 514
             ),
             // More votes with expiry of a large number of votes
             (
@@ -2104,7 +2144,7 @@ mod tests {
                 202,
                 // root: 74
                 // slots 119 - 124 expire
-                210,
+                514,
             ),
             (
                 vec![
@@ -2113,23 +2153,25 @@ mod tests {
                 ],
                 227,
                 // root: 95
-                // slot 75 - 91 earned 1 credit each when voted in slot 100
-                // slot 92, 93, 94, 95 earned 2, 3, 4, 5, credits when voted in slot 100
-                210 + ((91 - 75) + 1) + 2 + 3 + 4 + 5, // 241
+                // slot 75 - 91 earned 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, and 9 credits when voted in
+                //   slot 100
+                // slot 92, 93, 94, 95 earned 10, 11, 12, 13, credits when voted in slot 100
+                514 + 9 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13, // 613
             ),
             (
                 vec![227, 228, 229, 230, 231, 232, 233, 234, 235, 236],
                 237,
                 // root: 205
-                // slot 115 - 118 earned 1 credit when voted in slot 130
-                // slot 200 and 201 earned 8 credits when voted in slot 202
+                // slot 115 - 118 earned 3, 4, 5, and 6 credits when voted in slot 130
+                // slot 200 and 201 earned 16 credits when voted in slot 202
                 // slots 202 - 205 earned 1 credit when voted in slot 227
-                241 + 1 + 1 + 1 + 1 + 8 + 8 + 1 + 1 + 1 + 1, // 265
+                613 + 3 + 4 + 5 + 6 + 16 + 16 + 1 + 1 + 1 + 1, // 667
             ),
         ];
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // For each vote group, process all vote groups leading up to it and it itself, and ensure that the number of
         // credits earned is correct for both regular votes and vote state updates
@@ -2256,14 +2298,15 @@ mod tests {
                 42,
                 // root: 10
                 Some(10),
-                // when slots 1 - 6 were voted on in slot 12, they earned 1, 1, 1, 2, 3, and 4 credits
-                // when slots 7 - 10 were voted on in slot 11, they earned 6, 7, 8, and 8 credits
-                1 + 1 + 1 + 2 + 3 + 4 + 6 + 7 + 8 + 8,
+                // when slots 1 - 6 were voted on in slot 12, they earned 7, 8, 9, 10, 11, and 12 credits
+                // when slots 7 - 10 were voted on in slot 11, they earned 14, 15, 16, and 16 credits
+                7 + 8 + 9 + 10 + 11 + 12 + 14 + 15 + 16 + 16,
             ),
         ];
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // Retroactive voting is only possible with VoteStateUpdate transactions, which is why Vote transactions are
         // not tested here
