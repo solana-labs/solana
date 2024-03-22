@@ -360,8 +360,8 @@ impl HotStorageReader {
     }
 
     /// Returns the size of the underlying storage.
-    pub fn len(&self) -> u64 {
-        self.mmap.len() as u64
+    pub fn len(&self) -> usize {
+        self.mmap.len()
     }
 
     /// Returns whether the nderlying storage is empty.
@@ -1432,10 +1432,10 @@ pub mod tests {
         }
         let footer = hot_storage.footer();
 
-        let expected_size: u64 = footer.owners_block_offset
-            + std::mem::size_of::<Pubkey>() as u64 * footer.owner_count as u64
-            + std::mem::size_of::<TieredStorageFooter>() as u64
-            + std::mem::size_of::<TieredStorageMagicNumber>() as u64;
+        let expected_size = footer.owners_block_offset as usize
+            + std::mem::size_of::<Pubkey>() * footer.owner_count as usize
+            + std::mem::size_of::<TieredStorageFooter>()
+            + std::mem::size_of::<TieredStorageMagicNumber>();
 
         assert!(!hot_storage.is_empty());
         assert_eq!(expected_size, hot_storage.len());

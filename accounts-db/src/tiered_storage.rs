@@ -155,8 +155,13 @@ impl TieredStorage {
     }
 
     /// Returns the size of the underlying accounts file.
-    pub fn file_size(&self) -> TieredStorageResult<u64> {
-        Ok(self.reader().map_or(0, |reader| reader.len()))
+    pub fn len(&self) -> usize {
+        self.reader().map_or(0, |reader| reader.len())
+    }
+
+    /// Returns whether the underlying storage is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -220,7 +225,7 @@ mod tests {
 
         assert!(tiered_storage.is_read_only());
         assert_eq!(
-            tiered_storage.file_size().unwrap() as usize,
+            tiered_storage.len(),
             std::mem::size_of::<TieredStorageFooter>()
                 + std::mem::size_of::<TieredStorageMagicNumber>()
         );
@@ -238,7 +243,7 @@ mod tests {
 
             assert!(!tiered_storage.is_read_only());
             assert_eq!(tiered_storage.path(), tiered_storage_path);
-            assert_eq!(tiered_storage.file_size().unwrap(), 0);
+            assert_eq!(tiered_storage.len(), 0);
 
             write_zero_accounts(&tiered_storage, Ok(vec![]));
         }
@@ -252,7 +257,7 @@ mod tests {
         assert_eq!(footer.index_block_format, HOT_FORMAT.index_block_format);
         assert_eq!(footer.account_block_format, HOT_FORMAT.account_block_format);
         assert_eq!(
-            tiered_storage_readonly.file_size().unwrap() as usize,
+            tiered_storage_readonly.len(),
             std::mem::size_of::<TieredStorageFooter>()
                 + std::mem::size_of::<TieredStorageMagicNumber>()
         );

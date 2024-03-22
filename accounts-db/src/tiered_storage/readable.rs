@@ -31,7 +31,7 @@ impl TieredStorageReader {
     }
 
     /// Returns the size of the underlying storage.
-    pub fn len(&self) -> u64 {
+    pub fn len(&self) -> usize {
         match self {
             Self::Hot(hot) => hot.len(),
         }
