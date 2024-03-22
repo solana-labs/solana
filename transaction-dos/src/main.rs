@@ -247,6 +247,7 @@ fn run_transactions_dos(
             upgrade_authority_signer_index: 0,
             is_final: true,
             max_len: None,
+            compute_unit_price: None,
             skip_fee_check: true, // skip_fee_check
         });
 

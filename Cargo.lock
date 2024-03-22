@@ -5781,6 +5781,7 @@ dependencies = [
  "solana-program-runtime",
  "solana-pubsub-client",
  "solana-remote-wallet",
+ "solana-rpc",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-rpc-client-nonce-utils",
