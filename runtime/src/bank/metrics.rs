@@ -31,7 +31,7 @@ pub(crate) struct NewBankTimings {
     pub(crate) blockhash_queue_time_us: u64,
     pub(crate) stakes_cache_time_us: u64,
     pub(crate) epoch_stakes_time_us: u64,
-    pub(crate) builtin_programs_time_us: u64,
+    pub(crate) builtin_program_ids_time_us: u64,
     pub(crate) rewards_pool_pubkeys_time_us: u64,
     pub(crate) executor_cache_time_us: u64,
     pub(crate) transaction_debug_keys_time_us: u64,
@@ -125,7 +125,11 @@ pub(crate) fn report_new_bank_metrics(
         ("blockhash_queue_us", timings.blockhash_queue_time_us, i64),
         ("stakes_cache_us", timings.stakes_cache_time_us, i64),
         ("epoch_stakes_time_us", timings.epoch_stakes_time_us, i64),
-        ("builtin_programs_us", timings.builtin_programs_time_us, i64),
+        (
+            "builtin_programs_us",
+            timings.builtin_program_ids_time_us,
+            i64
+        ),
         (
             "rewards_pool_pubkeys_us",
             timings.rewards_pool_pubkeys_time_us,
