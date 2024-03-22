@@ -405,17 +405,21 @@ pub fn process_instruction_deploy(
     let deployment_slot = state.slot;
     let effective_slot = deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET);
 
+    let environments = invoke_context
+        .get_environments_for_slot(effective_slot)
+        .map_err(|err| {
+            // This will never fail since the epoch schedule is already configured.
+            ic_logger_msg!(log_collector, "Failed to get runtime environment {}", err);
+            InstructionError::InvalidArgument
+        })?;
+
     let mut load_program_metrics = LoadProgramMetrics {
         program_id: buffer.get_key().to_string(),
         ..LoadProgramMetrics::default()
     };
     let executor = LoadedProgram::new(
         &loader_v4::id(),
-        invoke_context
-            .programs_modified_by_tx
-            .environments
-            .program_runtime_v2
-            .clone(),
+        environments.program_runtime_v2.clone(),
         deployment_slot,
         effective_slot,
         programdata,

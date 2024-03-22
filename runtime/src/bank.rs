@@ -33,10 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-#[cfg(feature = "dev-context-only-utils")]
-use solana_accounts_db::accounts_db::{
-    ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
-};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -198,6 +194,13 @@ use {
         thread::Builder,
         time::{Duration, Instant},
     },
+};
+#[cfg(feature = "dev-context-only-utils")]
+use {
+    solana_accounts_db::accounts_db::{
+        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+    },
+    solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
 };
 
 /// params to `verify_accounts_hash`
@@ -7880,6 +7883,14 @@ impl Bank {
 
     pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
+    }
+
+    pub fn new_program_cache_for_tx_batch_for_slot(&self, slot: Slot) -> LoadedProgramsForTxBatch {
+        LoadedProgramsForTxBatch::new_from_cache(
+            slot,
+            self.epoch_schedule.get_epoch(slot),
+            &self.program_cache.read().unwrap(),
+        )
     }
 }
 

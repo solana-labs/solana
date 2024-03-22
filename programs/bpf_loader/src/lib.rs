@@ -51,7 +51,7 @@ use {
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
-    syscalls::create_program_runtime_environment_v1,
+    syscalls::{create_program_runtime_environment_v1, morph_into_deployment_environment_v1},
 };
 
 pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
@@ -106,11 +106,16 @@ macro_rules! deploy_program {
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
         let mut register_syscalls_time = Measure::start("register_syscalls_time");
-        let deployment_program_runtime_environment = create_program_runtime_environment_v1(
-            &$invoke_context.feature_set,
-            $invoke_context.get_compute_budget(),
-            true, /* deployment */
-            false, /* debugging_features */
+        let deployment_slot: Slot = $slot;
+        let environments = $invoke_context.get_environments_for_slot(
+            deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
+        ).map_err(|e| {
+            // This will never fail since the epoch schedule is already configured.
+            ic_msg!($invoke_context, "Failed to get runtime environment: {}", e);
+            InstructionError::ProgramEnvironmentSetupFailure
+        })?;
+        let deployment_program_runtime_environment = morph_into_deployment_environment_v1(
+            environments.program_runtime_v1.clone(),
         ).map_err(|e| {
             ic_msg!($invoke_context, "Failed to register syscalls: {}", e);
             InstructionError::ProgramEnvironmentSetupFailure
@@ -143,7 +148,7 @@ macro_rules! deploy_program {
             $loader_key,
             $account_size,
             $slot,
-            $invoke_context.programs_modified_by_tx.environments.program_runtime_v1.clone(),
+            environments.program_runtime_v1.clone(),
             true,
         )?;
         if let Some(old_entry) = $invoke_context.find_program_in_cache(&$program_id) {
@@ -1536,6 +1541,7 @@ mod tests {
             },
             account_utils::StateMut,
             clock::Clock,
+            epoch_schedule::EpochSchedule,
             instruction::{AccountMeta, InstructionError},
             pubkey::Pubkey,
             rent::Rent,
@@ -3723,7 +3729,10 @@ mod tests {
 
     #[test]
     fn test_program_usage_count_on_upgrade() {
-        let transaction_accounts = vec![];
+        let transaction_accounts = vec![(
+            sysvar::epoch_schedule::id(),
+            create_account_for_test(&EpochSchedule::default()),
+        )];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_mock());
@@ -3763,7 +3772,10 @@ mod tests {
 
     #[test]
     fn test_program_usage_count_on_non_upgrade() {
-        let transaction_accounts = vec![];
+        let transaction_accounts = vec![(
+            sysvar::epoch_schedule::id(),
+            create_account_for_test(&EpochSchedule::default()),
+        )];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let program_id = Pubkey::new_unique();
         let env = Arc::new(BuiltinProgram::new_mock());

@@ -510,9 +510,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 // Initialize our local cache.
                 let is_first_round = loaded_programs_for_txs.is_none();
                 if is_first_round {
-                    loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
+                    loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new_from_cache(
                         self.slot,
-                        program_cache.get_environments_for_epoch(self.epoch).clone(),
+                        self.epoch,
+                        &program_cache,
                     ));
                 }
                 // Submit our last completed loading task.
@@ -523,9 +524,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         // This branch is taken when there is an error in assigning a program to a
                         // cache slot. It is not possible to mock this error for SVM unit
                         // tests purposes.
-                        let mut ret = LoadedProgramsForTxBatch::new(
+                        let mut ret = LoadedProgramsForTxBatch::new_from_cache(
                             self.slot,
-                            program_cache.get_environments_for_epoch(self.epoch).clone(),
+                            self.epoch,
+                            &program_cache,
                         );
                         ret.hit_max_limit = true;
                         return ret;
@@ -630,6 +632,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
             self.slot,
             programs_loaded_for_tx_batch.environments.clone(),
+            programs_loaded_for_tx_batch.upcoming_environments.clone(),
+            programs_loaded_for_tx_batch.latest_root_epoch,
         );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(

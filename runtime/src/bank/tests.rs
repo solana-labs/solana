@@ -13921,3 +13921,115 @@ fn test_check_execution_status_and_charge_fee() {
             }
         });
 }
+#[test]
+fn test_deploy_last_epoch_slot() {
+    solana_logger::setup();
+
+    // Bank Setup
+    let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config
+        .accounts
+        .remove(&feature_set::reject_callx_r10::id());
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.activate_feature(&feature_set::reject_callx_r10::id());
+
+    // go to the last slot in the epoch
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let slots_in_epoch = bank.epoch_schedule().get_slots_in_epoch(0);
+    let bank = new_bank_from_parent_with_bank_forks(
+        &bank_forks,
+        bank,
+        &Pubkey::default(),
+        slots_in_epoch - 1,
+    );
+    eprintln!("now at slot {} epoch {}", bank.slot(), bank.epoch());
+
+    // deploy a program
+    let payer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    let min_program_balance =
+        bank.get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program());
+    let min_buffer_balance = bank
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_buffer(elf.len()));
+    let min_programdata_balance = bank.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::size_of_programdata(elf.len()),
+    );
+    let buffer_address = Pubkey::new_unique();
+    let (programdata_address, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+    let upgrade_authority_keypair = Keypair::new();
+
+    let buffer_account = {
+        let mut account = AccountSharedData::new(
+            min_buffer_balance,
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
+            &bpf_loader_upgradeable::id(),
+        );
+        account
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(upgrade_authority_keypair.pubkey()),
+            })
+            .unwrap();
+        account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
+            .unwrap()
+            .copy_from_slice(&elf);
+        account
+    };
+
+    let payer_base_balance = LAMPORTS_PER_SOL;
+    let deploy_fees = {
+        let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
+        3 * fee_calculator.lamports_per_signature
+    };
+    let min_payer_balance = min_program_balance
+        .saturating_add(min_programdata_balance)
+        .saturating_sub(min_buffer_balance.saturating_add(deploy_fees));
+    bank.store_account(
+        &payer_keypair.pubkey(),
+        &AccountSharedData::new(
+            payer_base_balance.saturating_add(min_payer_balance),
+            0,
+            &system_program::id(),
+        ),
+    );
+    bank.store_account(&buffer_address, &buffer_account);
+    bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+    bank.store_account(&programdata_address, &AccountSharedData::default());
+    let message = Message::new(
+        &bpf_loader_upgradeable::deploy_with_max_program_len(
+            &payer_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            &upgrade_authority_keypair.pubkey(),
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap(),
+        Some(&payer_keypair.pubkey()),
+    );
+    let signers = &[&payer_keypair, &program_keypair, &upgrade_authority_keypair];
+    let transaction = Transaction::new(signers, message.clone(), bank.last_blockhash());
+    let ret = bank.process_transaction(&transaction);
+    assert!(ret.is_ok(), "ret: {:?}", ret);
+    goto_end_of_slot(bank.clone());
+
+    // go to the first slot in the new epoch
+    let bank =
+        new_bank_from_parent_with_bank_forks(&bank_forks, bank, &Pubkey::default(), slots_in_epoch);
+    eprintln!("now at slot {} epoch {}", bank.slot(), bank.epoch());
+
+    let instruction = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let binding = mint_keypair.insecure_clone();
+    let signers = vec![&binding];
+    let transaction = Transaction::new(&signers, message, bank.last_blockhash());
+    let result_with_feature_enabled = bank.process_transaction(&transaction);
+    assert_eq!(result_with_feature_enabled, Ok(()));
+}

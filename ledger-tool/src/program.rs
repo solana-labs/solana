@@ -21,11 +21,12 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        account::AccountSharedData,
+        account::{create_account_shared_data_for_test, AccountSharedData},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         pubkey::Pubkey,
         slot_history::Slot,
+        sysvar,
         transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
@@ -510,13 +511,16 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         program_id, // ID of the loaded program. It can modify accounts with the same owner key
         AccountSharedData::new(0, 0, &loader_id),
     ));
+    transaction_accounts.push((
+        sysvar::epoch_schedule::id(),
+        create_account_shared_data_for_test(bank.epoch_schedule()),
+    ));
     let interpreted = matches.value_of("mode").unwrap() != "jit";
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
-    let slot = bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET;
     let mut loaded_programs =
-        LoadedProgramsForTxBatch::new(slot, bank.get_runtime_environments_for_slot(slot));
+        bank.new_program_cache_for_tx_batch_for_slot(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
     for key in cached_account_keys {
         loaded_programs.replenish(key, bank.load_program(&key, false, bank.epoch()));
         debug!("Loaded program {}", key);

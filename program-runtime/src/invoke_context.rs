@@ -2,7 +2,9 @@ use {
     crate::{
         compute_budget::ComputeBudget,
         ic_msg,
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
+        },
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::SysvarCache,
@@ -17,8 +19,10 @@ use {
         vm::{Config, ContextObject, EbpfVm},
     },
     solana_sdk::{
-        account::AccountSharedData,
+        account::{create_account_shared_data_for_test, AccountSharedData},
         bpf_loader_deprecated,
+        clock::Slot,
+        epoch_schedule::EpochSchedule,
         feature_set::FeatureSet,
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -26,6 +30,7 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         stable_layout::stable_instruction::StableInstruction,
+        sysvar,
         transaction_context::{
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
         },
@@ -207,6 +212,17 @@ impl<'a> InvokeContext<'a> {
         self.programs_modified_by_tx
             .find(pubkey)
             .or_else(|| self.programs_loaded_for_tx_batch.find(pubkey))
+    }
+
+    pub fn get_environments_for_slot(
+        &self,
+        effective_slot: Slot,
+    ) -> Result<&ProgramRuntimeEnvironments, InstructionError> {
+        let epoch_schedule = self.sysvar_cache.get_epoch_schedule()?;
+        let epoch = epoch_schedule.get_epoch(effective_slot);
+        Ok(self
+            .programs_loaded_for_tx_batch
+            .get_environments_for_epoch(epoch))
     }
 
     /// Push a stack frame onto the invocation stack
@@ -713,6 +729,18 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
+    let pop_epoch_schedule_account = if !transaction_accounts
+        .iter()
+        .any(|(key, _)| *key == sysvar::epoch_schedule::id())
+    {
+        transaction_accounts.push((
+            sysvar::epoch_schedule::id(),
+            create_account_shared_data_for_test(&EpochSchedule::default()),
+        ));
+        true
+    } else {
+        false
+    };
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
     programs_loaded_for_tx_batch.replenish(
@@ -731,6 +759,9 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     assert_eq!(result, expected_result);
     post_adjustments(&mut invoke_context);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
+    if pop_epoch_schedule_account {
+        transaction_accounts.pop();
+    }
     transaction_accounts.pop();
     transaction_accounts
 }
