@@ -553,6 +553,11 @@ pub mod enable_bpf_loader_set_authority_checked_ix {
 pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
+
+pub mod simplify_alt_bn128_syscall_error_codes {
+    solana_sdk::declare_id!("JDn5q3GBeqzvUa7z67BbmVHVdE3EbUAjvFep3weR3jxX");
+}
+
 pub mod enable_alt_bn128_compression_syscall {
     solana_sdk::declare_id!("EJJewYSddEEtSZHiqugnvhQHiWyZKjkFDQASd7oKSagn");
 }
@@ -912,6 +917,7 @@ lazy_static! {
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
+        (simplify_alt_bn128_syscall_error_codes::id(), "simplify alt_bn128 syscall error codes SIMD-0129"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
