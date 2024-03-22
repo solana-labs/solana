@@ -9,7 +9,7 @@ use {
     },
 };
 
-/// Used to validate a built-in program's account before migrating to Core BPF.
+/// The account details of a built-in program to be migrated to Core BPF.
 #[derive(Debug)]
 pub(crate) struct TargetProgramBuiltin {
     pub program_address: Pubkey,
@@ -19,7 +19,8 @@ pub(crate) struct TargetProgramBuiltin {
 }
 
 impl TargetProgramBuiltin {
-    /// Create a new migration configuration for a built-in program.
+    /// Collects the details of a built-in program and verifies it is properly
+    /// configured
     pub(crate) fn new_checked(
         bank: &Bank,
         program_address: &Pubkey,
@@ -143,12 +144,12 @@ mod tests {
         let program_data_address = get_program_data_address(&program_address);
 
         // Success
-        let builtin_config =
+        let target_builtin =
             TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
-        assert_eq!(builtin_config.program_address, program_address);
-        assert_eq!(builtin_config.program_account, program_account);
-        assert_eq!(builtin_config.program_data_address, program_data_address);
-        assert_eq!(builtin_config.total_data_size, program_account.data().len());
+        assert_eq!(target_builtin.program_address, program_address);
+        assert_eq!(target_builtin.program_account, program_account);
+        assert_eq!(target_builtin.program_data_address, program_data_address);
+        assert_eq!(target_builtin.total_data_size, program_account.data().len());
 
         // Fail if the program account is not owned by the native loader
         store_account(
@@ -210,12 +211,12 @@ mod tests {
         let program_data_address = get_program_data_address(&program_address);
 
         // Success
-        let builtin_config =
+        let target_builtin =
             TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
-        assert_eq!(builtin_config.program_address, program_address);
-        assert_eq!(builtin_config.program_account, program_account);
-        assert_eq!(builtin_config.program_data_address, program_data_address);
-        assert_eq!(builtin_config.total_data_size, program_account.data().len());
+        assert_eq!(target_builtin.program_address, program_address);
+        assert_eq!(target_builtin.program_account, program_account);
+        assert_eq!(target_builtin.program_data_address, program_data_address);
+        assert_eq!(target_builtin.total_data_size, program_account.data().len());
 
         // Fail if the program data account exists
         store_account(
