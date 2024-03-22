@@ -195,7 +195,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            accounts_db::{AccountStorageEntry, AppendVecId},
+            accounts_db::{AccountStorageEntry, AccountsFileId},
             accounts_file::AccountsFile,
             append_vec::AppendVec,
         },
@@ -297,7 +297,7 @@ mod tests {
             assert!(
                 (slot != 2 && slot != 4)
                     ^ storage
-                        .map(|storage| storage.append_vec_id() == (slot as AppendVecId))
+                        .map(|storage| storage.append_vec_id() == (slot as AccountsFileId))
                         .unwrap_or(false),
                 "slot: {slot}, storage: {storage:?}"
             );
@@ -440,7 +440,7 @@ mod tests {
         );
     }
 
-    fn create_sample_store(id: AppendVecId) -> Arc<AccountStorageEntry> {
+    fn create_sample_store(id: AccountsFileId) -> Arc<AccountStorageEntry> {
         let tf = crate::append_vec::test_utils::get_append_vec_path("create_sample_store");
         let (_temp_dirs, paths) = crate::accounts_db::get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;

@@ -18,7 +18,7 @@ use {
             rebuild_storages_from_snapshot_dir, serialize_snapshot_data_file,
             verify_and_unarchive_snapshots, verify_unpacked_snapshots_dir_and_version,
             AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotKind, SnapshotError,
-            SnapshotRootPaths, SnapshotVersion, StorageAndNextAppendVecId,
+            SnapshotRootPaths, SnapshotVersion, StorageAndNextAccountsFileId,
             UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
         },
         status_cache,
@@ -27,7 +27,7 @@ use {
     log::*,
     solana_accounts_db::{
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAccountsFileId,
             CalcAccountsHashDataSource,
         },
         accounts_hash::AccountsHash,
@@ -308,7 +308,7 @@ pub fn bank_from_snapshot_archives(
         storage.extend(incremental_snapshot_storages);
     }
 
-    let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
+    let storage_and_next_append_vec_id = StorageAndNextAccountsFileId {
         storage,
         next_append_vec_id,
     };
@@ -501,7 +501,7 @@ pub fn bank_from_snapshot_dir(
         delete_contents_of_path(path);
     }
 
-    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
+    let next_append_vec_id = Arc::new(AtomicAccountsFileId::new(0));
 
     let (storage, measure_rebuild_storages) = measure!(
         rebuild_storages_from_snapshot_dir(
@@ -515,7 +515,7 @@ pub fn bank_from_snapshot_dir(
 
     let next_append_vec_id =
         Arc::try_unwrap(next_append_vec_id).expect("this is the only strong reference");
-    let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
+    let storage_and_next_append_vec_id = StorageAndNextAccountsFileId {
         storage,
         next_append_vec_id,
     };
@@ -685,7 +685,7 @@ fn rebuild_bank_from_unarchived_snapshots(
         &UnpackedSnapshotsDirAndVersion,
     >,
     account_paths: &[PathBuf],
-    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
+    storage_and_next_append_vec_id: StorageAndNextAccountsFileId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -781,7 +781,7 @@ fn rebuild_bank_from_unarchived_snapshots(
 fn rebuild_bank_from_snapshot(
     bank_snapshot: &BankSnapshotInfo,
     account_paths: &[PathBuf],
-    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
+    storage_and_next_append_vec_id: StorageAndNextAccountsFileId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,

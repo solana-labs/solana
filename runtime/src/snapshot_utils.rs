@@ -18,7 +18,7 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{AccountStorageEntry, AtomicAppendVecId},
+        accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
         accounts_file::AccountsFileError,
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
@@ -281,9 +281,9 @@ pub struct UnpackedSnapshotsDirAndVersion {
 
 /// Helper type for passing around account storage map and next append vec id
 /// for reconstructing accounts from a snapshot
-pub(crate) struct StorageAndNextAppendVecId {
+pub(crate) struct StorageAndNextAccountsFileId {
     pub storage: AccountStorageMap,
-    pub next_append_vec_id: AtomicAppendVecId,
+    pub next_append_vec_id: AtomicAccountsFileId,
 }
 
 #[derive(Error, Debug)]
@@ -1228,7 +1228,7 @@ pub fn verify_and_unarchive_snapshots(
 ) -> Result<(
     UnarchivedSnapshot,
     Option<UnarchivedSnapshot>,
-    AtomicAppendVecId,
+    AtomicAccountsFileId,
 )> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -1237,7 +1237,7 @@ pub fn verify_and_unarchive_snapshots(
 
     let parallel_divisions = (num_cpus::get() / 4).clamp(1, PARALLEL_UNTAR_READERS_DEFAULT);
 
-    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
+    let next_append_vec_id = Arc::new(AtomicAccountsFileId::new(0));
     let unarchived_full_snapshot = unarchive_snapshot(
         &bank_snapshots_dir,
         TMP_SNAPSHOT_ARCHIVE_PREFIX,
@@ -1384,7 +1384,7 @@ fn unarchive_snapshot(
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
-    next_append_vec_id: Arc<AtomicAppendVecId>,
+    next_append_vec_id: Arc<AtomicAccountsFileId>,
 ) -> Result<UnarchivedSnapshot> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(unpacked_snapshots_dir_prefix)
@@ -1459,7 +1459,7 @@ fn streaming_snapshot_dir_files(
 pub fn rebuild_storages_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
-    next_append_vec_id: Arc<AtomicAppendVecId>,
+    next_append_vec_id: Arc<AtomicAccountsFileId>,
 ) -> Result<AccountStorageMap> {
     let bank_snapshot_dir = &snapshot_info.snapshot_dir;
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);

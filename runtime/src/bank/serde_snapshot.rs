@@ -14,7 +14,7 @@ mod tests {
             snapshot_bank_utils,
             snapshot_utils::{
                 self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
-                StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+                StorageAndNextAccountsFileId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
             status_cache::StatusCache,
         },
@@ -23,7 +23,7 @@ mod tests {
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts_db::{
                 get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
-                AtomicAppendVecId,
+                AtomicAccountsFileId,
             },
             accounts_file::{AccountsFile, AccountsFileError},
             accounts_hash::{AccountsDeltaHash, AccountsHash},
@@ -53,7 +53,7 @@ mod tests {
     fn copy_append_vecs<P: AsRef<Path>>(
         accounts_db: &AccountsDb,
         output_dir: P,
-    ) -> Result<StorageAndNextAppendVecId, AccountsFileError> {
+    ) -> Result<StorageAndNextAccountsFileId, AccountsFileError> {
         let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
         let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
         let mut next_append_vec_id = 0;
@@ -84,9 +84,9 @@ mod tests {
             );
         }
 
-        Ok(StorageAndNextAppendVecId {
+        Ok(StorageAndNextAccountsFileId {
             storage,
-            next_append_vec_id: AtomicAppendVecId::new(next_append_vec_id + 1),
+            next_append_vec_id: AtomicAccountsFileId::new(next_append_vec_id + 1),
         })
     }
 

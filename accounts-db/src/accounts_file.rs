@@ -3,7 +3,7 @@ use {
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
-        accounts_db::AppendVecId,
+        accounts_db::AccountsFileId,
         accounts_hash::AccountHash,
         append_vec::{AppendVec, AppendVecError},
         storable_accounts::StorableAccounts,
@@ -104,7 +104,7 @@ impl AccountsFile {
         }
     }
 
-    pub fn file_name(slot: Slot, id: AppendVecId) -> String {
+    pub fn file_name(slot: Slot, id: AccountsFileId) -> String {
         format!("{slot}.{id}")
     }
 

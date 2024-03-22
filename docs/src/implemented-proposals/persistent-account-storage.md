@@ -19,11 +19,11 @@ The underlying memory for an AppendVec is a memory-mapped file. Memory-mapped fi
 The account index is designed to support a single index for all the currently forked Accounts.
 
 ```text
-type AppendVecId = usize;
+type AccountsFileId = usize;
 
 type Fork = u64;
 
-struct AccountMap(Hashmap<Fork, (AppendVecId, u64)>);
+struct AccountMap(Hashmap<Fork, (AccountsFileId, u64)>);
 
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 ```
@@ -39,7 +39,7 @@ The index is a map of account Pubkeys to a map of Forks and the location of the 
 pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 ```
 
-The read is satisfied by pointing to a memory-mapped location in the `AppendVecId` at the stored offset. A reference can be returned without a copy.
+The read is satisfied by pointing to a memory-mapped location in the `AccountsFileId` at the stored offset. A reference can be returned without a copy.
 
 ### Root Forks
 
