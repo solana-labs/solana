@@ -1,3 +1,4 @@
+pub(crate) mod core_bpf_migration;
 pub mod prototypes;
 
 pub use prototypes::{BuiltinPrototype, StatelessBuiltinPrototype};
