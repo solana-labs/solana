@@ -239,6 +239,24 @@ macro_rules! register_feature_gated_function {
     };
 }
 
+pub fn morph_into_deployment_environment_v1(
+    from: Arc<BuiltinProgram<InvokeContext>>,
+) -> Result<BuiltinProgram<InvokeContext>, Error> {
+    let mut config = *from.get_config();
+    config.reject_broken_elfs = true;
+
+    let mut result = FunctionRegistry::<BuiltinFunction<InvokeContext>>::default();
+
+    for (key, (name, value)) in from.get_function_registry().iter() {
+        // Deployment of programs with sol_alloc_free is disabled. So do not register the syscall.
+        if name != *b"sol_alloc_free_" {
+            result.register_function(key, name, value)?;
+        }
+    }
+
+    Ok(BuiltinProgram::new_loader(config, result))
+}
+
 pub fn create_program_runtime_environment_v1<'a>(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,

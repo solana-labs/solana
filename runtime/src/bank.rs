@@ -4828,6 +4828,8 @@ impl Bank {
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(
             self.slot,
             programs_loaded_for_tx_batch.environments.clone(),
+            programs_loaded_for_tx_batch.upcoming_environments.clone(),
+            programs_loaded_for_tx_batch.latest_root_epoch,
         );
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
@@ -4977,11 +4979,10 @@ impl Bank {
                 // Initialize our local cache.
                 let is_first_round = loaded_programs_for_txs.is_none();
                 if is_first_round {
-                    loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
+                    loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new_from_cache(
                         self.slot,
-                        loaded_programs_cache
-                            .get_environments_for_epoch(self.epoch)
-                            .clone(),
+                        self.epoch,
+                        &loaded_programs_cache,
                     ));
                 }
                 // Submit our last completed loading task.
@@ -4990,7 +4991,11 @@ impl Bank {
                         .finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
-                        let mut ret = LoadedProgramsForTxBatch::default();
+                        let mut ret = LoadedProgramsForTxBatch::new_from_cache(
+                            self.slot,
+                            self.epoch,
+                            &loaded_programs_cache,
+                        );
                         ret.hit_max_limit = true;
                         return ret;
                     }
@@ -8332,6 +8337,14 @@ impl Bank {
 
     pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
+    }
+
+    pub fn new_program_cache_for_tx_batch_for_slot(&self, slot: Slot) -> LoadedProgramsForTxBatch {
+        LoadedProgramsForTxBatch::new_from_cache(
+            slot,
+            self.epoch_schedule.get_epoch(slot),
+            &self.loaded_programs_cache.read().unwrap(),
+        )
     }
 }
 
