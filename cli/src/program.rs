@@ -38,27 +38,13 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        client_error::ErrorKind as ClientErrorKind,
+        client_error::{self, ErrorKind as ClientErrorKind},
         config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         filter::{Memcmp, RpcFilterType},
     },
-    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
+    solana_rpc_client_nonce_utils::{blockhash_query::BlockhashQuery, get_account},
     solana_sdk::{
-        account::Account,
-        account_utils::StateMut,
-        bpf_loader, bpf_loader_deprecated,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::FeatureSet,
-        instruction::{Instruction, InstructionError},
-        loader_instruction,
-        message::Message,
-        native_token::Sol,
-        packet::PACKET_DATA_SIZE,
-        pubkey::Pubkey,
-        signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-        system_instruction::{self, SystemError},
-        system_program,
-        transaction::{Transaction, TransactionError},
+        account::Account, account_utils::StateMut, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable::{self, UpgradeableLoaderState}, commitment_config::CommitmentConfig, feature_set::FeatureSet, instruction::{Instruction, InstructionError}, loader_instruction, message::Message, native_token::Sol, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer}, system_instruction::{self, create_nonce_account, SystemError}, system_program, transaction::{Transaction, TransactionError}
     },
     std::{
         fs::File,
@@ -70,6 +56,71 @@ use {
         sync::Arc,
     },
 };
+use sha2::Digest;
+
+const NONCE_RENT: u64 = 1_447_680;
+
+pub struct NonceManager {
+    pub rpc_client: Arc<RpcClient>,
+    pub authority: Pubkey,
+    pub capacity: u64,
+    pub idx: u64,
+}
+impl NonceManager {
+    pub fn new(rpc_client: Arc<RpcClient>, authority: Pubkey, capacity: u64) -> Self {
+        NonceManager {
+            rpc_client,
+            authority,
+            capacity,
+            idx: 0,
+        }
+    }
+
+    pub fn try_init_all(&mut self, payer: &dyn Signer) -> Vec<Result<Signature, client_error::Error>> {
+        let (blockhash, _) = self.rpc_client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::finalized())
+            .unwrap_or_default();
+        let mut sigs = vec![];
+        for _ in 0..self.capacity {
+            let nonce_account = self.next();
+            let ixs = self.maybe_create_ixs(&nonce_account.pubkey());
+            if ixs.is_none() {
+                continue;
+            }
+            let ixs = ixs.unwrap();
+            let nonce_account: &dyn Signer = &nonce_account as &dyn Signer;
+            let tx = Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &[&payer, &nonce_account], blockhash);
+            sigs.push(self.rpc_client.send_transaction(&tx));
+        }
+        sigs
+    }
+
+    fn next_seed(&mut self) -> u64 {
+        let ret = self.idx;
+        self.idx = (self.idx + 1) % self.capacity;
+        ret
+    }
+
+    pub fn next(&mut self) -> Keypair {
+        let seed = format!("Nonce:{}:{}", self.authority.clone(), self.next_seed());
+        let seed = sha2::Sha256::digest(seed.as_bytes());
+        let kp = keypair_from_seed(&seed.as_ref()).unwrap();
+        kp
+    }
+
+    pub fn maybe_create_ixs(&mut self, nonce: &Pubkey) -> Option<Vec<Instruction>> {
+        if get_account(&self.rpc_client, nonce).is_ok() {
+            None
+        } else {
+            Some(create_nonce_account(
+                    &self.authority,
+                    &nonce,
+                    &self.authority,
+                    NONCE_RENT,
+            ))
+        }
+    }
+}
 
 pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! Closed programs cannot be recreated at the same \
                                          program id. Once a program is closed, it can never be \
@@ -883,7 +934,7 @@ pub fn parse_program_subcommand(
 
 pub fn process_program_subcommand(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_subcommand: &ProgramCliCommand,
 ) -> ProcessResult {
     match program_subcommand {
@@ -1070,7 +1121,7 @@ fn get_default_program_keypair(program_location: &Option<String>) -> Keypair {
 #[allow(clippy::too_many_arguments)]
 fn process_program_deploy(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_location: &Option<String>,
     fee_payer_signer_index: SignerIndex,
     program_signer_index: Option<SignerIndex>,
@@ -2169,9 +2220,9 @@ fn process_extend_program(
 
 pub fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
 where
-    F: Fn(u32, Vec<u8>) -> Message,
+    F: Fn(u32, Vec<u8>, usize) -> Message,
 {
-    let baseline_msg = create_msg(0, Vec::new());
+    let baseline_msg = create_msg(0, Vec::new(), 0 as usize);
     let tx_size = bincode::serialized_size(&Transaction {
         signatures: vec![
             Signature::default();
@@ -2199,12 +2250,13 @@ fn do_process_program_write_and_deploy(
     buffer_pubkey: &Pubkey,
     buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
-    skip_fee_check: bool,
+    _skip_fee_check: bool,
 ) -> ProcessResult {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-
+    let mut nonce_manager = NonceManager::new(rpc_client.clone(), fee_payer_signer.pubkey(), 1);
+    nonce_manager.try_init_all(&fee_payer_signer);  
+    let dumb_nonce = &nonce_manager.next().pubkey();
     // Initialize buffer account or complete if already partially initialized
-    let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
+    let (initial_instructions, _balance_needed, buffer_program_data) = if let Some(mut account) =
         rpc_client
             .get_account_with_commitment(buffer_pubkey, config.commitment)?
             .value
@@ -2251,18 +2303,9 @@ fn do_process_program_write_and_deploy(
             vec![0; program_len],
         )
     };
-    let initial_message = if !initial_instructions.is_empty() {
-        Some(Message::new_with_blockhash(
-            &initial_instructions,
-            Some(&fee_payer_signer.pubkey()),
-            &blockhash,
-        ))
-    } else {
-        None
-    };
 
     // Create and add write messages
-    let create_msg = |offset: u32, bytes: Vec<u8>| {
+    let create_msg = |offset: u32, bytes: Vec<u8>, _index: usize| {
         let instruction = if loader_id == &bpf_loader_upgradeable::id() {
             bpf_loader_upgradeable::write(
                 buffer_pubkey,
@@ -2273,7 +2316,7 @@ fn do_process_program_write_and_deploy(
         } else {
             loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
-        Message::new_with_blockhash(&[instruction], Some(&fee_payer_signer.pubkey()), &blockhash)
+        Message::new_with_nonce([instruction].to_vec(), Some(&fee_payer_signer.pubkey()), dumb_nonce, &fee_payer_signer.pubkey())
     };
 
     let mut write_messages = vec![];
@@ -2281,15 +2324,96 @@ fn do_process_program_write_and_deploy(
     for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
         let offset = i * chunk_size;
         if chunk != &buffer_program_data[offset..offset + chunk.len()] {
-            write_messages.push(create_msg(offset as u32, chunk.to_vec()));
+            write_messages.push(create_msg(offset as u32, chunk.to_vec(), i));
         }
     }
 
     // Create and add final message
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
-            Message::new_with_blockhash(
-                &bpf_loader_upgradeable::deploy_with_max_program_len(
+            Message::new_with_nonce(
+                bpf_loader_upgradeable::deploy_with_max_program_len(
+                    &fee_payer_signer.pubkey(),
+                    &program_signers[0].pubkey(),
+                    buffer_pubkey,
+                    &program_signers[1].pubkey(),
+                    rpc_client.get_minimum_balance_for_rent_exemption(
+                        UpgradeableLoaderState::size_of_program(),
+                    )?,
+                    program_data_max_len,
+                )?.to_vec(),
+                Some(&fee_payer_signer.pubkey()),
+                dumb_nonce,
+                &fee_payer_signer.pubkey(),
+            )
+        } else {
+            Message::new_with_nonce(
+                [loader_instruction::finalize(buffer_pubkey, loader_id)].to_vec(),
+                Some(&fee_payer_signer.pubkey()),
+                dumb_nonce,
+                &fee_payer_signer.pubkey(),
+            )
+        };
+        Some(message)
+    } else {
+        None
+    };
+
+
+    let count_messages = (!initial_instructions.is_empty() as usize
+        + write_messages.len()
+        + final_message.is_some() as usize) * 1115 as usize / 1000 as usize;
+    let mut nonce_manager = NonceManager::new(rpc_client.clone(), fee_payer_signer.pubkey(), count_messages as u64);
+    nonce_manager.try_init_all(&fee_payer_signer);  
+    let initial_message = if !initial_instructions.clone().is_empty() {
+        Some(Message::new_with_nonce( 
+            initial_instructions.clone(),
+            Some(&fee_payer_signer.pubkey()), 
+            &nonce_manager.next().pubkey(), 
+            &fee_payer_signer.pubkey())
+        )
+    } else {
+        None
+    };
+    let mut nonce_accounts = vec![];
+    while nonce_accounts.len() <= nonce_manager.capacity as usize -  final_message.is_some() as usize {
+        nonce_accounts.push(nonce_manager.next().pubkey());
+    }
+    // Create and add write messages
+    let create_msg = |offset: u32, bytes: Vec<u8>, index: usize| {
+        let instruction = if loader_id == &bpf_loader_upgradeable::id() {
+            bpf_loader_upgradeable::write(
+                buffer_pubkey,
+                &buffer_authority_signer.pubkey(),
+                offset,
+                bytes,
+            )
+        } else {
+            loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
+        };
+        Message::new_with_nonce( 
+            [instruction].to_vec(),
+            Some(&fee_payer_signer.pubkey()), 
+            &nonce_accounts[index],
+            &fee_payer_signer.pubkey())
+    };
+
+    let mut write_messages = vec![];
+    let chunk_size = calculate_max_chunk_size(&create_msg);
+    let mut index = 0;
+    for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+        let offset = i * chunk_size;
+        if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+            write_messages.push(create_msg(offset as u32, chunk.to_vec(), index));
+            index+=1;
+        }
+    }
+
+    // Create and add final message
+    let final_message = if let Some(program_signers) = program_signers {
+        let message = if loader_id == &bpf_loader_upgradeable::id() {
+            Message::new_with_nonce( 
+                bpf_loader_upgradeable::deploy_with_max_program_len(
                     &fee_payer_signer.pubkey(),
                     &program_signers[0].pubkey(),
                     buffer_pubkey,
@@ -2299,14 +2423,16 @@ fn do_process_program_write_and_deploy(
                     )?,
                     program_data_max_len,
                 )?,
-                Some(&fee_payer_signer.pubkey()),
-                &blockhash,
-            )
+                Some(&fee_payer_signer.pubkey()), 
+                &nonce_manager.next().pubkey(), 
+                &fee_payer_signer.pubkey())
+                
         } else {
-            Message::new_with_blockhash(
-                &[loader_instruction::finalize(buffer_pubkey, loader_id)],
+            Message::new_with_nonce(
+                [loader_instruction::finalize(buffer_pubkey, loader_id)].to_vec(),
                 Some(&fee_payer_signer.pubkey()),
-                &blockhash,
+                &nonce_manager.next().pubkey(),
+                &fee_payer_signer.pubkey()
             )
         };
         Some(message)
@@ -2314,7 +2440,7 @@ fn do_process_program_write_and_deploy(
         None
     };
 
-    if !skip_fee_check {
+    /* if !skip_fee_check {
         check_payer(
             &rpc_client,
             config,
@@ -2324,8 +2450,7 @@ fn do_process_program_write_and_deploy(
             &write_messages,
             &final_message,
         )?;
-    }
-
+    } */
     let final_tx_sig = send_deploy_messages(
         rpc_client,
         config,
@@ -2337,7 +2462,6 @@ fn do_process_program_write_and_deploy(
         Some(buffer_authority_signer),
         program_signers,
     )?;
-
     if let Some(program_signers) = program_signers {
         let program_id = CliProgramId {
             program_id: program_signers[0].pubkey().to_string(),
@@ -2355,7 +2479,7 @@ fn do_process_program_write_and_deploy(
 #[allow(clippy::too_many_arguments)]
 fn do_process_program_upgrade(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_data: &[u8], // can be empty, hence we have program_len
     program_len: usize,
     min_rent_exempt_program_data_balance: u64,
@@ -2364,11 +2488,12 @@ fn do_process_program_upgrade(
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
-    skip_fee_check: bool,
+    _skip_fee_check: bool,
 ) -> ProcessResult {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-
-    let (initial_message, write_messages, balance_needed) =
+    let mut nonce_manager = NonceManager::new(rpc_client.clone(), fee_payer_signer.pubkey(), 1);
+    nonce_manager.try_init_all(&fee_payer_signer);
+    let dumb_nonce = &nonce_manager.next().pubkey();
+    let (initial_message, write_messages, _balance_needed) =
         if let Some(buffer_signer) = buffer_signer {
             // Check Buffer account to see if partial initialization has occurred
             let (initial_instructions, balance_needed, buffer_program_data) =
@@ -2403,11 +2528,12 @@ fn do_process_program_upgrade(
                     )
                 };
 
-            let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new_with_blockhash(
-                    &initial_instructions,
+            let _initial_message = if !initial_instructions.is_empty() {
+                Some(Message::new_with_nonce(
+                    initial_instructions.clone(),
                     Some(&fee_payer_signer.pubkey()),
-                    &blockhash,
+                    dumb_nonce,
+                    &fee_payer_signer.pubkey(),
                 ))
             } else {
                 None
@@ -2415,17 +2541,18 @@ fn do_process_program_upgrade(
 
             let buffer_signer_pubkey = buffer_signer.pubkey();
             let upgrade_authority_pubkey = upgrade_authority.pubkey();
-            let create_msg = |offset: u32, bytes: Vec<u8>| {
+            let create_msg = |offset: u32, bytes: Vec<u8>, _index: usize| {
                 let instruction = bpf_loader_upgradeable::write(
                     &buffer_signer_pubkey,
                     &upgrade_authority_pubkey,
                     offset,
                     bytes,
                 );
-                Message::new_with_blockhash(
-                    &[instruction],
+                Message::new_with_nonce(
+                    [instruction].to_vec(),
                     Some(&fee_payer_signer.pubkey()),
-                    &blockhash,
+                    dumb_nonce,
+                    &fee_payer_signer.pubkey(),
                 )
             };
 
@@ -2435,7 +2562,53 @@ fn do_process_program_upgrade(
             for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
                 let offset = i * chunk_size;
                 if chunk != &buffer_program_data[offset..offset + chunk.len()] {
-                    write_messages.push(create_msg(offset as u32, chunk.to_vec()));
+                    write_messages.push(create_msg(offset as u32, chunk.to_vec(), i));
+                }
+            }
+            let count_messages = (1 as usize
+                + write_messages.len() as usize
+                + 1 as usize) * 1115 as usize / 1000 as usize;
+            nonce_manager = NonceManager::new(rpc_client.clone(), fee_payer_signer.pubkey(), count_messages as u64);
+            nonce_manager.try_init_all(&fee_payer_signer);  
+        
+            let initial_message = if !initial_instructions.clone().is_empty() {
+                Some(Message::new_with_nonce( 
+                    initial_instructions.clone(),
+                    Some(&fee_payer_signer.pubkey()), 
+                    &nonce_manager.next().pubkey(), 
+                    &fee_payer_signer.pubkey())
+                )
+            } else {
+                None
+            };
+            let mut nonce_accounts = vec![];
+            while nonce_accounts.len() <= nonce_manager.capacity as usize -  1 {
+                nonce_accounts.push(nonce_manager.next().pubkey());
+            }
+            // Create and add write messages
+            let create_msg = |offset: u32, bytes: Vec<u8>, index: usize| {
+                let instruction = bpf_loader_upgradeable::write(
+                    &buffer_signer_pubkey,
+                    &upgrade_authority_pubkey,
+                    offset,
+                    bytes,
+                );
+                Message::new_with_nonce( 
+                    [instruction].to_vec(),
+                    Some(&fee_payer_signer.pubkey()), 
+                    &nonce_accounts[index],
+                    &fee_payer_signer.pubkey())
+            };
+            
+            let mut write_messages = vec![];
+            let chunk_size = calculate_max_chunk_size(&create_msg);
+            let mut index = 0;
+
+            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+                let offset = i * chunk_size;
+                if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+                    write_messages.push(create_msg(offset as u32, chunk.to_vec(), index));
+                    index+=1;
                 }
             }
 
@@ -2445,19 +2618,22 @@ fn do_process_program_upgrade(
         };
 
     // Create and add final message
-    let final_message = Message::new_with_blockhash(
-        &[bpf_loader_upgradeable::upgrade(
+    let final_message = Message::new_with_nonce(
+        [bpf_loader_upgradeable::upgrade(
             program_id,
             buffer_pubkey,
             &upgrade_authority.pubkey(),
             &fee_payer_signer.pubkey(),
-        )],
+        )].to_vec(),
         Some(&fee_payer_signer.pubkey()),
-        &blockhash,
+        &nonce_manager.next().pubkey(),
+        &fee_payer_signer.pubkey()
     );
+
+
     let final_message = Some(final_message);
 
-    if !skip_fee_check {
+    /*if !skip_fee_check {
         check_payer(
             &rpc_client,
             config,
@@ -2467,7 +2643,7 @@ fn do_process_program_upgrade(
             &write_messages,
             &final_message,
         )?;
-    }
+    }*/
 
     let final_tx_sig = send_deploy_messages(
         rpc_client,
@@ -2600,7 +2776,7 @@ fn check_payer(
 
 fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     initial_message: &Option<Message>,
     write_messages: &[Message],
     final_message: &Option<Message>,
@@ -2609,10 +2785,11 @@ fn send_deploy_messages(
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
 ) -> Result<Option<Signature>, Box<dyn std::error::Error>> {
+
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
-            let blockhash = rpc_client.get_latest_blockhash()?;
+            let blockhash = rpc_client.get_latest_blockhash_with_commitment(config.commitment)?.0;
 
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
             // Most of the initial_transaction combinations require both the fee-payer and new program
@@ -2694,7 +2871,7 @@ fn send_deploy_messages(
     if let Some(message) = final_message {
         if let Some(final_signers) = final_signers {
             trace!("Deploying program");
-            let blockhash = rpc_client.get_latest_blockhash()?;
+            let blockhash = rpc_client.get_latest_blockhash_with_commitment(config.commitment)?.0;
 
             let mut final_tx = Transaction::new_unsigned(message.clone());
             let mut signers = final_signers.to_vec();

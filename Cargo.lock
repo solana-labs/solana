@@ -5585,6 +5585,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "sha2 0.10.8",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-clap-utils",
