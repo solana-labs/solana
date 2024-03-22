@@ -3,7 +3,8 @@
 use {
     crate::mock_bank::MockBankCallback,
     solana_bpf_loader_program::syscalls::{
-        SyscallAbort, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy, SyscallMemset,
+        SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
+        SyscallMemset, SyscallSetReturnData,
     },
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -21,7 +22,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader,
-        clock::{Epoch, Slot},
+        clock::{Clock, Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
         fee::FeeStructure,
         hash::Hash,
@@ -30,12 +31,15 @@ use {
         native_loader,
         pubkey::Pubkey,
         signature::Signature,
+        sysvar::SysvarId,
         transaction::{SanitizedTransaction, Transaction},
     },
     solana_svm::{
         account_loader::TransactionCheckResult,
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_processor::{ExecutionRecordingConfig, TransactionBatchProcessor},
+        transaction_processor::{
+            ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingCallback,
+        },
     },
     std::{
         cmp::Ordering,
@@ -43,6 +47,7 @@ use {
         fs::{self, File},
         io::Read,
         sync::{Arc, RwLock},
+        time::{SystemTime, UNIX_EPOCH},
     },
 };
 
@@ -115,6 +120,14 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
         .register_function_hashed(*b"sol_invoke_signed_rust", SyscallInvokeSignedRust::vm)
         .expect("Registration failed");
 
+    function_registry
+        .register_function_hashed(*b"sol_set_return_data", SyscallSetReturnData::vm)
+        .expect("Registration failed");
+
+    function_registry
+        .register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::vm)
+        .expect("Registration failed");
+
     BuiltinProgram::new_loader(vm_config, function_registry)
 }
 
@@ -171,6 +184,25 @@ fn create_executable_environment(
     };
 
     program_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
+
+    // We must fill in the sysvar cache entries
+    let time_now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs() as i64;
+    let clock = Clock {
+        slot: DEPLOYMENT_SLOT,
+        epoch_start_timestamp: time_now.saturating_sub(10) as UnixTimestamp,
+        epoch: DEPLOYMENT_EPOCH,
+        leader_schedule_epoch: DEPLOYMENT_EPOCH,
+        unix_timestamp: time_now as UnixTimestamp,
+    };
+
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&clock).unwrap());
+    mock_bank
+        .account_shared_data
+        .insert(Clock::id(), account_data);
 
     // Inform SVM of the registered builins
     let registered_built_ins = vec![bpf_loader::id(), solana_system_program::id()];
@@ -319,8 +351,53 @@ fn prepare_transactions(
 
     // The program account is set in `create_executable_environment`
 
+    // A program that utilizes a Sysvar
+    let program_account = Pubkey::new_unique();
+    let fee_payer = Pubkey::new_unique();
+    let message = Message {
+        account_keys: vec![fee_payer, program_account],
+        header: MessageHeader {
+            num_required_signatures: 1,
+            num_readonly_signed_accounts: 0,
+            num_readonly_unsigned_accounts: 0,
+        },
+        instructions: vec![CompiledInstruction {
+            program_id_index: 1,
+            accounts: vec![],
+            data: vec![],
+        }],
+        recent_blockhash: Hash::default(),
+    };
+
+    let transaction = Transaction {
+        signatures: vec![Signature::new_unique()],
+        message,
+    };
+    let sanitized_transaction =
+        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+    all_transactions.push(sanitized_transaction);
+    transaction_checks.push((Ok(()), None, Some(20)));
+
+    let mut account_data = AccountSharedData::default();
+    account_data.set_lamports(80000);
+    mock_bank
+        .account_shared_data
+        .insert(fee_payer, account_data);
+
+    let buffer = load_program("clock-sysvar".to_string());
+
+    // The program account must have funds and hold the executable binary
+    let mut account_data = AccountSharedData::default();
+    // The executable account owner must be one of the loaders.
+    account_data.set_owner(bpf_loader::id());
+    account_data.set_data(buffer);
+    account_data.set_executable(true);
+    account_data.set_lamports(25);
+    mock_bank
+        .account_shared_data
+        .insert(program_account, account_data);
+
     // TODO: Include these examples as well:
-    // An example with a sysvar
     // A transaction that fails
     // A transaction whose verification has already failed
 
@@ -342,10 +419,21 @@ fn svm_integration() {
         program_cache.clone(),
     );
 
+    // The sysvars must be put in the cache
+    batch_processor
+        .sysvar_cache
+        .write()
+        .unwrap()
+        .fill_missing_entries(|pubkey, callback| {
+            if let Some(account) = mock_bank.get_account_shared_data(pubkey) {
+                callback(account.data());
+            }
+        });
+
     let mut error_counter = TransactionErrorMetrics::default();
     let recording_config = ExecutionRecordingConfig {
         enable_log_recording: true,
-        enable_return_data_recording: false,
+        enable_return_data_recording: true,
         enable_cpi_recording: false,
     };
     let mut timings = ExecuteTimings::default();
@@ -363,7 +451,7 @@ fn svm_integration() {
         false,
     );
 
-    assert_eq!(result.execution_results.len(), 2);
+    assert_eq!(result.execution_results.len(), 3);
     assert!(result.execution_results[0]
         .details()
         .unwrap()
@@ -394,4 +482,15 @@ fn svm_integration() {
         .find(|key| key.0 == recipient_key)
         .unwrap();
     assert_eq!(recipient_data.1.lamports(), 900010);
+
+    let return_data = result.execution_results[2]
+        .details()
+        .unwrap()
+        .return_data
+        .as_ref()
+        .unwrap();
+    let time = i64::from_be_bytes(return_data.data[0..8].try_into().unwrap());
+    let clock_data = mock_bank.get_account_shared_data(&Clock::id()).unwrap();
+    let clock_info: Clock = bincode::deserialize(clock_data.data()).unwrap();
+    assert_eq!(clock_info.unix_timestamp, time);
 }
