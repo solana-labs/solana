@@ -120,7 +120,7 @@ impl ScanConfig {
     /// use existing 'abort' if available, otherwise allocate one
     pub fn recreate_with_abort(&self) -> Self {
         ScanConfig {
-            abort: Some(self.abort.as_ref().map(Arc::clone).unwrap_or_default()),
+            abort: Some(self.abort.clone().unwrap_or_default()),
             collect_all_unsorted: self.collect_all_unsorted,
         }
     }

@@ -87,7 +87,7 @@ pub enum ProgramTestError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT: RefCell<Option<usize>> = RefCell::new(None);
+    static INVOKE_CONTEXT: RefCell<Option<usize>> = const { RefCell::new(None) };
 }
 fn set_invoke_context(new: &mut InvokeContext) {
     INVOKE_CONTEXT

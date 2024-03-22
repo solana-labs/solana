@@ -175,7 +175,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 .disk
                 .as_ref()
                 .map(|disk| disk.get_bucket_from_index(bin))
-                .map(Arc::clone),
+                .cloned(),
             cache_ranges_held: CacheRangesHeld::default(),
             stop_evictions_changes: AtomicU64::default(),
             stop_evictions: AtomicU64::default(),
@@ -346,7 +346,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     ) -> RT {
         // SAFETY: Since we're passing the entry Arc clone to `callback`, we must
         // also add the entry to the in-mem cache.
-        self.get_internal(pubkey, |entry| (true, callback(entry.map(Arc::clone))))
+        self.get_internal(pubkey, |entry| (true, callback(entry.cloned())))
     }
 
     /// lookup 'pubkey' in index (in_mem or disk).

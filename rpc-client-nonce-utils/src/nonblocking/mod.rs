@@ -228,7 +228,7 @@ pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
     account: &T,
 ) -> Result<Data, Error> {
     account_identity_ok(account)?;
-    state_from_account(account).and_then(|ref s| data_from_state(s).map(|d| d.clone()))
+    state_from_account(account).and_then(|ref s| data_from_state(s).cloned())
 }
 
 /// Get the nonce data from its [`State`] value.

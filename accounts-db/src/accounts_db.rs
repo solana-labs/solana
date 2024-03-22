@@ -12102,7 +12102,7 @@ pub mod tests {
         db.print_accounts_stats("pre");
 
         let slots: HashSet<Slot> = vec![1].into_iter().collect();
-        let purge_keys = vec![(key1, slots)];
+        let purge_keys = [(key1, slots)];
         let _ = db.purge_keys_exact(purge_keys.iter());
 
         let account2 = AccountSharedData::new(3, 0, &key);

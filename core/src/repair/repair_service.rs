@@ -872,7 +872,7 @@ impl RepairService {
             ServeRepair::repair_proto_to_bytes(&request_proto, &identity_keypair).unwrap();
 
         // Prepare packet batch to send
-        let reqs = vec![(packet_buf, address)];
+        let reqs = [(packet_buf, address)];
 
         // Send packet batch
         match batch_send(repair_socket, &reqs[..]) {

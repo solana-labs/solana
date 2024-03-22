@@ -266,7 +266,7 @@ struct RpcNotifier {
 }
 
 thread_local! {
-    static RPC_NOTIFIER_BUF: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+    static RPC_NOTIFIER_BUF: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
 #[derive(Debug, Serialize)]

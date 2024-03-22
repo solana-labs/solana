@@ -1609,7 +1609,7 @@ mod tests {
 
     #[test]
     fn test_accountsdb_de_dup_accounts_zero_chunks() {
-        let vec = vec![vec![CalculateHashIntermediate {
+        let vec = [vec![CalculateHashIntermediate {
             lamports: 1,
             hash: AccountHash(Hash::default()),
             pubkey: Pubkey::default(),

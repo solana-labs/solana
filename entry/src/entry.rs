@@ -1104,7 +1104,7 @@ mod tests {
         let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
 
         // Verify entry with 2 transactions
-        let mut e0 = vec![Entry::new(&zero, 0, vec![tx0, tx1])];
+        let mut e0 = [Entry::new(&zero, 0, vec![tx0, tx1])];
         assert!(e0.verify(&zero));
 
         // Clear signature of the first transaction, see that it does not verify
@@ -1124,7 +1124,7 @@ mod tests {
         assert!(!e0.verify(&zero));
 
         // Pass an entry with no transactions
-        let e0 = vec![Entry::new(&zero, 0, vec![])];
+        let e0 = [Entry::new(&zero, 0, vec![])];
         assert!(e0.verify(&zero));
     }
 
