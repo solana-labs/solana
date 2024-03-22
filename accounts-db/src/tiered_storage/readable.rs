@@ -30,6 +30,20 @@ impl TieredStorageReader {
         }
     }
 
+    /// Returns the size of the underlying storage.
+    pub fn len(&self) -> u64 {
+        match self {
+            Self::Hot(hot) => hot.len(),
+        }
+    }
+
+    /// Returns whether the nderlying storage is empty.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Hot(hot) => hot.is_empty(),
+        }
+    }
+
     /// Returns the footer of the associated HotAccountsFile.
     pub fn footer(&self) -> &TieredStorageFooter {
         match self {

@@ -359,6 +359,16 @@ impl HotStorageReader {
         Ok(Self { mmap, footer })
     }
 
+    /// Returns the size of the underlying storage.
+    pub fn len(&self) -> u64 {
+        self.mmap.len() as u64
+    }
+
+    /// Returns whether the nderlying storage is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns the footer of the underlying tiered-storage accounts file.
     pub fn footer(&self) -> &TieredStorageFooter {
         &self.footer
@@ -709,7 +719,7 @@ pub mod tests {
         super::*,
         crate::tiered_storage::{
             byte_block::ByteBlockWriter,
-            file::TieredWritableFile,
+            file::{TieredStorageMagicNumber, TieredWritableFile},
             footer::{AccountBlockFormat, AccountMetaFormat, TieredStorageFooter, FOOTER_SIZE},
             hot::{HotAccountMeta, HotStorageReader},
             index::{AccountIndexWriterEntry, IndexBlockFormat, IndexOffset},
@@ -1420,5 +1430,14 @@ pub mod tests {
             let partial_accounts = hot_storage.accounts(IndexOffset(i as u32)).unwrap();
             assert_eq!(&partial_accounts, &accounts[i..]);
         }
+        let footer = hot_storage.footer();
+
+        let expected_size: u64 = footer.owners_block_offset
+            + std::mem::size_of::<Pubkey>() as u64 * footer.owner_count as u64
+            + std::mem::size_of::<TieredStorageFooter>() as u64
+            + std::mem::size_of::<TieredStorageMagicNumber>() as u64;
+
+        assert!(!hot_storage.is_empty());
+        assert_eq!(expected_size, hot_storage.len());
     }
 }

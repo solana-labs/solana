@@ -27,7 +27,7 @@ use {
     solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
-        fs::{self, OpenOptions},
+        fs,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -156,12 +156,7 @@ impl TieredStorage {
 
     /// Returns the size of the underlying accounts file.
     pub fn file_size(&self) -> TieredStorageResult<u64> {
-        let file = OpenOptions::new().read(true).open(&self.path);
-
-        Ok(file
-            .and_then(|file| file.metadata())
-            .map(|metadata| metadata.len())
-            .unwrap_or(0))
+        Ok(self.reader().map_or(0, |reader| reader.len()))
     }
 }
 
