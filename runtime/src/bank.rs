@@ -199,7 +199,9 @@ use {
     solana_accounts_db::accounts_db::{
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
-    solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
+    solana_program_runtime::{
+        loaded_programs::LoadedProgramsForTxBatch, sysvar_cache::SysvarCache,
+    },
 };
 
 /// params to `verify_accounts_hash`
@@ -1098,7 +1100,8 @@ impl Bank {
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
         bank.update_last_restart_slot();
-        bank.fill_missing_sysvar_cache_entries();
+        bank.transaction_processor
+            .fill_missing_sysvar_cache_entries(&bank);
         bank
     }
 
@@ -1457,7 +1460,9 @@ impl Bank {
             new.update_last_restart_slot()
         });
 
-        let (_, fill_sysvar_cache_time_us) = measure_us!(new.fill_missing_sysvar_cache_entries());
+        let (_, fill_sysvar_cache_time_us) = measure_us!(new
+            .transaction_processor
+            .fill_missing_sysvar_cache_entries(&new));
         time.stop();
 
         report_new_bank_metrics(
@@ -1793,7 +1798,8 @@ impl Bank {
                 new.inherit_specially_retained_account_fields(account),
             )
         });
-        new.fill_missing_sysvar_cache_entries();
+        new.transaction_processor
+            .fill_missing_sysvar_cache_entries(&new);
         new.freeze();
         new
     }
@@ -1907,7 +1913,8 @@ impl Bank {
             additional_builtins,
             debug_do_not_add_builtins,
         );
-        bank.fill_missing_sysvar_cache_entries();
+        bank.transaction_processor
+            .fill_missing_sysvar_cache_entries(&bank);
         bank.rebuild_skipped_rewrites();
 
         // Sanity assertions between bank snapshot and genesis config
@@ -2210,8 +2217,9 @@ impl Bank {
         });
         // Simply force fill sysvar cache rather than checking which sysvar was
         // actually updated since tests don't need to be optimized for performance.
-        self.reset_sysvar_cache();
-        self.fill_missing_sysvar_cache_entries();
+        self.transaction_processor.reset_sysvar_cache();
+        self.transaction_processor
+            .fill_missing_sysvar_cache_entries(self);
     }
 
     fn update_slot_history(&self) {
@@ -7879,6 +7887,10 @@ impl Bank {
             .accounts_db
             .verify_accounts_hash_in_bg
             .wait_for_complete()
+    }
+
+    pub fn get_sysvar_cache_for_tests(&self) -> SysvarCache {
+        self.transaction_processor.get_sysvar_cache_for_tests()
     }
 
     pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {

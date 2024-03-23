@@ -927,6 +927,27 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
         outer_instructions
     }
+
+    pub fn fill_missing_sysvar_cache_entries<CB: TransactionProcessingCallback>(
+        &self,
+        callbacks: &CB,
+    ) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        sysvar_cache.fill_missing_entries(|pubkey, set_sysvar| {
+            if let Some(account) = callbacks.get_account_shared_data(pubkey) {
+                set_sysvar(account.data());
+            }
+        });
+    }
+
+    pub fn reset_sysvar_cache(&self) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        sysvar_cache.reset();
+    }
+
+    pub fn get_sysvar_cache_for_tests(&self) -> SysvarCache {
+        self.sysvar_cache.read().unwrap().clone()
+    }
 }
 
 #[cfg(test)]
@@ -937,12 +958,13 @@ mod tests {
             loaded_programs::BlockRelation, solana_rbpf::program::BuiltinProgram,
         },
         solana_sdk::{
-            account::WritableAccount,
+            account::{create_account_shared_data_for_test, WritableAccount},
             bpf_loader,
+            fee_calculator::FeeCalculator,
             message::{LegacyMessage, Message, MessageHeader},
             rent_debits::RentDebits,
             signature::{Keypair, Signature},
-            sysvar::rent::Rent,
+            sysvar::{self, rent::Rent},
             transaction::{SanitizedTransaction, Transaction, TransactionError},
             transaction_context::TransactionContext,
         },
@@ -2101,5 +2123,158 @@ mod tests {
             &(&program1_pubkey, 1)
         );
         assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_sysvar_cache_initialization1() {
+        let mut mock_bank = MockBankCallback::default();
+
+        let clock = sysvar::clock::Clock {
+            slot: 1,
+            epoch_start_timestamp: 2,
+            epoch: 3,
+            leader_schedule_epoch: 4,
+            unix_timestamp: 5,
+        };
+        let clock_account = create_account_shared_data_for_test(&clock);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::clock::id(), clock_account);
+
+        let epoch_schedule = EpochSchedule::custom(64, 2, true);
+        let epoch_schedule_account = create_account_shared_data_for_test(&epoch_schedule);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::epoch_schedule::id(), epoch_schedule_account);
+
+        let fees = sysvar::fees::Fees {
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 123,
+            },
+        };
+        let fees_account = create_account_shared_data_for_test(&fees);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::fees::id(), fees_account);
+
+        let rent = Rent::with_slots_per_epoch(2048);
+        let rent_account = create_account_shared_data_for_test(&rent);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::rent::id(), rent_account);
+
+        let transaction_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        transaction_processor.fill_missing_sysvar_cache_entries(&mock_bank);
+
+        let sysvar_cache = transaction_processor.sysvar_cache.read().unwrap();
+        let cached_clock = sysvar_cache.get_clock();
+        let cached_epoch_schedule = sysvar_cache.get_epoch_schedule();
+        let cached_fees = sysvar_cache.get_fees();
+        let cached_rent = sysvar_cache.get_rent();
+
+        assert_eq!(
+            cached_clock.expect("clock sysvar missing in cache"),
+            clock.into()
+        );
+        assert_eq!(
+            cached_epoch_schedule.expect("epoch_schedule sysvar missing in cache"),
+            epoch_schedule.into()
+        );
+        assert_eq!(
+            cached_fees.expect("fees sysvar missing in cache"),
+            fees.into()
+        );
+        assert_eq!(
+            cached_rent.expect("rent sysvar missing in cache"),
+            rent.into()
+        );
+        assert!(sysvar_cache.get_slot_hashes().is_err());
+        assert!(sysvar_cache.get_epoch_rewards().is_err());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_reset_and_fill_sysvar_cache() {
+        let mut mock_bank = MockBankCallback::default();
+
+        let clock = sysvar::clock::Clock {
+            slot: 1,
+            epoch_start_timestamp: 2,
+            epoch: 3,
+            leader_schedule_epoch: 4,
+            unix_timestamp: 5,
+        };
+        let clock_account = create_account_shared_data_for_test(&clock);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::clock::id(), clock_account);
+
+        let epoch_schedule = EpochSchedule::custom(64, 2, true);
+        let epoch_schedule_account = create_account_shared_data_for_test(&epoch_schedule);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::epoch_schedule::id(), epoch_schedule_account);
+
+        let fees = sysvar::fees::Fees {
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 123,
+            },
+        };
+        let fees_account = create_account_shared_data_for_test(&fees);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::fees::id(), fees_account);
+
+        let rent = Rent::with_slots_per_epoch(2048);
+        let rent_account = create_account_shared_data_for_test(&rent);
+        mock_bank
+            .account_shared_data
+            .insert(sysvar::rent::id(), rent_account);
+
+        let transaction_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        // Fill the sysvar cache
+        transaction_processor.fill_missing_sysvar_cache_entries(&mock_bank);
+        // Reset the sysvar cache
+        transaction_processor.reset_sysvar_cache();
+
+        {
+            let sysvar_cache = transaction_processor.sysvar_cache.read().unwrap();
+            // Test that sysvar cache is empty and none of the values are found
+            assert!(sysvar_cache.get_clock().is_err());
+            assert!(sysvar_cache.get_epoch_schedule().is_err());
+            assert!(sysvar_cache.get_fees().is_err());
+            assert!(sysvar_cache.get_epoch_rewards().is_err());
+            assert!(sysvar_cache.get_rent().is_err());
+            assert!(sysvar_cache.get_epoch_rewards().is_err());
+        }
+
+        // Refill the cache and test the values are available.
+        transaction_processor.fill_missing_sysvar_cache_entries(&mock_bank);
+
+        let sysvar_cache = transaction_processor.sysvar_cache.read().unwrap();
+        let cached_clock = sysvar_cache.get_clock();
+        let cached_epoch_schedule = sysvar_cache.get_epoch_schedule();
+        let cached_fees = sysvar_cache.get_fees();
+        let cached_rent = sysvar_cache.get_rent();
+
+        assert_eq!(
+            cached_clock.expect("clock sysvar missing in cache"),
+            clock.into()
+        );
+        assert_eq!(
+            cached_epoch_schedule.expect("epoch_schedule sysvar missing in cache"),
+            epoch_schedule.into()
+        );
+        assert_eq!(
+            cached_fees.expect("fees sysvar missing in cache"),
+            fees.into()
+        );
+        assert_eq!(
+            cached_rent.expect("rent sysvar missing in cache"),
+            rent.into()
+        );
+        assert!(sysvar_cache.get_slot_hashes().is_err());
+        assert!(sysvar_cache.get_epoch_rewards().is_err());
     }
 }
