@@ -44,6 +44,12 @@ impl TieredStorageReader {
         }
     }
 
+    pub fn capacity(&self) -> u64 {
+        match self {
+            Self::Hot(hot) => hot.capacity(),
+        }
+    }
+
     /// Returns the footer of the associated HotAccountsFile.
     pub fn footer(&self) -> &TieredStorageFooter {
         match self {

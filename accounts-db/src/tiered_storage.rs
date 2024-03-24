@@ -38,6 +38,8 @@ use {
 
 pub type TieredStorageResult<T> = Result<T, TieredStorageError>;
 
+const MAX_TIERED_STORAGE_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB;
+
 /// The struct that defines the formats of all building blocks of a
 /// TieredStorage.
 #[derive(Clone, Debug, PartialEq)]
@@ -162,6 +164,11 @@ impl TieredStorage {
     /// Returns whether the underlying storage is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn capacity(&self) -> u64 {
+        self.reader()
+            .map_or(MAX_TIERED_STORAGE_FILE_SIZE, |reader| reader.capacity())
     }
 }
 

@@ -369,6 +369,10 @@ impl HotStorageReader {
         self.len() == 0
     }
 
+    pub fn capacity(&self) -> u64 {
+        self.len() as u64
+    }
+
     /// Returns the footer of the underlying tiered-storage accounts file.
     pub fn footer(&self) -> &TieredStorageFooter {
         &self.footer
