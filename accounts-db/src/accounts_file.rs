@@ -7,7 +7,9 @@ use {
         accounts_hash::AccountHash,
         append_vec::{AppendVec, AppendVecError},
         storable_accounts::StorableAccounts,
-        tiered_storage::error::TieredStorageError,
+        tiered_storage::{
+            error::TieredStorageError, hot::HOT_FORMAT, index::IndexOffset, TieredStorage,
+        },
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
     std::{
@@ -56,6 +58,7 @@ pub type Result<T> = std::result::Result<T, AccountsFileError>;
 /// under different formats.
 pub enum AccountsFile {
     AppendVec(AppendVec),
+    TieredStorage(TieredStorage),
 }
 
 impl AccountsFile {
@@ -64,43 +67,62 @@ impl AccountsFile {
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
     pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
-        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
-        Ok((Self::AppendVec(av), num_accounts))
+        match TieredStorage::new_readonly(path.as_ref()) {
+            Ok(tiered_storage) => {
+                // unwrap() note: TieredStorage::new_readonly() is guaranteed to have a valid
+                // reader instance when opening with new_readonly.
+                let num_accounts = tiered_storage.reader().unwrap().num_accounts();
+                Ok((Self::TieredStorage(tiered_storage), num_accounts))
+            }
+            Err(TieredStorageError::MagicNumberMismatch(_, _)) => {
+                // In case of MagicNumberMismatch, we can assume that this is not
+                // a tiered-storage file.
+                let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
+                Ok((Self::AppendVec(av), num_accounts))
+            }
+            Err(e) => Err(AccountsFileError::TieredStorageError(e)),
+        }
     }
 
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
+            Self::TieredStorage(_) => Ok(()),
         }
     }
 
     pub fn reset(&self) {
         match self {
             Self::AppendVec(av) => av.reset(),
+            Self::TieredStorage(_) => {}
         }
     }
 
     pub fn remaining_bytes(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.remaining_bytes(),
+            Self::TieredStorage(ts) => ts.capacity().saturating_sub(ts.len() as u64),
         }
     }
 
     pub fn len(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.len(),
+            Self::TieredStorage(ts) => ts.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.is_empty(),
+            Self::TieredStorage(ts) => ts.is_empty(),
         }
     }
 
     pub fn capacity(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.capacity(),
+            Self::TieredStorage(ts) => ts.capacity(),
         }
     }
 
@@ -114,6 +136,11 @@ impl AccountsFile {
     pub fn get_account(&self, index: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
         match self {
             Self::AppendVec(av) => av.get_account(index),
+            Self::TieredStorage(ts) => ts
+                .reader()?
+                .get_account(IndexOffset(index as u32))
+                .ok()?
+                .map(|(metas, index_offset)| (metas, index_offset.0 as usize)),
         }
     }
 
@@ -124,6 +151,12 @@ impl AccountsFile {
     ) -> std::result::Result<usize, MatchAccountOwnerError> {
         match self {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),
+            Self::TieredStorage(ts) => {
+                let Some(reader) = ts.reader() else {
+                    return Err(MatchAccountOwnerError::UnableToLoad);
+                };
+                reader.account_matches_owners(IndexOffset(offset as u32), owners)
+            }
         }
     }
 
@@ -131,6 +164,7 @@ impl AccountsFile {
     pub fn get_path(&self) -> PathBuf {
         match self {
             Self::AppendVec(av) => av.get_path(),
+            Self::TieredStorage(ts) => ts.path().to_path_buf(),
         }
     }
 
@@ -143,6 +177,10 @@ impl AccountsFile {
     pub fn accounts(&self, offset: usize) -> Vec<StoredAccountMeta> {
         match self {
             Self::AppendVec(av) => av.accounts(offset),
+            Self::TieredStorage(ts) => ts
+                .reader()
+                .and_then(|reader| reader.accounts(IndexOffset(offset as u32)).ok())
+                .unwrap_or_default(),
         }
     }
 
@@ -166,6 +204,11 @@ impl AccountsFile {
     ) -> Option<Vec<StoredAccountInfo>> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
+            // Currently we only support HOT_FORMAT.  If we later want to use
+            // a different format, then we will need a way to pass-in it.
+            // TODO: consider adding function like write_accounts_to_hot_storage() or something
+            // to hide implementation detail.
+            Self::TieredStorage(ts) => ts.write_accounts(accounts, skip, &HOT_FORMAT).ok(),
         }
     }
 }
@@ -204,6 +247,7 @@ pub mod tests {
         pub(crate) fn set_current_len_for_tests(&self, len: usize) {
             match self {
                 Self::AppendVec(av) => av.set_current_len_for_tests(len),
+                Self::TieredStorage(_) => {}
             }
         }
     }

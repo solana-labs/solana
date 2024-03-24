@@ -966,9 +966,7 @@ pub const fn get_ancient_append_vec_capacity() -> u64 {
 
 /// is this a max-size append vec designed to be used as an ancient append vec?
 pub fn is_ancient(storage: &AccountsFile) -> bool {
-    match storage {
-        AccountsFile::AppendVec(storage) => storage.capacity() >= get_ancient_append_vec_capacity(),
-    }
+    storage.capacity() >= get_ancient_append_vec_capacity()
 }
 
 #[cfg(test)]
