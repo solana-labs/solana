@@ -32,7 +32,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         sysvar::SysvarId,
-        transaction::{SanitizedTransaction, Transaction},
+        transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
     solana_svm::{
         account_loader::TransactionCheckResult,
@@ -40,6 +40,7 @@ use {
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingCallback,
         },
+        transaction_results::TransactionExecutionResult,
     },
     std::{
         cmp::Ordering,
@@ -277,7 +278,7 @@ fn prepare_transactions(
         .insert(fee_payer, account_data);
 
     // A simple funds transfer between accounts
-    let program_account = Pubkey::new_unique();
+    let transfer_program_account = Pubkey::new_unique();
     let sender = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
@@ -286,7 +287,7 @@ fn prepare_transactions(
         account_keys: vec![
             fee_payer,
             sender,
-            program_account,
+            transfer_program_account,
             recipient,
             system_account,
         ],
@@ -335,7 +336,7 @@ fn prepare_transactions(
     account_data.set_lamports(25);
     mock_bank
         .account_shared_data
-        .insert(program_account, account_data);
+        .insert(transfer_program_account, account_data);
 
     // sender
     let mut account_data = AccountSharedData::default();
@@ -397,9 +398,67 @@ fn prepare_transactions(
         .account_shared_data
         .insert(program_account, account_data);
 
-    // TODO: Include these examples as well:
     // A transaction that fails
+    let sender = Pubkey::new_unique();
+    let recipient = Pubkey::new_unique();
+    let fee_payer = Pubkey::new_unique();
+    let system_account = Pubkey::new_from_array([0; 32]);
+    let mut data = 900050u64.to_be_bytes().to_vec();
+    while data.len() < 8 {
+        data.insert(0, 0);
+    }
+
+    let message = Message {
+        account_keys: vec![
+            fee_payer,
+            sender,
+            transfer_program_account,
+            recipient,
+            system_account,
+        ],
+        header: MessageHeader {
+            num_required_signatures: 2,
+            num_readonly_signed_accounts: 0,
+            num_readonly_unsigned_accounts: 0,
+        },
+        instructions: vec![CompiledInstruction {
+            program_id_index: 2,
+            accounts: vec![1, 3, 4],
+            data,
+        }],
+        recent_blockhash: Hash::default(),
+    };
+    let transaction = Transaction {
+        signatures: vec![Signature::new_unique(), Signature::new_unique()],
+        message,
+    };
+    let sanitized_transaction =
+        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+    all_transactions.push(sanitized_transaction.clone());
+    transaction_checks.push((Ok(()), None, Some(20)));
+
+    // fee payer
+    let mut account_data = AccountSharedData::default();
+    account_data.set_lamports(80000);
+    mock_bank
+        .account_shared_data
+        .insert(fee_payer, account_data);
+
+    // Sender without enough funds
+    let mut account_data = AccountSharedData::default();
+    account_data.set_lamports(900000);
+    mock_bank.account_shared_data.insert(sender, account_data);
+
+    // recipient
+    let mut account_data = AccountSharedData::default();
+    account_data.set_lamports(900000);
+    mock_bank
+        .account_shared_data
+        .insert(recipient, account_data);
+
     // A transaction whose verification has already failed
+    all_transactions.push(sanitized_transaction);
+    transaction_checks.push((Err(TransactionError::BlockhashNotFound), None, Some(20)));
 
     (all_transactions, transaction_checks)
 }
@@ -451,7 +510,7 @@ fn svm_integration() {
         false,
     );
 
-    assert_eq!(result.execution_results.len(), 3);
+    assert_eq!(result.execution_results.len(), 5);
     assert!(result.execution_results[0]
         .details()
         .unwrap()
@@ -493,4 +552,22 @@ fn svm_integration() {
     let clock_data = mock_bank.get_account_shared_data(&Clock::id()).unwrap();
     let clock_info: Clock = bincode::deserialize(clock_data.data()).unwrap();
     assert_eq!(clock_info.unix_timestamp, time);
+
+    assert!(result.execution_results[3]
+        .details()
+        .unwrap()
+        .status
+        .is_err());
+    assert!(result.execution_results[3]
+        .details()
+        .unwrap()
+        .log_messages
+        .as_ref()
+        .unwrap()
+        .contains(&"Transfer: insufficient lamports 900000, need 900050".to_string()));
+
+    assert!(matches!(
+        result.execution_results[4],
+        TransactionExecutionResult::NotExecuted(TransactionError::BlockhashNotFound)
+    ));
 }
