@@ -89,7 +89,7 @@ impl SignerSource {
         }
     }
 
-    pub(crate) fn parse<S: AsRef<str>>(source: S) -> Result<Self, SignerSourceError> {
+    pub fn parse<S: AsRef<str>>(source: S) -> Result<Self, SignerSourceError> {
         let source = source.as_ref();
         let source = {
             #[cfg(target_family = "windows")]
