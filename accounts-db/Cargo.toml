@@ -10,18 +10,13 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-arrayref = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true }
-byteorder = { workspace = true }
 bzip2 = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
-flate2 = { workspace = true }
-fnv = { workspace = true }
-im = { workspace = true, features = ["rayon", "serde"] }
 index_list = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
@@ -30,21 +25,16 @@ log = { workspace = true }
 lz4 = { workspace = true }
 memmap2 = { workspace = true }
 modular-bitfield = { workspace = true }
-num-derive = { workspace = true }
-num-traits = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
-percentage = { workspace = true }
-qualifier_attr = { workspace = true }
+qualifier_attr = { workspace = true, optional = true }
 rand = { workspace = true }
 rayon = { workspace = true }
-regex = { workspace = true }
 seqlock = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 smallvec = { workspace = true, features = ["const_generics"] }
 solana-bucket-map = { workspace = true }
-solana-config-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
@@ -53,13 +43,10 @@ solana-nohash-hasher = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
-solana-stake-program = { workspace = true }
+solana-stake-program = { workspace = true, optional = true }
 solana-svm = { workspace = true }
-solana-system-program = { workspace = true }
-solana-vote-program = { workspace = true }
+solana-vote-program = { workspace = true, optional = true }
 static_assertions = { workspace = true }
-strum = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -80,6 +67,8 @@ solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
 test-case = { workspace = true }
 
 [package.metadata.docs.rs]
@@ -89,7 +78,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 rustc_version = { workspace = true }
 
 [features]
-dev-context-only-utils = []
+dev-context-only-utils = ["dep:qualifier_attr", "dep:solana-stake-program", "dep:solana-vote-program"]
 
 [[bench]]
 name = "bench_hashing"
