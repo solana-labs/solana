@@ -51,19 +51,21 @@ pub fn try_get_word_count(matches: &ArgMatches) -> Result<Option<usize>, Box<dyn
         }))
 }
 
+// The constant `POSSIBLE_LANGUAGES` and function `try_get_language` must always be updated in sync
+const POSSIBLE_LANGUAGES: &[&str] = &[
+    "english",
+    "chinese-simplified",
+    "chinese-traditional",
+    "japanese",
+    "spanish",
+    "korean",
+    "french",
+    "italian",
+];
 pub fn language_arg<'a>() -> Arg<'a> {
     Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
-        .value_parser(PossibleValuesParser::new([
-            "english",
-            "chinese-simplified",
-            "chinese-traditional",
-            "japanese",
-            "spanish",
-            "korean",
-            "french",
-            "italian",
-        ]))
+        .value_parser(PossibleValuesParser::new(POSSIBLE_LANGUAGES))
         .default_value("english")
         .value_name("LANGUAGE")
         .takes_value(true)
@@ -77,6 +79,7 @@ pub fn no_passphrase_arg<'a>() -> Arg<'a> {
         .help(NO_PASSPHRASE_ARG.help)
 }
 
+#[deprecated(since = "2.0.0", note = "Please use `try_get_language` instead")]
 pub fn acquire_language(matches: &ArgMatches) -> Language {
     match matches
         .get_one::<String>(LANGUAGE_ARG.name)
@@ -93,6 +96,22 @@ pub fn acquire_language(matches: &ArgMatches) -> Language {
         "italian" => Language::Italian,
         _ => unreachable!(),
     }
+}
+
+pub fn try_get_language(matches: &ArgMatches) -> Result<Option<Language>, Box<dyn error::Error>> {
+    Ok(matches
+        .try_get_one::<String>(LANGUAGE_ARG.name)?
+        .map(|language| match language.as_str() {
+            "english" => Language::English,
+            "chinese-simplified" => Language::ChineseSimplified,
+            "chinese-traditional" => Language::ChineseTraditional,
+            "japanese" => Language::Japanese,
+            "spanish" => Language::Spanish,
+            "korean" => Language::Korean,
+            "french" => Language::French,
+            "italian" => Language::Italian,
+            _ => unreachable!(),
+        }))
 }
 
 pub fn no_passphrase_and_message() -> (String, String) {
