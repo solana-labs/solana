@@ -5560,11 +5560,14 @@ dependencies = [
 name = "solana-bench-tps"
 version = "2.0.0"
 dependencies = [
+ "chrono",
  "clap 2.33.3",
  "crossbeam-channel",
+ "csv",
  "log",
  "rand 0.8.5",
  "rayon",
+ "serde",
  "serde_json",
  "serde_yaml 0.9.32",
  "serial_test",

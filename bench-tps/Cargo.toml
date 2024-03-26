@@ -9,11 +9,14 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+chrono = { workspace = true }
 clap = { workspace = true }
 crossbeam-channel = { workspace = true }
+csv = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 solana-clap-utils = { workspace = true }

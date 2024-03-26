@@ -76,6 +76,8 @@ pub struct Config {
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
     pub commitment_config: CommitmentConfig,
+    pub block_data_file: Option<String>,
+    pub transaction_data_file: Option<String>,
 }
 
 impl Eq for Config {}
@@ -109,6 +111,8 @@ impl Default for Config {
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
             commitment_config: CommitmentConfig::confirmed(),
+            block_data_file: None,
+            transaction_data_file: None,
         }
     }
 }
@@ -419,6 +423,23 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .default_value("confirmed")
                 .help("Block commitment config for getting latest blockhash"),
         )
+        .arg(
+            Arg::with_name("block_data_file")
+                .long("block-data-file")
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help("File to save block statistics relevant to the submitted transactions."),
+        )
+        .arg(
+            Arg::with_name("transaction_data_file")
+                .long("transaction-data-file")
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help(
+                    "File to save details about all the submitted transactions.\
+                    This option is useful for debug purposes."
+                ),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -587,6 +608,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     args.commitment_config = value_t_or_exit!(matches, "commitment_config", CommitmentConfig);
+    args.block_data_file = matches.value_of("block_data_file").map(|s| s.to_string());
+    args.transaction_data_file = matches
+        .value_of("transaction_data_file")
+        .map(|s| s.to_string());
 
     Ok(args)
 }
