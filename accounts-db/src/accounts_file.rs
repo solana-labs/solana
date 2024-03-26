@@ -67,7 +67,7 @@ impl AccountsFile {
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
     pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
-        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
+        let (av, num_accounts) = AppendVec::new_from_file(path.as_ref(), current_len)?;
         Ok((Self::AppendVec(av), num_accounts))
     }
 

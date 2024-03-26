@@ -58,7 +58,7 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                 || {
                     let path = temp_dir.path().join(format!("append_vec_{accounts_count}"));
                     let file_size = accounts.len() * (space + append_vec::STORE_META_OVERHEAD);
-                    AppendVec::new(&path, true, file_size)
+                    AppendVec::new(path, true, file_size)
                 },
                 |append_vec| {
                     let res = append_vec.append_accounts(&storable_accounts, 0).unwrap();

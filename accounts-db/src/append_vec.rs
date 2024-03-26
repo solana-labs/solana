@@ -29,7 +29,7 @@ use {
         fs::{remove_file, OpenOptions},
         io::{Seek, SeekFrom, Write},
         mem,
-        path::{Path, PathBuf},
+        path::PathBuf,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
@@ -237,19 +237,20 @@ impl Drop for AppendVec {
 }
 
 impl AppendVec {
-    pub fn new(file: &Path, create: bool, size: usize) -> Self {
+    pub fn new(file: impl Into<PathBuf>, create: bool, size: usize) -> Self {
+        let file = file.into();
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
         if create {
-            let _ignored = remove_file(file);
+            let _ignored = remove_file(&file);
         }
 
         let mut data = OpenOptions::new()
             .read(true)
             .write(true)
             .create(create)
-            .open(file)
+            .open(&file)
             .map_err(|e| {
                 panic!(
                     "Unable to {} data file {} in current dir({:?}): {:?}",
@@ -282,7 +283,7 @@ impl AppendVec {
         APPEND_VEC_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
 
         AppendVec {
-            path: file.to_path_buf(),
+            path: file,
             map,
             // This mutex forces append to be single threaded, but concurrent with reads
             // See UNSAFE usage in `append_ptr`
@@ -347,15 +348,16 @@ impl AppendVec {
         format!("{slot}.{id}")
     }
 
-    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> Result<(Self, usize)> {
-        let new = Self::new_from_file_unchecked(&path, current_len)?;
+    pub fn new_from_file(path: impl Into<PathBuf>, current_len: usize) -> Result<(Self, usize)> {
+        let path = path.into();
+        let new = Self::new_from_file_unchecked(path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
             // This info show the failing accountvec file path.  It helps debugging
             // the appendvec data corrupution issues related to recycling.
             return Err(AccountsFileError::AppendVecError(
-                AppendVecError::IncorrectLayout(path.as_ref().to_path_buf()),
+                AppendVecError::IncorrectLayout(new.path.clone()),
             ));
         }
 
@@ -363,7 +365,8 @@ impl AppendVec {
     }
 
     /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
-    pub fn new_from_file_unchecked<P: AsRef<Path>>(path: P, current_len: usize) -> Result<Self> {
+    pub fn new_from_file_unchecked(path: impl Into<PathBuf>, current_len: usize) -> Result<Self> {
+        let path = path.into();
         let file_size = std::fs::metadata(&path)?.len();
         Self::sanitize_len_and_size(current_len, file_size as usize)?;
 
@@ -384,7 +387,7 @@ impl AppendVec {
         APPEND_VEC_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
 
         Ok(AppendVec {
-            path: path.as_ref().to_path_buf(),
+            path,
             map,
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
