@@ -30,7 +30,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData},
         client::SyncClient,
-        clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         feature_set,
@@ -555,12 +555,11 @@ impl LocalCluster {
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
-    pub fn check_for_new_roots(
+    fn discover_nodes(
         &self,
-        num_new_roots: usize,
-        test_name: &str,
         socket_addr_space: SocketAddrSpace,
-    ) {
+        test_name: &str,
+    ) -> Vec<ContactInfo> {
         let alive_node_contact_infos: Vec<_> = self
             .validators
             .values()
@@ -575,6 +574,36 @@ impl LocalCluster {
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
+        alive_node_contact_infos
+    }
+
+    pub fn check_min_slot_is_rooted(
+        &self,
+        min_root: Slot,
+        test_name: &str,
+        socket_addr_space: SocketAddrSpace,
+    ) {
+        let alive_node_contact_infos = self.discover_nodes(socket_addr_space, test_name);
+        info!(
+            "{} looking minimum root {} on all nodes",
+            min_root, test_name
+        );
+        cluster_tests::check_min_slot_is_rooted(
+            min_root,
+            &alive_node_contact_infos,
+            &self.connection_cache,
+            test_name,
+        );
+        info!("{} done waiting for roots", test_name);
+    }
+
+    pub fn check_for_new_roots(
+        &self,
+        num_new_roots: usize,
+        test_name: &str,
+        socket_addr_space: SocketAddrSpace,
+    ) {
+        let alive_node_contact_infos = self.discover_nodes(socket_addr_space, test_name);
         info!("{} looking for new roots on all nodes", test_name);
         cluster_tests::check_for_new_roots(
             num_new_roots,

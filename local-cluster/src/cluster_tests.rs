@@ -10,7 +10,10 @@ use {
         connection_cache::{ConnectionCache, Protocol},
         thin_client::ThinClient,
     },
-    solana_core::consensus::VOTE_THRESHOLD_DEPTH,
+    solana_core::consensus::{
+        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
+        VOTE_THRESHOLD_DEPTH,
+    },
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
         cluster_info::{self, ClusterInfo},
@@ -43,7 +46,7 @@ use {
         borrow::Borrow,
         collections::{HashMap, HashSet, VecDeque},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-        path::Path,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -330,6 +333,53 @@ pub fn kill_entry_and_spend_and_verify_rest(
                     break;
                 }
             }
+        }
+    }
+}
+
+pub fn apply_votes_to_tower(node_keypair: &Keypair, votes: Vec<(Slot, Hash)>, tower_path: PathBuf) {
+    let tower_storage = FileTowerStorage::new(tower_path);
+    let mut tower = tower_storage.load(&node_keypair.pubkey()).unwrap();
+    for (slot, hash) in votes {
+        tower.record_vote(slot, hash);
+    }
+    let saved_tower = SavedTowerVersions::from(SavedTower::new(&tower, node_keypair).unwrap());
+    tower_storage.store(&saved_tower).unwrap();
+}
+
+pub fn check_min_slot_is_rooted(
+    min_slot: Slot,
+    contact_infos: &[ContactInfo],
+    connection_cache: &Arc<ConnectionCache>,
+    test_name: &str,
+) {
+    let mut last_print = Instant::now();
+    let loop_start = Instant::now();
+    let loop_timeout = Duration::from_secs(180);
+    for ingress_node in contact_infos.iter() {
+        let (rpc, tpu) = LegacyContactInfo::try_from(ingress_node)
+            .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
+            .unwrap();
+        let client = ThinClient::new(rpc, tpu, connection_cache.clone());
+        loop {
+            let root_slot = client
+                .get_slot_with_commitment(CommitmentConfig::finalized())
+                .unwrap_or(0);
+            if root_slot >= min_slot || last_print.elapsed().as_secs() > 3 {
+                info!(
+                    "{} waiting for node {} to see root >= {}.. observed latest root: {}",
+                    test_name,
+                    ingress_node.pubkey(),
+                    min_slot,
+                    root_slot
+                );
+                last_print = Instant::now();
+                if root_slot >= min_slot {
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
+            assert!(loop_start.elapsed() < loop_timeout);
         }
     }
 }
