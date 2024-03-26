@@ -25,7 +25,6 @@ pub(in crate::parse_token) fn parse_interest_bearing_mint_instruction(
             } = *decode_instruction_data(instruction_data).map_err(|_| {
                 ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
             })?;
-            let rate_authority = rate_authority;
             let rate_authority: Option<Pubkey> = rate_authority.into();
             Ok(ParsedInstructionEnum {
                 instruction_type: "initializeInterestBearingConfig".to_string(),

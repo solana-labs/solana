@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![feature(test)]
 
 use {
@@ -115,14 +115,14 @@ fn setup(apply_cost_tracker_during_replay: bool) -> BenchFrame {
     bank.write_cost_tracker()
         .unwrap()
         .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
-    let bank = Arc::new(bank);
+    let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let ledger_path = TempDir::new().unwrap();
     let blockstore = Arc::new(
         Blockstore::open(ledger_path.path()).expect("Expected to be able to open database ledger"),
     );
     let (exit, poh_recorder, poh_service, signal_receiver) =
-        create_test_recorder(&bank, blockstore, None, None);
+        create_test_recorder(bank.clone(), blockstore, None, None);
 
     BenchFrame {
         bank,
@@ -139,6 +139,16 @@ fn bench_process_and_record_transactions(
     batch_size: usize,
     apply_cost_tracker_during_replay: bool,
 ) {
+    const TRANSACTIONS_PER_ITERATION: usize = 64;
+    assert_eq!(
+        TRANSACTIONS_PER_ITERATION % batch_size,
+        0,
+        "batch_size must be a factor of \
+        `TRANSACTIONS_PER_ITERATION` ({TRANSACTIONS_PER_ITERATION}) \
+        so that bench results are easily comparable"
+    );
+    let batches_per_iteration = TRANSACTIONS_PER_ITERATION / batch_size;
+
     let BenchFrame {
         bank,
         ledger_path: _ledger_path,
@@ -152,12 +162,17 @@ fn bench_process_and_record_transactions(
     let mut transaction_iter = transactions.chunks(batch_size);
 
     bencher.iter(move || {
-        let summary =
-            consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
-        assert!(summary
-            .execute_and_commit_transactions_output
-            .commit_transactions_result
-            .is_ok());
+        for _ in 0..batches_per_iteration {
+            let summary = consumer.process_and_record_transactions(
+                &bank,
+                transaction_iter.next().unwrap(),
+                0,
+            );
+            assert!(summary
+                .execute_and_commit_transactions_output
+                .commit_transactions_result
+                .is_ok());
+        }
     });
 
     exit.store(true, Ordering::Relaxed);

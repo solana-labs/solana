@@ -52,6 +52,7 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .validator(is_pubkey_sig)
         .requires(BLOCKHASH_ARG.name)
         .multiple(true)
+        .number_of_values(1)
         .help(SIGNER_ARG.help)
 }
 

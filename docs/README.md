@@ -1,11 +1,20 @@
-# Solana Docs Readme
+# Solana Validator Docs Readme
 
-Solana's Docs are built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
+This validator's documentation is built using [Docusaurus v2](https://v2.docusaurus.io/) with `npm`.
 Static content delivery is handled using `vercel`.
+
+> Note: The documentation within this repo is specifically focused on the
+> Solana validator client maintained by Solana Labs. The more "common"
+> documentation, which is generalized to the Solana protocol as a whole and applies
+> to all Solana validator implementations, is maintained within the
+> [`developer-content`](https://github.com/solana-foundation/developer-content/)
+> repo. Those "common docs" are managed by the Solana Foundation within their
+> GitHub organization and are publicly accessible via
+> [solana.com/docs](https://solana.com/docs)
 
 ## Local Development
 
-To set up the Solana Docs site locally:
+To set up the Solana Validator Docs site locally:
 
 - install dependencies using `npm`
 - build locally via `./build.sh`
@@ -30,7 +39,7 @@ The build script generates static content into the `build` directory and can be 
 ./build.sh
 ```
 
-Running this build script requires **Docker**, and will auto fetch the [solanalabs/rust](https://hub.docker.com/r/solanalabs/rust) image from Docker hub to compile the desired version of the [Solana CLI](https://docs.solana.com/cli) from source.
+Running this build script requires **Docker**, and will auto fetch the [solanalabs/rust](https://hub.docker.com/r/solanalabs/rust) image from Docker hub to compile the desired version of the [Solana CLI](https://docs.solanalabs.com/cli) from source.
 
 This build script will also:
 
@@ -54,8 +63,12 @@ npm run start
 
 ## Translations
 
-Translations are sourced from [Crowdin](https://docusaurus.io/docs/i18n/crowdin) and generated when `master` is built.
-For local development use the following two commands in this `docs` directory.
+Translations are sourced from [Crowdin](https://docusaurus.io/docs/i18n/crowdin)
+and generated when the branch noted as the `STABLE` channel is built via the
+`build.sh` script.
+
+For local development, and with the `CROWDIN_PERSONAL_TOKEN` env variable set,
+use the following two commands in this `docs` directory.
 
 To download the newest documentation translations run:
 
@@ -63,11 +76,44 @@ To download the newest documentation translations run:
 npm run crowdin:download
 ```
 
-To upload changes from `src` & generate [explicit IDs](https://docusaurus.io/docs/markdown-features/headings#explicit-ids):
+To upload changes from `src` & generate
+[explicit IDs](https://docusaurus.io/docs/markdown-features/headings#explicit-ids):
 
 ```shell
 npm run crowdin:upload
 ```
+
+> Translations are only included when deploying the `STABLE` channel of the docs
+> (via `build.sh`). Resulting in only the `docs.solanalabs.com` documentation
+> site to include translated content. Therefore, the `edge` and `beta` docs
+> sites are not expected to include translated content, even though the language
+> selector will still be present.
+
+### Common issues
+
+#### `CROWDIN_PERSONAL_TOKEN` env variable
+
+The `crowdin.yml` file requires a `CROWDIN_PERSONAL_TOKEN` env variable to be
+set with a valid Crowdin access token.
+
+For local development, you can store this in a `.env` file that the Crowdin CLI
+will auto detect.
+
+For building and publishing via the GitHub actions, the `CROWDIN_PERSONAL_TOKEN`
+secret must be set.
+
+#### Translation locale fails to build with `SyntaxError`
+
+Some translation locales may fail to build with a `SyntaxError` thrown by
+Docusaurus due to how certain language symbols get parsed by Docusaurus while
+generating the static version of the docs.
+
+> Note: When any locale fails to build, the entire docs build will fail
+> resulting in the docs not being able to be deployed at all.
+
+There are several known locales that fail to build the current documentation.
+They are listed in the commented out `localesNotBuilding` attribute in the
+[`docusaurus.config.js`](https://github.com/solana-labs/solana/blob/master/docs/docusaurus.config.js)
 
 ## CI Build Flow
 
@@ -75,9 +121,9 @@ The docs are built and published in Travis CI with the `./build.sh` script. On e
 
 In each post-commit build, docs are built and published using `vercel` to their respective domain depending on the build branch.
 
-- Master branch docs are published to `edge.docs.solana.com`
-- Beta branch docs are published to `beta.docs.solana.com`
-- Latest release tag docs are published to `docs.solana.com`
+- Master branch docs are published to `edge.docs.solanalabs.com`
+- Beta branch docs are published to `beta.docs.solanalabs.com`
+- Latest release tag docs are published to `docs.solanalabs.com`
 
 ## Common Issues
 

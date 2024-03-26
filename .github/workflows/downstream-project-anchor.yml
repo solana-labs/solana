@@ -1,0 +1,60 @@
+name: Downstream Project - Anchor
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    paths:
+      - "**.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "cargo-build-bpf"
+      - "cargo-test-bpf"
+      - "cargo-build-sbf"
+      - "cargo-test-sbf"
+      - "scripts/build-downstream-anchor-projects.sh"
+      - ".github/scripts/purge-ubuntu-runner.sh"
+      - ".github/scripts/downstream-project-spl-install-deps.sh"
+      - ".github/workflows/downstream-project-anchor.yml"
+  workflow_call:
+    inputs:
+      branch:
+        required: false
+        type: string
+        default: "master"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELL: /bin/bash
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ["v0.29.0"]
+    steps:
+      - uses: actions/checkout@v3
+
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: |
+          source .github/scripts/downstream-project-spl-install-deps.sh
+          ./scripts/build-downstream-anchor-projects.sh ${{ matrix.version }}

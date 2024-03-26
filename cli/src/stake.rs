@@ -6,6 +6,7 @@ use {
             ProcessResult,
         },
         compute_unit_price::WithComputeUnitPrice,
+        feature::get_feature_activation_epoch,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -31,7 +32,9 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, response::RpcInflationReward,
+        config::RpcGetVoteAccountsConfig,
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::{RpcInflationReward, RpcVoteAccountStatus},
     },
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
@@ -40,21 +43,24 @@ use {
         clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         message::Message,
         pubkey::Pubkey,
         stake::{
             self,
             instruction::{self as stake_instruction, LockupArgs, StakeError},
-            state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+            state::{
+                Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeStateV2,
+            },
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
-        stake_history::StakeHistory,
-        system_instruction::SystemError,
+        stake_history::{Epoch, StakeHistory},
+        system_instruction::{self, SystemError},
+        system_program,
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::VoteState,
-    std::{ops::Deref, sync::Arc},
+    std::{ops::Deref, rc::Rc},
 };
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
@@ -116,6 +122,13 @@ pub struct StakeAuthorizationIndexed {
     pub new_authority_signer: Option<SignerIndex>,
 }
 
+struct SignOnlySplitNeedsRent {}
+impl ArgsConfig for SignOnlySplitNeedsRent {
+    fn sign_only_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg.requires("rent_exempt_reserve_sol")
+    }
+}
+
 pub trait StakeSubCommands {
     fn stake_subcommands(self) -> Self;
 }
@@ -132,7 +145,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Stake account to create (or base of derived address if --seed is used)")
+                        .help(
+                            "Stake account to create (or base of derived address if --seed is \
+                             used)",
+                        ),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -141,28 +157,35 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
+                        .help(
+                            "The amount to send to the stake account, in SOL; accepts keyword ALL",
+                        ),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("custodian")
+                .arg(pubkey!(
+                    Arg::with_name("custodian")
                         .long("custodian")
                         .value_name("PUBKEY"),
-                        "Authority to modify lockups. ")
-                )
+                    "Authority to modify lockups."
+                ))
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account \
-                               will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey",
+                        ),
                 )
                 .arg(
                     Arg::with_name("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("The epoch height at which this account will be available for withdrawal")
+                        .help(
+                            "The epoch height at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
                 .arg(
                     Arg::with_name("lockup_date")
@@ -170,7 +193,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("RFC3339 DATETIME")
                         .validator(is_rfc3339_datetime)
                         .takes_value(true)
-                        .help("The date and time at which this account will be available for withdrawal")
+                        .help(
+                            "The date and time at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
                 .arg(
                     Arg::with_name(STAKE_AUTHORITY_ARG.name)
@@ -178,7 +204,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
-                        .help(STAKE_AUTHORITY_ARG.help)
+                        .help(STAKE_AUTHORITY_ARG.help),
                 )
                 .arg(
                     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
@@ -186,7 +212,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
-                        .help(WITHDRAW_AUTHORITY_ARG.help)
+                        .help(WITHDRAW_AUTHORITY_ARG.help),
                 )
                 .arg(
                     Arg::with_name("from")
@@ -200,7 +226,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("create-stake-account-checked")
@@ -212,7 +238,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Stake account to create (or base of derived address if --seed is used)")
+                        .help(
+                            "Stake account to create (or base of derived address if --seed is \
+                             used)",
+                        ),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -221,15 +250,19 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
+                        .help(
+                            "The amount to send to the stake account, in SOL; accepts keyword ALL",
+                        ),
                 )
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account \
-                               will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey",
+                        ),
                 )
                 .arg(
                     Arg::with_name(STAKE_AUTHORITY_ARG.name)
@@ -237,7 +270,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
-                        .help(STAKE_AUTHORITY_ARG.help)
+                        .help(STAKE_AUTHORITY_ARG.help),
                 )
                 .arg(
                     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
@@ -245,7 +278,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
-                        .help(WITHDRAW_AUTHORITY_ARG.help)
+                        .help(WITHDRAW_AUTHORITY_ARG.help),
                 )
                 .arg(
                     Arg::with_name("from")
@@ -259,7 +292,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("delegate-stake")
@@ -269,28 +302,28 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("force")
                         .takes_value(false)
                         .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
-                        .help("Override vote account sanity checks (use carefully!)")
+                        .help("Override vote account sanity checks (use carefully!)"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account to delegate")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                    "Stake account to delegate."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(2)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "The vote account to which the stake will be delegated")
-                )
+                    "Vote account to which the stake will be delegated."
+                ))
                 .arg(stake_authority_arg())
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("redelegate-stake")
@@ -300,24 +333,24 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("force")
                         .takes_value(false)
                         .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
-                        .help("Override vote account sanity checks (use carefully!)")
+                        .help("Override vote account sanity checks (use carefully!)"),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Existing delegated stake account that has been fully activated. \
-                        On success this stake account will be scheduled for deactivation and the rent-exempt balance \
-                        may be withdrawn once fully deactivated")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkey")
+                    "Existing delegated stake account that has been fully activated. On success \
+                     this stake account will be scheduled for deactivation and the rent-exempt \
+                     balance may be withdrawn once fully deactivated."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("vote_account_pubkey")
                         .index(2)
                         .value_name("REDELEGATED_VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "The vote account to which the stake will be redelegated")
-                )
+                    "Vote account to which the stake will be redelegated."
+                ))
                 .arg(
                     Arg::with_name("redelegation_stake_account")
                         .index(3)
@@ -325,42 +358,43 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Stake account to create for the redelegation. \
-                               On success this stake account will be created and scheduled for activation with all \
-                               the stake in the existing stake account, exclusive of the rent-exempt balance retained \
-                               in the existing account")
+                        .help(
+                            "Stake account to create for the redelegation. On success this stake \
+                             account will be created and scheduled for activation with all the \
+                             stake in the existing stake account, exclusive of the rent-exempt \
+                             balance retained in the existing account",
+                        ),
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
-                .arg(memo_arg())
+                .arg(memo_arg()),
         )
-
         .subcommand(
             SubCommand::with_name("stake-authorize")
                 .about("Authorize a new signing keypair for the given stake account")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
-                        "Stake account in which to set a new authority. ")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("new_stake_authority")
+                    "Stake account in which to set a new authority."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("new_stake_authority")
                         .long("new-stake-authority")
                         .required_unless("new_withdraw_authority")
                         .value_name("PUBKEY"),
-                        "New authorized staker")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("new_withdraw_authority")
+                    "New authorized staker."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("new_withdraw_authority")
                         .long("new-withdraw-authority")
                         .required_unless("new_stake_authority")
                         .value_name("PUBKEY"),
-                        "New authorized withdrawer. ")
-                )
+                    "New authorized withdrawer."
+                ))
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
                 .offline_args()
@@ -371,21 +405,27 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("no_wait")
                         .long("no-wait")
                         .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                        .help(
+                            "Return signature immediately after submitting the transaction, \
+                             instead of waiting for confirmations",
+                        ),
                 )
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-checked")
-                .about("Authorize a new signing keypair for the given stake account, checking the authority as a signer")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .about(
+                    "Authorize a new signing keypair for the given stake account, checking the \
+                     authority as a signer",
+                )
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .required(true)
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS"),
-                        "Stake account in which to set a new authority. ")
-                )
+                    "Stake account in which to set a new authority."
+                ))
                 .arg(
                     Arg::with_name("new_stake_authority")
                         .long("new-stake-authority")
@@ -393,7 +433,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_valid_signer)
                         .required_unless("new_withdraw_authority")
-                        .help("New authorized staker")
+                        .help("New authorized staker"),
                 )
                 .arg(
                     Arg::with_name("new_withdraw_authority")
@@ -402,7 +442,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_valid_signer)
                         .required_unless("new_stake_authority")
-                        .help("New authorized withdrawer")
+                        .help("New authorized withdrawer"),
                 )
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
@@ -414,53 +454,62 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("no_wait")
                         .long("no-wait")
                         .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                        .help(
+                            "Return signature immediately after submitting the transaction, \
+                             instead of waiting for confirmations",
+                        ),
                 )
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
                 .about("Deactivate the delegated stake from the stake account")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account to be deactivated (or base of derived address if --seed is used). ")
-                )
+                    "Stake account to be deactivated (or base of derived address if --seed is \
+                     used)."
+                ))
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account \
-                               will be at a derived address of STAKE_ACCOUNT_ADDRESS")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of STAKE_ACCOUNT_ADDRESS",
+                        ),
                 )
                 .arg(
                     Arg::with_name("delinquent")
                         .long("delinquent")
                         .takes_value(false)
                         .conflicts_with(SIGN_ONLY_ARG.name)
-                        .help("Deactivate abandoned stake that is currently delegated to a delinquent vote account")
+                        .help(
+                            "Deactivate abandoned stake that is currently delegated to a \
+                             delinquent vote account",
+                        ),
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("split-stake")
                 .about("Duplicate a stake account, splitting the tokens between the two")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account to split (or base of derived address if --seed is used). ")
-                )
+                    "Stake account to split (or base of derived address if --seed is used)."
+                ))
                 .arg(
                     Arg::with_name("split_stake_account")
                         .index(2)
@@ -468,7 +517,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Keypair of the new stake account")
+                        .help("Keypair of the new stake account"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -477,65 +526,80 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account, in SOL")
+                        .help("The amount to move into the new stake account, in SOL"),
                 )
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account \
-                               will be at a derived address of SPLIT_STAKE_ACCOUNT")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of SPLIT_STAKE_ACCOUNT",
+                        ),
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
+                .offline_args_config(&SignOnlySplitNeedsRent {})
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg())
+                .arg(
+                    Arg::with_name("rent_exempt_reserve_sol")
+                        .long("rent-exempt-reserve-sol")
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .validator(is_amount)
+                        .requires("sign_only")
+                        .help(
+                            "Offline signing only: the rent-exempt amount to move into the new \
+                             stake account, in SOL",
+                        ),
+                ),
         )
         .subcommand(
             SubCommand::with_name("merge-stake")
                 .about("Merges one stake account into another")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account to merge into")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("source_stake_account_pubkey")
+                    "Stake account to merge into."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("source_stake_account_pubkey")
                         .index(2)
                         .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Source stake account for the merge.  If successful, this stake account \
-                         will no longer exist after the merge")
-                )
+                    "Source stake account for the merge. If successful, this stake account will \
+                     no longer exist after the merge."
+                ))
                 .arg(stake_authority_arg())
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
                 .about("Withdraw the unstaked SOL from the stake account")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account from which to withdraw (or base of derived address if --seed is used). ")
-                )
-                .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    "Stake account from which to withdraw (or base of derived address if --seed \
+                     is used)."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "Recipient of withdrawn SOL")
-                )
+                    "Recipient of withdrawn stake."
+                ))
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
@@ -543,15 +607,20 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to withdraw from the stake account, in SOL; accepts keyword ALL")
+                        .help(
+                            "The amount to withdraw from the stake account, in SOL; accepts \
+                             keyword ALL",
+                        ),
                 )
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account \
-                               will be at a derived address of STAKE_ACCOUNT_ADDRESS")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of STAKE_ACCOUNT_ADDRESS",
+                        ),
                 )
                 .arg(withdraw_authority_arg())
                 .offline_args()
@@ -559,24 +628,27 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup")
                 .about("Set Lockup for the stake account")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account for which to set lockup parameters. ")
-                )
+                    "Stake account for which to set lockup parameters."
+                ))
                 .arg(
                     Arg::with_name("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("The epoch height at which this account will be available for withdrawal")
+                        .help(
+                            "The epoch height at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
                 .arg(
                     Arg::with_name("lockup_date")
@@ -584,48 +656,56 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("RFC3339 DATETIME")
                         .validator(is_rfc3339_datetime)
                         .takes_value(true)
-                        .help("The date and time at which this account will be available for withdrawal")
+                        .help(
+                            "The date and time at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
-                .arg(
-                    pubkey!(Arg::with_name("new_custodian")
+                .arg(pubkey!(
+                    Arg::with_name("new_custodian")
                         .long("new-custodian")
                         .value_name("PUBKEY"),
-                        "Identity of a new lockup custodian. ")
+                    "New lockup custodian."
+                ))
+                .group(
+                    ArgGroup::with_name("lockup_details")
+                        .args(&["lockup_epoch", "lockup_date", "new_custodian"])
+                        .multiple(true)
+                        .required(true),
                 )
-                .group(ArgGroup::with_name("lockup_details")
-                    .args(&["lockup_epoch", "lockup_date", "new_custodian"])
-                    .multiple(true)
-                    .required(true))
                 .arg(
                     Arg::with_name("custodian")
                         .long("custodian")
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
-                        .help("Keypair of the existing custodian [default: cli config pubkey]")
+                        .help("Keypair of the existing custodian [default: cli config pubkey]"),
                 )
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup-checked")
                 .about("Set Lockup for the stake account, checking the new authority as a signer")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account for which to set lockup parameters. ")
-                )
+                    "Stake account for which to set lockup parameters."
+                ))
                 .arg(
                     Arg::with_name("lockup_epoch")
                         .long("lockup-epoch")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("The epoch height at which this account will be available for withdrawal")
+                        .help(
+                            "The epoch height at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
                 .arg(
                     Arg::with_name("lockup_date")
@@ -633,7 +713,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("RFC3339 DATETIME")
                         .validator(is_rfc3339_datetime)
                         .takes_value(true)
-                        .help("The date and time at which this account will be available for withdrawal")
+                        .help(
+                            "The date and time at which this account will be available for \
+                             withdrawal",
+                        ),
                 )
                 .arg(
                     Arg::with_name("new_custodian")
@@ -641,42 +724,44 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
-                        .help("Keypair of a new lockup custodian")
+                        .help("Keypair of a new lockup custodian"),
                 )
-                .group(ArgGroup::with_name("lockup_details")
-                    .args(&["lockup_epoch", "lockup_date", "new_custodian"])
-                    .multiple(true)
-                    .required(true))
+                .group(
+                    ArgGroup::with_name("lockup_details")
+                        .args(&["lockup_epoch", "lockup_date", "new_custodian"])
+                        .multiple(true)
+                        .required(true),
+                )
                 .arg(
                     Arg::with_name("custodian")
                         .long("custodian")
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
-                        .help("Keypair of the existing custodian [default: cli config pubkey]")
+                        .help("Keypair of the existing custodian [default: cli config pubkey]"),
                 )
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
-                .arg(compute_unit_price_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("stake-account")
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
-                .arg(
-                    pubkey!(Arg::with_name("stake_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "The stake account to display. ")
-                )
+                    "Stake account to display."
+                ))
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL")
+                        .help("Display balance in lamports instead of SOL"),
                 )
                 .arg(
                     Arg::with_name("with_rewards")
@@ -685,14 +770,23 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Display inflation rewards"),
                 )
                 .arg(
+                    Arg::with_name("csv")
+                        .long("csv")
+                        .takes_value(false)
+                        .help("Format stake rewards data in csv"),
+                )
+                .arg(
                     Arg::with_name("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1..=10))
+                        .validator(|s| is_within_range(s, 1..=50))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
-                        .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
+                        .help(
+                            "Display rewards for NUM recent epochs, max 10 \
+                            [default: latest epoch only]",
+                        ),
                 ),
         )
         .subcommand(
@@ -703,7 +797,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL")
+                        .help("Display balance in lamports instead of SOL"),
                 )
                 .arg(
                     Arg::with_name("limit")
@@ -711,13 +805,12 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("NUM")
                         .default_value("10")
-                        .validator(|s| {
-                            s.parse::<usize>()
-                                .map(|_| ())
-                                .map_err(|e| e.to_string())
-                        })
-                        .help("Display NUM recent epochs worth of stake history in text mode. 0 for all")
-                )
+                        .validator(|s| s.parse::<usize>().map(|_| ()).map_err(|e| e.to_string()))
+                        .help(
+                            "Display NUM recent epochs worth of stake history in text mode. 0 for \
+                             all",
+                        ),
+                ),
         )
         .subcommand(
             SubCommand::with_name("stake-minimum-delegation")
@@ -726,8 +819,8 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display minimum delegation in lamports instead of SOL")
-                )
+                        .help("Display minimum delegation in lamports instead of SOL"),
+                ),
         )
     }
 }
@@ -735,7 +828,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_create_stake_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -811,7 +904,7 @@ pub fn parse_create_stake_account(
 pub fn parse_stake_delegate_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -866,7 +959,7 @@ pub fn parse_stake_delegate_stake(
 pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -995,7 +1088,7 @@ pub fn parse_stake_authorize(
 pub fn parse_split_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1022,6 +1115,7 @@ pub fn parse_split_stake(
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
     let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
+    let rent_exempt_reserve = lamports_of_sol(matches, "rent_exempt_reserve_sol");
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -1038,6 +1132,7 @@ pub fn parse_split_stake(
             lamports,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             compute_unit_price,
+            rent_exempt_reserve,
         },
         signers: signer_info.signers,
     })
@@ -1046,7 +1141,7 @@ pub fn parse_split_stake(
 pub fn parse_merge_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1093,7 +1188,7 @@ pub fn parse_merge_stake(
 pub fn parse_stake_deactivate_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1141,7 +1236,7 @@ pub fn parse_stake_deactivate_stake(
 pub fn parse_stake_withdraw_stake(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -1196,7 +1291,7 @@ pub fn parse_stake_withdraw_stake(
 pub fn parse_stake_set_lockup(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -1264,11 +1359,12 @@ pub fn parse_stake_set_lockup(
 
 pub fn parse_show_stake_account(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let use_csv = matches.is_present("csv");
     let with_rewards = if matches.is_present("with_rewards") {
         Some(value_of(matches, "num_rewards_epochs").unwrap())
     } else {
@@ -1279,6 +1375,7 @@ pub fn parse_show_stake_account(
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
+            use_csv,
         },
         signers: vec![],
     })
@@ -1420,11 +1517,12 @@ pub fn process_create_stake_account(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, \
+                 provided lamports: {lamports}"
             ))
             .into());
         }
@@ -1498,8 +1596,8 @@ pub fn process_stake_authorize(
         let authority = config.signers[*authority];
         if let Some(current_stake_account) = current_stake_account {
             let authorized = match current_stake_account {
-                StakeState::Stake(Meta { authorized, .. }, ..) => Some(authorized),
-                StakeState::Initialized(Meta { authorized, .. }) => Some(authorized),
+                StakeStateV2::Stake(Meta { authorized, .. }, ..) => Some(authorized),
+                StakeStateV2::Initialized(Meta { authorized, .. }) => Some(authorized),
                 _ => None,
             };
             if let Some(authorized) = authorized {
@@ -1628,7 +1726,7 @@ pub fn process_deactivate_stake_account(
 
         let vote_account_address = match stake_account.state() {
             Ok(stake_state) => match stake_state {
-                StakeState::Stake(_, stake, _) => stake.delegation.voter_pubkey,
+                StakeStateV2::Stake(_, stake, _) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
                         "{stake_account_address} is not a delegated stake account",
@@ -1847,6 +1945,7 @@ pub fn process_split_stake(
     lamports: u64,
     fee_payer: SignerIndex,
     compute_unit_price: Option<&u64>,
+    rent_exempt_reserve: Option<&u64>,
 ) -> ProcessResult {
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
@@ -1880,51 +1979,78 @@ pub fn process_split_stake(
         split_stake_account.pubkey()
     };
 
-    if !sign_only {
+    let rent_exempt_reserve = if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == stake::program::id() {
-                format!("Stake account {split_stake_account_address} already exists")
+            if stake_account.owner == stake::program::id() {
+                return Err(CliError::BadParameter(format!(
+                    "Stake account {split_stake_account_address} already exists"
+                ))
+                .into());
+            } else if stake_account.owner == system_program::id() {
+                if !stake_account.data.is_empty() {
+                    return Err(CliError::BadParameter(format!(
+                        "Account {split_stake_account_address} has data and cannot be used to split stake"
+                    ))
+                    .into());
+                }
+            // if `stake_account`'s owner is the system_program and its data is
+            // empty, `stake_account` is allowed to receive the stake split
             } else {
-                format!(
-                    "Account {split_stake_account_address} already exists and is not a stake account"
-                )
-            };
-            return Err(CliError::BadParameter(err_msg).into());
+                return Err(CliError::BadParameter(format!(
+                    "Account {split_stake_account_address} already exists and cannot be used to split stake"
+                ))
+                .into());
+            }
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, \
+                 provided lamports: {lamports}"
             ))
             .into());
         }
-    }
+        minimum_balance
+    } else {
+        rent_exempt_reserve
+            .cloned()
+            .expect("rent_exempt_reserve_sol is required with sign_only")
+    };
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let ixs = if let Some(seed) = split_stake_account_seed {
-        stake_instruction::split_with_seed(
-            stake_account_pubkey,
-            &stake_authority.pubkey(),
-            lamports,
-            &split_stake_account_address,
-            &split_stake_account.pubkey(),
-            seed,
+    let mut ixs = vec![system_instruction::transfer(
+        &fee_payer.pubkey(),
+        &split_stake_account_address,
+        rent_exempt_reserve,
+    )];
+    if let Some(seed) = split_stake_account_seed {
+        ixs.append(
+            &mut stake_instruction::split_with_seed(
+                stake_account_pubkey,
+                &stake_authority.pubkey(),
+                lamports,
+                &split_stake_account_address,
+                &split_stake_account.pubkey(),
+                seed,
+            )
+            .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price),
         )
-        .with_memo(memo)
-        .with_compute_unit_price(compute_unit_price)
     } else {
-        stake_instruction::split(
-            stake_account_pubkey,
-            &stake_authority.pubkey(),
-            lamports,
-            &split_stake_account_address,
+        ixs.append(
+            &mut stake_instruction::split(
+                stake_account_pubkey,
+                &stake_authority.pubkey(),
+                lamports,
+                &split_stake_account_address,
+            )
+            .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price),
         )
-        .with_memo(memo)
-        .with_compute_unit_price(compute_unit_price)
     };
 
     let nonce_authority = config.signers[nonce_authority];
@@ -2114,8 +2240,8 @@ pub fn process_stake_set_lockup(
     if !sign_only {
         let state = get_stake_account_state(rpc_client, stake_account_pubkey, config.commitment)?;
         let lockup = match state {
-            StakeState::Stake(Meta { lockup, .. }, ..) => Some(lockup),
-            StakeState::Initialized(Meta { lockup, .. }) => Some(lockup),
+            StakeStateV2::Stake(Meta { lockup, .. }, ..) => Some(lockup),
+            StakeStateV2::Initialized(Meta { lockup, .. }) => Some(lockup),
             _ => None,
         };
         if let Some(lockup) = lockup {
@@ -2182,13 +2308,15 @@ fn u64_some_if_not_zero(n: u64) -> Option<u64> {
 
 pub fn build_stake_state(
     account_balance: u64,
-    stake_state: &StakeState,
+    stake_state: &StakeStateV2,
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
     clock: &Clock,
+    new_rate_activation_epoch: Option<Epoch>,
+    use_csv: bool,
 ) -> CliStakeState {
     match stake_state {
-        StakeState::Stake(
+        StakeStateV2::Stake(
             Meta {
                 rent_exempt_reserve,
                 authorized,
@@ -2202,9 +2330,11 @@ pub fn build_stake_state(
                 effective,
                 activating,
                 deactivating,
-            } = stake
-                .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            } = stake.delegation.stake_activating_and_deactivating(
+                current_epoch,
+                stake_history,
+                new_rate_activation_epoch,
+            );
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
@@ -2240,19 +2370,20 @@ pub fn build_stake_state(
                 active_stake: u64_some_if_not_zero(effective),
                 activating_stake: u64_some_if_not_zero(activating),
                 deactivating_stake: u64_some_if_not_zero(deactivating),
+                use_csv,
                 ..CliStakeState::default()
             }
         }
-        StakeState::RewardsPool => CliStakeState {
+        StakeStateV2::RewardsPool => CliStakeState {
             stake_type: CliStakeType::RewardsPool,
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Uninitialized => CliStakeState {
+        StakeStateV2::Uninitialized => CliStakeState {
             account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Initialized(Meta {
+        StakeStateV2::Initialized(Meta {
             rent_exempt_reserve,
             authorized,
             lockup,
@@ -2280,7 +2411,7 @@ fn get_stake_account_state(
     rpc_client: &RpcClient,
     stake_account_pubkey: &Pubkey,
     commitment_config: CommitmentConfig,
-) -> Result<StakeState, Box<dyn std::error::Error>> {
+) -> Result<StakeStateV2, Box<dyn std::error::Error>> {
     let stake_account = rpc_client
         .get_account_with_commitment(stake_account_pubkey, commitment_config)?
         .value
@@ -2307,7 +2438,8 @@ pub(crate) fn check_current_authority(
 ) -> Result<(), CliError> {
     if !permitted_authorities.contains(provided_current_authority) {
         Err(CliError::RpcRequestError(format!(
-            "Invalid authority provided: {provided_current_authority:?}, expected {permitted_authorities:?}"
+            "Invalid authority provided: {provided_current_authority:?}, expected \
+             {permitted_authorities:?}"
         )))
     } else {
         Ok(())
@@ -2406,6 +2538,7 @@ pub fn process_show_stake_account(
     stake_account_address: &Pubkey,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
+    use_csv: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
@@ -2424,6 +2557,10 @@ pub fn process_show_stake_account(
             let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
+            let new_rate_activation_epoch = get_feature_activation_epoch(
+                rpc_client,
+                &feature_set::reduce_stake_warmup_cooldown::id(),
+            )?;
 
             let mut state = build_stake_state(
                 stake_account.lamports,
@@ -2431,6 +2568,8 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
+                new_rate_activation_epoch,
+                use_csv,
             );
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
@@ -2531,38 +2670,41 @@ pub fn process_delegate_stake(
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
         // voted at the tip of the ledger
-        let vote_account_data = rpc_client
-            .get_account(vote_account_pubkey)
-            .map_err(|err| {
-                CliError::RpcRequestError(format!(
-                    "Vote account not found: {vote_account_pubkey}. error: {err}",
-                ))
-            })?
-            .data;
+        let get_vote_accounts_config = RpcGetVoteAccountsConfig {
+            vote_pubkey: Some(vote_account_pubkey.to_string()),
+            keep_unstaked_delinquents: Some(true),
+            commitment: Some(rpc_client.commitment()),
+            ..RpcGetVoteAccountsConfig::default()
+        };
+        let RpcVoteAccountStatus {
+            current,
+            delinquent,
+        } = rpc_client.get_vote_accounts_with_config(get_vote_accounts_config)?;
+        // filter should return at most one result
+        let rpc_vote_account =
+            current
+                .first()
+                .or_else(|| delinquent.first())
+                .ok_or(CliError::RpcRequestError(format!(
+                    "Vote account not found: {vote_account_pubkey}"
+                )))?;
 
-        let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
-            CliError::RpcRequestError(
-                "Account data could not be deserialized to vote state".to_string(),
-            )
-        })?;
-
-        let sanity_check_result = match vote_state.root_slot {
-            None => Err(CliError::BadParameter(
+        let activated_stake = rpc_vote_account.activated_stake;
+        let root_slot = rpc_vote_account.root_slot;
+        let min_root_slot = rpc_client
+            .get_slot()
+            .map(|slot| slot.saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE))?;
+        let sanity_check_result = if root_slot >= min_root_slot || activated_stake == 0 {
+            Ok(())
+        } else if root_slot == 0 {
+            Err(CliError::BadParameter(
                 "Unable to delegate. Vote account has no root slot".to_string(),
-            )),
-            Some(root_slot) => {
-                let min_root_slot = rpc_client
-                    .get_slot()?
-                    .saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
-                if root_slot < min_root_slot {
-                    Err(CliError::DynamicProgramError(format!(
-                        "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
-                    )))
-                } else {
-                    Ok(())
-                }
-            }
+            ))
+        } else {
+            Err(CliError::DynamicProgramError(format!(
+                "Unable to delegate.  Vote account appears delinquent because its current root \
+                 slot, {root_slot}, is less than {min_root_slot}"
+            )))
         };
 
         if let Err(err) = &sanity_check_result {
@@ -2744,7 +2886,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let (withdraw_authority_keypair_file, mut tmp_file) = make_tmp_file();
@@ -2794,13 +2936,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -2847,10 +2985,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -2883,7 +3019,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -2918,10 +3054,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -2958,10 +3092,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -2994,7 +3126,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -3029,10 +3161,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3068,7 +3198,7 @@ mod tests {
                     no_wait: true,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -3116,8 +3246,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3168,14 +3298,10 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3222,11 +3348,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3260,8 +3384,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3297,11 +3421,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3338,11 +3460,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3376,8 +3496,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3413,11 +3533,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3454,8 +3572,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3495,7 +3613,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
         // Test Authorize Subcommand w/ offline feepayer
@@ -3542,8 +3660,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&pubkey, &sig))
                 ],
             }
         );
@@ -3598,9 +3716,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into(),
-                    Presigner::new(&pubkey2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&pubkey, &sig)),
+                    Box::new(Presigner::new(&pubkey2, &sig2)),
                 ],
             }
         );
@@ -3639,7 +3757,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
         // Test Authorize Subcommand w/ nonce
@@ -3687,8 +3805,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    nonce_authority_keypair.into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(nonce_authority_keypair)
                 ],
             }
         );
@@ -3730,8 +3848,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3777,8 +3895,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&fee_payer_pubkey, &sig).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&fee_payer_pubkey, &sig))
                 ],
             }
         );
@@ -3828,8 +3946,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    stake_account_keypair.into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(stake_account_keypair)
                 ],
             }
         );
@@ -3869,8 +3987,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -3909,9 +4027,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    stake_account_keypair.into(),
-                    withdrawer_keypair.into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(stake_account_keypair),
+                    Box::new(withdrawer_keypair),
                 ],
             }
         );
@@ -3982,8 +4100,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    Presigner::new(&offline_pubkey, &offline_sig).into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(Presigner::new(&offline_pubkey, &offline_sig)),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -4015,7 +4133,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4049,10 +4167,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4083,7 +4199,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4119,7 +4235,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4150,7 +4266,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4192,8 +4308,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1))
                 ],
             }
         );
@@ -4242,9 +4358,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into(),
-                    Presigner::new(&key2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1)),
+                    Box::new(Presigner::new(&key2, &sig2)),
                 ],
             }
         );
@@ -4280,8 +4396,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap())
                 ],
             }
         );
@@ -4323,10 +4439,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&redelegation_stake_account_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&redelegation_stake_account_keypair_file).unwrap())
                 ],
             }
         );
@@ -4359,7 +4473,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4393,7 +4507,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: Some(99),
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4428,10 +4542,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4467,8 +4579,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&custodian_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&custodian_keypair_file).unwrap())
                 ],
             }
         );
@@ -4517,10 +4629,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    Presigner::new(&offline_pubkey, &offline_sig).into()
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&offline_pubkey, &offline_sig))
                 ],
             }
         );
@@ -4548,7 +4658,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4576,7 +4686,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4606,10 +4716,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4644,7 +4752,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4673,7 +4781,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4713,8 +4821,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1))
                 ],
             }
         );
@@ -4761,9 +4869,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into(),
-                    Presigner::new(&key2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1)),
+                    Box::new(Presigner::new(&key2, &sig2)),
                 ],
             }
         );
@@ -4794,8 +4902,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap())
                 ],
             }
         );
@@ -4832,12 +4940,11 @@ mod tests {
                     lamports: 50_000_000_000,
                     fee_payer: 0,
                     compute_unit_price: None,
+                    rent_exempt_reserve: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&split_stake_account_keypair_file).unwrap())
                 ],
             }
         );
@@ -4899,13 +5006,12 @@ mod tests {
                     lamports: 50_000_000_000,
                     fee_payer: 1,
                     compute_unit_price: None,
+                    rent_exempt_reserve: None,
                 },
                 signers: vec![
-                    Presigner::new(&stake_auth_pubkey, &stake_sig).into(),
-                    Presigner::new(&nonce_auth_pubkey, &nonce_sig).into(),
-                    read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(Presigner::new(&stake_auth_pubkey, &stake_sig)),
+                    Box::new(Presigner::new(&nonce_auth_pubkey, &nonce_sig)),
+                    Box::new(read_keypair_file(&split_stake_account_keypair_file).unwrap()),
                 ],
             }
         );
@@ -4938,7 +5044,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             }
         );
     }

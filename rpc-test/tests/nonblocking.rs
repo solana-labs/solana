@@ -40,7 +40,7 @@ async fn test_tpu_send_transaction() {
             .get_signature_statuses(&signatures)
             .await
             .unwrap();
-        if statuses.value.get(0).is_some() {
+        if statuses.value.first().is_some() {
             break;
         }
     }

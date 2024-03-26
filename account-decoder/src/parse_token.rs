@@ -290,12 +290,10 @@ mod test {
     use {
         super::*,
         crate::parse_token_extension::{UiMemoTransfer, UiMintCloseAuthority},
-        spl_token_2022::{
-            extension::{
-                immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
-                mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
-            },
-            pod::OptionalNonZeroPubkey,
+        spl_pod::optional_keys::OptionalNonZeroPubkey,
+        spl_token_2022::extension::{
+            immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
+            mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
         },
     };
 
@@ -506,10 +504,11 @@ mod test {
             delegate: COption::None,
             delegated_amount: 0,
         };
-        let account_size = ExtensionType::get_account_len::<Account>(&[
+        let account_size = ExtensionType::try_calculate_account_len::<Account>(&[
             ExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer,
-        ]);
+        ])
+        .unwrap();
         let mut account_data = vec![0; account_size];
         let mut account_state =
             StateWithExtensionsMut::<Account>::unpack_uninitialized(&mut account_data).unwrap();
@@ -586,7 +585,8 @@ mod test {
     fn test_parse_token_mint_with_extensions() {
         let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
         let mint_size =
-            ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+            ExtensionType::try_calculate_account_len::<Mint>(&[ExtensionType::MintCloseAuthority])
+                .unwrap();
         let mint_base = Mint {
             mint_authority: COption::Some(owner_pubkey),
             supply: 42,

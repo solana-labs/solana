@@ -6,6 +6,7 @@
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    bytemuck::{Pod, Zeroable},
     sha2::{Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
@@ -42,7 +43,10 @@ const MAX_BASE58_LEN: usize = 44;
     PartialOrd,
     Hash,
     AbiExample,
+    Pod,
+    Zeroable,
 )]
+#[borsh(crate = "borsh")]
 #[repr(transparent)]
 pub struct Hash(pub(crate) [u8; HASH_BYTES]);
 

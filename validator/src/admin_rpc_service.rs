@@ -6,19 +6,19 @@ use {
     jsonrpc_ipc_server::{
         tokio::sync::oneshot::channel as oneshot_channel, RequestContext, ServerBuilder,
     },
-    jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
+    solana_accounts_db::accounts_index::AccountIndex,
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         consensus::{tower_storage::TowerStorage, Tower},
+        repair::repair_service,
         validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
     solana_gossip::contact_info::{ContactInfo, Protocol, SOCKET_ADDR_UNSPECIFIED},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
-    solana_runtime::accounts_index::AccountIndex,
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
@@ -34,6 +34,7 @@ use {
         thread::{self, Builder},
         time::{Duration, SystemTime},
     },
+    tokio::runtime::Runtime,
 };
 
 #[derive(Clone)]
@@ -71,8 +72,8 @@ pub struct AdminRpcContactInfo {
     pub id: String,
     pub gossip: SocketAddr,
     pub tvu: SocketAddr,
-    pub tvu_forwards: SocketAddr,
-    pub repair: SocketAddr,
+    pub tvu_quic: SocketAddr,
+    pub serve_repair_quic: SocketAddr,
     pub tpu: SocketAddr,
     pub tpu_forwards: SocketAddr,
     pub tpu_vote: SocketAddr,
@@ -103,14 +104,14 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             last_updated_timestamp: node.wallclock(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
-            tvu_forwards: SOCKET_ADDR_UNSPECIFIED,
-            repair: unwrap_socket!(repair),
+            tvu_quic: unwrap_socket!(tvu, Protocol::QUIC),
+            serve_repair_quic: unwrap_socket!(serve_repair, Protocol::QUIC),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
+            serve_repair: unwrap_socket!(serve_repair, Protocol::UDP),
             shred_version: node.shred_version(),
         }
     }
@@ -121,8 +122,7 @@ impl Display for AdminRpcContactInfo {
         writeln!(f, "Identity: {}", self.id)?;
         writeln!(f, "Gossip: {}", self.gossip)?;
         writeln!(f, "TVU: {}", self.tvu)?;
-        writeln!(f, "TVU Forwards: {}", self.tvu_forwards)?;
-        writeln!(f, "Repair: {}", self.repair)?;
+        writeln!(f, "TVU QUIC: {}", self.tvu_quic)?;
         writeln!(f, "TPU: {}", self.tpu)?;
         writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
         writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
@@ -208,6 +208,15 @@ pub trait AdminRpc {
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
 
+    #[rpc(meta, name = "repairShredFromPeer")]
+    fn repair_shred_from_peer(
+        &self,
+        meta: Self::Metadata,
+        pubkey: Option<Pubkey>,
+        slot: u64,
+        shred_index: u64,
+    ) -> Result<()>;
+
     #[rpc(meta, name = "repairWhitelist")]
     fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist>;
 
@@ -220,14 +229,6 @@ pub trait AdminRpc {
         meta: Self::Metadata,
         pubkey_str: String,
     ) -> Result<HashMap<RpcAccountIndex, usize>>;
-
-    #[rpc(meta, name = "getLargestIndexKeys")]
-    fn get_largest_index_keys(
-        &self,
-        meta: Self::Metadata,
-        secondary_index: RpcAccountIndex,
-        max_entries: usize,
-    ) -> Result<Vec<(String, usize)>>;
 
     #[rpc(meta, name = "setPublicTpuAddress")]
     fn set_public_tpu_address(
@@ -486,7 +487,7 @@ impl AdminRpc for AdminRpcImpl {
             .staked_map_id;
         let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
         write_staked_nodes.clear();
-        write_staked_nodes.extend(loaded_config.into_iter());
+        write_staked_nodes.extend(loaded_config);
         info!("Staked nodes overrides loaded from {}", path);
         debug!("overrides map: {:?}", write_staked_nodes);
         Ok(())
@@ -494,6 +495,29 @@ impl AdminRpc for AdminRpcImpl {
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+
+    fn repair_shred_from_peer(
+        &self,
+        meta: Self::Metadata,
+        pubkey: Option<Pubkey>,
+        slot: u64,
+        shred_index: u64,
+    ) -> Result<()> {
+        debug!("repair_shred_from_peer request received");
+
+        meta.with_post_init(|post_init| {
+            repair_service::RepairService::request_repair_for_shred_from_peer(
+                post_init.cluster_info.clone(),
+                post_init.cluster_slots.clone(),
+                pubkey,
+                slot,
+                shred_index,
+                &post_init.repair_socket.clone(),
+                post_init.outstanding_repair_requests.clone(),
+            );
+            Ok(())
+        })
     }
 
     fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist> {
@@ -577,34 +601,6 @@ impl AdminRpc for AdminRpcImpl {
         })
     }
 
-    fn get_largest_index_keys(
-        &self,
-        meta: Self::Metadata,
-        secondary_index: RpcAccountIndex,
-        max_entries: usize,
-    ) -> Result<Vec<(String, usize)>> {
-        debug!(
-            "get_largest_index_keys rpc request received: {:?}",
-            max_entries
-        );
-        let secondary_index = account_index_from_rpc_account_index(&secondary_index);
-        meta.with_post_init(|post_init| {
-            let bank = post_init.bank_forks.read().unwrap().root_bank();
-            let enabled_account_indexes = &bank.accounts().accounts_db.account_indexes;
-            if enabled_account_indexes.is_empty() {
-                debug!("get_secondary_index_key_size: secondary index not enabled.");
-                return Ok(Vec::new());
-            };
-            let accounts_index = &bank.accounts().accounts_db.accounts_index;
-            let largest_keys = accounts_index
-                .get_largest_keys(&secondary_index, max_entries)
-                .iter()
-                .map(|&(x, y)| (y.to_string(), x))
-                .collect::<Vec<_>>();
-            Ok(largest_keys)
-        })
-    }
-
     fn set_public_tpu_address(
         &self,
         meta: Self::Metadata,
@@ -619,10 +615,9 @@ impl AdminRpc for AdminRpcImpl {
                 .tpu(Protocol::UDP)
                 .map_err(|err| {
                     error!(
-                        "The public TPU address isn't being published. \
-                        The node is likely in repair mode. \
-                        See help for --restricted-repair-only-mode for more information. \
-                        {err}"
+                        "The public TPU address isn't being published. The node is likely in \
+                         repair mode. See help for --restricted-repair-only-mode for more \
+                         information. {err}"
                     );
                     jsonrpc_core::error::Error::internal_error()
                 })?;
@@ -657,10 +652,9 @@ impl AdminRpc for AdminRpcImpl {
                 .tpu_forwards(Protocol::UDP)
                 .map_err(|err| {
                     error!(
-                        "The public TPU Forwards address isn't being published. \
-                        The node is likely in repair mode. \
-                        See help for --restricted-repair-only-mode for more information. \
-                        {err}"
+                        "The public TPU Forwards address isn't being published. The node is \
+                         likely in repair mode. See help for --restricted-repair-only-mode for \
+                         more information. {err}"
                     );
                     jsonrpc_core::error::Error::internal_error()
                 })?;
@@ -719,6 +713,12 @@ impl AdminRpcImpl {
                     })?;
             }
 
+            for n in post_init.notifies.iter() {
+                if let Err(err) = n.update_key(&identity_keypair) {
+                    error!("Error updating network layer keypair: {err}");
+                }
+            }
+
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
             post_init
                 .cluster_info
@@ -734,14 +734,6 @@ fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAcco
         AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
         AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
         AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
-    }
-}
-
-fn account_index_from_rpc_account_index(rpc_account_index: &RpcAccountIndex) -> AccountIndex {
-    match rpc_account_index {
-        RpcAccountIndex::ProgramId => AccountIndex::ProgramId,
-        RpcAccountIndex::SplTokenOwner => AccountIndex::SplTokenOwner,
-        RpcAccountIndex::SplTokenMint => AccountIndex::SplTokenMint,
     }
 }
 
@@ -823,8 +815,12 @@ pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Clie
     }
 }
 
-pub fn runtime() -> jsonrpc_server_utils::tokio::runtime::Runtime {
-    jsonrpc_server_utils::tokio::runtime::Runtime::new().expect("new tokio runtime")
+pub fn runtime() -> Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .thread_name("solAdminRpcRt")
+        .enable_all()
+        .build()
+        .expect("new tokio runtime")
 }
 
 #[derive(Default, Deserialize, Clone)]
@@ -863,18 +859,15 @@ pub fn load_staked_nodes_overrides(
 mod tests {
     use {
         super::*,
-        rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
+        solana_accounts_db::{accounts_index::AccountSecondaryIndexes, inline_spl_token},
         solana_core::consensus::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,
         solana_runtime::{
-            accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
             bank_forks::BankForks,
-            inline_spl_token,
-            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},
@@ -886,7 +879,7 @@ mod tests {
             solana_program::{program_option::COption, program_pack::Pack},
             state::{Account as TokenAccount, AccountState as TokenAccountState, Mint},
         },
-        std::{collections::HashSet, str::FromStr, sync::atomic::AtomicBool},
+        std::{collections::HashSet, sync::atomic::AtomicBool},
     };
 
     #[derive(Default)]
@@ -936,6 +929,14 @@ mod tests {
                     bank_forks: bank_forks.clone(),
                     vote_account,
                     repair_whitelist,
+                    notifies: Vec::new(),
+                    repair_socket: Arc::new(std::net::UdpSocket::bind("0.0.0.0:0").unwrap()),
+                    outstanding_repair_requests: Arc::<
+                        RwLock<repair_service::OutstandingShredRepairs>,
+                    >::default(),
+                    cluster_slots: Arc::new(
+                        solana_core::cluster_slots_service::cluster_slots::ClusterSlots::default(),
+                    ),
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,
@@ -965,10 +966,7 @@ mod tests {
         } = create_genesis_config(1_000_000_000);
 
         let bank = Bank::new_for_tests_with_config(&genesis_config, config);
-        (
-            Arc::new(RwLock::new(BankForks::new(bank))),
-            Arc::new(voting_keypair),
-        )
+        (BankForks::new_rw_arc(bank), Arc::new(voting_keypair))
     }
 
     #[test]
@@ -1273,185 +1271,6 @@ mod tests {
                 let sizes: HashMap<RpcAccountIndex, usize> =
                     serde_json::from_value(result["result"].clone()).unwrap();
                 assert!(sizes.is_empty());
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_largest_index_keys() {
-        // Constants
-        const NUM_DUMMY_ACCOUNTS: usize = 50;
-        const MAX_CHILD_ACCOUNTS: usize = 5; // Set low because it induces lots of same key size entries in the ProgramID list
-        const MAX_MINT_ACCOUNTS: usize = 50;
-        const MAX_TOKEN_ACCOUNTS: usize = 100;
-
-        // Set secondary indexes
-        let account_indexes = AccountSecondaryIndexes {
-            keys: None,
-            indexes: HashSet::from([
-                AccountIndex::ProgramId,
-                AccountIndex::SplTokenMint,
-                AccountIndex::SplTokenOwner,
-            ]),
-        };
-
-        // RPC & Bank Setup
-        let rpc = RpcHandler::start_with_config(TestConfig { account_indexes });
-
-        let bank = rpc.root_bank();
-        let RpcHandler { io, meta, .. } = rpc;
-
-        // Add some basic system owned account
-        let mut dummy_account_pubkeys = Vec::with_capacity(NUM_DUMMY_ACCOUNTS);
-        let mut num_generator = thread_rng();
-        let key_size_range = Uniform::new_inclusive(0, MAX_CHILD_ACCOUNTS);
-        for _i in 1..=NUM_DUMMY_ACCOUNTS {
-            let pubkey = Pubkey::new_unique();
-            dummy_account_pubkeys.push(pubkey);
-            let account = AccountSharedData::from(Account {
-                lamports: 11111111,
-                owner: system_program::id(),
-                ..Account::default()
-            });
-            bank.store_account(&pubkey, &account);
-        }
-
-        // Now add a random number of accounts each owned by one of the newely
-        // created dummy accounts
-        for dummy_account in &dummy_account_pubkeys {
-            // Add child accounts to each dummy account
-            let num_children = (&mut num_generator).sample_iter(key_size_range).next();
-            for _j in 0..num_children.unwrap_or(0) {
-                let child_pubkey = Pubkey::new_unique();
-                let child_account = AccountSharedData::from(Account {
-                    lamports: bank.get_minimum_balance_for_rent_exemption(0),
-                    owner: *dummy_account,
-                    ..Account::default()
-                });
-                bank.store_account(&child_pubkey, &child_account);
-            }
-        }
-
-        let num_token_accounts_range = Uniform::new_inclusive(1, MAX_TOKEN_ACCOUNTS);
-        let num_mint_accounts_range = Uniform::new_inclusive(NUM_DUMMY_ACCOUNTS, MAX_MINT_ACCOUNTS);
-        let dummy_account_pubkey_index_range = Uniform::new(0, NUM_DUMMY_ACCOUNTS);
-
-        let num_token_accounts = (&mut num_generator)
-            .sample_iter(num_token_accounts_range)
-            .next();
-        let num_mint_accounts = (&mut num_generator)
-            .sample_iter(num_mint_accounts_range)
-            .next();
-
-        let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        let mut mint_data = vec![0; Mint::get_packed_len()];
-
-        // Make a bunch of SPL Tokens each with some random number of SPL Token Accounts that have the token in them
-        for _i in 0..num_mint_accounts.unwrap_or(NUM_DUMMY_ACCOUNTS) {
-            let mint_pubkey = Pubkey::new_unique();
-            for _j in 0..num_token_accounts.unwrap_or(1) {
-                let owner_pubkey = dummy_account_pubkeys[(&mut num_generator)
-                    .sample_iter(dummy_account_pubkey_index_range)
-                    .next()
-                    .unwrap()];
-                let delagate_pubkey = dummy_account_pubkeys[(&mut num_generator)
-                    .sample_iter(dummy_account_pubkey_index_range)
-                    .next()
-                    .unwrap()];
-                let account_pubkey = Pubkey::new_unique();
-                // Add a token account
-                let token_state = TokenAccount {
-                    mint: mint_pubkey,
-                    owner: owner_pubkey,
-                    delegate: COption::Some(delagate_pubkey),
-                    amount: 100,
-                    state: TokenAccountState::Initialized,
-                    is_native: COption::None,
-                    delegated_amount: 10,
-                    close_authority: COption::Some(owner_pubkey),
-                };
-                TokenAccount::pack(token_state, &mut account_data).unwrap();
-                let token_account = AccountSharedData::from(Account {
-                    lamports: 22222222,
-                    data: account_data.to_vec(),
-                    owner: inline_spl_token::id(),
-                    ..Account::default()
-                });
-                bank.store_account(&account_pubkey, &token_account);
-            }
-            // Add the mint
-            let mint_authority_pubkey = dummy_account_pubkeys[(&mut num_generator)
-                .sample_iter(dummy_account_pubkey_index_range)
-                .next()
-                .unwrap()];
-            let mint_state = Mint {
-                mint_authority: COption::Some(mint_authority_pubkey),
-                supply: 100 * (num_token_accounts.unwrap_or(1) as u64),
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(mint_authority_pubkey),
-            };
-            Mint::pack(mint_state, &mut mint_data).unwrap();
-            let mint_account = AccountSharedData::from(Account {
-                lamports: 33333333,
-                data: mint_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&mint_pubkey, &mint_account);
-        }
-
-        // Collect largest key list for ProgramIDs
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
-            "programId", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let largest_program_id_keys: Vec<(String, usize)> =
-            serde_json::from_value(result["result"].clone()).unwrap();
-        // Collect largest key list for SPLTokenOwners
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
-            "splTokenOwner", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let largest_spl_token_owner_keys: Vec<(String, usize)> =
-            serde_json::from_value(result["result"].clone()).unwrap();
-        // Collect largest key list for SPLTokenMints
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
-            "splTokenMint", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let largest_spl_token_mint_keys: Vec<(String, usize)> =
-            serde_json::from_value(result["result"].clone()).unwrap();
-
-        let largest_keys = vec![
-            largest_program_id_keys,
-            largest_spl_token_owner_keys,
-            largest_spl_token_mint_keys,
-        ];
-
-        // Make sure key lists conform to expected output
-        for key_list in largest_keys {
-            // No longer than the max
-            assert!(key_list.len() <= MAX_NUM_LARGEST_INDEX_KEYS_RETURNED);
-            let key_list_pubkeys = key_list
-                .iter()
-                .map(|(k, _)| Pubkey::from_str(k).unwrap())
-                .collect::<Vec<Pubkey>>();
-            // In sorted order: Descending key size, where ties are sorted by descending pubkey
-            for i in 0..key_list.len() - 1 {
-                assert!(key_list[i].1 >= key_list[i + 1].1);
-                if key_list[i].1 == key_list[i + 1].1 {
-                    assert!(key_list_pubkeys[i] >= key_list_pubkeys[i + 1]);
-                }
             }
         }
     }

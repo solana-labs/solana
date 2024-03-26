@@ -16,7 +16,7 @@ use {
     solana_sdk::{packet::Packet, saturating_add_assign},
 };
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
 pub struct SigverifyTracerPacketStats {
     pub total_removed_before_sigverify_stage: usize,
     pub total_tracer_packets_received_in_sigverify_stage: usize,

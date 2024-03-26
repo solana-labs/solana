@@ -16,7 +16,7 @@ use {
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         crds::{Crds, CrdsError, Cursor, GossipRoute},
         crds_gossip,
-        crds_value::{CrdsData, CrdsValue},
+        crds_value::CrdsValue,
         ping_pong::PingCache,
         push_active_set::PushActiveSet,
         received_cache::ReceivedCache,
@@ -144,7 +144,7 @@ impl CrdsGossipPush {
                     continue;
                 }
                 let origin = value.pubkey();
-                match crds.insert(value, now, GossipRoute::PushMessage) {
+                match crds.insert(value, now, GossipRoute::PushMessage(&from)) {
                     Ok(()) => {
                         received_cache.record(origin, from, /*num_dups:*/ 0);
                         origins.insert(origin);
@@ -191,11 +191,6 @@ impl CrdsGossipPush {
         let crds = crds.read().unwrap();
         let entries = crds
             .get_entries(crds_cursor.deref_mut())
-            .filter(|entry| {
-                // Exclude the new ContactInfo from outgoing push messages
-                // until the cluster has upgraded.
-                !matches!(&entry.value.data, CrdsData::ContactInfo(_))
-            })
             .map(|entry| &entry.value)
             .filter(|value| wallclock_window.contains(&value.wallclock()));
         for value in entries {

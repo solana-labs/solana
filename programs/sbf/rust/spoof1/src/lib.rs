@@ -22,10 +22,7 @@ fn process_instruction(
     let mut tmp_native_owner = [0u8; 32];
     tmp_native_owner.copy_from_slice(accounts[0].owner.as_ref());
 
-    let owner_addr = accounts[0].owner as *const Pubkey;
-    unsafe {
-        std::ptr::write_volatile(owner_addr as *mut [u8; 32], fake_system.owner.to_bytes());
-    }
+    accounts[0].assign(fake_system.owner);
 
     let system = &accounts[0];
     let mut new_system = system.clone();
@@ -44,10 +41,7 @@ fn process_instruction(
     msg!("swapped owner and data");
     invoke(&ix, &[target.clone(), me.clone(), new_system])?;
 
-    let owner_addr = accounts[0].owner as *const Pubkey;
-    unsafe {
-        std::ptr::write_volatile(owner_addr as *mut [u8; 32], tmp_native_owner);
-    }
+    accounts[0].assign(&Pubkey::from(tmp_native_owner));
 
     Ok(())
 }

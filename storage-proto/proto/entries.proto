@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package solana.storage.Entries;
+
+message Entries {
+    repeated Entry entries = 1;
+}
+
+message Entry {
+    uint32 index = 1;
+    uint64 num_hashes = 2;
+    bytes hash = 3;
+    uint64 num_transactions = 4;
+    uint32 starting_transaction_index = 5;
+}

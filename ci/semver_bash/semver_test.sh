@@ -21,7 +21,7 @@ echo "$A -> M:$MAJOR m:$MINOR p:$PATCH s:$SPECIAL. Expect M:1 m:3 p:2 s:"
 semverParseInto $E MAJOR MINOR PATCH SPECIAL
 echo "$E -> M:$MAJOR m:$MINOR p:$PATCH s:$SPECIAL. Expect M:1 m:3 p:2 s:a"
 
-echo "Equality comparisions"
+echo "Equality comparisons"
 semverEQ $A $A
 echo "$A == $A -> $?. Expect 0."
 
@@ -32,7 +32,7 @@ semverGT $A $A
 echo "$A > $A -> $?. Expect 1."
 
 
-echo "Major number comparisions"
+echo "Major number comparisons"
 semverEQ $A $B
 echo "$A == $B -> $?. Expect 1."
 
@@ -52,7 +52,7 @@ semverGT $B $A
 echo "$B > $A -> $?. Expect 0."
 
 
-echo "Minor number comparisions"
+echo "Minor number comparisons"
 semverEQ $A $C
 echo "$A == $C -> $?. Expect 1."
 
@@ -71,7 +71,7 @@ echo "$C < $A -> $?. Expect 1."
 semverGT $C $A
 echo "$C > $A -> $?. Expect 0."
 
-echo "patch number comparisions"
+echo "patch number comparisons"
 semverEQ $A $D
 echo "$A == $D -> $?. Expect 1."
 
@@ -90,7 +90,7 @@ echo "$D < $A -> $?. Expect 1."
 semverGT $D $A
 echo "$D > $A -> $?. Expect 0."
 
-echo "special section vs no special comparisions"
+echo "special section vs no special comparisons"
 semverEQ $A $E
 echo "$A == $E -> $?. Expect 1."
 
@@ -109,7 +109,7 @@ echo "$E < $A -> $?. Expect 0."
 semverGT $E $A
 echo "$E > $A -> $?. Expect 1."
 
-echo "special section vs special comparisions"
+echo "special section vs special comparisons"
 semverEQ $E $F
 echo "$E == $F -> $?. Expect 1."
 

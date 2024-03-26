@@ -1,6 +1,6 @@
 //! A type to hold data for the [`StakeHistory` sysvar][sv].
 //!
-//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#stakehistory
+//! [sv]: https://docs.solanalabs.com/runtime/sysvars#stakehistory
 //!
 //! The sysvar ID is declared in [`sysvar::stake_history`].
 //!
@@ -11,6 +11,7 @@ use std::ops::Deref;
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
+#[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
 pub struct StakeHistoryEntry {
     pub effective: u64,    // effective stake at this epoch

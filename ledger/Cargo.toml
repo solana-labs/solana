@@ -25,6 +25,7 @@ lazy_static = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
+mockall = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
 prost = { workspace = true }
@@ -37,6 +38,7 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }
@@ -52,7 +54,9 @@ solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-storage-proto = { workspace = true }
+solana-svm = { workspace = true }
 solana-transaction-status = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
@@ -74,9 +78,10 @@ features = ["lz4"]
 
 [dev-dependencies]
 bs58 = { workspace = true }
-matches = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+spl-pod = { workspace = true }
 test-case = { workspace = true }
 
 [build-dependencies]

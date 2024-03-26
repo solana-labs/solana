@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(dead_code)]
 pub mod ledger;
 pub mod ledger_error;

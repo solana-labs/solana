@@ -18,7 +18,7 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client_api::config::RpcSendTransactionConfig,
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
-    std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration},
+    std::{collections::HashMap, error, path::PathBuf, rc::Rc, time::Duration},
 };
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -27,7 +27,8 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
             let config_file = match matches.value_of("config_file") {
                 None => {
                     println!(
-                        "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",
+                        "{} Either provide the `--config` arg or ensure home directory exists to \
+                         use the default config location",
                         style("No config file found.").bold()
                     );
                     return Ok(false);
@@ -142,7 +143,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 
 pub fn parse_args<'a>(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()

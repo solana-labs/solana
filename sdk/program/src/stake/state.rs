@@ -1,75 +1,97 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+// Remove the following `allow` when `StakeState` is removed, required to avoid
+// warnings from uses of deprecated types during trait derivations.
+#![allow(deprecated)]
+
 use {
     crate::{
         clock::{Clock, Epoch, UnixTimestamp},
         instruction::InstructionError,
         pubkey::Pubkey,
         stake::{
-            config::Config,
             instruction::{LockupArgs, StakeError},
             stake_flags::StakeFlags,
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
-    borsh::{maybestd::io, BorshDeserialize, BorshSchema, BorshSerialize},
+    borsh::{io, BorshDeserialize, BorshSchema, BorshSerialize},
     std::collections::HashSet,
 };
 
 pub type StakeActivationStatus = StakeHistoryEntry;
 
+// means that no more than RATE of current effective stake may be added or subtracted per
+// epoch
+pub const DEFAULT_WARMUP_COOLDOWN_RATE: f64 = 0.25;
+pub const NEW_WARMUP_COOLDOWN_RATE: f64 = 0.09;
+pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
+
+pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Option<Epoch>) -> f64 {
+    if current_epoch < new_rate_activation_epoch.unwrap_or(u64::MAX) {
+        DEFAULT_WARMUP_COOLDOWN_RATE
+    } else {
+        NEW_WARMUP_COOLDOWN_RATE
+    }
+}
+
+macro_rules! impl_borsh_stake_state {
+    ($borsh:ident) => {
+        impl $borsh::BorshDeserialize for StakeState {
+            fn deserialize_reader<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+                let enum_value: u32 = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                match enum_value {
+                    0 => Ok(StakeState::Uninitialized),
+                    1 => {
+                        let meta: Meta = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        Ok(StakeState::Initialized(meta))
+                    }
+                    2 => {
+                        let meta: Meta = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        let stake: Stake = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        Ok(StakeState::Stake(meta, stake))
+                    }
+                    3 => Ok(StakeState::RewardsPool),
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Invalid enum value",
+                    )),
+                }
+            }
+        }
+        impl $borsh::BorshSerialize for StakeState {
+            fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+                match self {
+                    StakeState::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
+                    StakeState::Initialized(meta) => {
+                        writer.write_all(&1u32.to_le_bytes())?;
+                        $borsh::BorshSerialize::serialize(&meta, writer)
+                    }
+                    StakeState::Stake(meta, stake) => {
+                        writer.write_all(&2u32.to_le_bytes())?;
+                        $borsh::BorshSerialize::serialize(&meta, writer)?;
+                        $borsh::BorshSerialize::serialize(&stake, writer)
+                    }
+                    StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
+                }
+            }
+        }
+    };
+}
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
+#[deprecated(
+    since = "1.17.0",
+    note = "Please use `StakeStateV2` instead, and match the third `StakeFlags` field when matching `StakeStateV2::Stake` to resolve any breakage. For example, `if let StakeState::Stake(meta, stake)` becomes `if let StakeStateV2::Stake(meta, stake, _stake_flags)`."
+)]
 pub enum StakeState {
     #[default]
     Uninitialized,
     Initialized(Meta),
-    Stake(Meta, Stake, StakeFlags),
+    Stake(Meta, Stake),
     RewardsPool,
 }
-
-impl BorshDeserialize for StakeState {
-    fn deserialize_reader<R: io::Read>(reader: &mut R) -> io::Result<Self> {
-        let enum_value = u32::deserialize_reader(reader)?;
-        match enum_value {
-            0 => Ok(StakeState::Uninitialized),
-            1 => {
-                let meta = Meta::deserialize_reader(reader)?;
-                Ok(StakeState::Initialized(meta))
-            }
-            2 => {
-                let meta: Meta = BorshDeserialize::deserialize_reader(reader)?;
-                let stake: Stake = BorshDeserialize::deserialize_reader(reader)?;
-                let stake_flags: StakeFlags = BorshDeserialize::deserialize_reader(reader)?;
-                Ok(StakeState::Stake(meta, stake, stake_flags))
-            }
-            3 => Ok(StakeState::RewardsPool),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid enum value",
-            )),
-        }
-    }
-}
-
-impl BorshSerialize for StakeState {
-    fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        match self {
-            StakeState::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
-            StakeState::Initialized(meta) => {
-                writer.write_all(&1u32.to_le_bytes())?;
-                meta.serialize(writer)
-            }
-            StakeState::Stake(meta, stake, stake_flags) => {
-                writer.write_all(&2u32.to_le_bytes())?;
-                meta.serialize(writer)?;
-                stake.serialize(writer)?;
-                stake_flags.serialize(writer)
-            }
-            StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
-        }
-    }
-}
-
+impl_borsh_stake_state!(borsh);
+impl_borsh_stake_state!(borsh0_10);
 impl StakeState {
     /// The fixed number of bytes used to serialize each stake account
     pub const fn size_of() -> usize {
@@ -78,21 +100,21 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake, _stake_flags) => Some(*stake),
+            StakeState::Stake(_meta, stake) => Some(*stake),
             _ => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
+            StakeState::Stake(_meta, stake) => Some(stake.delegation),
             _ => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
+            StakeState::Stake(meta, _stake) => Some(meta.authorized),
             StakeState::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
@@ -104,8 +126,107 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake, _stake_flags) => Some(*meta),
+            StakeState::Stake(meta, _stake) => Some(*meta),
             StakeState::Initialized(meta) => Some(*meta),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[allow(clippy::large_enum_variant)]
+pub enum StakeStateV2 {
+    #[default]
+    Uninitialized,
+    Initialized(Meta),
+    Stake(Meta, Stake, StakeFlags),
+    RewardsPool,
+}
+macro_rules! impl_borsh_stake_state_v2 {
+    ($borsh:ident) => {
+        impl $borsh::BorshDeserialize for StakeStateV2 {
+            fn deserialize_reader<R: io::Read>(reader: &mut R) -> io::Result<Self> {
+                let enum_value: u32 = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                match enum_value {
+                    0 => Ok(StakeStateV2::Uninitialized),
+                    1 => {
+                        let meta: Meta = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        Ok(StakeStateV2::Initialized(meta))
+                    }
+                    2 => {
+                        let meta: Meta = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        let stake: Stake = $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        let stake_flags: StakeFlags =
+                            $borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        Ok(StakeStateV2::Stake(meta, stake, stake_flags))
+                    }
+                    3 => Ok(StakeStateV2::RewardsPool),
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Invalid enum value",
+                    )),
+                }
+            }
+        }
+        impl $borsh::BorshSerialize for StakeStateV2 {
+            fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+                match self {
+                    StakeStateV2::Uninitialized => writer.write_all(&0u32.to_le_bytes()),
+                    StakeStateV2::Initialized(meta) => {
+                        writer.write_all(&1u32.to_le_bytes())?;
+                        $borsh::BorshSerialize::serialize(&meta, writer)
+                    }
+                    StakeStateV2::Stake(meta, stake, stake_flags) => {
+                        writer.write_all(&2u32.to_le_bytes())?;
+                        $borsh::BorshSerialize::serialize(&meta, writer)?;
+                        $borsh::BorshSerialize::serialize(&stake, writer)?;
+                        $borsh::BorshSerialize::serialize(&stake_flags, writer)
+                    }
+                    StakeStateV2::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
+                }
+            }
+        }
+    };
+}
+impl_borsh_stake_state_v2!(borsh);
+impl_borsh_stake_state_v2!(borsh0_10);
+
+impl StakeStateV2 {
+    /// The fixed number of bytes used to serialize each stake account
+    pub const fn size_of() -> usize {
+        200 // see test_size_of
+    }
+
+    pub fn stake(&self) -> Option<Stake> {
+        match self {
+            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(*stake),
+            _ => None,
+        }
+    }
+
+    pub fn delegation(&self) -> Option<Delegation> {
+        match self {
+            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
+            _ => None,
+        }
+    }
+
+    pub fn authorized(&self) -> Option<Authorized> {
+        match self {
+            StakeStateV2::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
+            StakeStateV2::Initialized(meta) => Some(meta.authorized),
+            _ => None,
+        }
+    }
+
+    pub fn lockup(&self) -> Option<Lockup> {
+        self.meta().map(|meta| meta.lockup)
+    }
+
+    pub fn meta(&self) -> Option<Meta> {
+        match self {
+            StakeStateV2::Stake(meta, _stake, _stake_flags) => Some(*meta),
+            StakeStateV2::Initialized(meta) => Some(*meta),
             _ => None,
         }
     }
@@ -131,6 +252,7 @@ pub enum StakeAuthorize {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Lockup {
     /// UnixTimestamp at which this stake will allow withdrawal, unless the
     ///   transaction is signed by the custodian
@@ -142,13 +264,71 @@ pub struct Lockup {
     ///  lockup constraints
     pub custodian: Pubkey,
 }
-
 impl Lockup {
     pub fn is_in_force(&self, clock: &Clock, custodian: Option<&Pubkey>) -> bool {
         if custodian == Some(&self.custodian) {
             return false;
         }
         self.unix_timestamp > clock.unix_timestamp || self.epoch > clock.epoch
+    }
+}
+impl borsh0_10::de::BorshDeserialize for Lockup {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            unix_timestamp: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            epoch: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            custodian: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for Lockup {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "Lockup".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([
+                (
+                    "unix_timestamp".to_string(),
+                    <UnixTimestamp as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "epoch".to_string(),
+                    <Epoch as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "custodian".to_string(),
+                    <Pubkey as borsh0_10::BorshSchema>::declaration(),
+                ),
+            ]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <UnixTimestamp as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Epoch as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Pubkey as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for Lockup {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.unix_timestamp, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.epoch, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.custodian, writer)?;
+        Ok(())
     }
 }
 
@@ -166,6 +346,7 @@ impl Lockup {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Authorized {
     pub staker: Pubkey,
     pub withdrawer: Pubkey,
@@ -231,6 +412,58 @@ impl Authorized {
         Ok(())
     }
 }
+impl borsh0_10::de::BorshDeserialize for Authorized {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            staker: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            withdrawer: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for Authorized {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "Authorized".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([
+                (
+                    "staker".to_string(),
+                    <Pubkey as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "withdrawer".to_string(),
+                    <Pubkey as borsh0_10::BorshSchema>::declaration(),
+                ),
+            ]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <Pubkey as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Pubkey as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for Authorized {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.staker, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.withdrawer, writer)?;
+        Ok(())
+    }
+}
 
 #[derive(
     Default,
@@ -246,6 +479,7 @@ impl Authorized {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Meta {
     pub rent_exempt_reserve: u64,
     pub authorized: Authorized,
@@ -288,6 +522,65 @@ impl Meta {
         }
     }
 }
+impl borsh0_10::de::BorshDeserialize for Meta {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            rent_exempt_reserve: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            authorized: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            lockup: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for Meta {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "Meta".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([
+                (
+                    "rent_exempt_reserve".to_string(),
+                    <u64 as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "authorized".to_string(),
+                    <Authorized as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "lockup".to_string(),
+                    <Lockup as borsh0_10::BorshSchema>::declaration(),
+                ),
+            ]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <u64 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Authorized as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Lockup as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for Meta {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.rent_exempt_reserve, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.authorized, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.lockup, writer)?;
+        Ok(())
+    }
+}
 
 #[derive(
     Debug,
@@ -301,6 +594,7 @@ impl Meta {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Delegation {
     /// to whom the stake is delegated
     pub voter_pubkey: Pubkey,
@@ -311,33 +605,32 @@ pub struct Delegation {
     /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
     pub deactivation_epoch: Epoch,
     /// how much stake we can activate per-epoch as a fraction of currently effective stake
+    #[deprecated(
+        since = "1.16.7",
+        note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
+    )]
     pub warmup_cooldown_rate: f64,
 }
 
 impl Default for Delegation {
     fn default() -> Self {
+        #[allow(deprecated)]
         Self {
             voter_pubkey: Pubkey::default(),
             stake: 0,
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
-            warmup_cooldown_rate: Config::default().warmup_cooldown_rate,
+            warmup_cooldown_rate: DEFAULT_WARMUP_COOLDOWN_RATE,
         }
     }
 }
 
 impl Delegation {
-    pub fn new(
-        voter_pubkey: &Pubkey,
-        stake: u64,
-        activation_epoch: Epoch,
-        warmup_cooldown_rate: f64,
-    ) -> Self {
+    pub fn new(voter_pubkey: &Pubkey, stake: u64, activation_epoch: Epoch) -> Self {
         Self {
             voter_pubkey: *voter_pubkey,
             stake,
             activation_epoch,
-            warmup_cooldown_rate,
             ..Delegation::default()
         }
     }
@@ -345,8 +638,13 @@ impl Delegation {
         self.activation_epoch == std::u64::MAX
     }
 
-    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history)
+    pub fn stake(
+        &self,
+        epoch: Epoch,
+        history: &StakeHistory,
+        new_rate_activation_epoch: Option<Epoch>,
+    ) -> u64 {
+        self.stake_activating_and_deactivating(epoch, history, new_rate_activation_epoch)
             .effective
     }
 
@@ -354,10 +652,12 @@ impl Delegation {
     pub fn stake_activating_and_deactivating(
         &self,
         target_epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
+        new_rate_activation_epoch: Option<Epoch>,
     ) -> StakeActivationStatus {
         // first, calculate an effective and activating stake
-        let (effective_stake, activating_stake) = self.stake_and_activating(target_epoch, history);
+        let (effective_stake, activating_stake) =
+            self.stake_and_activating(target_epoch, history, new_rate_activation_epoch);
 
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
@@ -373,17 +673,14 @@ impl Delegation {
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
             StakeActivationStatus::with_deactivating(effective_stake)
-        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
-            history.and_then(|history| {
-                history
-                    .get(self.deactivation_epoch)
-                    .map(|cluster_stake_at_deactivation_epoch| {
-                        (
-                            history,
-                            self.deactivation_epoch,
-                            cluster_stake_at_deactivation_epoch,
-                        )
-                    })
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
+            .get(self.deactivation_epoch)
+            .map(|cluster_stake_at_deactivation_epoch| {
+                (
+                    history,
+                    self.deactivation_epoch,
+                    cluster_stake_at_deactivation_epoch,
+                )
             })
         {
             // target_epoch > self.deactivation_epoch
@@ -404,10 +701,12 @@ impl Delegation {
                 //   this account is entitled to take
                 let weight =
                     current_effective_stake as f64 / prev_cluster_stake.deactivating as f64;
+                let warmup_cooldown_rate =
+                    warmup_cooldown_rate(current_epoch, new_rate_activation_epoch);
 
                 // portion of newly not-effective cluster stake I'm entitled to at current epoch
                 let newly_not_effective_cluster_stake =
-                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                    prev_cluster_stake.effective as f64 * warmup_cooldown_rate;
                 let newly_not_effective_stake =
                     ((weight * newly_not_effective_cluster_stake) as u64).max(1);
 
@@ -440,7 +739,8 @@ impl Delegation {
     fn stake_and_activating(
         &self,
         target_epoch: Epoch,
-        history: Option<&StakeHistory>,
+        history: &StakeHistory,
+        new_rate_activation_epoch: Option<Epoch>,
     ) -> (u64, u64) {
         let delegated_stake = self.stake;
 
@@ -457,17 +757,14 @@ impl Delegation {
         } else if target_epoch < self.activation_epoch {
             // not yet enabled
             (0, 0)
-        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
-            history.and_then(|history| {
-                history
-                    .get(self.activation_epoch)
-                    .map(|cluster_stake_at_activation_epoch| {
-                        (
-                            history,
-                            self.activation_epoch,
-                            cluster_stake_at_activation_epoch,
-                        )
-                    })
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
+            .get(self.activation_epoch)
+            .map(|cluster_stake_at_activation_epoch| {
+                (
+                    history,
+                    self.activation_epoch,
+                    cluster_stake_at_activation_epoch,
+                )
             })
         {
             // target_epoch > self.activation_epoch
@@ -489,10 +786,12 @@ impl Delegation {
                 let remaining_activating_stake = delegated_stake - current_effective_stake;
                 let weight =
                     remaining_activating_stake as f64 / prev_cluster_stake.activating as f64;
+                let warmup_cooldown_rate =
+                    warmup_cooldown_rate(current_epoch, new_rate_activation_epoch);
 
                 // portion of newly effective cluster stake I'm entitled to at current epoch
                 let newly_effective_cluster_stake =
-                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                    prev_cluster_stake.effective as f64 * warmup_cooldown_rate;
                 let newly_effective_stake =
                     ((weight * newly_effective_cluster_stake) as u64).max(1);
 
@@ -523,6 +822,79 @@ impl Delegation {
         }
     }
 }
+impl borsh0_10::de::BorshDeserialize for Delegation {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            voter_pubkey: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            stake: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            activation_epoch: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            deactivation_epoch: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            warmup_cooldown_rate: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for Delegation {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "Delegation".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([
+                (
+                    "voter_pubkey".to_string(),
+                    <Pubkey as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "stake".to_string(),
+                    <u64 as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "activation_epoch".to_string(),
+                    <Epoch as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "deactivation_epoch".to_string(),
+                    <Epoch as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "warmup_cooldown_rate".to_string(),
+                    <f64 as borsh0_10::BorshSchema>::declaration(),
+                ),
+            ]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <Pubkey as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <u64 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Epoch as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <Epoch as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <f64 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for Delegation {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.voter_pubkey, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.stake, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.activation_epoch, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.deactivation_epoch, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.warmup_cooldown_rate, writer)?;
+        Ok(())
+    }
+}
 
 #[derive(
     Debug,
@@ -537,6 +909,7 @@ impl Delegation {
     BorshSchema,
     BorshSerialize,
 )]
+#[borsh(crate = "borsh")]
 pub struct Stake {
     pub delegation: Delegation,
     /// credits observed is credits from vote account state when delegated or redeemed
@@ -544,8 +917,14 @@ pub struct Stake {
 }
 
 impl Stake {
-    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.delegation.stake(epoch, history)
+    pub fn stake(
+        &self,
+        epoch: Epoch,
+        history: &StakeHistory,
+        new_rate_activation_epoch: Option<Epoch>,
+    ) -> u64 {
+        self.delegation
+            .stake(epoch, history, new_rate_activation_epoch)
     }
 
     pub fn split(
@@ -576,36 +955,88 @@ impl Stake {
         }
     }
 }
+impl borsh0_10::de::BorshDeserialize for Stake {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self {
+            delegation: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+            credits_observed: borsh0_10::BorshDeserialize::deserialize_reader(reader)?,
+        })
+    }
+}
+impl borsh0_10::BorshSchema for Stake {
+    fn declaration() -> borsh0_10::schema::Declaration {
+        "Stake".to_string()
+    }
+    fn add_definitions_recursively(
+        definitions: &mut borsh0_10::maybestd::collections::HashMap<
+            borsh0_10::schema::Declaration,
+            borsh0_10::schema::Definition,
+        >,
+    ) {
+        let fields = borsh0_10::schema::Fields::NamedFields(<[_]>::into_vec(
+            borsh0_10::maybestd::boxed::Box::new([
+                (
+                    "delegation".to_string(),
+                    <Delegation as borsh0_10::BorshSchema>::declaration(),
+                ),
+                (
+                    "credits_observed".to_string(),
+                    <u64 as borsh0_10::BorshSchema>::declaration(),
+                ),
+            ]),
+        ));
+        let definition = borsh0_10::schema::Definition::Struct { fields };
+        Self::add_definition(
+            <Self as borsh0_10::BorshSchema>::declaration(),
+            definition,
+            definitions,
+        );
+        <Delegation as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+        <u64 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
+    }
+}
+impl borsh0_10::ser::BorshSerialize for Stake {
+    fn serialize<W: borsh0_10::maybestd::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> ::core::result::Result<(), borsh0_10::maybestd::io::Error> {
+        borsh0_10::BorshSerialize::serialize(&self.delegation, writer)?;
+        borsh0_10::BorshSerialize::serialize(&self.credits_observed, writer)?;
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::borsh::try_from_slice_unchecked, assert_matches::assert_matches,
+        super::*, crate::borsh1::try_from_slice_unchecked, assert_matches::assert_matches,
         bincode::serialize,
     };
 
-    fn check_borsh_deserialization(stake: StakeState) {
+    fn check_borsh_deserialization(stake: StakeStateV2) {
         let serialized = serialize(&stake).unwrap();
-        let deserialized = StakeState::try_from_slice(&serialized).unwrap();
+        let deserialized = StakeStateV2::try_from_slice(&serialized).unwrap();
         assert_eq!(stake, deserialized);
     }
 
-    fn check_borsh_serialization(stake: StakeState) {
+    fn check_borsh_serialization(stake: StakeStateV2) {
         let bincode_serialized = serialize(&stake).unwrap();
-        let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
+        let borsh_serialized = borsh::to_vec(&stake).unwrap();
         assert_eq!(bincode_serialized, borsh_serialized);
     }
 
     #[test]
     fn test_size_of() {
-        assert_eq!(StakeState::size_of(), std::mem::size_of::<StakeState>());
+        assert_eq!(StakeStateV2::size_of(), std::mem::size_of::<StakeStateV2>());
     }
 
     #[test]
     fn bincode_vs_borsh_deserialization() {
-        check_borsh_deserialization(StakeState::Uninitialized);
-        check_borsh_deserialization(StakeState::RewardsPool);
-        check_borsh_deserialization(StakeState::Initialized(Meta {
+        check_borsh_deserialization(StakeStateV2::Uninitialized);
+        check_borsh_deserialization(StakeStateV2::RewardsPool);
+        check_borsh_deserialization(StakeStateV2::Initialized(Meta {
             rent_exempt_reserve: u64::MAX,
             authorized: Authorized {
                 staker: Pubkey::new_unique(),
@@ -613,7 +1044,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_deserialization(StakeState::Stake(
+        check_borsh_deserialization(StakeStateV2::Stake(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {
@@ -628,7 +1059,7 @@ mod test {
                     stake: u64::MAX,
                     activation_epoch: Epoch::MAX,
                     deactivation_epoch: Epoch::MAX,
-                    warmup_cooldown_rate: f64::MAX,
+                    ..Delegation::default()
                 },
                 credits_observed: 1,
             },
@@ -638,9 +1069,9 @@ mod test {
 
     #[test]
     fn bincode_vs_borsh_serialization() {
-        check_borsh_serialization(StakeState::Uninitialized);
-        check_borsh_serialization(StakeState::RewardsPool);
-        check_borsh_serialization(StakeState::Initialized(Meta {
+        check_borsh_serialization(StakeStateV2::Uninitialized);
+        check_borsh_serialization(StakeStateV2::RewardsPool);
+        check_borsh_serialization(StakeStateV2::Initialized(Meta {
             rent_exempt_reserve: u64::MAX,
             authorized: Authorized {
                 staker: Pubkey::new_unique(),
@@ -648,7 +1079,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_serialization(StakeState::Stake(
+        check_borsh_serialization(StakeStateV2::Stake(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {
@@ -663,7 +1094,7 @@ mod test {
                     stake: u64::MAX,
                     activation_epoch: Epoch::MAX,
                     deactivation_epoch: Epoch::MAX,
-                    warmup_cooldown_rate: f64::MAX,
+                    ..Default::default()
                 },
                 credits_observed: 1,
             },
@@ -686,13 +1117,165 @@ mod test {
         ];
         // As long as we get the 4-byte enum and the first field right, then
         // we're sure the rest works out
-        let deserialized = try_from_slice_unchecked::<StakeState>(&data).unwrap();
+        let deserialized = try_from_slice_unchecked::<StakeStateV2>(&data).unwrap();
         assert_matches!(
             deserialized,
-            StakeState::Initialized(Meta {
+            StakeStateV2::Initialized(Meta {
                 rent_exempt_reserve: 2282880,
                 ..
             })
         );
+    }
+
+    #[test]
+    fn stake_flag_member_offset() {
+        const FLAG_OFFSET: usize = 196;
+        let check_flag = |flag, expected| {
+            let stake = StakeStateV2::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+                flag,
+            );
+
+            let bincode_serialized = serialize(&stake).unwrap();
+            let borsh_serialized = borsh::to_vec(&stake).unwrap();
+
+            assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
+            assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
+        };
+        check_flag(
+            StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
+            1,
+        );
+        check_flag(StakeFlags::empty(), 0);
+    }
+
+    mod deprecated {
+        use super::*;
+        fn check_borsh_deserialization(stake: StakeState) {
+            let serialized = serialize(&stake).unwrap();
+            let deserialized = StakeState::try_from_slice(&serialized).unwrap();
+            assert_eq!(stake, deserialized);
+        }
+
+        fn check_borsh_serialization(stake: StakeState) {
+            let bincode_serialized = serialize(&stake).unwrap();
+            let borsh_serialized = borsh::to_vec(&stake).unwrap();
+            assert_eq!(bincode_serialized, borsh_serialized);
+        }
+
+        #[test]
+        fn test_size_of() {
+            assert_eq!(StakeState::size_of(), std::mem::size_of::<StakeState>());
+        }
+
+        #[test]
+        fn bincode_vs_borsh_deserialization() {
+            check_borsh_deserialization(StakeState::Uninitialized);
+            check_borsh_deserialization(StakeState::RewardsPool);
+            check_borsh_deserialization(StakeState::Initialized(Meta {
+                rent_exempt_reserve: u64::MAX,
+                authorized: Authorized {
+                    staker: Pubkey::new_unique(),
+                    withdrawer: Pubkey::new_unique(),
+                },
+                lockup: Lockup::default(),
+            }));
+            check_borsh_deserialization(StakeState::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+            ));
+        }
+
+        #[test]
+        fn bincode_vs_borsh_serialization() {
+            check_borsh_serialization(StakeState::Uninitialized);
+            check_borsh_serialization(StakeState::RewardsPool);
+            check_borsh_serialization(StakeState::Initialized(Meta {
+                rent_exempt_reserve: u64::MAX,
+                authorized: Authorized {
+                    staker: Pubkey::new_unique(),
+                    withdrawer: Pubkey::new_unique(),
+                },
+                lockup: Lockup::default(),
+            }));
+            check_borsh_serialization(StakeState::Stake(
+                Meta {
+                    rent_exempt_reserve: 1,
+                    authorized: Authorized {
+                        staker: Pubkey::new_unique(),
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    lockup: Lockup::default(),
+                },
+                Stake {
+                    delegation: Delegation {
+                        voter_pubkey: Pubkey::new_unique(),
+                        stake: u64::MAX,
+                        activation_epoch: Epoch::MAX,
+                        deactivation_epoch: Epoch::MAX,
+                        warmup_cooldown_rate: f64::MAX,
+                    },
+                    credits_observed: 1,
+                },
+            ));
+        }
+
+        #[test]
+        fn borsh_deserialization_live_data() {
+            let data = [
+                1, 0, 0, 0, 128, 213, 34, 0, 0, 0, 0, 0, 133, 0, 79, 231, 141, 29, 73, 61, 232, 35,
+                119, 124, 168, 12, 120, 216, 195, 29, 12, 166, 139, 28, 36, 182, 186, 154, 246,
+                149, 224, 109, 52, 100, 133, 0, 79, 231, 141, 29, 73, 61, 232, 35, 119, 124, 168,
+                12, 120, 216, 195, 29, 12, 166, 139, 28, 36, 182, 186, 154, 246, 149, 224, 109, 52,
+                100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
+            // As long as we get the 4-byte enum and the first field right, then
+            // we're sure the rest works out
+            let deserialized = try_from_slice_unchecked::<StakeState>(&data).unwrap();
+            assert_matches!(
+                deserialized,
+                StakeState::Initialized(Meta {
+                    rent_exempt_reserve: 2282880,
+                    ..
+                })
+            );
+        }
     }
 }

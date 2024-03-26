@@ -139,7 +139,7 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
     // generate packet vector
     let mut batches = vec![];
     while current_packets < num_packets {
-        let mut len: usize = thread_rng().gen_range(1, 128);
+        let mut len: usize = thread_rng().gen_range(1..128);
         current_packets += len;
         if current_packets > num_packets {
             len -= current_packets - num_packets;

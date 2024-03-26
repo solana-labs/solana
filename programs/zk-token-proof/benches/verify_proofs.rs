@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 use {
     criterion::{criterion_group, criterion_main, Criterion},
     curve25519_dalek::scalar::Scalar,

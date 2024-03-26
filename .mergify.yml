@@ -58,6 +58,28 @@ pull_request_rules:
           # only require docs checks if docs files changed
           - -files~=^docs/
           - status-success=build & deploy docs
+        - or:
+          - -files~=(\.rs|Cargo\.toml|Cargo\.lock|\.github/scripts/cargo-clippy-before-script\.sh|\.github/workflows/cargo\.yml)$
+          - and:
+            - or:
+              - check-success=clippy-stable (macos-latest)
+              - check-success=clippy-stable (macos-latest-large)
+            - or:
+              - check-success=clippy-nightly (macos-latest)
+              - check-success=clippy-nightly (macos-latest-large)
+        - or:
+          - -files~=(\.rs|Cargo\.toml|Cargo\.lock|cargo-build-bpf|cargo-test-bpf|cargo-build-sbf|cargo-test-sbf|ci/downstream-projects/run-spl\.sh|\.github/workflows/downstream-project-spl\.yml)$
+          - and:
+            - status-success=cargo-test-sbf (token/program)
+            - status-success=cargo-test-sbf (instruction-padding/program, token/program-2022, token/program-2022-test)
+            - status-success=cargo-test-sbf (associated-token-account/program, associated-token-account/program-test)
+            - status-success=cargo-test-sbf (token-upgrade/program)
+            - status-success=cargo-test-sbf (feature-proposal/program)
+            - status-success=cargo-test-sbf (governance/addin-mock/program, governance/program)
+            - status-success=cargo-test-sbf (memo/program)
+            - status-success=cargo-test-sbf (name-service/program)
+            - status-success=cargo-test-sbf (stake-pool/program)
+            - status-success=cargo-test-sbf (single-pool/program)
     actions:
       merge:
         method: squash
@@ -73,9 +95,9 @@ pull_request_rules:
           - automerge
       comment:
         message: automerge label removed due to a CI failure
-  - name: v1.14 feature-gate backport
+  - name: v1.17 feature-gate backport
     conditions:
-      - label=v1.14
+      - label=v1.17
       - label=feature-gate
     actions:
       backport:
@@ -86,10 +108,10 @@ pull_request_rules:
         labels:
           - feature-gate
         branches:
-          - v1.14
-  - name: v1.14 non-feature-gate backport
+          - v1.17
+  - name: v1.17 non-feature-gate backport
     conditions:
-      - label=v1.14
+      - label=v1.17
       - label!=feature-gate
     actions:
       backport:
@@ -97,10 +119,23 @@ pull_request_rules:
         title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
-          - v1.14
-  - name: v1.16 feature-gate backport
+          - v1.17
+  - name: v1.17 backport warning comment
     conditions:
-      - label=v1.16
+      - label=v1.17
+    actions:
+      comment:
+        message: >
+          Backports to the stable branch are to be avoided unless absolutely
+          necessary for fixing bugs, security issues, and perf regressions.
+          Changes intended for backport should be structured such that a
+          minimum effective diff can be committed separately from any
+          refactoring, plumbing, cleanup, etc that are not strictly
+          necessary to achieve the goal. Any of the latter should go only
+          into master and ride the normal stabilization schedule.
+  - name: v1.18 feature-gate backport
+    conditions:
+      - label=v1.18
       - label=feature-gate
     actions:
       backport:
@@ -110,10 +145,10 @@ pull_request_rules:
         labels:
           - feature-gate
         branches:
-          - v1.16
-  - name: v1.16 non-feature-gate backport
+          - v1.18
+  - name: v1.18 non-feature-gate backport
     conditions:
-      - label=v1.16
+      - label=v1.18
       - label!=feature-gate
     actions:
       backport:
@@ -121,7 +156,22 @@ pull_request_rules:
         title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
-          - v1.16
+          - v1.18
+  - name: v1.18 backport warning comment
+    conditions:
+      - label=v1.18
+    actions:
+      comment:
+        message: >
+          Backports to the beta branch are to be avoided unless absolutely
+          necessary for fixing bugs, security issues, and perf regressions.
+          Changes intended for backport should be structured such that a
+          minimum effective diff can be committed separately from any
+          refactoring, plumbing, cleanup, etc that are not strictly
+          necessary to achieve the goal. Any of the latter should go only
+          into master and ride the normal stabilization schedule. Exceptions
+          include CI/metrics changes, CLI improvements and documentation
+          updates on a case by case basis.
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.

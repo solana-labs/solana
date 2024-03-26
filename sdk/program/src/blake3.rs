@@ -31,6 +31,7 @@ const MAX_BASE58_LEN: usize = 44;
     Hash,
     AbiExample,
 )]
+#[borsh(crate = "borsh")]
 #[repr(transparent)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 

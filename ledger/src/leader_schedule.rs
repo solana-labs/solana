@@ -13,7 +13,7 @@ pub struct FixedSchedule {
 }
 
 /// Stake-weighted leader schedule for one epoch.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
     // Inverted index from pubkeys to indices where they are the leader.
@@ -200,7 +200,7 @@ mod tests {
         const NUM_SLOTS: usize = 97;
         let mut rng = rand::thread_rng();
         let pubkeys: Vec<_> = repeat_with(Pubkey::new_unique).take(4).collect();
-        let schedule: Vec<_> = repeat_with(|| pubkeys[rng.gen_range(0, 3)])
+        let schedule: Vec<_> = repeat_with(|| pubkeys[rng.gen_range(0..3)])
             .take(19)
             .collect();
         let schedule = LeaderSchedule::new_from_schedule(schedule);

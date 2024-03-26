@@ -1,0 +1,162 @@
+name: Downstream Project - SPL
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    paths:
+      - "**.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "cargo-build-bpf"
+      - "cargo-test-bpf"
+      - "cargo-build-sbf"
+      - "cargo-test-sbf"
+      - "ci/downstream-projects/run-spl.sh"
+      - ".github/workflows/downstream-project-spl.yml"
+  workflow_call:
+    inputs:
+      branch:
+        required: false
+        type: string
+        default: "master"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELL: /bin/bash
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  check:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: |
+          source .github/scripts/downstream-project-spl-common.sh
+          source .github/scripts/downstream-project-spl-install-deps.sh
+
+          cargo check
+
+  test:
+    if: false
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arrays:
+          [
+            {
+              test_paths: ["token/cli"],
+              required_programs:
+                [
+                  "token/program",
+                  "token/program-2022",
+                  "associated-token-account/program",
+                ],
+            },
+            {
+              test_paths: ["single-pool/cli"],
+              required_programs:
+                [
+                  "single-pool/program",
+                ],
+            },
+            {
+              test_paths: ["token-upgrade/cli"],
+              required_programs:
+                [
+                  "token-upgrade/program",
+                ],
+            },
+          ]
+    steps:
+      - uses: actions/checkout@v3
+
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: |
+          source .github/scripts/downstream-project-spl-common.sh
+          source .github/scripts/downstream-project-spl-install-deps.sh
+
+          programStr="${{ tojson(matrix.arrays.required_programs) }}"
+          IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
+          for program in "${programs[@]}"; do
+            $CARGO_BUILD_SBF --manifest-path "$program"/Cargo.toml
+          done
+
+          testPathsStr="${{ tojson(matrix.arrays.test_paths) }}"
+          IFS=', ' read -ra test_paths <<<"${testPathsStr//[\[\]$'\n'$'\r' ]/}"
+          for test_path in "${test_paths[@]}"; do
+            cargo test --manifest-path "$test_path"/Cargo.toml
+          done
+
+  cargo-test-sbf:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        programs:
+          - [token/program]
+          - [
+              instruction-padding/program,
+              token/program-2022,
+              token/program-2022-test,
+            ]
+          - [
+              associated-token-account/program,
+              associated-token-account/program-test,
+            ]
+          - [token-upgrade/program]
+          - [feature-proposal/program]
+          - [governance/addin-mock/program, governance/program]
+          - [memo/program]
+          - [name-service/program]
+          - [stake-pool/program]
+          - [single-pool/program]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - shell: bash
+        run: |
+          .github/scripts/purge-ubuntu-runner.sh
+
+      - uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.5.4"
+
+      - shell: bash
+        run: |
+          source .github/scripts/downstream-project-spl-common.sh
+
+          programStr="${{ tojson(matrix.programs) }}"
+          IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
+
+          for program in "${programs[@]}"; do
+            $CARGO_TEST_SBF --manifest-path "$program"/Cargo.toml
+          done

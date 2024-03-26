@@ -5,7 +5,7 @@
 //! introspection][in], which is required for correctly interoperating with
 //! native programs like the [secp256k1] and [ed25519] programs.
 //!
-//! [in]: https://docs.solana.com/implemented-proposals/instruction_introspection
+//! [in]: https://docs.solanalabs.com/implemented-proposals/instruction_introspection
 //! [secp256k1]: crate::secp256k1_program
 //! [ed25519]: crate::ed25519_program
 //!
@@ -18,7 +18,7 @@
 //!
 //! See also the Solana [documentation on the instructions sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#instructions
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#instructions
 //!
 //! # Examples
 //!
@@ -27,7 +27,7 @@
 //!
 //! [`secp256k1_instruction`]: https://docs.rs/solana-sdk/latest/solana_sdk/secp256k1_instruction/index.html
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use crate::{
     account_info::AccountInfo,
@@ -302,8 +302,11 @@ mod tests {
             message::{Message as LegacyMessage, SanitizedMessage},
             pubkey::Pubkey,
         },
-        std::convert::TryFrom,
     };
+
+    fn new_sanitized_message(message: LegacyMessage) -> SanitizedMessage {
+        SanitizedMessage::try_from_legacy_message(message).unwrap()
+    }
 
     #[test]
     fn test_load_store_instruction() {
@@ -327,11 +330,11 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
+        let message = LegacyMessage::new(
             &[instruction0.clone(), instruction1.clone()],
             Some(&Pubkey::new_unique()),
-        ))
-        .unwrap();
+        );
+        let sanitized_message = new_sanitized_message(message);
 
         let key = id();
         let mut lamports = 0;
@@ -381,11 +384,9 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
-            &[instruction0, instruction1],
-            Some(&Pubkey::new_unique()),
-        ))
-        .unwrap();
+        let message =
+            LegacyMessage::new(&[instruction0, instruction1], Some(&Pubkey::new_unique()));
+        let sanitized_message = new_sanitized_message(message);
 
         let key = id();
         let mut lamports = 0;
@@ -435,15 +436,15 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = SanitizedMessage::try_from(LegacyMessage::new(
+        let message = LegacyMessage::new(
             &[
                 instruction0.clone(),
                 instruction1.clone(),
                 instruction2.clone(),
             ],
             Some(&Pubkey::new_unique()),
-        ))
-        .unwrap();
+        );
+        let sanitized_message = new_sanitized_message(message);
 
         let key = id();
         let mut lamports = 0;
@@ -538,7 +539,7 @@ mod tests {
         ];
 
         let message = LegacyMessage::new(&instructions, Some(&id1));
-        let sanitized_message = SanitizedMessage::try_from(message).unwrap();
+        let sanitized_message = new_sanitized_message(message);
         let serialized = serialize_instructions(&sanitized_message.decompile_instructions());
 
         // assert that deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
@@ -560,9 +561,9 @@ mod tests {
             Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
         ];
 
-        let message =
-            SanitizedMessage::try_from(LegacyMessage::new(&instructions, Some(&id1))).unwrap();
-        let serialized = serialize_instructions(&message.decompile_instructions());
+        let message = LegacyMessage::new(&instructions, Some(&id1));
+        let sanitized_message = new_sanitized_message(message);
+        let serialized = serialize_instructions(&sanitized_message.decompile_instructions());
         assert_eq!(
             deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,

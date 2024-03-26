@@ -8,7 +8,7 @@
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         range_proof::RangeProof,
         transcript::TranscriptProtocol,
     },
@@ -50,7 +50,7 @@ impl RangeProofU64Data {
         commitment: &PedersenCommitment,
         amount: u64,
         opening: &PedersenOpening,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let pod_commitment = pod::PedersenCommitment(commitment.to_bytes());
 
         let context = RangeProofContext {
@@ -64,8 +64,9 @@ impl RangeProofU64Data {
         // `unwrap` here. A simple case `u64::BITS as usize` can silently overflow.
         let bit_size = usize::try_from(u64::BITS).unwrap();
 
-        let proof = RangeProof::new(vec![amount], vec![bit_size], vec![opening], &mut transcript)
-            .try_into()?;
+        let proof = RangeProof::new(vec![amount], vec![bit_size], vec![opening], &mut transcript)?
+            .try_into()
+            .map_err(|_| ProofGenerationError::ProofLength)?;
 
         Ok(Self { context, proof })
     }
@@ -79,7 +80,7 @@ impl ZkProofData<RangeProofContext> for RangeProofU64Data {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context_data().new_transcript();
         let commitment = self.context.commitment.try_into()?;
         let proof: RangeProof = self.proof.try_into()?;

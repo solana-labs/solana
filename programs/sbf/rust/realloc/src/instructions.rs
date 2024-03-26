@@ -16,6 +16,7 @@ pub const CHECK: u8 = 8;
 pub const ZERO_INIT: u8 = 9;
 pub const REALLOC_EXTEND_AND_UNDO: u8 = 10;
 pub const EXTEND_AND_WRITE_U64: u8 = 11;
+pub const REALLOC_EXTEND_FROM_SLICE: u8 = 12;
 
 pub fn realloc(program_id: &Pubkey, address: &Pubkey, size: usize, bump: &mut u8) -> Instruction {
     let mut instruction_data = vec![REALLOC, *bump];

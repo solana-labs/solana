@@ -1,23 +1,32 @@
 use {
     assert_matches::assert_matches,
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
-    solana_address_lookup_table_program::{
-        id,
-        instruction::{create_lookup_table, create_lookup_table_signed},
-        processor::process_instruction,
-        state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
-    },
     solana_program_test::*,
     solana_sdk::{
-        clock::Slot, feature_set, instruction::InstructionError, pubkey::Pubkey, rent::Rent,
-        signature::Signer, signer::keypair::Keypair, transaction::Transaction,
+        address_lookup_table::{
+            instruction::{create_lookup_table, create_lookup_table_signed},
+            program::id,
+            state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
+        },
+        clock::Slot,
+        feature_set,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::Signer,
+        signer::keypair::Keypair,
+        transaction::Transaction,
     },
 };
 
 mod common;
 
 pub async fn setup_test_context_without_authority_feature() -> ProgramTestContext {
-    let mut program_test = ProgramTest::new("", id(), Some(process_instruction));
+    let mut program_test = ProgramTest::new(
+        "",
+        id(),
+        Some(solana_address_lookup_table_program::processor::Entrypoint::vm),
+    );
     program_test.deactivate_feature(
         feature_set::relax_authority_signer_check_for_lookup_table_creation::id(),
     );
@@ -29,7 +38,7 @@ async fn test_create_lookup_table_idempotent() {
     let mut context = setup_test_context().await;
 
     let test_recent_slot = 123;
-    overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
+    overwrite_slot_hashes_with_slots(&context, &[test_recent_slot]);
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -89,7 +98,7 @@ async fn test_create_lookup_table_not_idempotent() {
     let mut context = setup_test_context_without_authority_feature().await;
 
     let test_recent_slot = 123;
-    overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
+    overwrite_slot_hashes_with_slots(&context, &[test_recent_slot]);
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -129,7 +138,7 @@ async fn test_create_lookup_table_use_payer_as_authority() {
     let mut context = setup_test_context().await;
 
     let test_recent_slot = 123;
-    overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
+    overwrite_slot_hashes_with_slots(&context, &[test_recent_slot]);
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -188,7 +197,7 @@ async fn test_create_lookup_table_not_recent_slot() {
 async fn test_create_lookup_table_pda_mismatch() {
     let mut context = setup_test_context().await;
     let test_recent_slot = 123;
-    overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
+    overwrite_slot_hashes_with_slots(&context, &[test_recent_slot]);
     let payer = &context.payer;
     let authority_address = Pubkey::new_unique();
 

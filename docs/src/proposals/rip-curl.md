@@ -39,7 +39,7 @@ Easier for validators to support:
   has no significant resource constraints.
 - Transaction status is never stored in memory and cannot be polled for.
 - Signatures are only stored in memory until the desired commitment level or
-  until the blockhash expires, which ever is later.
+  until the blockhash expires, whichever is later.
 
 How it works:
 

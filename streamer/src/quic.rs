@@ -1,7 +1,7 @@
 use {
     crate::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate,
+        tls_certificates::new_dummy_x509_certificate,
     },
     crossbeam_channel::Sender,
     pem::Pem,
@@ -10,11 +10,11 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{NotifyKeyUpdate, QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
-        net::{IpAddr, UdpSocket},
+        net::UdpSocket,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, RwLock,
@@ -36,6 +36,12 @@ impl SkipClientVerification {
     }
 }
 
+pub struct SpawnServerResult {
+    pub endpoint: Endpoint,
+    pub thread: thread::JoinHandle<()>,
+    pub key_updater: Arc<EndpointKeyUpdater>,
+}
+
 impl rustls::server::ClientCertVerifier for SkipClientVerification {
     fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
         &[]
@@ -55,9 +61,8 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
 pub(crate) fn configure_server(
     identity_keypair: &Keypair,
-    gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
-    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
+    let (cert, priv_key) = new_dummy_x509_certificate(identity_keypair);
     let cert_chain_pem_parts = vec![Pem {
         tag: "CERTIFICATE".to_string(),
         contents: cert.0.clone(),
@@ -95,9 +100,9 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn rt() -> Runtime {
+fn rt(name: String) -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-server")
+        .thread_name(name)
         .enable_all()
         .build()
         .unwrap()
@@ -107,10 +112,20 @@ fn rt() -> Runtime {
 pub enum QuicServerError {
     #[error("Endpoint creation failed: {0}")]
     EndpointFailed(std::io::Error),
-    #[error("Certificate error: {0}")]
-    CertificateError(#[from] rcgen::RcgenError),
     #[error("TLS error: {0}")]
     TlsError(#[from] rustls::Error),
+}
+
+pub struct EndpointKeyUpdater {
+    endpoint: Endpoint,
+}
+
+impl NotifyKeyUpdate for EndpointKeyUpdater {
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        let (config, _) = configure_server(key)?;
+        self.endpoint.set_server_config(Some(config));
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -156,6 +171,10 @@ pub struct StreamStats {
     pub(crate) connection_setup_error_locally_closed: AtomicUsize,
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
+    pub(crate) throttled_streams: AtomicUsize,
+    pub(crate) stream_load_ema: AtomicUsize,
+    pub(crate) stream_load_ema_overflow: AtomicUsize,
+    pub(crate) stream_load_capacity_overflow: AtomicUsize,
 }
 
 impl StreamStats {
@@ -386,16 +405,36 @@ impl StreamStats {
                 self.total_stream_read_timeouts.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "throttled_streams",
+                self.throttled_streams.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_load_ema",
+                self.stream_load_ema.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_load_ema_overflow",
+                self.stream_load_ema_overflow.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_load_capacity_overflow",
+                self.stream_load_capacity_overflow.load(Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
-    name: &'static str,
+    thread_name: &'static str,
+    metrics_name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
-    gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -404,15 +443,14 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
-) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
-    let runtime = rt();
+) -> Result<SpawnServerResult, QuicServerError> {
+    let runtime = rt(format!("{thread_name}Rt"));
     let (endpoint, _stats, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
-            name,
+            metrics_name,
             sock,
             keypair,
-            gossip_host,
             packet_sender,
             exit,
             max_connections_per_peer,
@@ -424,14 +462,21 @@ pub fn spawn_server(
         )
     }?;
     let handle = thread::Builder::new()
-        .name("solQuicServer".into())
+        .name(thread_name.into())
         .spawn(move || {
             if let Err(e) = runtime.block_on(task) {
                 warn!("error from runtime.block_on: {:?}", e);
             }
         })
         .unwrap();
-    Ok((endpoint, handle))
+    let updater = EndpointKeyUpdater {
+        endpoint: endpoint.clone(),
+    };
+    Ok(SpawnServerResult {
+        endpoint,
+        thread: handle,
+        key_updater: Arc::new(updater),
+    })
 }
 
 #[cfg(test)]
@@ -454,14 +499,17 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -486,7 +534,7 @@ mod test {
     fn test_quic_timeout() {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_timeout(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -497,7 +545,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, _receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_block_multiple_connections(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -510,14 +558,17 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             2,
@@ -529,7 +580,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_multiple_streams(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -540,7 +591,7 @@ mod test {
         solana_logger::setup();
         let (t, exit, receiver, server_address) = setup_quic_server();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_multiple_writes(receiver, server_address, None));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
@@ -553,14 +604,17 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, _) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        let (_, t) = spawn_server(
+        let SpawnServerResult {
+            endpoint: _,
+            thread: t,
+            key_updater: _,
+        } = spawn_server(
+            "solQuicTest",
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -572,7 +626,7 @@ mod test {
         )
         .unwrap();
 
-        let runtime = rt();
+        let runtime = rt("solQuicTestRt".to_string());
         runtime.block_on(check_unstaked_node_connect_failure(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();

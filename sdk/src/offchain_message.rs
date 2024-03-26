@@ -42,7 +42,7 @@ pub enum MessageFormat {
     ExtendedUtf8,
 }
 
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 pub mod v0 {
     use {
         super::{is_printable_ascii, is_utf8, MessageFormat, OffchainMessage as Base},

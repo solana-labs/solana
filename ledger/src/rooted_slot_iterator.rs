@@ -133,7 +133,7 @@ mod tests {
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, fork_point, fork_hash);
 
         // Set a root
-        blockstore.set_roots(vec![1, 2, 3].iter()).unwrap();
+        blockstore.set_roots([1, 2, 3].iter()).unwrap();
 
         // Trying to get an iterator on a different fork will error
         assert!(RootedSlotIterator::new(4, &blockstore).is_err());
@@ -195,7 +195,7 @@ mod tests {
         }
 
         // Set roots
-        blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
+        blockstore.set_roots([0, 1, 2, 3].iter()).unwrap();
 
         // Create one post-skip slot at 10, simulating starting from a snapshot
         // at 10

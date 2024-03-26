@@ -134,7 +134,7 @@ mod tests {
                 elgamal::{ElGamalCiphertext, ElGamalKeypair},
                 pedersen::{Pedersen, PedersenOpening},
             },
-            instruction::transfer::split_u64,
+            instruction::transfer::try_split_u64,
             zk_token_elgamal::{ops, pod},
         },
         bytemuck::Zeroable,
@@ -204,7 +204,7 @@ mod tests {
     fn test_transfer_arithmetic() {
         // transfer amount
         let transfer_amount: u64 = 55;
-        let (amount_lo, amount_hi) = split_u64(transfer_amount, 16);
+        let (amount_lo, amount_hi) = try_split_u64(transfer_amount, 16).unwrap();
 
         // generate public keys
         let source_keypair = ElGamalKeypair::new_rand();
@@ -254,7 +254,7 @@ mod tests {
             source_pk.encrypt_with(22_u64, &final_source_open).into();
         assert_eq!(expected_source, final_source_spendable);
 
-        // program arithemtic for the destination account
+        // program arithmetic for the destination account
         let dest_lo_ct: pod::ElGamalCiphertext = (comm_lo, handle_dest_lo).into();
         let dest_hi_ct: pod::ElGamalCiphertext = (comm_hi, handle_dest_hi).into();
 

@@ -1,5 +1,6 @@
 use {
     clap::{crate_description, crate_name, crate_version, Arg},
+    itertools::Itertools,
     log::*,
     std::{
         env,
@@ -58,15 +59,15 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let args = args.into_iter().collect::<Vec<_>>();
-    let mut msg = format!("spawn: {}", program.display());
-    for arg in args.iter() {
-        msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
-    }
-    info!("{}", msg);
+    let args = Vec::from_iter(args);
+    let msg = args
+        .iter()
+        .map(|arg| arg.as_ref().to_str().unwrap_or("?"))
+        .join(" ");
+    info!("spawn: {}", msg);
 
     let mut child = Command::new(program)
-        .args(&args)
+        .args(args)
         .spawn()
         .unwrap_or_else(|err| {
             error!("Failed to execute {}: {}", program.display(), err);
@@ -89,10 +90,7 @@ where
             writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
-        for arg in args.iter() {
-            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
-        }
-        writeln!(out).unwrap();
+        writeln!(out, "{}", msg).unwrap();
         out.flush().unwrap();
         error!(
             "To rerun the failed command for debugging use {}",

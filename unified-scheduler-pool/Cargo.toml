@@ -1,0 +1,27 @@
+[package]
+name = "solana-unified-scheduler-pool"
+description = "The Solana unified scheduler pool"
+documentation = "https://docs.rs/solana-unified-scheduler-pool"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+assert_matches = { workspace = true }
+crossbeam-channel = { workspace = true }
+derivative = { workspace = true }
+log = { workspace = true }
+solana-ledger = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-unified-scheduler-logic = { workspace = true }
+solana-vote = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }

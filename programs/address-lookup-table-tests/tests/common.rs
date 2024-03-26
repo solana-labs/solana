@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 use {
-    solana_address_lookup_table_program::{
-        id,
-        processor::process_instruction,
-        state::{AddressLookupTable, LookupTableMeta},
-    },
     solana_program_test::*,
     solana_sdk::{
         account::AccountSharedData,
+        address_lookup_table::{
+            program::id,
+            state::{AddressLookupTable, LookupTableMeta},
+        },
         clock::Slot,
         hash::Hash,
         instruction::{Instruction, InstructionError},
@@ -20,7 +19,11 @@ use {
 };
 
 pub async fn setup_test_context() -> ProgramTestContext {
-    let program_test = ProgramTest::new("", id(), Some(process_instruction));
+    let program_test = ProgramTest::new(
+        "",
+        id(),
+        Some(solana_address_lookup_table_program::processor::Entrypoint::vm),
+    );
     program_test.start_with_context().await
 }
 
@@ -80,18 +83,14 @@ pub async fn add_lookup_table_account(
     let rent = context.banks_client.get_rent().await.unwrap();
     let rent_exempt_balance = rent.minimum_balance(data.len());
 
-    let mut account = AccountSharedData::new(
-        rent_exempt_balance,
-        data.len(),
-        &solana_address_lookup_table_program::id(),
-    );
-    account.set_data(data);
+    let mut account = AccountSharedData::new(rent_exempt_balance, data.len(), &id());
+    account.set_data_from_slice(&data);
     context.set_account(&account_address, &account);
 
     account
 }
 
-pub fn overwrite_slot_hashes_with_slots(context: &mut ProgramTestContext, slots: &[Slot]) {
+pub fn overwrite_slot_hashes_with_slots(context: &ProgramTestContext, slots: &[Slot]) {
     let mut slot_hashes = SlotHashes::default();
     for slot in slots {
         slot_hashes.add(*slot, Hash::new_unique());

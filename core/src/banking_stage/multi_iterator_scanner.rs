@@ -1,6 +1,6 @@
 //! Provides an iterator interface that create non-conflicting batches of elements to process.
 //!
-//! The problem that this structure is targetting is as following:
+//! The problem that this structure is targeting is as following:
 //!     We have a slice of transactions we want to process in batches where transactions
 //!     in the same batch do not conflict with each other. This allows us process them in
 //!     parallel. The original slice is ordered by priority, and it is often the case

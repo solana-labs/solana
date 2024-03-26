@@ -1,0 +1,96 @@
+[package]
+name = "solana-accounts-db"
+description = "Solana accounts db"
+documentation = "https://docs.rs/solana-acounts-db"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+arrayref = { workspace = true }
+bincode = { workspace = true }
+blake3 = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true }
+byteorder = { workspace = true }
+bzip2 = { workspace = true }
+crossbeam-channel = { workspace = true }
+dashmap = { workspace = true, features = ["rayon", "raw-api"] }
+flate2 = { workspace = true }
+fnv = { workspace = true }
+im = { workspace = true, features = ["rayon", "serde"] }
+index_list = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+lz4 = { workspace = true }
+memmap2 = { workspace = true }
+modular-bitfield = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+num_cpus = { workspace = true }
+num_enum = { workspace = true }
+percentage = { workspace = true }
+qualifier_attr = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+seqlock = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+serde_derive = { workspace = true }
+smallvec = { workspace = true, features = ["const_generics"] }
+solana-bucket-map = { workspace = true }
+solana-config-program = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-nohash-hasher = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-svm = { workspace = true }
+solana-system-program = { workspace = true }
+solana-vote-program = { workspace = true }
+static_assertions = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_accounts_db"
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+criterion = { workspace = true }
+ed25519-dalek = { workspace = true }
+libsecp256k1 = { workspace = true }
+memoffset = { workspace = true }
+rand_chacha = { workspace = true }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
+solana-logger = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
+static_assertions = { workspace = true }
+test-case = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[features]
+dev-context-only-utils = []
+
+[[bench]]
+name = "bench_hashing"
+harness = false

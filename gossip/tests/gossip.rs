@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[macro_use]
 extern crate log;
 
@@ -99,9 +99,8 @@ where
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(exit.clone())).collect();
     topo(&listen);
-    let mut done = true;
+    let mut done = false;
     for i in 0..(num * 32) {
-        done = true;
         let total: usize = listen.iter().map(|v| v.0.gossip_peers().len()).sum();
         if (total + num) * 10 > num * num * 9 {
             done = true;
@@ -140,14 +139,16 @@ fn retransmit_to(
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };
-    if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(socket, data, &dests)
-    {
-        error!(
-            "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-            ioerr,
-            num_failed,
-            dests.len(),
-        );
+    match multi_target_send(socket, data, &dests) {
+        Ok(()) => (),
+        Err(SendPktsError::IoError(ioerr, num_failed)) => {
+            error!(
+                "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                ioerr,
+                num_failed,
+                dests.len(),
+            );
+        }
     }
 }
 
@@ -310,7 +311,7 @@ pub fn cluster_info_scale() {
         vec![100; vote_keypairs.len()],
     );
     let bank0 = Bank::new_for_tests(&genesis_config_info.genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+    let bank_forks = BankForks::new_rw_arc(bank0);
 
     let nodes: Vec<_> = vote_keypairs
         .into_iter()

@@ -2,21 +2,11 @@
 mod tests {
     use {
         crate::{
-            account_storage::{AccountStorageMap, AccountStorageReference},
-            accounts_db::{
-                get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
-                AtomicAppendVecId,
-            },
-            accounts_file::{AccountsFile, AccountsFileError},
-            accounts_hash::{AccountsDeltaHash, AccountsHash},
-            accounts_index::AccountSecondaryIndexes,
             bank::{
-                epoch_accounts_hash_utils, Bank, BankTestConfig, EpochRewardStatus,
+                epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
                 StartBlockHeightAndRewards,
             },
-            epoch_accounts_hash::EpochAccountsHash,
-            genesis_utils::{activate_all_features, activate_feature},
-            runtime_config::RuntimeConfig,
+            genesis_utils::activate_all_features,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
                 SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
@@ -26,12 +16,24 @@ mod tests {
                 self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
-            stake_rewards::StakeReward,
             status_cache::StatusCache,
         },
+        assert_matches::assert_matches,
+        solana_accounts_db::{
+            account_storage::{AccountStorageMap, AccountStorageReference},
+            accounts_db::{
+                get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
+                AtomicAppendVecId,
+            },
+            accounts_file::{AccountsFile, AccountsFileError},
+            accounts_hash::{AccountsDeltaHash, AccountsHash},
+            accounts_index::AccountSecondaryIndexes,
+            epoch_accounts_hash::EpochAccountsHash,
+            stake_rewards::StakeReward,
+        },
+        solana_program_runtime::runtime_config::RuntimeConfig,
         solana_sdk::{
             epoch_schedule::EpochSchedule,
-            feature_set,
             genesis_config::create_genesis_config,
             hash::Hash,
             pubkey::Pubkey,
@@ -97,16 +99,15 @@ mod tests {
     ) {
         solana_logger::setup();
         let (mut genesis_config, _) = create_genesis_config(500);
-        activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank0.squash();
 
         // Create an account on a non-root fork
         let key1 = Keypair::new();
-        bank1.deposit(&key1.pubkey(), 5).unwrap();
+        bank_test_utils::deposit(&bank1, &key1.pubkey(), 5).unwrap();
 
         // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
         // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
@@ -116,23 +117,23 @@ mod tests {
         } else {
             0
         } + 2;
-        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
+        let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
 
         // Test new account
         let key2 = Keypair::new();
-        bank2.deposit(&key2.pubkey(), 10).unwrap();
+        bank_test_utils::deposit(&bank2, &key2.pubkey(), 10).unwrap();
         assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
 
         let key3 = Keypair::new();
-        bank2.deposit(&key3.pubkey(), 0).unwrap();
+        bank_test_utils::deposit(&bank2, &key3.pubkey(), 0).unwrap();
 
         bank2.freeze();
         bank2.squash();
         bank2.force_flush_accounts_cache();
-        bank2
-            .accounts()
-            .accounts_db
-            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
+        bank2.accounts().accounts_db.set_accounts_hash(
+            bank2.slot(),
+            (AccountsHash(Hash::new(&[0; 32])), u64::default()),
+        );
 
         let snapshot_storages = bank2.get_snapshot_storages(None);
         let mut buf = vec![];
@@ -162,10 +163,10 @@ mod tests {
         .unwrap();
 
         if update_accounts_hash {
-            bank2
-                .accounts()
-                .accounts_db
-                .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
+            bank2.accounts().accounts_db.set_accounts_hash(
+                bank2.slot(),
+                (AccountsHash(Hash::new(&[1; 32])), u64::default()),
+            );
         }
         let accounts_hash = bank2.get_accounts_hash().unwrap();
 
@@ -269,7 +270,7 @@ mod tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
         )
@@ -339,25 +340,19 @@ mod tests {
         for epoch_reward_status_active in [None, Some(vec![]), Some(vec![sample_rewards])] {
             let (genesis_config, _) = create_genesis_config(500);
 
-            let bank0 = Arc::new(Bank::new_for_tests_with_config(
-                &genesis_config,
-                BankTestConfig::default(),
-            ));
+            let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0.squash();
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
 
             add_root_and_flush_write_cache(&bank0);
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
 
             // Set extra fields
             bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -404,7 +399,7 @@ mod tests {
                 None,
                 AccountShrinkThreshold::default(),
                 false,
-                Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
                 None,
                 Arc::default(),
             )
@@ -416,11 +411,11 @@ mod tests {
             );
 
             // assert epoch_reward_status is the same as the set epoch reward status
-            let epoch_reward_status = bank
+            let epoch_reward_status = dbank
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Active(_));
                 if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                     start_block_height,
                     ref stake_rewards_by_partition,
@@ -432,7 +427,7 @@ mod tests {
                     unreachable!("Epoch reward status should NOT be inactive.");
                 }
             } else {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
             }
         }
     }
@@ -449,7 +444,7 @@ mod tests {
             activate_all_features(&mut genesis_config);
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-            let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
             while !bank.is_complete() {
                 bank.fill_bank_with_ticks_for_tests();
             }
@@ -474,7 +469,7 @@ mod tests {
                 None,
                 full_snapshot_archives_dir.path(),
                 incremental_snapshot_archives_dir.path(),
-                ArchiveFormat::TarBzip2,
+                ArchiveFormat::Tar,
                 NonZeroUsize::new(1).unwrap(),
                 NonZeroUsize::new(1).unwrap(),
             )
@@ -496,7 +491,8 @@ mod tests {
                 false,
                 false,
                 false,
-                Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                false,
+                Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
                 None,
                 Arc::default(),
             )
@@ -508,11 +504,11 @@ mod tests {
             );
 
             // assert epoch_reward_status is the same as the set epoch reward status
-            let epoch_reward_status = bank
+            let epoch_reward_status = dbank
                 .get_epoch_reward_status_to_serialize()
                 .unwrap_or(&EpochRewardStatus::Inactive);
             if let Some(rewards) = epoch_reward_status_active {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Active(_));
                 if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
                     start_block_height,
                     ref stake_rewards_by_partition,
@@ -524,7 +520,7 @@ mod tests {
                     unreachable!("Epoch reward status should NOT be inactive.");
                 }
             } else {
-                assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+                assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
             }
         }
     }
@@ -534,21 +530,18 @@ mod tests {
         solana_logger::setup();
         let (genesis_config, _) = create_genesis_config(500);
 
-        let bank0 = Arc::new(Bank::new_for_tests_with_config(
-            &genesis_config,
-            BankTestConfig::default(),
-        ));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.squash();
-        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         add_root_and_flush_write_cache(&bank0);
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc
-            .accounts
-            .accounts_db
-            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+            .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        bank.rc.accounts.accounts_db.set_accounts_hash(
+            bank.slot(),
+            (AccountsHash(Hash::new_unique()), u64::default()),
+        );
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -590,7 +583,7 @@ mod tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
         )
@@ -600,10 +593,10 @@ mod tests {
         assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
 
         // epoch_reward status should default to `Inactive`
-        let epoch_reward_status = bank
+        let epoch_reward_status = dbank
             .get_epoch_reward_status_to_serialize()
             .unwrap_or(&EpochRewardStatus::Inactive);
-        assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
+        assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
     }
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -612,7 +605,7 @@ mod tests {
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
-        #[frozen_abi(digest = "A99zFXvqYm88n6EbtEFbroDbuFNnhw4K7AmqMh2wjJmh")]
+        #[frozen_abi(digest = "7BH2s2Y1yKy396c3ixC4TTyvvpkyenAvWDSiZvY5yb7P")]
         #[derive(Serialize, AbiExample)]
         pub struct BankAbiTestWrapperNewer {
             #[serde(serialize_with = "wrapper_newer")]
@@ -626,14 +619,11 @@ mod tests {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_accounts_delta_hash_for_tests(
-                    bank.slot(),
-                    AccountsDeltaHash(Hash::new_unique()),
-                );
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+            bank.rc.accounts.accounts_db.set_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
             let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
             // ensure there is a single snapshot storage example for ABI digesting
             assert_eq!(snapshot_storages.len(), 1);

@@ -131,8 +131,8 @@ impl SlotsStats {
                 .unwrap_or(-1);
             datapoint_info!(
                 "shred_insert_is_full",
-                ("total_time_ms", total_time_ms, i64),
                 ("slot", slot, i64),
+                ("total_time_ms", total_time_ms, i64),
                 ("last_index", last_index, i64),
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),

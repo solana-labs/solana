@@ -1,11 +1,13 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+
+mod setup;
+
 use {
     bincode::deserialize,
     log::debug,
+    setup::{setup_stake, setup_vote},
     solana_banks_client::BanksClient,
-    solana_program_test::{
-        processor, ProgramTest, ProgramTestBanksClientExt, ProgramTestContext, ProgramTestError,
-    },
+    solana_program_test::{processor, ProgramTest, ProgramTestBanksClientExt, ProgramTestError},
     solana_sdk::{
         account::Account,
         account_info::{next_account_info, AccountInfo},
@@ -18,9 +20,8 @@ use {
         signature::{Keypair, Signer},
         stake::{
             instruction as stake_instruction,
-            state::{Authorized, Lockup, StakeActivationStatus, StakeState},
+            state::{StakeActivationStatus, StakeStateV2},
         },
-        system_instruction, system_program,
         sysvar::{
             clock,
             stake_history::{self, StakeHistory},
@@ -29,88 +30,12 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_stake_program::stake_state,
-    solana_vote_program::{
-        vote_instruction,
-        vote_state::{self, VoteInit, VoteState},
-    },
+    solana_vote_program::vote_state,
     std::convert::TryInto,
 };
 
 // Use a big number to be sure that we get the right error
 const WRONG_SLOT_ERROR: u32 = 123456;
-
-async fn setup_stake(
-    context: &mut ProgramTestContext,
-    user: &Keypair,
-    vote_address: &Pubkey,
-    stake_lamports: u64,
-) -> Pubkey {
-    let stake_keypair = Keypair::new();
-    let transaction = Transaction::new_signed_with_payer(
-        &stake_instruction::create_account_and_delegate_stake(
-            &context.payer.pubkey(),
-            &stake_keypair.pubkey(),
-            vote_address,
-            &Authorized::auto(&user.pubkey()),
-            &Lockup::default(),
-            stake_lamports,
-        ),
-        Some(&context.payer.pubkey()),
-        &vec![&context.payer, &stake_keypair, user],
-        context.last_blockhash,
-    );
-    context
-        .banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap();
-    stake_keypair.pubkey()
-}
-
-async fn setup_vote(context: &mut ProgramTestContext) -> Pubkey {
-    // warp once to make sure stake config doesn't get rent-collected
-    context.warp_to_slot(100).unwrap();
-    let mut instructions = vec![];
-    let validator_keypair = Keypair::new();
-    instructions.push(system_instruction::create_account(
-        &context.payer.pubkey(),
-        &validator_keypair.pubkey(),
-        Rent::default().minimum_balance(0),
-        0,
-        &system_program::id(),
-    ));
-    let vote_lamports = Rent::default().minimum_balance(VoteState::size_of());
-    let vote_keypair = Keypair::new();
-    let user_keypair = Keypair::new();
-    instructions.append(&mut vote_instruction::create_account_with_config(
-        &context.payer.pubkey(),
-        &vote_keypair.pubkey(),
-        &VoteInit {
-            node_pubkey: validator_keypair.pubkey(),
-            authorized_voter: user_keypair.pubkey(),
-            ..VoteInit::default()
-        },
-        vote_lamports,
-        vote_instruction::CreateVoteAccountConfig {
-            space: vote_state::VoteStateVersions::vote_state_size_of(true) as u64,
-            ..vote_instruction::CreateVoteAccountConfig::default()
-        },
-    ));
-
-    let transaction = Transaction::new_signed_with_payer(
-        &instructions,
-        Some(&context.payer.pubkey()),
-        &vec![&context.payer, &validator_keypair, &vote_keypair],
-        context.last_blockhash,
-    );
-    context
-        .banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap();
-
-    vote_keypair.pubkey()
-}
 
 fn process_instruction(
     _program_id: &Pubkey,
@@ -214,6 +139,8 @@ async fn stake_rewards_from_warp() {
     // Initialize and start the test network
     let program_test = ProgramTest::default();
     let mut context = program_test.start_with_context().await;
+
+    context.warp_to_slot(100).unwrap();
     let vote_address = setup_vote(&mut context).await;
 
     let user_keypair = Keypair::new();
@@ -271,14 +198,14 @@ async fn stake_rewards_from_warp() {
         .expect("account exists")
         .unwrap();
 
-    let stake_state: StakeState = deserialize(&account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&account.data).unwrap();
     let stake_history: StakeHistory = deserialize(&stake_history_account.data).unwrap();
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let stake = stake_state.stake().unwrap();
     assert_eq!(
         stake
             .delegation
-            .stake_activating_and_deactivating(clock.epoch, Some(&stake_history)),
+            .stake_activating_and_deactivating(clock.epoch, &stake_history, None),
         StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }
@@ -387,14 +314,14 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
         .expect("account exists")
         .unwrap();
 
-    let stake_state: StakeState = deserialize(&account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&account.data).unwrap();
     let stake_history: StakeHistory = deserialize(&stake_history_account.data).unwrap();
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let stake = stake_state.stake().unwrap();
     assert_eq!(
         stake
             .delegation
-            .stake_activating_and_deactivating(clock.epoch, Some(&stake_history)),
+            .stake_activating_and_deactivating(clock.epoch, &stake_history, None),
         StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }
@@ -409,17 +336,18 @@ async fn check_credits_observed(
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(
         stake_state.stake().unwrap().credits_observed,
         expected_credits
     );
 }
-
 #[tokio::test]
 async fn stake_merge_immediately_after_activation() {
     let program_test = ProgramTest::default();
     let mut context = program_test.start_with_context().await;
+
+    context.warp_to_slot(100).unwrap();
     let vote_address = setup_vote(&mut context).await;
     context.increment_vote_account_credits(&vote_address, 100);
 
@@ -441,8 +369,15 @@ async fn stake_merge_immediately_after_activation() {
     check_credits_observed(&mut context.banks_client, base_stake_address, 100).await;
     context.increment_vote_account_credits(&vote_address, 100);
 
+    let clock_account = context
+        .banks_client
+        .get_account(clock::id())
+        .await
+        .expect("account exists")
+        .unwrap();
+    let clock: Clock = deserialize(&clock_account.data).unwrap();
+    context.warp_to_epoch(clock.epoch + 1).unwrap();
     current_slot += slots_per_epoch;
-    context.warp_to_slot(current_slot).unwrap();
     context.warp_forward_force_reward_interval_end().unwrap();
 
     // make another stake which will just have its credits observed advanced
@@ -465,7 +400,7 @@ async fn stake_merge_immediately_after_activation() {
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert!(stake_account.lamports > stake_lamports);
 
@@ -476,7 +411,7 @@ async fn stake_merge_immediately_after_activation() {
         .await
         .unwrap()
         .unwrap();
-    let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
+    let stake_state: StakeStateV2 = deserialize(&stake_account.data).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert_eq!(stake_account.lamports, stake_lamports);
 

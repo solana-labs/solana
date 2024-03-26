@@ -173,7 +173,11 @@ pub fn ip_echo_server(
 ) -> IpEchoServer {
     tcp_listener.set_nonblocking(true).unwrap();
 
-    let runtime = Runtime::new().expect("Failed to create Runtime");
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_name("solIpEchoSrvrRt")
+        .enable_all()
+        .build()
+        .expect("new tokio runtime");
     runtime.spawn(run_echo_server(tcp_listener, shred_version));
     runtime
 }

@@ -8,8 +8,10 @@
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        encryption::elgamal::ElGamalKeypair, errors::ProofError,
-        sigma_proofs::pubkey_proof::PubkeyValidityProof, transcript::TranscriptProtocol,
+        encryption::elgamal::ElGamalKeypair,
+        errors::{ProofGenerationError, ProofVerificationError},
+        sigma_proofs::pubkey_proof::PubkeyValidityProof,
+        transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
@@ -47,7 +49,7 @@ pub struct PubkeyValidityProofContext {
 
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityData {
-    pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofError> {
+    pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofGenerationError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
 
         let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
@@ -67,7 +69,7 @@ impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
         let pubkey = self.context.pubkey.try_into()?;
         let proof: PubkeyValidityProof = self.proof.try_into()?;

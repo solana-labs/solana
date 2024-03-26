@@ -66,7 +66,7 @@ pub struct MockSender {
 ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
 ///
 ///    It is customary to set the `url` to "succeeds" for mocks that should
-///    return sucessfully, though this value is not actually interpreted.
+///    return successfully, though this value is not actually interpreted.
 ///
 ///    Other possible values of `url` are specific to different `RpcRequest`
 ///    values. Read the implementation for specifics.
@@ -350,6 +350,7 @@ impl RpcSender for MockSender {
                     accounts: None,
                     units_consumed: None,
                     return_data: None,
+                    inner_instructions: None,
                 },
             })?,
             "getMinimumBalanceForRentExemption" => json![20],

@@ -12,13 +12,15 @@ use {
     jsonrpc_core::IoHandler,
     soketto::handshake::{server, Server},
     solana_metrics::TokenCounter,
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::timing::AtomicInterval,
     std::{
         io,
         net::SocketAddr,
+        num::NonZeroUsize,
         str,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
         thread::{self, Builder, JoinHandle},
@@ -43,7 +45,7 @@ pub struct PubSubConfig {
     pub queue_capacity_items: usize,
     pub queue_capacity_bytes: usize,
     pub worker_threads: usize,
-    pub notification_threads: Option<usize>,
+    pub notification_threads: Option<NonZeroUsize>,
 }
 
 impl Default for PubSubConfig {
@@ -55,7 +57,7 @@ impl Default for PubSubConfig {
             queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
             worker_threads: DEFAULT_WORKER_THREADS,
-            notification_threads: None,
+            notification_threads: NonZeroUsize::new(get_thread_count()),
         }
     }
 }
@@ -69,7 +71,7 @@ impl PubSubConfig {
             queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
             worker_threads: DEFAULT_WORKER_THREADS,
-            notification_threads: Some(2),
+            notification_threads: NonZeroUsize::new(2),
         }
     }
 }
@@ -91,7 +93,9 @@ impl PubSubService {
         let thread_hdl = Builder::new()
             .name("solRpcPubSub".to_string())
             .spawn(move || {
+                info!("PubSubService has started");
                 let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .thread_name("solRpcPubSubRt")
                     .worker_threads(pubsub_config.worker_threads)
                     .enable_all()
                     .build()
@@ -102,8 +106,9 @@ impl PubSubService {
                     subscription_control,
                     tripwire,
                 )) {
-                    error!("pubsub service failed: {}", err);
+                    error!("PubSubService has stopped due to error: {err}");
                 };
+                info!("PubSubService has stopped");
             })
             .expect("thread spawn failed");
 
@@ -132,6 +137,7 @@ struct SentNotificationStats {
     num_root: AtomicUsize,
     num_vote: AtomicUsize,
     num_block: AtomicUsize,
+    total_creation_to_queue_time_us: AtomicU64,
     last_report: AtomicInterval,
 }
 
@@ -185,6 +191,12 @@ impl SentNotificationStats {
                     self.num_block.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
+                (
+                    "total_creation_to_queue_time_us",
+                    self.total_creation_to_queue_time_us
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                )
             );
         }
     }
@@ -197,6 +209,7 @@ struct BroadcastHandler {
 
 fn increment_sent_notification_stats(
     params: &SubscriptionParams,
+    notification: &RpcNotification,
     stats: &Arc<SentNotificationStats>,
 ) {
     match params {
@@ -228,6 +241,11 @@ fn increment_sent_notification_stats(
             stats.num_block.fetch_add(1, Ordering::Relaxed);
         }
     }
+    stats.total_creation_to_queue_time_us.fetch_add(
+        notification.created_at.elapsed().as_micros() as u64,
+        Ordering::Relaxed,
+    );
+
     stats.maybe_report();
 }
 
@@ -245,17 +263,10 @@ impl BroadcastHandler {
             .current_subscriptions
             .entry(notification.subscription_id)
         {
-            increment_sent_notification_stats(entry.get().params(), &self.sent_stats);
-
-            let time_since_created = notification.created_at.elapsed();
-
-            datapoint_info!(
-                "pubsub_notifications",
-                (
-                    "created_to_queue_time_us",
-                    time_since_created.as_micros() as i64,
-                    i64
-                ),
+            increment_sent_notification_stats(
+                entry.get().params(),
+                &notification,
+                &self.sent_stats,
             );
 
             if notification.is_final {
@@ -485,7 +496,7 @@ mod tests {
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(

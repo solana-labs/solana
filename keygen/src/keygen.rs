@@ -1,10 +1,11 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(deprecated)]
 use {
     bip39::{Mnemonic, MnemonicType, Seed},
-    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
+    clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
-        input_validators::{is_parsable, is_prompt_signer_source},
+        input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
             derivation_path::{acquire_derivation_path, derivation_path_arg},
@@ -34,6 +35,7 @@ use {
     std::{
         collections::HashSet,
         error,
+        rc::Rc,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -64,7 +66,7 @@ struct GrindMatch {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs_next::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
@@ -338,7 +340,7 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .long("num-threads")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .validator(is_parsable::<usize>)
+                        .value_parser(value_parser!(usize))
                         .default_value(num_threads)
                         .help("Specify the number of grind threads"),
                 )
@@ -486,7 +488,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let derivation_path = acquire_derivation_path(matches)?;
 
             let mnemonic = Mnemonic::new(mnemonic_type, language);
-            let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
+            let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches)
+                .map_err(|err| format!("Unable to acquire passphrase: {err}"))?;
 
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = match derivation_path {
@@ -570,7 +573,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 );
             }
 
-            let num_threads: usize = matches.value_of_t_or_exit("num_threads");
+            let num_threads = *matches.get_one::<usize>("num_threads").unwrap();
 
             let grind_matches = grind_parse_args(
                 ignore_case,
@@ -629,7 +632,6 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     let passphrase = passphrase.clone();
                     let passphrase_message = passphrase_message.clone();
                     let derivation_path = derivation_path.clone();
-                    let skip_len_44_pubkeys = skip_len_44_pubkeys;
 
                     thread::spawn(move || loop {
                         if done.load(Ordering::Relaxed) {

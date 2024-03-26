@@ -87,7 +87,7 @@ impl From<Infallible> for LocatorError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Locator {
     pub manufacturer: Manufacturer,
     pub pubkey: Option<Pubkey>,
@@ -124,7 +124,7 @@ impl Locator {
         let host = uri.host().map(|h| h.to_string());
         match (scheme, host) {
             (Some(scheme), Some(host)) if scheme == "usb" => {
-                let path = uri.path().segments().get(0).and_then(|s| {
+                let path = uri.path().segments().first().and_then(|s| {
                     if !s.is_empty() {
                         Some(s.as_str())
                     } else {
@@ -164,7 +164,7 @@ impl Locator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, assert_matches::assert_matches};
 
     #[test]
     fn test_manufacturer() {
@@ -190,36 +190,36 @@ mod tests {
             manufacturer,
             pubkey: None,
         };
-        assert!(matches!(
+        assert_matches!(
             Locator::new_from_parts(manufacturer, None::<Pubkey>),
-            Ok(e) if e == expect,
-        ));
-        assert!(matches!(
+            Ok(e) if e == expect
+        );
+        assert_matches!(
             Locator::new_from_parts(manufacturer_str, None::<Pubkey>),
-            Ok(e) if e == expect,
-        ));
+            Ok(e) if e == expect
+        );
 
         let expect = Locator {
             manufacturer,
             pubkey: Some(pubkey),
         };
-        assert!(matches!(
+        assert_matches!(
             Locator::new_from_parts(manufacturer, Some(pubkey)),
-            Ok(e) if e == expect,
-        ));
-        assert!(matches!(
+            Ok(e) if e == expect
+        );
+        assert_matches!(
             Locator::new_from_parts(manufacturer_str, Some(pubkey_str.as_str())),
-            Ok(e) if e == expect,
-        ));
+            Ok(e) if e == expect
+        );
 
-        assert!(matches!(
+        assert_matches!(
             Locator::new_from_parts("bad-manufacturer", None::<Pubkey>),
-            Err(LocatorError::ManufacturerError(e)) if e == ManufacturerError,
-        ));
-        assert!(matches!(
+            Err(LocatorError::ManufacturerError(e)) if e == ManufacturerError
+        );
+        assert_matches!(
             Locator::new_from_parts(manufacturer, Some("bad-pubkey")),
-            Err(LocatorError::PubkeyError(e)) if e == ParsePubkeyError::Invalid,
-        ));
+            Err(LocatorError::PubkeyError(e)) if e == ParsePubkeyError::Invalid
+        );
     }
 
     #[test]

@@ -6,24 +6,29 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
+    solana_client::{
+        connection_cache::ConnectionCache,
+        rpc_client::RpcClient,
+        thin_client::ThinClient,
+        tpu_client::{QuicTpuClient, TpuClient, TpuClientConfig},
+    },
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
         cluster_info::Node,
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
-    solana_ledger::create_new_tmp_ledger,
+    solana_ledger::{create_new_tmp_ledger, shred::Shred},
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -38,13 +43,13 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         stake::{
-            config as stake_config, instruction as stake_instruction,
+            instruction as stake_instruction,
             state::{Authorized, Lockup},
         },
         system_transaction,
         transaction::Transaction,
     },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
+    solana_stake_program::stake_state,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
@@ -57,6 +62,7 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        net::UdpSocket,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -266,18 +272,6 @@ impl LocalCluster {
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-
-        // Replace staking config
-        genesis_config.add_account(
-            stake_config::id(),
-            create_stake_config_account(
-                1,
-                &stake_config::Config {
-                    warmup_cooldown_rate: std::f64::MAX,
-                    slash_penalty: std::u8::MAX,
-                },
-            ),
-        );
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
@@ -813,6 +807,34 @@ impl LocalCluster {
             ..SnapshotConfig::new_load_only()
         }
     }
+
+    fn build_tpu_client<F>(&self, rpc_client_builder: F) -> Result<QuicTpuClient>
+    where
+        F: FnOnce(String) -> Arc<RpcClient>,
+    {
+        let rpc_pubsub_url = format!("ws://{}/", self.entry_point_info.rpc_pubsub().unwrap());
+        let rpc_url = format!("http://{}", self.entry_point_info.rpc().unwrap());
+
+        let cache = match &*self.connection_cache {
+            ConnectionCache::Quic(cache) => cache,
+            ConnectionCache::Udp(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Expected a Quic ConnectionCache. Got UDP",
+                ))
+            }
+        };
+
+        let tpu_client = TpuClient::new_with_connection_cache(
+            rpc_client_builder(rpc_url),
+            rpc_pubsub_url.as_str(),
+            TpuClientConfig::default(),
+            cache.clone(),
+        )
+        .map_err(|err| Error::new(ErrorKind::Other, format!("TpuSenderError: {}", err)))?;
+
+        Ok(tpu_client)
+    }
 }
 
 impl Cluster for LocalCluster {
@@ -828,6 +850,19 @@ impl Cluster for LocalCluster {
                 })
                 .unwrap();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
+        })
+    }
+
+    fn build_tpu_quic_client(&self) -> Result<QuicTpuClient> {
+        self.build_tpu_client(|rpc_url| Arc::new(RpcClient::new(rpc_url)))
+    }
+
+    fn build_tpu_quic_client_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<QuicTpuClient> {
+        self.build_tpu_client(|rpc_url| {
+            Arc::new(RpcClient::new_with_commitment(rpc_url, commitment_config))
         })
     }
 
@@ -862,6 +897,10 @@ impl Cluster for LocalCluster {
         };
 
         (node, entry_point_info)
+    }
+
+    fn set_entry_point(&mut self, entry_point_info: ContactInfo) {
+        self.entry_point_info = entry_point_info;
     }
 
     fn restart_node(
@@ -933,6 +972,20 @@ impl Cluster for LocalCluster {
 
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         self.validators.get(pubkey).map(|v| &v.info.contact_info)
+    }
+
+    fn send_shreds_to_validator(&self, dup_shreds: Vec<&Shred>, validator_key: &Pubkey) {
+        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let validator_tvu = self
+            .get_contact_info(validator_key)
+            .unwrap()
+            .tvu(Protocol::UDP)
+            .unwrap();
+        for shred in dup_shreds {
+            send_socket
+                .send_to(shred.payload().as_ref(), validator_tvu)
+                .unwrap();
+        }
     }
 }
 

@@ -1,8 +1,13 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     crossbeam_channel::Receiver,
     log::*,
+    solana_accounts_db::{
+        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig,
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        utils::create_accounts_run_and_snapshot_dirs,
+    },
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
@@ -24,14 +29,12 @@ use {
         create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::{compute_budget::ComputeBudget, runtime_config::RuntimeConfig},
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client::{nonblocking, rpc_client::RpcClient},
     solana_runtime::{
-        accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+        bank_forks::BankForks, genesis_utils::create_genesis_config_with_leader_ex,
+        snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -774,12 +777,14 @@ impl TestValidator {
             validator_stake_lamports,
             validator_identity_lamports,
             config.fee_rate_governor.clone(),
-            config.rent,
+            config.rent.clone(),
             solana_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),
         );
         genesis_config.epoch_schedule = config
             .epoch_schedule
+            .as_ref()
+            .cloned()
             .unwrap_or_else(EpochSchedule::without_warmup);
 
         if let Some(ticks_per_slot) = config.ticks_per_slot {
@@ -833,6 +838,14 @@ impl TestValidator {
         write_keypair_file(
             &validator_identity,
             ledger_path.join("validator-keypair.json").to_str().unwrap(),
+        )?;
+
+        write_keypair_file(
+            &validator_stake_account,
+            ledger_path
+                .join("stake-account-keypair.json")
+                .to_str()
+                .unwrap(),
         )?;
 
         // `ledger_exists` should fail until the vote account keypair is written

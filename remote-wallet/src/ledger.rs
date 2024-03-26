@@ -6,7 +6,7 @@ use {
     dialoguer::{theme::ColorfulTheme, Select},
     semver::Version as FirmwareVersion,
     solana_sdk::derivation_path::DerivationPath,
-    std::{fmt, sync::Arc},
+    std::{fmt, rc::Rc},
 };
 #[cfg(feature = "hidapi")]
 use {
@@ -592,7 +592,7 @@ pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
     keypair_name: &str,
     wallet_manager: &RemoteWalletManager,
-) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+) -> Result<Rc<LedgerWallet>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
     let mut matches = devices
         .iter()

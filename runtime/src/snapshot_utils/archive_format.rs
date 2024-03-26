@@ -3,7 +3,13 @@ use {
     strum::Display,
 };
 
-pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["bz2", "gzip", "zstd", "lz4", "tar", "none"];
+// SUPPORTED_ARCHIVE_COMPRESSION lists the compression types that can be
+// specified on the command line. "zstd" and "lz4" are valid whereas "gzip",
+// "bz2", "tar" and "none" have been deprecated. Thus, all newly created
+// snapshots will either use "zstd" or "lz4". By keeping the deprecated types
+// in the ArchiveFormat enum, pre-existing snapshot archives with the
+// deprecated compression types can still be read.
+pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["zstd", "lz4"];
 pub const DEFAULT_ARCHIVE_COMPRESSION: &str = "zstd";
 
 pub const TAR_BZIP2_EXTENSION: &str = "tar.bz2";
@@ -36,11 +42,8 @@ impl ArchiveFormat {
 
     pub fn from_cli_arg(archive_format_str: &str) -> Option<ArchiveFormat> {
         match archive_format_str {
-            "bz2" => Some(ArchiveFormat::TarBzip2),
-            "gzip" => Some(ArchiveFormat::TarGzip),
             "zstd" => Some(ArchiveFormat::TarZstd),
             "lz4" => Some(ArchiveFormat::TarLz4),
-            "tar" | "none" => Some(ArchiveFormat::Tar),
             _ => None,
         }
     }
@@ -158,14 +161,7 @@ mod tests {
 
     #[test]
     fn test_from_cli_arg() {
-        let golden = [
-            Some(ArchiveFormat::TarBzip2),
-            Some(ArchiveFormat::TarGzip),
-            Some(ArchiveFormat::TarZstd),
-            Some(ArchiveFormat::TarLz4),
-            Some(ArchiveFormat::Tar),
-            Some(ArchiveFormat::Tar),
-        ];
+        let golden = [Some(ArchiveFormat::TarZstd), Some(ArchiveFormat::TarLz4)];
 
         for (arg, expected) in zip(SUPPORTED_ARCHIVE_COMPRESSION.iter(), golden.into_iter()) {
             assert_eq!(ArchiveFormat::from_cli_arg(arg), expected);

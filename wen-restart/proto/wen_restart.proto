@@ -1,0 +1,29 @@
+syntax = "proto3";
+package solana.wen_restart_proto;
+
+enum State {
+    INIT = 0;
+    LAST_VOTED_FORK_SLOTS = 1;
+    HEAVIEST_FORK = 2;
+    GENERATING_SNAPSHOT = 3;
+    FINISHED_SNAPSHOT = 4;
+    WAITING_FOR_SUPERMAJORITY = 5;
+    DONE = 6;
+}
+
+message LastVotedForkSlotsRecord {
+    repeated uint64 last_voted_fork_slots = 1;
+    string last_vote_bankhash = 2;
+    uint32 shred_version = 3;
+    uint64 wallclock = 4;
+}
+
+message LastVotedForkSlotsAggregateRecord {
+    map<string, LastVotedForkSlotsRecord> received = 1;
+}
+
+message WenRestartProgress {
+    State state = 1;
+    optional LastVotedForkSlotsRecord my_last_voted_fork_slots = 2;
+    optional LastVotedForkSlotsAggregateRecord last_voted_fork_slots_aggregate = 3;
+}

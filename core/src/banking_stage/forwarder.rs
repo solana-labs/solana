@@ -100,7 +100,7 @@ impl Forwarder {
                 slot_metrics_tracker.increment_forwardable_batches_count(1);
 
                 let batched_forwardable_packets_count = forward_batch.len();
-                let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
+                let (_forward_result, successful_forwarded_packets_count, leader_pubkey) = self
                     .forward_buffered_packets(
                         &forward_option,
                         forward_batch.get_forwardable_packets(),
@@ -114,7 +114,7 @@ impl Forwarder {
                     );
                 }
                 let failed_forwarded_packets_count = batched_forwardable_packets_count
-                    .saturating_sub(sucessful_forwarded_packets_count);
+                    .saturating_sub(successful_forwarded_packets_count);
 
                 if failed_forwarded_packets_count > 0 {
                     slot_metrics_tracker.increment_failed_forwarded_packets_count(
@@ -123,9 +123,9 @@ impl Forwarder {
                     slot_metrics_tracker.increment_packet_batch_forward_failure_count(1);
                 }
 
-                if sucessful_forwarded_packets_count > 0 {
+                if successful_forwarded_packets_count > 0 {
                     slot_metrics_tracker.increment_successful_forwarded_packets_count(
-                        sucessful_forwarded_packets_count as u64,
+                        successful_forwarded_packets_count as u64,
                     );
                 }
             });
@@ -306,9 +306,7 @@ mod tests {
             create_slow_genesis_config_with_leader(10_000, &validator_keypair.pubkey());
         let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
 
-        let bank: Bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = bank_forks.read().unwrap().working_bank();
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
 
         let ledger_path = TempDir::new().unwrap();
         let blockstore = Arc::new(
@@ -323,7 +321,7 @@ mod tests {
         };
 
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, blockstore, Some(poh_config), None);
+            create_test_recorder(bank, blockstore, Some(poh_config), None);
 
         let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
         let cluster_info = Arc::new(cluster_info);
@@ -441,10 +439,7 @@ mod tests {
         };
 
         let mut unprocessed_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(
-            UnprocessedPacketBatches::from_iter(
-                vec![forwarded_packet, normal_packet].into_iter(),
-                2,
-            ),
+            UnprocessedPacketBatches::from_iter(vec![forwarded_packet, normal_packet], 2),
             ThreadType::Transactions,
         );
         let connection_cache = ConnectionCache::new("connection_cache_test");

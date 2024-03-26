@@ -23,12 +23,15 @@ solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 uriparse = { workspace = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+
 [features]
 default = ["linux-static-hidraw", "hidapi"]
-linux-static-libusb = ["hidapi/linux-static-libusb"]
-linux-static-hidraw = ["hidapi/linux-static-hidraw"]
-linux-shared-libusb = ["hidapi/linux-shared-libusb"]
 linux-shared-hidraw = ["hidapi/linux-shared-hidraw"]
+linux-shared-libusb = ["hidapi/linux-shared-libusb"]
+linux-static-hidraw = ["hidapi/linux-static-hidraw"]
+linux-static-libusb = ["hidapi/linux-static-libusb"]
 
 [[bin]]
 name = "solana-ledger-udev"

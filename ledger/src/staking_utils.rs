@@ -2,10 +2,7 @@
 pub(crate) mod tests {
     use {
         rand::Rng,
-        solana_runtime::{
-            bank::Bank,
-            vote_account::{VoteAccount, VoteAccounts},
-        },
+        solana_runtime::bank::Bank,
         solana_sdk::{
             account::AccountSharedData,
             clock::Clock,
@@ -19,6 +16,7 @@ pub(crate) mod tests {
             },
             transaction::Transaction,
         },
+        solana_vote::vote_account::{VoteAccount, VoteAccounts},
         solana_vote_program::{
             vote_instruction,
             vote_state::{VoteInit, VoteState, VoteStateVersions},

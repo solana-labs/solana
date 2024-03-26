@@ -22,13 +22,17 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
     std::mem::replace(&mut SYSCALL_STUBS.write().unwrap(), syscall_stubs)
 }
 
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
         println!("{message}");
     }
     fn sol_log_compute_units(&self) {
         sol_log("SyscallStubs: sol_log_compute_units() not available");
+    }
+    fn sol_remaining_compute_units(&self) -> u64 {
+        sol_log("SyscallStubs: sol_remaining_compute_units() defaulting to 0");
+        0
     }
     fn sol_invoke_signed(
         &self,
@@ -124,6 +128,10 @@ pub(crate) fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) 
 
 pub(crate) fn sol_log_compute_units() {
     SYSCALL_STUBS.read().unwrap().sol_log_compute_units();
+}
+
+pub(crate) fn sol_remaining_compute_units() -> u64 {
+    SYSCALL_STUBS.read().unwrap().sol_remaining_compute_units()
 }
 
 pub(crate) fn sol_invoke_signed(
@@ -223,15 +231,14 @@ pub(crate) fn sol_get_epoch_rewards_sysvar(var_addr: *mut u8) -> u64 {
 #[doc(hidden)]
 pub fn is_nonoverlapping<N>(src: N, src_len: N, dst: N, dst_len: N) -> bool
 where
-    N: Ord + std::ops::Sub<Output = N>,
-    <N as std::ops::Sub>::Output: Ord,
+    N: Ord + num_traits::SaturatingSub,
 {
     // If the absolute distance between the ptrs is at least as big as the size of the other,
     // they do not overlap.
     if src > dst {
-        src - dst >= dst_len
+        src.saturating_sub(&dst) >= dst_len
     } else {
-        dst - src >= src_len
+        dst.saturating_sub(&src) >= src_len
     }
 }
 

@@ -2,7 +2,7 @@
 //! a server-side TPU.  Client code should use this object instead of writing
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
-
+#[allow(deprecated)]
 use {
     crate::connection_cache::{dispatch, ConnectionCache},
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
@@ -32,11 +32,13 @@ use {
 /// A thin wrapper over thin-client/ThinClient to ease
 /// construction of the ThinClient for code dealing both with udp and quic.
 /// For the scenario only using udp or quic, use thin-client/ThinClient directly.
+#[allow(deprecated)]
 pub enum ThinClient {
     Quic(BackendThinClient<QuicPool, QuicConnectionManager, QuicConfig>),
     Udp(BackendThinClient<UdpPool, UdpConnectionManager, UdpConfig>),
 }
 
+#[allow(deprecated)]
 impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP

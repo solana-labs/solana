@@ -1,8 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
-
-#[cfg(target_os = "solana")]
-#[macro_use]
-extern crate matches;
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod merkle_tree;
 pub use merkle_tree::MerkleTree;

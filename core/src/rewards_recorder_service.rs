@@ -1,8 +1,7 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_ledger::blockstore::Blockstore,
-    solana_runtime::bank::RewardInfo,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, reward_info::RewardInfo},
     solana_transaction_status::Reward,
     std::{
         sync::{
@@ -53,7 +52,7 @@ impl RewardsRecorderService {
     fn write_rewards(
         rewards_receiver: &RewardsRecorderReceiver,
         max_complete_rewards_slot: &Arc<AtomicU64>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
     ) -> Result<(), RecvTimeoutError> {
         match rewards_receiver.recv_timeout(Duration::from_secs(1))? {
             RewardsMessage::Batch((slot, rewards)) => {

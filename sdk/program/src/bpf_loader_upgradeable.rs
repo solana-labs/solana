@@ -2,11 +2,11 @@
 //!
 //! The upgradeable BPF loader is responsible for deploying, upgrading, and
 //! executing BPF programs. The upgradeable loader allows a program's authority
-//! to update the program at any time. This ability break's the "code is law"
-//! contract the usually enforces the policy that once a program is on-chain it
-//! becomes immutable. Because of this, care should be taken before executing
-//! upgradeable programs which still have a functioning authority. For more
-//! information refer to the [`loader_upgradeable_instruction`] module.
+//! to update the program at any time. This ability breaks the "code is law"
+//! contract that once a program is on-chain it is immutable. Because of this,
+//! care should be taken before executing upgradeable programs which still have
+//! a functioning authority. For more information refer to the
+//! [`loader_upgradeable_instruction`] module.
 //!
 //! The `solana program deploy` CLI command uses the
 //! upgradeable BPF loader. Calling `solana program deploy --final` deploys a
@@ -119,6 +119,11 @@ impl UpgradeableLoaderState {
     }
 }
 
+/// Returns the program data address for a program ID
+pub fn get_program_data_address(program_address: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[program_address.as_ref()], &id()).0
+}
+
 /// Returns the instructions required to initialize a Buffer account.
 pub fn create_buffer(
     payer_address: &Pubkey,
@@ -175,7 +180,7 @@ pub fn deploy_with_max_program_len(
     program_lamports: u64,
     max_data_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
-    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let programdata_address = get_program_data_address(program_address);
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -208,7 +213,7 @@ pub fn upgrade(
     authority_address: &Pubkey,
     spill_address: &Pubkey,
 ) -> Instruction {
-    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let programdata_address = get_program_data_address(program_address);
     Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::Upgrade,
@@ -281,7 +286,7 @@ pub fn set_upgrade_authority(
     current_authority_address: &Pubkey,
     new_authority_address: Option<&Pubkey>,
 ) -> Instruction {
-    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let programdata_address = get_program_data_address(program_address);
 
     let mut metas = vec![
         AccountMeta::new(programdata_address, false),
@@ -300,7 +305,7 @@ pub fn set_upgrade_authority_checked(
     current_authority_address: &Pubkey,
     new_authority_address: &Pubkey,
 ) -> Instruction {
-    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let programdata_address = get_program_data_address(program_address);
 
     let metas = vec![
         AccountMeta::new(programdata_address, false),
@@ -355,8 +360,7 @@ pub fn extend_program(
     payer_address: Option<&Pubkey>,
     additional_bytes: u32,
 ) -> Instruction {
-    let (program_data_address, _) =
-        Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let program_data_address = get_program_data_address(program_address);
     let mut metas = vec![
         AccountMeta::new(program_data_address, false),
         AccountMeta::new(*program_address, false),

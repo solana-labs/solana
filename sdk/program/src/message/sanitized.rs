@@ -98,14 +98,6 @@ impl From<SanitizeError> for SanitizeMessageError {
     }
 }
 
-impl TryFrom<legacy::Message> for SanitizedMessage {
-    type Error = SanitizeMessageError;
-    fn try_from(message: legacy::Message) -> Result<Self, Self::Error> {
-        message.sanitize()?;
-        Ok(Self::Legacy(LegacyMessage::new(message)))
-    }
-}
-
 impl SanitizedMessage {
     /// Create a sanitized message from a sanitized versioned message.
     /// If the input message uses address tables, attempt to look up the
@@ -124,6 +116,12 @@ impl SanitizedMessage {
                 SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
             }
         })
+    }
+
+    /// Create a sanitized legacy message
+    pub fn try_from_legacy_message(message: legacy::Message) -> Result<Self, SanitizeMessageError> {
+        message.sanitize()?;
+        Ok(Self::Legacy(LegacyMessage::new(message)))
     }
 
     /// Return true if this message contains duplicate account keys
@@ -347,23 +345,77 @@ impl SanitizedMessage {
     }
 
     pub fn num_signatures(&self) -> u64 {
-        let mut num_signatures = u64::from(self.header().num_required_signatures);
-        // This next part is really calculating the number of pre-processor
-        // operations being done and treating them like a signature
-        for (program_id, instruction) in self.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
-                if let Some(num_verifies) = instruction.data.first() {
-                    num_signatures = num_signatures.saturating_add(u64::from(*num_verifies));
-                }
-            }
-        }
-        num_signatures
+        self.get_signature_details().total_signatures()
     }
 
+    /// Returns the number of requested write-locks in this message.
+    /// This does not consider if write-locks are demoted.
     pub fn num_write_locks(&self) -> u64 {
         self.account_keys()
             .len()
             .saturating_sub(self.num_readonly_accounts()) as u64
+    }
+
+    /// return detailed signature counts
+    pub fn get_signature_details(&self) -> TransactionSignatureDetails {
+        let mut transaction_signature_details = TransactionSignatureDetails {
+            num_transaction_signatures: u64::from(self.header().num_required_signatures),
+            ..TransactionSignatureDetails::default()
+        };
+
+        // counting the number of pre-processor operations separately
+        for (program_id, instruction) in self.program_instructions_iter() {
+            if secp256k1_program::check_id(program_id) {
+                if let Some(num_verifies) = instruction.data.first() {
+                    transaction_signature_details.num_secp256k1_instruction_signatures =
+                        transaction_signature_details
+                            .num_secp256k1_instruction_signatures
+                            .saturating_add(u64::from(*num_verifies));
+                }
+            } else if ed25519_program::check_id(program_id) {
+                if let Some(num_verifies) = instruction.data.first() {
+                    transaction_signature_details.num_ed25519_instruction_signatures =
+                        transaction_signature_details
+                            .num_ed25519_instruction_signatures
+                            .saturating_add(u64::from(*num_verifies));
+                }
+            }
+        }
+
+        transaction_signature_details
+    }
+}
+
+#[derive(Default)]
+/// Transaction signature details including the number of transaction signatures
+/// and precompile signatures.
+pub struct TransactionSignatureDetails {
+    num_transaction_signatures: u64,
+    num_secp256k1_instruction_signatures: u64,
+    num_ed25519_instruction_signatures: u64,
+}
+
+impl TransactionSignatureDetails {
+    /// return total number of signature, treating pre-processor operations as signature
+    pub(crate) fn total_signatures(&self) -> u64 {
+        self.num_transaction_signatures
+            .saturating_add(self.num_secp256k1_instruction_signatures)
+            .saturating_add(self.num_ed25519_instruction_signatures)
+    }
+
+    /// return the number of transaction signatures
+    pub fn num_transaction_signatures(&self) -> u64 {
+        self.num_transaction_signatures
+    }
+
+    /// return the number of secp256k1 instruction signatures
+    pub fn num_secp256k1_instruction_signatures(&self) -> u64 {
+        self.num_secp256k1_instruction_signatures
+    }
+
+    /// return the number of ed25519 instruction signatures
+    pub fn num_ed25519_instruction_signatures(&self) -> u64 {
+        self.num_ed25519_instruction_signatures
     }
 }
 
@@ -372,14 +424,14 @@ mod tests {
     use {super::*, crate::message::v0, std::collections::HashSet};
 
     #[test]
-    fn test_try_from_message() {
+    fn test_try_from_legacy_message() {
         let legacy_message_with_no_signers = legacy::Message {
             account_keys: vec![Pubkey::new_unique()],
             ..legacy::Message::default()
         };
 
         assert_eq!(
-            SanitizedMessage::try_from(legacy_message_with_no_signers).err(),
+            SanitizedMessage::try_from_legacy_message(legacy_message_with_no_signers).err(),
             Some(SanitizeMessageError::IndexOutOfBounds),
         );
     }
@@ -394,14 +446,16 @@ mod tests {
             CompiledInstruction::new(2, &(), vec![0, 1]),
         ];
 
-        let message = SanitizedMessage::try_from(legacy::Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            vec![key0, key1, loader_key],
-            Hash::default(),
-            instructions,
-        ))
+        let message = SanitizedMessage::try_from_legacy_message(
+            legacy::Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                vec![key0, key1, loader_key],
+                Hash::default(),
+                instructions,
+            ),
+        )
         .unwrap();
 
         assert!(message.is_non_loader_key(0));
@@ -418,7 +472,7 @@ mod tests {
         let key4 = Pubkey::new_unique();
         let key5 = Pubkey::new_unique();
 
-        let legacy_message = SanitizedMessage::try_from(legacy::Message {
+        let legacy_message = SanitizedMessage::try_from_legacy_message(legacy::Message {
             header: MessageHeader {
                 num_required_signatures: 2,
                 num_readonly_signed_accounts: 1,
@@ -462,14 +516,16 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 0]),
         ];
 
-        let message = SanitizedMessage::try_from(legacy::Message::new_with_compiled_instructions(
-            2,
-            1,
-            2,
-            vec![signer0, signer1, non_signer, loader_key],
-            Hash::default(),
-            instructions,
-        ))
+        let message = SanitizedMessage::try_from_legacy_message(
+            legacy::Message::new_with_compiled_instructions(
+                2,
+                1,
+                2,
+                vec![signer0, signer1, non_signer, loader_key],
+                Hash::default(),
+                instructions,
+            ),
+        )
         .unwrap();
 
         assert_eq!(
@@ -500,7 +556,7 @@ mod tests {
         let key4 = Pubkey::new_unique();
         let key5 = Pubkey::new_unique();
 
-        let legacy_message = SanitizedMessage::try_from(legacy::Message {
+        let legacy_message = SanitizedMessage::try_from_legacy_message(legacy::Message {
             header: MessageHeader {
                 num_required_signatures: 2,
                 num_readonly_signed_accounts: 1,
@@ -558,5 +614,47 @@ mod tests {
                 panic!("Expect to be SanitizedMessage::V0")
             }
         }
+    }
+
+    #[test]
+    fn test_get_signature_details() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let loader_key = Pubkey::new_unique();
+
+        let loader_instr = CompiledInstruction::new(2, &(), vec![0, 1]);
+        let mock_secp256k1_instr = CompiledInstruction::new(3, &[1u8; 10], vec![]);
+        let mock_ed25519_instr = CompiledInstruction::new(4, &[5u8; 10], vec![]);
+
+        let message = SanitizedMessage::try_from_legacy_message(
+            legacy::Message::new_with_compiled_instructions(
+                2,
+                1,
+                2,
+                vec![
+                    key0,
+                    key1,
+                    loader_key,
+                    secp256k1_program::id(),
+                    ed25519_program::id(),
+                ],
+                Hash::default(),
+                vec![
+                    loader_instr,
+                    mock_secp256k1_instr.clone(),
+                    mock_ed25519_instr,
+                    mock_secp256k1_instr,
+                ],
+            ),
+        )
+        .unwrap();
+
+        let signature_details = message.get_signature_details();
+        // expect 2 required transaction signatures
+        assert_eq!(2, signature_details.num_transaction_signatures);
+        // expect 2 secp256k1 instruction signatures - 1 for each mock_secp2561k1_instr
+        assert_eq!(2, signature_details.num_secp256k1_instruction_signatures);
+        // expect 5 ed25519 instruction signatures from mock_ed25519_instr
+        assert_eq!(5, signature_details.num_ed25519_instruction_signatures);
     }
 }

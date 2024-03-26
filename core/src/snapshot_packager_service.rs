@@ -2,7 +2,7 @@ mod snapshot_gossip_manager;
 use {
     crossbeam_channel::{Receiver, Sender},
     snapshot_gossip_manager::SnapshotGossipManager,
-    solana_gossip::cluster_info::{ClusterInfo, MAX_LEGACY_SNAPSHOT_HASHES},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
@@ -39,25 +39,13 @@ impl SnapshotPackagerService {
         snapshot_config: SnapshotConfig,
         enable_gossip_push: bool,
     ) -> Self {
-        let max_full_snapshot_hashes = std::cmp::min(
-            MAX_LEGACY_SNAPSHOT_HASHES,
-            snapshot_config
-                .maximum_full_snapshot_archives_to_retain
-                .get(),
-        );
-
         let t_snapshot_packager = Builder::new()
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
-                let mut snapshot_gossip_manager = enable_gossip_push.then(|| {
-                    SnapshotGossipManager::new(
-                        cluster_info,
-                        max_full_snapshot_hashes,
-                        starting_snapshot_hashes,
-                    )
-                });
+                let mut snapshot_gossip_manager = enable_gossip_push
+                    .then(|| SnapshotGossipManager::new(cluster_info, starting_snapshot_hashes));
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -83,18 +71,22 @@ impl SnapshotPackagerService {
                         // Archiving the snapshot package is not allowed to fail.
                         // AccountsBackgroundService calls `clean_accounts()` with a value for
                         // last_full_snapshot_slot that requires this archive call to succeed.
-                        snapshot_utils::archive_snapshot_package(
+                        let result = snapshot_utils::archive_snapshot_package(
                             &snapshot_package,
                             &snapshot_config.full_snapshot_archives_dir,
                             &snapshot_config.incremental_snapshot_archives_dir,
                             snapshot_config.maximum_full_snapshot_archives_to_retain,
                             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-                        )
-                        .expect("failed to archive snapshot package");
+                        );
+                        if let Err(err) = result {
+                            error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
+                            exit.store(true, Ordering::Relaxed);
+                            break;
+                        }
 
                         if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                             snapshot_gossip_manager.push_snapshot_hash(
-                                snapshot_package.snapshot_type,
+                                snapshot_package.snapshot_kind,
                                 (snapshot_package.slot(), *snapshot_package.hash()),
                             );
                         }
@@ -206,7 +198,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_bank_utils,
             snapshot_hash::SnapshotHash,
-            snapshot_package::{SnapshotPackage, SnapshotType},
+            snapshot_package::{SnapshotKind, SnapshotPackage},
             snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash},
@@ -264,7 +256,7 @@ mod tests {
         let bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let snapshot_storages = bank.get_snapshot_storages(None);
-        let archive_format = ArchiveFormat::TarBzip2;
+        let archive_format = ArchiveFormat::Tar;
 
         let full_archive = snapshot_bank_utils::package_and_archive_full_snapshot(
             &bank,
@@ -296,7 +288,7 @@ mod tests {
     /// Otherwise, they should be dropped.
     #[test]
     fn test_get_next_snapshot_package() {
-        fn new(snapshot_type: SnapshotType, slot: Slot) -> SnapshotPackage {
+        fn new(snapshot_kind: SnapshotKind, slot: Slot) -> SnapshotPackage {
             SnapshotPackage {
                 snapshot_archive_info: SnapshotArchiveInfo {
                     path: PathBuf::default(),
@@ -308,15 +300,15 @@ mod tests {
                 bank_snapshot_dir: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
-                snapshot_type,
+                snapshot_kind,
                 enqueued: Instant::now(),
             }
         }
         fn new_full(slot: Slot) -> SnapshotPackage {
-            new(SnapshotType::FullSnapshot, slot)
+            new(SnapshotKind::FullSnapshot, slot)
         }
         fn new_incr(slot: Slot, base: Slot) -> SnapshotPackage {
-            new(SnapshotType::IncrementalSnapshot(base), slot)
+            new(SnapshotKind::IncrementalSnapshot(base), slot)
         }
 
         let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
@@ -350,7 +342,7 @@ mod tests {
             &snapshot_package_receiver,
         )
         .unwrap();
-        assert_eq!(snapshot_package.snapshot_type, SnapshotType::FullSnapshot,);
+        assert_eq!(snapshot_package.snapshot_kind, SnapshotKind::FullSnapshot,);
         assert_eq!(snapshot_package.slot(), 400);
         assert_eq!(num_re_enqueued_snapshot_packages, 2);
 
@@ -366,8 +358,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            snapshot_package.snapshot_type,
-            SnapshotType::IncrementalSnapshot(400),
+            snapshot_package.snapshot_kind,
+            SnapshotKind::IncrementalSnapshot(400),
         );
         assert_eq!(snapshot_package.slot(), 420);
         assert_eq!(num_re_enqueued_snapshot_packages, 0);

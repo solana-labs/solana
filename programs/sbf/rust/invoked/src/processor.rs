@@ -1,13 +1,13 @@
 //! Example Rust-based SBF program that issues a cross-program-invocation
 
 #![cfg(feature = "program")]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::instructions::*,
     solana_program::{
         account_info::AccountInfo,
-        bpf_loader,
+        bpf_loader_upgradeable,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
         log::sol_log_64,
         msg,
@@ -70,7 +70,10 @@ fn process_instruction(
             assert!(!accounts[INVOKED_ARGUMENT_INDEX].executable);
 
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].key, program_id);
-            assert_eq!(accounts[INVOKED_PROGRAM_INDEX].owner, &bpf_loader::id());
+            assert_eq!(
+                accounts[INVOKED_PROGRAM_INDEX].owner,
+                &bpf_loader_upgradeable::id()
+            );
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_signer);
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_writable);
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].rent_epoch, u64::MAX);
@@ -296,6 +299,14 @@ fn process_instruction(
             msg!("Set return data");
 
             set_return_data(b"Set by invoked");
+        }
+        ASSIGN_ACCOUNT_TO_CALLER => {
+            msg!("Assigning account to caller");
+            const ARGUMENT_INDEX: usize = 0;
+            const CALLER_PROGRAM_ID: usize = 2;
+            let account = &accounts[ARGUMENT_INDEX];
+            let caller_program_id = accounts[CALLER_PROGRAM_ID].key;
+            account.assign(caller_program_id);
         }
         _ => panic!(),
     }

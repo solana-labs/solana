@@ -54,7 +54,7 @@ The different protocol strategies to address the above challenges:
    Blockstore tracks the latest root slot. RepairService will then periodically
    iterate every fork in blockstore starting from the root slot, sending repair
    requests to validators for any missing shreds. It will send at most some `N`
-   repair reqeusts per iteration. Shred repair should prioritize repairing
+   repair requests per iteration. Shred repair should prioritize repairing
    forks based on the leader's fork weight. Validators should only send repair
    requests to validators who have marked that slot as completed in their
    EpochSlots. Validators should prioritize repairing shreds in each slot

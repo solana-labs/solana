@@ -40,7 +40,7 @@ pub struct LeaderScheduleCache {
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(*bank.epoch_schedule(), bank)
+        Self::new(bank.epoch_schedule().clone(), bank)
     }
 
     pub fn new(epoch_schedule: EpochSchedule, root_bank: &Bank) -> Self {
@@ -56,9 +56,11 @@ impl LeaderScheduleCache {
         cache.set_root(root_bank);
 
         // Calculate the schedule for all epochs between 0 and leader_schedule_epoch(root)
-        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
+        let leader_schedule_epoch = cache
+            .epoch_schedule
+            .get_leader_schedule_epoch(root_bank.slot());
         for epoch in 0..leader_schedule_epoch {
-            let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+            let first_slot_in_epoch = cache.epoch_schedule.get_first_slot_in_epoch(epoch);
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
         }
         cache
@@ -507,7 +509,7 @@ mod tests {
         } = create_genesis_config(10_000 * bootstrap_validator_stake_lamports());
         genesis_config.epoch_schedule.warmup = false;
 
-        let bank = Bank::new_for_tests(&genesis_config);
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         // Create new vote account
@@ -531,7 +533,11 @@ mod tests {
             target_slot += 1;
         }
 
-        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), target_slot);
+        let bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(bank, &Pubkey::default(), target_slot))
+            .clone_without_scheduler();
         let mut expected_slot = 0;
         let epoch = bank.get_leader_schedule_epoch(target_slot);
         for i in 0..epoch {
@@ -591,7 +597,7 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(96).0, 2);
         assert!(cache.slot_leader_at(96, Some(&bank)).is_none());
 
-        let bank2 = Bank::new_from_parent(&bank, &solana_sdk::pubkey::new_rand(), 95);
+        let bank2 = Bank::new_from_parent(bank, &solana_sdk::pubkey::new_rand(), 95);
         assert!(bank2.epoch_vote_accounts(2).is_some());
 
         // Set root for a slot in epoch 1, so that epoch 2 is now confirmed

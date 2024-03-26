@@ -2,7 +2,7 @@ use {
     solana_clap_utils::input_validators::normalize_to_url_if_moniker,
     solana_cli_config::{Config, CONFIG_FILE},
     solana_rpc_client::rpc_client::RpcClient,
-    solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token},
+    solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token, stake},
     std::{
         env,
         error::Error,
@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match command_args.command {
         Command::DistributeTokens(mut args) => {
             spl_token::update_token_args(&client, &mut args.spl_token_args)?;
+            stake::update_stake_args(&client, &mut args.stake_args)?;
             commands::process_allocations(&client, &args, exit)?;
         }
         Command::Balances(mut args) => {

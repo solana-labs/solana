@@ -317,7 +317,7 @@ impl TowerStorage for EtcdTowerStorage {
 
         for op_response in response.op_responses() {
             if let etcd_client::TxnOpResponse::Get(get_response) = op_response {
-                if let Some(kv) = get_response.kvs().get(0) {
+                if let Some(kv) = get_response.kvs().first() {
                     return bincode::deserialize_from(kv.value())
                         .map_err(|e| e.into())
                         .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey));
@@ -372,7 +372,7 @@ pub mod test {
         super::*,
         crate::consensus::{
             tower1_7_14::{SavedTower1_7_14, Tower1_7_14},
-            Tower,
+            BlockhashStatus, Tower,
         },
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_vote_program::vote_state::{
@@ -403,7 +403,7 @@ pub mod test {
             vote_state: VoteState1_14_11::from(vote_state),
             last_vote: vote.clone(),
             last_timestamp: BlockTimestamp::default(),
-            last_vote_tx_blockhash: None,
+            last_vote_tx_blockhash: BlockhashStatus::Uninitialized,
             stray_restored_slot: Some(2),
             last_switch_threshold_check: Option::default(),
         };

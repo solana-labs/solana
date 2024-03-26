@@ -1,9 +1,13 @@
 //! The Solana [`Account`] type.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         clock::{Epoch, INITIAL_RENT_EPOCH},
         lamports::LamportsError,
+        loader_v4,
         pubkey::Pubkey,
     },
     serde::{
@@ -55,15 +59,14 @@ mod account_serialize {
         #[serde(with = "serde_bytes")]
         // a slice so we don't have to make a copy just to serialize this
         data: &'a [u8],
-        // can't be &pubkey because abi example doesn't support it
-        owner: Pubkey,
+        owner: &'a Pubkey,
         executable: bool,
         rent_epoch: Epoch,
     }
 
     /// allows us to implement serialize on AccountSharedData that is equivalent to Account::serialize without making a copy of the Vec<u8>
     pub fn serialize_account<S>(
-        account: &(impl ReadableAccount + Serialize),
+        account: &impl ReadableAccount,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
@@ -72,7 +75,7 @@ mod account_serialize {
         let temp = Account {
             lamports: account.lamports(),
             data: account.data(),
-            owner: *account.owner(),
+            owner: account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         };
@@ -598,7 +601,8 @@ impl AccountSharedData {
         };
     }
 
-    pub fn set_data(&mut self, data: Vec<u8>) {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn set_data(&mut self, data: Vec<u8>) {
         self.data = Arc::new(data);
     }
 
@@ -750,6 +754,14 @@ pub fn create_is_signer_account_infos<'a>(
         })
         .collect()
 }
+
+/// Replacement for the executable flag: An account being owned by one of these contains a program.
+pub const PROGRAM_OWNERS: &[Pubkey] = &[
+    bpf_loader_upgradeable::id(),
+    bpf_loader::id(),
+    bpf_loader_deprecated::id(),
+    loader_v4::id(),
+];
 
 #[cfg(test)]
 pub mod tests {

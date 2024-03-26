@@ -316,6 +316,11 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         (
+            "num_redundant_pull_responses",
+            crds_stats.num_redundant_pull_responses,
+            i64
+        ),
+        (
             "push_response_count",
             stats.push_response_count.clear(),
             i64
@@ -628,6 +633,18 @@ pub(crate) fn submit_gossip_stats(
         ("ContactInfo-push", crds_stats.push.counts[11], i64),
         ("ContactInfo-pull", crds_stats.pull.counts[11], i64),
         (
+            "RestartLastVotedForkSlots-push",
+            crds_stats.push.counts[12],
+            i64
+        ),
+        (
+            "RestartLastVotedForkSlots-pull",
+            crds_stats.pull.counts[12],
+            i64
+        ),
+        ("RestartHeaviestFork-push", crds_stats.push.counts[13], i64),
+        ("RestartHeaviestFork-pull", crds_stats.pull.counts[13], i64),
+        (
             "all-push",
             crds_stats.push.counts.iter().sum::<usize>(),
             i64
@@ -664,6 +681,18 @@ pub(crate) fn submit_gossip_stats(
         ("SnapshotHashes-pull", crds_stats.pull.fails[10], i64),
         ("ContactInfo-push", crds_stats.push.fails[11], i64),
         ("ContactInfo-pull", crds_stats.pull.fails[11], i64),
+        (
+            "RestartLastVotedForkSlots-push",
+            crds_stats.push.fails[12],
+            i64
+        ),
+        (
+            "RestartLastVotedForkSlots-pull",
+            crds_stats.pull.fails[12],
+            i64
+        ),
+        ("RestartHeaviestFork-push", crds_stats.push.fails[13], i64),
+        ("RestartHeaviestFork-pull", crds_stats.pull.fails[13], i64),
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
@@ -676,7 +705,7 @@ pub(crate) fn submit_gossip_stats(
         .pull
         .votes
         .into_iter()
-        .chain(crds_stats.push.votes.into_iter())
+        .chain(crds_stats.push.votes)
         .into_grouping_map()
         .aggregate(|acc, _slot, num_votes| Some(acc.unwrap_or_default() + num_votes));
     submit_vote_stats("cluster_info_crds_stats_votes", &votes);

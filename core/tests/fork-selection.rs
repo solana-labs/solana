@@ -1,6 +1,6 @@
 //! Fork Selection Simulation
 //!
-//! Description of the algorithm can be found in [docs/src/cluster/managing-forks.md](docs/src/cluster/managing-forks.md).
+//! Description of the algorithm can be found in [Managing Forks](https://docs.solanalabs.com/consensus/managing-forks).
 //!
 //! A test library function exists for configuring networks.
 //! ```
@@ -11,7 +11,7 @@
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
-//! ```
+//! ```no_run
 //! #[test]
 //! #[ignore]
 //! fn test_all_partitions() {
@@ -71,7 +71,7 @@
 //! ```
 //! time: 4007, tip converged: 10, trunk id: 3830, trunk time: 3827, trunk converged 100, trunk height 348
 //! ```
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 extern crate rand;
 use {
@@ -514,7 +514,7 @@ fn test_with_partitions(
         for tower in towers.iter_mut() {
             let mut fork = tower.last_fork().clone();
             if fork.id == 0 {
-                fork.id = thread_rng().gen_range(1, 1 + num_partitions);
+                fork.id = thread_rng().gen_range(1..1 + num_partitions);
                 fork_tree.insert(fork.id, fork.clone());
             }
             let vote = Vote::new(fork, time);
@@ -526,7 +526,7 @@ fn test_with_partitions(
         assert_eq!(tower.votes.len(), warmup);
         assert_eq!(tower.first_vote().unwrap().lockout, 1 << warmup);
         assert!(tower.first_vote().unwrap().lock_height() >= 1 << warmup);
-        tower.parasite = parasite_rate > thread_rng().gen_range(0.0, 1.0);
+        tower.parasite = parasite_rate > thread_rng().gen_range(0.0..1.0);
     }
     let converge_map = calc_fork_map(&towers, &fork_tree);
     assert_ne!(calc_tip_converged(&towers, &converge_map), len);
@@ -548,7 +548,7 @@ fn test_with_partitions(
                 })
             });
             for tower in towers.iter_mut() {
-                if thread_rng().gen_range(0f64, 1.0f64) < fail_rate {
+                if thread_rng().gen_range(0f64..1.0f64) < fail_rate {
                     continue;
                 }
                 tower.submit_vote(vote.clone(), &fork_tree, &converge_map, &scores);

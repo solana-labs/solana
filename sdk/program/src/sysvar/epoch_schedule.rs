@@ -9,7 +9,7 @@
 //!
 //! See also the Solana [documentation on the epoch schedule sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#epochschedule
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#epochschedule
 //!
 //! # Examples
 //!

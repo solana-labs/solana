@@ -25,6 +25,7 @@ solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 

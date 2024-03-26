@@ -12,6 +12,7 @@ edition = { workspace = true }
 
 [dependencies]
 futures-util = { workspace = true }
+rand = { workspace = true }
 serde_json = { workspace = true }
 solana-client = { workspace = true }
 solana-ledger = { workspace = true }
@@ -36,6 +37,7 @@ tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 
 [dev-dependencies]
 solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

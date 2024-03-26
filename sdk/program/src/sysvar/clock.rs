@@ -9,7 +9,7 @@
 //!
 //! See also the Solana [documentation on the clock sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#clock
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#clock
 //!
 //! # Examples
 //!

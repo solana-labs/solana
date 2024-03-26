@@ -25,6 +25,7 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-output = { workspace = true }
@@ -38,15 +39,17 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rpc = { workspace = true }
-solana-runtime = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
 solana-transaction-status = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 solana_rbpf = { workspace = true, features = ["debugger"] }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -55,6 +58,9 @@ jemallocator = { workspace = true }
 [dev-dependencies]
 assert_cmd = { workspace = true }
 bytecount = { workspace = true }
+
+[features]
+dev-context-only-utils = []
 
 [target."cfg(unix)".dependencies]
 signal-hook = { workspace = true }

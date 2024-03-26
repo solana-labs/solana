@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-getrandom = { workspace = true, features = ["dummy"] }
+getrandom = { workspace = true, features = ["custom"] }
 rand = { workspace = true }
 solana-program = { workspace = true }
 

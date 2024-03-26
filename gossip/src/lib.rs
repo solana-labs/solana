@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod cluster_info;
 pub mod cluster_info_metrics;
@@ -24,6 +24,7 @@ pub mod legacy_contact_info;
 pub mod ping_pong;
 mod push_active_set;
 mod received_cache;
+pub mod restart_crds_values;
 pub mod weighted_shuffle;
 
 #[macro_use]
@@ -31,7 +32,7 @@ extern crate log;
 
 #[cfg(test)]
 #[macro_use]
-extern crate matches;
+extern crate assert_matches;
 
 #[macro_use]
 extern crate serde_derive;

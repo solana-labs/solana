@@ -1,12 +1,14 @@
 //! A type to hold data for the [`EpochRewards` sysvar][sv].
 //!
-//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#EpochRewards
+//! [sv]: https://docs.solanalabs.com/runtime/sysvars#epochrewards
 //!
 //! The sysvar ID is declared in [`sysvar::epoch_rewards`].
 //!
 //! [`sysvar::epoch_rewards`]: crate::sysvar::epoch_rewards
 
 use std::ops::AddAssign;
+
+#[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, Copy, AbiExample)]
 pub struct EpochRewards {
     /// total rewards for the current epoch, in lamports
@@ -66,7 +68,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: self.distributed_rewards.saturating_add(amount) <= self.total_rewards"
+        expected = "self.distributed_rewards.saturating_add(amount) <= self.total_rewards"
     )]
     fn test_epoch_rewards_distribute_panic() {
         let mut epoch_rewards = EpochRewards::new(100, 0, 64);

@@ -197,7 +197,7 @@ pub(crate) fn check_output_file(path: &str, db: &PickleDb) {
             new_stake_account_address: info
                 .new_stake_account_address
                 .map(|x| x.to_string())
-                .unwrap_or_else(|| "".to_string()),
+                .unwrap_or_default(),
             finalized_date: info.finalized_date,
             signature: info.transaction.signatures[0].to_string(),
         })
@@ -209,6 +209,7 @@ pub(crate) fn check_output_file(path: &str, db: &PickleDb) {
 mod tests {
     use {
         super::*,
+        assert_matches::assert_matches,
         csv::{ReaderBuilder, Trim},
         solana_sdk::transaction::TransactionError,
         solana_transaction_status::TransactionConfirmationStatus,
@@ -272,10 +273,10 @@ mod tests {
         let signature = Signature::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
-        assert!(matches!(
-            update_finalized_transaction(&mut db, &signature, None, 0, 0).unwrap(),
-            Some(0)
-        ));
+        assert_matches!(
+            update_finalized_transaction(&mut db, &signature, None, 0, 0),
+            Ok(Some(0))
+        );
 
         // Unchanged
         assert_eq!(

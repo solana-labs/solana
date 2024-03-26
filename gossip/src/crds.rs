@@ -32,13 +32,13 @@ use {
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
+    assert_matches::debug_assert_matches,
     bincode::serialize,
     indexmap::{
         map::{rayon::ParValues, Entry, IndexMap},
         set::IndexSet,
     },
     lru::LruCache,
-    matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
     solana_sdk::{
         clock::Slot,
@@ -96,14 +96,14 @@ pub enum CrdsError {
 }
 
 #[derive(Clone, Copy)]
-pub enum GossipRoute {
+pub enum GossipRoute<'a> {
     LocalMessage,
     PullRequest,
     PullResponse,
-    PushMessage,
+    PushMessage(/*from:*/ &'a Pubkey),
 }
 
-type CrdsCountsArray = [usize; 12];
+type CrdsCountsArray = [usize; 14];
 
 pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
@@ -115,6 +115,9 @@ pub(crate) struct CrdsDataStats {
 pub(crate) struct CrdsStats {
     pub(crate) pull: CrdsDataStats,
     pub(crate) push: CrdsDataStats,
+    /// number of times a message was first received via a PullResponse
+    /// and that message was later received via a PushMessage
+    pub(crate) num_redundant_pull_responses: u64,
 }
 
 /// This structure stores some local metadata associated with the CrdsValue
@@ -127,8 +130,10 @@ pub struct VersionedCrdsValue {
     pub(crate) local_timestamp: u64,
     /// value hash
     pub(crate) value_hash: Hash,
-    /// Number of times duplicates of this value are recevied from gossip push.
-    num_push_dups: u8,
+    /// None -> value upserted by GossipRoute::{LocalMessage,PullRequest}
+    /// Some(0) -> value upserted by GossipRoute::PullResponse
+    /// Some(k) if k > 0 -> value upserted by GossipRoute::PushMessage w/ k - 1 push duplicates
+    num_push_recv: Option<u8>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -147,14 +152,21 @@ impl Cursor {
 }
 
 impl VersionedCrdsValue {
-    fn new(value: CrdsValue, cursor: Cursor, local_timestamp: u64) -> Self {
+    fn new(value: CrdsValue, cursor: Cursor, local_timestamp: u64, route: GossipRoute) -> Self {
         let value_hash = hash(&serialize(&value).unwrap());
+        let num_push_recv = match route {
+            GossipRoute::LocalMessage => None,
+            GossipRoute::PullRequest => None,
+            GossipRoute::PullResponse => Some(0),
+            GossipRoute::PushMessage(_) => Some(1),
+        };
+
         VersionedCrdsValue {
             ordinal: cursor.ordinal(),
             value,
             local_timestamp,
             value_hash,
-            num_push_dups: 0u8,
+            num_push_recv,
         }
     }
 }
@@ -222,7 +234,7 @@ impl Crds {
     ) -> Result<(), CrdsError> {
         let label = value.label();
         let pubkey = value.pubkey();
-        let value = VersionedCrdsValue::new(value, self.cursor, now);
+        let value = VersionedCrdsValue::new(value, self.cursor, now, route);
         match self.table.entry(label) {
             Entry::Vacant(entry) => {
                 self.stats.lock().unwrap().record_insert(&value, route);
@@ -301,10 +313,14 @@ impl Crds {
                 if entry.get().value_hash != value.value_hash {
                     self.purged.push_back((value.value_hash, now));
                     Err(CrdsError::InsertFailed)
-                } else if matches!(route, GossipRoute::PushMessage) {
+                } else if matches!(route, GossipRoute::PushMessage(_)) {
                     let entry = entry.get_mut();
-                    entry.num_push_dups = entry.num_push_dups.saturating_add(1);
-                    Err(CrdsError::DuplicatePush(entry.num_push_dups))
+                    if entry.num_push_recv == Some(0) {
+                        self.stats.lock().unwrap().num_redundant_pull_responses += 1;
+                    }
+                    let num_push_dups = entry.num_push_recv.unwrap_or_default();
+                    entry.num_push_recv = Some(num_push_dups.saturating_add(1));
+                    Err(CrdsError::DuplicatePush(num_push_dups))
                 } else {
                     Err(CrdsError::InsertFailed)
                 }
@@ -549,9 +565,8 @@ impl Crds {
         self.entries.remove(&value.ordinal);
         // Remove the index from records associated with the value's pubkey.
         let pubkey = value.value.pubkey();
-        let mut records_entry = match self.records.entry(pubkey) {
-            hash_map::Entry::Vacant(_) => panic!("this should not happen!"),
-            hash_map::Entry::Occupied(entry) => entry,
+        let hash_map::Entry::Occupied(mut records_entry) = self.records.entry(pubkey) else {
+            panic!("this should not happen!");
         };
         records_entry.get_mut().swap_remove(&index);
         if records_entry.get().is_empty() {
@@ -669,7 +684,7 @@ impl Default for CrdsDataStats {
 }
 
 impl CrdsDataStats {
-    fn record_insert(&mut self, entry: &VersionedCrdsValue) {
+    fn record_insert(&mut self, entry: &VersionedCrdsValue, route: GossipRoute) {
         self.counts[Self::ordinal(entry)] += 1;
         if let CrdsData::Vote(_, vote) = &entry.value.data {
             if let Some(slot) = vote.slot() {
@@ -677,6 +692,10 @@ impl CrdsDataStats {
                 self.votes.put(slot, num_nodes + 1);
             }
         }
+
+        let GossipRoute::PushMessage(from) = route else {
+            return;
+        };
 
         if should_report_message_signature(&entry.value.signature) {
             datapoint_info!(
@@ -689,6 +708,11 @@ impl CrdsDataStats {
                 (
                     "signature",
                     entry.value.signature.to_string().get(..8),
+                    Option<String>
+                ),
+                (
+                    "from",
+                    from.to_string().get(..8),
                     Option<String>
                 )
             );
@@ -713,6 +737,8 @@ impl CrdsDataStats {
             CrdsData::DuplicateShred(_, _) => 9,
             CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
+            CrdsData::RestartLastVotedForkSlots(_) => 12,
+            CrdsData::RestartHeaviestFork(_) => 13,
             // Update CrdsCountsArray if new items are added here.
         }
     }
@@ -723,8 +749,8 @@ impl CrdsStats {
         match route {
             GossipRoute::LocalMessage => (),
             GossipRoute::PullRequest => (),
-            GossipRoute::PushMessage => self.push.record_insert(entry),
-            GossipRoute::PullResponse => self.pull.record_insert(entry),
+            GossipRoute::PushMessage(_) => self.push.record_insert(entry, route),
+            GossipRoute::PullResponse => self.pull.record_insert(entry, route),
         }
     }
 
@@ -732,7 +758,7 @@ impl CrdsStats {
         match route {
             GossipRoute::LocalMessage => (),
             GossipRoute::PullRequest => (),
-            GossipRoute::PushMessage => self.push.record_fail(entry),
+            GossipRoute::PushMessage(_) => self.push.record_fail(entry),
             GossipRoute::PullResponse => self.pull.record_fail(entry),
         }
     }
@@ -751,7 +777,7 @@ fn should_report_message_signature(signature: &Signature) -> bool {
 mod tests {
     use {
         super::*,
-        crate::crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
+        crate::crds_value::{new_rand_timestamp, AccountsHashes, NodeInstance},
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
@@ -896,10 +922,7 @@ mod tests {
             let other = NodeInstance::new(&mut rng, pubkey, now + k);
             let other = other.with_wallclock(now - 1);
             let other = make_crds_value(other);
-            match crds.insert(other, now, GossipRoute::LocalMessage) {
-                Ok(()) => (),
-                _ => panic!(),
-            }
+            assert_matches!(crds.insert(other, now, GossipRoute::LocalMessage), Ok(()));
         }
     }
 
@@ -1082,7 +1105,7 @@ mod tests {
         let mut rng = thread_rng();
         let mut num_inserts = 0;
         for _ in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             if let Ok(()) = crds.insert(value, local_timestamp, GossipRoute::LocalMessage) {
@@ -1099,7 +1122,7 @@ mod tests {
         check_crds_shards(&crds);
         // Remove values one by one and assert that shards stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             check_crds_shards(&crds);
@@ -1116,9 +1139,9 @@ mod tests {
     ) {
         let size = crds.table.len();
         let since = if size == 0 || rng.gen() {
-            rng.gen_range(0, crds.cursor.0 + 1)
+            rng.gen_range(0..crds.cursor.0 + 1)
         } else {
-            crds.table[rng.gen_range(0, size)].ordinal
+            crds.table[rng.gen_range(0..size)].ordinal
         };
         let num_epoch_slots = crds
             .table
@@ -1139,10 +1162,7 @@ mod tests {
         );
         for value in crds.get_epoch_slots(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(value.value.data, CrdsData::EpochSlots(_, _));
         }
         let num_votes = crds
             .table
@@ -1165,10 +1185,7 @@ mod tests {
         );
         for value in crds.get_votes(&mut Cursor(since)) {
             assert!(value.ordinal >= since);
-            match value.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(value.value.data, CrdsData::Vote(_, _));
         }
         let num_entries = crds
             .table
@@ -1215,16 +1232,10 @@ mod tests {
             crds.get_epoch_slots(&mut Cursor::default()).count()
         );
         for vote in crds.get_votes(&mut Cursor::default()) {
-            match vote.value.data {
-                CrdsData::Vote(_, _) => (),
-                _ => panic!("not a vote!"),
-            }
+            assert_matches!(vote.value.data, CrdsData::Vote(_, _));
         }
         for epoch_slots in crds.get_epoch_slots(&mut Cursor::default()) {
-            match epoch_slots.value.data {
-                CrdsData::EpochSlots(_, _) => (),
-                _ => panic!("not an epoch-slot!"),
-            }
+            assert_matches!(epoch_slots.value.data, CrdsData::EpochSlots(_, _));
         }
         (num_nodes, num_votes, num_epoch_slots)
     }
@@ -1236,7 +1247,7 @@ mod tests {
         let mut crds = Crds::default();
         let mut num_inserts = 0;
         for k in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             if let Ok(()) = crds.insert(value, local_timestamp, GossipRoute::LocalMessage) {
@@ -1259,7 +1270,7 @@ mod tests {
         assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             if crds.table.len() % 16 == 0 {
@@ -1286,7 +1297,7 @@ mod tests {
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(128).collect();
         let mut crds = Crds::default();
         for k in 0..4096 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             let _ = crds.insert(value, local_timestamp, GossipRoute::LocalMessage);
@@ -1298,7 +1309,7 @@ mod tests {
         assert!(crds.records.len() <= keypairs.len());
         // Remove values one by one and assert that records stay valid.
         while !crds.table.is_empty() {
-            let index = rng.gen_range(0, crds.table.len());
+            let index = rng.gen_range(0..crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key, /*now=*/ 0);
             if crds.table.len() % 64 == 0 {
@@ -1348,8 +1359,8 @@ mod tests {
         );
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Add other crds values with the same pubkey.
-        let val = LegacySnapshotHashes::new_rand(&mut rng, Some(pubkey));
-        let val = CrdsData::LegacySnapshotHashes(val);
+        let val = AccountsHashes::new_rand(&mut rng, Some(pubkey));
+        let val = CrdsData::AccountsHashes(val);
         let val = CrdsValue::new_unsigned(val);
         assert_eq!(
             crds.insert(val, timestamp(), GossipRoute::LocalMessage),
@@ -1362,7 +1373,7 @@ mod tests {
         assert_eq!(crds.get::<&ContactInfo>(pubkey), None);
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Remove the remaining entry with the same pubkey.
-        crds.remove(&CrdsValueLabel::LegacySnapshotHashes(pubkey), timestamp());
+        crds.remove(&CrdsValueLabel::AccountsHashes(pubkey), timestamp());
         assert_eq!(crds.get_records(&pubkey).count(), 0);
         assert_eq!(crds.get_shred_version(&pubkey), None);
     }
@@ -1384,11 +1395,11 @@ mod tests {
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(64).collect();
         let stakes = keypairs
             .iter()
-            .map(|k| (k.pubkey(), rng.gen_range(0, 1000)))
+            .map(|k| (k.pubkey(), rng.gen_range(0..1000)))
             .collect();
         let mut crds = Crds::default();
         for _ in 0..2048 {
-            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let keypair = &keypairs[rng.gen_range(0..keypairs.len())];
             let value = CrdsValue::new_rand(&mut rng, Some(keypair));
             let local_timestamp = new_rand_timestamp(&mut rng);
             let _ = crds.insert(value, local_timestamp, GossipRoute::LocalMessage);
@@ -1455,8 +1466,9 @@ mod tests {
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_equal() {
         let val = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::default()));
-        let v1 = VersionedCrdsValue::new(val.clone(), Cursor::default(), 1);
-        let v2 = VersionedCrdsValue::new(val, Cursor::default(), 1);
+        let v1 =
+            VersionedCrdsValue::new(val.clone(), Cursor::default(), 1, GossipRoute::LocalMessage);
+        let v2 = VersionedCrdsValue::new(val, Cursor::default(), 1, GossipRoute::LocalMessage);
         assert_eq!(v1, v2);
         assert!(!(v1 != v2));
         assert!(!overrides(&v1.value, &v2));
@@ -1472,6 +1484,7 @@ mod tests {
             ))),
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
         let v2 = VersionedCrdsValue::new(
             {
@@ -1481,6 +1494,7 @@ mod tests {
             },
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
 
         assert_eq!(v1.value.label(), v2.value.label());
@@ -1506,6 +1520,7 @@ mod tests {
             ))),
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
         let v2 = VersionedCrdsValue::new(
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::new_localhost(
@@ -1514,6 +1529,7 @@ mod tests {
             ))),
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
         assert_eq!(v1.value.label(), v2.value.label());
         assert!(overrides(&v1.value, &v2));
@@ -1532,6 +1548,7 @@ mod tests {
             ))),
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
         let v2 = VersionedCrdsValue::new(
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::new_localhost(
@@ -1540,6 +1557,7 @@ mod tests {
             ))),
             Cursor::default(),
             1, // local_timestamp
+            GossipRoute::LocalMessage,
         );
         assert_ne!(v1, v2);
         assert!(!(v1 == v2));

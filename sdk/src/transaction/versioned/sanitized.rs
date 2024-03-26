@@ -32,6 +32,11 @@ impl SanitizedVersionedTransaction {
     pub fn get_message(&self) -> &SanitizedVersionedMessage {
         &self.message
     }
+
+    /// Consumes the SanitizedVersionedTransaction, returning the fields individually.
+    pub fn destruct(self) -> (Vec<Signature>, SanitizedVersionedMessage) {
+        (self.signatures, self.message)
+    }
 }
 
 #[cfg(test)]

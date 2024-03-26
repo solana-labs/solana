@@ -7,11 +7,10 @@ use {
         tpu_connection::TpuConnection,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
-        timing::AtomicInterval, transport::TransportError,
+        clock::Slot, hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign,
+        signature::Signature, timing::AtomicInterval, transport::TransportError,
     },
     std::{
         collections::{
@@ -28,8 +27,8 @@ use {
     },
 };
 
-/// Maximum size of the transaction queue
-const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
+/// Maximum size of the transaction retry pool
+const MAX_TRANSACTION_RETRY_POOL_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
 
 /// Default retry interval
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
@@ -114,6 +113,9 @@ pub struct Config {
     pub batch_size: usize,
     /// How frequently batches are sent
     pub batch_send_rate_ms: u64,
+    /// When the retry pool exceeds this max size, new transactions are dropped after their first broadcast attempt
+    pub retry_pool_max_size: usize,
+    pub tpu_peers: Option<Vec<SocketAddr>>,
 }
 
 impl Default for Config {
@@ -125,6 +127,8 @@ impl Default for Config {
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
+            retry_pool_max_size: MAX_TRANSACTION_RETRY_POOL_SIZE,
+            tpu_peers: None,
         }
     }
 }
@@ -461,7 +465,7 @@ impl SendTransactionService {
                         .fetch_add(transactions.len() as u64, Ordering::Relaxed);
                     Self::send_transactions_in_batch(
                         &tpu_address,
-                        &mut transactions,
+                        &transactions,
                         leader_info_provider.lock().unwrap().get_leader_info(),
                         &connection_cache,
                         &config,
@@ -477,8 +481,7 @@ impl SendTransactionService {
                             let retry_len = retry_transactions.len();
                             let entry = retry_transactions.entry(signature);
                             if let Entry::Vacant(_) = entry {
-                                if retry_len >= MAX_TRANSACTION_QUEUE_SIZE {
-                                    datapoint_warn!("send_transaction_service-queue-overflow");
+                                if retry_len >= config.retry_pool_max_size {
                                     break;
                                 } else {
                                     transaction_info.last_sent_time = Some(last_sent_time);
@@ -558,34 +561,46 @@ impl SendTransactionService {
     /// Process transactions in batch.
     fn send_transactions_in_batch<T: TpuInfo>(
         tpu_address: &SocketAddr,
-        transactions: &mut HashMap<Signature, TransactionInfo>,
+        transactions: &HashMap<Signature, TransactionInfo>,
         leader_info: Option<&T>,
         connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addresses(
+        let mut addresses = config
+            .tpu_peers
+            .as_ref()
+            .map(|addrs| addrs.iter().map(|a| (a, 0)).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let leader_addresses = Self::get_tpu_addresses_with_slots(
             tpu_address,
             leader_info,
             config,
             connection_cache.protocol(),
         );
+        addresses.extend(leader_addresses);
 
         let wire_transactions = transactions
             .iter()
-            .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
+            .map(|(_, transaction_info)| {
+                debug!(
+                    "Sending transacation {} to (address, slot): {:?}",
+                    transaction_info.signature, addresses,
+                );
+                transaction_info.wire_transaction.as_ref()
+            })
             .collect::<Vec<&[u8]>>();
 
-        for address in &addresses {
+        for (address, _) in &addresses {
             Self::send_transactions(address, &wire_transactions, connection_cache, stats);
         }
     }
 
     /// Retry transactions sent before.
     fn process_transactions<T: TpuInfo + std::marker::Send + 'static>(
-        working_bank: &Arc<Bank>,
-        root_bank: &Arc<Bank>,
+        working_bank: &Bank,
+        root_bank: &Bank,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info_provider: &Arc<Mutex<CurrentLeaderInfo<T>>>,
@@ -695,14 +710,20 @@ impl SendTransactionService {
 
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
+                let mut addresses = config
+                    .tpu_peers
+                    .as_ref()
+                    .map(|addrs| addrs.iter().collect::<Vec<_>>())
+                    .unwrap_or_default();
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
                 let leader_info = leader_info_provider.get_leader_info();
-                let addresses = Self::get_tpu_addresses(
+                let leader_addresses = Self::get_tpu_addresses(
                     tpu_address,
                     leader_info,
                     config,
                     connection_cache.protocol(),
                 );
+                addresses.extend(leader_addresses);
 
                 for address in &addresses {
                     Self::send_transactions(address, chunk, connection_cache, stats);
@@ -777,6 +798,21 @@ impl SendTransactionService {
             .unwrap_or_else(|| vec![tpu_address])
     }
 
+    fn get_tpu_addresses_with_slots<'a, T: TpuInfo>(
+        tpu_address: &'a SocketAddr,
+        leader_info: Option<&'a T>,
+        config: &'a Config,
+        protocol: Protocol,
+    ) -> Vec<(&'a SocketAddr, Slot)> {
+        leader_info
+            .as_ref()
+            .map(|leader_info| {
+                leader_info.get_leader_tpus_with_slots(config.leader_forward_count, protocol)
+            })
+            .filter(|addresses| !addresses.is_empty())
+            .unwrap_or_else(|| vec![(tpu_address, 0)])
+    }
+
     pub fn join(self) -> thread::Result<()> {
         self.receive_txn_thread.join()?;
         self.exit.store(true, Ordering::Relaxed);
@@ -805,7 +841,7 @@ mod test {
     fn service_exit() {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let bank = Bank::default_for_tests();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let (sender, receiver) = unbounded();
 
         let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
@@ -828,7 +864,7 @@ mod test {
     fn validator_exit() {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let bank = Bank::default_for_tests();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let (sender, receiver) = bounded(0);
 
         let dummy_tx_info = || TransactionInfo {
@@ -870,25 +906,39 @@ mod test {
     fn process_transactions() {
         solana_logger::setup();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let (mut genesis_config, mint_keypair) = create_genesis_config(4);
+        genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
+        let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
             ..Config::default()
         };
 
-        let root_bank = Arc::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().working_bank(),
+        let root_bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
-        ));
+        );
+        let root_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(root_bank)
+            .clone_without_scheduler();
+
         let rooted_signature = root_bank
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
-        let working_bank = Arc::new(Bank::new_from_parent(&root_bank, &Pubkey::default(), 2));
+        let working_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(
+                root_bank.clone(),
+                &Pubkey::default(),
+                2,
+            ))
+            .clone_without_scheduler();
 
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
@@ -1132,20 +1182,26 @@ mod test {
     fn test_retry_durable_nonce_transactions() {
         solana_logger::setup();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let (mut genesis_config, mint_keypair) = create_genesis_config(4);
+        genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
+        let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let config = Config {
             leader_forward_count: 1,
             ..Config::default()
         };
 
-        let root_bank = Arc::new(Bank::new_from_parent(
-            &bank_forks.read().unwrap().working_bank(),
+        let root_bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().working_bank(),
             &Pubkey::default(),
             1,
-        ));
+        );
+        let root_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(root_bank)
+            .clone_without_scheduler();
+
         let rooted_signature = root_bank
             .transfer(1, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
@@ -1159,7 +1215,15 @@ mod test {
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
 
-        let working_bank = Arc::new(Bank::new_from_parent(&root_bank, &Pubkey::default(), 2));
+        let working_bank = bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(
+                root_bank.clone(),
+                &Pubkey::default(),
+                2,
+            ))
+            .clone_without_scheduler();
         let non_rooted_signature = working_bank
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();

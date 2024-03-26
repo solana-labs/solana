@@ -1,5 +1,18 @@
 use {
     crate::{
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
+        builtins::BuiltinPrototype,
+        epoch_stakes::EpochStakes,
+        serde_snapshot::storage::SerializableAccountStorageEntry,
+        snapshot_utils::{
+            self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+        },
+        stakes::Stakes,
+    },
+    bincode::{self, config::Options, Error},
+    log::*,
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_accounts_db::{
         account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{
@@ -10,23 +23,11 @@ use {
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
-        builtins::BuiltinPrototype,
         epoch_accounts_hash::EpochAccountsHash,
-        epoch_stakes::EpochStakes,
-        rent_collector::RentCollector,
-        runtime_config::RuntimeConfig,
-        serde_snapshot::storage::SerializableAccountStorageEntry,
-        snapshot_utils::{
-            self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
-        },
-        stakes::Stakes,
     },
-    bincode::{self, config::Options, Error},
-    log::*,
-    serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_measure::measure::Measure,
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -37,6 +38,7 @@ use {
         hash::Hash,
         inflation::Inflation,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -55,15 +57,13 @@ use {
 mod newer;
 mod storage;
 mod tests;
-mod types;
 mod utils;
 
-// a number of test cases in accounts_db use this
-#[cfg(test)]
-pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
+    solana_accounts_db::accounts_hash::{
+        SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
+    },
     storage::SerializedAppendVecId,
-    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -176,7 +176,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                     })?;
 
                 let mut combined_storages = full_snapshot_storages;
-                combined_storages.extend(incremental_snapshot_storages.into_iter());
+                combined_storages.extend(incremental_snapshot_storages);
 
                 Ok(AccountsDbFields(
                     combined_storages,
@@ -266,6 +266,7 @@ where
 
 /// used by tests to compare contents of serialized bank fields
 /// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+#[cfg(feature = "dev-context-only-utils")]
 pub(crate) fn compare_two_serialized_banks(
     path1: impl AsRef<Path>,
     path2: impl AsRef<Path>,
@@ -516,7 +517,7 @@ where
     (SerializableBankAndStorage::<newer::Context> {
         bank,
         snapshot_storages: storage,
-        phantom: std::marker::PhantomData::default(),
+        phantom: std::marker::PhantomData,
     })
     .serialize(s)
 }
@@ -619,7 +620,7 @@ where
         bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
-    let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let bank_rc = BankRc::new(Accounts::new(Arc::new(accounts_db)), bank_fields.slot);
     let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
@@ -939,8 +940,6 @@ where
         .rent_paying_accounts_by_partition
         .set(rent_paying_accounts_by_partition)
         .unwrap();
-
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
 
     handle.join().unwrap();
     measure_notify.stop();

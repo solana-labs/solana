@@ -1,8 +1,9 @@
 ---
-title: The Runtime
+title: Solana Runtime on a Solana Validator
+sidebar_position: 6
+sidebar_label: Runtime
+pagination_label: Validator Runtime
 ---
-
-## The Runtime
 
 The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
 
@@ -29,9 +30,9 @@ At the _execute_ stage, the loaded accounts have no data dependencies, so all th
 The runtime enforces the following rules:
 
 1. Only the _owner_ program may modify the contents of an account. This means that upon assignment data vector is guaranteed to be zero.
-2. Total balances on all the accounts is equal before and after execution of a transaction.
+2. Total balances on all the accounts are equal before and after execution of a transaction.
 3. After the transaction is executed, balances of read-only accounts must be equal to the balances before the transaction.
-4. All instructions in the transaction executed atomically. If one fails, all account modifications are discarded.
+4. All instructions in the transaction are executed atomically. If one fails, all account modifications are discarded.
 
 Execution of the program involves mapping the program's public key to an entrypoint which takes a pointer to the transaction, and an array of loaded accounts.
 

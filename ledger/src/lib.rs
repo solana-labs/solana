@@ -1,5 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod bank_forks_utils;
 pub mod bigtable_delete;
@@ -9,8 +9,10 @@ pub mod block_error;
 #[macro_use]
 pub mod blockstore;
 pub mod ancestor_iterator;
+pub mod blockstore_cleanup_service;
 pub mod blockstore_db;
 pub mod blockstore_meta;
+pub mod blockstore_metric_report_service;
 pub mod blockstore_metrics;
 pub mod blockstore_options;
 pub mod blockstore_processor;
@@ -28,6 +30,7 @@ pub mod sigverify_shreds;
 pub mod slot_stats;
 mod staking_utils;
 pub mod token_balances;
+mod transaction_address_lookup_table_scanner;
 pub mod use_snapshot_archives_at_startup;
 
 #[macro_use]
@@ -35,9 +38,6 @@ extern crate solana_metrics;
 
 #[macro_use]
 extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
 
 #[macro_use]
 extern crate solana_frozen_abi_macro;

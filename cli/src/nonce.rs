@@ -36,7 +36,7 @@ use {
         system_program,
         transaction::Transaction,
     },
-    std::sync::Arc,
+    std::rc::Rc,
 };
 
 pub trait NonceSubCommands {
@@ -48,20 +48,20 @@ impl NonceSubCommands for App<'_, '_> {
         self.subcommand(
             SubCommand::with_name("authorize-nonce-account")
                 .about("Assign account authority to a new entity")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("new_authority")
+                    "Nonce account."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("new_authority")
                         .index(2)
                         .value_name("AUTHORITY_PUBKEY")
                         .required(true),
-                        "Account to be granted authority of the nonce account. "),
-                )
+                    "Account to be granted authority of the nonce account."
+                ))
                 .arg(nonce_authority_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -85,20 +85,26 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
+                        .help(
+                            "The amount to load the nonce account with, in SOL; accepts keyword \
+                             ALL",
+                        ),
                 )
-                .arg(
-                    pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
+                .arg(pubkey!(
+                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY"),
-                        "Assign noncing authority to another entity. "),
-                )
+                    "Assign noncing authority to this other entity."
+                ))
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
+                        .help(
+                            "Seed for address generation; if specified, the resulting account \
+                             will be at a derived address of the NONCE_ACCOUNT pubkey",
+                        ),
                 )
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -107,24 +113,24 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("nonce")
                 .about("Get the current nonce value")
                 .alias("get-nonce")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account to display. "),
-                ),
+                    "Nonce account to display."
+                )),
         )
         .subcommand(
             SubCommand::with_name("new-nonce")
                 .about("Generate a new nonce, rendering the existing nonce useless")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account. "),
-                )
+                    "Nonce account."
+                ))
                 .arg(nonce_authority_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
@@ -133,13 +139,13 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("nonce-account")
                 .about("Show the contents of a nonce account")
                 .alias("show-nonce-account")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Address of the nonce account to display. "),
-                )
+                    "Nonce account to display."
+                ))
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -150,20 +156,20 @@ impl NonceSubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("withdraw-from-nonce-account")
                 .about("Withdraw SOL from the nonce account")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Nonce account to withdraw from. "),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("destination_account_pubkey")
+                    "Nonce account to withdraw from."
+                ))
+                .arg(pubkey!(
+                    Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The account to which the SOL should be transferred. "),
-                )
+                    "Recipient of withdrawn SOL."
+                ))
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
@@ -179,15 +185,17 @@ impl NonceSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("upgrade-nonce-account")
-                .about("One-time idempotent upgrade of legacy nonce versions \
-                        in order to bump them out of chain blockhash domain.")
-                .arg(
-                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                .about(
+                    "One-time idempotent upgrade of legacy nonce versions in order to bump them \
+                     out of chain blockhash domain.",
+                )
+                .arg(pubkey!(
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Nonce account to upgrade. "),
-                )
+                    "Nonce account to upgrade."
+                ))
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
         )
@@ -197,7 +205,7 @@ impl NonceSubCommands for App<'_, '_> {
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let new_authority = pubkey_of_signer(matches, "new_authority", wallet_manager)?.unwrap();
@@ -228,7 +236,7 @@ pub fn parse_authorize_nonce_account(
 pub fn parse_nonce_create_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (nonce_account, nonce_account_pubkey) =
         signer_of(matches, "nonce_account_keypair", wallet_manager)?;
@@ -260,7 +268,7 @@ pub fn parse_nonce_create_account(
 
 pub fn parse_get_nonce(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -274,7 +282,7 @@ pub fn parse_get_nonce(
 pub fn parse_new_nonce(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
@@ -302,7 +310,7 @@ pub fn parse_new_nonce(
 
 pub fn parse_show_nonce_account(
     matches: &ArgMatches<'_>,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -320,7 +328,7 @@ pub fn parse_show_nonce_account(
 pub fn parse_withdraw_from_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
@@ -502,7 +510,8 @@ pub fn process_create_nonce_account(
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
-            "need at least {minimum_balance} lamports for nonce account to be rent exempt, provided lamports: {lamports}"
+            "need at least {minimum_balance} lamports for nonce account to be rent exempt, \
+             provided lamports: {lamports}"
         ))
         .into());
     }
@@ -719,7 +728,7 @@ mod tests {
                     new_authority: Pubkey::default(),
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -743,8 +752,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -768,8 +777,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -795,8 +804,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -830,7 +839,7 @@ mod tests {
                     memo: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -853,8 +862,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -900,7 +909,7 @@ mod tests {
                     lamports: 42_000_000_000,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -931,8 +940,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -977,8 +986,8 @@ mod tests {
                     compute_unit_price: Some(99),
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
                 ],
             }
         );

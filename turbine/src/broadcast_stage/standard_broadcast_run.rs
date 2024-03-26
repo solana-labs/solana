@@ -15,6 +15,7 @@ use {
     },
     solana_sdk::{
         genesis_config::ClusterType,
+        hash::Hash,
         signature::Keypair,
         timing::{duration_as_us, AtomicInterval},
     },
@@ -83,21 +84,20 @@ impl StandardBroadcastRun {
                 let shredder =
                     Shredder::new(state.slot, state.parent, reference_tick, self.shred_version)
                         .unwrap();
-                let merkle_variant = should_use_merkle_variant(state.slot, cluster_type);
                 let (mut shreds, coding_shreds) = shredder.entries_to_shreds(
                     keypair,
                     &[],  // entries
                     true, // is_last_in_slot,
+                    should_chain_merkle_shreds(state.slot, cluster_type)
+                        .then_some(state.chained_merkle_root),
                     state.next_shred_index,
                     state.next_code_index,
-                    merkle_variant,
+                    true, // merkle_variant
                     &self.reed_solomon_cache,
                     stats,
                 );
-                if merkle_variant {
-                    stats.num_merkle_data_shreds += shreds.len();
-                    stats.num_merkle_coding_shreds += coding_shreds.len();
-                }
+                stats.num_merkle_data_shreds += shreds.len();
+                stats.num_merkle_coding_shreds += coding_shreds.len();
                 self.report_and_reset_stats(true);
                 self.unfinished_slot = None;
                 shreds.extend(coding_shreds);
@@ -126,12 +126,16 @@ impl StandardBroadcastRun {
         BroadcastError,
     > {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
-        let (next_shred_index, next_code_index) = match &self.unfinished_slot {
-            Some(state) => (state.next_shred_index, state.next_code_index),
+        let (next_shred_index, next_code_index, chained_merkle_root) = match &self.unfinished_slot {
+            Some(state) => (
+                state.next_shred_index,
+                state.next_code_index,
+                state.chained_merkle_root,
+            ),
             None => {
                 // If the blockstore has shreds for the slot, it should not
                 // recreate the slot:
-                // https://github.com/solana-labs/solana/blob/ff68bf6c2/ledger/src/leader_schedule_cache.rs#L142-L146
+                // https://github.com/solana-labs/solana/blob/92a0b310c/ledger/src/leader_schedule_cache.rs##L139-L148
                 if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
                     if slot_meta.received > 0 || slot_meta.consumed > 0 {
                         process_stats.num_extant_slots += 1;
@@ -140,26 +144,38 @@ impl StandardBroadcastRun {
                         return Ok((Vec::default(), Vec::default()));
                     }
                 }
-                (0u32, 0u32)
+                let chained_merkle_root = broadcast_utils::get_chained_merkle_root_from_parent(
+                    slot,
+                    parent_slot,
+                    blockstore,
+                )
+                .unwrap_or_else(|err| {
+                    error!("Unknown chained Merkle root: {err}");
+                    process_stats.err_unknown_chained_merkle_root += 1;
+                    Hash::default()
+                });
+                (0u32, 0u32, chained_merkle_root)
             }
         };
         let shredder =
             Shredder::new(slot, parent_slot, reference_tick, self.shred_version).unwrap();
-        let merkle_variant = should_use_merkle_variant(slot, cluster_type);
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             entries,
             is_slot_end,
+            should_chain_merkle_shreds(slot, cluster_type).then_some(chained_merkle_root),
             next_shred_index,
             next_code_index,
-            merkle_variant,
+            true, // merkle_variant
             &self.reed_solomon_cache,
             process_stats,
         );
-        if merkle_variant {
-            process_stats.num_merkle_data_shreds += data_shreds.len();
-            process_stats.num_merkle_coding_shreds += coding_shreds.len();
-        }
+        process_stats.num_merkle_data_shreds += data_shreds.len();
+        process_stats.num_merkle_coding_shreds += coding_shreds.len();
+        let chained_merkle_root = match data_shreds.iter().max_by_key(|shred| shred.index()) {
+            None => chained_merkle_root,
+            Some(shred) => shred.merkle_root().unwrap(),
+        };
         let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
             Some(index) => index + 1,
             None => next_shred_index,
@@ -176,6 +192,7 @@ impl StandardBroadcastRun {
             return Err(BroadcastError::TooManyShreds);
         }
         self.unfinished_slot = Some(UnfinishedSlotInfo {
+            chained_merkle_root,
             next_shred_index,
             next_code_index,
             slot,
@@ -267,9 +284,13 @@ impl StandardBroadcastRun {
             .unwrap();
         // Insert the first data shred synchronously so that blockstore stores
         // that the leader started this block. This must be done before the
-        // blocks are sent out over the wire. By contrast Self::insert skips
-        // the 1st data shred with index zero.
-        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L334-L339
+        // blocks are sent out over the wire, so that the slots we have already
+        // sent a shred for are skipped (even if the node reboots):
+        // https://github.com/solana-labs/solana/blob/92a0b310c/ledger/src/leader_schedule_cache.rs#L139-L148
+        // preventing the node from broadcasting duplicate blocks:
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L132-L142
+        // By contrast Self::insert skips the 1st data shred with index zero:
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L367-L373
         if let Some(shred) = data_shreds.first() {
             if shred.index() == 0 {
                 blockstore
@@ -365,7 +386,7 @@ impl StandardBroadcastRun {
         let insert_shreds_start = Instant::now();
         let mut shreds = Arc::try_unwrap(shreds).unwrap_or_else(|shreds| (*shreds).clone());
         // The first data shred is inserted synchronously.
-        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L239-L246
+        // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L268-L283
         if let Some(shred) = shreds.first() {
             if shred.is_data() && shred.index() == 0 {
                 shreds.swap_remove(0);
@@ -506,26 +527,25 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
-fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType) -> bool {
-    match cluster_type {
-        ClusterType::Testnet | ClusterType::Devnet | ClusterType::Development => true,
-        ClusterType::MainnetBeta => (slot % 19) < 4,
-    }
+fn should_chain_merkle_shreds(_slot: Slot, _cluster_type: ClusterType) -> bool {
+    false
 }
 
 #[cfg(test)]
 mod test {
     use {
         super::*,
+        rand::Rng,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
             blockstore::Blockstore, genesis_utils::create_genesis_config, get_tmp_ledger_path,
-            shred::max_ticks_per_n_shreds,
+            get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
         solana_sdk::{
             genesis_config::GenesisConfig,
+            hash::Hash,
             signature::{Keypair, Signer},
         },
         solana_streamer::socket::SocketAddrSpace,
@@ -562,7 +582,7 @@ mod test {
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().root_bank();
         (
             blockstore,
@@ -585,6 +605,7 @@ mod test {
         let slot = 1;
         let parent = 0;
         run.unfinished_slot = Some(UnfinishedSlotInfo {
+            chained_merkle_root: Hash::new_from_array(rand::thread_rng().gen()),
             next_shred_index,
             next_code_index: 17,
             slot,
@@ -598,12 +619,12 @@ mod test {
         // Slot 2 interrupted slot 1
         let shreds = run.finish_prev_slot(
             &keypair,
-            0,
-            ClusterType::Devnet,
+            0, // max_ticks_in_slot
+            ClusterType::Development,
             &mut ProcessShredsStats::default(),
         );
         let shred = shreds
-            .get(0)
+            .first()
             .expect("Expected a shred that signals an interrupt");
 
         // Validate the shred
@@ -685,7 +706,7 @@ mod test {
 
         // Step 2: Make a transmission for another bank that interrupts the transmission for
         // slot 0
-        let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_keypair.pubkey(), 2));
+        let bank2 = Arc::new(Bank::new_from_parent(bank0, &leader_keypair.pubkey(), 2));
         let interrupted_slot = unfinished_slot.slot;
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
@@ -838,9 +859,10 @@ mod test {
         bs.current_slot_and_parent = Some((1, 0));
         let entries = create_ticks(10_000, 1, solana_sdk::hash::Hash::default());
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Arc::new(
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger"),
         );
         let mut stats = ProcessShredsStats::default();
 

@@ -1,7 +1,7 @@
 //! Example Rust-based SBF sanity program that prints out the parameters passed to it
 
 #![allow(unreachable_code)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 extern crate solana_program;
 use solana_program::{
@@ -14,6 +14,21 @@ struct SStruct {
     x: u64,
     y: u64,
     z: u64,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+enum TestEnum {
+    VariantOne,
+    VariantTwo,
+}
+
+#[allow(dead_code)]
+#[allow(clippy::enum_clike_unportable_variant)]
+#[repr(C)]
+enum Test64BitEnum {
+    VariantOne,
+    VariantTwo = 0xFFFFFFFFF,
 }
 
 #[inline(never)]
@@ -70,6 +85,14 @@ pub fn process_instruction(
         let num = num.powf(0.333f64);
         // check that the result is in a correct interval close to 1.998614185980905
         assert!(1.9986f64 < num && num < 2.0f64);
+    }
+
+    {
+        // #[repr(C) enums must not change size between compiler version
+        // 32-bit for #[repr(C)] enum
+        assert_eq!(std::mem::size_of::<TestEnum>(), 4);
+        // 64-bit for enum with a declared value
+        assert_eq!(std::mem::size_of::<Test64BitEnum>(), 8);
     }
 
     check_type_assumptions();

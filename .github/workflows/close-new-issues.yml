@@ -1,0 +1,20 @@
+name: Close new issues
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  comment-and-close:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          COMMENT: >
+            This repository is no longer in use. Please re-open this
+            issue in the agave repo: https://github.com/anza-xyz/agave
+        run: >
+          gh issue close "$ISSUE_NUMBER" --comment "$COMMENT"

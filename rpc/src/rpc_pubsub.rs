@@ -622,7 +622,6 @@ mod tests {
                 activate_all_features, create_genesis_config,
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
-            vote_transaction::VoteTransaction,
         },
         solana_sdk::{
             account::ReadableAccount,
@@ -635,12 +634,13 @@ mod tests {
             signature::{Keypair, Signer},
             stake::{
                 self, instruction as stake_instruction,
-                state::{Authorized, Lockup, StakeAuthorize, StakeState},
+                state::{Authorized, Lockup, StakeAuthorize, StakeStateV2},
             },
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
         },
         solana_stake_program::stake_state,
+        solana_vote::vote_transaction::VoteTransaction,
         solana_vote_program::vote_state::Vote,
         std::{
             sync::{
@@ -659,7 +659,7 @@ mod tests {
         current_slot: Slot,
     ) -> transaction::Result<()> {
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(current_slot)
             .unwrap()
@@ -684,7 +684,7 @@ mod tests {
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
@@ -813,7 +813,7 @@ mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let mut io = IoHandler::<()>::default();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -871,9 +871,9 @@ mod tests {
         let stake_program_id = stake::program::id();
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
@@ -907,7 +907,7 @@ mod tests {
         let balance = {
             let bank = bank_forks.read().unwrap().working_bank();
             let rent = &bank.rent_collector().rent;
-            rent.minimum_balance(StakeState::size_of())
+            rent.minimum_balance(StakeStateV2::size_of())
         };
 
         let tx = system_transaction::transfer(&alice, &from.pubkey(), balance, blockhash);
@@ -999,9 +999,9 @@ mod tests {
         let nonce_account = Keypair::new();
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
@@ -1088,9 +1088,7 @@ mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new_for_tests(
-            &genesis_config,
-        ))));
+        let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
 
         let mut io = IoHandler::<()>::default();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -1138,7 +1136,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bob = Keypair::new();
 
         let exit = Arc::new(AtomicBool::new(false));
@@ -1168,7 +1166,7 @@ mod tests {
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(1)
             .unwrap()
@@ -1190,9 +1188,9 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bob = Keypair::new();
 
@@ -1223,7 +1221,7 @@ mod tests {
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
-            .write()
+            .read()
             .unwrap()
             .get(1)
             .unwrap()
@@ -1272,7 +1270,7 @@ mod tests {
     fn test_slot_subscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
@@ -1305,7 +1303,7 @@ mod tests {
     fn test_slot_unsubscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
@@ -1348,7 +1346,7 @@ mod tests {
         );
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         // Setup Subscriptions
         let optimistically_confirmed_bank =
@@ -1390,7 +1388,7 @@ mod tests {
     fn test_vote_unsubscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
@@ -1409,7 +1407,7 @@ mod tests {
     fn test_get_version() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(

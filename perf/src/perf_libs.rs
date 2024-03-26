@@ -140,9 +140,11 @@ fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn append_to_ld_library_path(path: String) {
-    let ld_library_path =
-        path + ":" + &env::var("LD_LIBRARY_PATH").unwrap_or_else(|_| "".to_string());
+pub fn append_to_ld_library_path(mut ld_library_path: String) {
+    if let Ok(env_value) = env::var("LD_LIBRARY_PATH") {
+        ld_library_path.push(':');
+        ld_library_path.push_str(&env_value);
+    }
     info!("setting ld_library_path to: {:?}", ld_library_path);
     env::set_var("LD_LIBRARY_PATH", ld_library_path);
 }

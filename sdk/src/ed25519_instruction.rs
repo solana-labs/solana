@@ -1,6 +1,6 @@
 //! Instructions for the [ed25519 native program][np].
 //!
-//! [np]: https://docs.solana.com/developing/runtime-facilities/programs#ed25519-program
+//! [np]: https://docs.solanalabs.com/runtime/programs#ed25519-program
 
 #![cfg(feature = "full")]
 
@@ -188,7 +188,7 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
-        rand::{thread_rng, Rng},
+        rand0_7::{thread_rng, Rng},
     };
 
     fn test_case(

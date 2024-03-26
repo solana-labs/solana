@@ -300,13 +300,6 @@ impl ThreadExecuteTimings {
     }
 
     pub fn accumulate(&mut self, other: &ThreadExecuteTimings) {
-        self.execute_timings.saturating_add_in_place(
-            ExecuteTimingType::TotalBatchesLen,
-            *other
-                .execute_timings
-                .metrics
-                .index(ExecuteTimingType::TotalBatchesLen),
-        );
         self.execute_timings.accumulate(&other.execute_timings);
         saturating_add_assign!(self.total_thread_us, other.total_thread_us);
         saturating_add_assign!(

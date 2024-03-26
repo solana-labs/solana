@@ -34,6 +34,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 bincode = { workspace = true }
 solana-logger = { workspace = true }
 solana-streamer = { workspace = true }

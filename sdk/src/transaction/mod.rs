@@ -43,7 +43,7 @@
 //! transactions.
 //!
 //! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
-//! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
+//! [durable transaction nonce]: https://docs.solanalabs.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!
@@ -147,7 +147,7 @@ pub enum TransactionVerificationMode {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-/// An atomically-commited sequence of instructions.
+/// An atomically-committed sequence of instructions.
 ///
 /// While [`Instruction`]s are the basic unit of computation in Solana,
 /// they are submitted by clients in [`Transaction`]s containing one or
@@ -1074,6 +1074,7 @@ impl Transaction {
     }
 }
 
+/// Returns true if transaction begins with an advance nonce instruction.
 pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
     let message = tx.message();
     message
@@ -1089,11 +1090,6 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
             && matches!(
                 limited_deserialize(&instruction.data),
                 Ok(SystemInstruction::AdvanceNonceAccount)
-            )
-            // Nonce account is writable
-            && matches!(
-                instruction.accounts.first(),
-                Some(index) if message.is_writable(*index as usize)
             )
         })
 }
@@ -1119,7 +1115,7 @@ mod tests {
             hash::hash,
             instruction::AccountMeta,
             signature::{Keypair, Presigner, Signer},
-            system_instruction, sysvar,
+            system_instruction,
         },
         bincode::{deserialize, serialize, serialized_size},
         std::mem::size_of,
@@ -1264,10 +1260,10 @@ mod tests {
 
     fn create_sample_transaction() -> Transaction {
         let keypair = Keypair::from_bytes(&[
-            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 255, 101, 36, 24, 124, 23,
-            167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116, 193, 215, 38, 142, 22, 8,
-            14, 229, 239, 119, 93, 5, 218, 161, 35, 3, 33, 0, 36, 100, 158, 252, 33, 161, 97, 185,
-            62, 89, 99,
+            255, 101, 36, 24, 124, 23, 167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116,
+            193, 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 36, 100, 158, 252, 33, 161,
+            97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+            62, 157, 5, 142, 27, 210, 117,
         ])
         .unwrap();
         let to = Pubkey::from([
@@ -1286,7 +1282,9 @@ mod tests {
         let instruction =
             Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
         let message = Message::new(&[instruction], Some(&keypair.pubkey()));
-        Transaction::new(&[&keypair], message, Hash::default())
+        let tx = Transaction::new(&[&keypair], message, Hash::default());
+        tx.verify().expect("valid sample transaction signatures");
+        tx
     }
 
     #[test]
@@ -1354,16 +1352,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 71, 59, 9, 187, 190, 129, 150, 165, 21, 33, 158, 72, 87, 110, 144, 120, 79, 238,
-                132, 134, 105, 39, 102, 116, 209, 29, 229, 154, 36, 105, 44, 172, 118, 131, 22,
-                124, 131, 179, 142, 176, 27, 117, 160, 89, 102, 224, 204, 1, 252, 141, 2, 136, 0,
-                37, 218, 225, 129, 92, 154, 250, 59, 97, 178, 10, 1, 0, 1, 3, 156, 227, 116, 193,
-                215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 161, 35, 3, 33, 0, 36, 100,
-                158, 252, 33, 161, 97, 185, 62, 89, 99, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1,
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2,
-                2, 0, 1, 3, 1, 2, 3
+                1, 120, 138, 162, 185, 59, 209, 241, 157, 71, 157, 74, 131, 4, 87, 54, 28, 38, 180,
+                222, 82, 64, 62, 61, 62, 22, 46, 17, 203, 187, 136, 62, 43, 11, 38, 235, 17, 239,
+                82, 240, 139, 130, 217, 227, 214, 9, 242, 141, 223, 94, 29, 184, 110, 62, 32, 87,
+                137, 63, 139, 100, 221, 20, 137, 4, 5, 1, 0, 1, 3, 36, 100, 158, 252, 33, 161, 97,
+                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 1,
+                3, 1, 2, 3
             ]
         );
     }
@@ -1578,32 +1576,6 @@ mod tests {
         ];
         let message = Message::new(&instructions, Some(&from_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
-        assert!(uses_durable_nonce(&tx).is_none());
-    }
-
-    #[test]
-    fn tx_uses_ro_nonce_account() {
-        let from_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
-        let nonce_keypair = Keypair::new();
-        let nonce_pubkey = nonce_keypair.pubkey();
-        let account_metas = vec![
-            AccountMeta::new_readonly(nonce_pubkey, false),
-            #[allow(deprecated)]
-            AccountMeta::new_readonly(sysvar::recent_blockhashes::id(), false),
-            AccountMeta::new_readonly(nonce_pubkey, true),
-        ];
-        let nonce_instruction = Instruction::new_with_bincode(
-            system_program::id(),
-            &system_instruction::SystemInstruction::AdvanceNonceAccount,
-            account_metas,
-        );
-        let tx = Transaction::new_signed_with_payer(
-            &[nonce_instruction],
-            Some(&from_pubkey),
-            &[&from_keypair, &nonce_keypair],
-            Hash::default(),
-        );
         assert!(uses_durable_nonce(&tx).is_none());
     }
 

@@ -19,6 +19,15 @@ pub struct ClientStats {
     pub acks: MovingStat,
     pub make_connection_ms: AtomicU64,
     pub send_timeout: AtomicU64,
+    /// The time spent sending packets when packets are successfully sent. This include both time
+    /// preparing for a connection (either obtaining from cache or create a new one in case of cache miss
+    /// or connection error)
+    pub send_packets_us: AtomicU64,
+    /// `prepare_connection_us` differs from `make_connection_ms` in that it accounts for the time spent
+    /// on obtaining a successful connection including time spent on retries when sending a packet.
+    pub prepare_connection_us: AtomicU64,
+    /// Count of packets successfully sent
+    pub successful_packets: AtomicU64,
 }
 
 pub trait ClientConnection: Sync + Send {

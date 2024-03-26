@@ -1,5 +1,5 @@
 #![feature(test)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use solana_sdk::{entrypoint::MAX_PERMITTED_DATA_INCREASE, pubkey::Pubkey};
 

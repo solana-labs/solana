@@ -9,15 +9,15 @@
 //! determined with the [`getFeeForMessage`] RPC method. For additional context
 //! see the [Comprehensive Compute Fees proposal][ccf].
 //!
-//! [`getFeeForMessage`]: https://docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage
-//! [ccf]: https://docs.solana.com/proposals/comprehensive-compute-fees
+//! [`getFeeForMessage`]: https://solana.com/docs/rpc/http/getfeeformessage
+//! [ccf]: https://docs.solanalabs.com/proposals/comprehensive-compute-fees
 //!
 //! See also the Solana [documentation on the recent blockhashes sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#recentblockhashes
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#recentblockhashes
 
 #![allow(deprecated)]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     crate::{
         declare_deprecated_sysvar_id, fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar,

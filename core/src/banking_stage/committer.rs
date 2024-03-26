@@ -6,18 +6,20 @@ use {
     },
     solana_measure::measure_us,
     solana_runtime::{
-        accounts::TransactionLoadResult,
         bank::{Bank, CommitTransactionCounts, TransactionBalancesSet},
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
-        transaction_results::{TransactionExecutionResult, TransactionResults},
-        vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
+    solana_svm::{
+        account_loader::TransactionLoadResult,
+        transaction_results::{TransactionExecutionResult, TransactionResults},
+    },
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
+    solana_vote::vote_sender_types::ReplayVoteSender,
     std::{collections::HashMap, sync::Arc},
 };
 
@@ -34,6 +36,7 @@ pub(super) struct PreBalanceInfo {
     pub mint_decimals: HashMap<Pubkey, u8>,
 }
 
+#[derive(Clone)]
 pub struct Committer {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: ReplayVoteSender,
@@ -63,6 +66,8 @@ impl Committer {
         batch: &TransactionBatch,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
+        last_blockhash: Hash,
+        lamports_per_signature: u64,
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
@@ -72,9 +77,6 @@ impl Committer {
         executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
-        let (last_blockhash, lamports_per_signature) =
-            bank.last_blockhash_and_lamports_per_signature();
-
         let executed_transactions = execution_results
             .iter()
             .zip(batch.sanitized_transactions())

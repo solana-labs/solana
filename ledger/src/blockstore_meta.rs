@@ -138,6 +138,16 @@ pub(crate) struct ErasureConfig {
     num_coding: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MerkleRootMeta {
+    /// The merkle root, `None` for legacy shreds
+    merkle_root: Option<Hash>,
+    /// The first received shred index
+    first_received_shred_index: u32,
+    /// The shred type of the first received shred
+    first_received_shred_type: ShredType,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct DuplicateSlotProof {
     #[serde(with = "serde_bytes")]
@@ -253,6 +263,13 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    /// Returns a boolean indicating whether this meta's parent slot is known.
+    /// This value being true indicates that this meta's slot is the head of a
+    /// detached chain of slots.
+    pub(crate) fn is_orphan(&self) -> bool {
+        self.parent_slot.is_none()
+    }
+
     /// Returns a boolean indicating whether the meta is connected.
     pub fn is_connected(&self) -> bool {
         self.connected_flags.contains(ConnectedFlags::CONNECTED)
@@ -352,6 +369,15 @@ impl ErasureMeta {
         self == &other
     }
 
+    /// Returns true if both shreds are coding shreds and have a
+    /// consistent erasure config
+    pub fn check_erasure_consistency(shred1: &Shred, shred2: &Shred) -> bool {
+        let Some(coding_shred) = Self::from_coding_shred(shred1) else {
+            return false;
+        };
+        coding_shred.check_coding_shred(shred2)
+    }
+
     pub(crate) fn config(&self) -> ErasureConfig {
         self.config
     }
@@ -384,6 +410,34 @@ impl ErasureMeta {
         } else {
             StillNeed(num_needed)
         }
+    }
+}
+
+impl MerkleRootMeta {
+    pub(crate) fn from_shred(shred: &Shred) -> Self {
+        Self {
+            // An error here after the shred has already sigverified
+            // can only indicate that the leader is sending
+            // legacy or malformed shreds. We should still store
+            // `None` for those cases in blockstore, as a later
+            // shred that contains a proper merkle root would constitute
+            // a valid duplicate shred proof.
+            merkle_root: shred.merkle_root().ok(),
+            first_received_shred_index: shred.index(),
+            first_received_shred_type: shred.shred_type(),
+        }
+    }
+
+    pub(crate) fn merkle_root(&self) -> Option<Hash> {
+        self.merkle_root
+    }
+
+    pub(crate) fn first_received_shred_index(&self) -> u32 {
+        self.first_received_shred_index
+    }
+
+    pub(crate) fn first_received_shred_type(&self) -> ShredType {
+        self.first_received_shred_type
     }
 }
 

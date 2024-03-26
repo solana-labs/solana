@@ -12,7 +12,6 @@ use {
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        transaction_results::TransactionExecutionResult,
     },
     solana_sdk::{
         account::Account,
@@ -30,8 +29,8 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_svm::transaction_results::TransactionExecutionResult,
     std::{
-        convert::TryFrom,
         io,
         net::{Ipv4Addr, SocketAddr},
         sync::{atomic::AtomicBool, Arc, RwLock},
@@ -93,7 +92,7 @@ impl BanksServer {
                 // has been processed
                 let lock = bank.freeze_lock();
                 if *lock == Hash::default() {
-                    let _ = bank.try_process_transactions(transactions.iter());
+                    let _ = bank.try_process_entry_transactions(transactions);
                     // break out of inner loop and release bank freeze lock
                     break;
                 }
@@ -194,11 +193,14 @@ fn simulate_transaction(
         post_simulation_accounts: _,
         units_consumed,
         return_data,
-    } = bank.simulate_transaction_unchecked(sanitized_transaction);
+        inner_instructions,
+    } = bank.simulate_transaction_unchecked(&sanitized_transaction, false);
+
     let simulation_details = TransactionSimulationDetails {
         logs,
         units_consumed,
         return_data,
+        inner_instructions,
     };
     BanksTransactionResultWithSimulation {
         result: Some(result),
@@ -217,7 +219,7 @@ impl Banks for BanksServer {
             .root_bank()
             .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = transaction.signatures.first().cloned().unwrap_or_default();
         let info = TransactionInfo::new(
             signature,
             serialize(&transaction).unwrap(),
@@ -415,7 +417,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> Option<u64> {
         let bank = self.bank(commitment);
-        let sanitized_message = SanitizedMessage::try_from(message).ok()?;
+        let sanitized_message = SanitizedMessage::try_from_legacy_message(message).ok()?;
         bank.get_fee_for_message(&sanitized_message)
     }
 }

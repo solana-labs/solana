@@ -1,7 +1,7 @@
 use {
     crate::{
         address_lookup_table::*, clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*,
-        program::*, spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
+        program::*, program_v4::*, spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
     },
     clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell},
     log::*,
@@ -33,7 +33,9 @@ use {
     },
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
-    std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
+    std::{
+        collections::HashMap, error, io::stdout, rc::Rc, str::FromStr, sync::Arc, time::Duration,
+    },
     thiserror::Error,
 };
 
@@ -173,6 +175,7 @@ pub enum CliCommand {
     // Program Deployment
     Deploy,
     Program(ProgramCliCommand),
+    ProgramV4(ProgramV4CliCommand),
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
@@ -235,6 +238,7 @@ pub enum CliCommand {
         lamports: u64,
         fee_payer: SignerIndex,
         compute_unit_price: Option<u64>,
+        rent_exempt_reserve: Option<u64>,
     },
     MergeStake {
         stake_account_pubkey: Pubkey,
@@ -257,6 +261,7 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
         with_rewards: Option<usize>,
+        use_csv: bool,
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
@@ -329,6 +334,7 @@ pub enum CliCommand {
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
+        use_csv: bool,
         with_rewards: Option<usize>,
     },
     WithdrawFromVoteAccount {
@@ -568,7 +574,7 @@ impl Default for CliConfig<'_> {
 pub fn parse_command(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Autocompletion Command
@@ -684,6 +690,9 @@ pub fn parse_command(
         .exit(),
         ("program", Some(matches)) => {
             parse_program_subcommand(matches, default_signer, wallet_manager)
+        }
+        ("program-v4", Some(matches)) => {
+            parse_program_v4_subcommand(matches, default_signer, wallet_manager)
         }
         ("address-lookup-table", Some(matches)) => {
             parse_address_lookup_table_subcommand(matches, default_signer, wallet_manager)
@@ -1101,6 +1110,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_program_subcommand(rpc_client, config, program_subcommand)
         }
 
+        // Deploy a custom program v4 to the chain
+        CliCommand::ProgramV4(program_subcommand) => {
+            process_program_v4_subcommand(rpc_client, config, program_subcommand)
+        }
+
         // Stake Commands
 
         // Create stake account
@@ -1215,6 +1229,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lamports,
             fee_payer,
             compute_unit_price,
+            rent_exempt_reserve,
         } => process_split_stake(
             &rpc_client,
             config,
@@ -1231,6 +1246,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *lamports,
             *fee_payer,
             compute_unit_price.as_ref(),
+            rent_exempt_reserve.as_ref(),
         ),
         CliCommand::MergeStake {
             stake_account_pubkey,
@@ -1263,12 +1279,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
+            use_csv,
         } => process_show_stake_account(
             &rpc_client,
             config,
             stake_account_pubkey,
             *use_lamports_unit,
             *with_rewards,
+            *use_csv,
         ),
         CliCommand::ShowStakeHistory {
             use_lamports_unit,
@@ -1427,12 +1445,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
+            use_csv,
             with_rewards,
         } => process_show_vote_account(
             &rpc_client,
             config,
             vote_account_pubkey,
             *use_lamports_unit,
+            *use_csv,
             *with_rewards,
         ),
         CliCommand::WithdrawFromVoteAccount {
@@ -1662,7 +1682,7 @@ pub fn request_and_confirm_airdrop(
     Ok(signature)
 }
 
-fn common_error_adapter<E>(ix_error: &InstructionError) -> Option<E>
+pub fn common_error_adapter<E>(ix_error: &InstructionError) -> Option<E>
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -1680,12 +1700,12 @@ pub fn log_instruction_custom_error<E>(
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
-    log_instruction_custom_error_ex::<E, _>(result, config, common_error_adapter)
+    log_instruction_custom_error_ex::<E, _>(result, &config.output_format, common_error_adapter)
 }
 
 pub fn log_instruction_custom_error_ex<E, F>(
     result: ClientResult<Signature>,
-    config: &CliConfig,
+    output_format: &OutputFormat,
     error_adapter: F,
 ) -> ProcessResult
 where
@@ -1706,7 +1726,7 @@ where
             let signature = CliSignature {
                 signature: sig.clone().to_string(),
             };
-            Ok(config.output_format.formatted_string(&signature))
+            Ok(output_format.formatted_string(&signature))
         }
     }
 }
@@ -1776,7 +1796,11 @@ mod tests {
         let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_clone_pubkey = keypair0.pubkey();
-        let signers = vec![None, Some(keypair0.into()), Some(keypair0_clone.into())];
+        let signers: Vec<Option<Box<dyn Signer>>> = vec![
+            None,
+            Some(Box::new(keypair0)),
+            Some(Box::new(keypair0_clone)),
+        ];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
             .unwrap();
@@ -1788,7 +1812,8 @@ mod tests {
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
-        let signers = vec![Some(keypair0.into()), Some(keypair0_clone.into())];
+        let signers: Vec<Option<Box<dyn Signer>>> =
+            vec![Some(Box::new(keypair0)), Some(Box::new(keypair0_clone))];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
             .unwrap();
@@ -1805,11 +1830,11 @@ mod tests {
         let presigner0_pubkey = presigner0.pubkey();
         let presigner1 = Presigner::new(&keypair1.pubkey(), &keypair1.sign_message(&message));
         let presigner1_pubkey = presigner1.pubkey();
-        let signers = vec![
-            Some(keypair0.into()),
-            Some(presigner0.into()),
-            Some(presigner1.into()),
-            Some(keypair1.into()),
+        let signers: Vec<Option<Box<dyn Signer>>> = vec![
+            Some(Box::new(keypair0)),
+            Some(Box::new(presigner0)),
+            Some(Box::new(presigner1)),
+            Some(Box::new(keypair1)),
         ];
         let signer_info = default_signer
             .generate_unique_signers(signers, &matches, &mut None)
@@ -1893,7 +1918,7 @@ mod tests {
                     pubkey: None,
                     use_lamports_unit: true,
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -1917,8 +1942,8 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
-        let from_str = from_pubkey.unwrap().to_string();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let from_str = from_pubkey.to_string();
         for (name, program_id) in &[
             ("STAKE", stake::program::id()),
             ("VOTE", solana_vote_program::id()),
@@ -1936,7 +1961,7 @@ mod tests {
                 parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
                 CliCommandInfo {
                     command: CliCommand::CreateAddressWithSeed {
-                        from_pubkey,
+                        from_pubkey: Some(from_pubkey),
                         seed: "seed".to_string(),
                         program_id: *program_id
                     },
@@ -1958,7 +1983,7 @@ mod tests {
                     seed: "seed".to_string(),
                     program_id: stake::program::id(),
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2000,7 +2025,7 @@ mod tests {
                 command: CliCommand::SignOffchainMessage {
                     message: message.clone()
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
 
@@ -2020,7 +2045,7 @@ mod tests {
                     signature,
                     message
                 },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -2232,6 +2257,7 @@ mod tests {
             lamports: 30,
             fee_payer: 0,
             compute_unit_price: None,
+            rent_exempt_reserve: None,
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);
@@ -2409,7 +2435,7 @@ mod tests {
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
         let default_signer = DefaultSigner::new("", &default_keypair_file);
 
-        //Test Transfer Subcommand, SOL
+        // Test Transfer Subcommand, SOL
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
         let from_pubkey = from_keypair.pubkey();
         let from_string = from_pubkey.to_string();
@@ -2439,7 +2465,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2467,7 +2493,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2500,7 +2526,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2536,7 +2562,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -2580,7 +2606,7 @@ mod tests {
                     derived_address_program_id: None,
                     compute_unit_price: None,
                 },
-                signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
+                signers: vec![Box::new(Presigner::new(&from_pubkey, &from_sig))],
             }
         );
 
@@ -2626,8 +2652,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&nonce_authority_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&nonce_authority_file).unwrap())
                 ],
             }
         );
@@ -2665,7 +2691,7 @@ mod tests {
                     derived_address_program_id: Some(stake::program::id()),
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             }
         );
     }

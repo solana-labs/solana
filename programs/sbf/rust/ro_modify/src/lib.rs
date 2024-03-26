@@ -150,8 +150,7 @@ fn process_instruction(
             // Not sure how to get a const data length in an Rc<RefCell<&mut [u8]>>
         }
         3 => {
-            let mut new_accounts =
-                &mut [READONLY_ACCOUNTS[0].clone(), READONLY_ACCOUNTS[1].clone()];
+            let new_accounts = &mut [READONLY_ACCOUNTS[0].clone(), READONLY_ACCOUNTS[1].clone()];
             new_accounts[1].owner_addr = &PUBKEY as *const _ as u64;
             let system_instruction = system_instruction::assign(accounts[1].key, program_id);
             let metas = &[SolAccountMeta {

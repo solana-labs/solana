@@ -5,7 +5,7 @@
 #include <solana_sdk.h>
 
 /**
- * Number of SolKeyedAccount expected. The program should bail if an
+ * Number of SolAccountInfo expected. The program should bail if an
  * unexpected number of accounts are passed to the program's entrypoint
  */
 #define NUM_KA 3

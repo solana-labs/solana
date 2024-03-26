@@ -17,6 +17,7 @@ chrono-humanize = { workspace = true }
 crossbeam-channel = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-banks-client = { workspace = true }
 solana-banks-interface = { workspace = true }
 solana-banks-server = { workspace = true }
@@ -25,7 +26,10 @@ solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
+solana-svm = { workspace = true }
 solana-vote-program = { workspace = true }
+solana_rbpf = { workspace = true }
+test-case = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 

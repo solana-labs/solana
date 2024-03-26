@@ -32,14 +32,16 @@ use {
             CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         },
         crds_value::{
-            self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            LegacySnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
-            MAX_WALLCLOCK,
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
+            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
+        restart_crds_values::{
+            RestartHeaviestFork, RestartLastVotedForkSlots, RestartLastVotedForkSlotsError,
+        },
         socketaddr, socketaddr_any,
         weighted_shuffle::WeightedShuffle,
     },
@@ -60,7 +62,7 @@ use {
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
     },
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::{bank_forks::BankForks, vote_parser},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
         feature_set::FeatureSet,
@@ -77,10 +79,11 @@ use {
         socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
+    solana_vote::vote_parser,
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         borrow::Cow,
-        collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+        collections::{HashMap, HashSet, VecDeque},
         fmt::Debug,
         fs::{self, File},
         io::BufReader,
@@ -99,8 +102,6 @@ use {
     thiserror::Error,
 };
 
-/// The Data plane fanout size, also used as the neighborhood size
-pub const DATA_PLANE_FANOUT: usize = 200;
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// The maximum size of a bloom filter
@@ -119,10 +120,6 @@ pub(crate) const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 11
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 pub const MAX_ACCOUNTS_HASHES: usize = 16;
-/// Maximum number of hashes in LegacySnapshotHashes a node publishes
-/// such that the serialized size of the push/pull message stays below
-/// PACKET_DATA_SIZE.
-pub const MAX_LEGACY_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of incremental hashes in SnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
@@ -200,7 +197,7 @@ impl PruneData {
     #[cfg(test)]
     fn new_rand<R: Rng>(rng: &mut R, self_keypair: &Keypair, num_nodes: Option<usize>) -> Self {
         let wallclock = crds_value::new_rand_timestamp(rng);
-        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0, MAX_PRUNE_DATA_NODES + 1));
+        let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0..MAX_PRUNE_DATA_NODES + 1));
         let prunes = std::iter::repeat_with(Pubkey::new_unique)
             .take(num_nodes)
             .collect();
@@ -262,18 +259,10 @@ struct PullData {
     filter: CrdsFilter,
 }
 
-pub fn make_accounts_hashes_message(
-    keypair: &Keypair,
-    accounts_hashes: Vec<(Slot, Hash)>,
-) -> Option<CrdsValue> {
-    let message = CrdsData::AccountsHashes(AccountsHashes::new(keypair.pubkey(), accounts_hashes));
-    Some(CrdsValue::new_signed(message, keypair))
-}
-
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "Ctxue3UVFXXqnHoMVAPmfBoCy3Cyg7gNCYBY7Cg9P3so")]
+#[frozen_abi(digest = "ogEqvffeEkPpojAaSiUbCv2HdJcdXDQ1ykgYyvKvLo2")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -395,11 +384,12 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // the various dashboards.
             CrdsData::Version(_) => true,
             CrdsData::NodeInstance(_) => true,
-            // getHealth fails if account hashes are not propagated.
             CrdsData::AccountsHashes(_) => true,
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
-            | CrdsData::DuplicateShred(_, _) => {
+            | CrdsData::DuplicateShred(_, _)
+            | CrdsData::RestartHeaviestFork(_)
+            | CrdsData::RestartLastVotedForkSlots(_) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
             }
@@ -775,7 +765,7 @@ impl ClusterInfo {
                         ""
                     },
                     now.saturating_sub(last_updated),
-                    node.pubkey(),
+                    node.pubkey().to_string(),
                     if let Some(node_version) = node_version {
                         node_version.to_string()
                     } else {
@@ -837,7 +827,7 @@ impl ClusterInfo {
                             .unwrap_or_else(|| String::from("none")),
                         if node.pubkey() == &my_pubkey { "me" } else { "" },
                         now.saturating_sub(last_updated),
-                        node.pubkey(),
+                        node.pubkey().to_string(),
                         if let Some(node_version) = node_version {
                             node_version.to_string()
                         } else {
@@ -848,8 +838,8 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
-                        self.addr_to_string(&ip_addr, &node.repair().ok()),
-                        self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
+                        self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::QUIC).ok()),
+                        self.addr_to_string(&ip_addr, &node.serve_repair(contact_info::Protocol::UDP).ok()),
                         node.shred_version(),
                     ))
                 }
@@ -858,8 +848,8 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |Repair|ServeR|ShredVer\n\
-             ------------------+-------+---------------------------------------\
+             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVU Q |ServeR|ShredVer\n\
+             ------------------+-------+----------------------------------------------\
              +---------+------+-------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
@@ -894,10 +884,7 @@ impl ClusterInfo {
                 CrdsData::LowestSlot(0, LowestSlot::new(self_pubkey, min, now)),
                 &self.keypair(),
             );
-            self.local_message_pending_push_queue
-                .lock()
-                .unwrap()
-                .push(entry);
+            self.push_message(entry);
         }
     }
 
@@ -970,6 +957,46 @@ impl ClusterInfo {
         }
     }
 
+    pub fn push_restart_last_voted_fork_slots(
+        &self,
+        fork: &[Slot],
+        last_vote_bankhash: Hash,
+    ) -> Result<(), RestartLastVotedForkSlotsError> {
+        let now = timestamp();
+        let last_voted_fork_slots = RestartLastVotedForkSlots::new(
+            self.id(),
+            now,
+            fork,
+            last_vote_bankhash,
+            self.my_shred_version(),
+        )?;
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
+            &self.keypair(),
+        ));
+        Ok(())
+    }
+
+    pub fn push_restart_heaviest_fork(
+        &self,
+        last_slot: Slot,
+        last_slot_hash: Hash,
+        observed_stake: u64,
+    ) {
+        let restart_heaviest_fork = RestartHeaviestFork {
+            from: self.id(),
+            wallclock: timestamp(),
+            last_slot,
+            last_slot_hash,
+            observed_stake,
+            shred_version: self.my_shred_version(),
+        };
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::RestartHeaviestFork(restart_heaviest_fork),
+            &self.keypair(),
+        ));
+    }
+
     fn time_gossip_read_lock<'a>(
         &'a self,
         label: &'static str,
@@ -978,38 +1005,11 @@ impl ClusterInfo {
         TimedGuard::new(self.gossip.crds.read().unwrap(), label, counter)
     }
 
-    pub fn push_message(&self, message: CrdsValue) {
+    fn push_message(&self, message: CrdsValue) {
         self.local_message_pending_push_queue
             .lock()
             .unwrap()
             .push(message);
-    }
-
-    pub fn push_accounts_hashes(&self, accounts_hashes: Vec<(Slot, Hash)>) {
-        if accounts_hashes.len() > MAX_ACCOUNTS_HASHES {
-            warn!(
-                "accounts hashes too large, ignored: {}",
-                accounts_hashes.len(),
-            );
-            return;
-        }
-
-        let message = CrdsData::AccountsHashes(AccountsHashes::new(self.id(), accounts_hashes));
-        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
-    }
-
-    pub fn push_legacy_snapshot_hashes(&self, snapshot_hashes: Vec<(Slot, Hash)>) {
-        if snapshot_hashes.len() > MAX_LEGACY_SNAPSHOT_HASHES {
-            warn!(
-                "snapshot hashes too large, ignored: {}",
-                snapshot_hashes.len(),
-            );
-            return;
-        }
-
-        let message =
-            CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new(self.id(), snapshot_hashes));
-        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
     pub fn push_snapshot_hashes(
@@ -1109,19 +1109,18 @@ impl ClusterInfo {
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
             (0..MAX_LOCKOUT_HISTORY as u8).find(|ix| {
                 let vote = CrdsValueLabel::Vote(*ix, self_pubkey);
-                if let Some(vote) = gossip_crds.get::<&CrdsData>(&vote) {
-                    match &vote {
-                        CrdsData::Vote(_, prev_vote) => match prev_vote.slot() {
-                            Some(prev_vote_slot) => prev_vote_slot == vote_slot,
-                            None => {
-                                error!("crds vote with no slots!");
-                                false
-                            }
-                        },
-                        _ => panic!("this should not happen!"),
+                let Some(vote) = gossip_crds.get::<&CrdsData>(&vote) else {
+                    return false;
+                };
+                let CrdsData::Vote(_, prev_vote) = &vote else {
+                    panic!("this should not happen!");
+                };
+                match prev_vote.slot() {
+                    Some(prev_vote_slot) => prev_vote_slot == vote_slot,
+                    None => {
+                        error!("crds vote with no slots!");
+                        false
                     }
-                } else {
-                    false
                 }
             })
         };
@@ -1155,11 +1154,10 @@ impl ClusterInfo {
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
             .map(|vote| {
-                let transaction = match &vote.value.data {
-                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
-                    _ => panic!("this should not happen!"),
+                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                    panic!("this should not happen!");
                 };
-                transaction
+                vote.transaction().clone()
             })
             .collect();
         self.stats.get_votes_count.add_relaxed(txs.len() as u64);
@@ -1175,11 +1173,11 @@ impl ClusterInfo {
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
             .map(|vote| {
-                let transaction = match &vote.value.data {
-                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
-                    _ => panic!("this should not happen!"),
+                let label = vote.value.label();
+                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                    panic!("this should not happen!");
                 };
-                (vote.value.label(), transaction)
+                (label, vote.transaction().clone())
             })
             .unzip();
         self.stats.get_votes_count.add_relaxed(txs.len() as u64);
@@ -1201,25 +1199,6 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
-    where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
-    {
-        self.time_gossip_read_lock("get_accounts_hash", &self.stats.get_accounts_hash)
-            .get::<&CrdsValue>(&CrdsValueLabel::AccountsHashes(*pubkey))
-            .map(|x| &x.accounts_hash().unwrap().hashes)
-            .map(map)
-    }
-
-    pub fn get_legacy_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
-    where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
-    {
-        let gossip_crds = self.gossip.crds.read().unwrap();
-        let hashes = &gossip_crds.get::<&LegacySnapshotHashes>(*pubkey)?.hashes;
-        Some(map(hashes))
-    }
-
     pub fn get_snapshot_hashes_for_node(&self, pubkey: &Pubkey) -> Option<SnapshotHashes> {
         self.gossip
             .crds
@@ -1230,7 +1209,7 @@ impl ClusterInfo {
     }
 
     /// Returns epoch-slots inserted since the given cursor.
-    /// Excludes entries from nodes with unkown or different shred version.
+    /// Excludes entries from nodes with unknown or different shred version.
     pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
         let self_shred_version = Some(self.my_shred_version());
         let gossip_crds = self.gossip.crds.read().unwrap();
@@ -1244,6 +1223,39 @@ impl ClusterInfo {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
             })
+            .collect()
+    }
+
+    pub fn get_restart_last_voted_fork_slots(
+        &self,
+        cursor: &mut Cursor,
+    ) -> Vec<RestartLastVotedForkSlots> {
+        let self_shred_version = self.my_shred_version();
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        gossip_crds
+            .get_entries(cursor)
+            .filter_map(|entry| {
+                let CrdsData::RestartLastVotedForkSlots(slots) = &entry.value.data else {
+                    return None;
+                };
+                (slots.shred_version == self_shred_version).then_some(slots)
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn get_restart_heaviest_fork(&self, cursor: &mut Cursor) -> Vec<RestartHeaviestFork> {
+        let self_shred_version = self.my_shred_version();
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        gossip_crds
+            .get_entries(cursor)
+            .filter_map(|entry| {
+                let CrdsData::RestartHeaviestFork(fork) = &entry.value.data else {
+                    return None;
+                };
+                (fork.shred_version == self_shred_version).then_some(fork)
+            })
+            .cloned()
             .collect()
     }
 
@@ -1347,7 +1359,7 @@ impl ClusterInfo {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
-                    && self.check_socket_addr_space(&node.serve_repair())
+                    && self.check_socket_addr_space(&node.serve_repair(contact_info::Protocol::UDP))
                     && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
                         Some(lowest_slot) => lowest_slot.lowest <= slot,
@@ -1545,25 +1557,23 @@ impl ClusterInfo {
         (pings, pulls.collect())
     }
 
-    fn drain_push_queue(&self) -> Vec<CrdsValue> {
-        let mut push_queue = self.local_message_pending_push_queue.lock().unwrap();
-        std::mem::take(&mut *push_queue)
-    }
-    // Used in tests
     pub fn flush_push_queue(&self) {
-        let pending_push_messages = self.drain_push_queue();
-        let mut gossip_crds = self.gossip.crds.write().unwrap();
-        let now = timestamp();
-        for entry in pending_push_messages {
-            let _ = gossip_crds.insert(entry, now, GossipRoute::LocalMessage);
+        let entries: Vec<CrdsValue> =
+            std::mem::take(&mut *self.local_message_pending_push_queue.lock().unwrap());
+        if !entries.is_empty() {
+            let mut gossip_crds = self.gossip.crds.write().unwrap();
+            let now = timestamp();
+            for entry in entries {
+                let _ = gossip_crds.insert(entry, now, GossipRoute::LocalMessage);
+            }
         }
     }
     fn new_push_requests(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.id();
         let (mut push_messages, num_entries, num_nodes) = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
-            self.gossip
-                .new_push_messages(&self_id, self.drain_push_queue(), timestamp(), stakes)
+            self.flush_push_queue();
+            self.gossip.new_push_messages(&self_id, timestamp(), stakes)
         };
         self.stats
             .push_fanout_num_entries
@@ -1748,7 +1758,7 @@ impl ClusterInfo {
         match gossip_crds.trim(cap, &keep, stakes, timestamp()) {
             Err(err) => {
                 self.stats.trim_crds_table_failed.add_relaxed(1);
-                // TODO: Stakes are comming from the root-bank. Debug why/when
+                // TODO: Stakes are coming from the root-bank. Debug why/when
                 // they are empty/zero.
                 debug!("crds table trim failed: {:?}", err);
             }
@@ -1974,6 +1984,10 @@ impl ClusterInfo {
     // Returns a predicate checking if the pull request is from a valid
     // address, and if the address have responded to a ping request. Also
     // appends ping packets for the addresses which need to be (re)verified.
+    //
+    // allow lint false positive trait bound requirement (`CryptoRng` only
+    // implemented on `&'a mut T`
+    #[rustversion::attr(since(1.73), allow(clippy::needless_pass_by_ref_mut))]
     fn check_pull_request<'a, R>(
         &'a self,
         now: Instant,
@@ -2077,7 +2091,7 @@ impl ClusterInfo {
                     score
                 };
                 let score = match response.data {
-                    CrdsData::LegacyContactInfo(_) => 2 * score,
+                    CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => 2 * score,
                     _ => score,
                 };
                 ((addr, response), score)
@@ -2127,77 +2141,27 @@ impl ClusterInfo {
 
     fn handle_batch_pull_responses(
         &self,
-        responses: Vec<(Pubkey, Vec<CrdsValue>)>,
-        thread_pool: &ThreadPool,
+        responses: Vec<CrdsValue>,
         stakes: &HashMap<Pubkey, u64>,
         epoch_duration: Duration,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_responses_time);
-        if responses.is_empty() {
-            return;
-        }
-        fn extend<K, V>(hash_map: &mut HashMap<K, Vec<V>>, (key, mut value): (K, Vec<V>))
-        where
-            K: Eq + std::hash::Hash,
-        {
-            match hash_map.entry(key) {
-                Entry::Occupied(mut entry) => {
-                    let entry_value = entry.get_mut();
-                    if entry_value.len() < value.len() {
-                        std::mem::swap(entry_value, &mut value);
-                    }
-                    entry_value.extend(value);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(value);
-                }
-            }
-        }
-        fn merge<K, V>(
-            mut hash_map: HashMap<K, Vec<V>>,
-            other: HashMap<K, Vec<V>>,
-        ) -> HashMap<K, Vec<V>>
-        where
-            K: Eq + std::hash::Hash,
-        {
-            if hash_map.len() < other.len() {
-                return merge(other, hash_map);
-            }
-            for kv in other {
-                extend(&mut hash_map, kv);
-            }
-            hash_map
-        }
-        let responses = thread_pool.install(|| {
-            responses
-                .into_par_iter()
-                .with_min_len(1024)
-                .fold(HashMap::new, |mut hash_map, kv| {
-                    extend(&mut hash_map, kv);
-                    hash_map
-                })
-                .reduce(HashMap::new, merge)
-        });
         if !responses.is_empty() {
             let self_pubkey = self.id();
             let timeouts = self
                 .gossip
                 .make_timeouts(self_pubkey, stakes, epoch_duration);
-            for (from, data) in responses {
-                self.handle_pull_response(&from, data, &timeouts);
-            }
+            self.handle_pull_response(responses, &timeouts);
         }
     }
 
     // Returns (failed, timeout, success)
     fn handle_pull_response(
         &self,
-        from: &Pubkey,
         crds_values: Vec<CrdsValue>,
         timeouts: &CrdsTimeouts,
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
-        trace!("PullResponse me: {} from: {} len={}", self.id(), from, len);
         let mut pull_stats = ProcessPullStats::default();
         let (filtered_pulls, filtered_pulls_expired_timeout, failed_inserts) = {
             let _st = ScopedTimer::from(&self.stats.filter_pull_response);
@@ -2210,7 +2174,6 @@ impl ClusterInfo {
         {
             let _st = ScopedTimer::from(&self.stats.process_pull_response);
             self.gossip.process_pull_responses(
-                from,
                 filtered_pulls,
                 filtered_pulls_expired_timeout,
                 failed_inserts,
@@ -2473,9 +2436,9 @@ impl ClusterInfo {
                 Protocol::PullRequest(filter, caller) => {
                     pull_requests.push((from_addr, filter, caller))
                 }
-                Protocol::PullResponse(from, data) => {
+                Protocol::PullResponse(_, mut data) => {
                     check_duplicate_instance(&data)?;
-                    pull_responses.push((from, data));
+                    pull_responses.append(&mut data);
                 }
                 Protocol::PushMessage(from, data) => {
                     check_duplicate_instance(&data)?;
@@ -2487,13 +2450,10 @@ impl ClusterInfo {
             }
         }
         if self.require_stake_for_gossip(stakes) {
-            for (_, data) in &mut pull_responses {
-                retain_staked(data, stakes);
-            }
+            retain_staked(&mut pull_responses, stakes);
             for (_, data) in &mut push_messages {
                 retain_staked(data, stakes);
             }
-            pull_responses.retain(|(_, data)| !data.is_empty());
             push_messages.retain(|(_, data)| !data.is_empty());
         }
         self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
@@ -2505,7 +2465,7 @@ impl ClusterInfo {
             stakes,
             response_sender,
         );
-        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_duration);
+        self.handle_batch_pull_responses(pull_responses, stakes, epoch_duration);
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
@@ -2801,6 +2761,7 @@ pub struct Sockets {
     pub repair: UdpSocket,
     pub retransmit_sockets: Vec<UdpSocket>,
     pub serve_repair: UdpSocket,
+    pub serve_repair_quic: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
@@ -2828,8 +2789,8 @@ impl Node {
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
-        let ((_tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let tvu_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
@@ -2841,6 +2802,7 @@ impl Node {
         let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
         let serve_repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let serve_repair_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
 
         let mut info = ContactInfo::new(
@@ -2858,7 +2820,7 @@ impl Node {
         }
         set_socket!(set_gossip, gossip_addr, "gossip");
         set_socket!(set_tvu, tvu.local_addr().unwrap(), "TVU");
-        set_socket!(set_repair, repair.local_addr().unwrap(), "repair");
+        set_socket!(set_tvu_quic, tvu_quic.local_addr().unwrap(), "TVU QUIC");
         set_socket!(set_tpu, tpu.local_addr().unwrap(), "TPU");
         set_socket!(
             set_tpu_forwards,
@@ -2872,6 +2834,11 @@ impl Node {
             set_serve_repair,
             serve_repair.local_addr().unwrap(),
             "serve-repair"
+        );
+        set_socket!(
+            set_serve_repair_quic,
+            serve_repair_quic.local_addr().unwrap(),
+            "serve-repair QUIC"
         );
         Node {
             info,
@@ -2887,6 +2854,7 @@ impl Node {
                 repair,
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
+                serve_repair_quic,
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
@@ -2922,16 +2890,17 @@ impl Node {
     ) -> Self {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
-        let ((tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
-        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
+        let (_, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, port_range);
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
 
@@ -2954,13 +2923,18 @@ impl Node {
         }
         set_socket!(set_gossip, gossip_port, "gossip");
         set_socket!(set_tvu, tvu_port, "TVU");
-        set_socket!(set_repair, repair_port, "repair");
+        set_socket!(set_tvu_quic, tvu_quic_port, "TVU QUIC");
         set_socket!(set_tpu, tpu_port, "TPU");
         set_socket!(set_tpu_forwards, tpu_forwards_port, "TPU-forwards");
         set_socket!(set_tpu_vote, tpu_vote_port, "TPU-vote");
         set_socket!(set_rpc, rpc_port, "RPC");
         set_socket!(set_rpc_pubsub, rpc_pubsub_port, "RPC-pubsub");
         set_socket!(set_serve_repair, serve_repair_port, "serve-repair");
+        set_socket!(
+            set_serve_repair_quic,
+            serve_repair_quic_port,
+            "serve-repair QUIC"
+        );
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -2977,6 +2951,7 @@ impl Node {
                 repair,
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
+                serve_repair_quic,
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
@@ -2997,10 +2972,7 @@ impl Node {
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
-        let (_tvu_port_quic, tvu_quic) = Self::bind(
-            bind_ip_addr,
-            (tvu_port + QUIC_PORT_OFFSET, tvu_port + QUIC_PORT_OFFSET + 1),
-        );
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
 
@@ -3026,8 +2998,9 @@ impl Node {
         let (_, retransmit_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("retransmit multi_bind");
 
-        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
+        let (_, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, port_range);
 
         let (_, broadcast) =
             multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
@@ -3040,15 +3013,19 @@ impl Node {
             0u16,        // shred_version
         );
         let addr = gossip_addr.ip();
-        let _ = info.set_gossip((addr, gossip_port));
-        let _ = info.set_tvu((addr, tvu_port));
-        let _ = info.set_repair((addr, repair_port));
-        let _ = info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
-        let _ = info.set_tpu_forwards(
+        info.set_gossip((addr, gossip_port)).unwrap();
+        info.set_tvu((addr, tvu_port)).unwrap();
+        info.set_tvu_quic((addr, tvu_quic_port)).unwrap();
+        info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)))
+            .unwrap();
+        info.set_tpu_forwards(
             public_tpu_forwards_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_forwards_port)),
-        );
-        let _ = info.set_tpu_vote((addr, tpu_vote_port));
-        let _ = info.set_serve_repair((addr, serve_repair_port));
+        )
+        .unwrap();
+        info.set_tpu_vote((addr, tpu_vote_port)).unwrap();
+        info.set_serve_repair((addr, serve_repair_port)).unwrap();
+        info.set_serve_repair_quic((addr, serve_repair_quic_port))
+            .unwrap();
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -3064,6 +3041,7 @@ impl Node {
                 repair,
                 retransmit_sockets,
                 serve_repair,
+                serve_repair_quic,
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
                 tpu_quic,
@@ -3108,6 +3086,7 @@ fn filter_on_shred_version(
         if crds.get_shred_version(from) == Some(self_shred_version) {
             values.retain(|value| match &value.data {
                 // Allow contact-infos so that shred-versions are updated.
+                CrdsData::ContactInfo(_) => true,
                 CrdsData::LegacyContactInfo(_) => true,
                 CrdsData::NodeInstance(_) => true,
                 // Only retain values with the same shred version.
@@ -3117,6 +3096,7 @@ fn filter_on_shred_version(
             values.retain(|value| match &value.data {
                 // Allow node to update its own contact info in case their
                 // shred-version changes
+                CrdsData::ContactInfo(node) => node.pubkey() == from,
                 CrdsData::LegacyContactInfo(node) => node.pubkey() == from,
                 CrdsData::NodeInstance(_) => true,
                 _ => false,
@@ -3131,6 +3111,11 @@ fn filter_on_shred_version(
         Protocol::PullRequest(_, caller) => match &caller.data {
             // Allow spy nodes with shred-verion == 0 to pull from other nodes.
             CrdsData::LegacyContactInfo(node)
+                if node.shred_version() == 0 || node.shred_version() == self_shred_version =>
+            {
+                Some(msg)
+            }
+            CrdsData::ContactInfo(node)
                 if node.shred_version() == 0 || node.shred_version() == self_shred_version =>
             {
                 Some(msg)
@@ -3168,7 +3153,7 @@ mod tests {
         super::*,
         crate::{
             crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
-            crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+            crds_value::{AccountsHashes, CrdsValue, CrdsValueLabel, Vote as CrdsVote},
             duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
         },
         itertools::izip,
@@ -3221,18 +3206,11 @@ mod tests {
         );
         assert_eq!(
             (0, 0, 1),
-            ClusterInfo::handle_pull_response(
-                &cluster_info,
-                &entrypoint_pubkey,
-                data.clone(),
-                &timeouts
-            )
+            cluster_info.handle_pull_response(data.clone(), &timeouts)
         );
-
-        let entrypoint_pubkey2 = solana_sdk::pubkey::new_rand();
         assert_eq!(
             (1, 0, 0),
-            ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_pubkey2, data, &timeouts)
+            cluster_info.handle_pull_response(data, &timeouts)
         );
     }
 
@@ -3343,10 +3321,7 @@ mod tests {
         let recycler = PacketBatchRecycler::default();
         let packets = cluster_info
             .handle_ping_messages(
-                remote_nodes
-                    .iter()
-                    .map(|(_, socket)| *socket)
-                    .zip(pings.into_iter()),
+                remote_nodes.iter().map(|(_, socket)| *socket).zip(pings),
                 &recycler,
             )
             .unwrap();
@@ -3391,36 +3366,6 @@ mod tests {
             let accounts_hash = AccountsHashes::new_rand(&mut rng, None);
             let crds_value =
                 CrdsValue::new_signed(CrdsData::AccountsHashes(accounts_hash), &Keypair::new());
-            let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
-            let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(Some(&socket), response).is_ok());
-        }
-    }
-
-    #[test]
-    fn test_max_legecy_snapshot_hashes_with_push_messages() {
-        let mut rng = rand::thread_rng();
-        for _ in 0..256 {
-            let snapshot_hash = LegacySnapshotHashes::new_rand(&mut rng, None);
-            let crds_value = CrdsValue::new_signed(
-                CrdsData::LegacySnapshotHashes(snapshot_hash),
-                &Keypair::new(),
-            );
-            let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
-            let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(Some(&socket), message).is_ok());
-        }
-    }
-
-    #[test]
-    fn test_max_legacy_snapshot_hashes_with_pull_responses() {
-        let mut rng = rand::thread_rng();
-        for _ in 0..256 {
-            let snapshot_hash = LegacySnapshotHashes::new_rand(&mut rng, None);
-            let crds_value = CrdsValue::new_signed(
-                CrdsData::LegacySnapshotHashes(snapshot_hash),
-                &Keypair::new(),
-            );
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
@@ -3495,7 +3440,7 @@ mod tests {
         let keypair = Keypair::new();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen_range(0, 32_000);
+        let next_shred_index = rng.gen_range(0..32_000);
         let shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let other_payload = {
             let other_shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
@@ -3620,6 +3565,7 @@ mod tests {
     fn check_node_sockets(node: &Node, ip: IpAddr, range: (u16, u16)) {
         check_socket(&node.sockets.gossip, ip, range);
         check_socket(&node.sockets.repair, ip, range);
+        check_socket(&node.sockets.tvu_quic, ip, range);
 
         check_sockets(&node.sockets.tvu, ip, range);
         check_sockets(&node.sockets.tpu, ip, range);
@@ -3697,12 +3643,11 @@ mod tests {
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
-        let (push_messages, _, _) = cluster_info.gossip.new_push_messages(
-            &cluster_info.id(),
-            cluster_info.drain_push_queue(),
-            timestamp(),
-            &stakes,
-        );
+        cluster_info.flush_push_queue();
+        let (push_messages, _, _) =
+            cluster_info
+                .gossip
+                .new_push_messages(&cluster_info.id(), timestamp(), &stakes);
         // there should be some pushes ready
         assert!(!push_messages.is_empty());
         push_messages
@@ -3818,7 +3763,6 @@ mod tests {
 
     #[test]
     fn test_push_vote() {
-        let mut rng = rand::thread_rng();
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info =
@@ -3832,7 +3776,7 @@ mod tests {
         // add a vote
         let vote = Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            Hash::new_unique(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -3861,8 +3805,8 @@ mod tests {
         assert_eq!(votes, vec![]);
     }
 
-    fn new_vote_transaction<R: Rng>(rng: &mut R, slots: Vec<Slot>) -> Transaction {
-        let vote = Vote::new(slots, solana_sdk::hash::new_rand(rng));
+    fn new_vote_transaction(slots: Vec<Slot>) -> Transaction {
+        let vote = Vote::new(slots, Hash::new_unique());
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
             &Pubkey::new_unique(), // authorized_voter_pubkey
@@ -3881,16 +3825,13 @@ mod tests {
             let gossip_crds = cluster_info.gossip.crds.read().unwrap();
             let mut vote_slots = HashSet::new();
             for label in labels {
-                match &gossip_crds.get::<&CrdsData>(&label).unwrap() {
-                    CrdsData::Vote(_, vote) => {
-                        assert!(vote_slots.insert(vote.slot().unwrap()));
-                    }
-                    _ => panic!("this should not happen!"),
-                }
+                let CrdsData::Vote(_, vote) = &gossip_crds.get::<&CrdsData>(&label).unwrap() else {
+                    panic!("this should not happen!");
+                };
+                assert!(vote_slots.insert(vote.slot().unwrap()));
             }
             vote_slots.into_iter().collect()
         };
-        let mut rng = rand::thread_rng();
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
@@ -3898,7 +3839,7 @@ mod tests {
         for k in 0..MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
             tower.push(slot);
-            let vote = new_vote_transaction(&mut rng, vec![slot]);
+            let vote = new_vote_transaction(vec![slot]);
             cluster_info.push_vote(&tower, vote);
         }
         let vote_slots = get_vote_slots(&cluster_info);
@@ -3910,7 +3851,7 @@ mod tests {
         let slot = MAX_LOCKOUT_HISTORY as Slot;
         tower.push(slot);
         tower.remove(23);
-        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        let vote = new_vote_transaction(vec![slot]);
         // New versioned-crds-value should have wallclock later than existing
         // entries, otherwise might not get inserted into the table.
         sleep(Duration::from_millis(5));
@@ -3927,7 +3868,7 @@ mod tests {
         tower.push(slot);
         tower.remove(17);
         tower.remove(5);
-        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        let vote = new_vote_transaction(vec![slot]);
         cluster_info.push_vote(&tower, vote);
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
@@ -4026,12 +3967,7 @@ mod tests {
             &stakes,
             Duration::from_millis(cluster_info.gossip.pull.crds_timeout),
         );
-        ClusterInfo::handle_pull_response(
-            &cluster_info,
-            &entrypoint_pubkey,
-            vec![entrypoint_crdsvalue],
-            &timeouts,
-        );
+        cluster_info.handle_pull_response(vec![entrypoint_crdsvalue], &timeouts);
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert_eq!(pings.len(), 1);
         assert_eq!(pulls.len(), MIN_NUM_BLOOM_FILTERS);
@@ -4065,7 +4001,7 @@ mod tests {
             ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, values.clone())
                 .collect();
         let self_pubkey = solana_sdk::pubkey::new_rand();
-        assert!(splits.len() * 3 < NUM_CRDS_VALUES);
+        assert!(splits.len() * 2 < NUM_CRDS_VALUES);
         // Assert that all messages are included in the splits.
         assert_eq!(NUM_CRDS_VALUES, splits.iter().map(Vec::len).sum::<usize>());
         splits
@@ -4097,16 +4033,15 @@ mod tests {
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
-        let mut value =
-            CrdsValue::new_unsigned(CrdsData::LegacySnapshotHashes(LegacySnapshotHashes {
-                from: Pubkey::default(),
-                hashes: vec![],
-                wallclock: 0,
-            }));
+        let mut value = CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes {
+            from: Pubkey::default(),
+            hashes: vec![],
+            wallclock: 0,
+        }));
 
         let mut i = 0;
         while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
-            value.data = CrdsData::LegacySnapshotHashes(LegacySnapshotHashes {
+            value.data = CrdsData::AccountsHashes(AccountsHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
                 wallclock: 0,
@@ -4332,7 +4267,7 @@ mod tests {
         );
         //random should be hard to compress
         let mut rng = rand::thread_rng();
-        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1, 32))
+        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1..32))
             .scan(0, |slot, step| {
                 *slot += step;
                 Some(*slot)
@@ -4541,7 +4476,7 @@ mod tests {
         );
         assert_eq!(
             (0, 0, NO_ENTRIES),
-            cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)
+            cluster_info.handle_pull_response(data, &timeouts)
         );
     }
 
@@ -4603,5 +4538,201 @@ mod tests {
             assert_eq!(shred_data.slot, 53084025);
             assert_eq!(shred_data.chunk_index() as usize, i);
         }
+    }
+
+    #[test]
+    fn test_push_restart_last_voted_fork_slots() {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert!(slots.is_empty());
+        let mut update: Vec<Slot> = vec![0];
+        for i in 0..81 {
+            for j in 0..1000 {
+                update.push(i * 1050 + j);
+            }
+        }
+        assert!(cluster_info
+            .push_restart_last_voted_fork_slots(&update, Hash::default())
+            .is_ok());
+        cluster_info.flush_push_queue();
+
+        let mut cursor = Cursor::default();
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
+        assert_eq!(slots.len(), 1);
+        let retrieved_slots = slots[0].to_slots(0);
+        assert!(retrieved_slots[0] < 69000);
+        assert_eq!(retrieved_slots.last(), Some(84999).as_ref());
+
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut cursor);
+        assert!(slots.is_empty());
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let node_pubkey = Pubkey::new_unique();
+        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        node.set_shred_version(42);
+        let mut slots = RestartLastVotedForkSlots::new_rand(&mut rng, Some(node_pubkey));
+        slots.shred_version = 42;
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::RestartLastVotedForkSlots(slots)),
+        ];
+        {
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+            for entry in entries {
+                assert!(gossip_crds
+                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
+                    .is_ok());
+            }
+        }
+        // Should exclude other node's last-voted-fork-slot because of different
+        // shred-version.
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].from, cluster_info.id());
+
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.set_shred_version(42);
+        }
+        assert!(cluster_info
+            .push_restart_last_voted_fork_slots(&update, Hash::default())
+            .is_ok());
+        cluster_info.flush_push_queue();
+        // Should now include both slots.
+        let slots = cluster_info.get_restart_last_voted_fork_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].from, node_pubkey);
+        assert_eq!(slots[1].from, cluster_info.id());
+    }
+
+    #[test]
+    fn test_push_restart_heaviest_fork() {
+        solana_logger::setup();
+        let keypair = Arc::new(Keypair::new());
+        let pubkey = keypair.pubkey();
+        let contact_info = ContactInfo::new_localhost(&pubkey, 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
+
+        // make sure empty crds is handled correctly
+        let mut cursor = Cursor::default();
+        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut cursor);
+        assert_eq!(heaviest_forks, vec![]);
+
+        // add new message
+        let slot1 = 53;
+        let hash1 = Hash::new_unique();
+        let stake1 = 15_000_000;
+        cluster_info.push_restart_heaviest_fork(slot1, hash1, stake1);
+        cluster_info.flush_push_queue();
+
+        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut cursor);
+        assert_eq!(heaviest_forks.len(), 1);
+        let fork = &heaviest_forks[0];
+        assert_eq!(fork.last_slot, slot1);
+        assert_eq!(fork.last_slot_hash, hash1);
+        assert_eq!(fork.observed_stake, stake1);
+        assert_eq!(fork.from, pubkey);
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let pubkey2 = Pubkey::new_unique();
+        let mut new_node = LegacyContactInfo::new_rand(&mut rng, Some(pubkey2));
+        new_node.set_shred_version(42);
+        let slot2 = 54;
+        let hash2 = Hash::new_unique();
+        let stake2 = 23_000_000;
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(new_node)),
+            CrdsValue::new_unsigned(CrdsData::RestartHeaviestFork(RestartHeaviestFork {
+                from: pubkey2,
+                wallclock: timestamp(),
+                last_slot: slot2,
+                last_slot_hash: hash2,
+                observed_stake: stake2,
+                shred_version: 42,
+            })),
+        ];
+        {
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
+            for entry in entries {
+                assert!(gossip_crds
+                    .insert(entry, /*now=*/ 0, GossipRoute::LocalMessage)
+                    .is_ok());
+            }
+        }
+        // Should exclude other node's heaviest_fork because of different
+        // shred-version.
+        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut Cursor::default());
+        assert_eq!(heaviest_forks.len(), 1);
+        assert_eq!(heaviest_forks[0].from, pubkey);
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.set_shred_version(42);
+        }
+        cluster_info.push_self();
+        cluster_info.flush_push_queue();
+
+        // Should now include the previous heaviest_fork from the other node.
+        let heaviest_forks = cluster_info.get_restart_heaviest_fork(&mut Cursor::default());
+        assert_eq!(heaviest_forks.len(), 1);
+        assert_eq!(heaviest_forks[0].from, pubkey2);
+    }
+
+    #[test]
+    fn test_contact_trace() {
+        solana_logger::setup();
+        let keypair43 = Arc::new(
+            Keypair::from_bytes(&[
+                198, 203, 8, 178, 196, 71, 119, 152, 31, 96, 221, 142, 115, 224, 45, 34, 173, 138,
+                254, 39, 181, 238, 168, 70, 183, 47, 210, 91, 221, 179, 237, 153, 14, 58, 154, 59,
+                67, 220, 235, 106, 241, 99, 4, 72, 60, 245, 53, 30, 225, 122, 145, 225, 8, 40, 30,
+                174, 26, 228, 125, 127, 125, 21, 96, 28,
+            ])
+            .unwrap(),
+        );
+        let keypair44 = Arc::new(
+            Keypair::from_bytes(&[
+                66, 88, 3, 70, 228, 215, 125, 64, 130, 183, 180, 98, 22, 166, 201, 234, 89, 80,
+                135, 24, 228, 35, 20, 52, 105, 130, 50, 51, 46, 229, 244, 108, 70, 57, 45, 247, 57,
+                177, 39, 126, 190, 238, 50, 96, 186, 208, 28, 168, 148, 56, 9, 106, 92, 213, 63,
+                205, 252, 225, 244, 101, 77, 182, 4, 2,
+            ])
+            .unwrap(),
+        );
+
+        let cluster_info44 = Arc::new({
+            let mut node = Node::new_localhost_with_pubkey(&keypair44.pubkey());
+            node.sockets.gossip = UdpSocket::bind("127.0.0.1:65534").unwrap();
+            info!("{:?}", node);
+            ClusterInfo::new(node.info, keypair44.clone(), SocketAddrSpace::Unspecified)
+        });
+        let cluster_info43 = Arc::new({
+            let node = Node::new_localhost_with_pubkey(&keypair43.pubkey());
+            ClusterInfo::new(node.info, keypair43.clone(), SocketAddrSpace::Unspecified)
+        });
+
+        assert_eq!(keypair43.pubkey().to_string().len(), 43);
+        assert_eq!(keypair44.pubkey().to_string().len(), 44);
+
+        let trace = cluster_info44.contact_info_trace();
+        info!("cluster:\n{}", trace);
+        assert_eq!(trace.len(), 431);
+
+        let trace = cluster_info44.rpc_info_trace();
+        info!("rpc:\n{}", trace);
+        assert_eq!(trace.len(), 335);
+
+        let trace = cluster_info43.contact_info_trace();
+        info!("cluster:\n{}", trace);
+        assert_eq!(trace.len(), 431);
+
+        let trace = cluster_info43.rpc_info_trace();
+        info!("rpc:\n{}", trace);
+        assert_eq!(trace.len(), 335);
     }
 }

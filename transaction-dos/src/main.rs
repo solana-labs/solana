@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
@@ -126,7 +126,7 @@ fn make_dos_message(
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
         .map(|_| {
-            let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
+            let data = [num_program_iterations, thread_rng().gen_range(0..255)];
             Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
         })
         .collect();
@@ -238,6 +238,7 @@ fn run_transactions_dos(
         config.signers = vec![payer_keypairs[0], &program_keypair];
         config.command = CliCommand::Program(ProgramCliCommand::Deploy {
             program_location: Some(program_location),
+            fee_payer_signer_index: 0,
             program_signer_index: Some(1),
             program_pubkey: None,
             buffer_signer_index: None,
@@ -513,7 +514,7 @@ fn main() {
                 .long("batch-sleep-ms")
                 .takes_value(true)
                 .value_name("NUM")
-                .help("Sleep for this long the num outstanding transctions is greater than the batch size."),
+                .help("Sleep for this long the num outstanding transactions is greater than the batch size."),
         )
         .arg(
             Arg::with_name("check_gossip")

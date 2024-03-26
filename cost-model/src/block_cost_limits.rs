@@ -3,8 +3,8 @@
 use {
     lazy_static::lazy_static,
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, compute_budget, ed25519_program,
-        loader_v4, pubkey::Pubkey, secp256k1_program,
+        address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        compute_budget, ed25519_program, loader_v4, pubkey::Pubkey, secp256k1_program,
     },
     std::collections::HashMap,
 };
@@ -24,6 +24,10 @@ pub const MAX_CONCURRENCY: u64 = 4;
 pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 30;
 /// Number of compute units for one signature verification.
 pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 24;
+/// Number of compute units for one secp256k1 signature verification.
+pub const SECP256K1_VERIFY_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 223;
+/// Number of compute units for one ed25519 signature verification.
+pub const ED25519_VERIFY_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 76;
 /// Number of compute units for one write lock
 pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 /// Number of data bytes per compute units
@@ -37,14 +41,14 @@ lazy_static! {
         (solana_vote_program::id(), solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS),
         (solana_system_program::id(), solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS),
         (compute_budget::id(), solana_compute_budget_program::DEFAULT_COMPUTE_UNITS),
-        (solana_address_lookup_table_program::id(), solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS),
+        (address_lookup_table::program::id(), solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS),
         (bpf_loader_upgradeable::id(), solana_bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS),
         (bpf_loader_deprecated::id(), solana_bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS),
         (bpf_loader::id(), solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS),
         (loader_v4::id(), solana_loader_v4_program::DEFAULT_COMPUTE_UNITS),
         // Note: These are precompile, run directly in bank during sanitizing;
-        (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
-        (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
+        (secp256k1_program::id(), 0),
+        (ed25519_program::id(), 0),
     ]
     .iter()
     .cloned()

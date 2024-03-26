@@ -3,6 +3,7 @@ pub mod cluster_slot_state_verifier;
 pub mod duplicate_repair_status;
 pub mod outstanding_requests;
 pub mod packet_threshold;
+pub(crate) mod quic_endpoint;
 pub mod repair_generic_traversal;
 pub mod repair_response;
 pub mod repair_service;

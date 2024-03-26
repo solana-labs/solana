@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     solana_entry::entry::Entry,
     solana_ledger::shred::{
@@ -53,6 +53,7 @@ fn test_multi_fec_block_coding() {
         &keypair,
         &entries,
         true,  // is_last_in_slot
+        None,  // chained_merkle_root
         0,     // next_shred_index
         0,     // next_code_index
         false, // merkle_variant
@@ -164,9 +165,7 @@ fn sort_data_coding_into_fec_sets(
         // Make sure there are no duplicates for same key
         assert!(!data_slot_and_index.contains(&key));
         data_slot_and_index.insert(key);
-        let fec_entry = fec_data
-            .entry(shred.fec_set_index())
-            .or_insert_with(Vec::new);
+        let fec_entry = fec_data.entry(shred.fec_set_index()).or_default();
         fec_entry.push(shred);
     }
     for shred in coding_shreds {
@@ -175,9 +174,7 @@ fn sort_data_coding_into_fec_sets(
         // Make sure there are no duplicates for same key
         assert!(!coding_slot_and_index.contains(&key));
         coding_slot_and_index.insert(key);
-        let fec_entry = fec_coding
-            .entry(shred.fec_set_index())
-            .or_insert_with(Vec::new);
+        let fec_entry = fec_coding.entry(shred.fec_set_index()).or_default();
         fec_entry.push(shred);
     }
 }
@@ -230,6 +227,7 @@ fn setup_different_sized_fec_blocks(
             &keypair,
             &entries,
             is_last,
+            None, // chained_merkle_root
             next_shred_index,
             next_code_index,
             false, // merkle_variant

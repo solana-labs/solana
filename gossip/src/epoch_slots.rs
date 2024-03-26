@@ -13,7 +13,7 @@ use {
     },
 };
 
-const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
+pub const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Uncompressed {
     pub first_slot: Slot,
@@ -178,7 +178,7 @@ impl Default for CompressedSlots {
 }
 
 impl CompressedSlots {
-    fn new(max_size: usize) -> Self {
+    pub(crate) fn new(max_size: usize) -> Self {
         CompressedSlots::Uncompressed(Uncompressed::new(max_size))
     }
 
@@ -326,8 +326,8 @@ impl EpochSlots {
         let now = crds_value::new_rand_timestamp(rng);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let mut epoch_slots = Self::new(pubkey, now);
-        let num_slots = rng.gen_range(0, 20);
-        let slots: Vec<_> = std::iter::repeat_with(|| 47825632 + rng.gen_range(0, 512))
+        let num_slots = rng.gen_range(0..20);
+        let slots: Vec<_> = std::iter::repeat_with(|| 47825632 + rng.gen_range(0..512))
             .take(num_slots)
             .collect();
         epoch_slots.add(&slots);
@@ -486,7 +486,7 @@ mod tests {
     }
 
     fn make_rand_slots<R: Rng>(rng: &mut R) -> impl Iterator<Item = Slot> + '_ {
-        repeat_with(|| rng.gen_range(1, 5)).scan(0, |slot, step| {
+        repeat_with(|| rng.gen_range(1..5)).scan(0, |slot, step| {
             *slot += step;
             Some(*slot)
         })

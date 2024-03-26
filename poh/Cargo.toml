@@ -22,11 +22,16 @@ solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 bincode = { workspace = true }
-matches = { workspace = true }
 rand = { workspace = true }
 solana-logger = { workspace = true }
 solana-perf = { workspace = true }
+solana-poh = { path = ".", features = ["dev-context-only-utils"] }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+
+[features]
+dev-context-only-utils = []
 
 [lib]
 crate-type = ["lib"]

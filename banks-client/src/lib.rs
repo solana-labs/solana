@@ -587,7 +587,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
@@ -626,7 +626,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = solana_sdk::pubkey::new_rand();

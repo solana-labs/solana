@@ -1,26 +1,23 @@
-// Service to verify accounts hashes with other known validator nodes.
-//
-// Each interval, publish the snapshot hash which is the full accounts state
-// hash on gossip.
+//! Service to calculate accounts hashes
 
 use {
     crossbeam_channel::{Receiver, Sender},
-    solana_gossip::cluster_info::{ClusterInfo, MAX_ACCOUNTS_HASHES},
-    solana_measure::measure_us,
-    solana_runtime::{
-        accounts_db::CalcAccountsHashFlavor,
+    solana_accounts_db::{
+        accounts_db::CalcAccountsHashKind,
         accounts_hash::{
-            AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
+            AccountsHash, AccountsHashKind, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
+        sorted_storages::SortedStorages,
+    },
+    solana_measure::measure_us,
+    solana_runtime::{
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
-            SnapshotType,
+            self, AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage,
         },
         snapshot_utils,
-        sorted_storages::SortedStorages,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -36,8 +33,6 @@ use {
     },
 };
 
-pub type AccountsHashFaultInjector = fn(&Hash, Slot) -> Option<Hash>;
-
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
 }
@@ -48,8 +43,6 @@ impl AccountsHashVerifier {
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
         exit: Arc<AtomicBool>,
-        cluster_info: Arc<ClusterInfo>,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
@@ -58,11 +51,6 @@ impl AccountsHashVerifier {
             .name("solAcctHashVer".to_string())
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
-                let mut hashes = vec![];
-                // To support fastboot, we must ensure the storages used in the latest POST snapshot are
-                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
-                // expiring.
-                let mut last_snapshot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -83,26 +71,12 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    // If this accounts package is for a snapshot, then clone the storages to
-                    // save for fastboot.
-                    let snapshot_storages_for_fastboot = accounts_package
-                        .snapshot_info
-                        .is_some()
-                        .then(|| accounts_package.snapshot_storages.clone());
-
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
-                        &cluster_info,
                         snapshot_package_sender.as_ref(),
-                        &mut hashes,
                         &snapshot_config,
-                        accounts_hash_fault_injector,
                         &exit,
                     ));
-
-                    if let Some(snapshot_storages_for_fastboot) = snapshot_storages_for_fastboot {
-                        last_snapshot_storages = Some(snapshot_storages_for_fastboot)
-                    }
 
                     datapoint_info!(
                         "accounts_hash_verifier",
@@ -120,13 +94,6 @@ impl AccountsHashVerifier {
                         ("handling_time_us", handling_time_us, i64),
                     );
                 }
-                debug!(
-                    "Number of snapshot storages kept alive for fastboot: {}",
-                    last_snapshot_storages
-                        .as_ref()
-                        .map(|storages| storages.len())
-                        .unwrap_or(0)
-                );
                 info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
@@ -169,7 +136,7 @@ impl AccountsHashVerifier {
                 let num_eah_packages = accounts_packages
                     .iter()
                     .filter(|account_package| {
-                        account_package.package_type == AccountsPackageType::EpochAccountsHash
+                        account_package.package_kind == AccountsPackageKind::EpochAccountsHash
                     })
                     .count();
                 assert!(
@@ -197,8 +164,8 @@ impl AccountsHashVerifier {
                 // be at most one EpochAccountsHash request, so `y` is the only other request we
                 // need to check.  If `y` is a FullSnapshot request *with a lower slot* than `z`,
                 // then handle `y` first.
-                let accounts_package = if z.package_type == AccountsPackageType::EpochAccountsHash
-                    && y.package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                let accounts_package = if z.package_kind == AccountsPackageKind::EpochAccountsHash
+                    && y.package_kind == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
                     && y.slot < z.slot
                 {
                     // SAFETY: We know the len is > 1, so both `pop`s will return `Some`
@@ -238,25 +205,14 @@ impl AccountsHashVerifier {
     #[allow(clippy::too_many_arguments)]
     fn process_accounts_package(
         accounts_package: AccountsPackage,
-        cluster_info: &ClusterInfo,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
-        hashes: &mut Vec<(Slot, Hash)>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         exit: &AtomicBool,
     ) {
         let accounts_hash =
             Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
-
-        Self::push_accounts_hashes_to_cluster(
-            &accounts_package,
-            cluster_info,
-            hashes,
-            accounts_hash,
-            accounts_hash_fault_injector,
-        );
 
         Self::submit_for_packaging(
             accounts_package,
@@ -271,43 +227,58 @@ impl AccountsHashVerifier {
     fn calculate_and_verify_accounts_hash(
         accounts_package: &AccountsPackage,
         snapshot_config: &SnapshotConfig,
-    ) -> AccountsHashEnum {
-        let accounts_hash_calculation_flavor = match accounts_package.package_type {
-            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
-                SnapshotType::FullSnapshot => CalcAccountsHashFlavor::Full,
-                SnapshotType::IncrementalSnapshot(_) => {
+    ) -> AccountsHashKind {
+        let accounts_hash_calculation_kind = match accounts_package.package_kind {
+            AccountsPackageKind::AccountsHashVerifier => CalcAccountsHashKind::Full,
+            AccountsPackageKind::EpochAccountsHash => CalcAccountsHashKind::Full,
+            AccountsPackageKind::Snapshot(snapshot_kind) => match snapshot_kind {
+                SnapshotKind::FullSnapshot => CalcAccountsHashKind::Full,
+                SnapshotKind::IncrementalSnapshot(_) => {
                     if accounts_package.is_incremental_accounts_hash_feature_enabled {
-                        CalcAccountsHashFlavor::Incremental
+                        CalcAccountsHashKind::Incremental
                     } else {
-                        CalcAccountsHashFlavor::Full
+                        CalcAccountsHashKind::Full
                     }
                 }
             },
         };
 
         let (
-            accounts_hash_enum,
+            accounts_hash_kind,
             accounts_hash_for_reserialize,
             bank_incremental_snapshot_persistence,
-        ) = match accounts_hash_calculation_flavor {
-            CalcAccountsHashFlavor::Full => {
+        ) = match accounts_hash_calculation_kind {
+            CalcAccountsHashKind::Full => {
                 let (accounts_hash, _capitalization) =
                     Self::_calculate_full_accounts_hash(accounts_package);
                 (accounts_hash.into(), accounts_hash, None)
             }
-            CalcAccountsHashFlavor::Incremental => {
-                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) =
-                    accounts_package.package_type
+            CalcAccountsHashKind::Incremental => {
+                let AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(base_slot)) =
+                    accounts_package.package_kind
                 else {
                     panic!("Calculating incremental accounts hash requires a base slot");
                 };
-                let (base_accounts_hash, base_capitalization) = accounts_package
-                    .accounts
-                    .accounts_db
-                    .get_accounts_hash(base_slot)
-                    .expect("incremental snapshot requires accounts hash and capitalization from the full snapshot it is based on");
+                let accounts_db = &accounts_package.accounts.accounts_db;
+                let Some((base_accounts_hash, base_capitalization)) =
+                    accounts_db.get_accounts_hash(base_slot)
+                else {
+                    panic!(
+                        "incremental snapshot requires accounts hash and capitalization \
+                         from the full snapshot it is based on \n\
+                         package: {accounts_package:?} \n\
+                         accounts hashes: {:?} \n\
+                         incremental accounts hashes: {:?} \n\
+                         full snapshot archives: {:?} \n\
+                         bank snapshots: {:?}",
+                        accounts_db.get_accounts_hashes(),
+                        accounts_db.get_incremental_accounts_hashes(),
+                        snapshot_utils::get_full_snapshot_archives(
+                            &snapshot_config.full_snapshot_archives_dir,
+                        ),
+                        snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir),
+                    );
+                };
                 let (incremental_accounts_hash, incremental_capitalization) =
                     Self::_calculate_incremental_accounts_hash(accounts_package, base_slot);
                 let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
@@ -334,8 +305,8 @@ impl AccountsHashVerifier {
             );
         }
 
-        if accounts_package.package_type
-            == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+        if accounts_package.package_kind
+            == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         {
             accounts_package
                 .accounts
@@ -369,7 +340,7 @@ impl AccountsHashVerifier {
             );
         }
 
-        accounts_hash_enum
+        accounts_hash_kind
     }
 
     fn _calculate_full_accounts_hash(
@@ -391,27 +362,19 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
-            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
+        let slot = accounts_package.slot;
         let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
             .accounts
             .accounts_db
-            .calculate_accounts_hash_from_storages(
+            .update_accounts_hash(
                 &calculate_accounts_hash_config,
                 &sorted_storages,
+                slot,
                 timings,
             )
             .unwrap()); // unwrap here will never fail since check_hash = false
-
-        let slot = accounts_package.slot;
-        let old_accounts_hash = accounts_package
-            .accounts
-            .accounts_db
-            .set_accounts_hash(slot, (accounts_hash, lamports));
-        if let Some(old_accounts_hash) = old_accounts_hash {
-            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
-        }
 
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
@@ -478,7 +441,6 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
-            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
         let (incremental_accounts_hash, measure_hash_us) = measure_us!(
@@ -508,10 +470,10 @@ impl AccountsHashVerifier {
 
     fn save_epoch_accounts_hash(
         accounts_package: &AccountsPackage,
-        accounts_hash: AccountsHashEnum,
+        accounts_hash: AccountsHashKind,
     ) {
-        if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
-            let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+        if accounts_package.package_kind == AccountsPackageKind::EpochAccountsHash {
+            let AccountsHashKind::Full(accounts_hash) = accounts_hash else {
                 panic!("EAH requires a full accounts hash!");
             };
             info!(
@@ -526,34 +488,17 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn push_accounts_hashes_to_cluster(
-        accounts_package: &AccountsPackage,
-        cluster_info: &ClusterInfo,
-        hashes: &mut Vec<(Slot, Hash)>,
-        accounts_hash: AccountsHashEnum,
-        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
-    ) {
-        let hash = accounts_hash_fault_injector
-            .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
-            .or(Some(*accounts_hash.as_hash()));
-        hashes.push((accounts_package.slot, hash.unwrap()));
-
-        retain_max_n_elements(hashes, MAX_ACCOUNTS_HASHES);
-
-        cluster_info.push_accounts_hashes(hashes.clone());
-    }
-
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash: AccountsHashEnum,
+        accounts_hash: AccountsHashKind,
         exit: &AtomicBool,
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
-                accounts_package.package_type,
-                AccountsPackageType::Snapshot(_)
+                accounts_package.package_kind,
+                AccountsPackageKind::Snapshot(_)
             )
         {
             return;
@@ -581,109 +526,33 @@ impl AccountsHashVerifier {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        rand::seq::SliceRandom,
-        solana_gossip::contact_info::ContactInfo,
-        solana_runtime::{
-            snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL, snapshot_package::SnapshotType,
-        },
-        solana_sdk::{
-            signature::{Keypair, Signer},
-            timing::timestamp,
-        },
-        solana_streamer::socket::SocketAddrSpace,
-        std::str::FromStr,
-    };
+    use {super::*, rand::seq::SliceRandom, solana_runtime::snapshot_package::SnapshotKind};
 
-    fn new_test_cluster_info() -> ClusterInfo {
-        let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
-    }
-
-    #[test]
-    fn test_max_hashes() {
-        solana_logger::setup();
-        let cluster_info = new_test_cluster_info();
-        let cluster_info = Arc::new(cluster_info);
-        let exit = AtomicBool::new(false);
-
-        let mut hashes = vec![];
-        let full_snapshot_archive_interval_slots = 100;
-        let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots,
-            incremental_snapshot_archive_interval_slots: DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
-            ..SnapshotConfig::default()
-        };
-        let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        for i in 0..MAX_ACCOUNTS_HASHES + 1 {
-            let slot = full_snapshot_archive_interval_slots + i as u64;
-            let accounts_package = AccountsPackage {
-                slot,
-                block_height: slot,
-                ..AccountsPackage::default_for_tests()
-            };
-
-            AccountsHashVerifier::process_accounts_package(
-                accounts_package,
-                &cluster_info,
-                None,
-                &mut hashes,
-                &snapshot_config,
-                None,
-                &exit,
-            );
-
-            // sleep for 1ms to create a newer timestamp for gossip entry
-            // otherwise the timestamp won't be newer.
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        cluster_info.flush_push_queue();
-        let cluster_hashes = cluster_info
-            .get_accounts_hash_for_node(&cluster_info.id(), |c| c.clone())
-            .unwrap();
-        info!("{:?}", cluster_hashes);
-        assert_eq!(hashes.len(), MAX_ACCOUNTS_HASHES);
-        assert_eq!(cluster_hashes.len(), MAX_ACCOUNTS_HASHES);
-        assert_eq!(
-            cluster_hashes[0],
-            (full_snapshot_archive_interval_slots + 1, expected_hash)
-        );
-        assert_eq!(
-            cluster_hashes[MAX_ACCOUNTS_HASHES - 1],
-            (
-                full_snapshot_archive_interval_slots + MAX_ACCOUNTS_HASHES as u64,
-                expected_hash
-            )
-        );
-    }
-
-    fn new(package_type: AccountsPackageType, slot: Slot) -> AccountsPackage {
+    fn new(package_kind: AccountsPackageKind, slot: Slot) -> AccountsPackage {
         AccountsPackage {
-            package_type,
+            package_kind,
             slot,
             block_height: slot,
             ..AccountsPackage::default_for_tests()
         }
     }
     fn new_eah(slot: Slot) -> AccountsPackage {
-        new(AccountsPackageType::EpochAccountsHash, slot)
+        new(AccountsPackageKind::EpochAccountsHash, slot)
     }
     fn new_fss(slot: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
             slot,
         )
     }
     fn new_iss(slot: Slot, base: Slot) -> AccountsPackage {
         new(
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base)),
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(base)),
             slot,
         )
     }
     fn new_ahv(slot: Slot) -> AccountsPackage {
-        new(AccountsPackageType::AccountsHashVerifier, slot)
+        new(AccountsPackageKind::AccountsHashVerifier, slot)
     }
 
     /// Ensure that unhandled accounts packages are properly re-enqueued or dropped
@@ -737,8 +606,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::EpochAccountsHash
+            account_package.package_kind,
+            AccountsPackageKind::EpochAccountsHash
         );
         assert_eq!(account_package.slot, 200);
         assert_eq!(num_re_enqueued_accounts_packages, 15);
@@ -755,8 +624,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 400);
         assert_eq!(num_re_enqueued_accounts_packages, 7);
@@ -773,8 +642,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(400))
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(400))
         );
         assert_eq!(account_package.slot, 420);
         assert_eq!(num_re_enqueued_accounts_packages, 3);
@@ -791,8 +660,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::AccountsHashVerifier
+            account_package.package_kind,
+            AccountsPackageKind::AccountsHashVerifier
         );
         assert_eq!(account_package.slot, 423);
         assert_eq!(num_re_enqueued_accounts_packages, 0);
@@ -846,8 +715,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(account_package.slot, 100);
         assert_eq!(num_re_enqueued_accounts_packages, 10);
@@ -863,8 +732,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::EpochAccountsHash
+            account_package.package_kind,
+            AccountsPackageKind::EpochAccountsHash
         );
         assert_eq!(account_package.slot, 200);
         assert_eq!(num_re_enqueued_accounts_packages, 6);
@@ -881,8 +750,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(100))
+            account_package.package_kind,
+            AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(100))
         );
         assert_eq!(account_package.slot, 220);
         assert_eq!(num_re_enqueued_accounts_packages, 2);
@@ -899,8 +768,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_package.package_type,
-            AccountsPackageType::AccountsHashVerifier
+            account_package.package_kind,
+            AccountsPackageKind::AccountsHashVerifier
         );
         assert_eq!(account_package.slot, 222);
         assert_eq!(num_re_enqueued_accounts_packages, 0);

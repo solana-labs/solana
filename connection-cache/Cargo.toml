@@ -12,13 +12,13 @@ edition = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 bincode = { workspace = true }
+crossbeam-channel = { workspace = true }
 futures-util = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true, optional = true }
 log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
-rcgen = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-sdk = { workspace = true }

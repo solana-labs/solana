@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 pub use solana_test_validator as test_validator;
 use {
     console::style,
@@ -24,12 +24,7 @@ pub mod dashboard;
 #[cfg(unix)]
 fn redirect_stderr(filename: &str) {
     use std::os::unix::io::AsRawFd;
-    match OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(filename)
-    {
+    match OpenOptions::new().create(true).append(true).open(filename) {
         Ok(file) => unsafe {
             libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
         },

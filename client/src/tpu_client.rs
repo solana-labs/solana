@@ -2,6 +2,7 @@ use {
     crate::connection_cache::ConnectionCache,
     solana_connection_cache::connection_cache::{
         ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
+        NewConnectionConfig,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::rpc_client::RpcClient,
@@ -12,12 +13,20 @@ use {
         transport::Result as TransportResult,
     },
     solana_tpu_client::tpu_client::{Result, TpuClient as BackendTpuClient},
+    solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::sync::Arc,
 };
 pub use {
     crate::nonblocking::tpu_client::TpuSenderError,
     solana_tpu_client::tpu_client::{TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS},
 };
+
+pub type QuicTpuClient = TpuClient<QuicPool, QuicConnectionManager, QuicConfig>;
+
+pub enum TpuClientWrapper {
+    Quic(TpuClient<QuicPool, QuicConnectionManager, QuicConfig>),
+    Udp(TpuClient<UdpPool, UdpConnectionManager, UdpConfig>),
+}
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
@@ -34,6 +43,7 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -90,6 +100,7 @@ impl<P, M, C> TpuClient<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Create a new client that disconnects when dropped
     pub fn new_with_connection_cache(

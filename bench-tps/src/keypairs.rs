@@ -16,6 +16,8 @@ pub fn get_keypairs<T>(
     num_lamports_per_account: u64,
     client_ids_and_stake_file: &str,
     read_from_client_file: bool,
+    skip_tx_account_data_size: bool,
+    enable_padding: bool,
 ) -> Vec<Keypair>
 where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
@@ -56,6 +58,8 @@ where
             &keypairs,
             keypairs.len().saturating_sub(keypair_count) as u64,
             last_balance,
+            skip_tx_account_data_size,
+            enable_padding,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {e:?}");
@@ -63,10 +67,17 @@ where
         });
         keypairs
     } else {
-        generate_and_fund_keypairs(client, id, keypair_count, num_lamports_per_account)
-            .unwrap_or_else(|e| {
-                eprintln!("Error could not fund keys: {e:?}");
-                exit(1);
-            })
+        generate_and_fund_keypairs(
+            client,
+            id,
+            keypair_count,
+            num_lamports_per_account,
+            skip_tx_account_data_size,
+            enable_padding,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("Error could not fund keys: {e:?}");
+            exit(1);
+        })
     }
 }

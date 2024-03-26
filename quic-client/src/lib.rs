@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod nonblocking;
 pub mod quic_client;
@@ -15,11 +15,10 @@ use {
         quic_client::QuicClientConnection as BlockingQuicClientConnection,
     },
     quinn::Endpoint,
-    rcgen::RcgenError,
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, Protocol,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
@@ -30,20 +29,13 @@ use {
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate,
+        tls_certificates::new_dummy_x509_certificate,
     },
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, SocketAddr},
         sync::{Arc, RwLock},
     },
-    thiserror::Error,
 };
-
-#[derive(Error, Debug)]
-pub enum QuicClientError {
-    #[error("Certificate error: {0}")]
-    CertificateError(#[from] RcgenError),
-}
 
 pub struct QuicPool {
     connections: Vec<Arc<Quic>>,
@@ -53,9 +45,11 @@ impl ConnectionPool for QuicPool {
     type BaseClientConnection = Quic;
     type NewConnectionConfig = QuicConfig;
 
-    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) -> usize {
         let connection = self.create_pool_entry(config, addr);
+        let idx = self.connections.len();
         self.connections.push(connection);
+        idx
     }
 
     fn num_connections(&self) -> usize {
@@ -82,9 +76,9 @@ impl ConnectionPool for QuicPool {
     }
 }
 
-#[derive(Clone)]
 pub struct QuicConfig {
-    client_certificate: Arc<QuicClientCertificate>,
+    // Arc to prevent having to copy the struct
+    client_certificate: RwLock<Arc<QuicClientCertificate>>,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     maybe_client_pubkey: Option<Pubkey>,
 
@@ -93,15 +87,26 @@ pub struct QuicConfig {
     client_endpoint: Option<Endpoint>,
 }
 
-impl QuicConfig {
-    pub fn new() -> Result<Self, ClientError> {
-        let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
+impl Clone for QuicConfig {
+    fn clone(&self) -> Self {
+        let cert_guard = self.client_certificate.read().unwrap();
+        QuicConfig {
+            client_certificate: RwLock::new(cert_guard.clone()),
+            maybe_staked_nodes: self.maybe_staked_nodes.clone(),
+            maybe_client_pubkey: self.maybe_client_pubkey,
+            client_endpoint: self.client_endpoint.clone(),
+        }
+    }
+}
+
+impl NewConnectionConfig for QuicConfig {
+    fn new() -> Result<Self, ClientError> {
+        let (cert, priv_key) = new_dummy_x509_certificate(&Keypair::new());
         Ok(Self {
-            client_certificate: Arc::new(QuicClientCertificate {
+            client_certificate: RwLock::new(Arc::new(QuicClientCertificate {
                 certificate: cert,
                 key: priv_key,
-            }),
+            })),
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
@@ -111,41 +116,48 @@ impl QuicConfig {
 
 impl QuicConfig {
     fn create_endpoint(&self) -> QuicLazyInitializedEndpoint {
-        QuicLazyInitializedEndpoint::new(
-            self.client_certificate.clone(),
-            self.client_endpoint.as_ref().cloned(),
-        )
+        let cert_guard = self.client_certificate.read().unwrap();
+        QuicLazyInitializedEndpoint::new(cert_guard.clone(), self.client_endpoint.as_ref().cloned())
     }
 
     fn compute_max_parallel_streams(&self) -> usize {
-        let (client_type, stake, total_stake) =
+        let (client_type, total_stake) =
             self.maybe_client_pubkey
-                .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
+                .map_or((ConnectionPeerType::Unstaked, 0), |pubkey| {
                     self.maybe_staked_nodes.as_ref().map_or(
-                        (ConnectionPeerType::Unstaked, 0, 0),
+                        (ConnectionPeerType::Unstaked, 0),
                         |stakes| {
                             let rstakes = stakes.read().unwrap();
                             rstakes.get_node_stake(&pubkey).map_or(
-                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake()),
-                                |stake| (ConnectionPeerType::Staked, stake, rstakes.total_stake()),
+                                (ConnectionPeerType::Unstaked, rstakes.total_stake()),
+                                |stake| (ConnectionPeerType::Staked(stake), rstakes.total_stake()),
                             )
                         },
                     )
                 });
-        compute_max_allowed_uni_streams(client_type, stake, total_stake)
+        compute_max_allowed_uni_streams(client_type, total_stake)
     }
 
-    pub fn update_client_certificate(
-        &mut self,
-        keypair: &Keypair,
-        ipaddr: IpAddr,
-    ) -> Result<(), RcgenError> {
-        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
-        self.client_certificate = Arc::new(QuicClientCertificate {
+    pub fn update_client_certificate(&mut self, keypair: &Keypair, _ipaddr: IpAddr) {
+        let (cert, priv_key) = new_dummy_x509_certificate(keypair);
+
+        let mut cert_guard = self.client_certificate.write().unwrap();
+
+        *cert_guard = Arc::new(QuicClientCertificate {
             certificate: cert,
             key: priv_key,
         });
-        Ok(())
+    }
+
+    pub fn update_keypair(&self, keypair: &Keypair) {
+        let (cert, priv_key) = new_dummy_x509_certificate(keypair);
+
+        let mut cert_guard = self.client_certificate.write().unwrap();
+
+        *cert_guard = Arc::new(QuicClientCertificate {
+            certificate: cert,
+            key: priv_key,
+        });
     }
 
     pub fn set_staked_nodes(
@@ -210,6 +222,11 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_config(&self) -> QuicConfig {
         self.connection_config.clone()
     }
+
+    fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
+        self.connection_config.update_keypair(key);
+        Ok(())
+    }
 }
 
 impl QuicConnectionManager {
@@ -228,7 +245,7 @@ pub fn new_quic_connection_cache(
     connection_pool_size: usize,
 ) -> Result<QuicConnectionCache, ClientError> {
     let mut config = QuicConfig::new()?;
-    config.update_client_certificate(keypair, ipaddr)?;
+    config.update_client_certificate(keypair, ipaddr);
     config.set_staked_nodes(staked_nodes, &keypair.pubkey());
     let connection_manager = QuicConnectionManager::new_with_connection_config(config);
     ConnectionCache::new(name, connection_manager, connection_pool_size)

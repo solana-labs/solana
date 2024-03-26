@@ -128,7 +128,7 @@ pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u
 mod tests {
     use {
         crate::poh::{Poh, PohEntry},
-        matches::assert_matches,
+        assert_matches::assert_matches,
         solana_sdk::hash::{hash, hashv, Hash},
         std::time::Duration,
     };
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: hashes_per_tick > 1")]
+    #[should_panic(expected = "hashes_per_tick > 1")]
     fn test_target_poh_time_hashes_per_tick() {
         let zero = Hash::default();
         let poh = Poh::new(zero, Some(0));

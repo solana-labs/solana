@@ -66,6 +66,8 @@ pub enum Error {
     Blockstore(#[from] solana_ledger::blockstore::BlockstoreError),
     #[error(transparent)]
     ClusterInfo(#[from] solana_gossip::cluster_info::ClusterInfoError),
+    #[error("Invalid Merkle root, slot: {slot}, index: {index}")]
+    InvalidMerkleRoot { slot: Slot, index: u64 },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -76,8 +78,14 @@ pub enum Error {
     Send,
     #[error(transparent)]
     Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
+    #[error("Shred not found, slot: {slot}, index: {index}")]
+    ShredNotFound { slot: Slot, index: u64 },
     #[error(transparent)]
     TransportError(#[from] solana_sdk::transport::TransportError),
+    #[error("Unknown last index, slot: {0}")]
+    UnknownLastIndex(Slot),
+    #[error("Unknown slot meta, slot: {0}")]
+    UnknownSlotMeta(Slot),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -87,7 +95,7 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
@@ -466,9 +474,12 @@ pub fn broadcast_shreds(
     transmit_stats.shred_select += shred_select.as_us();
 
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    if let Err(SendPktsError::IoError(ioerr, num_failed)) = batch_send(s, &packets[..]) {
-        transmit_stats.dropped_packets_udp += num_failed;
-        result = Err(Error::Io(ioerr));
+    match batch_send(s, &packets[..]) {
+        Ok(()) => (),
+        Err(SendPktsError::IoError(ioerr, num_failed)) => {
+            transmit_stats.dropped_packets_udp += num_failed;
+            result = Err(Error::Io(ioerr));
+        }
     }
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
@@ -500,12 +511,13 @@ pub mod test {
     use {
         super::*,
         crossbeam_channel::unbounded,
+        rand::Rng,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
             blockstore::Blockstore,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
             shred::{max_ticks_per_n_shreds, ProcessShredsStats, ReedSolomonCache, Shredder},
         },
         solana_runtime::bank::Bank,
@@ -541,6 +553,8 @@ pub mod test {
             &Keypair::new(),
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            Some(Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index,
             0,    // next_code_index
             true, // merkle_variant
@@ -590,8 +604,8 @@ pub mod test {
     #[test]
     fn test_duplicate_retransmit_signal() {
         // Setup
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let (transmit_sender, transmit_receiver) = unbounded();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
@@ -668,7 +682,7 @@ pub mod test {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank_forks = BankForks::new_rw_arc(bank);
         let bank = bank_forks.read().unwrap().root_bank();
 
         // Start up the broadcast stage
@@ -694,66 +708,62 @@ pub mod test {
     #[test]
     fn test_broadcast_ledger() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
+        // Create the leader scheduler
+        let leader_keypair = Arc::new(Keypair::new());
+
+        let (entry_sender, entry_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let broadcast_service = setup_dummy_broadcast_service(
+            leader_keypair,
+            ledger_path.path(),
+            entry_receiver,
+            retransmit_slots_receiver,
+        );
+        let start_tick_height;
+        let max_tick_height;
+        let ticks_per_slot;
+        let slot;
         {
-            // Create the leader scheduler
-            let leader_keypair = Arc::new(Keypair::new());
-
-            let (entry_sender, entry_receiver) = unbounded();
-            let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
-            let broadcast_service = setup_dummy_broadcast_service(
-                leader_keypair,
-                &ledger_path,
-                entry_receiver,
-                retransmit_slots_receiver,
-            );
-            let start_tick_height;
-            let max_tick_height;
-            let ticks_per_slot;
-            let slot;
-            {
-                let bank = broadcast_service.bank;
-                start_tick_height = bank.tick_height();
-                max_tick_height = bank.max_tick_height();
-                ticks_per_slot = bank.ticks_per_slot();
-                slot = bank.slot();
-                let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
-                for (i, tick) in ticks.into_iter().enumerate() {
-                    entry_sender
-                        .send((bank.clone(), (tick, i as u64 + 1)))
-                        .expect("Expect successful send to broadcast service");
-                }
+            let bank = broadcast_service.bank;
+            start_tick_height = bank.tick_height();
+            max_tick_height = bank.max_tick_height();
+            ticks_per_slot = bank.ticks_per_slot();
+            slot = bank.slot();
+            let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
+            for (i, tick) in ticks.into_iter().enumerate() {
+                entry_sender
+                    .send((bank.clone(), (tick, i as u64 + 1)))
+                    .expect("Expect successful send to broadcast service");
             }
-
-            trace!(
-                "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
-                max_tick_height,
-                start_tick_height,
-                ticks_per_slot,
-            );
-
-            let mut entries = vec![];
-            for _ in 0..10 {
-                entries = broadcast_service
-                    .blockstore
-                    .get_slot_entries(slot, 0)
-                    .expect("Expect entries to be present");
-                if entries.len() >= max_tick_height as usize {
-                    break;
-                }
-                sleep(Duration::from_millis(1000));
-            }
-            assert_eq!(entries.len(), max_tick_height as usize);
-
-            drop(entry_sender);
-            drop(retransmit_slots_sender);
-            broadcast_service
-                .broadcast_service
-                .join()
-                .expect("Expect successful join of broadcast service");
         }
 
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        trace!(
+            "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
+            max_tick_height,
+            start_tick_height,
+            ticks_per_slot,
+        );
+
+        let mut entries = vec![];
+        for _ in 0..10 {
+            entries = broadcast_service
+                .blockstore
+                .get_slot_entries(slot, 0)
+                .expect("Expect entries to be present");
+            if entries.len() >= max_tick_height as usize {
+                break;
+            }
+            sleep(Duration::from_millis(1000));
+        }
+        assert_eq!(entries.len(), max_tick_height as usize);
+
+        drop(entry_sender);
+        drop(retransmit_slots_sender);
+        broadcast_service
+            .broadcast_service
+            .join()
+            .expect("Expect successful join of broadcast service");
     }
 }

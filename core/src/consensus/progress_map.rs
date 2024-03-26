@@ -7,8 +7,9 @@ use {
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         ops::Index,
@@ -292,8 +293,7 @@ impl ForkProgress {
 
 #[derive(Debug, Clone, Default)]
 pub struct ForkStats {
-    pub weight: u128,
-    pub fork_weight: u128,
+    pub fork_stake: Stake,
     pub total_stake: Stake,
     pub block_height: u64,
     pub has_voted: bool,
@@ -307,6 +307,13 @@ pub struct ForkStats {
     pub lockout_intervals: LockoutIntervals,
     pub bank_hash: Option<Hash>,
     pub my_latest_landed_vote: Option<Slot>,
+}
+
+impl ForkStats {
+    /// Return fork_weight, i.e. bank_stake over total_stake.
+    pub fn fork_weight(&self) -> f64 {
+        self.fork_stake as f64 / self.total_stake as f64
+    }
 }
 
 #[derive(Clone, Default)]
@@ -531,8 +538,8 @@ impl ProgressMap {
 mod test {
     use {
         super::*,
-        solana_runtime::vote_account::VoteAccount,
         solana_sdk::account::{Account, AccountSharedData},
+        solana_vote::vote_account::VoteAccount,
     };
 
     fn new_test_vote_account() -> VoteAccount {

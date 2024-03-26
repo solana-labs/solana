@@ -12,7 +12,7 @@
 //!
 //! See also the Solana [documentation on the epoch rewards sysvar][sdoc].
 //!
-//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#epochrewards
+//! [sdoc]: https://docs.solanalabs.com/runtime/sysvars#epochrewards
 //!
 //! # Examples
 //!

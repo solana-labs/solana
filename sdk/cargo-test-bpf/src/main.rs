@@ -16,7 +16,7 @@ fn main() {
         let cargo_build_sbf = cargo_build_bpf.replace("build-bpf", "build-sbf");
         env::set_var("CARGO_BUILD_SBF", cargo_build_sbf);
     }
-    let program = if let Some(arg0) = args.get(0) {
+    let program = if let Some(arg0) = args.first() {
         let cargo_test_sbf = arg0.replace("test-bpf", "test-sbf");
         let cargo_build_sbf = cargo_test_sbf.replace("test-sbf", "build-sbf");
         env::set_var("CARGO_BUILD_SBF", cargo_build_sbf);
@@ -27,7 +27,7 @@ fn main() {
     };
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
-    if let Some(arg0) = args.get(0) {
+    if let Some(arg0) = args.first() {
         if arg0 == "test-bpf" {
             args.remove(0);
         }

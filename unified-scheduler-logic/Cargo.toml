@@ -1,0 +1,13 @@
+[package]
+name = "solana-unified-scheduler-logic"
+description = "The Solana unified scheduler logic"
+documentation = "https://docs.rs/solana-unified-scheduler-logic"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-sdk = { workspace = true }

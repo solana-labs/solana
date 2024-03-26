@@ -5,11 +5,10 @@ use {
         *,
     },
     crate::{
-        accounts_hash::AccountsHash,
-        ancestors::AncestorsForSerialization,
         bank::EpochRewardStatus,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
+    solana_accounts_db::{accounts_hash::AccountsHash, ancestors::AncestorsForSerialization},
     solana_measure::measure::Measure,
     solana_sdk::{deserialize_utils::ignore_eof_error, stake::state::Delegation},
     std::{cell::RefCell, collections::HashSet, sync::RwLock},

@@ -1,6 +1,9 @@
 //! Solana account addresses.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+
+#[cfg(test)]
+use arbitrary::Arbitrary;
 use {
     crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
@@ -60,9 +63,9 @@ impl From<u64> for PubkeyError {
 /// can not safely create or manage secret keys, the full [`Keypair`] is not
 /// defined in `solana-program` but in `solana-sdk`.
 ///
-/// [acc]: https://docs.solana.com/developing/programming-model/accounts
+/// [acc]: https://solana.com/docs/core/accounts
 /// [ed25519]: https://ed25519.cr.yp.to/
-/// [pdas]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+/// [pdas]: https://solana.com/docs/core/cpi#program-derived-addresses
 /// [`Keypair`]: https://docs.rs/solana-sdk/latest/solana_sdk/signer/keypair/struct.Keypair.html
 #[wasm_bindgen]
 #[repr(transparent)]
@@ -84,6 +87,8 @@ impl From<u64> for PubkeyError {
     Serialize,
     Zeroable,
 )]
+#[borsh(crate = "borsh")]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Pubkey(pub(crate) [u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}
@@ -225,7 +230,7 @@ impl Pubkey {
 
     /// Find a valid [program derived address][pda] and its corresponding bump seed.
     ///
-    /// [pda]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+    /// [pda]: https://solana.com/docs/core/cpi#program-derived-addresses
     ///
     /// Program derived addresses (PDAs) are account keys that only the program,
     /// `program_id`, has the authority to sign. The address is of the same form
@@ -328,6 +333,7 @@ impl Pubkey {
     /// // The computed address of the PDA will be passed to this program via
     /// // the `accounts` vector of the `Instruction` type.
     /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+    /// # #[borsh(crate = "borsh")]
     /// pub struct InstructionData {
     ///     pub vault_bump_seed: u8,
     ///     pub lamports: u64,
@@ -409,6 +415,7 @@ impl Pubkey {
     /// # use anyhow::Result;
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize, Debug)]
+    /// # #[borsh(crate = "borsh")]
     /// # struct InstructionData {
     /// #    pub vault_bump_seed: u8,
     /// #    pub lamports: u64,
@@ -481,7 +488,7 @@ impl Pubkey {
 
     /// Find a valid [program derived address][pda] and its corresponding bump seed.
     ///
-    /// [pda]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+    /// [pda]: https://solana.com/docs/core/cpi#program-derived-addresses
     ///
     /// The only difference between this method and [`find_program_address`]
     /// is that this one returns `None` in the statistically improbable event
@@ -535,7 +542,7 @@ impl Pubkey {
 
     /// Create a valid [program derived address][pda] without searching for a bump seed.
     ///
-    /// [pda]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+    /// [pda]: https://solana.com/docs/core/cpi#program-derived-addresses
     ///
     /// Because this function does not create a bump seed, it may unpredictably
     /// return an error for any given set of seeds and is not generally suitable
@@ -624,7 +631,7 @@ impl Pubkey {
         }
     }
 
-    pub fn to_bytes(self) -> [u8; 32] {
+    pub const fn to_bytes(self) -> [u8; 32] {
         self.0
     }
 
@@ -667,6 +674,71 @@ impl fmt::Display for Pubkey {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
+
+impl borsh0_10::de::BorshDeserialize for Pubkey {
+    fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
+        reader: &mut R,
+    ) -> ::core::result::Result<Self, borsh0_10::maybestd::io::Error> {
+        Ok(Self(borsh0_10::BorshDeserialize::deserialize_reader(
+            reader,
+        )?))
+    }
+}
+impl borsh0_9::de::BorshDeserialize for Pubkey {
+    fn deserialize(buf: &mut &[u8]) -> ::core::result::Result<Self, borsh0_9::maybestd::io::Error> {
+        Ok(Self(borsh0_9::BorshDeserialize::deserialize(buf)?))
+    }
+}
+
+macro_rules! impl_borsh_schema {
+    ($borsh:ident) => {
+        impl $borsh::BorshSchema for Pubkey
+        where
+            [u8; 32]: $borsh::BorshSchema,
+        {
+            fn declaration() -> $borsh::schema::Declaration {
+                "Pubkey".to_string()
+            }
+            fn add_definitions_recursively(
+                definitions: &mut $borsh::maybestd::collections::HashMap<
+                    $borsh::schema::Declaration,
+                    $borsh::schema::Definition,
+                >,
+            ) {
+                let fields = $borsh::schema::Fields::UnnamedFields(<[_]>::into_vec(
+                    $borsh::maybestd::boxed::Box::new([
+                        <[u8; 32] as $borsh::BorshSchema>::declaration(),
+                    ]),
+                ));
+                let definition = $borsh::schema::Definition::Struct { fields };
+                <Self as $borsh::BorshSchema>::add_definition(
+                    <Self as $borsh::BorshSchema>::declaration(),
+                    definition,
+                    definitions,
+                );
+                <[u8; 32] as $borsh::BorshSchema>::add_definitions_recursively(definitions);
+            }
+        }
+    };
+}
+impl_borsh_schema!(borsh0_10);
+impl_borsh_schema!(borsh0_9);
+
+macro_rules! impl_borsh_serialize {
+    ($borsh:ident) => {
+        impl $borsh::ser::BorshSerialize for Pubkey {
+            fn serialize<W: $borsh::maybestd::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> ::core::result::Result<(), $borsh::maybestd::io::Error> {
+                $borsh::BorshSerialize::serialize(&self.0, writer)?;
+                Ok(())
+            }
+        }
+    };
+}
+impl_borsh_serialize!(borsh0_10);
+impl_borsh_serialize!(borsh0_9);
 
 #[cfg(test)]
 mod tests {

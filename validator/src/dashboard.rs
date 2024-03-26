@@ -154,10 +154,9 @@ impl Dashboard {
                         };
 
                         progress_bar.set_message(format!(
-                            "{}{}| \
-                                    Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
-                                    Full Snapshot Slot: {} | Incremental Snapshot Slot: {} | \
-                                    Transactions: {} | {}",
+                            "{}{}| Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
+                             Full Snapshot Slot: {} | Incremental Snapshot Slot: {} | \
+                             Transactions: {} | {}",
                             uptime,
                             if health == "ok" {
                                 "".to_string()
@@ -220,13 +219,13 @@ async fn wait_for_validator_startup(
                 if start_progress == ValidatorStartProgress::Running {
                     let admin_client = admin_client.take().unwrap();
 
-                    match async move {
+                    let validator_info = async move {
                         let rpc_addr = admin_client.rpc_addr().await?;
                         let start_time = admin_client.start_time().await?;
                         Ok::<_, jsonrpc_core_client::RpcError>((rpc_addr, start_time))
                     }
-                    .await
-                    {
+                    .await;
+                    match validator_info {
                         Ok((None, _)) => progress_bar.set_message("RPC service not available"),
                         Ok((Some(rpc_addr), start_time)) => return Some((rpc_addr, start_time)),
                         Err(err) => {

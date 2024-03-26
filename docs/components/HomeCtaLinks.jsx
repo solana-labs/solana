@@ -6,7 +6,7 @@ export default function HomeCtaLinks() {
     <div className="container">
       <div className="row cards__container">
         <Card
-          to="developers"
+          to="https://solana.com/developers"
           header={{
             label: "Developers",
             translateId: "cta-developers",
@@ -14,15 +14,15 @@ export default function HomeCtaLinks() {
         />
 
         <Card
-          to="running-validator"
+          to="operations"
           header={{
-            label: "Validators",
+            label: "Operate a Validator",
             translateId: "cta-validators",
           }}
         />
 
         <Card
-          to="cluster/overview"
+          to="clusters"
           header={{
             label: "Architecture",
             translateId: "cta-architecture",

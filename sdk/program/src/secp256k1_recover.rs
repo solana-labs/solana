@@ -78,6 +78,7 @@ pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
     Hash,
     AbiExample,
 )]
+#[borsh(crate = "borsh")]
 pub struct Secp256k1Pubkey(pub [u8; SECP256K1_PUBLIC_KEY_LENGTH]);
 
 impl Secp256k1Pubkey {
@@ -108,7 +109,7 @@ impl Secp256k1Pubkey {
 /// arbitrary message, signed by some public key.
 ///
 /// The recovery ID is a value in the range [0, 3] that is generated during
-/// signing, and allows the recovery process to be more efficent. Note that the
+/// signing, and allows the recovery process to be more efficient. Note that the
 /// `recovery_id` here does not directly correspond to an Ethereum recovery ID
 /// as used in `ecrecover`. This function accepts recovery IDs in the range of
 /// [0, 3], while Ethereum's recovery IDs have a value of 27 or 28. To convert
@@ -254,6 +255,7 @@ impl Secp256k1Pubkey {
 /// use borsh::{BorshDeserialize, BorshSerialize};
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// pub struct DemoSecp256k1RecoverInstruction {
 ///     pub message: Vec<u8>,
 ///     pub signature: [u8; 64],
@@ -348,6 +350,7 @@ impl Secp256k1Pubkey {
 /// };
 /// # use borsh::{BorshDeserialize, BorshSerialize};
 /// # #[derive(BorshSerialize, BorshDeserialize, Debug)]
+/// # #[borsh(crate = "borsh")]
 /// # pub struct DemoSecp256k1RecoverInstruction {
 /// #     pub message: Vec<u8>,
 /// #     pub signature: [u8; 64],

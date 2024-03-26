@@ -1,0 +1,49 @@
+[package]
+name = "solana-wen-restart"
+description = "Automatic repair and restart protocol"
+documentation = "https://github.com/solana-foundation/solana-improvement-documents/pull/46"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = true
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-program = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-vote-program = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+rand = { workspace = true }
+serial_test = { workspace = true }
+solana-accounts-db = { workspace = true }
+solana-entry = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-streamer = { workspace = true }
+tempfile = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+rustc_version = { workspace = true }
+
+# windows users should install the protobuf compiler manually and set the PROTOC
+# envar to point to the installed binary
+[target."cfg(not(windows))".build-dependencies]
+protobuf-src = { workspace = true }
+
+[lib]
+name = "solana_wen_restart"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

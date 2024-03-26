@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use {
     bincode::serialized_size,
     log::*,
@@ -244,7 +244,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
     Network::new(network)
 }
 
-fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &mut Network) {
+fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &Network) {
     let num = network.len();
     let (converged, bytes_tx) = network_run_pull(thread_pool, network, 0, num * 2, 0.9);
     trace!(
@@ -351,9 +351,7 @@ fn network_run_push(
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
                 (
                     node_pubkey,
-                    node.gossip
-                        .new_push_messages(&node_pubkey, vec![], now, &stakes)
-                        .0,
+                    node.gossip.new_push_messages(&node_pubkey, now, &stakes).0,
                 )
             })
             .collect();
@@ -466,7 +464,7 @@ fn network_run_push(
 
 fn network_run_pull(
     thread_pool: &ThreadPool,
-    network: &mut Network,
+    network: &Network,
     start: usize,
     end: usize,
     max_convergance: f64,
@@ -575,7 +573,6 @@ fn network_run_pull(
                         .gossip
                         .filter_pull_responses(&timeouts, rsp, now, &mut stats);
                     node.gossip.process_pull_responses(
-                        &from,
                         vers,
                         vers_expired_timeout,
                         failed_inserts,
@@ -635,16 +632,16 @@ fn new_ping_cache() -> Mutex<PingCache> {
 #[test]
 #[serial]
 fn test_star_network_pull_50() {
-    let mut network = star_network_create(50);
+    let network = star_network_create(50);
     let thread_pool = build_gossip_thread_pool();
-    network_simulator_pull_only(&thread_pool, &mut network);
+    network_simulator_pull_only(&thread_pool, &network);
 }
 #[test]
 #[serial]
 fn test_star_network_pull_100() {
-    let mut network = star_network_create(100);
+    let network = star_network_create(100);
     let thread_pool = build_gossip_thread_pool();
-    network_simulator_pull_only(&thread_pool, &mut network);
+    network_simulator_pull_only(&thread_pool, &network);
 }
 #[test]
 #[serial]
@@ -704,9 +701,9 @@ fn test_connected_staked_network() {
 #[ignore]
 fn test_star_network_large_pull() {
     solana_logger::setup();
-    let mut network = star_network_create(2000);
+    let network = star_network_create(2000);
     let thread_pool = build_gossip_thread_pool();
-    network_simulator_pull_only(&thread_pool, &mut network);
+    network_simulator_pull_only(&thread_pool, &network);
 }
 #[test]
 #[ignore]

@@ -8,15 +8,15 @@ use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
-        feature_set,
+        epoch_schedule::EpochSchedule,
+        feature_set::{self, FeatureSet},
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
-    solana_turbine::cluster_nodes::check_feature_activation,
     std::{
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -52,25 +52,37 @@ impl ShredFetchStage {
             .as_ref()
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
-        // In the case of bank_forks=None, setup to accept any slot range
-        let mut root_bank = bank_forks.read().unwrap().root_bank();
-        let mut last_root = 0;
-        let mut last_slot = std::u64::MAX;
-        let mut slots_per_epoch = 0;
-
+        let (
+            mut last_root,
+            mut slots_per_epoch,
+            mut feature_set,
+            mut epoch_schedule,
+            mut last_slot,
+        ) = {
+            let bank_forks_r = bank_forks.read().unwrap();
+            let root_bank = bank_forks_r.root_bank();
+            (
+                root_bank.slot(),
+                root_bank.get_slots_in_epoch(root_bank.epoch()),
+                root_bank.feature_set.clone(),
+                root_bank.epoch_schedule().clone(),
+                bank_forks_r.highest_slot(),
+            )
+        };
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
-                {
+                let root_bank = {
                     let bank_forks_r = bank_forks.read().unwrap();
-                    last_root = bank_forks_r.root();
-                    let working_bank = bank_forks_r.working_bank();
-                    last_slot = working_bank.slot();
-                    root_bank = bank_forks_r.root_bank();
-                    slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
-                }
+                    last_slot = bank_forks_r.highest_slot();
+                    bank_forks_r.root_bank()
+                };
+                feature_set = root_bank.feature_set.clone();
+                epoch_schedule = root_bank.epoch_schedule().clone();
+                last_root = root_bank.slot();
+                slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 keypair = repair_context
                     .as_ref()
                     .map(|(_, cluster_info)| cluster_info.keypair().clone());
@@ -92,8 +104,22 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
-            let should_drop_merkle_shreds =
-                |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
+            let should_drop_legacy_shreds = |shred_slot| {
+                check_feature_activation(
+                    &feature_set::drop_legacy_shreds::id(),
+                    shred_slot,
+                    &feature_set,
+                    &epoch_schedule,
+                )
+            };
+            let enable_chained_merkle_shreds = |shred_slot| {
+                check_feature_activation(
+                    &feature_set::enable_chained_merkle_shreds::id(),
+                    shred_slot,
+                    &feature_set,
+                    &epoch_schedule,
+                )
+            };
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
                 if turbine_disabled
@@ -102,7 +128,8 @@ impl ShredFetchStage {
                         last_root,
                         max_slot,
                         shred_version,
-                        should_drop_merkle_shreds,
+                        should_drop_legacy_shreds,
+                        enable_chained_merkle_shreds,
                         &mut stats,
                     )
                 {
@@ -120,6 +147,8 @@ impl ShredFetchStage {
 
     #[allow(clippy::too_many_arguments)]
     fn packet_modifier(
+        receiver_thread_name: &'static str,
+        modifier_thread_name: &'static str,
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
         sender: Sender<PacketBatch>,
@@ -134,9 +163,11 @@ impl ShredFetchStage {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
-            .map(|s| {
+            .enumerate()
+            .map(|(i, socket)| {
                 streamer::receiver(
-                    s,
+                    format!("{receiver_thread_name}{i:02}"),
+                    socket,
                     exit.clone(),
                     packet_sender.clone(),
                     recycler.clone(),
@@ -148,7 +179,7 @@ impl ShredFetchStage {
             })
             .collect();
         let modifier_hdl = Builder::new()
-            .name("solTvuFetchPMod".to_string())
+            .name(modifier_thread_name.to_string())
             .spawn(move || {
                 let repair_context = repair_context
                     .as_ref()
@@ -171,8 +202,9 @@ impl ShredFetchStage {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         sockets: Vec<Arc<UdpSocket>>,
-        quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+        turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_socket: Arc<UdpSocket>,
+        repair_quic_endpoint_receiver: Receiver<(SocketAddr, Vec<u8>)>,
         sender: Sender<PacketBatch>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -183,6 +215,8 @@ impl ShredFetchStage {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
+            "solRcvrShred",
+            "solTvuPktMod",
             sockets,
             exit.clone(),
             sender.clone(),
@@ -196,6 +230,8 @@ impl ShredFetchStage {
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
+            "solRcvrShredRep",
+            "solTvuRepPktMod",
             vec![repair_socket.clone()],
             exit.clone(),
             sender.clone(),
@@ -208,16 +244,58 @@ impl ShredFetchStage {
             turbine_disabled.clone(),
         );
 
-        tvu_threads.extend(repair_receiver.into_iter());
+        tvu_threads.extend(repair_receiver);
         tvu_threads.push(tvu_filter);
         tvu_threads.push(repair_handler);
-
+        // Repair shreds fetched over QUIC protocol.
+        {
+            let (packet_sender, packet_receiver) = unbounded();
+            let bank_forks = bank_forks.clone();
+            let recycler = recycler.clone();
+            let exit = exit.clone();
+            let sender = sender.clone();
+            let turbine_disabled = turbine_disabled.clone();
+            tvu_threads.extend([
+                Builder::new()
+                    .name("solTvuRecvRpr".to_string())
+                    .spawn(|| {
+                        receive_repair_quic_packets(
+                            repair_quic_endpoint_receiver,
+                            packet_sender,
+                            recycler,
+                            exit,
+                        )
+                    })
+                    .unwrap(),
+                Builder::new()
+                    .name("solTvuFetchRpr".to_string())
+                    .spawn(move || {
+                        Self::modify_packets(
+                            packet_receiver,
+                            sender,
+                            &bank_forks,
+                            shred_version,
+                            "shred_fetch_repair_quic",
+                            PacketFlags::REPAIR,
+                            None, // repair_context; no ping packets!
+                            turbine_disabled,
+                        )
+                    })
+                    .unwrap(),
+            ]);
+        }
+        // Turbine shreds fetched over QUIC protocol.
         let (packet_sender, packet_receiver) = unbounded();
         tvu_threads.extend([
             Builder::new()
                 .name("solTvuRecvQuic".to_string())
                 .spawn(|| {
-                    receive_quic_datagrams(quic_endpoint_receiver, packet_sender, recycler, exit)
+                    receive_quic_datagrams(
+                        turbine_quic_endpoint_receiver,
+                        packet_sender,
+                        recycler,
+                        exit,
+                    )
                 })
                 .unwrap(),
             Builder::new()
@@ -250,14 +328,14 @@ impl ShredFetchStage {
 }
 
 fn receive_quic_datagrams(
-    quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
+    turbine_quic_endpoint_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
     sender: Sender<PacketBatch>,
     recycler: PacketBatchRecycler,
     exit: Arc<AtomicBool>,
 ) {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     while !exit.load(Ordering::Relaxed) {
-        let entry = match quic_endpoint_receiver.recv_timeout(RECV_TIMEOUT) {
+        let entry = match turbine_quic_endpoint_receiver.recv_timeout(RECV_TIMEOUT) {
             Ok(entry) => entry,
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => return,
@@ -269,7 +347,7 @@ fn receive_quic_datagrams(
         };
         let deadline = Instant::now() + PACKET_COALESCE_DURATION;
         let entries = std::iter::once(entry).chain(
-            std::iter::repeat_with(|| quic_endpoint_receiver.recv_deadline(deadline).ok())
+            std::iter::repeat_with(|| turbine_quic_endpoint_receiver.recv_deadline(deadline).ok())
                 .while_some(),
         );
         let size = entries
@@ -294,17 +372,67 @@ fn receive_quic_datagrams(
     }
 }
 
+pub(crate) fn receive_repair_quic_packets(
+    repair_quic_endpoint_receiver: Receiver<(SocketAddr, Vec<u8>)>,
+    sender: Sender<PacketBatch>,
+    recycler: PacketBatchRecycler,
+    exit: Arc<AtomicBool>,
+) {
+    const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+    while !exit.load(Ordering::Relaxed) {
+        let entry = match repair_quic_endpoint_receiver.recv_timeout(RECV_TIMEOUT) {
+            Ok(entry) => entry,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        let mut packet_batch =
+            PacketBatch::new_with_recycler(&recycler, PACKETS_PER_BATCH, "receive_quic_datagrams");
+        unsafe {
+            packet_batch.set_len(PACKETS_PER_BATCH);
+        };
+        let deadline = Instant::now() + PACKET_COALESCE_DURATION;
+        let entries = std::iter::once(entry).chain(
+            std::iter::repeat_with(|| repair_quic_endpoint_receiver.recv_deadline(deadline).ok())
+                .while_some(),
+        );
+        let size = entries
+            .filter(|(_, bytes)| bytes.len() <= PACKET_DATA_SIZE)
+            .zip(packet_batch.iter_mut())
+            .map(|((addr, bytes), packet)| {
+                *packet.meta_mut() = Meta {
+                    size: bytes.len(),
+                    addr: addr.ip(),
+                    port: addr.port(),
+                    flags: PacketFlags::REPAIR,
+                };
+                packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
+            })
+            .count();
+        if size > 0 {
+            packet_batch.truncate(size);
+            if sender.send(packet_batch).is_err() {
+                return; // The receiver end of the channel is disconnected.
+            }
+        }
+    }
+}
+
+// Returns true if the feature is effective for the shred slot.
 #[must_use]
-fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
-    check_feature_activation(
-        &feature_set::keep_merkle_shreds::id(),
-        shred_slot,
-        root_bank,
-    ) && !check_feature_activation(
-        &feature_set::drop_merkle_shreds::id(),
-        shred_slot,
-        root_bank,
-    )
+fn check_feature_activation(
+    feature: &Pubkey,
+    shred_slot: Slot,
+    feature_set: &FeatureSet,
+    epoch_schedule: &EpochSchedule,
+) -> bool {
+    match feature_set.activated_slot(feature) {
+        None => false,
+        Some(feature_slot) => {
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
+    }
 }
 
 #[cfg(test)]
@@ -347,7 +475,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -361,7 +490,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
     }
@@ -383,7 +513,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -405,7 +536,8 @@ mod tests {
             3,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
@@ -415,7 +547,8 @@ mod tests {
             last_root,
             max_slot,
             345,       // shred_version
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
@@ -426,7 +559,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
 
@@ -448,7 +582,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
 
@@ -460,7 +595,8 @@ mod tests {
             last_root,
             max_slot,
             shred_version,
-            |_| false, // should_drop_merkle_shreds
+            |_| false, // should_drop_legacy_shreds
+            |_| true,  // enable_chained_merkle_shreds
             &mut stats,
         ));
     }

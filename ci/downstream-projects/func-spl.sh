@@ -5,6 +5,7 @@ spl() {
     # Mind the order!
     PROGRAMS=(
       instruction-padding/program
+      token/transfer-hook/example
       token/program
       token/program-2022
       token/program-2022-test
@@ -16,7 +17,7 @@ spl() {
       memo/program
       name-service/program
       stake-pool/program
-      stake-pool/single-pool
+      single-pool/program
     )
     set -x
     rm -rf spl
@@ -35,7 +36,7 @@ spl() {
     ./patch.crates-io.sh "$SOLANA_DIR"
 
     for program in "${PROGRAMS[@]}"; do
-      $CARGO_BUILD_SBF --manifest-path "$program"/Cargo.toml
+      $CARGO_TEST_SBF --manifest-path "$program"/Cargo.toml
     done
 
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build

@@ -36,9 +36,7 @@ usermod -aG docker "$SETUP_USER"
 "$HERE"/disable-networkd-wait.sh
 
 "$SOLANA_ROOT"/net/scripts/install-earlyoom.sh
-"$SOLANA_ROOT"/net/scripts/install-nodejs.sh
 "$SOLANA_ROOT"/net/scripts/localtime.sh
-"$SOLANA_ROOT"/net/scripts/install-redis.sh
 "$SOLANA_ROOT"/net/scripts/install-rsync.sh
 "$SOLANA_ROOT"/net/scripts/install-libssl-compatability.sh
 

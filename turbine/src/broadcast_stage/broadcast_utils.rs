@@ -1,12 +1,15 @@
 use {
-    super::Result,
+    super::{Error, Result},
     bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
-    solana_ledger::shred::ShredData,
+    solana_ledger::{
+        blockstore::Blockstore,
+        shred::{self, ShredData},
+    },
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, hash::Hash},
     std::{
         sync::Arc,
         time::{Duration, Instant},
@@ -25,6 +28,7 @@ pub(super) struct ReceiveResults {
 
 #[derive(Clone)]
 pub struct UnfinishedSlotInfo {
+    pub(super) chained_merkle_root: Hash,
     pub next_shred_index: u32,
     pub(crate) next_code_index: u32,
     pub slot: Slot,
@@ -96,6 +100,34 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     })
 }
 
+// Returns the Merkle root of the last erasure batch of the parent slot.
+pub(super) fn get_chained_merkle_root_from_parent(
+    slot: Slot,
+    parent: Slot,
+    blockstore: &Blockstore,
+) -> Result<Hash> {
+    if slot == parent {
+        debug_assert_eq!(slot, 0u64);
+        return Ok(Hash::default());
+    }
+    debug_assert!(parent < slot, "parent: {parent} >= slot: {slot}");
+    let index = blockstore
+        .meta(parent)?
+        .ok_or_else(|| Error::UnknownSlotMeta(parent))?
+        .last_index
+        .ok_or_else(|| Error::UnknownLastIndex(parent))?;
+    let shred = blockstore
+        .get_data_shred(parent, index)?
+        .ok_or(Error::ShredNotFound {
+            slot: parent,
+            index,
+        })?;
+    shred::layout::get_merkle_root(&shred).ok_or(Error::InvalidMerkleRoot {
+        slot: parent,
+        index,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -129,7 +161,7 @@ mod tests {
     fn test_recv_slot_entries_1() {
         let (genesis_config, bank0, tx) = setup_test();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
         let (s, r) = unbounded();
         let mut last_hash = genesis_config.hash();
 
@@ -158,8 +190,8 @@ mod tests {
     fn test_recv_slot_entries_2() {
         let (genesis_config, bank0, tx) = setup_test();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+        let bank1 = Arc::new(Bank::new_from_parent(bank0, &Pubkey::default(), 1));
+        let bank2 = Arc::new(Bank::new_from_parent(bank1.clone(), &Pubkey::default(), 2));
         let (s, r) = unbounded();
 
         let mut last_hash = genesis_config.hash();

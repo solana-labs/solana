@@ -14,7 +14,7 @@
 //! of that account array, a [recent blockhash], and a compact encoding of the
 //! message's instructions.
 //!
-//! [recent blockhash]: https://docs.solana.com/developing/programming-model/transactions#recent-blockhash
+//! [recent blockhash]: https://solana.com/docs/core/transactions#recent-blockhash
 //!
 //! Clients most often deal with `Instruction`s and `Transaction`s, with
 //! `Message`s being created by `Transaction` constructors.
@@ -30,7 +30,7 @@
 //! more account keys into a transaction than the legacy format. The
 //! [`VersionedMessage`] type is a thin wrapper around either message version.
 //!
-//! [future message format]: https://docs.solana.com/proposals/versioned-transactions
+//! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 //!
 //! Despite living in the `solana-program` crate, there is no way to access the
 //! runtime's messages from within a Solana program, and only the legacy message
@@ -90,7 +90,7 @@ pub const MESSAGE_HEADER_LENGTH: usize = 3;
 /// may process them in parallel, in a single [PoH] entry. Transactions that
 /// access the same read-write accounts are processed sequentially.
 ///
-/// [PoH]: https://docs.solana.com/cluster/synchronization
+/// [PoH]: https://docs.solanalabs.com/consensus/synchronization
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {

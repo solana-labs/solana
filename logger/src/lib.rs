@@ -58,7 +58,6 @@ pub fn setup() {
 pub fn setup_file_with_default(logfile: &str, filter: &str) {
     use std::fs::OpenOptions;
     let file = OpenOptions::new()
-        .write(true)
         .create(true)
         .append(true)
         .open(logfile)

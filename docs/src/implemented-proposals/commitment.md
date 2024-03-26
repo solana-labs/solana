@@ -4,7 +4,7 @@ title: Commitment
 
 The commitment metric aims to give clients a measure of the network confirmation
 and stake levels on a particular block. Clients can then use this information to
-derive their own [measures of commitment](../cluster/commitments.md).
+derive their own [measures of commitment](../consensus/commitments.md).
 
 # Calculation RPC
 

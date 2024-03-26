@@ -16,7 +16,6 @@ futures-util = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true, optional = true }
 log = { workspace = true }
-rand = { workspace = true }
 rayon = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
@@ -27,9 +26,6 @@ solana-rpc-client-api = { workspace = true }
 solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-
-[dev-dependencies]
-rand_chacha = { workspace = true }
 
 [features]
 default = ["spinner"]

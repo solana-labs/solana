@@ -34,7 +34,7 @@ pub struct Config {
     ///
     /// For local testing, the typical value is `http://localhost:8899`.
     ///
-    /// [rpcdocs]: https://docs.solana.com/cluster/rpc-endpoints
+    /// [rpcdocs]: https://solana.com/docs/core/clusters
     pub json_rpc_url: String,
     /// The address to connect to for receiving event notifications.
     ///

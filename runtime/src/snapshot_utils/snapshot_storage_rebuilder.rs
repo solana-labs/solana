@@ -1,17 +1,10 @@
 //! Provides interfaces for rebuilding snapshot storages
 
 use {
-    super::{
-        get_io_error, snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion,
-    },
-    crate::{
-        account_storage::{AccountStorageMap, AccountStorageReference},
-        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
-        append_vec::AppendVec,
-        serde_snapshot::{
-            self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
-            snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
-        },
+    super::{snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion},
+    crate::serde_snapshot::{
+        self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
+        snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
     dashmap::DashMap,
@@ -21,11 +14,16 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     regex::Regex,
+    solana_accounts_db::{
+        account_storage::{AccountStorageMap, AccountStorageReference},
+        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
+        append_vec::AppendVec,
+    },
     solana_sdk::clock::Slot,
     std::{
         collections::HashMap,
         fs::File,
-        io::BufReader,
+        io::{BufReader, Error as IoError},
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -84,9 +82,9 @@ impl SnapshotStorageRebuilder {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
         let snapshot_version_str = snapshot_version_from_file(snapshot_version_path)?;
-        let snapshot_version = snapshot_version_str.parse().map_err(|_| {
-            get_io_error(&format!(
-                "unsupported snapshot version: {snapshot_version_str}",
+        let snapshot_version = snapshot_version_str.parse().map_err(|err| {
+            IoError::other(format!(
+                "unsupported snapshot version '{snapshot_version_str}': {err}",
             ))
         })?;
         let snapshot_storage_lengths =
@@ -420,9 +418,10 @@ impl SnapshotStorageRebuilder {
     /// Builds thread pool to rebuild with
     fn build_thread_pool(&self) -> ThreadPool {
         ThreadPoolBuilder::default()
+            .thread_name(|i| format!("solRbuildSnap{i:02}"))
             .num_threads(self.num_threads)
             .build()
-            .unwrap()
+            .expect("new rayon threadpool")
     }
 }
 
@@ -464,8 +463,8 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        crate::{append_vec::AppendVec, snapshot_utils::SNAPSHOT_VERSION_FILENAME},
+        super::*, crate::snapshot_utils::SNAPSHOT_VERSION_FILENAME,
+        solana_accounts_db::append_vec::AppendVec,
     };
 
     #[test]

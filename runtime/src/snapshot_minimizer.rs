@@ -1,20 +1,18 @@
 //! Used to create minimal snapshots - separated here to keep accounts_db simpler
 
 use {
-    crate::{
-        accounts_db::{
-            AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats, StoreReclaims,
-        },
-        accounts_partition,
-        bank::Bank,
-        builtins::BUILTINS,
-        static_ids,
-    },
+    crate::{bank::Bank, builtins::BUILTINS, static_ids},
     dashmap::DashSet,
     log::info,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         prelude::ParallelSlice,
+    },
+    solana_accounts_db::{
+        accounts_db::{
+            AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats, StoreReclaims,
+        },
+        accounts_partition,
     },
     solana_measure::measure,
     solana_sdk::{
@@ -45,7 +43,7 @@ pub struct SnapshotMinimizer<'a> {
 impl<'a> SnapshotMinimizer<'a> {
     /// Removes all accounts not necessary for replaying slots in the range [starting_slot, ending_slot].
     /// `transaction_account_set` should contain accounts used in transactions in the slot range [starting_slot, ending_slot].
-    /// This function will accumulate other accounts (rent colleciton, builtins, etc) necessary to replay transactions.
+    /// This function will accumulate other accounts (rent collection, builtins, etc) necessary to replay transactions.
     ///
     /// This function will modify accounts_db by removing accounts not needed to replay [starting_slot, ending_slot],
     /// and update the bank's capitalization.
@@ -241,12 +239,8 @@ impl<'a> SnapshotMinimizer<'a> {
             measure!(self.purge_dead_slots(dead_slots), "purge dead slots");
         info!("{purge_dead_slots_measure}");
 
-        let (_, drop_or_recycle_stores_measure) = measure!(
-            self.accounts_db()
-                .drop_or_recycle_stores(dead_storages, &self.accounts_db().shrink_stats),
-            "drop or recycle stores"
-        );
-        info!("{drop_or_recycle_stores_measure}");
+        let (_, drop_storages_measure) = measure!(drop(dead_storages), "drop storages");
+        info!("{drop_storages_measure}");
 
         // Turn logging back on after minimization
         self.accounts_db()
@@ -258,15 +252,23 @@ impl<'a> SnapshotMinimizer<'a> {
     fn get_minimized_slot_set(&self) -> DashSet<Slot> {
         let minimized_slot_set = DashSet::new();
         self.minimized_account_set.par_iter().for_each(|pubkey| {
-            if let Some(read_entry) = self
-                .accounts_db()
+            self.accounts_db()
                 .accounts_index
-                .get_account_read_entry(&pubkey)
-            {
-                if let Some(max_slot) = read_entry.slot_list().iter().map(|(slot, _)| *slot).max() {
-                    minimized_slot_set.insert(max_slot);
-                }
-            }
+                .get_and_then(&pubkey, |entry| {
+                    if let Some(entry) = entry {
+                        let max_slot = entry
+                            .slot_list
+                            .read()
+                            .unwrap()
+                            .iter()
+                            .map(|(slot, _)| *slot)
+                            .max();
+                        if let Some(max_slot) = max_slot {
+                            minimized_slot_set.insert(max_slot);
+                        }
+                    }
+                    (false, ())
+                });
         });
         minimized_slot_set
     }
@@ -323,12 +325,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 if self.minimized_account_set.contains(account.pubkey()) {
                     chunk_bytes += account.stored_size();
                     keep_accounts.push(account);
-                } else if self
-                    .accounts_db()
-                    .accounts_index
-                    .get_account_read_entry(account.pubkey())
-                    .is_some()
-                {
+                } else if self.accounts_db().accounts_index.contains(account.pubkey()) {
                     purge_pubkeys.push(account.pubkey());
                 }
             });
@@ -370,11 +367,7 @@ impl<'a> SnapshotMinimizer<'a> {
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
             self.accounts_db().store_accounts_frozen(
-                (
-                    slot,
-                    &accounts[..],
-                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
-                ),
+                (slot, &accounts[..]),
                 Some(hashes),
                 new_storage,
                 Some(Box::new(write_versions.into_iter())),

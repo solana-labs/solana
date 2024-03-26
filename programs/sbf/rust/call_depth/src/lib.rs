@@ -18,7 +18,7 @@ pub fn recurse(data: &mut [u8]) {
 #[no_mangle]
 pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     msg!("Call depth");
-    let depth = *(input.add(16) as *mut u8);
+    let depth = *input.add(16);
     sol_log_64(line!() as u64, 0, 0, 0, depth as u64);
     let mut data = Vec::with_capacity(depth as usize);
     for i in 0_u8..depth {

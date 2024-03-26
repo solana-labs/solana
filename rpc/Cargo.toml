@@ -30,6 +30,7 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 soketto = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-client = { workspace = true }
 solana-entry = { workspace = true }
 solana-faucet = { workspace = true }
@@ -47,9 +48,11 @@ solana-send-transaction-service = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
+solana-svm = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
@@ -60,9 +63,10 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 
 [dev-dependencies]
 serial_test = { workspace = true }
-solana-address-lookup-table-program = { workspace = true }
 solana-net-utils = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
+spl-pod = { workspace = true }
 symlink = { workspace = true }
 
 [lib]

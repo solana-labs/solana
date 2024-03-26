@@ -32,7 +32,7 @@ trait SyncClient {
 }
 ```
 
-Users send transactions and asynchrounously and synchrounously await results.
+Users send transactions and asynchronously and synchronously await results.
 
 ### ThinClient for Clusters
 

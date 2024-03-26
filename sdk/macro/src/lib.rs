@@ -8,7 +8,6 @@ use {
     proc_macro::TokenStream,
     proc_macro2::{Delimiter, Span, TokenTree},
     quote::{quote, ToTokens},
-    std::convert::TryFrom,
     syn::{
         bracketed,
         parse::{Parse, ParseStream, Result},
@@ -90,8 +89,8 @@ fn deprecated_id_to_tokens(
 
         #[cfg(test)]
         #[test]
-            fn test_id() {
-            #[allow(deprecated)]
+        #[allow(deprecated)]
+        fn test_id() {
             assert!(check_id(&id()));
         }
     });
@@ -430,7 +429,6 @@ pub fn derive_clone_zeroed(input: proc_macro::TokenStream) -> proc_macro::TokenS
                     // implementations on `Copy` types are simply wrappers of `Copy`.
                     // This is not the case here, and intentionally so because we want to
                     // guarantee zeroed padding.
-                    #[allow(clippy::incorrect_clone_impl_on_copy_type)]
                     fn clone(&self) -> Self {
                         let mut value = std::mem::MaybeUninit::<Self>::uninit();
                         unsafe {

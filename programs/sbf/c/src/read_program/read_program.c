@@ -10,7 +10,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return ERROR_INVALID_ARGUMENT;
   }
 
-  char ka_data[] = {0x7F, 0x45, 0x4C, 0x46};
+  char ka_data[] = {0x02, 0x00, 0x00, 0x00};
 
   sol_assert(params.ka_num == 1);
   sol_assert(!sol_memcmp(params.ka[0].data, ka_data, 4));

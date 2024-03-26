@@ -26,7 +26,7 @@ solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 
 [dev-dependencies]
-matches = { workspace = true }
+assert_matches = { workspace = true }
 solana-logger = { workspace = true }
 
 [lib]

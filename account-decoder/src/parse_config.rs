@@ -8,7 +8,9 @@ use {
     solana_config_program::{get_config_data, ConfigKeys},
     solana_sdk::{
         pubkey::Pubkey,
-        stake::config::{self as stake_config, Config as StakeConfig},
+        stake::config::{
+            Config as StakeConfig, {self as stake_config},
+        },
     },
 };
 
@@ -66,6 +68,10 @@ pub struct UiConfigKey {
     pub signer: bool,
 }
 
+#[deprecated(
+    since = "1.16.7",
+    note = "Please use `solana_sdk::stake::state::warmup_cooldown_rate()` instead"
+)]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiStakeConfig {

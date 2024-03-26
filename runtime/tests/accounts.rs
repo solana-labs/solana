@@ -2,14 +2,13 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_runtime::{
-        accounts_db::{AccountsDb, LoadHint, INCLUDE_SLOT_IN_HASH_TESTS},
+    solana_accounts_db::{
+        accounts_db::{AccountsDb, LoadHint},
         ancestors::Ancestors,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
-        genesis_config::ClusterType,
         pubkey::Pubkey,
         sysvar::epoch_schedule::EpochSchedule,
     },
@@ -51,7 +50,7 @@ fn test_shrink_and_clean() {
             while alive_accounts.len() <= 10 {
                 alive_accounts.push((
                     solana_sdk::pubkey::new_rand(),
-                    AccountSharedData::new(thread_rng().gen_range(0, 50), 0, &owner),
+                    AccountSharedData::new(thread_rng().gen_range(0..50), 0, &owner),
                 ));
             }
 
@@ -60,14 +59,7 @@ fn test_shrink_and_clean() {
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.checked_sub_lamports(1).unwrap();
 
-                accounts.store_cached(
-                    (
-                        current_slot,
-                        &[(&*pubkey, &*account)][..],
-                        INCLUDE_SLOT_IN_HASH_TESTS,
-                    ),
-                    None,
-                );
+                accounts.store_cached((current_slot, &[(&*pubkey, &*account)][..]), None);
             }
             accounts.add_root(current_slot);
             accounts.flush_accounts_cache(true, Some(current_slot));
@@ -88,7 +80,7 @@ fn test_shrink_and_clean() {
 #[test]
 fn test_bad_bank_hash() {
     solana_logger::setup();
-    let db = AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development);
+    let db = AccountsDb::new_single_for_tests();
 
     let some_slot: Slot = 0;
     let max_accounts = 200;
@@ -96,8 +88,8 @@ fn test_bad_bank_hash() {
         .into_par_iter()
         .map(|_| {
             let key = solana_sdk::pubkey::new_rand();
-            let lamports = thread_rng().gen_range(0, 100);
-            let some_data_len = thread_rng().gen_range(0, 1000);
+            let lamports = thread_rng().gen_range(0..100);
+            let some_data_len = thread_rng().gen_range(0..1000);
             let account = AccountSharedData::new(lamports, some_data_len, &key);
             (key, account)
         })
@@ -113,11 +105,11 @@ fn test_bad_bank_hash() {
             info!("i: {}", i);
             last_print = Instant::now();
         }
-        let num_accounts = thread_rng().gen_range(0, 100);
+        let num_accounts = thread_rng().gen_range(0..100);
         (0..num_accounts).for_each(|_| {
             let mut idx;
             loop {
-                idx = thread_rng().gen_range(0, max_accounts);
+                idx = thread_rng().gen_range(0..max_accounts);
                 if existing.contains(&idx) {
                     continue;
                 }
@@ -126,23 +118,20 @@ fn test_bad_bank_hash() {
             }
             accounts_keys[idx]
                 .1
-                .set_lamports(thread_rng().gen_range(0, 1000));
+                .set_lamports(thread_rng().gen_range(0..1000));
         });
 
         let account_refs: Vec<_> = existing
             .iter()
             .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1))
             .collect();
-        db.store_cached(
-            (some_slot, &account_refs[..], INCLUDE_SLOT_IN_HASH_TESTS),
-            None,
-        );
+        db.store_cached((some_slot, &account_refs[..]), None);
         for pass in 0..2 {
             for (key, account) in &account_refs {
                 assert_eq!(
                     db.load_account_hash(&ancestors, key, Some(some_slot), LoadHint::Unspecified)
                         .unwrap(),
-                    AccountsDb::hash_account(some_slot, *account, key, INCLUDE_SLOT_IN_HASH_TESTS)
+                    AccountsDb::hash_account(*account, key)
                 );
             }
             if pass == 0 {

@@ -496,7 +496,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
     loop {
         assert!(now.elapsed() < timeout);
         let statuses = rpc_client.get_signature_statuses(&signatures).unwrap();
-        if statuses.value.get(0).is_some() {
+        if statuses.value.first().is_some() {
             return;
         }
     }

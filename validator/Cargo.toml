@@ -23,7 +23,6 @@ jsonrpc-core = { workspace = true }
 jsonrpc-core-client = { workspace = true, features = ["ipc"] }
 jsonrpc-derive = { workspace = true }
 jsonrpc-ipc-server = { workspace = true }
-jsonrpc-server-utils = { workspace = true }
 lazy_static = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
@@ -33,6 +32,7 @@ rayon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-core = { workspace = true }
@@ -49,6 +49,8 @@ solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-perf = { workspace = true }
 solana-poh = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
@@ -59,13 +61,16 @@ solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true }
 solana-tpu-client = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 symlink = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 solana-account-decoder = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

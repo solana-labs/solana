@@ -14,6 +14,7 @@ log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-client = { workspace = true }
@@ -33,6 +34,7 @@ spl-token = { workspace = true, features = ["no-entrypoint"] }
 [dev-dependencies]
 solana-core = { workspace = true }
 solana-local-cluster = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-test-validator = { workspace = true }
 
 [package.metadata.docs.rs]

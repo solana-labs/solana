@@ -1,24 +1,35 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+// REMOVE once https://github.com/rust-lang/rust-clippy/issues/11153 is fixed
+#![allow(clippy::items_after_test_module)]
 
 use {
     serde_json::Value,
     solana_cli::{
         cli::{process_command, CliCommand, CliConfig},
         program::{ProgramCliCommand, CLOSE_PROGRAM_WARNING},
+        test_utils::wait_n_slots,
     },
-    solana_cli_output::OutputFormat,
+    solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_faucet::faucet::run_local_faucet,
     solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         commitment_config::CommitmentConfig,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{Keypair, NullSigner, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    std::{env, fs::File, io::Read, path::PathBuf, str::FromStr},
+    std::{
+        env,
+        fs::File,
+        io::Read,
+        path::{Path, PathBuf},
+        str::FromStr,
+    },
+    test_case::test_case,
 };
 
 #[test]
@@ -64,6 +75,7 @@ fn test_cli_program_deploy_non_upgradeable() {
 
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -89,6 +101,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     assert_eq!(account0.lamports, minimum_balance_for_program);
     assert_eq!(account0.owner, bpf_loader_upgradeable::id());
     assert!(account0.executable);
+
     let (programdata_pubkey, _) =
         Pubkey::find_program_address(&[program_id.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -108,6 +121,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -162,6 +176,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -184,6 +199,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     // Use forcing parameter to deploy to account with excess balance
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(1),
         program_pubkey: None,
         buffer_signer_index: None,
@@ -244,6 +260,7 @@ fn test_cli_program_deploy_no_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -270,6 +287,7 @@ fn test_cli_program_deploy_no_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_id),
         buffer_signer_index: None,
@@ -331,6 +349,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -379,6 +398,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -411,7 +431,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert!(!programdata_account.executable);
+    assert!(program_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
@@ -421,6 +441,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -444,19 +465,38 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert!(!programdata_account.executable);
+    assert!(program_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
     );
 
-    // Set a new authority
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+    // Set a new authority sign offline first
     let new_upgrade_authority = Keypair::new();
-    config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
+    config.signers = vec![&keypair, &upgrade_authority, &new_upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
         program_pubkey,
-        upgrade_authority_index: Some(1),
-        new_upgrade_authority: Some(new_upgrade_authority.pubkey()),
+        upgrade_authority_index: 1,
+        new_upgrade_authority_index: 2,
+        sign_only: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    let sig_response = process_command(&config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_pre_signer = sign_only
+        .presigner_of(&new_upgrade_authority.pubkey())
+        .unwrap();
+
+    config.signers = vec![&keypair, &upgrade_authority, &offline_pre_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+        program_pubkey,
+        upgrade_authority_index: 1,
+        new_upgrade_authority_index: 2,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), false, None),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -476,6 +516,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -499,7 +540,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert!(!programdata_account.executable);
+    assert!(program_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
@@ -535,6 +576,9 @@ fn test_cli_program_deploy_with_authority() {
         program_pubkey,
         upgrade_authority_index: Some(1),
         new_upgrade_authority: None,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -551,6 +595,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -567,6 +612,7 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -670,6 +716,7 @@ fn test_cli_program_close_program() {
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -687,6 +734,9 @@ fn test_cli_program_close_program() {
         &[program_keypair.pubkey().as_ref()],
         &bpf_loader_upgradeable::id(),
     );
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
 
     // Close program
     let close_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -720,6 +770,153 @@ fn test_cli_program_close_program() {
     rpc_client.get_account(&programdata_pubkey).unwrap_err();
     let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
     assert_eq!(programdata_lamports, recipient_account.lamports);
+}
+
+#[test]
+fn test_cli_program_extend_program() {
+    solana_logger::setup();
+
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
+
+    let mut noop_large_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_large_path.push("tests");
+    noop_large_path.push("fixtures");
+    noop_large_path.push("noop_large");
+    noop_large_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_programdata = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
+        .unwrap();
+    let minimum_balance_for_program = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
+        .unwrap();
+    let upgrade_authority = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
+    };
+    process_command(&config).unwrap();
+
+    // Deploy the upgradeable program
+    let program_keypair = Keypair::new();
+    config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None, // Use None to check that it defaults to the max length
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+
+    let (programdata_pubkey, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len = UpgradeableLoaderState::size_of_programdata(max_len);
+    assert_eq!(expected_len, programdata_account.data.len());
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
+
+    // Extend program for larger program, minus 1 required byte
+    let mut file = File::open(noop_large_path.to_str().unwrap()).unwrap();
+    let mut new_program_data = Vec::new();
+    file.read_to_end(&mut new_program_data).unwrap();
+    let new_max_len = new_program_data.len();
+    let additional_bytes = (new_max_len - max_len) as u32;
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::ExtendProgram {
+        program_pubkey: program_keypair.pubkey(),
+        additional_bytes: additional_bytes - 1,
+    });
+    process_command(&config).unwrap();
+
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len = UpgradeableLoaderState::size_of_programdata(new_max_len - 1);
+    assert_eq!(expected_len, programdata_account.data.len());
+
+    // Larger program deploy fails because missing 1 byte
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    process_command(&config).unwrap_err();
+
+    // Wait one slot to avoid "Program was deployed in this block already" error
+    wait_n_slots(&rpc_client, 1);
+
+    // Extend 1 last byte
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::ExtendProgram {
+        program_pubkey: program_keypair.pubkey(),
+        additional_bytes: 1,
+    });
+    process_command(&config).unwrap();
+
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let expected_len = UpgradeableLoaderState::size_of_programdata(new_max_len);
+    assert_eq!(expected_len, programdata_account.data.len());
+
+    // Larger program deploy finally succeeds
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    process_command(&config).unwrap();
 }
 
 #[test]
@@ -776,6 +973,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 0,
@@ -811,6 +1009,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -873,6 +1072,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -911,6 +1111,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 2,
@@ -985,6 +1186,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: 0,
@@ -1026,6 +1228,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -1036,6 +1239,7 @@ fn test_cli_program_write_buffer() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: Some(1),
@@ -1098,6 +1302,7 @@ fn test_cli_program_set_buffer_authority() {
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 0,
@@ -1112,7 +1317,7 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set new authority
+    // Set new buffer authority
     let new_buffer_authority = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
@@ -1141,7 +1346,25 @@ fn test_cli_program_set_buffer_authority() {
         panic!("not a buffer account");
     }
 
-    // Set authority to buffer
+    // Attempt to deploy program from buffer using previous authority (should fail)
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 0,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap_err();
+
+    // Set buffer authority to the buffer identity (it's a common way for program devs to do so)
     config.signers = vec![&keypair, &new_buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
         buffer_pubkey: buffer_keypair.pubkey(),
@@ -1167,6 +1390,24 @@ fn test_cli_program_set_buffer_authority() {
     } else {
         panic!("not a buffer account");
     }
+
+    // Deploy from buffer using proper(new) buffer authority
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
 }
 
 #[test]
@@ -1214,6 +1455,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &buffer_keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -1233,6 +1475,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1249,6 +1492,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.signers = vec![&keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1260,6 +1504,198 @@ fn test_cli_program_mismatch_buffer_authority() {
         skip_fee_check: false,
     });
     process_command(&config).unwrap();
+}
+
+// Assume fee payer will be either online signer or offline signer (could be completely
+// separate signer too, but that option is unlikely to be chosen often, so don't bother
+// testing for it), we want to test for most common choices.
+#[test_case(true; "offline signer will be fee payer")]
+#[test_case(false; "online signer will be fee payer")]
+fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer: bool) {
+    solana_logger::setup();
+
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
+
+    let mut noop_large_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_large_path.push("tests");
+    noop_large_path.push("fixtures");
+    noop_large_path.push("noop_large");
+    noop_large_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+
+    let mut file = File::open(noop_large_path.to_str().unwrap()).unwrap();
+    let mut large_program_data = Vec::new();
+    file.read_to_end(&mut large_program_data).unwrap();
+    let max_program_data_len = large_program_data.len();
+    let minimum_balance_for_large_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_program_data_len,
+        ))
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+
+    let online_signer = Keypair::new();
+    let online_signer_identity = NullSigner::new(&online_signer.pubkey());
+    let offline_signer = Keypair::new();
+    let buffer_signer = Keypair::new();
+    // Typically, keypair for program signer should be different from online signer or
+    // offline signer keypairs.
+    let program_signer = Keypair::new();
+
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_large_buffer, // gotta be enough for this test
+    };
+    config.signers = vec![&online_signer];
+    process_command(&config).unwrap();
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_large_buffer, // gotta be enough for this test
+    };
+    config.signers = vec![&offline_signer];
+    process_command(&config).unwrap();
+
+    // Deploy upgradeable program with authority set to offline signer
+    config.signers = vec![&online_signer, &offline_signer, &program_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_signer.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1, // must be offline signer for security reasons
+        is_final: false,
+        max_len: Some(max_program_data_len), // allows for larger program size with future upgrades
+        skip_fee_check: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+
+    // Prepare buffer to upgrade deployed program to a larger program
+    create_buffer_with_offline_authority(
+        &rpc_client,
+        &noop_large_path,
+        &mut config,
+        &online_signer,
+        &offline_signer,
+        &buffer_signer,
+    );
+
+    // Offline sign-only with signature over "wrong" message (with different buffer)
+    config.signers = vec![&offline_signer];
+    let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
+        0 // offline signer
+    } else {
+        config.signers.push(&online_signer_identity); // can't (and won't) provide signature in --sign-only mode
+        1 // online signer
+    };
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: program_signer.pubkey(), // will ensure offline signature applies to wrong(different) message
+        upgrade_authority_signer_index: 0,
+        sign_only: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let sig_response = process_command(&config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_pre_signer = sign_only.presigner_of(&offline_signer.pubkey()).unwrap();
+    // Attempt to deploy from buffer using signature over wrong(different) message (should fail)
+    config.signers = vec![&offline_pre_signer, &program_signer];
+    let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
+        0 // offline signer
+    } else {
+        config.signers.push(&online_signer); // can provide signature when not in --sign-only mode
+        2 // online signer
+    };
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
+        upgrade_authority_signer_index: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let error = process_command(&config).unwrap_err();
+    assert_eq!(error.to_string(), "presigner error");
+
+    // Offline sign-only with online signer as fee payer (correct signature for program upgrade)
+    config.signers = vec![&offline_signer];
+    let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
+        0 // offline signer
+    } else {
+        config.signers.push(&online_signer_identity); // can't (and won't) provide signature in --sign-only mode
+        1 // online signer
+    };
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
+        upgrade_authority_signer_index: 0,
+        sign_only: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let sig_response = process_command(&config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_pre_signer = sign_only.presigner_of(&offline_signer.pubkey()).unwrap();
+    // Attempt to deploy from buffer using signature over correct message (should succeed)
+    config.signers = vec![&offline_pre_signer, &program_signer];
+    let fee_payer_signer_index = if use_offline_signer_as_fee_payer {
+        0 // offline signer
+    } else {
+        config.signers.push(&online_signer); // can provide signature when not in --sign-only mode
+        2 // online signer
+    };
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
+        upgrade_authority_signer_index: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+    let (programdata_pubkey, _) = Pubkey::find_program_address(
+        &[program_signer.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+    let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    assert_eq!(
+        programdata_account.lamports,
+        minimum_balance_for_large_buffer
+    );
+    assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
+    assert!(!programdata_account.executable);
+    assert_eq!(
+        programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
+        large_program_data[..]
+    );
 }
 
 #[test]
@@ -1310,6 +1746,7 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -1366,6 +1803,7 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair, &authority_keypair, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -1497,6 +1935,7 @@ fn test_cli_program_dump() {
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
         program_location: noop_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: 2,
@@ -1524,5 +1963,49 @@ fn test_cli_program_dump() {
     assert_eq!(program_data.len(), out_data.len());
     for i in 0..program_data.len() {
         assert_eq!(program_data[i], out_data[i]);
+    }
+}
+
+fn create_buffer_with_offline_authority<'a>(
+    rpc_client: &RpcClient,
+    program_path: &Path,
+    config: &mut CliConfig<'a>,
+    online_signer: &'a Keypair,
+    offline_signer: &'a Keypair,
+    buffer_signer: &'a Keypair,
+) {
+    // Write a buffer
+    config.signers = vec![online_signer, buffer_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: program_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_signer.pubkey()),
+        buffer_authority_signer_index: 0,
+        max_len: None,
+        skip_fee_check: false,
+    });
+    process_command(config).unwrap();
+    let buffer_account = rpc_client.get_account(&buffer_signer.pubkey()).unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(online_signer.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+
+    // Set buffer authority to offline signer
+    config.signers = vec![online_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
+        buffer_pubkey: buffer_signer.pubkey(),
+        buffer_authority_index: Some(0),
+        new_buffer_authority: offline_signer.pubkey(),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(config).unwrap();
+    let buffer_account = rpc_client.get_account(&buffer_signer.pubkey()).unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(offline_signer.pubkey()));
+    } else {
+        panic!("not a buffer account");
     }
 }

@@ -1,15 +1,18 @@
 //! Plain Old Data types for the AES128-GCM-SIV authenticated encryption scheme.
 
 #[cfg(not(target_os = "solana"))]
-use crate::{encryption::auth_encryption as decoded, errors::ProofError};
+use crate::encryption::auth_encryption::{self as decoded, AuthenticatedEncryptionError};
 use {
-    crate::zk_token_elgamal::pod::{Pod, Zeroable},
+    crate::zk_token_elgamal::pod::{impl_from_str, Pod, Zeroable},
     base64::{prelude::BASE64_STANDARD, Engine},
     std::fmt,
 };
 
 /// Byte length of an authenticated encryption ciphertext
 const AE_CIPHERTEXT_LEN: usize = 36;
+
+/// Maximum length of a base64 encoded authenticated encryption ciphertext
+const AE_CIPHERTEXT_MAX_BASE64_LEN: usize = 48;
 
 /// The `AeCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -34,6 +37,12 @@ impl fmt::Display for AeCiphertext {
     }
 }
 
+impl_from_str!(
+    TYPE = AeCiphertext,
+    BYTES_LEN = AE_CIPHERTEXT_LEN,
+    BASE64_LEN = AE_CIPHERTEXT_MAX_BASE64_LEN
+);
+
 impl Default for AeCiphertext {
     fn default() -> Self {
         Self::zeroed()
@@ -49,9 +58,25 @@ impl From<decoded::AeCiphertext> for AeCiphertext {
 
 #[cfg(not(target_os = "solana"))]
 impl TryFrom<AeCiphertext> for decoded::AeCiphertext {
-    type Error = ProofError;
+    type Error = AuthenticatedEncryptionError;
 
     fn try_from(pod_ciphertext: AeCiphertext) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
+        Self::from_bytes(&pod_ciphertext.0).ok_or(AuthenticatedEncryptionError::Deserialization)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, crate::encryption::auth_encryption::AeKey, std::str::FromStr};
+
+    #[test]
+    fn ae_ciphertext_fromstr() {
+        let ae_key = AeKey::new_rand();
+        let expected_ae_ciphertext: AeCiphertext = ae_key.encrypt(0_u64).into();
+
+        let ae_ciphertext_base64_str = format!("{}", expected_ae_ciphertext);
+        let computed_ae_ciphertext = AeCiphertext::from_str(&ae_ciphertext_base64_str).unwrap();
+
+        assert_eq!(expected_ae_ciphertext, computed_ae_ciphertext);
     }
 }

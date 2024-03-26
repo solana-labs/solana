@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -7,6 +7,7 @@ extern crate serde_derive;
 pub mod parse_account_data;
 pub mod parse_address_lookup_table;
 pub mod parse_bpf_loader;
+#[allow(deprecated)]
 pub mod parse_config;
 pub mod parse_nonce;
 pub mod parse_stake;
@@ -53,6 +54,30 @@ pub enum UiAccountData {
     LegacyBinary(String), // Legacy. Retained for RPC backwards compatibility
     Json(ParsedAccount),
     Binary(String, UiAccountEncoding),
+}
+
+impl UiAccountData {
+    /// Returns decoded account data in binary format if possible
+    pub fn decode(&self) -> Option<Vec<u8>> {
+        match self {
+            UiAccountData::Json(_) => None,
+            UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
+            UiAccountData::Binary(blob, encoding) => match encoding {
+                UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
+                UiAccountEncoding::Base64 => BASE64_STANDARD.decode(blob).ok(),
+                UiAccountEncoding::Base64Zstd => {
+                    BASE64_STANDARD.decode(blob).ok().and_then(|zstd_data| {
+                        let mut data = vec![];
+                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                            .and_then(|mut reader| reader.read_to_end(&mut data))
+                            .map(|_| data)
+                            .ok()
+                    })
+                }
+                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
+            },
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -138,24 +163,7 @@ impl UiAccount {
     }
 
     pub fn decode<T: WritableAccount>(&self) -> Option<T> {
-        let data = match &self.data {
-            UiAccountData::Json(_) => None,
-            UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
-            UiAccountData::Binary(blob, encoding) => match encoding {
-                UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
-                UiAccountEncoding::Base64 => BASE64_STANDARD.decode(blob).ok(),
-                UiAccountEncoding::Base64Zstd => {
-                    BASE64_STANDARD.decode(blob).ok().and_then(|zstd_data| {
-                        let mut data = vec![];
-                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
-                            .and_then(|mut reader| reader.read_to_end(&mut data))
-                            .map(|_| data)
-                            .ok()
-                    })
-                }
-                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
-            },
-        }?;
+        let data = self.data.decode()?;
         Some(T::create(
             self.lamports,
             data,
@@ -213,6 +221,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 mod test {
     use {
         super::*,
+        assert_matches::assert_matches,
         solana_sdk::account::{Account, AccountSharedData},
     };
 
@@ -256,10 +265,10 @@ mod test {
             None,
             None,
         );
-        assert!(matches!(
+        assert_matches!(
             encoded_account.data,
             UiAccountData::Binary(_, UiAccountEncoding::Base64Zstd)
-        ));
+        );
 
         let decoded_account = encoded_account.decode::<Account>().unwrap();
         assert_eq!(decoded_account.data(), &vec![0; 1024]);

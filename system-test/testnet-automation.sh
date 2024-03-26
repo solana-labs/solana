@@ -12,7 +12,7 @@ function cleanup_testnet {
 Test failed during step:
 ${STEP}
 
-Failure occured when running the following command:
+Failure occurred when running the following command:
 $*"
   fi
 

@@ -9,16 +9,14 @@ and `src/program.c` containing:
 ```c
 #include <solana_sdk.h>
 
-bool entrypoint(const uint8_t *input) {
-  SolKeyedAccount ka[1];
-  uint8_t *data;
-  uint64_t data_len;
+extern uint64_t entrypoint(const uint8_t *input) {
+  SolAccountInfo ka[1];
+  SolParameters params = (SolParameters) { .ka = ka };
 
-  if (!sol_deserialize(buf, ka, SOL_ARRAY_SIZE(ka), NULL, &data, &data_len)) {
-    return false;
+  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
+    return ERROR_INVALID_ARGUMENT;
   }
-  print_params(1, ka, data, data_len);
-  return true;
+  return SUCCESS;
 }
 ```
 

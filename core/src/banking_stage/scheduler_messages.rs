@@ -1,7 +1,7 @@
 use {
     super::immutable_deserialized_packet::ImmutableDeserializedPacket,
     solana_sdk::{clock::Slot, transaction::SanitizedTransaction},
-    std::sync::Arc,
+    std::{fmt::Display, sync::Arc},
 };
 
 /// A unique identifier for a transaction batch.
@@ -14,6 +14,12 @@ impl TransactionBatchId {
     }
 }
 
+impl Display for TransactionBatchId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A unique identifier for a transaction.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct TransactionId(u64);
@@ -21,6 +27,12 @@ pub struct TransactionId(u64);
 impl TransactionId {
     pub fn new(index: u64) -> Self {
         Self(index)
+    }
+}
+
+impl Display for TransactionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

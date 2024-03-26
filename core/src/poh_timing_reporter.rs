@@ -93,10 +93,7 @@ impl PohTimingReporter {
 
     /// Process incoming PohTimingPoint from the channel
     pub fn process(&mut self, slot: Slot, root_slot: Option<Slot>, t: PohTimingPoint) -> bool {
-        let slot_timestamp = self
-            .slot_timestamps
-            .entry(slot)
-            .or_insert_with(SlotPohTimestamp::default);
+        let slot_timestamp = self.slot_timestamps.entry(slot).or_default();
 
         slot_timestamp.update(t);
         let is_completed = slot_timestamp.is_complete();

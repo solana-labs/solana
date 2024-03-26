@@ -559,6 +559,7 @@ fn parse_distribute_stake_args(
         stake_authority,
         withdraw_authority,
         lockup_authority,
+        rent_exempt_reserve: None,
     };
     let stake_args = StakeArgs {
         unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
@@ -651,7 +652,7 @@ where
 {
     let matches = get_matches(args);
     let config_file = matches.value_of("config_file").unwrap().to_string();
-    let url = matches.value_of("url").map(|x| x.to_string());
+    let url = matches.value_of("json_rpc_url").map(|x| x.to_string());
 
     let command = match matches.subcommand() {
         ("distribute-tokens", Some(matches)) => {

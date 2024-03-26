@@ -1,16 +1,16 @@
 use {
     crate::{
-        cluster_info::MAX_LEGACY_SNAPSHOT_HASHES,
+        cluster_info::MAX_ACCOUNTS_HASHES,
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         epoch_slots::EpochSlots,
         legacy_contact_info::LegacyContactInfo,
+        restart_crds_values::{RestartHeaviestFork, RestartLastVotedForkSlots},
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
-    solana_runtime::vote_parser,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -20,6 +20,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
+    solana_vote::vote_parser,
     std::{
         borrow::{Borrow, Cow},
         cmp::Ordering,
@@ -85,8 +86,8 @@ pub enum CrdsData {
     LegacyContactInfo(LegacyContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    LegacySnapshotHashes(LegacySnapshotHashes),
-    AccountsHashes(AccountsHashes),
+    LegacySnapshotHashes(LegacySnapshotHashes), // Deprecated
+    AccountsHashes(AccountsHashes),             // Deprecated
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
@@ -94,6 +95,8 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     SnapshotHashes(SnapshotHashes),
     ContactInfo(ContactInfo),
+    RestartLastVotedForkSlots(RestartLastVotedForkSlots),
+    RestartHeaviestFork(RestartHeaviestFork),
 }
 
 impl Sanitize for CrdsData {
@@ -132,6 +135,8 @@ impl Sanitize for CrdsData {
             }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.sanitize(),
+            CrdsData::RestartHeaviestFork(fork) => fork.sanitize(),
         }
     }
 }
@@ -139,13 +144,13 @@ impl Sanitize for CrdsData {
 /// Random timestamp for tests and benchmarks.
 pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
     const DELAY: u64 = 10 * 60 * 1000; // 10 minutes
-    timestamp() - DELAY + rng.gen_range(0, 2 * DELAY)
+    timestamp() - DELAY + rng.gen_range(0..2 * DELAY)
 }
 
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0, 7);
+        let kind = rng.gen_range(0..9);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -156,9 +161,13 @@ impl CrdsData {
             2 => CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
-            5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            5 => CrdsData::Vote(rng.gen_range(0..MAX_VOTES), Vote::new_rand(rng, pubkey)),
+            6 => CrdsData::RestartLastVotedForkSlots(RestartLastVotedForkSlots::new_rand(
+                rng, pubkey,
+            )),
+            7 => CrdsData::RestartHeaviestFork(RestartHeaviestFork::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
-                rng.gen_range(0, MAX_EPOCH_SLOTS),
+                rng.gen_range(0..MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
         }
@@ -195,10 +204,10 @@ impl AccountsHashes {
 
     /// New random AccountsHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let num_hashes = rng.gen_range(0, MAX_LEGACY_SNAPSHOT_HASHES) + 1;
+        let num_hashes = rng.gen_range(0..MAX_ACCOUNTS_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
-            let slot = 47825632 + rng.gen_range(0, 512);
-            let hash = solana_sdk::hash::new_rand(rng);
+            let slot = 47825632 + rng.gen_range(0..512);
+            let hash = Hash::new_unique();
             (slot, hash)
         })
         .take(num_hashes)
@@ -211,7 +220,7 @@ impl AccountsHashes {
     }
 }
 
-pub type LegacySnapshotHashes = AccountsHashes;
+type LegacySnapshotHashes = AccountsHashes;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct SnapshotHashes {
@@ -501,6 +510,8 @@ pub enum CrdsValueLabel {
     DuplicateShred(DuplicateShredIndex, Pubkey),
     SnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
+    RestartLastVotedForkSlots(Pubkey),
+    RestartHeaviestFork(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -524,6 +535,12 @@ impl fmt::Display for CrdsValueLabel {
                 write!(f, "SnapshotHashes({})", self.pubkey())
             }
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            CrdsValueLabel::RestartLastVotedForkSlots(_) => {
+                write!(f, "RestartLastVotedForkSlots({})", self.pubkey())
+            }
+            CrdsValueLabel::RestartHeaviestFork(_) => {
+                write!(f, "RestartHeaviestFork({})", self.pubkey())
+            }
         }
     }
 }
@@ -543,6 +560,8 @@ impl CrdsValueLabel {
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
+            CrdsValueLabel::RestartLastVotedForkSlots(p) => *p,
+            CrdsValueLabel::RestartHeaviestFork(p) => *p,
         }
     }
 }
@@ -593,6 +612,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.wallclock,
+            CrdsData::RestartHeaviestFork(fork) => fork.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -609,6 +630,8 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
+            CrdsData::RestartLastVotedForkSlots(slots) => slots.from,
+            CrdsData::RestartHeaviestFork(fork) => fork.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -627,18 +650,15 @@ impl CrdsValue {
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
+            CrdsData::RestartLastVotedForkSlots(_) => {
+                CrdsValueLabel::RestartLastVotedForkSlots(self.pubkey())
+            }
+            CrdsData::RestartHeaviestFork(_) => CrdsValueLabel::RestartHeaviestFork(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
         match &self.data {
             CrdsData::LegacyContactInfo(contact_info) => Some(contact_info),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn accounts_hash(&self) -> Option<&AccountsHashes> {
-        match &self.data {
-            CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
         }
     }
@@ -801,7 +821,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let vote = vote_state::Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            Hash::new_unique(),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -878,7 +898,7 @@ mod test {
         let mut rng = ChaChaRng::from_seed(seed);
         let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
         let values: Vec<_> = repeat_with(|| {
-            let index = rng.gen_range(0, keys.len());
+            let index = rng.gen_range(0..keys.len());
             CrdsValue::new_rand(&mut rng, Some(&keys[index]))
         })
         .take(1 << 12)
@@ -1050,7 +1070,7 @@ mod test {
         assert!(!other.check_duplicate(&node_crds));
         assert_eq!(node.overrides(&other_crds), None);
         assert_eq!(other.overrides(&node_crds), None);
-        // Differnt crds value is not a duplicate.
+        // Different crds value is not a duplicate.
         let other = LegacyContactInfo::new_rand(&mut rng, Some(pubkey));
         let other = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(other));
         assert!(!node.check_duplicate(&other));

@@ -53,7 +53,7 @@ This field **SHOULD NOT** be displayed to users
 #### Header version
 
 The header version is represented as an 8-bit unsigned integer. Only the version
-0 header format is specfied in this document
+0 header format is specified in this document
 
 This field **SHOULD NOT** be displayed to users
 
@@ -64,7 +64,7 @@ This may be any arbitrary bytes. For instance the on-chain address of a program,
 DAO instance, Candy Machine, etc.
 
 This field **SHOULD** be displayed to users as a base58-encoded ASCII string rather
-than interpretted otherwise.
+than interpreted otherwise.
 
 #### Message Format
 

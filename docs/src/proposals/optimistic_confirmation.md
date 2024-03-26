@@ -86,7 +86,7 @@ the votes must satisfy:
 
 - `X <= S.last`, `X' <= S'.last`
 - All `s` in `S` are ancestors/descendants of one another,
-  all `s'` in `S'` are ancsestors/descendants of one another,
+  all `s'` in `S'` are ancestors/descendants of one another,
 -
 - `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
 - `X' > X` implies `X' > S.last` and `S'.last > S.last`
@@ -312,7 +312,7 @@ true that `B' > X`
 ```
 
 `Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Then by
-definition, given the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
+definition, given the "optimistically confirmed" block `B`, `X <= B <= S.last`.
 
 Because `X` is a parent of `B`, and `B'` is not a parent or ancestor of `B`,
 then:
@@ -322,7 +322,7 @@ then:
 
 Now consider if `B'` < `X`:
 
-`Case B' < X`: We wll show this is a violation of lockouts.
+`Case B' < X`: We will show this is a violation of lockouts.
 From above, we know `B'` is not a parent of `X`. Then because `B'` was rooted,
 and `B'` is not a parent of `X`, then the validator should not have been able
 to vote on the higher slot `X` that does not descend from `B'`.
@@ -361,7 +361,7 @@ By `Lemma 2` we know `B' > X`, and from above `S_v.last > B'`, so then
 From above, `S.last >= B >= X` so for all such "switching votes", `X_v > B`.
 
 Now ordering all these "switching votes" in time, let `V` to be the validator
-in `Optimistic Validators` that first submitted such a "swtching vote"
+in `Optimistic Validators` that first submitted such a "switching vote"
 `Vote(X', S')`, where `X' > B`. We know that such a validator exists because
 we know from above that all delinquent validators must have submitted such
 a vote, and the delinquent validators are a subset of the

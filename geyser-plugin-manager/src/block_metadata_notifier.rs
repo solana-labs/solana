@@ -5,12 +5,11 @@ use {
     },
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaBlockInfoV2, ReplicaBlockInfoVersions,
+        ReplicaBlockInfoV3, ReplicaBlockInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_runtime::bank::RewardInfo,
-    solana_sdk::{clock::UnixTimestamp, pubkey::Pubkey},
+    solana_sdk::{clock::UnixTimestamp, pubkey::Pubkey, reward_info::RewardInfo},
     solana_transaction_status::{Reward, Rewards},
     std::sync::{Arc, RwLock},
 };
@@ -31,6 +30,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
         executed_transaction_count: u64,
+        entry_count: u64,
     ) {
         let plugin_manager = self.plugin_manager.read().unwrap();
         if plugin_manager.plugins.is_empty() {
@@ -49,8 +49,9 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
                 block_time,
                 block_height,
                 executed_transaction_count,
+                entry_count,
             );
-            let block_info = ReplicaBlockInfoVersions::V0_0_2(&block_info);
+            let block_info = ReplicaBlockInfoVersions::V0_0_3(&block_info);
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
                     error!(
@@ -103,8 +104,9 @@ impl BlockMetadataNotifierImpl {
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
         executed_transaction_count: u64,
-    ) -> ReplicaBlockInfoV2<'a> {
-        ReplicaBlockInfoV2 {
+        entry_count: u64,
+    ) -> ReplicaBlockInfoV3<'a> {
+        ReplicaBlockInfoV3 {
             parent_slot,
             parent_blockhash,
             slot,
@@ -113,6 +115,7 @@ impl BlockMetadataNotifierImpl {
             block_time,
             block_height,
             executed_transaction_count,
+            entry_count,
         }
     }
 

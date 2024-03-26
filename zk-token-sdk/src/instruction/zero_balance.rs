@@ -8,7 +8,7 @@
 use {
     crate::{
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair},
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
         sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
     },
@@ -53,7 +53,7 @@ impl ZeroBalanceProofData {
     pub fn new(
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofGenerationError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
@@ -77,7 +77,7 @@ impl ZkProofData<ZeroBalanceProofContext> for ZeroBalanceProofData {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
         let pubkey = self.context.pubkey.try_into()?;
         let ciphertext = self.context.ciphertext.try_into()?;

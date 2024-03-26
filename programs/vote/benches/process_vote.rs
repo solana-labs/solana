@@ -48,7 +48,7 @@ fn create_accounts() -> (Slot, SlotHashes, Vec<TransactionAccount>, Vec<AccountM
         );
 
         for next_vote_slot in 0..num_initial_votes {
-            vote_state.process_next_vote_slot(next_vote_slot, 0);
+            vote_state.process_next_vote_slot(next_vote_slot, 0, 0, true, true);
         }
         let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
         let versioned = VoteStateVersions::new_current(vote_state);
@@ -108,7 +108,7 @@ fn bench_process_vote_instruction(
             transaction_accounts.clone(),
             instruction_account_metas.clone(),
             Ok(()),
-            solana_vote_program::vote_processor::process_instruction,
+            solana_vote_program::vote_processor::Entrypoint::vm,
             |_invoke_context| {},
             |_invoke_context| {},
         );

@@ -26,6 +26,8 @@ usage() {
                                          -c bench-tps=2="--tx_count 25000"
                                      This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                      to the bench-tps client.
+--use-unstaked-connection          - Use unstaked connection. By default, staked connection with
+                                     bootstrap node credendials is used.
 EOM
 )
   cat <<EOF
@@ -116,7 +118,7 @@ Operate a configured testnet
                                       - Enable UDP for tpu transactions
 
    --client-type
-                                      - Specify backend client type for bench-tps. Valid options are (thin-client|rpc-client|tpu-client), thin-client is default
+                                      - Specify backend client type for bench-tps. Valid options are (rpc-client|tpu-client), tpu-client is default
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -189,7 +191,7 @@ build() {
   if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
     # shellcheck source=ci/rust-version.sh
     source "$SOLANA_ROOT"/ci/rust-version.sh
-    MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
+    MAYBE_DOCKER="ci/docker-run.sh ${ci_docker_image:?}"
   fi
   SECONDS=0
   (
@@ -444,7 +446,8 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType"
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType \
+      $maybeUseUnstakedConnection"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -831,7 +834,8 @@ waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
 enableUdp=false
-clientType=thin-client
+clientType=tpu-client
+maybeUseUnstakedConnection=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -968,7 +972,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --client-type ]]; then
       clientType=$2
       case "$clientType" in
-        thin-client|tpu-client|rpc-client)
+        tpu-client|rpc-client)
           ;;
         *)
           echo "Unexpected client type: \"$clientType\""
@@ -976,6 +980,9 @@ while [[ -n $1 ]]; do
           ;;
       esac
       shift 2
+    elif [[ $1 = --use-unstaked-connection ]]; then
+      maybeUseUnstakedConnection="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi

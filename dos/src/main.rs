@@ -38,19 +38,23 @@
 //! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
 //!
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(deprecated)]
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::ConnectionCache, tpu_client::TpuClientWrapper,
+        tpu_connection::TpuConnection,
+    },
     solana_core::repair::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::Protocol,
-        gossip_service::{discover, get_multi_client},
+        gossip_service::{discover, get_client},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_measure::measure::Measure,
@@ -343,7 +347,7 @@ fn create_sender_thread(
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
     tx_sender: &Sender<TransactionBatchMsg>,
     send_batch_size: usize,
-    transaction_generator: &mut TransactionGenerator,
+    transaction_generator: &TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
 ) -> thread::JoinHandle<()> {
@@ -448,8 +452,10 @@ fn get_target(
                     Mode::TpuForwards => {
                         Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
                     }
-                    Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
-                    Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
+                    Mode::Repair => todo!("repair socket is not gossiped anymore!"),
+                    Mode::ServeRepair => {
+                        Some((*node.pubkey(), node.serve_repair(Protocol::UDP).unwrap()))
+                    }
                     Mode::Rpc => None,
                 };
                 break;
@@ -548,12 +554,18 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         // transactions are built to be invalid so the the amount here is arbitrary
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
-        let res =
-            generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
-                .unwrap_or_else(|e| {
-                    eprintln!("Error could not fund keys: {e:?}");
-                    exit(1);
-                });
+        let res = generate_and_fund_keypairs(
+            client.unwrap().clone(),
+            &funding_key,
+            size,
+            1_000_000,
+            false,
+            false,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("Error could not fund keys: {e:?}");
+            exit(1);
+        });
         res.into_iter().map(Some).collect()
     } else {
         std::iter::repeat_with(|| None).take(size).collect()
@@ -587,7 +599,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         client.as_ref(),
     );
 
-    let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
     let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
@@ -597,7 +609,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             create_generator_thread(
                 &tx_sender,
                 send_batch_size,
-                &mut transaction_generator,
+                &transaction_generator,
                 client.clone(),
                 payer,
             )
@@ -783,33 +795,30 @@ fn main() {
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             ),
         };
-        let (client, num_clients) = get_multi_client(
-            &validators,
-            &SocketAddrSpace::Unspecified,
-            Arc::new(connection_cache),
-        );
-        if validators.len() < num_clients {
-            eprintln!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                validators.len()
-            );
-            exit(1);
-        }
-        (gossip_nodes, Some(Arc::new(client)))
+        let client = get_client(&validators, Arc::new(connection_cache));
+        (gossip_nodes, Some(client))
     } else {
         (vec![], None)
     };
 
     info!("done found {} nodes", nodes.len());
-
-    run_dos(&nodes, 0, client, cmd_params);
+    if let Some(tpu_client) = client {
+        match tpu_client {
+            TpuClientWrapper::Quic(quic_client) => {
+                run_dos(&nodes, 0, Some(Arc::new(quic_client)), cmd_params);
+            }
+            TpuClientWrapper::Udp(udp_client) => {
+                run_dos(&nodes, 0, Some(Arc::new(udp_client)), cmd_params);
+            }
+        };
+    }
 }
 
 #[cfg(test)]
 pub mod test {
     use {
         super::*,
-        solana_client::thin_client::ThinClient,
+        solana_client::tpu_client::QuicTpuClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_gossip::contact_info::LegacyContactInfo,
@@ -827,7 +836,7 @@ pub mod test {
     // thin wrapper for the run_dos function
     // to avoid specifying everywhere generic parameters
     fn run_dos_no_client(nodes: &[ContactInfo], iterations: usize, params: DosClientParameters) {
-        run_dos::<ThinClient>(nodes, iterations, None, params);
+        run_dos::<QuicTpuClient>(nodes, iterations, None, params);
     }
 
     #[test]
@@ -856,6 +865,9 @@ pub mod test {
             },
         );
 
+        // TODO: Figure out how to DOS repair. Repair socket is no longer
+        // gossiped and cannot be obtained from a node's contact-info.
+        #[cfg(not(test))]
         run_dos_no_client(
             &nodes,
             1,
@@ -964,14 +976,9 @@ pub mod test {
             .unwrap();
         let nodes_slice = [node];
 
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc().unwrap(),
-            cluster
-                .entry_point_info
-                .tpu(cluster.connection_cache.protocol())
-                .unwrap(),
-            cluster.connection_cache.clone(),
-        ));
+        let client = Arc::new(cluster.build_tpu_quic_client().unwrap_or_else(|err| {
+            panic!("Could not create TpuClient with Quic Cache {err:?}");
+        }));
 
         // creates one transaction with 8 valid signatures and sends it 10 times
         run_dos(
@@ -1103,14 +1110,9 @@ pub mod test {
             .unwrap();
         let nodes_slice = [node];
 
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc().unwrap(),
-            cluster
-                .entry_point_info
-                .tpu(cluster.connection_cache.protocol())
-                .unwrap(),
-            cluster.connection_cache.clone(),
-        ));
+        let client = Arc::new(cluster.build_tpu_quic_client().unwrap_or_else(|err| {
+            panic!("Could not create TpuClient with Quic Cache {err:?}");
+        }));
 
         // creates one transaction and sends it 10 times
         // this is done in single thread

@@ -1,4 +1,5 @@
 use {
+    crate::range_proof::errors::RangeProofGeneratorError,
     curve25519_dalek::{
         digest::{ExtendableOutput, Update, XofReader},
         ristretto::RistrettoPoint,
@@ -6,10 +7,10 @@ use {
     sha3::{Sha3XofReader, Shake256},
 };
 
-/// Generators for Pedersen vector commitments.
-///
-/// The code is copied from https://github.com/dalek-cryptography/bulletproofs for now...
+#[cfg(not(target_os = "solana"))]
+const MAX_GENERATOR_LENGTH: usize = u32::MAX as usize;
 
+/// Generators for Pedersen vector commitments that are used for inner-product proofs.
 struct GeneratorsChain {
     reader: Sha3XofReader,
 }
@@ -70,45 +71,44 @@ pub struct BulletproofGens {
 }
 
 impl BulletproofGens {
-    pub fn new(gens_capacity: usize) -> Self {
+    pub fn new(gens_capacity: usize) -> Result<Self, RangeProofGeneratorError> {
         let mut gens = BulletproofGens {
             gens_capacity: 0,
             G_vec: Vec::new(),
             H_vec: Vec::new(),
         };
-        gens.increase_capacity(gens_capacity);
-        gens
+        gens.increase_capacity(gens_capacity)?;
+        Ok(gens)
     }
-
-    // pub fn new_aggregate(gens_capacities: Vec<usize>) -> Vec<BulletproofGens> {
-    //     let mut gens_vector = Vec::new();
-    //     for (capacity, i) in gens_capacities.iter().enumerate() {
-    //         gens_vector.push(BulletproofGens::new(capacity, &i.to_le_bytes()));
-    //     }
-    //     gens_vector
-    // }
 
     /// Increases the generators' capacity to the amount specified.
     /// If less than or equal to the current capacity, does nothing.
-    pub fn increase_capacity(&mut self, new_capacity: usize) {
+    pub fn increase_capacity(
+        &mut self,
+        new_capacity: usize,
+    ) -> Result<(), RangeProofGeneratorError> {
         if self.gens_capacity >= new_capacity {
-            return;
+            return Ok(());
         }
 
-        let label = [b'G'];
+        if new_capacity > MAX_GENERATOR_LENGTH {
+            return Err(RangeProofGeneratorError::MaximumGeneratorLengthExceeded);
+        }
+
         self.G_vec.extend(
-            &mut GeneratorsChain::new(&[label, [b'G']].concat())
+            &mut GeneratorsChain::new(&[b'G'])
                 .fast_forward(self.gens_capacity)
                 .take(new_capacity - self.gens_capacity),
         );
 
         self.H_vec.extend(
-            &mut GeneratorsChain::new(&[label, [b'H']].concat())
+            &mut GeneratorsChain::new(&[b'H'])
                 .fast_forward(self.gens_capacity)
                 .take(new_capacity - self.gens_capacity),
         );
 
         self.gens_capacity = new_capacity;
+        Ok(())
     }
 
     #[allow(non_snake_case)]

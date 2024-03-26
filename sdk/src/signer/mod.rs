@@ -81,20 +81,12 @@ pub trait Signer {
     }
     /// Fallibly produces an Ed25519 signature over the provided `message` bytes.
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
-    /// Whether the impelmentation requires user interaction to sign
+    /// Whether the implementation requires user interaction to sign
     fn is_interactive(&self) -> bool;
 }
 
-impl<T> From<T> for Box<dyn Signer>
-where
-    T: Signer + 'static,
-{
-    fn from(signer: T) -> Self {
-        Box::new(signer)
-    }
-}
-
-impl<Container: Deref<Target = impl Signer>> Signer for Container {
+/// This implements `Signer` for all ptr types - `Box/Rc/Arc/&/&mut` etc
+impl<Container: Deref<Target = impl Signer + ?Sized>> Signer for Container {
     #[inline]
     fn pubkey(&self) -> Pubkey {
         self.deref().pubkey()

@@ -161,7 +161,7 @@ where
             dummy_message.recent_blockhash = *blockhash;
             get_fee_for_messages(rpc_client, &[&dummy_message])?
         }
-        None => 0, // Offline, cannot calulate fee
+        None => 0, // Offline, cannot calculate fee
     };
 
     match amount {

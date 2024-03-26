@@ -1,4 +1,4 @@
-use {super::*, crate::declare_syscall};
+use super::*;
 
 fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     sysvar: Result<Arc<T>, InstructionError>,
@@ -22,10 +22,10 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     Ok(SUCCESS)
 }
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a Clock sysvar
     SyscallGetClockSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,
@@ -44,10 +44,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a EpochSchedule sysvar
     SyscallGetEpochScheduleSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,
@@ -66,10 +66,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a EpochRewards sysvar
     SyscallGetEpochRewardsSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,
@@ -88,10 +88,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a Fees sysvar
     SyscallGetFeesSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,
@@ -113,10 +113,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a Rent sysvar
     SyscallGetRentSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,
@@ -135,10 +135,10 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
+declare_builtin_function!(
     /// Get a Last Restart Slot sysvar
     SyscallGetLastRestartSlotSysvar,
-    fn inner_call(
+    fn rust(
         invoke_context: &mut InvokeContext,
         var_addr: u64,
         _arg2: u64,

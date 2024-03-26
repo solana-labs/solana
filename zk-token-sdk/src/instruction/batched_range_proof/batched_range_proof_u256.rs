@@ -4,7 +4,8 @@
 use {
     crate::{
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
-        errors::ProofError,
+        errors::{ProofGenerationError, ProofVerificationError},
+        instruction::batched_range_proof::{MAX_COMMITMENTS, MAX_SINGLE_BIT_LENGTH},
         range_proof::RangeProof,
     },
     std::convert::TryInto,
@@ -42,21 +43,31 @@ impl BatchedRangeProofU256Data {
         amounts: Vec<u64>,
         bit_lengths: Vec<usize>,
         openings: Vec<&PedersenOpening>,
-    ) -> Result<Self, ProofError> {
-        // the sum of the bit lengths must be 64
+    ) -> Result<Self, ProofGenerationError> {
+        // each bit length must be at most 128
+        if bit_lengths
+            .iter()
+            .any(|length| *length > MAX_SINGLE_BIT_LENGTH)
+        {
+            return Err(ProofGenerationError::IllegalCommitmentLength);
+        }
+
+        // the sum of the bit lengths must be 256
         let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofGenerationError::IllegalAmountBitLength)?;
         if batched_bit_length != BATCHED_RANGE_PROOF_U256_BIT_LENGTH {
-            return Err(ProofError::Generation);
+            return Err(ProofGenerationError::IllegalAmountBitLength);
         }
 
         let context =
             BatchedRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
 
         let mut transcript = context.new_transcript();
-        let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript).try_into()?;
+        let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript)?
+            .try_into()
+            .map_err(|_| ProofGenerationError::ProofLength)?;
 
         Ok(Self { context, proof })
     }
@@ -70,8 +81,21 @@ impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU256Data {
     }
 
     #[cfg(not(target_os = "solana"))]
-    fn verify_proof(&self) -> Result<(), ProofError> {
+    fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let (commitments, bit_lengths) = self.context.try_into()?;
+        let num_commitments = commitments.len();
+
+        if bit_lengths
+            .iter()
+            .any(|length| *length > MAX_SINGLE_BIT_LENGTH)
+        {
+            return Err(ProofVerificationError::IllegalCommitmentLength);
+        }
+
+        if num_commitments > MAX_COMMITMENTS || num_commitments != bit_lengths.len() {
+            return Err(ProofVerificationError::IllegalCommitmentLength);
+        }
+
         let mut transcript = self.context_data().new_transcript();
         let proof: RangeProof = self.proof.try_into()?;
 
@@ -86,8 +110,8 @@ mod test {
     use {
         super::*,
         crate::{
-            encryption::pedersen::Pedersen,
-            errors::{ProofType, ProofVerificationError},
+            encryption::pedersen::Pedersen, errors::ProofVerificationError,
+            range_proof::errors::RangeProofVerificationError,
         },
     };
 
@@ -177,10 +201,7 @@ mod test {
 
         assert_eq!(
             proof_data.verify_proof().unwrap_err(),
-            ProofError::VerificationError(
-                ProofType::RangeProof,
-                ProofVerificationError::AlgebraicRelation
-            ),
+            ProofVerificationError::RangeProof(RangeProofVerificationError::AlgebraicRelation),
         );
     }
 }

@@ -6,8 +6,9 @@ use {
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc::{
-            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_7::*,
-            rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
+            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_18::*,
+            rpc_deprecated_v1_7::*, rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*,
+            rpc_obsolete_v1_7::*, *,
         },
         rpc_cache::LargestAccountsCache,
         rpc_health::*,
@@ -37,12 +38,11 @@ use {
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        native_token::lamports_to_sol,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
     std::{
-        collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -350,7 +350,6 @@ impl JsonRpcService {
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         exit: Arc<AtomicBool>,
-        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -368,8 +367,8 @@ impl JsonRpcService {
         let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            known_validators,
+            Arc::clone(&optimistically_confirmed_bank),
+            Arc::clone(&blockstore),
             config.health_check_slot_distance,
             override_health_check,
             startup_verification_complete,
@@ -408,6 +407,7 @@ impl JsonRpcService {
                 ref bigtable_instance_name,
                 ref bigtable_app_profile_id,
                 timeout,
+                max_message_size,
             }) = config.rpc_bigtable_config
             {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
@@ -416,6 +416,7 @@ impl JsonRpcService {
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                     app_profile_id: bigtable_app_profile_id.clone(),
+                    max_message_size,
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
@@ -510,6 +511,7 @@ impl JsonRpcService {
                     io.extend_with(rpc_full::FullImpl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_7::DeprecatedV1_7Impl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
+                    io.extend_with(rpc_deprecated_v1_18::DeprecatedV1_18Impl.to_delegate());
                 }
                 if obsolete_v1_7_api {
                     io.extend_with(rpc_obsolete_v1_7::ObsoleteV1_7Impl.to_delegate());
@@ -523,7 +525,14 @@ impl JsonRpcService {
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
-                    move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
+                    move |req: &hyper::Request<hyper::Body>| {
+                        let xbigtable = req.headers().get("x-bigtable");
+                        if xbigtable.is_some_and(|v| v == "disabled") {
+                            request_processor.clone_without_bigtable()
+                        } else {
+                            request_processor.clone()
+                        }
+                    },
                 )
                 .event_loop_executor(runtime.handle().clone())
                 .threads(1)
@@ -586,13 +595,9 @@ mod tests {
     use {
         super::*,
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
-        solana_gossip::{
-            crds::GossipRoute,
-            crds_value::{AccountsHashes, CrdsData, CrdsValue},
-        },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
+            get_tmp_ledger_path_auto_delete,
         },
         solana_rpc_client_api::config::RpcContextConfig,
         solana_runtime::bank::Bank,
@@ -623,9 +628,9 @@ mod tests {
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -643,7 +648,6 @@ mod tests {
             &PathBuf::from("farf"),
             validator_exit,
             exit,
-            None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
@@ -681,7 +685,7 @@ mod tests {
         } = create_genesis_config(10_000);
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Bank::new_for_tests(&genesis_config);
-        Arc::new(RwLock::new(BankForks::new(bank)))
+        BankForks::new_rw_arc(bank)
     }
 
     #[test]
@@ -726,18 +730,25 @@ mod tests {
 
     #[test]
     fn test_is_file_get_path() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let health = RpcHealth::stub(optimistically_confirmed_bank, blockstore);
+
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.path().to_path_buf(),
             None,
             bank_forks.clone(),
-            RpcHealth::stub(),
+            health.clone(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+            ledger_path.path().to_path_buf(),
             Some(SnapshotConfig::default()),
             bank_forks,
-            RpcHealth::stub(),
+            health,
         );
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
@@ -745,7 +756,9 @@ mod tests {
         assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
         assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
-        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
+        // These two are redirects
+        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/incremental-snapshot.tar.bz2"));
 
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
@@ -827,15 +840,17 @@ mod tests {
     fn test_process_file_get() {
         let runtime = Runtime::new().unwrap();
 
-        let ledger_path = get_tmp_ledger_path!();
-        std::fs::create_dir(&ledger_path).unwrap();
-
-        let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let genesis_path = ledger_path.path().join(DEFAULT_GENESIS_ARCHIVE);
+        let bank_forks = create_bank_forks();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let rrm = RpcRequestMiddleware::new(
-            ledger_path.clone(),
+            ledger_path.path().to_path_buf(),
             None,
-            create_bank_forks(),
-            RpcHealth::stub(),
+            bank_forks,
+            RpcHealth::stub(optimistically_confirmed_bank, blockstore),
         );
 
         // File does not exist => request should fail.
@@ -863,126 +878,21 @@ mod tests {
             panic!("Unexpected RequestMiddlewareAction variant");
         }
 
-        #[cfg(unix)]
+        std::fs::remove_file(&genesis_path).unwrap();
         {
-            std::fs::remove_file(&genesis_path).unwrap();
-            {
-                let mut file = std::fs::File::create(ledger_path.join("wrong")).unwrap();
-                file.write_all(b"wrong file").unwrap();
-            }
-            symlink::symlink_file("wrong", &genesis_path).unwrap();
-
-            // File is a symbolic link => request should fail.
-            let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
-            if let RequestMiddlewareAction::Respond { response, .. } = action {
-                let response = runtime.block_on(response);
-                let response = response.unwrap();
-                assert_ne!(response.status(), 200);
-            } else {
-                panic!("Unexpected RequestMiddlewareAction variant");
-            }
+            let mut file = std::fs::File::create(ledger_path.path().join("wrong")).unwrap();
+            file.write_all(b"wrong file").unwrap();
         }
-    }
+        symlink::symlink_file("wrong", &genesis_path).unwrap();
 
-    #[test]
-    fn test_health_check_with_no_known_validators() {
-        let rm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
-            None,
-            create_bank_forks(),
-            RpcHealth::stub(),
-        );
-        assert_eq!(rm.health_check(), "ok");
-    }
-
-    #[test]
-    fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(new_test_cluster_info());
-        let health_check_slot_distance = 123;
-        let override_health_check = Arc::new(AtomicBool::new(false));
-        let startup_verification_complete = Arc::new(AtomicBool::new(true));
-        let known_validators = vec![
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-        ];
-
-        let health = Arc::new(RpcHealth::new(
-            cluster_info.clone(),
-            Some(known_validators.clone().into_iter().collect()),
-            health_check_slot_distance,
-            override_health_check.clone(),
-            startup_verification_complete,
-        ));
-
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
-
-        // No account hashes for this node or any known validators
-        assert_eq!(rm.health_check(), "unknown");
-
-        // No account hashes for any known validators
-        cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
-        cluster_info.flush_push_queue();
-        assert_eq!(rm.health_check(), "unknown");
-
-        // Override health check
-        override_health_check.store(true, Ordering::Relaxed);
-        assert_eq!(rm.health_check(), "ok");
-        override_health_check.store(false, Ordering::Relaxed);
-
-        // This node is ahead of the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[0],
-                    vec![
-                        (1, Hash::default()),
-                        (1001, Hash::default()),
-                        (2, Hash::default()),
-                    ],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is slightly behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[1],
-                    vec![(1000 + health_check_slot_distance - 1, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "ok");
-
-        // Node is far behind the known validators
-        cluster_info
-            .gossip
-            .crds
-            .write()
-            .unwrap()
-            .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
-                    known_validators[2],
-                    vec![(1000 + health_check_slot_distance, Hash::default())],
-                ))),
-                1,
-                GossipRoute::LocalMessage,
-            )
-            .unwrap();
-        assert_eq!(rm.health_check(), "behind");
+        // File is a symbolic link => request should fail.
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
+        if let RequestMiddlewareAction::Respond { response, .. } = action {
+            let response = runtime.block_on(response);
+            let response = response.unwrap();
+            assert_ne!(response.status(), 200);
+        } else {
+            panic!("Unexpected RequestMiddlewareAction variant");
+        }
     }
 }

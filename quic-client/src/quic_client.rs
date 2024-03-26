@@ -26,7 +26,7 @@ const SEND_DATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A semaphore used for limiting the number of asynchronous tasks spawn to the
 /// runtime. Before spawnning a task, use acquire. After the task is done (be it
-/// succsess or failure), call release.
+/// success or failure), call release.
 struct AsyncTaskSemaphore {
     /// Keep the counter info about the usage
     counter: Mutex<u64>,
@@ -69,7 +69,7 @@ lazy_static! {
     static ref ASYNC_TASK_SEMAPHORE: AsyncTaskSemaphore =
         AsyncTaskSemaphore::new(MAX_OUTSTANDING_TASK);
     static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("quic-client")
+        .thread_name("solQuicClientRt")
         .enable_all()
         .build()
         .unwrap();

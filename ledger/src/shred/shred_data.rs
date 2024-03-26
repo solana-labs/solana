@@ -7,7 +7,7 @@ use {
         DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType, ShredVariant, SignedData,
         MAX_DATA_SHREDS_PER_SLOT,
     },
-    solana_sdk::{clock::Slot, signature::Signature},
+    solana_sdk::{clock::Slot, hash::Hash, signature::Signature},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,6 +38,13 @@ impl ShredData {
         match self {
             Self::Legacy(shred) => Ok(SignedData::Chunk(shred.signed_data()?)),
             Self::Merkle(shred) => Ok(SignedData::MerkleRoot(shred.signed_data()?)),
+        }
+    }
+
+    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
+        match self {
+            Self::Legacy(_) => Err(Error::InvalidShredType),
+            Self::Merkle(shred) => shred.merkle_root(),
         }
     }
 
@@ -90,8 +97,10 @@ impl ShredData {
     // Possibly zero pads bytes stored in blockstore.
     pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
         match shred::layout::get_shred_variant(&shred)? {
-            ShredVariant::LegacyCode | ShredVariant::MerkleCode(_) => Err(Error::InvalidShredType),
-            ShredVariant::MerkleData(_) => {
+            ShredVariant::LegacyCode | ShredVariant::MerkleCode { .. } => {
+                Err(Error::InvalidShredType)
+            }
+            ShredVariant::MerkleData { .. } => {
                 if shred.len() != merkle::ShredData::SIZE_OF_PAYLOAD {
                     return Err(Error::InvalidPayloadSize(shred.len()));
                 }
@@ -104,10 +113,19 @@ impl ShredData {
     // Maximum size of ledger data that can be embedded in a data-shred.
     // merkle_proof_size is the number of merkle proof entries.
     // None indicates a legacy data-shred.
-    pub fn capacity(merkle_proof_size: Option<u8>) -> Result<usize, Error> {
-        match merkle_proof_size {
+    pub fn capacity(
+        merkle_variant: Option<(
+            u8,   // proof_size
+            bool, // chained
+            bool, // resigned
+        )>,
+    ) -> Result<usize, Error> {
+        match merkle_variant {
             None => Ok(legacy::ShredData::CAPACITY),
-            Some(proof_size) => merkle::ShredData::capacity(proof_size),
+            Some((proof_size, chained, resigned)) => {
+                debug_assert!(chained || !resigned);
+                merkle::ShredData::capacity(proof_size, chained, resigned)
+            }
         }
     }
 

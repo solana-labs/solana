@@ -1,4 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     clap::{crate_description, crate_name, Arg, Command},
@@ -108,6 +108,7 @@ fn main() -> Result<()> {
         let (s_reader, r_reader) = unbounded();
         read_channels.push(r_reader);
         read_threads.push(receiver(
+            "solRcvrBenStrmr".to_string(),
             Arc::new(read),
             exit.clone(),
             s_reader,

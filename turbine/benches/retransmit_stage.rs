@@ -6,6 +6,7 @@ extern crate test;
 use {
     crossbeam_channel::unbounded,
     log::*,
+    rand::Rng,
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -32,7 +33,7 @@ use {
         net::{Ipv4Addr, UdpSocket},
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            Arc,
         },
         thread::{sleep, Builder},
         time::Duration,
@@ -74,9 +75,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank0 = Bank::new_for_benches(&genesis_config);
-    let bank_forks = BankForks::new(bank0);
-    let bank = bank_forks.working_bank();
-    let bank_forks = Arc::new(RwLock::new(bank_forks));
+    let bank_forks = BankForks::new_rw_arc(bank0);
+    let bank = bank_forks.read().unwrap().working_bank();
     let (shreds_sender, shreds_receiver) = unbounded();
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
@@ -106,6 +106,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &keypair,
         &entries,
         true, // is_last_in_slot
+        // chained_merkle_root
+        Some(Hash::new_from_array(rand::thread_rng().gen())),
         0,    // next_shred_index
         0,    // next_code_index
         true, // merkle_variant

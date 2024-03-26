@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+assert_matches = { workspace = true }
 bincode = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 clap = { workspace = true }
@@ -19,17 +20,18 @@ indexmap = { workspace = true, features = ["rayon"] }
 itertools = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
-matches = { workspace = true }
 num-traits = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+rustversion = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 solana-bloom = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -43,17 +45,18 @@ solana-rayon-threadlimit = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
-solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
+solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 num_cpus = { workspace = true }
-regex = { workspace = true }
 serial_test = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+test-case = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
