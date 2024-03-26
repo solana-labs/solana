@@ -317,7 +317,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         .instructions()
         .iter()
         .map(|instruction| {
-            let mut account_indices = Vec::new();
+            let mut account_indices = Vec::with_capacity(2);
             let mut program_index = instruction.program_id_index as usize;
             // This command may never return error, because the transaction is sanitized
             let (program_id, program_account) = accounts
