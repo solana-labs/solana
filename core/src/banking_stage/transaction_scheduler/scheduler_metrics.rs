@@ -290,7 +290,7 @@ impl SlotSchedulerTimingMetrics {
             // Only report if there was an assigned slot.
             if self.slot.is_some() {
                 self.metrics
-                    .report("banking_stage_scheduler_slot_counts", self.slot);
+                    .report("banking_stage_scheduler_slot_timing", self.slot);
             }
             self.metrics.reset();
             self.slot = slot;
