@@ -791,6 +791,7 @@ mod tests {
         assert_eq!(57_u64, secret.decrypt_u32(&ciphertext).unwrap());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_encrypt_decrypt_correctness_multithreaded() {
         let ElGamalKeypair { public, secret } = ElGamalKeypair::new_rand();

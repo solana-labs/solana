@@ -16,6 +16,8 @@
 
 #![cfg(not(target_os = "solana"))]
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
 use {
     crate::RISTRETTO_POINT_LEN,
     curve25519_dalek::{
@@ -26,7 +28,7 @@ use {
     },
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, thread},
+    std::collections::HashMap,
     thiserror::Error,
 };
 
@@ -34,6 +36,7 @@ const TWO16: u64 = 65536; // 2^16
 const TWO17: u64 = 131072; // 2^17
 
 /// Maximum number of threads permitted for discrete log computation
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_THREAD: usize = 65536;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
@@ -112,6 +115,7 @@ impl DiscreteLog {
     }
 
     /// Adjusts number of threads in a discrete log instance.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn num_threads(&mut self, num_threads: usize) -> Result<(), DiscreteLogError> {
         // number of threads must be a positive power-of-two integer
         if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > MAX_THREAD {
@@ -141,35 +145,48 @@ impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
-        let mut starting_point = self.target;
-        let handles = (0..self.num_threads)
-            .map(|i| {
-                let ristretto_iterator = RistrettoIterator::new(
-                    (starting_point, i as u64),
-                    (-(&self.step_point), self.num_threads as u64),
-                );
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut starting_point = self.target;
+            let handles = (0..self.num_threads)
+                .map(|i| {
+                    let ristretto_iterator = RistrettoIterator::new(
+                        (starting_point, i as u64),
+                        (-(&self.step_point), self.num_threads as u64),
+                    );
 
-                let handle = thread::spawn(move || {
-                    Self::decode_range(
-                        ristretto_iterator,
-                        self.range_bound,
-                        self.compression_batch_size,
-                    )
-                });
+                    let handle = thread::spawn(move || {
+                        Self::decode_range(
+                            ristretto_iterator,
+                            self.range_bound,
+                            self.compression_batch_size,
+                        )
+                    });
 
-                starting_point -= G;
-                handle
-            })
-            .collect::<Vec<_>>();
+                    starting_point -= G;
+                    handle
+                })
+                .collect::<Vec<_>>();
 
-        let mut solution = None;
-        for handle in handles {
-            let discrete_log = handle.join().unwrap();
-            if discrete_log.is_some() {
-                solution = discrete_log;
-            }
+            handles
+                .into_iter()
+                .map_while(|h| h.join().ok())
+                .find(|x| x.is_some())
+                .flatten()
         }
-        solution
+        #[cfg(target_arch = "wasm32")]
+        {
+            let ristretto_iterator = RistrettoIterator::new(
+                (self.target, 0_u64),
+                (-(&self.step_point), self.num_threads as u64),
+            );
+
+            Self::decode_range(
+                ristretto_iterator,
+                self.range_bound,
+                self.compression_batch_size,
+            )
+        }
     }
 
     fn decode_range(
@@ -274,6 +291,7 @@ mod tests {
         println!("single thread discrete log computation secs: {computation_secs:?} sec");
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_decode_correctness_threaded() {
         // general case
