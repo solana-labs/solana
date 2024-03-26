@@ -81,5 +81,9 @@ rustc_version = { workspace = true }
 dev-context-only-utils = ["dep:qualifier_attr", "dep:solana-stake-program", "dep:solana-vote-program"]
 
 [[bench]]
+name = "bench_accounts_file"
+harness = false
+
+[[bench]]
 name = "bench_hashing"
 harness = false
