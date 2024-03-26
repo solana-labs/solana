@@ -11,14 +11,13 @@ use {
 
 /// The account details of a built-in program to be migrated to Core BPF.
 #[derive(Debug)]
-pub(crate) struct TargetProgramBuiltin {
+pub(crate) struct TargetBuiltin {
     pub program_address: Pubkey,
     pub program_account: AccountSharedData,
     pub program_data_address: Pubkey,
-    pub total_data_size: usize,
 }
 
-impl TargetProgramBuiltin {
+impl TargetBuiltin {
     /// Collects the details of a built-in program and verifies it is properly
     /// configured
     pub(crate) fn new_checked(
@@ -62,14 +61,10 @@ impl TargetProgramBuiltin {
             ));
         }
 
-        // The total data size is the size of the program account's data.
-        let total_data_size = program_account.data().len();
-
         Ok(Self {
             program_address: *program_address,
             program_account,
             program_data_address,
-            total_data_size,
         })
     }
 }
@@ -79,6 +74,7 @@ mod tests {
     use {
         super::*,
         crate::bank::{tests::create_simple_test_bank, ApplyFeatureActivationsCaller},
+        assert_matches::assert_matches,
         solana_sdk::{
             account::Account,
             bpf_loader_upgradeable::{UpgradeableLoaderState, ID as BPF_LOADER_UPGRADEABLE_ID},
@@ -145,11 +141,10 @@ mod tests {
 
         // Success
         let target_builtin =
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
         assert_eq!(target_builtin.program_address, program_address);
         assert_eq!(target_builtin.program_account, program_account);
         assert_eq!(target_builtin.program_data_address, program_data_address);
-        assert_eq!(target_builtin.total_data_size, program_account.data().len());
 
         // Fail if the program account is not owned by the native loader
         store_account(
@@ -159,10 +154,9 @@ mod tests {
             true,
             &Pubkey::new_unique(), // Not the native loader
         );
-        assert_eq!(
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target)
-                .unwrap_err(),
-            CoreBpfMigrationError::IncorrectOwner(program_address)
+        assert_matches!(
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap_err(),
+            CoreBpfMigrationError::IncorrectOwner(..)
         );
 
         // Fail if the program data account exists
@@ -183,10 +177,9 @@ mod tests {
             false,
             &BPF_LOADER_UPGRADEABLE_ID,
         );
-        assert_eq!(
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target)
-                .unwrap_err(),
-            CoreBpfMigrationError::ProgramHasDataAccount(program_address)
+        assert_matches!(
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap_err(),
+            CoreBpfMigrationError::ProgramHasDataAccount(..)
         );
 
         // Fail if the program account does not exist
@@ -194,10 +187,9 @@ mod tests {
             &program_address,
             &AccountSharedData::default(),
         );
-        assert_eq!(
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target)
-                .unwrap_err(),
-            CoreBpfMigrationError::AccountNotFound(program_address)
+        assert_matches!(
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap_err(),
+            CoreBpfMigrationError::AccountNotFound(..)
         );
     }
 
@@ -212,11 +204,10 @@ mod tests {
 
         // Success
         let target_builtin =
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap();
         assert_eq!(target_builtin.program_address, program_address);
         assert_eq!(target_builtin.program_account, program_account);
         assert_eq!(target_builtin.program_data_address, program_data_address);
-        assert_eq!(target_builtin.total_data_size, program_account.data().len());
 
         // Fail if the program data account exists
         store_account(
@@ -229,10 +220,9 @@ mod tests {
             false,
             &BPF_LOADER_UPGRADEABLE_ID,
         );
-        assert_eq!(
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target)
-                .unwrap_err(),
-            CoreBpfMigrationError::ProgramHasDataAccount(program_address)
+        assert_matches!(
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap_err(),
+            CoreBpfMigrationError::ProgramHasDataAccount(..)
         );
 
         // Fail if the program account exists
@@ -243,10 +233,9 @@ mod tests {
             true,
             &NATIVE_LOADER_ID,
         );
-        assert_eq!(
-            TargetProgramBuiltin::new_checked(&bank, &program_address, &migration_target)
-                .unwrap_err(),
-            CoreBpfMigrationError::AccountExists(program_address)
+        assert_matches!(
+            TargetBuiltin::new_checked(&bank, &program_address, &migration_target).unwrap_err(),
+            CoreBpfMigrationError::AccountExists(..)
         );
     }
 }
