@@ -27,7 +27,7 @@ use {
     solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
-        fs,
+        fs, io,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -65,10 +65,14 @@ pub struct TieredStorage {
 impl Drop for TieredStorage {
     fn drop(&mut self) {
         if let Err(err) = fs::remove_file(&self.path) {
-            panic!(
-                "TieredStorage failed to remove backing storage file '{}': {err}",
-                self.path.display(),
-            );
+            // Here we bypass NotFound error as the focus of the panic is to
+            // detect any leakage of storage resource.
+            if err.kind() != io::ErrorKind::NotFound {
+                panic!(
+                    "TieredStorage failed to remove backing storage file '{}': {err}",
+                    self.path.display(),
+                );
+            }
         }
     }
 }
