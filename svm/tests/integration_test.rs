@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use {
-    crate::mock_bank::MockBankCallback,
+    crate::{mock_bank::MockBankCallback, transaction_builder::SanitizedTransactionBuilder},
     solana_bpf_loader_program::syscalls::{
         SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
         SyscallMemset, SyscallSetReturnData,
@@ -26,13 +26,12 @@ use {
         epoch_schedule::EpochSchedule,
         fee::FeeStructure,
         hash::Hash,
-        instruction::CompiledInstruction,
-        message::{Message, MessageHeader},
+        instruction::AccountMeta,
         native_loader,
         pubkey::Pubkey,
         signature::Signature,
         sysvar::SysvarId,
-        transaction::{SanitizedTransaction, Transaction, TransactionError},
+        transaction::{SanitizedTransaction, TransactionError},
     },
     solana_svm::{
         account_loader::TransactionCheckResult,
@@ -44,6 +43,7 @@ use {
     },
     std::{
         cmp::Ordering,
+        collections::HashMap,
         env,
         fs::{self, File},
         io::Read,
@@ -54,6 +54,7 @@ use {
 
 // This module contains the implementation of TransactionProcessingCallback
 mod mock_bank;
+mod transaction_builder;
 
 const BPF_LOADER_NAME: &str = "solana_bpf_loader_program";
 const SYSTEM_PROGRAM_NAME: &str = "system_program";
@@ -228,33 +229,18 @@ fn load_program(name: String) -> Vec<u8> {
 fn prepare_transactions(
     mock_bank: &mut MockBankCallback,
 ) -> (Vec<SanitizedTransaction>, Vec<TransactionCheckResult>) {
+    let mut transaction_builder = SanitizedTransactionBuilder::default();
     let mut all_transactions = Vec::new();
     let mut transaction_checks = Vec::new();
 
     // A transaction that works without any account
     let key1 = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
-    let message = Message {
-        account_keys: vec![fee_payer, key1],
-        header: MessageHeader {
-            num_required_signatures: 1,
-            num_readonly_signed_accounts: 0,
-            num_readonly_unsigned_accounts: 0,
-        },
-        instructions: vec![CompiledInstruction {
-            program_id_index: 1,
-            accounts: vec![],
-            data: vec![],
-        }],
-        recent_blockhash: Hash::default(),
-    };
+    transaction_builder.create_instruction(key1, Vec::new(), HashMap::new(), Vec::new());
 
-    let transaction = Transaction {
-        signatures: vec![Signature::new_unique()],
-        message,
-    };
     let sanitized_transaction =
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()));
+
     all_transactions.push(sanitized_transaction);
     transaction_checks.push((Ok(()), None, Some(20)));
 
@@ -283,36 +269,32 @@ fn prepare_transactions(
     let recipient = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
     let system_account = Pubkey::from([0u8; 32]);
-    let message = Message {
-        account_keys: vec![
-            fee_payer,
-            sender,
-            transfer_program_account,
-            recipient,
-            system_account,
-        ],
-        header: MessageHeader {
-            // The signers must appear in the `account_keys` vector in positions whose index is
-            // less than `num_required_signatures`
-            num_required_signatures: 2,
-            num_readonly_signed_accounts: 0,
-            num_readonly_unsigned_accounts: 0,
-        },
-        instructions: vec![CompiledInstruction {
-            program_id_index: 2,
-            accounts: vec![1, 3, 4],
-            data: vec![0, 0, 0, 0, 0, 0, 0, 10],
-        }],
-        recent_blockhash: Hash::default(),
-    };
 
-    let transaction = Transaction {
-        signatures: vec![Signature::new_unique(), Signature::new_unique()],
-        message,
-    };
+    transaction_builder.create_instruction(
+        transfer_program_account,
+        vec![
+            AccountMeta {
+                pubkey: sender,
+                is_signer: true,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: recipient,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: system_account,
+                is_signer: false,
+                is_writable: false,
+            },
+        ],
+        HashMap::from([(sender, Signature::new_unique())]),
+        vec![0, 0, 0, 0, 0, 0, 0, 10],
+    );
 
     let sanitized_transaction =
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()));
     all_transactions.push(sanitized_transaction);
     transaction_checks.push((Ok(()), None, Some(20)));
 
@@ -355,27 +337,11 @@ fn prepare_transactions(
     // A program that utilizes a Sysvar
     let program_account = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
-    let message = Message {
-        account_keys: vec![fee_payer, program_account],
-        header: MessageHeader {
-            num_required_signatures: 1,
-            num_readonly_signed_accounts: 0,
-            num_readonly_unsigned_accounts: 0,
-        },
-        instructions: vec![CompiledInstruction {
-            program_id_index: 1,
-            accounts: vec![],
-            data: vec![],
-        }],
-        recent_blockhash: Hash::default(),
-    };
+    transaction_builder.create_instruction(program_account, Vec::new(), HashMap::new(), Vec::new());
 
-    let transaction = Transaction {
-        signatures: vec![Signature::new_unique()],
-        message,
-    };
     let sanitized_transaction =
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()));
+
     all_transactions.push(sanitized_transaction);
     transaction_checks.push((Ok(()), None, Some(20)));
 
@@ -407,33 +373,31 @@ fn prepare_transactions(
     while data.len() < 8 {
         data.insert(0, 0);
     }
-
-    let message = Message {
-        account_keys: vec![
-            fee_payer,
-            sender,
-            transfer_program_account,
-            recipient,
-            system_account,
+    transaction_builder.create_instruction(
+        transfer_program_account,
+        vec![
+            AccountMeta {
+                pubkey: sender,
+                is_signer: true,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: recipient,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: system_account,
+                is_signer: false,
+                is_writable: false,
+            },
         ],
-        header: MessageHeader {
-            num_required_signatures: 2,
-            num_readonly_signed_accounts: 0,
-            num_readonly_unsigned_accounts: 0,
-        },
-        instructions: vec![CompiledInstruction {
-            program_id_index: 2,
-            accounts: vec![1, 3, 4],
-            data,
-        }],
-        recent_blockhash: Hash::default(),
-    };
-    let transaction = Transaction {
-        signatures: vec![Signature::new_unique(), Signature::new_unique()],
-        message,
-    };
+        HashMap::from([(sender, Signature::new_unique())]),
+        data,
+    );
+
     let sanitized_transaction =
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()));
     all_transactions.push(sanitized_transaction.clone());
     transaction_checks.push((Ok(()), None, Some(20)));
 
@@ -531,7 +495,7 @@ fn svm_integration() {
         .is_ok());
 
     // The SVM does not commit the account changes in MockBank
-    let recipient_key = transactions[1].message().account_keys()[3];
+    let recipient_key = transactions[1].message().account_keys()[2];
     let recipient_data = result.loaded_transactions[1]
         .0
         .as_ref()
