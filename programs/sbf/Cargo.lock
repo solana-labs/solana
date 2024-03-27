@@ -5681,7 +5681,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "lru",
  "lz4",
  "memmap2",
  "mockall",
