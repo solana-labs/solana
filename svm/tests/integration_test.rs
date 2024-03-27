@@ -21,7 +21,7 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        bpf_loader,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Clock, Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
         fee::FeeStructure,
@@ -56,7 +56,7 @@ use {
 mod mock_bank;
 mod transaction_builder;
 
-const BPF_LOADER_NAME: &str = "solana_bpf_loader_program";
+const BPF_LOADER_NAME: &str = "solana_bpf_loader_upgradeable_program";
 const SYSTEM_PROGRAM_NAME: &str = "system_program";
 const DEPLOYMENT_SLOT: u64 = 0;
 const EXECUTION_SLOT: u64 = 5; // The execution slot must be greater than the deployment slot
@@ -146,11 +146,11 @@ fn create_executable_environment(
     );
     mock_bank
         .account_shared_data
-        .insert(bpf_loader::id(), account_data);
+        .insert(bpf_loader_upgradeable::id(), account_data);
 
     // The bpf loader needs an executable as well
     program_cache.assign_program(
-        bpf_loader::id(),
+        bpf_loader_upgradeable::id(),
         Arc::new(LoadedProgram::new_builtin(
             DEPLOYMENT_SLOT,
             BPF_LOADER_NAME.len(),
@@ -207,7 +207,7 @@ fn create_executable_environment(
         .insert(Clock::id(), account_data);
 
     // Inform SVM of the registered builins
-    let registered_built_ins = vec![bpf_loader::id(), solana_system_program::id()];
+    let registered_built_ins = vec![bpf_loader_upgradeable::id(), solana_system_program::id()];
     (program_cache, registered_built_ins)
 }
 
@@ -226,6 +226,46 @@ fn load_program(name: String) -> Vec<u8> {
     buffer
 }
 
+fn deploy_program(name: String, mock_bank: &mut MockBankCallback) -> Pubkey {
+    let program_account = Pubkey::new_unique();
+    let program_data_account = Pubkey::new_unique();
+    let state = UpgradeableLoaderState::Program {
+        programdata_address: program_data_account,
+    };
+
+    // The program account must have funds and hold the executable binary
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&state).unwrap());
+    account_data.set_lamports(25);
+    account_data.set_owner(bpf_loader_upgradeable::id());
+    mock_bank
+        .account_shared_data
+        .insert(program_account, account_data);
+
+    let mut account_data = AccountSharedData::default();
+    let state = UpgradeableLoaderState::ProgramData {
+        slot: DEPLOYMENT_SLOT,
+        upgrade_authority_address: None,
+    };
+    let mut header = bincode::serialize(&state).unwrap();
+    let mut complement = vec![
+        0;
+        std::cmp::max(
+            0,
+            UpgradeableLoaderState::size_of_programdata_metadata().saturating_sub(header.len())
+        )
+    ];
+    let mut buffer = load_program(name);
+    header.append(&mut complement);
+    header.append(&mut buffer);
+    account_data.set_data(header);
+    mock_bank
+        .account_shared_data
+        .insert(program_data_account, account_data);
+
+    program_account
+}
+
 fn prepare_transactions(
     mock_bank: &mut MockBankCallback,
 ) -> (Vec<SanitizedTransaction>, Vec<TransactionCheckResult>) {
@@ -234,27 +274,15 @@ fn prepare_transactions(
     let mut transaction_checks = Vec::new();
 
     // A transaction that works without any account
-    let key1 = Pubkey::new_unique();
+    let hello_program = deploy_program("hello-solana".to_string(), mock_bank);
     let fee_payer = Pubkey::new_unique();
-    transaction_builder.create_instruction(key1, Vec::new(), HashMap::new(), Vec::new());
+    transaction_builder.create_instruction(hello_program, Vec::new(), HashMap::new(), Vec::new());
 
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()));
 
     all_transactions.push(sanitized_transaction);
     transaction_checks.push((Ok(()), None, Some(20)));
-
-    // Loading the program file
-    let buffer = load_program("hello-solana".to_string());
-
-    // The program account must have funds and hold the executable binary
-    let mut account_data = AccountSharedData::default();
-    // The executable account owner must be one of the loaders.
-    account_data.set_owner(bpf_loader::id());
-    account_data.set_data(buffer);
-    account_data.set_executable(true);
-    account_data.set_lamports(25);
-    mock_bank.account_shared_data.insert(key1, account_data);
 
     // The transaction fee payer must have enough funds
     let mut account_data = AccountSharedData::default();
@@ -264,7 +292,7 @@ fn prepare_transactions(
         .insert(fee_payer, account_data);
 
     // A simple funds transfer between accounts
-    let transfer_program_account = Pubkey::new_unique();
+    let transfer_program_account = deploy_program("simple-transfer".to_string(), mock_bank);
     let sender = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
@@ -307,19 +335,6 @@ fn prepare_transactions(
         .account_shared_data
         .insert(fee_payer, account_data);
 
-    let buffer = load_program("simple-transfer".to_string());
-
-    // The program account must have funds and hold the executable binary
-    let mut account_data = AccountSharedData::default();
-    // The executable account owner must be one of the loaders.
-    account_data.set_owner(bpf_loader::id());
-    account_data.set_data(buffer);
-    account_data.set_executable(true);
-    account_data.set_lamports(25);
-    mock_bank
-        .account_shared_data
-        .insert(transfer_program_account, account_data);
-
     // sender
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(900000);
@@ -332,10 +347,10 @@ fn prepare_transactions(
         .account_shared_data
         .insert(recipient, account_data);
 
-    // The program account is set in `create_executable_environment`
+    // The system account is set in `create_executable_environment`
 
     // A program that utilizes a Sysvar
-    let program_account = Pubkey::new_unique();
+    let program_account = deploy_program("clock-sysvar".to_string(), mock_bank);
     let fee_payer = Pubkey::new_unique();
     transaction_builder.create_instruction(program_account, Vec::new(), HashMap::new(), Vec::new());
 
@@ -351,28 +366,12 @@ fn prepare_transactions(
         .account_shared_data
         .insert(fee_payer, account_data);
 
-    let buffer = load_program("clock-sysvar".to_string());
-
-    // The program account must have funds and hold the executable binary
-    let mut account_data = AccountSharedData::default();
-    // The executable account owner must be one of the loaders.
-    account_data.set_owner(bpf_loader::id());
-    account_data.set_data(buffer);
-    account_data.set_executable(true);
-    account_data.set_lamports(25);
-    mock_bank
-        .account_shared_data
-        .insert(program_account, account_data);
-
     // A transaction that fails
     let sender = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
     let system_account = Pubkey::new_from_array([0; 32]);
-    let mut data = 900050u64.to_be_bytes().to_vec();
-    while data.len() < 8 {
-        data.insert(0, 0);
-    }
+    let data = 900050u64.to_be_bytes().to_vec();
     transaction_builder.create_instruction(
         transfer_program_account,
         vec![
