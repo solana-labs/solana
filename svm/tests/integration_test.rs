@@ -443,15 +443,7 @@ fn svm_integration() {
     );
 
     // The sysvars must be put in the cache
-    batch_processor
-        .sysvar_cache
-        .write()
-        .unwrap()
-        .fill_missing_entries(|pubkey, callback| {
-            if let Some(account) = mock_bank.get_account_shared_data(pubkey) {
-                callback(account.data());
-            }
-        });
+    batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
 
     let mut error_counter = TransactionErrorMetrics::default();
     let recording_config = ExecutionRecordingConfig {
