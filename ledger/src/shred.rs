@@ -310,6 +310,7 @@ impl ErasureSetId {
 macro_rules! dispatch {
     ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)?) $(-> $out:ty)?) => {
         #[inline]
+        #[allow(dead_code)]
         $vis fn $name(&self $(, $arg:$ty)?) $(-> $out)? {
             match self {
                 Self::ShredCode(shred) => shred.$name($($arg, )?),
@@ -344,6 +345,7 @@ impl Shred {
     dispatch!(fn set_signature(&mut self, signature: Signature));
     dispatch!(fn signed_data(&self) -> Result<SignedData, Error>);
 
+    dispatch!(pub(crate) fn chained_merkle_root(&self) -> Result<Hash, Error>);
     // Returns the portion of the shred's payload which is erasure coded.
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     // Like Shred::erasure_shard but returning a slice.
@@ -724,6 +726,36 @@ pub mod layout {
                 resigned,
             } => merkle::ShredData::get_merkle_root(shred, proof_size, chained, resigned),
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_chained_merkle_root(shred: &[u8]) -> Option<Hash> {
+        let offset = match get_shred_variant(shred).ok()? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => None,
+            ShredVariant::MerkleCode {
+                proof_size,
+                chained: true,
+                resigned,
+            } => merkle::ShredCode::get_chained_merkle_root_offset(proof_size, resigned).ok(),
+            ShredVariant::MerkleData {
+                proof_size,
+                chained: true,
+                resigned,
+            } => merkle::ShredData::get_chained_merkle_root_offset(proof_size, resigned).ok(),
+            ShredVariant::MerkleCode {
+                proof_size: _,
+                chained: false,
+                resigned: _,
+            } => None,
+            ShredVariant::MerkleData {
+                proof_size: _,
+                chained: false,
+                resigned: _,
+            } => None,
+        }?;
+        shred
+            .get(offset..offset + SIZE_OF_MERKLE_ROOT)
+            .map(Hash::new)
     }
 
     // Minimally corrupts the packet so that the signature no longer verifies.
