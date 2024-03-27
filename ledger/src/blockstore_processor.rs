@@ -519,20 +519,23 @@ pub fn process_entries_for_tests(
 
     let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
     let mut batch_timing = BatchExecutionTiming::default();
-    let mut replay_entries: Vec<_> =
-        entry::verify_transactions(entries, Arc::new(verify_transaction))?
-            .into_iter()
-            .map(|entry| {
-                let starting_index = entry_starting_index;
-                if let EntryType::Transactions(ref transactions) = entry {
-                    entry_starting_index = entry_starting_index.saturating_add(transactions.len());
-                }
-                ReplayEntry {
-                    entry,
-                    starting_index,
-                }
-            })
-            .collect();
+    let mut replay_entries: Vec<_> = entry::verify_transactions(
+        entries,
+        &replay_tx_thread_pool,
+        Arc::new(verify_transaction),
+    )?
+    .into_iter()
+    .map(|entry| {
+        let starting_index = entry_starting_index;
+        if let EntryType::Transactions(ref transactions) = entry {
+            entry_starting_index = entry_starting_index.saturating_add(transactions.len());
+        }
+        ReplayEntry {
+            entry,
+            starting_index,
+        }
+    })
+    .collect();
 
     let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries(
@@ -1292,7 +1295,11 @@ fn confirm_slot_entries(
     let last_entry_hash = entries.last().map(|e| e.hash);
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
-        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
+        let entry_state = entries.start_verify(
+            &progress.last_entry,
+            replay_tx_thread_pool,
+            recyclers.clone(),
+        );
         if entry_state.status() == EntryVerificationStatus::Failure {
             warn!("Ledger proof of history failed at slot: {}", slot);
             return Err(BlockError::InvalidEntryHash.into());
@@ -1315,6 +1322,7 @@ fn confirm_slot_entries(
     let transaction_verification_result = entry::start_verify_transactions(
         entries,
         skip_verification,
+        replay_tx_thread_pool,
         recyclers.clone(),
         Arc::new(verify_transaction),
     );
@@ -1381,7 +1389,7 @@ fn confirm_slot_entries(
     }
 
     if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify();
+        let verified = verifier.finish_verify(replay_tx_thread_pool);
         *poh_verify_elapsed += verifier.poh_duration_us();
         if !verified {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());

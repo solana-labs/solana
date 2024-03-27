@@ -6,7 +6,6 @@ use {
     crate::poh::Poh,
     crossbeam_channel::{Receiver, Sender},
     dlopen2::symbor::{Container, SymBorApi, Symbol},
-    lazy_static::lazy_static,
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
@@ -40,16 +39,6 @@ use {
         time::Instant,
     },
 };
-
-// get_max_thread_count to match number of threads in the old code.
-// see: https://github.com/solana-labs/solana/pull/24853
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_max_thread_count())
-        .thread_name(|i| format!("solEntry{i:02}"))
-        .build()
-        .unwrap();
-}
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -359,7 +348,7 @@ impl EntryVerificationState {
         self.poh_duration_us
     }
 
-    pub fn finish_verify(&mut self) -> bool {
+    pub fn finish_verify(&mut self, thread_pool: &ThreadPool) -> bool {
         match &mut self.device_verification_data {
             DeviceVerificationData::Gpu(verification_state) => {
                 let gpu_time_us = verification_state.thread_h.take().unwrap().join().unwrap();
@@ -370,7 +359,7 @@ impl EntryVerificationState {
                     .expect("unwrap Arc")
                     .into_inner()
                     .expect("into_inner");
-                let res = PAR_THREAD_POOL.install(|| {
+                let res = thread_pool.install(|| {
                     hashes
                         .into_par_iter()
                         .cloned()
@@ -405,9 +394,10 @@ impl EntryVerificationState {
 
 pub fn verify_transactions(
     entries: Vec<Entry>,
+    thread_pool: &ThreadPool,
     verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
 ) -> Result<Vec<EntryType>> {
-    PAR_THREAD_POOL.install(|| {
+    thread_pool.install(|| {
         entries
             .into_par_iter()
             .map(|entry| {
@@ -430,6 +420,7 @@ pub fn verify_transactions(
 pub fn start_verify_transactions(
     entries: Vec<Entry>,
     skip_verification: bool,
+    thread_pool: &ThreadPool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
         dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
@@ -459,15 +450,16 @@ pub fn start_verify_transactions(
             .is_some();
 
     if use_cpu {
-        start_verify_transactions_cpu(entries, skip_verification, verify)
+        start_verify_transactions_cpu(entries, skip_verification, thread_pool, verify)
     } else {
-        start_verify_transactions_gpu(entries, verify_recyclers, verify)
+        start_verify_transactions_gpu(entries, verify_recyclers, thread_pool, verify)
     }
 }
 
 fn start_verify_transactions_cpu(
     entries: Vec<Entry>,
     skip_verification: bool,
+    thread_pool: &ThreadPool,
     verify: Arc<
         dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
             + Send
@@ -484,7 +476,7 @@ fn start_verify_transactions_cpu(
         move |versioned_tx| verify(versioned_tx, mode)
     };
 
-    let entries = verify_transactions(entries, Arc::new(verify_func))?;
+    let entries = verify_transactions(entries, thread_pool, Arc::new(verify_func))?;
 
     Ok(EntrySigVerificationState {
         verification_status: EntryVerificationStatus::Success,
@@ -497,6 +489,7 @@ fn start_verify_transactions_cpu(
 fn start_verify_transactions_gpu(
     entries: Vec<Entry>,
     verify_recyclers: VerifyRecyclers,
+    thread_pool: &ThreadPool,
     verify: Arc<
         dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
             + Send
@@ -512,7 +505,7 @@ fn start_verify_transactions_gpu(
         }
     };
 
-    let entries = verify_transactions(entries, Arc::new(verify_func))?;
+    let entries = verify_transactions(entries, thread_pool, Arc::new(verify_func))?;
 
     let entry_txs: Vec<&SanitizedTransaction> = entries
         .iter()
@@ -618,12 +611,25 @@ fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
 // an EntrySlice is a slice of Entries
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
-    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
-    fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState;
-    fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState;
-    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers)
-        -> EntryVerificationState;
-    fn verify(&self, start_hash: &Hash) -> bool;
+    fn verify_cpu(&self, start_hash: &Hash, thread_pool: &ThreadPool) -> EntryVerificationState;
+    fn verify_cpu_generic(
+        &self,
+        start_hash: &Hash,
+        thread_pool: &ThreadPool,
+    ) -> EntryVerificationState;
+    fn verify_cpu_x86_simd(
+        &self,
+        start_hash: &Hash,
+        simd_len: usize,
+        thread_pool: &ThreadPool,
+    ) -> EntryVerificationState;
+    fn start_verify(
+        &self,
+        start_hash: &Hash,
+        thread_pool: &ThreadPool,
+        recyclers: VerifyRecyclers,
+    ) -> EntryVerificationState;
+    fn verify(&self, start_hash: &Hash, thread_pool: &ThreadPool) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
     /// for the next entry slice.
@@ -633,12 +639,16 @@ pub trait EntrySlice {
 }
 
 impl EntrySlice for [Entry] {
-    fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default())
-            .finish_verify()
+    fn verify(&self, start_hash: &Hash, thread_pool: &ThreadPool) -> bool {
+        self.start_verify(start_hash, thread_pool, VerifyRecyclers::default())
+            .finish_verify(thread_pool)
     }
 
-    fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState {
+    fn verify_cpu_generic(
+        &self,
+        start_hash: &Hash,
+        thread_pool: &ThreadPool,
+    ) -> EntryVerificationState {
         let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
@@ -646,7 +656,7 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        let res = PAR_THREAD_POOL.install(|| {
+        let res = thread_pool.install(|| {
             entry_pairs.all(|(x0, x1)| {
                 let r = x1.verify(&x0.hash);
                 if !r {
@@ -672,7 +682,12 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState {
+    fn verify_cpu_x86_simd(
+        &self,
+        start_hash: &Hash,
+        simd_len: usize,
+        thread_pool: &ThreadPool,
+    ) -> EntryVerificationState {
         use solana_sdk::hash::HASH_BYTES;
         let now = Instant::now();
         let genesis = [Entry {
@@ -703,7 +718,7 @@ impl EntrySlice for [Entry] {
         num_hashes.resize(aligned_len, 0);
         let num_hashes: Vec<_> = num_hashes.chunks(simd_len).collect();
 
-        let res = PAR_THREAD_POOL.install(|| {
+        let res = thread_pool.install(|| {
             hashes_chunked
                 .par_iter_mut()
                 .zip(num_hashes)
@@ -753,7 +768,7 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState {
+    fn verify_cpu(&self, start_hash: &Hash, thread_pool: &ThreadPool) -> EntryVerificationState {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         let (has_avx2, has_avx512) = (
             is_x86_feature_detected!("avx2"),
@@ -764,25 +779,26 @@ impl EntrySlice for [Entry] {
 
         if api().is_some() {
             if has_avx512 && self.len() >= 128 {
-                self.verify_cpu_x86_simd(start_hash, 16)
+                self.verify_cpu_x86_simd(start_hash, 16, thread_pool)
             } else if has_avx2 && self.len() >= 48 {
-                self.verify_cpu_x86_simd(start_hash, 8)
+                self.verify_cpu_x86_simd(start_hash, 8, thread_pool)
             } else {
-                self.verify_cpu_generic(start_hash)
+                self.verify_cpu_generic(start_hash, thread_pool)
             }
         } else {
-            self.verify_cpu_generic(start_hash)
+            self.verify_cpu_generic(start_hash, thread_pool)
         }
     }
 
     fn start_verify(
         &self,
         start_hash: &Hash,
+        thread_pool: &ThreadPool,
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
         let Some(api) = perf_libs::api() else {
-            return self.verify_cpu(start_hash);
+            return self.verify_cpu(start_hash, thread_pool);
         };
         inc_new_counter_info!("entry_verify-num_entries", self.len());
 
@@ -839,7 +855,7 @@ impl EntrySlice for [Entry] {
             })
             .unwrap();
 
-        let verifications = PAR_THREAD_POOL.install(|| {
+        let verifications = thread_pool.install(|| {
             self.into_par_iter()
                 .map(|entry| {
                     let answer = entry.hash;
@@ -938,6 +954,26 @@ pub fn next_versioned_entry(
     }
 }
 
+pub fn thread_pool_for_tests() -> ThreadPool {
+    // Allocate fewer threads for unit tests
+    // Unit tests typically aren't creating massive blocks to verify, and
+    // multiple tests could be running in parallel so any further parallelism
+    // will do more harm than good
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .thread_name(|i| format!("solEntryTest{i:02}"))
+        .build()
+        .expect("new rayon threadpool")
+}
+
+pub fn thread_pool_for_benches() -> ThreadPool {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|i| format!("solEntryBnch{i:02}"))
+        .build()
+        .expect("new rayon threadpool")
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -968,6 +1004,7 @@ mod tests {
         entries: Vec<Entry>,
         skip_verification: bool,
         verify_recyclers: VerifyRecyclers,
+        thread_pool: &ThreadPool,
         verify: Arc<
             dyn Fn(
                     VersionedTransaction,
@@ -989,10 +1026,16 @@ mod tests {
             }
         };
 
-        let cpu_verify_result = verify_transactions(entries.clone(), Arc::new(verify_func));
+        let cpu_verify_result =
+            verify_transactions(entries.clone(), thread_pool, Arc::new(verify_func));
         let mut gpu_verify_result: EntrySigVerificationState = {
-            let verify_result =
-                start_verify_transactions(entries, skip_verification, verify_recyclers, verify);
+            let verify_result = start_verify_transactions(
+                entries,
+                skip_verification,
+                thread_pool,
+                verify_recyclers,
+                verify,
+            );
             match verify_result {
                 Ok(res) => res,
                 _ => EntrySigVerificationState {
@@ -1022,6 +1065,8 @@ mod tests {
 
     #[test]
     fn test_entry_gpu_verify() {
+        let thread_pool = thread_pool_for_tests();
+
         let verify_transaction = {
             move |versioned_tx: VersionedTransaction,
                   verification_mode: TransactionVerificationMode|
@@ -1067,12 +1112,14 @@ mod tests {
             entries_invalid,
             false,
             recycler.clone(),
+            &thread_pool,
             Arc::new(verify_transaction)
         ));
         assert!(test_verify_transactions(
             entries_valid,
             false,
             recycler,
+            &thread_pool,
             Arc::new(verify_transaction)
         ));
     }
@@ -1096,6 +1143,8 @@ mod tests {
 
     #[test]
     fn test_transaction_signing() {
+        let thread_pool = thread_pool_for_tests();
+
         use solana_sdk::signature::Signature;
         let zero = Hash::default();
 
@@ -1105,27 +1154,27 @@ mod tests {
 
         // Verify entry with 2 transactions
         let mut e0 = [Entry::new(&zero, 0, vec![tx0, tx1])];
-        assert!(e0.verify(&zero));
+        assert!(e0.verify(&zero, &thread_pool));
 
         // Clear signature of the first transaction, see that it does not verify
         let orig_sig = e0[0].transactions[0].signatures[0];
         e0[0].transactions[0].signatures[0] = Signature::default();
-        assert!(!e0.verify(&zero));
+        assert!(!e0.verify(&zero, &thread_pool));
 
         // restore original signature
         e0[0].transactions[0].signatures[0] = orig_sig;
-        assert!(e0.verify(&zero));
+        assert!(e0.verify(&zero, &thread_pool));
 
         // Resize signatures and see verification fails.
         let len = e0[0].transactions[0].signatures.len();
         e0[0].transactions[0]
             .signatures
             .resize(len - 1, Signature::default());
-        assert!(!e0.verify(&zero));
+        assert!(!e0.verify(&zero, &thread_pool));
 
         // Pass an entry with no transactions
         let e0 = [Entry::new(&zero, 0, vec![])];
-        assert!(e0.verify(&zero));
+        assert!(e0.verify(&zero, &thread_pool));
     }
 
     #[test]
@@ -1158,41 +1207,57 @@ mod tests {
     #[test]
     fn test_verify_slice1() {
         solana_logger::setup();
+        let thread_pool = thread_pool_for_tests();
+
         let zero = Hash::default();
         let one = hash(zero.as_ref());
-        assert!(vec![][..].verify(&zero)); // base case
-        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
-        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
+        // base case
+        assert!(vec![][..].verify(&zero, &thread_pool));
+        // singleton case 1
+        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero, &thread_pool));
+        // singleton case 2, bad
+        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one, &thread_pool));
+        // inductive step
+        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero, &thread_pool));
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&zero)); // inductive step, bad
+        // inductive step, bad
+        assert!(!bad_ticks.verify(&zero, &thread_pool));
     }
 
     #[test]
     fn test_verify_slice_with_hashes1() {
         solana_logger::setup();
+        let thread_pool = thread_pool_for_tests();
+
         let zero = Hash::default();
         let one = hash(zero.as_ref());
         let two = hash(one.as_ref());
-        assert!(vec![][..].verify(&one)); // base case
-        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
-        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
+        // base case
+        assert!(vec![][..].verify(&one, &thread_pool));
+        // singleton case 1
+        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one, &thread_pool));
+        // singleton case 2, bad
+        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two, &thread_pool));
 
         let mut ticks = vec![next_entry(&one, 1, vec![])];
         ticks.push(next_entry(&ticks.last().unwrap().hash, 1, vec![]));
-        assert!(ticks.verify(&one)); // inductive step
+        // inductive step
+        assert!(ticks.verify(&one, &thread_pool));
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+        // inductive step, bad
+        assert!(!bad_ticks.verify(&one, &thread_pool));
     }
 
     #[test]
     fn test_verify_slice_with_hashes_and_transactions() {
         solana_logger::setup();
+        let thread_pool = thread_pool_for_tests();
+
         let zero = Hash::default();
         let one = hash(zero.as_ref());
         let two = hash(one.as_ref());
@@ -1200,9 +1265,12 @@ mod tests {
         let bob_keypair = Keypair::new();
         let tx0 = system_transaction::transfer(&alice_keypair, &bob_keypair.pubkey(), 1, one);
         let tx1 = system_transaction::transfer(&bob_keypair, &alice_keypair.pubkey(), 1, one);
-        assert!(vec![][..].verify(&one)); // base case
-        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
-        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
+        // base case
+        assert!(vec![][..].verify(&one, &thread_pool));
+        // singleton case 1
+        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one, &thread_pool));
+        // singleton case 2, bad
+        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two, &thread_pool));
 
         let mut ticks = vec![next_entry(&one, 1, vec![tx0.clone()])];
         ticks.push(next_entry(
@@ -1210,12 +1278,15 @@ mod tests {
             1,
             vec![tx1.clone()],
         ));
-        assert!(ticks.verify(&one)); // inductive step
+
+        // inductive step
+        assert!(ticks.verify(&one, &thread_pool));
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+        // inductive step, bad
+        assert!(!bad_ticks.verify(&one, &thread_pool));
     }
 
     #[test]
@@ -1354,7 +1425,7 @@ mod tests {
 
             info!("done.. {}", time);
             let mut time = Measure::start("poh");
-            let res = entries.verify(&Hash::default());
+            let res = entries.verify(&Hash::default(), &thread_pool_for_tests());
             assert_eq!(res, !modified);
             time.stop();
             info!("{} {}", time, res);

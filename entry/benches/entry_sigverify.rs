@@ -16,6 +16,7 @@ use {
 
 #[bench]
 fn bench_gpusigverify(bencher: &mut Bencher) {
+    let thread_pool = entry::thread_pool_for_benches();
     let entries = (0..131072)
         .map(|_| {
             let transaction = test_tx();
@@ -53,6 +54,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
         let res = entry::start_verify_transactions(
             entries.clone(),
             false,
+            &thread_pool,
             recycler.clone(),
             Arc::new(verify_transaction),
         );
@@ -65,6 +67,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_cpusigverify(bencher: &mut Bencher) {
+    let thread_pool = entry::thread_pool_for_benches();
     let entries = (0..131072)
         .map(|_| {
             let transaction = test_tx();
@@ -89,6 +92,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
     };
 
     bencher.iter(|| {
-        let _ans = entry::verify_transactions(entries.clone(), Arc::new(verify_transaction));
+        let _ans =
+            entry::verify_transactions(entries.clone(), &thread_pool, Arc::new(verify_transaction));
     })
 }

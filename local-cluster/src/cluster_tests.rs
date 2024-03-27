@@ -5,7 +5,7 @@
 use log::*;
 use {
     rand::{thread_rng, Rng},
-    rayon::prelude::*,
+    rayon::{prelude::*, ThreadPool},
     solana_client::{
         connection_cache::{ConnectionCache, Protocol},
         thin_client::ThinClient,
@@ -14,7 +14,7 @@ use {
         tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
         VOTE_THRESHOLD_DEPTH,
     },
-    solana_entry::entry::{Entry, EntrySlice},
+    solana_entry::entry::{self, Entry, EntrySlice},
     solana_gossip::{
         cluster_info::{self, ClusterInfo},
         contact_info::{ContactInfo, LegacyContactInfo},
@@ -180,6 +180,8 @@ pub fn send_many_transactions(
 
 pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
     let ledger = Blockstore::open(ledger_path).unwrap();
+    let thread_pool = entry::thread_pool_for_tests();
+
     let zeroth_slot = ledger.get_slot_entries(0, 0).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
@@ -201,7 +203,7 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
             None
         };
 
-        let last_id = verify_slot_ticks(&ledger, slot, &last_id, should_verify_ticks);
+        let last_id = verify_slot_ticks(&ledger, &thread_pool, slot, &last_id, should_verify_ticks);
         pending_slots.extend(
             next_slots
                 .into_iter()
@@ -630,21 +632,23 @@ pub fn start_gossip_voter(
 
 fn get_and_verify_slot_entries(
     blockstore: &Blockstore,
+    thread_pool: &ThreadPool,
     slot: Slot,
     last_entry: &Hash,
 ) -> Vec<Entry> {
     let entries = blockstore.get_slot_entries(slot, 0).unwrap();
-    assert!(entries.verify(last_entry));
+    assert!(entries.verify(last_entry, thread_pool));
     entries
 }
 
 fn verify_slot_ticks(
     blockstore: &Blockstore,
+    thread_pool: &ThreadPool,
     slot: Slot,
     last_entry: &Hash,
     expected_num_ticks: Option<usize>,
 ) -> Hash {
-    let entries = get_and_verify_slot_entries(blockstore, slot, last_entry);
+    let entries = get_and_verify_slot_entries(blockstore, thread_pool, slot, last_entry);
     let num_ticks: usize = entries.iter().map(|entry| entry.is_tick() as usize).sum();
     if let Some(expected_num_ticks) = expected_num_ticks {
         assert_eq!(num_ticks, expected_num_ticks);

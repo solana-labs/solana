@@ -2,7 +2,7 @@
 extern crate test;
 
 use {
-    solana_entry::entry::{next_entry_mut, Entry, EntrySlice},
+    solana_entry::entry::{self, next_entry_mut, Entry, EntrySlice},
     solana_sdk::{
         hash::{hash, Hash},
         signature::{Keypair, Signer},
@@ -17,6 +17,8 @@ const NUM_ENTRIES: usize = 800;
 #[bench]
 fn bench_poh_verify_ticks(bencher: &mut Bencher) {
     solana_logger::setup();
+    let thread_pool = entry::thread_pool_for_benches();
+
     let zero = Hash::default();
     let start_hash = hash(zero.as_ref());
     let mut cur_hash = start_hash;
@@ -27,12 +29,14 @@ fn bench_poh_verify_ticks(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| {
-        assert!(ticks.verify(&start_hash));
+        assert!(ticks.verify(&start_hash, &thread_pool));
     })
 }
 
 #[bench]
 fn bench_poh_verify_transaction_entries(bencher: &mut Bencher) {
+    let thread_pool = entry::thread_pool_for_benches();
+
     let zero = Hash::default();
     let start_hash = hash(zero.as_ref());
     let mut cur_hash = start_hash;
@@ -47,6 +51,6 @@ fn bench_poh_verify_transaction_entries(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| {
-        assert!(ticks.verify(&start_hash));
+        assert!(ticks.verify(&start_hash, &thread_pool));
     })
 }
