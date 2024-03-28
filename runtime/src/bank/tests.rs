@@ -12715,9 +12715,13 @@ fn test_epoch_rewards_sysvar() {
 
     // create epoch rewards sysvar
     let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        distribution_starting_block_height: 42,
+        num_partitions: 0,
+        parent_blockhash: Hash::default(),
+        total_points: 0,
         total_rewards,
         distributed_rewards: 10,
-        distribution_complete_block_height: 42,
+        active: true,
     };
 
     bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
@@ -12732,9 +12736,13 @@ fn test_epoch_rewards_sysvar() {
     assert_eq!(account.lamports(), total_rewards - 20);
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
     let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
+        distribution_starting_block_height: 42,
+        num_partitions: 0,
+        parent_blockhash: Hash::default(),
+        total_points: 0,
         total_rewards,
         distributed_rewards: 20,
-        distribution_complete_block_height: 42,
+        active: true,
     };
     assert_eq!(epoch_rewards, expected_epoch_rewards);
 

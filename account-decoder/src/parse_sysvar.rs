@@ -372,9 +372,11 @@ mod test {
         );
 
         let epoch_rewards = EpochRewards {
+            distribution_starting_block_height: 42,
             total_rewards: 100,
             distributed_rewards: 20,
-            distribution_complete_block_height: 42,
+            active: true,
+            ..EpochRewards::default()
         };
         let epoch_rewards_sysvar = create_account_for_test(&epoch_rewards);
         assert_eq!(

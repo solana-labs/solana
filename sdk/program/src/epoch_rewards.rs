@@ -6,20 +6,37 @@
 //!
 //! [`sysvar::epoch_rewards`]: crate::sysvar::epoch_rewards
 
-use std::ops::AddAssign;
+use {crate::hash::Hash, solana_sdk_macro::CloneZeroed, std::ops::AddAssign};
 
-#[repr(C)]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, Copy, AbiExample)]
+#[repr(C, align(16))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, AbiExample, CloneZeroed)]
 pub struct EpochRewards {
-    /// total rewards for the current epoch, in lamports
+    /// The starting block height of the rewards distribution in the current
+    /// epoch
+    pub distribution_starting_block_height: u64,
+
+    /// Number of partitions in the rewards distribution in the current epoch,
+    /// used to generate an EpochRewardsHasher
+    pub num_partitions: u64,
+
+    /// The blockhash of the parent block of the first block in the epoch, used
+    /// to seed an EpochRewardsHasher
+    pub parent_blockhash: Hash,
+
+    /// The total rewards points calculated for the current epoch, where points
+    /// equals the sum of (delegated stake * credits observed) for all
+    /// delegations
+    pub total_points: u128,
+
+    /// The total rewards for the current epoch, in lamports
     pub total_rewards: u64,
 
-    /// distributed rewards for the current epoch, in lamports
+    /// The rewards currently distributed for the current epoch, in lamports
     pub distributed_rewards: u64,
 
-    /// distribution of all staking rewards for the current
-    /// epoch will be completed at this block height
-    pub distribution_complete_block_height: u64,
+    /// Whether the rewards period (including calculation and distribution) is
+    /// active
+    pub active: bool,
 }
 
 impl EpochRewards {
@@ -38,12 +55,13 @@ mod tests {
         pub fn new(
             total_rewards: u64,
             distributed_rewards: u64,
-            distribution_complete_block_height: u64,
+            distribution_starting_block_height: u64,
         ) -> Self {
             Self {
                 total_rewards,
                 distributed_rewards,
-                distribution_complete_block_height,
+                distribution_starting_block_height,
+                ..Self::default()
             }
         }
     }
@@ -54,7 +72,7 @@ mod tests {
 
         assert_eq!(epoch_rewards.total_rewards, 100);
         assert_eq!(epoch_rewards.distributed_rewards, 0);
-        assert_eq!(epoch_rewards.distribution_complete_block_height, 64);
+        assert_eq!(epoch_rewards.distribution_starting_block_height, 64);
     }
 
     #[test]

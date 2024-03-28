@@ -1,11 +1,19 @@
 //! Epoch rewards for current epoch
 //!
 //! The _epoch rewards_ sysvar provides access to the [`EpochRewards`] type,
-//! which tracks the progress of epoch rewards distribution. It includes the
-//!   - total rewards for the current epoch, in lamports
-//!   - rewards for the current epoch distributed so far, in lamports
-//!   - distribution completed block height, i.e. distribution of all staking rewards for the current
-//!     epoch will be completed at this block height
+//! which tracks whether the rewards period (including calculation and
+//! distribution) is in progress, as well as the details needed to resume
+//! distribution when starting from a snapshot during the rewards period. The
+//! sysvar is repopulated at the start of the first block of each epoch.
+//! Therefore, the sysvar contains data about the current epoch until a new
+//! epoch begins. Fields in the sysvar include:
+//!   - distribution starting block height
+//!   - the number of partitions in the distribution
+//!   - the parent-blockhash seed used to generate the partition hasher
+//!   - the total rewards points calculated for the epoch
+//!   - total rewards for epoch, in lamports
+//!   - rewards for the epoch distributed so far, in lamports
+//!   - whether the rewards period is active
 //!
 //! [`EpochRewards`] implements [`Sysvar::get`] and can be loaded efficiently without
 //! passing the sysvar account ID to the program.
@@ -43,9 +51,16 @@
 //! #
 //! # use solana_program::sysvar::SysvarId;
 //! # let p = EpochRewards::id();
-//! # let l = &mut 1120560;
-//! # let d = &mut vec![0, 202, 154, 59, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0];
-//! # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+//! # let l = &mut 1559040;
+//! # let epoch_rewards = EpochRewards {
+//! #     distribution_starting_block_height: 42,
+//! #     total_rewards: 100,
+//! #     distributed_rewards: 10,
+//! #     active: true,
+//! #     ..EpochRewards::default()
+//! # };
+//! # let mut d: Vec<u8> = bincode::serialize(&epoch_rewards).unwrap();
+//! # let a = AccountInfo::new(&p, false, false, l, &mut d, &p, false, 0);
 //! # let accounts = &[a.clone(), a];
 //! # process_instruction(
 //! #     &Pubkey::new_unique(),
@@ -86,9 +101,16 @@
 //! #
 //! # use solana_program::sysvar::SysvarId;
 //! # let p = EpochRewards::id();
-//! # let l = &mut 1120560;
-//! # let d = &mut vec![0, 202, 154, 59, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0];
-//! # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+//! # let l = &mut 1559040;
+//! # let epoch_rewards = EpochRewards {
+//! #     distribution_starting_block_height: 42,
+//! #     total_rewards: 100,
+//! #     distributed_rewards: 10,
+//! #     active: true,
+//! #     ..EpochRewards::default()
+//! # };
+//! # let mut d: Vec<u8> = bincode::serialize(&epoch_rewards).unwrap();
+//! # let a = AccountInfo::new(&p, false, false, l, &mut d, &p, false, 0);
 //! # let accounts = &[a.clone(), a];
 //! # process_instruction(
 //! #     &Pubkey::new_unique(),
@@ -109,9 +131,17 @@
 //! # use anyhow::Result;
 //! #
 //! fn print_sysvar_epoch_rewards(client: &RpcClient) -> Result<()> {
+//! #   let epoch_rewards = EpochRewards {
+//! #       distribution_starting_block_height: 42,
+//! #       total_rewards: 100,
+//! #       distributed_rewards: 10,
+//! #       active: true,
+//! #       ..EpochRewards::default()
+//! #   };
+//! #   let data: Vec<u8> = bincode::serialize(&epoch_rewards)?;
 //! #   client.set_get_account_response(epoch_rewards::ID, Account {
 //! #       lamports: 1120560,
-//! #       data: vec![0, 202, 154, 59, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0],
+//! #       data,
 //! #       owner: solana_sdk::system_program::ID,
 //! #       executable: false,
 //! #       rent_epoch: 307,

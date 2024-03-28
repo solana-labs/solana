@@ -1673,13 +1673,12 @@ impl Bank {
 
         let slot = self.slot();
         let credit_start = self.block_height() + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive = credit_start + stake_rewards_by_partition.len() as u64;
 
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
-        // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total_rewards - distributed_rewards)
-        self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
+        // (total_rewards, distributed_rewards, credit_start), total capital will increase by (total_rewards - distributed_rewards)
+        self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_start);
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -3615,14 +3614,16 @@ impl Bank {
         &self,
         total_rewards: u64,
         distributed_rewards: u64,
-        distribution_complete_block_height: u64,
+        distribution_starting_block_height: u64,
     ) {
         assert!(self.is_partitioned_rewards_code_enabled());
 
         let epoch_rewards = sysvar::epoch_rewards::EpochRewards {
             total_rewards,
             distributed_rewards,
-            distribution_complete_block_height,
+            distribution_starting_block_height,
+            active: true,
+            ..sysvar::epoch_rewards::EpochRewards::default()
         };
 
         self.update_sysvar_account(&sysvar::epoch_rewards::id(), |account| {
