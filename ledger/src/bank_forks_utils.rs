@@ -297,15 +297,6 @@ fn bank_forks_from_snapshot(
             source: err,
             path: fastboot_snapshot.snapshot_path(),
         })?;
-
-        // If the node crashes before taking the next bank snapshot, the next startup will attempt
-        // to load from the same bank snapshot again.  And if `shrink` has run, the account storage
-        // files that are hard linked in bank snapshot will be *different* than what the bank
-        // snapshot expects.  This would cause the node to crash again.  To prevent that, purge all
-        // the bank snapshots here.  In the above scenario, this will cause the node to load from a
-        // snapshot archive next time, which is safe.
-        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
-
         bank
     } else {
         // Given that we are going to boot from an archive, the append vecs held in the snapshot dirs for fast-boot should
