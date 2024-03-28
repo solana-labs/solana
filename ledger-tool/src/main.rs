@@ -1501,6 +1501,12 @@ fn main() {
 
     let verbose_level = matches.occurrences_of("verbose");
 
+    // Name the rayon global thread pool
+    rayon::ThreadPoolBuilder::new()
+        .thread_name(|i| format!("solRayonGlob{i:02}"))
+        .build_global()
+        .unwrap();
+
     match matches.subcommand() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
         ("blockstore", Some(arg_matches)) => blockstore_process_command(&ledger_path, arg_matches),

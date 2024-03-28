@@ -153,6 +153,7 @@ dependencies = [
  "itertools",
  "log",
  "num_cpus",
+ "rayon",
  "regex",
  "serde",
  "serde_json",
