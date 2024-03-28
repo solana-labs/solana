@@ -1,6 +1,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 pub mod config_instruction;
 pub mod config_processor;
+#[deprecated(
+    since = "2.0.0",
+    note = "The config program API no longer supports date instructions."
+)]
 pub mod date_instruction;
 
 pub use solana_sdk::config::program::id;
