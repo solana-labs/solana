@@ -356,6 +356,9 @@ pub enum SnapshotError {
 
     #[error("failed to archive snapshot package: {0}")]
     ArchiveSnapshotPackage(#[from] ArchiveSnapshotPackageError),
+
+    #[error("failed to rebuild snapshot storages: {0}")]
+    RebuildStorages(String),
 }
 
 #[derive(Error, Debug)]
