@@ -1257,13 +1257,16 @@ mod tests {
         crate::{
             bank_forks::BankForks,
             genesis_utils,
+            snapshot_config::SnapshotConfig,
             snapshot_utils::{
                 clean_orphaned_account_snapshot_dirs, create_tmp_accounts_dir_for_tests,
                 get_bank_snapshots, get_bank_snapshots_post, get_bank_snapshots_pre,
-                get_highest_bank_snapshot, purge_all_bank_snapshots, purge_bank_snapshot,
+                get_highest_bank_snapshot, get_highest_bank_snapshot_pre,
+                get_highest_loadable_bank_snapshot, purge_all_bank_snapshots, purge_bank_snapshot,
                 purge_bank_snapshots_older_than_slot, purge_incomplete_bank_snapshots,
                 purge_old_bank_snapshots, purge_old_bank_snapshots_at_startup,
-                snapshot_storage_rebuilder::get_slot_and_append_vec_id, ArchiveFormat,
+                snapshot_storage_rebuilder::get_slot_and_append_vec_id,
+                write_full_snapshot_slot_file, ArchiveFormat, SNAPSHOT_FULL_SNAPSHOT_SLOT_FILENAME,
             },
             status_cache::Status,
         },
@@ -2637,5 +2640,137 @@ mod tests {
             result,
             Err(VerifySlotDeltasError::SlotNotFoundInDeltas(333)),
         );
+    }
+
+    #[test]
+    fn test_get_highest_loadable_bank_snapshot() {
+        let bank_snapshots_dir = TempDir::new().unwrap();
+        let full_snapshot_archives_dir = TempDir::new().unwrap();
+        let incremental_snapshot_archives_dir = TempDir::new().unwrap();
+
+        let snapshot_config = SnapshotConfig {
+            bank_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .as_ref()
+                .to_path_buf(),
+            ..Default::default()
+        };
+        let load_only_snapshot_config = SnapshotConfig {
+            bank_snapshots_dir: snapshot_config.bank_snapshots_dir.clone(),
+            full_snapshot_archives_dir: snapshot_config.full_snapshot_archives_dir.clone(),
+            incremental_snapshot_archives_dir: snapshot_config
+                .incremental_snapshot_archives_dir
+                .clone(),
+            ..SnapshotConfig::new_load_only()
+        };
+
+        let genesis_config = GenesisConfig::default();
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        // take some snapshots, and archive them
+        for _ in 0..snapshot_config
+            .maximum_full_snapshot_archives_to_retain
+            .get()
+        {
+            let slot = bank.slot() + 1;
+            bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+            bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
+            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            let bank_snapshot_info = add_bank_snapshot(
+                &bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_config.snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+            assert!(
+                crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                    &bank_snapshot_info.snapshot_dir,
+                    bank.slot(),
+                    &bank.get_accounts_hash().unwrap(),
+                    None,
+                )
+            );
+            write_full_snapshot_slot_file(&bank_snapshot_info.snapshot_dir, slot).unwrap();
+            package_and_archive_full_snapshot(
+                &bank,
+                &bank_snapshot_info,
+                &full_snapshot_archives_dir,
+                &incremental_snapshot_archives_dir,
+                snapshot_storages,
+                snapshot_config.archive_format,
+                snapshot_config.snapshot_version,
+                snapshot_config.maximum_full_snapshot_archives_to_retain,
+                snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+            )
+            .unwrap();
+        }
+
+        // take another snapshot, but leave it as PRE
+        let slot = bank.slot() + 1;
+        bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), slot));
+        bank.fill_bank_with_ticks_for_tests();
+        bank.squash();
+        bank.force_flush_accounts_cache();
+        let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+        add_bank_snapshot(
+            &bank_snapshots_dir,
+            &bank,
+            &snapshot_storages,
+            SnapshotVersion::default(),
+            slot_deltas,
+        )
+        .unwrap();
+
+        let highest_full_snapshot_archive =
+            get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir).unwrap();
+        let highest_bank_snapshot_post =
+            get_highest_bank_snapshot_post(&bank_snapshots_dir).unwrap();
+        let highest_bank_snapshot_pre = get_highest_bank_snapshot_pre(&bank_snapshots_dir).unwrap();
+
+        // we want a bank snapshot PRE with the highest slot to ensure get_highest_loadable()
+        // correctly skips bank snapshots PRE
+        assert!(highest_bank_snapshot_pre.slot > highest_bank_snapshot_post.slot);
+
+        // 1. call get_highest_loadable() but bad snapshot dir, so returns None
+        assert!(get_highest_loadable_bank_snapshot(&SnapshotConfig::default()).is_none());
+
+        // 2. get_highest_loadable(), should return highest_bank_snapshot_post_slot
+        let bank_snapshot = get_highest_loadable_bank_snapshot(&snapshot_config).unwrap();
+        assert_eq!(bank_snapshot, highest_bank_snapshot_post);
+
+        // 3. delete highest full snapshot archive, get_highest_loadable() should return NONE
+        fs::remove_file(highest_full_snapshot_archive.path()).unwrap();
+        assert!(get_highest_loadable_bank_snapshot(&snapshot_config).is_none());
+
+        // 4. get_highest_loadable(), but with a load-only snapshot config, should return Some()
+        let bank_snapshot = get_highest_loadable_bank_snapshot(&load_only_snapshot_config).unwrap();
+        assert_eq!(bank_snapshot, highest_bank_snapshot_post);
+
+        // 5. delete highest bank snapshot, get_highest_loadable() should return Some() again, with slot-1
+        fs::remove_dir_all(&highest_bank_snapshot_post.snapshot_dir).unwrap();
+        let bank_snapshot = get_highest_loadable_bank_snapshot(&snapshot_config).unwrap();
+        assert_eq!(bank_snapshot.slot, highest_bank_snapshot_post.slot - 1);
+
+        // 6. delete the full snapshot slot file, get_highest_loadable() should return NONE
+        fs::remove_file(
+            bank_snapshot
+                .snapshot_dir
+                .join(SNAPSHOT_FULL_SNAPSHOT_SLOT_FILENAME),
+        )
+        .unwrap();
+        assert!(get_highest_loadable_bank_snapshot(&snapshot_config).is_none());
+
+        // 7. however, a load-only snapshot config should return Some() again
+        let bank_snapshot2 =
+            get_highest_loadable_bank_snapshot(&load_only_snapshot_config).unwrap();
+        assert_eq!(bank_snapshot2, bank_snapshot);
     }
 }

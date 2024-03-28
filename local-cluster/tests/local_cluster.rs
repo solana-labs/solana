@@ -5067,6 +5067,105 @@ fn test_boot_from_local_state() {
     }
 }
 
+/// Test fastboot to ensure a node can boot in case it crashed while archiving a full snapshot
+///
+/// 1. Start a node and wait for it to take at least two full snapshots and one more
+///    bank snapshot POST afterwards (for simplicity, wait for 2 full and 1 incremental).
+/// 2. To simulate a node crashing while archiving a full snapshot, stop the node and
+///    then delete the latest full snapshot archive.
+/// 3. Restart the node.  This should succeed, and boot from the older full snapshot archive,
+///    *not* the latest bank snapshot POST.
+/// 4. Take another incremental snapshot.  This ensures the correct snapshot was loaded,
+///    AND ensures the correct accounts hashes are present (which are needed when making
+///    the bank snapshot POST for the new incremental snapshot).
+#[test]
+#[serial]
+fn test_boot_from_local_state_missing_archive() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+    const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 10;
+
+    let validator_config = SnapshotValidatorConfig::new(
+        FULL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        INCREMENTAL_SNAPSHOT_INTERVAL,
+        7,
+    );
+
+    let mut cluster_config = ClusterConfig {
+        node_stakes: vec![100 * DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        validator_configs: make_identical_validator_configs(&validator_config.validator_config, 1),
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut cluster_config, SocketAddrSpace::Unspecified);
+
+    // we need two full snapshots and an incremental snapshot for this test
+    info!("Waiting for validator to create snapshots...");
+    LocalCluster::wait_for_next_full_snapshot(
+        &cluster,
+        &validator_config.full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
+    LocalCluster::wait_for_next_full_snapshot(
+        &cluster,
+        &validator_config.full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
+    LocalCluster::wait_for_next_incremental_snapshot(
+        &cluster,
+        &validator_config.full_snapshot_archives_dir,
+        &validator_config.incremental_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
+    debug!(
+        "snapshot archives:\n\tfull: {:?}\n\tincr: {:?}",
+        snapshot_utils::get_full_snapshot_archives(
+            validator_config.full_snapshot_archives_dir.path()
+        ),
+        snapshot_utils::get_incremental_snapshot_archives(
+            validator_config.incremental_snapshot_archives_dir.path()
+        ),
+    );
+    info!("Waiting for validator to create snapshots... DONE");
+
+    // now delete the latest full snapshot archive and restart, to simulate a crash while archiving
+    // a full snapshot package
+    info!("Stopping validator...");
+    let validator_pubkey = cluster.get_node_pubkeys()[0];
+    let mut validator_info = cluster.exit_node(&validator_pubkey);
+    info!("Stopping validator... DONE");
+
+    info!("Deleting latest full snapshot archive...");
+    let highest_full_snapshot = snapshot_utils::get_highest_full_snapshot_archive_info(
+        validator_config.full_snapshot_archives_dir.path(),
+    )
+    .unwrap();
+    fs::remove_file(highest_full_snapshot.path()).unwrap();
+    info!("Deleting latest full snapshot archive... DONE");
+
+    info!("Restarting validator...");
+    // if we set this to `Never`, the validator should not boot
+    validator_info.config.use_snapshot_archives_at_startup =
+        UseSnapshotArchivesAtStartup::WhenNewest;
+    cluster.restart_node(
+        &validator_pubkey,
+        validator_info,
+        SocketAddrSpace::Unspecified,
+    );
+    info!("Restarting validator... DONE");
+
+    // ensure we can create new incremental snapshots, since that is what used to fail
+    info!("Waiting for validator to create snapshots...");
+    LocalCluster::wait_for_next_incremental_snapshot(
+        &cluster,
+        &validator_config.full_snapshot_archives_dir,
+        &validator_config.incremental_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
+    info!("Waiting for validator to create snapshots... DONE");
+}
+
 // We want to simulate the following:
 //   /--- 1 --- 3 (duplicate block)
 // 0
