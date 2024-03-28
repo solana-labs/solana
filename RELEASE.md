@@ -1,4 +1,4 @@
-# Solana Release process
+# Agave Release process
 
 ## Branches and Tags
 
@@ -38,8 +38,8 @@ Incrementing the major version of the `master` branch is outside the scope of
 this document.
 
 ### v*X.Y* stabilization branches
-These are stabilization branches for a given milestone.  They are created off
-the `master` branch as late as possible prior to the milestone release.
+These are stabilization branches. They are created from the `master` branch approximately
+every 13 weeks.
 
 ### v*X.Y.Z* release tag
 The release tags are created as desired by the owner of the given stabilization
@@ -70,7 +70,7 @@ There are three release channels that map to branches as follows:
 1. Determine the new branch name.  The name should be "v" + the first 2 version fields
    from Cargo.toml.  For example, a Cargo.toml with version = "0.9.0" implies
    the next branch name is "v0.9".
-1. Create the new branch and push this branch to the `solana` repository:
+1. Create the new branch and push this branch to the `agave` repository:
     ```
     git checkout -b <branchname>
     git push -u origin <branchname>
@@ -99,15 +99,15 @@ Alternatively use the Github UI.
 ### Miscellaneous Clean up
 
 1. Pin the spl-token-cli version in the newly promoted stable branch by setting `splTokenCliVersion` in scripts/spl-token-cli-version.sh to the latest release that depends on the stable branch (usually this will be the latest spl-token-cli release).
-1. Update [mergify.yml](https://github.com/solana-labs/solana/blob/master/.mergify.yml) to add backport actions for the new branch and remove actions for the obsolete branch.
-1. Adjust the [Github backport labels](https://github.com/solana-labs/solana/labels) to add the new branch label and remove the label for the obsolete branch.
+1. Update [mergify.yml](https://github.com/anza-xyz/agave/blob/master/.mergify.yml) to add backport actions for the new branch and remove actions for the obsolete branch.
+1. Adjust the [Github backport labels](https://github.com/anza-xyz/agave/labels) to add the new branch label and remove the label for the obsolete branch.
 1. Announce on Discord #development that the release branch exists so people know to use the new backport labels.
 
 ## Steps to Create a Release
 
 ### Create the Release Tag on GitHub
 
-1. Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) for tagging a release.
+1. Go to [GitHub Releases](https://github.com/anza-xyz/agave/releases) for tagging a release.
 1. Click "Draft new release".  The release tag must exactly match the `version`
    field in `/Cargo.toml` prefixed by `v`.
    1.  If the Cargo.toml version field is **0.12.3**, then the release tag must be **v0.12.3**
@@ -115,7 +115,7 @@ Alternatively use the Github UI.
    1.  If you want to release v0.12.0, the target branch must be v0.12
 1. Fill the release notes.
    1.  If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
-   template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.
+   template](https://raw.githubusercontent.com/anza-xyz/agave/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.
    1. If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
 1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.
 1. Ensure all desired commits (usually backports) are landed on the branch by now.
@@ -126,24 +126,24 @@ Alternatively use the Github UI.
 
 ### Update release branch with the next patch version
 
-[This action](https://github.com/solana-labs/solana/blob/master/.github/workflows/increment-cargo-version-on-release.yml) ensures that publishing a release will trigger the creation of a PR to update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1). Ensure that the created PR makes it through CI and gets submitted.
+[This action](https://github.com/anza-xyz/agave/blob/master/.github/workflows/increment-cargo-version-on-release.yml) ensures that publishing a release will trigger the creation of a PR to update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1). Ensure that the created PR makes it through CI and gets submitted.
+
+Note: As of 2024-03-26 the above action is failing so version bumps are done manually. The version bump script is incorrectly updating hashbrown and proc-macro2 versions which should be reverted.
 
 ### Prepare for the next release
-1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release notes.  This allows people to incrementally add new release notes until it's time for the next release
+1.  Go to [GitHub Releases](https://github.com/anza-xyz/agave/releases) and create a new draft release for `X.Y.Z+1` with empty release notes.  This allows people to incrementally add new release notes until it's time for the next release
     1. Also, point the branch field to the same branch and mark the release as **"This is a pre-release"**.
-1.  Go to the [Github Milestones](https://github.com/solana-labs/solana/milestones).  Create a new milestone for the `X.Y.Z+1`, move over
-unresolved issues still in the `X.Y.Z` milestone, then close the `X.Y.Z` milestone.
 
 ### Verify release automation success
-Go to [Solana Releases](https://github.com/solana-labs/solana/releases) and click on the latest release that you just published.
-Verify that all of the build artifacts are present, then uncheck **"This is a pre-release"** for the release.
+Go to [Agave Releases](https://github.com/anza-xyz/agave/releases) and click on the latest release that you just published.
+Verify that all of the build artifacts are present (15 assets), then uncheck **"This is a pre-release"** for the release.
 
 Build artifacts can take up to 60 minutes after creating the tag before
 appearing.  To check for progress:
-* The `solana-secondary` Buildkite pipeline handles creating the Linux and macOS release artifacts and updated crates.  Look for a job under the tag name of the release: https://buildkite.com/solana-labs/solana-secondary.
-* The Windows release artifacts are produced by GitHub Actions.  Look for a job under the tag name of the release: https://github.com/solana-labs/solana/actions.
+* The `agave-secondary` Buildkite pipeline handles creating the Linux and macOS release artifacts and updated crates.  Look for a job under the tag name of the release: https://buildkite.com/anza-xyz/agave-secondary.
+* The Windows release artifacts are produced by GitHub Actions.  Look for a job under the tag name of the release: https://github.com/anza-xyz/agave/actions.
 
-[Crates.io](https://crates.io/crates/solana) should have an updated Solana version.  This can take 2-3 hours, and sometimes fails in the `solana-secondary` job.
+[Crates.io agave-validator](https://crates.io/crates/agave-validator) should have an updated agave-validator version.  This can take 2-3 hours, and sometimes fails in the `agave-secondary` job.
 If this happens and the error is non-fatal, click "Retry" on the "publish crate" job
 
 ### Update software on testnet.solana.com
