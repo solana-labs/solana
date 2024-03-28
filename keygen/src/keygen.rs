@@ -4,19 +4,21 @@ use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
-        input_parsers::STDOUT_OUTFILE_TOKEN,
-        input_validators::is_prompt_signer_source,
+        input_parsers::{
+            signer::{SignerSource, SignerSourceParserBuilder},
+            STDOUT_OUTFILE_TOKEN,
+        },
         keygen::{
             check_for_overwrite,
             derivation_path::{acquire_derivation_path, derivation_path_arg},
             mnemonic::{
                 acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
-                WORD_COUNT_ARG,
+                try_get_language, try_get_word_count, WORD_COUNT_ARG,
             },
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
         keypair::{
-            keypair_from_path, keypair_from_seed_phrase, signer_from_path,
+            keypair_from_seed_phrase, keypair_from_source, signer_from_source,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
         DisplayError,
@@ -68,16 +70,19 @@ fn get_keypair_from_matches(
     config: Config,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-    let mut path = dirs_next::home_dir().expect("home directory");
-    let path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap()
+    let config_source;
+    let keypair_source = if matches.try_contains_id("keypair")? {
+        matches.get_one::<SignerSource>("keypair").unwrap()
     } else if !config.keypair_path.is_empty() {
-        &config.keypair_path
+        config_source = SignerSource::parse(&config.keypair_path)?;
+        &config_source
     } else {
+        let mut path = dirs_next::home_dir().expect("home directory");
         path.extend([".config", "solana", "id.json"]);
-        path.to_str().unwrap()
+        config_source = SignerSource::parse(path.to_str().unwrap())?;
+        &config_source
     };
-    signer_from_path(matches, path, "pubkey recovery", wallet_manager)
+    signer_from_source(matches, keypair_source, "pubkey recovery", wallet_manager)
 }
 
 fn output_keypair(
@@ -258,6 +263,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
+                        .value_parser(
+                            SignerSourceParserBuilder::default().allow_all().build()
+                        )
                         .help("Filepath or URL to a keypair"),
                 )
         )
@@ -370,6 +378,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
+                        .value_parser(
+                            SignerSourceParserBuilder::default().allow_all().build()
+                        )
                         .help("Filepath or URL to a keypair"),
                 )
                 .arg(
@@ -401,7 +412,7 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_prompt_signer_source)
+                        .value_parser(SignerSourceParserBuilder::default().allow_prompt().allow_legacy().build())
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
@@ -436,7 +447,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-    let config = if let Some(config_file) = matches.value_of("config_file") {
+    let config = if let Some(config_file) = matches.try_get_one::<String>("config_file")? {
         Config::load(config_file).unwrap_or_default()
     } else {
         Config::default()
@@ -451,8 +462,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let pubkey =
                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
 
-            if matches.is_present("outfile") {
-                let outfile = matches.value_of("outfile").unwrap();
+            if matches.try_contains_id("outfile")? {
+                let outfile = matches.get_one::<String>("outfile").unwrap();
                 check_for_overwrite(outfile, matches)?;
                 write_pubkey_file(outfile, pubkey)?;
             } else {
@@ -461,9 +472,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         }
         ("new", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile")
-            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").map(|s| s.as_str())
+            } else if matches.try_contains_id(NO_OUTFILE_ARG.name)? {
                 None
             } else {
                 path.extend([".config", "solana", "id.json"]);
@@ -476,11 +487,11 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
+            let word_count = try_get_word_count(matches)?.unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-            let language = acquire_language(matches);
+            let language = try_get_language(matches)?.unwrap();
 
-            let silent = matches.is_present("silent");
+            let silent = matches.try_contains_id("silent")?;
             if !silent {
                 println!("Generating a new keypair");
             }
@@ -513,8 +524,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         }
         ("recover", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile").unwrap()
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").unwrap()
             } else {
                 path.extend([".config", "solana", "id.json"]);
                 path.to_str().unwrap()
@@ -525,12 +536,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
 
             let keypair_name = "recover";
-            let keypair = if let Some(path) = matches.value_of("prompt_signer") {
-                keypair_from_path(matches, path, keypair_name, true)?
-            } else {
-                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
-            };
+            let keypair =
+                if let Some(source) = matches.try_get_one::<SignerSource>("prompt_signer")? {
+                    keypair_from_source(matches, source, keypair_name, true)?
+                } else {
+                    let skip_validation =
+                        matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+                    keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+                };
             output_keypair(&keypair, outfile, "recovered")?;
         }
         ("grind", matches) => {
@@ -729,7 +742,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             )
             .serialize();
             let signature = keypair.try_sign_message(&simple_message)?;
-            let pubkey_bs58 = matches.value_of("pubkey").unwrap();
+            let pubkey_bs58 = matches.try_get_one::<String>("pubkey")?.unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
             if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {pubkey_bs58}: Success");
