@@ -190,7 +190,22 @@ impl ShredData {
         else {
             return Err(Error::InvalidShredVariant);
         };
+        Self::get_chained_merkle_root_offset(proof_size, resigned)
+    }
+
+    pub(super) fn get_chained_merkle_root_offset(
+        proof_size: u8,
+        resigned: bool,
+    ) -> Result<usize, Error> {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, /*chained:*/ true, resigned)?)
+    }
+
+    pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
+        let offset = self.chained_merkle_root_offset()?;
+        self.payload
+            .get(offset..offset + SIZE_OF_MERKLE_ROOT)
+            .map(Hash::new)
+            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
     }
 
     fn set_chained_merkle_root(&mut self, chained_merkle_root: &Hash) -> Result<(), Error> {
@@ -361,10 +376,17 @@ impl ShredCode {
         else {
             return Err(Error::InvalidShredVariant);
         };
+        Self::get_chained_merkle_root_offset(proof_size, resigned)
+    }
+
+    pub(super) fn get_chained_merkle_root_offset(
+        proof_size: u8,
+        resigned: bool,
+    ) -> Result<usize, Error> {
         Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, /*chained:*/ true, resigned)?)
     }
 
-    fn chained_merkle_root(&self) -> Result<Hash, Error> {
+    pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
         let offset = self.chained_merkle_root_offset()?;
         self.payload
             .get(offset..offset + SIZE_OF_MERKLE_ROOT)
