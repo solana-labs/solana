@@ -72,11 +72,13 @@ pub(crate) struct ReadOnlyAccountsCache {
 
     // Performance statistics
     stats: ReadOnlyCacheStats,
+    highest_slot_stored: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
     pub(crate) fn new(max_data_size: usize, ms_to_skip_lru_update: u32) -> Self {
         Self {
+            highest_slot_stored: AtomicU64::default(),
             max_data_size,
             cache: DashMap::default(),
             queue: Mutex::<IndexList<ReadOnlyCacheKey>>::default(),
@@ -134,6 +136,7 @@ impl ReadOnlyAccountsCache {
     }
 
     pub(crate) fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
+        self.highest_slot_stored.fetch_max(slot, Ordering::Release);
         let key = (pubkey, slot);
         let account_size = self.account_size(&account);
         self.data_size.fetch_add(account_size, Ordering::Relaxed);
@@ -167,6 +170,23 @@ impl ReadOnlyAccountsCache {
             self.remove(pubkey, slot);
         }
         self.stats.evicts.fetch_add(num_evicts, Ordering::Relaxed);
+    }
+
+    /// true if any pubkeys could have ever been stored into the cache at `slot`
+    pub(crate) fn can_slot_be_in_cache(&self, slot: Slot) -> bool {
+        self.highest_slot_stored.load(Ordering::Acquire) >= slot
+    }
+
+    /// remove entry if it exists.
+    /// Assume the entry does not exist for performance.
+    pub(crate) fn remove_assume_not_present(
+        &self,
+        pubkey: Pubkey,
+        slot: Slot,
+    ) -> Option<AccountSharedData> {
+        // get read lock first to see if the entry exists
+        _ = self.cache.get(&(pubkey, slot))?;
+        self.remove(pubkey, slot)
     }
 
     pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
