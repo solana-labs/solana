@@ -27,6 +27,7 @@ pub fn hidden_unless_forced() -> bool {
     std::env::var("SOLANA_NO_HIDDEN_CLI_ARGS").is_err()
 }
 
+pub mod compute_budget;
 pub mod compute_unit_price;
 pub mod fee_payer;
 pub mod input_parsers;
