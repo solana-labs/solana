@@ -15,6 +15,7 @@ jobs:
           buildkite_api_access_token: ${{ secrets.TRIGGER_BK_BUILD_TOKEN }}
           pipeline: "anza/agave-secondary"
           branch: "${{ github.ref_name }}"
+          build_env_vars: '{"TRIGGERED_BUILDKITE_TAG": "${{ github.ref_name }}"}'
           commit: "HEAD"
           message: ":github: Triggered from a GitHub Action"
 
@@ -32,8 +33,8 @@ jobs:
               tag_name: '${{ github.ref_name }}',
               name: 'Release ${{ github.ref_name }}',
               body: '🚧',
-              draft: true,
-              prerelease: false
+              draft: false,
+              prerelease: true
             })
 
   version-bump:
