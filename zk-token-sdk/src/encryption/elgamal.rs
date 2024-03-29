@@ -799,7 +799,7 @@ mod tests {
         let ciphertext = ElGamal::encrypt(&public, amount);
 
         let mut instance = ElGamal::decrypt(&secret, &ciphertext);
-        instance.num_threads(4).unwrap();
+        instance.num_threads(4.try_into().unwrap()).unwrap();
         assert_eq!(57_u64, instance.decode_u32().unwrap());
     }
 
