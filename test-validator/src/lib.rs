@@ -37,7 +37,7 @@ use {
         snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{Account, AccountSharedData, WritableAccount},
         bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
@@ -305,14 +305,16 @@ impl TestValidatorGenesis {
         self
     }
 
-    pub fn clone_accounts<T>(
+    fn clone_accounts_and_transform<T, F>(
         &mut self,
         addresses: T,
         rpc_client: &RpcClient,
         skip_missing: bool,
+        transform: F,
     ) -> Result<&mut Self, String>
     where
         T: IntoIterator<Item = Pubkey>,
+        F: Fn(&Pubkey, Account) -> Result<AccountSharedData, String>,
     {
         let addresses: Vec<Pubkey> = addresses.into_iter().collect();
         for chunk in addresses.chunks(MAX_MULTIPLE_ACCOUNTS) {
@@ -322,7 +324,7 @@ impl TestValidatorGenesis {
                 .map_err(|err| format!("Failed to fetch: {err}"))?;
             for (address, res) in chunk.iter().zip(responses) {
                 if let Some(account) = res {
-                    self.add_account(*address, AccountSharedData::from(account));
+                    self.add_account(*address, transform(address, account)?);
                 } else if skip_missing {
                     warn!("Could not find {}, skipping.", address);
                 } else {
@@ -331,6 +333,70 @@ impl TestValidatorGenesis {
             }
         }
         Ok(self)
+    }
+
+    pub fn clone_accounts<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+        skip_missing: bool,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        self.clone_accounts_and_transform(
+            addresses,
+            rpc_client,
+            skip_missing,
+            |_address, account| Ok(AccountSharedData::from(account)),
+        )
+    }
+
+    pub fn clone_programdata_accounts<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+        skip_missing: bool,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        self.clone_accounts_and_transform(
+            addresses,
+            rpc_client,
+            skip_missing,
+            |address, account| {
+                let programdata_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+                // Ensure the account is a proper programdata account before
+                // attempting to serialize into it.
+                if let Ok(UpgradeableLoaderState::ProgramData {
+                    upgrade_authority_address,
+                    ..
+                }) = bincode::deserialize(&account.data[..programdata_offset])
+                {
+                    // Serialize new programdata metadata into the resulting account,
+                    // to overwrite the deployment slot to `0`.
+                    let mut programdata_account = AccountSharedData::from(account);
+                    bincode::serialize_into(
+                        programdata_account.data_as_mut_slice(),
+                        &UpgradeableLoaderState::ProgramData {
+                            slot: 0,
+                            upgrade_authority_address,
+                        },
+                    )
+                    .map(|()| Ok(programdata_account))
+                    .unwrap_or_else(|_| {
+                        Err(format!(
+                            "Failed to write to upgradeable programdata account {address}",
+                        ))
+                    })
+                } else {
+                    Err(format!(
+                        "Failed to read upgradeable programdata account {address}",
+                    ))
+                }
+            },
+        )
     }
 
     pub fn clone_upgradeable_programs<T>(
@@ -360,7 +426,7 @@ impl TestValidatorGenesis {
             }
         }
 
-        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+        self.clone_programdata_accounts(programdata_addresses, rpc_client, false)?;
 
         Ok(self)
     }
