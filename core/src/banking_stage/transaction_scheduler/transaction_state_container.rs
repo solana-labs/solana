@@ -81,16 +81,6 @@ impl TransactionStateContainer {
             .map(|state| state.transaction_ttl())
     }
 
-    /// Take `SanitizedTransactionTTL` by id.
-    /// This transitions the transaction to `Pending` state.
-    /// Panics if the transaction does not exist.
-    pub(crate) fn take_transaction(&mut self, id: &TransactionId) -> SanitizedTransactionTTL {
-        self.id_to_transaction_state
-            .get_mut(id)
-            .expect("transaction must exist")
-            .transition_to_pending()
-    }
-
     /// Insert a new transaction into the container's queues and maps.
     /// Returns `true` if a packet was dropped due to capacity limits.
     pub(crate) fn insert_new_transaction(

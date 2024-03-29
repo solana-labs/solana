@@ -34,6 +34,7 @@ impl InFlightTracker {
     }
 
     /// Returns the number of cus that are in flight for each thread.
+    #[allow(dead_code)]
     pub fn cus_in_flight_per_thread(&self) -> &[u64] {
         &self.cus_in_flight_per_thread
     }

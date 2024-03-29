@@ -36,7 +36,6 @@ pub(crate) struct ConsumeWorker {
     metrics: Arc<ConsumeWorkerMetrics>,
 }
 
-#[allow(dead_code)]
 impl ConsumeWorker {
     pub fn new(
         id: u32,
