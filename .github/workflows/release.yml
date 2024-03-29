@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  trigger-buildkite-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger a Buildkite Build
+        uses: "buildkite/trigger-pipeline-action@v2.0.0"
+        with:
+          buildkite_api_access_token: ${{ secrets.TRIGGER_BK_BUILD_TOKEN }}
+          pipeline: "anza/agave-secondary"
+          branch: "${{ github.ref_name }}"
+          commit: "HEAD"
+          message: ":github: Triggered from a GitHub Action"
+
+  draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ github.ref_name }}',
+              name: 'Release ${{ github.ref_name }}',
+              body: '🚧',
+              draft: true,
+              prerelease: false
+            })
+
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse Info
+        id: parse_info
+        run: |
+          # get the next version
+          version=${{ github.ref_name }}
+          major=$(echo $version | cut -d'.' -f1)
+          minor=$(echo $version | cut -d'.' -f2)
+          patch=$(echo $version | cut -d'.' -f3)
+          next_version=$major.$minor.$((patch+1))
+          : "${next_version:?}"
+
+          # get the traget branch
+          target_branch=$major.$minor
+          : "${target_branch:?}"
+
+          echo "next_version=$next_version" | tee -a $GITHUB_OUTPUT
+          echo "target_branch=$target_branch" | tee -a $GITHUB_OUTPUT
+
+      - name: Create branch and make changes
+        run: |
+          next_version=${{ steps.parse_info.outputs.next_version }}
+
+          git checkout -b version-bump-$next_version
+          ./scripts/increment-cargo-version.sh patch
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git commit -am "Bump version to $next_version"
+          git push origin version-bump-$next_version
+
+      - name: Create PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Bump version to ${{ steps.parse_info.outputs.next_version }}',
+              head: 'version-bump-${{ steps.parse_info.outputs.next_version }}',
+              base: '${{ steps.parse_info.outputs.target_branch }}'
+            })
