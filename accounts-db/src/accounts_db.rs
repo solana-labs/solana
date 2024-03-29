@@ -787,6 +787,8 @@ pub enum LoadHint {
     // account loading, while maintaining the determinism of account loading and resultant
     // transaction execution thereof.
     FixedMaxRoot,
+    /// same as `FixedMaxRoot`, except do not populate the read cache on load
+    FixedMaxRootDoNotPopulateReadCache,
     // Caller can't hint the above safety assumption. Generally RPC and miscellaneous
     // other call-site falls into this category. The likelihood of slower path is slightly
     // increased as well.
@@ -5119,7 +5121,7 @@ impl AccountsDb {
                     // so retry. This works because in accounts cache flush, an account is written to
                     // storage *before* it is removed from the cache
                     match load_hint {
-                        LoadHint::FixedMaxRoot => {
+                        LoadHint::FixedMaxRootDoNotPopulateReadCache | LoadHint::FixedMaxRoot => {
                             // it's impossible for this to fail for transaction loads from
                             // replaying/banking more than once.
                             // This is because:
@@ -5139,7 +5141,7 @@ impl AccountsDb {
                 }
                 LoadedAccountAccessor::Stored(None) => {
                     match load_hint {
-                        LoadHint::FixedMaxRoot => {
+                        LoadHint::FixedMaxRootDoNotPopulateReadCache | LoadHint::FixedMaxRoot => {
                             // When running replay on the validator, or banking stage on the leader,
                             // it should be very rare that the storage entry doesn't exist if the
                             // entry in the accounts index is the latest version of this account.
@@ -5348,7 +5350,7 @@ impl AccountsDb {
             return None;
         }
 
-        if !is_cached {
+        if !is_cached && load_hint != LoadHint::FixedMaxRootDoNotPopulateReadCache {
             /*
             We show this store into the read-only cache for account 'A' and future loads of 'A' from the read-only cache are
             safe/reflect 'A''s latest state on this fork.
