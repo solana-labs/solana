@@ -5343,14 +5343,14 @@ impl AccountsDb {
             max_root,
             load_hint,
         )?;
+        let in_write_cache = matches!(account_accessor, LoadedAccountAccessor::Cached(_));
         let loaded_account = account_accessor.check_and_get_loaded_account();
-        let is_cached = loaded_account.is_cached();
         let account = loaded_account.take_account();
         if matches!(load_zero_lamports, LoadZeroLamports::None) && account.is_zero_lamport() {
             return None;
         }
 
-        if !is_cached && load_hint != LoadHint::FixedMaxRootDoNotPopulateReadCache {
+        if !in_write_cache && load_hint != LoadHint::FixedMaxRootDoNotPopulateReadCache {
             /*
             We show this store into the read-only cache for account 'A' and future loads of 'A' from the read-only cache are
             safe/reflect 'A''s latest state on this fork.
