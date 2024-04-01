@@ -14,12 +14,12 @@ log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 solana-account-decoder = { workspace = true }
-solana-accounts-db = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-client = { workspace = true }
 solana-faucet = { workspace = true }
 solana-gossip = { workspace = true }
+solana-inline-spl = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-net-utils = { workspace = true }
@@ -32,6 +32,7 @@ solana-version = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }
 
 [dev-dependencies]
+solana-accounts-db = { workspace = true }
 solana-core = { workspace = true }
 solana-local-cluster = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }

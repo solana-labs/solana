@@ -70,6 +70,7 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 solana-account-decoder = { workspace = true }
+solana-inline-spl = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 

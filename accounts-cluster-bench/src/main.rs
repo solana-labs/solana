@@ -4,13 +4,13 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_accounts_db::inline_spl_token,
     solana_clap_utils::{
         hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_client::{rpc_request::TokenAccountsFilter, transaction_executor::TransactionExecutor},
     solana_gossip::gossip_service::discover,
+    solana_inline_spl::token,
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
@@ -143,7 +143,7 @@ fn make_create_message(
     let instructions: Vec<_> = (0..num_instructions)
         .flat_map(|_| {
             let program_id = if mint.is_some() {
-                inline_spl_token::id()
+                token::id()
             } else {
                 system_program::id()
             };
@@ -190,7 +190,7 @@ fn make_close_message(
     let instructions: Vec<_> = (0..num_instructions)
         .filter_map(|_| {
             let program_id = if spl_token {
-                inline_spl_token::id()
+                token::id()
             } else {
                 system_program::id()
             };
@@ -465,7 +465,7 @@ fn make_rpc_bench_threads(
     num_rpc_bench_threads: usize,
 ) -> Vec<JoinHandle<()>> {
     let program_id = if mint.is_some() {
-        inline_spl_token::id()
+        token::id()
     } else {
         system_program::id()
     };
@@ -1055,10 +1055,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
-        solana_accounts_db::{
-            accounts_index::{AccountIndex, AccountSecondaryIndexes},
-            inline_spl_token,
-        },
+        solana_accounts_db::accounts_index::{AccountIndex, AccountSecondaryIndexes},
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
@@ -1230,7 +1227,7 @@ pub mod test {
                     &spl_mint_keypair.pubkey(),
                     spl_mint_rent,
                     spl_mint_len as u64,
-                    &inline_spl_token::id(),
+                    &token::id(),
                 ),
                 spl_token::instruction::initialize_mint(
                     &spl_token::id(),
