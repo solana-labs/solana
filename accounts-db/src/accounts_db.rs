@@ -18,6 +18,8 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+mod geyser_plugin_utils;
+
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
 use {
@@ -803,8 +805,6 @@ pub enum LoadedAccountAccessor<'a> {
     // None value in Cached variant means the cache was flushed
     Cached(Option<Cow<'a, CachedAccount>>),
 }
-
-mod geyser_plugin_utils;
 
 impl<'a> LoadedAccountAccessor<'a> {
     fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
