@@ -5,7 +5,9 @@ use {
     super::{
         prio_graph_scheduler::PrioGraphScheduler,
         scheduler_error::SchedulerError,
-        scheduler_metrics::{SchedulerCountMetrics, SchedulerTimingMetrics},
+        scheduler_metrics::{
+            SchedulerCountMetrics, SchedulerLeaderDetectionMetrics, SchedulerTimingMetrics,
+        },
         transaction_id_generator::TransactionIdGenerator,
         transaction_state::SanitizedTransactionTTL,
         transaction_state_container::TransactionStateContainer,
@@ -54,6 +56,8 @@ pub(crate) struct SchedulerController {
     container: TransactionStateContainer,
     /// State for scheduling and communicating with worker threads.
     scheduler: PrioGraphScheduler,
+    /// Metrics tracking time for leader bank detection.
+    leader_detection_metrics: SchedulerLeaderDetectionMetrics,
     /// Metrics tracking counts on transactions in different states
     /// over an interval and during a leader slot.
     count_metrics: SchedulerCountMetrics,
@@ -79,6 +83,7 @@ impl SchedulerController {
             transaction_id_generator: TransactionIdGenerator::default(),
             container: TransactionStateContainer::with_capacity(TOTAL_BUFFERED_PACKETS),
             scheduler,
+            leader_detection_metrics: SchedulerLeaderDetectionMetrics::default(),
             count_metrics: SchedulerCountMetrics::default(),
             timing_metrics: SchedulerTimingMetrics::default(),
             worker_metrics,
@@ -102,8 +107,9 @@ impl SchedulerController {
             self.timing_metrics.update(|timing_metrics| {
                 saturating_add_assign!(timing_metrics.decision_time_us, decision_time_us);
             });
-
             let new_leader_slot = decision.bank_start().map(|b| b.working_bank.slot());
+            self.leader_detection_metrics
+                .update_and_maybe_report(decision.bank_start());
             self.count_metrics
                 .maybe_report_and_reset_slot(new_leader_slot);
             self.timing_metrics
