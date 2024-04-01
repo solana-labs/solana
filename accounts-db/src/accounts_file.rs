@@ -231,6 +231,24 @@ impl<'a> Iterator for AccountsFileIter<'a> {
     }
 }
 
+/// An enum that creates AccountsFile instance with the specified format.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AccountsFileProvider {
+    AppendVec,
+    HotStorage,
+}
+
+impl AccountsFileProvider {
+    pub fn new_writable(&self, path: impl Into<PathBuf>, file_size: u64) -> AccountsFile {
+        match self {
+            Self::AppendVec => {
+                AccountsFile::AppendVec(AppendVec::new(path, true, file_size as usize))
+            }
+            Self::HotStorage => AccountsFile::TieredStorage(TieredStorage::new_writable(path)),
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::accounts_file::AccountsFile;

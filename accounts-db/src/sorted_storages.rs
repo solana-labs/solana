@@ -196,7 +196,7 @@ mod tests {
         super::*,
         crate::{
             accounts_db::{AccountStorageEntry, AccountsFileId},
-            accounts_file::AccountsFile,
+            accounts_file::{AccountsFile, AccountsFileProvider},
             append_vec::AppendVec,
         },
         std::sync::Arc,
@@ -445,7 +445,13 @@ mod tests {
         let (_temp_dirs, paths) = crate::accounts_db::get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;
         let slot = 0;
-        let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
+        let mut data = AccountStorageEntry::new(
+            &paths[0],
+            slot,
+            id,
+            size as u64,
+            AccountsFileProvider::AppendVec,
+        );
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 

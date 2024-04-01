@@ -276,7 +276,7 @@ impl Default for AccountStorageStatus {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use {super::*, std::path::Path};
+    use {super::*, crate::accounts_file::AccountsFileProvider, std::path::Path};
 
     #[test]
     fn test_shrink_in_progress() {
@@ -297,12 +297,14 @@ pub(crate) mod tests {
             slot,
             id,
             store_file_size,
+            AccountsFileProvider::AppendVec,
         ));
         let entry2 = Arc::new(AccountStorageEntry::new(
             common_store_path,
             slot,
             id,
             store_file_size2,
+            AccountsFileProvider::AppendVec,
         ));
         storage
             .map
@@ -353,6 +355,7 @@ pub(crate) mod tests {
                 slot,
                 id,
                 store_file_size,
+                AccountsFileProvider::AppendVec,
             ))
         }
         fn get_test_storage(&self) -> Arc<AccountStorageEntry> {
