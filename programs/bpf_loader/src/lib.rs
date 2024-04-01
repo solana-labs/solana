@@ -168,6 +168,29 @@ macro_rules! deploy_program {
     }};
 }
 
+/// Directly deploy a program using a provided invoke context.
+/// This function should only be invoked from the runtime, since it does not
+/// provide any account loads or checks.
+pub fn direct_deploy_program(
+    invoke_context: &mut InvokeContext,
+    program_id: &Pubkey,
+    loader_key: &Pubkey,
+    account_size: usize,
+    elf: &[u8],
+    slot: Slot,
+) -> Result<(), InstructionError> {
+    deploy_program!(
+        invoke_context,
+        *program_id,
+        loader_key,
+        account_size,
+        slot,
+        {},
+        elf,
+    );
+    Ok(())
+}
+
 fn write_program_data(
     program_data_offset: usize,
     bytes: &[u8],

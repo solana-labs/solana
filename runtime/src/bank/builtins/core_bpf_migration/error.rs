@@ -1,8 +1,14 @@
-use {solana_sdk::pubkey::Pubkey, thiserror::Error};
+use {
+    solana_sdk::{instruction::InstructionError, pubkey::Pubkey},
+    thiserror::Error,
+};
 
 /// Errors returned by a Core BPF migration.
 #[derive(Debug, Error)]
 pub enum CoreBpfMigrationError {
+    /// Solana instruction error
+    #[error("Solana instruction error: {0:?}")]
+    InstructionError(#[from] InstructionError),
     /// Bincode serialization error
     #[error("Bincode serialization error: {0:?}")]
     BincodeError(#[from] bincode::Error),
