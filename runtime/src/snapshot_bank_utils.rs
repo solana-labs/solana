@@ -99,6 +99,12 @@ pub fn add_bank_snapshot(
             bank_snapshot_path.display(),
         );
 
+        let (_, measure_flush) = measure!(for storage in snapshot_storages {
+            storage
+                .flush()
+                .map_err(|err| AddBankSnapshotError::FlushStorage(err, storage.get_path()))?;
+        });
+
         // We are constructing the snapshot directory to contain the full snapshot state information to allow
         // constructing a bank from this directory.  It acts like an archive to include the full state.
         // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
@@ -157,6 +163,7 @@ pub fn add_bank_snapshot(
             ("slot", slot, i64),
             ("bank_size", bank_snapshot_consumed_size, i64),
             ("status_cache_size", status_cache_consumed_size, i64),
+            ("flush_storages_us", measure_flush.as_us(), i64),
             ("hard_link_storages_us", measure_hard_linking.as_us(), i64),
             ("bank_serialize_us", bank_serialize.as_us(), i64),
             (

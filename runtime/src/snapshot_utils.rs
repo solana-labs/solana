@@ -418,6 +418,9 @@ pub enum AddBankSnapshotError {
     #[error("failed to create snapshot dir '{1}': {0}")]
     CreateSnapshotDir(#[source] IoError, PathBuf),
 
+    #[error("failed to flush storage '{1}': {0}")]
+    FlushStorage(#[source] AccountsFileError, PathBuf),
+
     #[error("failed to hard link storages: {0}")]
     HardLinkStorages(#[source] HardLinkStoragesToSnapshotError),
 
@@ -506,9 +509,6 @@ pub enum ArchiveSnapshotPackageError {
 pub enum HardLinkStoragesToSnapshotError {
     #[error("failed to create accounts hard links dir '{1}': {0}")]
     CreateAccountsHardLinksDir(#[source] IoError, PathBuf),
-
-    #[error("failed to flush storage: {0}")]
-    FlushStorage(#[source] AccountsFileError),
 
     #[error("failed to get the snapshot's accounts hard link dir: {0}")]
     GetSnapshotHardLinksDir(#[from] GetSnapshotAccountsHardLinkDirError),
@@ -1259,9 +1259,6 @@ pub fn hard_link_storages_to_snapshot(
 
     let mut account_paths: HashSet<PathBuf> = HashSet::new();
     for storage in snapshot_storages {
-        storage
-            .flush()
-            .map_err(HardLinkStoragesToSnapshotError::FlushStorage)?;
         let storage_path = storage.accounts.get_path();
         let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
             &storage_path,
