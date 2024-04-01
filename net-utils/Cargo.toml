@@ -22,6 +22,7 @@ socket2 = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }
+static_assertions = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 url = { workspace = true }
 

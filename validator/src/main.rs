@@ -1332,6 +1332,7 @@ pub fn main() {
     let full_api = matches.is_present("full_rpc_api");
 
     let cli::thread_args::NumThreadConfig {
+        ip_echo_server_threads,
         replay_forks_threads,
         replay_transactions_threads,
     } = cli::thread_args::parse_num_threads_args(&matches);
@@ -1474,6 +1475,7 @@ pub fn main() {
             use_snapshot_archives_at_startup::cli::NAME,
             UseSnapshotArchivesAtStartup
         ),
+        ip_echo_server_threads,
         replay_forks_threads,
         replay_transactions_threads,
         ..ValidatorConfig::default()

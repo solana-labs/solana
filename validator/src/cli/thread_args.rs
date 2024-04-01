@@ -9,6 +9,7 @@ use {
 
 // Need this struct to provide &str whose lifetime matches that of the CLAP Arg's
 pub struct DefaultThreadArgs {
+    pub ip_echo_server_threads: String,
     pub replay_forks_threads: String,
     pub replay_transactions_threads: String,
 }
@@ -16,6 +17,7 @@ pub struct DefaultThreadArgs {
 impl Default for DefaultThreadArgs {
     fn default() -> Self {
         Self {
+            ip_echo_server_threads: IpEchoServerThreadsArg::default().to_string(),
             replay_forks_threads: ReplayForksThreadsArg::default().to_string(),
             replay_transactions_threads: ReplayTransactionsThreadsArg::default().to_string(),
         }
@@ -24,6 +26,7 @@ impl Default for DefaultThreadArgs {
 
 pub fn thread_args<'a>(defaults: &DefaultThreadArgs) -> Vec<Arg<'_, 'a>> {
     vec![
+        new_thread_arg::<IpEchoServerThreadsArg>(&defaults.ip_echo_server_threads),
         new_thread_arg::<ReplayForksThreadsArg>(&defaults.replay_forks_threads),
         new_thread_arg::<ReplayTransactionsThreadsArg>(&defaults.replay_transactions_threads),
     ]
@@ -41,12 +44,18 @@ fn new_thread_arg<'a, T: ThreadArg>(default: &str) -> Arg<'_, 'a> {
 }
 
 pub struct NumThreadConfig {
+    pub ip_echo_server_threads: NonZeroUsize,
     pub replay_forks_threads: NonZeroUsize,
     pub replay_transactions_threads: NonZeroUsize,
 }
 
 pub fn parse_num_threads_args(matches: &ArgMatches) -> NumThreadConfig {
     NumThreadConfig {
+        ip_echo_server_threads: value_t_or_exit!(
+            matches,
+            IpEchoServerThreadsArg::NAME,
+            NonZeroUsize
+        ),
         replay_forks_threads: if matches.is_present("replay_slots_concurrently") {
             NonZeroUsize::new(4).expect("4 is non-zero")
         } else {
@@ -83,6 +92,20 @@ trait ThreadArg {
     /// The range of allowed number of threads (inclusive on both ends)
     fn range() -> RangeInclusive<usize> {
         RangeInclusive::new(Self::min(), Self::max())
+    }
+}
+
+struct IpEchoServerThreadsArg;
+impl ThreadArg for IpEchoServerThreadsArg {
+    const NAME: &'static str = "ip_echo_server_threads";
+    const LONG_NAME: &'static str = "ip-echo-server-threads";
+    const HELP: &'static str = "Number of threads to use for the IP echo server";
+
+    fn default() -> usize {
+        solana_net_utils::DEFAULT_IP_ECHO_SERVER_THREADS.get()
+    }
+    fn min() -> usize {
+        solana_net_utils::MINIMUM_IP_ECHO_SERVER_THREADS.get()
     }
 }
 
