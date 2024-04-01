@@ -156,6 +156,14 @@ impl AccountsFile {
         AccountsFileIter::new(self)
     }
 
+    /// iterate over all pubkeys
+    pub(crate) fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) {
+        match self {
+            Self::AppendVec(av) => av.scan_pubkeys(callback),
+            Self::TieredStorage(_) => unimplemented!(),
+        }
+    }
+
     /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, offset: usize) -> Vec<StoredAccountMeta> {
         match self {

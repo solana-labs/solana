@@ -2904,8 +2904,8 @@ impl AccountsDb {
                             dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
-                        store.accounts.account_iter().for_each(|account| {
-                            pubkeys.insert(*account.pubkey());
+                        store.accounts.scan_pubkeys(|k| {
+                            pubkeys.insert(*k);
                         });
                     });
                     oldest_dirty_slot
@@ -16664,11 +16664,19 @@ pub mod tests {
     ) -> Vec<(Pubkey, AccountSharedData)> {
         storages
             .flat_map(|storage| {
-                storage
+                let vec = storage
                     .accounts
                     .account_iter()
                     .map(|account| (*account.pubkey(), account.to_account_shared_data()))
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>();
+                // make sure scan_pubkeys results match
+                // Note that we assume traversals are both in the same order, but this doesn't have to be true.
+                let mut compare = Vec::default();
+                storage.accounts.scan_pubkeys(|k| {
+                    compare.push(*k);
+                });
+                assert_eq!(compare, vec.iter().map(|(k, _)| *k).collect::<Vec<_>>());
+                vec
             })
             .collect::<Vec<_>>()
     }
