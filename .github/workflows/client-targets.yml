@@ -31,7 +31,7 @@ jobs:
           - armv7-linux-androideabi
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - run: cargo install cargo-ndk@2.12.2
 
@@ -55,7 +55,7 @@ jobs:
           - x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         run: |

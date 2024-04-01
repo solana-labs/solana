@@ -44,7 +44,7 @@ jobs:
       matrix:
         version: ["v0.29.0"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - shell: bash
         run: |
