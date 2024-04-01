@@ -814,12 +814,12 @@ mod serde_snapshot_tests {
 
             assert_eq!(
                 pubkey_count,
-                accounts.all_account_count_in_append_vec(shrink_slot)
+                accounts.all_account_count_in_accounts_file(shrink_slot)
             );
             accounts.shrink_all_slots(*startup, None, &EpochSchedule::default());
             assert_eq!(
                 pubkey_count_after_shrink,
-                accounts.all_account_count_in_append_vec(shrink_slot)
+                accounts.all_account_count_in_accounts_file(shrink_slot)
             );
 
             let no_ancestors = Ancestors::default();
@@ -846,7 +846,7 @@ mod serde_snapshot_tests {
             accounts.shrink_all_slots(*startup, None, &epoch_schedule);
             assert_eq!(
                 pubkey_count_after_shrink,
-                accounts.all_account_count_in_append_vec(shrink_slot)
+                accounts.all_account_count_in_accounts_file(shrink_slot)
             );
         }
     }
@@ -889,7 +889,7 @@ mod serde_snapshot_tests {
         let tmp = tempfile::tempdir().unwrap();
         let original_path = tmp.path().join("123.456");
 
-        // In remap_append_vec() we want to handle EEXIST (collisions), but we want to return all
+        // In remap_accounts_file() we want to handle EEXIST (collisions), but we want to return all
         // other errors
         let next_append_vec_id = AtomicAccountsFileId::new(457);
         let num_collisions = AtomicUsize::new(0);
