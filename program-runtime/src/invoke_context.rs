@@ -457,7 +457,7 @@ impl<'a> InvokeContext<'a> {
         timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
-        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
+        let process_executable_chain_time = Measure::start("process_executable_chain_time");
 
         let builtin_id = {
             let borrowed_root_account = instruction_context
@@ -539,13 +539,12 @@ impl<'a> InvokeContext<'a> {
             return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 
-        process_executable_chain_time.stop();
         saturating_add_assign!(
             timings
                 .execute_accessories
                 .process_instructions
                 .process_executable_chain_us,
-            process_executable_chain_time.as_us()
+            process_executable_chain_time.end_as_us()
         );
         result
     }
