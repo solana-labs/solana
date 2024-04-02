@@ -3,8 +3,8 @@ mod tests {
     use {
         crate::{
             bank::{
-                epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
-                StartBlockHeightAndRewards,
+                epoch_accounts_hash_utils, partitioned_epoch_rewards::StartBlockHeightAndRewards,
+                test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
             genesis_utils::activate_all_features,
             serde_snapshot::{
@@ -605,7 +605,7 @@ mod tests {
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
-        #[frozen_abi(digest = "7BH2s2Y1yKy396c3ixC4TTyvvpkyenAvWDSiZvY5yb7P")]
+        #[frozen_abi(digest = "8BVfyLYrPt1ranknjF4sLePjZaZjpKXXrHt4wKf47g3W")]
         #[derive(Serialize, AbiExample)]
         pub struct BankAbiTestWrapperNewer {
             #[serde(serialize_with = "wrapper_newer")]

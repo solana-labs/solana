@@ -5,7 +5,7 @@ use {
         *,
     },
     crate::{
-        bank::EpochRewardStatus,
+        bank::partitioned_epoch_rewards::EpochRewardStatus,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_accounts_db::{accounts_hash::AccountsHash, ancestors::AncestorsForSerialization},

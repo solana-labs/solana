@@ -191,7 +191,7 @@ fn create_genesis_config_no_tx_fee(lamports: u64) -> (GenesisConfig, Keypair) {
     (genesis_config, mint_keypair)
 }
 
-fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
+pub(in crate::bank) fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
     solana_sdk::genesis_config::create_genesis_config(lamports)
 }
 
@@ -12225,34 +12225,6 @@ fn test_rewards_point_calculation_empty() {
     assert!(point_value.is_none());
 }
 
-#[test]
-fn test_force_reward_interval_end() {
-    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-
-    let expected_num = 100;
-
-    let stake_rewards = (0..expected_num)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
-
-    bank.set_epoch_reward_status_active(vec![stake_rewards]);
-    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
-
-    bank.force_reward_interval_end_for_tests();
-    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
-}
-
-#[test]
-fn test_is_partitioned_reward_feature_enable() {
-    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    assert!(!bank.is_partitioned_rewards_feature_enabled());
-    bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
-    assert!(bank.is_partitioned_rewards_feature_enabled());
-}
-
 /// Test that reward partition range panics when passing out of range partition index
 #[test]
 #[should_panic(expected = "index out of bounds: the len is 10 but the index is 15")]
@@ -12274,24 +12246,6 @@ fn test_get_stake_rewards_partition_range_panic() {
 
     // This call should panic, i.e. 15 is out of the num_credit_blocks
     let _range = &stake_rewards_bucket[15];
-}
-
-#[test]
-fn test_deactivate_epoch_reward_status() {
-    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-
-    let expected_num = 100;
-
-    let stake_rewards = (0..expected_num)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
-
-    bank.set_epoch_reward_status_active(vec![stake_rewards]);
-
-    assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
-    bank.deactivate_epoch_reward_status();
-    assert!(bank.get_reward_interval() == RewardInterval::OutsideInterval);
 }
 
 #[test]
@@ -13284,127 +13238,6 @@ fn test_calc_vote_accounts_to_store_normal() {
             }
         }
     }
-}
-
-impl Bank {
-    /// Return the total number of blocks in reward interval (including both calculation and crediting).
-    fn get_reward_total_num_blocks(&self, rewards: &StakeRewards) -> u64 {
-        self.get_reward_calculation_num_blocks() + self.get_reward_distribution_num_blocks(rewards)
-    }
-}
-
-/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during normal epoch gives the expected result
-#[test]
-fn test_get_reward_distribution_num_blocks_normal() {
-    solana_logger::setup();
-    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
-
-    let bank = Bank::new_for_tests(&genesis_config);
-
-    // Given 8k rewards, it will take 2 blocks to credit all the rewards
-    let expected_num = 8192;
-    let stake_rewards = (0..expected_num)
-        .map(|_| StakeReward::new_random())
-        .collect::<Vec<_>>();
-
-    assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 2);
-    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
-    assert_eq!(
-        bank.get_reward_total_num_blocks(&stake_rewards),
-        bank.get_reward_distribution_num_blocks(&stake_rewards)
-            + bank.get_reward_calculation_num_blocks(),
-    );
-}
-
-/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during small epoch
-/// The num_credit_blocks should be cap to 10% of the total number of blocks in the epoch.
-#[test]
-fn test_get_reward_distribution_num_blocks_cap() {
-    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
-
-    // Config stake reward distribution to be 10 per block
-    let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
-    accounts_db_config.test_partitioned_epoch_rewards =
-        TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
-            reward_calculation_num_blocks: 1,
-            stake_account_stores_per_block: 10,
-        };
-
-    let bank = Bank::new_with_paths(
-        &genesis_config,
-        Arc::new(RuntimeConfig::default()),
-        Vec::new(),
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
-        false,
-        Some(accounts_db_config),
-        None,
-        Some(Pubkey::new_unique()),
-        Arc::default(),
-    );
-
-    let stake_account_stores_per_block = bank.partitioned_rewards_stake_account_stores_per_block();
-    assert_eq!(stake_account_stores_per_block, 10);
-
-    let check_num_reward_distribution_blocks =
-        |num_stakes: u64,
-         expected_num_reward_distribution_blocks: u64,
-         expected_num_reward_computation_blocks: u64| {
-            // Given the short epoch, i.e. 32 slots, we should cap the number of reward distribution blocks to 32/10 = 3.
-            let stake_rewards = (0..num_stakes)
-                .map(|_| StakeReward::new_random())
-                .collect::<Vec<_>>();
-
-            assert_eq!(
-                bank.get_reward_distribution_num_blocks(&stake_rewards),
-                expected_num_reward_distribution_blocks
-            );
-            assert_eq!(
-                bank.get_reward_calculation_num_blocks(),
-                expected_num_reward_computation_blocks
-            );
-            assert_eq!(
-                bank.get_reward_total_num_blocks(&stake_rewards),
-                bank.get_reward_distribution_num_blocks(&stake_rewards)
-                    + bank.get_reward_calculation_num_blocks(),
-            );
-        };
-
-    for test_record in [
-        // num_stakes, expected_num_reward_distribution_blocks, expected_num_reward_computation_blocks
-        (0, 1, 1),
-        (1, 1, 1),
-        (stake_account_stores_per_block, 1, 1),
-        (2 * stake_account_stores_per_block - 1, 2, 1),
-        (2 * stake_account_stores_per_block, 2, 1),
-        (3 * stake_account_stores_per_block - 1, 3, 1),
-        (3 * stake_account_stores_per_block, 3, 1),
-        (4 * stake_account_stores_per_block, 3, 1), // cap at 3
-        (5 * stake_account_stores_per_block, 3, 1), //cap at 3
-    ] {
-        check_num_reward_distribution_blocks(test_record.0, test_record.1, test_record.2);
-    }
-}
-
-/// Test get_reward_distribution_num_blocks, get_reward_calculation_num_blocks, get_reward_total_num_blocks during warm up epoch gives the expected result.
-/// The num_credit_blocks should be 1 during warm up epoch.
-#[test]
-fn test_get_reward_distribution_num_blocks_warmup() {
-    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-
-    let bank = Bank::new_for_tests(&genesis_config);
-    let rewards = vec![];
-    assert_eq!(bank.get_reward_distribution_num_blocks(&rewards), 1);
-    assert_eq!(bank.get_reward_calculation_num_blocks(), 1);
-    assert_eq!(
-        bank.get_reward_total_num_blocks(&rewards),
-        bank.get_reward_distribution_num_blocks(&rewards)
-            + bank.get_reward_calculation_num_blocks(),
-    );
 }
 
 #[test]

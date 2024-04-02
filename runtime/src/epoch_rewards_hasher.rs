@@ -1,5 +1,5 @@
 use {
-    crate::bank::StakeRewards,
+    crate::bank::partitioned_epoch_rewards::StakeRewards,
     solana_sdk::{epoch_rewards_hasher::EpochRewardsHasher, hash::Hash},
 };
 
