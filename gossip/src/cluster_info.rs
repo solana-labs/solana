@@ -2786,6 +2786,14 @@ pub struct Sockets {
     pub tpu_forwards_quic: UdpSocket,
 }
 
+pub struct NodeConfig {
+    pub gossip_addr: SocketAddr,
+    pub port_range: PortRange,
+    pub bind_ip_addr: IpAddr,
+    pub public_tpu_addr: Option<SocketAddr>,
+    pub public_tpu_forwards_addr: Option<SocketAddr>,
+}
+
 #[derive(Debug)]
 pub struct Node {
     pub info: ContactInfo,
@@ -2978,16 +2986,17 @@ impl Node {
         }
     }
 
-    pub fn new_with_external_ip(
-        pubkey: &Pubkey,
-        gossip_addr: &SocketAddr,
-        port_range: PortRange,
-        bind_ip_addr: IpAddr,
-        public_tpu_addr: Option<SocketAddr>,
-        public_tpu_forwards_addr: Option<SocketAddr>,
-    ) -> Node {
+    pub fn new_with_external_ip(pubkey: &Pubkey, config: NodeConfig) -> Node {
+        let NodeConfig {
+            gossip_addr,
+            port_range,
+            bind_ip_addr,
+            public_tpu_addr,
+            public_tpu_forwards_addr,
+        } = config;
+
         let (gossip_port, (gossip, ip_echo)) =
-            Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
+            Self::get_gossip_port(&gossip_addr, port_range, bind_ip_addr);
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
@@ -3593,14 +3602,15 @@ mod tests {
     #[test]
     fn new_with_external_ip_test_random() {
         let ip = Ipv4Addr::LOCALHOST;
-        let node = Node::new_with_external_ip(
-            &solana_sdk::pubkey::new_rand(),
-            &socketaddr!(ip, 0),
-            VALIDATOR_PORT_RANGE,
-            IpAddr::V4(ip),
-            None,
-            None,
-        );
+        let config = NodeConfig {
+            gossip_addr: socketaddr!(ip, 0),
+            port_range: VALIDATOR_PORT_RANGE,
+            bind_ip_addr: IpAddr::V4(ip),
+            public_tpu_addr: None,
+            public_tpu_forwards_addr: None,
+        };
+
+        let node = Node::new_with_external_ip(&solana_sdk::pubkey::new_rand(), config);
 
         check_node_sockets(&node, IpAddr::V4(ip), VALIDATOR_PORT_RANGE);
     }
@@ -3613,17 +3623,17 @@ mod tests {
             VALIDATOR_PORT_RANGE.1 + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
             VALIDATOR_PORT_RANGE.1 + (2 * MINIMUM_VALIDATOR_PORT_RANGE_WIDTH),
         );
-
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
-        let node = Node::new_with_external_ip(
-            &solana_sdk::pubkey::new_rand(),
-            &socketaddr!(Ipv4Addr::LOCALHOST, port),
+        let config = NodeConfig {
+            gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, port),
             port_range,
-            ip,
-            None,
-            None,
-        );
+            bind_ip_addr: ip,
+            public_tpu_addr: None,
+            public_tpu_forwards_addr: None,
+        };
+
+        let node = Node::new_with_external_ip(&solana_sdk::pubkey::new_rand(), config);
 
         check_node_sockets(&node, ip, port_range);
 
