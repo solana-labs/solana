@@ -211,6 +211,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         log_messages_bytes_limit: Option<usize>,
         limit_to_load_programs: bool,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
+        let mut program_cache_time = Measure::start("program_cache");
         let mut program_accounts_map = Self::filter_executable_program_accounts(
             callbacks,
             sanitized_txs,
@@ -234,6 +235,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 execution_results: vec![],
             };
         }
+        program_cache_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = load_accounts(
@@ -328,6 +330,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             sanitized_txs.len(),
         );
 
+        timings.saturating_add_in_place(
+            ExecuteTimingType::ProgramCacheUs,
+            program_cache_time.as_us(),
+        );
         timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
