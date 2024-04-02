@@ -18,7 +18,7 @@ use {
     log::*,
     memmap2::MmapMut,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
         pubkey::Pubkey,
         stake_history::Epoch,
@@ -516,6 +516,24 @@ impl AppendVec {
         ))
     }
 
+    /// return an `AccountSharedData` for an account at `offset`.
+    /// This fn can efficiently return exactly what is needed by a caller.
+    pub(crate) fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
+        let (meta, next) = self.get_type::<StoredMeta>(offset)?;
+        let (account_meta, next) = self.get_type::<AccountMeta>(next)?;
+        let next = next + std::mem::size_of::<AccountHash>();
+        let (data, _next) = self.get_slice(next, meta.data_len as usize)?;
+        Some(AccountSharedData::create(
+            account_meta.lamports,
+            data.to_vec(),
+            account_meta.owner,
+            account_meta.executable,
+            account_meta.rent_epoch,
+        ))
+    }
+
+    /// note this fn can return account meta for an account whose fields have been truncated (ie. if `len` isn't long enough.)
+    /// This fn doesn't even load the data_len field, so this fn does not know how big `len` needs to be.
     fn get_account_meta(&self, offset: usize) -> Option<&AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
@@ -552,7 +570,21 @@ impl AppendVec {
         &self,
         offset: usize,
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
-        let (stored_account, _) = self.get_account(offset)?;
+        let r1 = self.get_account(offset);
+        let r2 = self.get_stored_account(offset);
+        let r3 = self.get_account_meta(offset);
+        if r1.is_some() {
+            // r3 can return Some when r1 and r2 do not
+            assert!(r3.is_some());
+        }
+        if let Some(r2) = r2.as_ref() {
+            let meta = r3.unwrap();
+            assert_eq!(meta.executable, r2.executable());
+            assert_eq!(meta.owner, *r2.owner());
+            assert_eq!(meta.lamports, r2.lamports());
+            assert_eq!(meta.rent_epoch, r2.rent_epoch());
+        }
+        let (stored_account, _) = r1?;
         let meta = stored_account.meta().clone();
         Some((meta, stored_account.to_account_shared_data()))
     }
@@ -1044,6 +1076,37 @@ pub mod tests {
         let account = create_test_account(0);
         let index = av.append_account_test(&account).unwrap();
         assert_eq!(av.get_account_test(index).unwrap(), account);
+        truncate_and_test(av, index);
+    }
+
+    /// truncate `av` and make sure that we fail to get an account. This verifies that the eof
+    /// code is working correctly.
+    fn truncate_and_test(av: AppendVec, index: usize) {
+        // truncate the hash, 1 byte at a time
+        let hash = std::mem::size_of::<AccountHash>();
+        for _ in 0..hash {
+            av.current_len.fetch_sub(1, Ordering::Relaxed);
+            assert_eq!(av.get_account_test(index), None);
+        }
+        // truncate 1 byte into the AccountMeta
+        av.current_len.fetch_sub(1, Ordering::Relaxed);
+        assert_eq!(av.get_account_test(index), None);
+    }
+
+    #[test]
+    fn test_append_vec_one_with_data() {
+        let path = get_append_vec_path("test_append");
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let data_len = 1;
+        let account = create_test_account(data_len);
+        let index = av.append_account_test(&account).unwrap();
+        // make the append vec 1 byte too short. we should get `None` since the append vec was truncated
+        assert_eq!(
+            STORE_META_OVERHEAD + data_len,
+            av.current_len.load(Ordering::Relaxed)
+        );
+        assert_eq!(av.get_account_test(index).unwrap(), account);
+        truncate_and_test(av, index);
     }
 
     #[test]

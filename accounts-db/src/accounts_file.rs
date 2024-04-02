@@ -12,7 +12,11 @@ use {
             error::TieredStorageError, hot::HOT_FORMAT, index::IndexOffset, TieredStorage,
         },
     },
-    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        clock::Slot,
+        pubkey::Pubkey,
+    },
     std::{borrow::Borrow, mem, path::PathBuf},
     thiserror::Error,
 };
@@ -130,6 +134,14 @@ impl AccountsFile {
                 .map(|(metas, index_offset)| {
                     (metas, AccountInfo::reduced_offset_to_offset(index_offset.0))
                 }),
+        }
+    }
+
+    /// return an `AccountSharedData` for an account at `offset`, if any.  Otherwise return None.
+    pub(crate) fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
+        match self {
+            Self::AppendVec(av) => av.get_stored_account(offset),
+            Self::TieredStorage(_) => unimplemented!(),
         }
     }
 
