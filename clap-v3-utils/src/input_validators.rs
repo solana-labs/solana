@@ -150,7 +150,7 @@ where
 // produce a pubkey()
 #[deprecated(
     since = "1.18.0",
-    note = "please use `SignerSourceParserBuilder::default().allow_pubkey().allow_file_path().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_all().build()` instead"
 )]
 #[allow(deprecated)]
 pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
@@ -176,7 +176,7 @@ where
 // also provided and correct happens in parsing, not in validation.
 #[deprecated(
     since = "1.18.0",
-    note = "please use `SignerSourceParserBuilder::default().build()` instead"
+    note = "please use `SignerSourceParserBuilder::default().allow_all().build()` instead"
 )]
 #[allow(deprecated)]
 pub fn is_valid_signer<T>(string: T) -> Result<(), String>
