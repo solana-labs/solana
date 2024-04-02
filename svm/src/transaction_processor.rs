@@ -15,6 +15,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
+        invoke_context::InvokeContext,
         loaded_programs::{
             ForkGraph, LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria,
             LoadedProgramType, LoadedProgramsForTxBatch, ProgramCache, ProgramRuntimeEnvironment,
@@ -635,23 +636,31 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             programs_loaded_for_tx_batch.upcoming_environments.clone(),
             programs_loaded_for_tx_batch.latest_root_epoch,
         );
+        let sysvar_cache = &self.sysvar_cache.read().unwrap();
+
+        let mut invoke_context = InvokeContext::new(
+            &mut transaction_context,
+            sysvar_cache,
+            log_collector.clone(),
+            compute_budget,
+            programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            callback.get_feature_set(),
+            blockhash,
+            lamports_per_signature,
+        );
+
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             tx.message(),
             &loaded_transaction.program_indices,
-            &mut transaction_context,
-            log_collector.clone(),
-            programs_loaded_for_tx_batch,
-            &mut programs_modified_by_tx,
-            callback.get_feature_set(),
-            compute_budget,
+            &mut invoke_context,
             timings,
-            &self.sysvar_cache.read().unwrap(),
-            blockhash,
-            lamports_per_signature,
             &mut executed_units,
         );
         process_message_time.stop();
+
+        drop(invoke_context);
 
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
