@@ -7607,7 +7607,10 @@ impl AccountsDb {
                     Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
                 },
                 |accum: &DashMap<Pubkey, AccountHash>, loaded_account: LoadedAccount| {
-                    let loaded_hash = loaded_account.loaded_hash();
+                    let mut loaded_hash = loaded_account.loaded_hash();
+                    if loaded_hash == AccountHash(Hash::default()) {
+                        loaded_hash = Self::hash_account(&loaded_account, loaded_account.pubkey())
+                    }
                     accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },
             );
@@ -7639,9 +7642,13 @@ impl AccountsDb {
             |accum: &DashMap<Pubkey, (AccountHash, AccountSharedData)>,
              loaded_account: LoadedAccount| {
                 // Storage may have duplicates so only keep the latest version for each key
+                let mut loaded_hash = loaded_account.loaded_hash();
+                if loaded_hash == AccountHash(Hash::default()) {
+                    loaded_hash = Self::hash_account(&loaded_account, loaded_account.pubkey())
+                }
                 accum.insert(
                     *loaded_account.pubkey(),
-                    (loaded_account.loaded_hash(), loaded_account.take_account()),
+                    (loaded_hash, loaded_account.take_account()),
                 );
             },
         );
