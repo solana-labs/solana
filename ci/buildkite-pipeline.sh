@@ -143,6 +143,7 @@ all_test_steps() {
   command_step checks1 "ci/docker-run-default-image.sh ci/test-checks.sh" 20 check
   command_step checks2 "ci/docker-run-default-image.sh ci/test-dev-context-only-utils.sh check-bins" 15 check
   command_step checks3 "ci/docker-run-default-image.sh ci/test-dev-context-only-utils.sh check-all-targets" 15 check
+  command_step miri "ci/docker-run-default-image.sh ci/test-miri.sh" 5 check
   wait_step
 
   # Full test suite

@@ -73,6 +73,7 @@ RUN \
   rustup install $RUST_NIGHTLY_VERSION && \
   rustup component add clippy --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup component add rustfmt --toolchain=$RUST_NIGHTLY_VERSION && \
+  rustup component add miri --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup target add wasm32-unknown-unknown && \
   cargo install cargo-audit && \
   cargo install cargo-hack && \
