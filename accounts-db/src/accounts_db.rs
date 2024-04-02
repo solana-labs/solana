@@ -8608,20 +8608,25 @@ impl AccountsDb {
     }
 
     /// return Some(lamports_to_top_off) if 'account' would collect rent
-    fn stats_for_rent_payers<T: ReadableAccount>(
+    fn stats_for_rent_payers(
         pubkey: &Pubkey,
-        account: &T,
+        lamports: u64,
+        account_data_len: usize,
+        account_rent_epoch: Epoch,
+        executable: bool,
         rent_collector: &RentCollector,
     ) -> Option<u64> {
-        if account.lamports() == 0 {
+        if lamports == 0 {
             return None;
         }
-        (rent_collector.should_collect_rent(pubkey, account)
-            && !rent_collector.get_rent_due(account).is_exempt())
+        (rent_collector.should_collect_rent(pubkey, executable)
+            && !rent_collector
+                .get_rent_due(lamports, account_data_len, account_rent_epoch)
+                .is_exempt())
         .then(|| {
-            let min_balance = rent_collector.rent.minimum_balance(account.data().len());
+            let min_balance = rent_collector.rent.minimum_balance(account_data_len);
             // return lamports required to top off this account to make it rent exempt
-            min_balance.saturating_sub(account.lamports())
+            min_balance.saturating_sub(lamports)
         })
     }
 
@@ -8661,9 +8666,14 @@ impl AccountsDb {
                 accounts_data_len += stored_account.data().len() as u64;
             }
 
-            if let Some(amount_to_top_off_rent_this_account) =
-                Self::stats_for_rent_payers(pubkey, &stored_account, rent_collector)
-            {
+            if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
+                pubkey,
+                stored_account.lamports(),
+                stored_account.data().len(),
+                stored_account.rent_epoch(),
+                stored_account.executable(),
+                rent_collector,
+            ) {
                 amount_to_top_off_rent += amount_to_top_off_rent_this_account;
                 num_accounts_rent_paying += 1;
                 // remember this rent-paying account pubkey
@@ -9090,9 +9100,14 @@ impl AccountsDb {
                             );
                             let loaded_account = accessor.check_and_get_loaded_account();
                             accounts_data_len_from_duplicates += loaded_account.data().len();
-                            if let Some(lamports_to_top_off) =
-                                Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
-                            {
+                            if let Some(lamports_to_top_off) = Self::stats_for_rent_payers(
+                                pubkey,
+                                loaded_account.lamports(),
+                                loaded_account.data().len(),
+                                loaded_account.rent_epoch(),
+                                loaded_account.executable(),
+                                rent_collector,
+                            ) {
                                 removed_rent_paying += 1;
                                 removed_top_off += lamports_to_top_off;
                             }

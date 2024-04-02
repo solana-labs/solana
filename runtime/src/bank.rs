@@ -5165,7 +5165,11 @@ impl Bank {
                 // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
                 // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
                 if account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
-                    && self.rent_collector.get_rent_due(account) == RentDue::Exempt
+                    && self.rent_collector.get_rent_due(
+                        account.lamports(),
+                        account.data().len(),
+                        account.rent_epoch(),
+                    ) == RentDue::Exempt
                 {
                     account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                 }
@@ -7803,8 +7807,14 @@ impl TotalAccountsStats {
             self.executable_data_len += data_len;
         }
 
-        if !rent_collector.should_collect_rent(address, account)
-            || rent_collector.get_rent_due(account).is_exempt()
+        if !rent_collector.should_collect_rent(address, account.executable())
+            || rent_collector
+                .get_rent_due(
+                    account.lamports(),
+                    account.data().len(),
+                    account.rent_epoch(),
+                )
+                .is_exempt()
         {
             self.num_rent_exempt_accounts += 1;
         } else {
