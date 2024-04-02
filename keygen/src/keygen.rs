@@ -1,8 +1,10 @@
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(deprecated)]
 use {
     bip39::{Mnemonic, MnemonicType, Seed},
-    clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command},
+    clap::{
+        builder::ValueParser, crate_description, crate_name, value_parser, Arg, ArgAction,
+        ArgMatches, Command,
+    },
     solana_clap_v3_utils::{
         input_parsers::{
             signer::{SignerSource, SignerSourceParserBuilder},
@@ -12,8 +14,8 @@ use {
             check_for_overwrite,
             derivation_path::{acquire_derivation_path, derivation_path_arg},
             mnemonic::{
-                acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
-                try_get_language, try_get_word_count, WORD_COUNT_ARG,
+                acquire_passphrase_and_message, no_passphrase_and_message, try_get_language,
+                try_get_word_count,
             },
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
@@ -65,6 +67,39 @@ struct GrindMatch {
     count: AtomicU64,
 }
 
+#[derive(Debug, Clone)]
+enum GrindType {
+    Starts,
+    Ends,
+    StartsAndEnds,
+}
+
+fn grind_parser(grind_type: GrindType) -> ValueParser {
+    ValueParser::from(move |v: &str| -> Result<String, String> {
+        let (required_div_count, prefix_suffix) = match grind_type {
+            GrindType::Starts => (1, "PREFIX"),
+            GrindType::Ends => (1, "SUFFIX"),
+            GrindType::StartsAndEnds => (2, "PREFIX and SUFFIX"),
+        };
+        if v.matches(':').count() != required_div_count || (v.starts_with(':') || v.ends_with(':'))
+        {
+            return Err(format!("Expected : between {} and COUNT", prefix_suffix));
+        }
+        // `args` is guaranteed to have length at least 1 by the previous if statement
+        let mut args: Vec<&str> = v.split(':').collect();
+        let count = args.pop().unwrap().parse::<u64>();
+        for arg in args.iter() {
+            bs58::decode(arg)
+                .into_vec()
+                .map_err(|err| format!("{}: {:?}", args[0], err))?;
+        }
+        if count.is_err() || count.unwrap() == 0 {
+            return Err(String::from("Expected COUNT to be of type u64"));
+        }
+        Ok(v.to_string())
+    })
+}
+
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
@@ -96,56 +131,6 @@ fn output_keypair(
     } else {
         write_keypair_file(keypair, outfile)?;
         println!("Wrote {source} keypair to {outfile}");
-    }
-    Ok(())
-}
-
-fn grind_validator_starts_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from("Expected : between PREFIX and COUNT"));
-    }
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-    let count = args[1].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be of type u64"));
-    }
-    Ok(())
-}
-
-fn grind_validator_ends_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from("Expected : between SUFFIX and COUNT"));
-    }
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-    let count = args[1].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be of type u64"));
-    }
-    Ok(())
-}
-
-fn grind_validator_starts_and_ends_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 2 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from(
-            "Expected : between PREFIX and SUFFIX and COUNT",
-        ));
-    }
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-    bs58::decode(&args[1])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[1], err))?;
-    let count = args[2].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be a u64"));
     }
     Ok(())
 }
@@ -316,9 +301,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .value_name("PREFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple_occurrences(true)
+                        .action(ArgAction::Append)
                         .multiple_values(true)
-                        .validator(grind_validator_starts_with)
+                        .value_parser(grind_parser(GrindType::Starts))
                         .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -327,9 +312,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .value_name("SUFFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple_occurrences(true)
+                        .action(ArgAction::Append)
                         .multiple_values(true)
-                        .validator(grind_validator_ends_with)
+                        .value_parser(grind_parser(GrindType::Ends))
                         .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -338,9 +323,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .value_name("PREFIX:SUFFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple_occurrences(true)
+                        .action(ArgAction::Append)
                         .multiple_values(true)
-                        .validator(grind_validator_starts_and_ends_with)
+                        .value_parser(grind_parser(GrindType::StartsAndEnds))
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -547,31 +532,49 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             output_keypair(&keypair, outfile, "recovered")?;
         }
         ("grind", matches) => {
-            let ignore_case = matches.is_present("ignore_case");
+            let ignore_case = matches.try_contains_id("ignore_case")?;
 
-            let starts_with_args = if matches.is_present("starts_with") {
+            let starts_with_args = if matches.try_contains_id("starts_with")? {
                 matches
-                    .values_of_t_or_exit::<String>("starts_with")
-                    .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .get_many::<String>("starts_with")
+                    .unwrap()
+                    .map(|s| {
+                        if ignore_case {
+                            s.to_lowercase()
+                        } else {
+                            s.to_owned()
+                        }
+                    })
                     .collect()
             } else {
                 HashSet::new()
             };
-            let ends_with_args = if matches.is_present("ends_with") {
+            let ends_with_args = if matches.try_contains_id("ends_with")? {
                 matches
-                    .values_of_t_or_exit::<String>("ends_with")
-                    .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .get_many::<String>("ends_with")
+                    .unwrap()
+                    .map(|s| {
+                        if ignore_case {
+                            s.to_lowercase()
+                        } else {
+                            s.to_owned()
+                        }
+                    })
                     .collect()
             } else {
                 HashSet::new()
             };
-            let starts_and_ends_with_args = if matches.is_present("starts_and_ends_with") {
+            let starts_and_ends_with_args = if matches.try_contains_id("starts_and_ends_with")? {
                 matches
-                    .values_of_t_or_exit::<String>("starts_and_ends_with")
-                    .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .get_many::<String>("starts_and_ends_with")
+                    .unwrap()
+                    .map(|s| {
+                        if ignore_case {
+                            s.to_lowercase()
+                        } else {
+                            s.to_owned()
+                        }
+                    })
                     .collect()
             } else {
                 HashSet::new()
@@ -596,20 +599,20 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 num_threads,
             );
 
-            let use_mnemonic = matches.is_present("use_mnemonic");
+            let use_mnemonic = matches.try_contains_id("use_mnemonic")?;
 
             let derivation_path = acquire_derivation_path(matches)?;
 
-            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
+            let word_count = try_get_word_count(matches)?.unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-            let language = acquire_language(matches);
+            let language = try_get_language(matches)?.unwrap();
 
             let (passphrase, passphrase_message) = if use_mnemonic {
                 acquire_passphrase_and_message(matches).unwrap()
             } else {
                 no_passphrase_and_message()
             };
-            let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
+            let no_outfile = matches.try_contains_id(NO_OUTFILE_ARG.name)?;
 
             // The vast majority of base58 encoded public keys have length 44, but
             // these only encapsulate prefixes 1-9 and A-H.  If the user is searching
