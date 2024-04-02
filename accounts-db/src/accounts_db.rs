@@ -9504,6 +9504,7 @@ pub mod tests {
         crate::{
             account_info::StoredSize,
             account_storage::meta::{AccountMeta, StoredMeta},
+            accounts_file::AccountsFileProvider,
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
             ancient_append_vecs,
@@ -10564,8 +10565,9 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn test_accountsdb_scan_account_storage_no_bank() {
+    #[test_case(AccountsFileProvider::AppendVec)]
+    #[test_case(AccountsFileProvider::HotStorage)]
+    fn test_accountsdb_scan_account_storage_no_bank(accounts_file_provider: AccountsFileProvider) {
         solana_logger::setup();
 
         let expected = 1;
@@ -10580,7 +10582,7 @@ pub mod tests {
             slot_expected,
             0,
             size as u64,
-            AccountsFileProvider::AppendVec,
+            accounts_file_provider,
         );
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
@@ -10686,13 +10688,16 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn test_accountsdb_scan_account_storage_no_bank_one_slot() {
+    #[test_case(AccountsFileProvider::AppendVec)]
+    #[test_case(AccountsFileProvider::HotStorage)]
+    fn test_accountsdb_scan_account_storage_no_bank_one_slot(
+        accounts_file_provider: AccountsFileProvider,
+    ) {
         solana_logger::setup();
 
         let expected = 1;
         let tf = crate::append_vec::test_utils::get_append_vec_path(
-            "test_accountsdb_scan_account_storage_no_bank",
+            "test_accountsdb_scan_account_storage_no_bank_one_slot",
         );
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
@@ -10702,7 +10707,7 @@ pub mod tests {
             slot_expected,
             0,
             size as u64,
-            AccountsFileProvider::AppendVec,
+            accounts_file_provider,
         );
         let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
