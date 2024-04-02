@@ -889,7 +889,7 @@ mod serde_snapshot_tests {
         let tmp = tempfile::tempdir().unwrap();
         let original_path = tmp.path().join("123.456");
 
-        // In remap_accounts_file() we want to handle EEXIST (collisions), but we want to return all
+        // In remap_append_vec_file() we want to handle EEXIST (collisions), but we want to return all
         // other errors
         let next_append_vec_id = AtomicAccountsFileId::new(457);
         let num_collisions = AtomicUsize::new(0);
