@@ -359,12 +359,10 @@ impl<'a> SnapshotMinimizer<'a> {
         if aligned_total > 0 {
             let mut accounts = Vec::with_capacity(keep_accounts.len());
             let mut hashes = Vec::with_capacity(keep_accounts.len());
-            let mut write_versions = Vec::with_capacity(keep_accounts.len());
 
             for alive_account in keep_accounts {
                 accounts.push(alive_account);
                 hashes.push(alive_account.hash());
-                write_versions.push(alive_account.write_version());
             }
 
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
@@ -373,7 +371,6 @@ impl<'a> SnapshotMinimizer<'a> {
                 (slot, &accounts[..]),
                 Some(hashes),
                 new_storage,
-                Some(Box::new(write_versions.into_iter())),
                 StoreReclaims::Ignore,
             );
 

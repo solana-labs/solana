@@ -438,7 +438,6 @@ impl AccountsDb {
             accounts_to_write,
             None::<Vec<AccountHash>>,
             shrink_in_progress.new_storage(),
-            None,
             StoreReclaims::Ignore,
         ));
 
