@@ -98,6 +98,7 @@ pub enum ProgramCliCommand {
         allow_excessive_balance: bool,
         skip_fee_check: bool,
         compute_unit_price: Option<u64>,
+        max_sign_attempts: usize,
     },
     Upgrade {
         fee_payer_signer_index: SignerIndex,
@@ -117,6 +118,7 @@ pub enum ProgramCliCommand {
         max_len: Option<usize>,
         skip_fee_check: bool,
         compute_unit_price: Option<u64>,
+        max_sign_attempts: usize,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -246,6 +248,26 @@ impl ProgramSubCommands for App<'_, '_> {
                                      holds a large balance of SOL",
                                 ),
                         )
+                        .arg(
+                            Arg::with_name("max_sign_attempts")
+                                .long("max-sign-attempts")
+                                .takes_value(true)
+                                .validator(is_parsable::<u64>)
+                                .default_value("5")
+                                .help(
+                                    "Maximum number of attempts to sign or resign transactions \
+                                    after blockhash expiration. \
+                                    If any transactions sent during the program deploy are still \
+                                    unconfirmed after the initially chosen recent blockhash \
+                                    expires, those transactions will be resigned with a new \
+                                    recent blockhash and resent. Use this setting to adjust \
+                                    the maximum number of transaction signing iterations. Each \
+                                    blockhash is valid for about 60 seconds, which means using \
+                                    the default value of 5 will lead to sending transactions \
+                                    for at least 5 minutes or until all transactions are confirmed,\
+                                    whichever comes first.",
+                                ),
+                        )
                         .arg(compute_unit_price_arg()),
                 )
                 .subcommand(
@@ -317,6 +339,26 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help(
                                     "Maximum length of the upgradeable program \
                                     [default: the length of the original deployed program]",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("max_sign_attempts")
+                                .long("max-sign-attempts")
+                                .takes_value(true)
+                                .validator(is_parsable::<u64>)
+                                .default_value("5")
+                                .help(
+                                    "Maximum number of attempts to sign or resign transactions \
+                                    after blockhash expiration. \
+                                    If any transactions sent during the program deploy are still \
+                                    unconfirmed after the initially chosen recent blockhash \
+                                    expires, those transactions will be resigned with a new \
+                                    recent blockhash and resent. Use this setting to adjust \
+                                    the maximum number of transaction signing iterations. Each \
+                                    blockhash is valid for about 60 seconds, which means using \
+                                    the default value of 5 will lead to sending transactions \
+                                    for at least 5 minutes or until all transactions are confirmed,\
+                                    whichever comes first.",
                                 ),
                         )
                         .arg(compute_unit_price_arg()),
@@ -613,6 +655,7 @@ pub fn parse_program_subcommand(
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
             let compute_unit_price = value_of(matches, "compute_unit_price");
+            let max_sign_attempts = value_of(matches, "max_sign_attempts").unwrap();
 
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
@@ -630,6 +673,7 @@ pub fn parse_program_subcommand(
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
                     compute_unit_price,
+                    max_sign_attempts,
                 }),
                 signers: signer_info.signers,
             }
@@ -702,6 +746,7 @@ pub fn parse_program_subcommand(
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
             let compute_unit_price = value_of(matches, "compute_unit_price");
+            let max_sign_attempts = value_of(matches, "max_sign_attempts").unwrap();
 
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
@@ -715,6 +760,7 @@ pub fn parse_program_subcommand(
                     max_len,
                     skip_fee_check,
                     compute_unit_price,
+                    max_sign_attempts,
                 }),
                 signers: signer_info.signers,
             }
@@ -917,6 +963,7 @@ pub fn process_program_subcommand(
             allow_excessive_balance,
             skip_fee_check,
             compute_unit_price,
+            max_sign_attempts,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -932,6 +979,7 @@ pub fn process_program_subcommand(
             *allow_excessive_balance,
             *skip_fee_check,
             *compute_unit_price,
+            *max_sign_attempts,
         ),
         ProgramCliCommand::Upgrade {
             fee_payer_signer_index,
@@ -961,6 +1009,7 @@ pub fn process_program_subcommand(
             max_len,
             skip_fee_check,
             compute_unit_price,
+            max_sign_attempts,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -972,6 +1021,7 @@ pub fn process_program_subcommand(
             *max_len,
             *skip_fee_check,
             *compute_unit_price,
+            *max_sign_attempts,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -1104,6 +1154,7 @@ fn process_program_deploy(
     allow_excessive_balance: bool,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
+    max_sign_attempts: usize,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
@@ -1244,6 +1295,7 @@ fn process_program_deploy(
             allow_excessive_balance,
             skip_fee_check,
             compute_unit_price,
+            max_sign_attempts,
         )
     } else {
         do_process_program_upgrade(
@@ -1259,6 +1311,7 @@ fn process_program_deploy(
             buffer_signer,
             skip_fee_check,
             compute_unit_price,
+            max_sign_attempts,
         )
     };
     if result.is_ok() && is_final {
@@ -1408,6 +1461,7 @@ fn process_write_buffer(
     max_len: Option<usize>,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
+    max_sign_attempts: usize,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let buffer_authority = config.signers[buffer_authority_signer_index];
@@ -1474,6 +1528,7 @@ fn process_write_buffer(
         true,
         skip_fee_check,
         compute_unit_price,
+        max_sign_attempts,
     );
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
         report_ephemeral_mnemonic(words, mnemonic);
@@ -2228,6 +2283,7 @@ fn do_process_program_write_and_deploy(
     allow_excessive_balance: bool,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
+    max_sign_attempts: usize,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -2366,6 +2422,7 @@ fn do_process_program_write_and_deploy(
         buffer_signer,
         Some(buffer_authority_signer),
         program_signers,
+        max_sign_attempts,
     )?;
 
     if let Some(program_signers) = program_signers {
@@ -2396,6 +2453,7 @@ fn do_process_program_upgrade(
     buffer_signer: Option<&dyn Signer>,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
+    max_sign_attempts: usize,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -2513,6 +2571,7 @@ fn do_process_program_upgrade(
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
+        max_sign_attempts,
     )?;
 
     let program_id = CliProgramId {
@@ -2696,6 +2755,7 @@ fn simulate_and_update_compute_unit_limit(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
@@ -2706,6 +2766,7 @@ fn send_deploy_messages(
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
+    max_sign_attempts: usize,
 ) -> Result<Option<Signature>, Box<dyn std::error::Error>> {
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
@@ -2793,7 +2854,7 @@ fn send_deploy_messages(
                         &write_messages,
                         &[fee_payer_signer, write_signer],
                         SendAndConfirmConfig {
-                            resign_txs_count: Some(5),
+                            resign_txs_count: Some(max_sign_attempts),
                             with_spinner: true,
                         },
                     )
@@ -2942,7 +3003,8 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -2971,7 +3033,8 @@ mod tests {
                     max_len: Some(42),
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3002,7 +3065,8 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3035,7 +3099,8 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3067,7 +3132,8 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3102,7 +3168,8 @@ mod tests {
                     max_len: None,
                     allow_excessive_balance: false,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3133,7 +3200,38 @@ mod tests {
                     max_len: None,
                     skip_fee_check: false,
                     allow_excessive_balance: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "deploy",
+            "/Users/test/program.so",
+            "--max-sign-attempts",
+            "1",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Deploy {
+                    program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    program_signer_index: None,
+                    program_pubkey: None,
+                    upgrade_authority_signer_index: 0,
+                    is_final: false,
+                    max_len: None,
+                    allow_excessive_balance: false,
+                    skip_fee_check: false,
+                    compute_unit_price: None,
+                    max_sign_attempts: 1,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3168,7 +3266,8 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3194,7 +3293,8 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: Some(42),
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3223,7 +3323,8 @@ mod tests {
                     buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3255,7 +3356,8 @@ mod tests {
                     buffer_authority_signer_index: 1,
                     max_len: None,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3292,13 +3394,41 @@ mod tests {
                     buffer_authority_signer_index: 2,
                     max_len: None,
                     skip_fee_check: false,
-                    compute_unit_price: None
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
                     Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
                     Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
+            }
+        );
+
+        // specify max sign attempts
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "write-buffer",
+            "/Users/test/program.so",
+            "--max-sign-attempts",
+            "10",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
+                    program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    buffer_authority_signer_index: 0,
+                    max_len: None,
+                    skip_fee_check: false,
+                    compute_unit_price: None,
+                    max_sign_attempts: 10,
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
         );
     }
@@ -3852,6 +3982,7 @@ mod tests {
                 allow_excessive_balance: false,
                 skip_fee_check: false,
                 compute_unit_price: None,
+                max_sign_attempts: 5,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,
