@@ -4316,7 +4316,7 @@ fn test_cpi_change_account_data_memory_allocation() {
     let builtin_program_id = Pubkey::new_unique();
     bank.add_builtin(
         builtin_program_id,
-        "test_cpi_change_account_data_memory_allocation_builtin".to_string(),
+        "test_cpi_change_account_data_memory_allocation_builtin",
         LoadedProgram::new_builtin(0, 42, MockBuiltin::vm),
     );
 

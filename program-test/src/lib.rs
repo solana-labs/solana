@@ -463,7 +463,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
-    builtin_programs: Vec<(Pubkey, String, LoadedProgram)>,
+    builtin_programs: Vec<(Pubkey, &'static str, LoadedProgram)>,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
     deactivate_feature_set: HashSet<Pubkey>,
@@ -513,7 +513,7 @@ impl ProgramTest {
     /// [`default`]: #method.default
     /// [`add_program`]: #method.add_program
     pub fn new(
-        program_name: &str,
+        program_name: &'static str,
         program_id: Pubkey,
         builtin_function: Option<BuiltinFunctionWithContext>,
     ) -> Self {
@@ -613,7 +613,7 @@ impl ProgramTest {
     /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
-        program_name: &str,
+        program_name: &'static str,
         program_id: Pubkey,
         builtin_function: Option<BuiltinFunctionWithContext>,
     ) {
@@ -720,14 +720,14 @@ impl ProgramTest {
     /// Note that builtin programs are responsible for their own `stable_log` output.
     pub fn add_builtin_program(
         &mut self,
-        program_name: &str,
+        program_name: &'static str,
         program_id: Pubkey,
         builtin_function: BuiltinFunctionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
         self.builtin_programs.push((
             program_id,
-            program_name.to_string(),
+            program_name,
             LoadedProgram::new_builtin(0, program_name.len(), builtin_function),
         ));
     }

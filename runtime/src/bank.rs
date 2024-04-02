@@ -5865,7 +5865,7 @@ impl Bank {
                 if builtin.enable_feature_id.is_none() {
                     self.add_builtin(
                         builtin.program_id,
-                        builtin.name.to_string(),
+                        builtin.name,
                         LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint),
                     );
                 }
@@ -6952,15 +6952,15 @@ impl Bank {
     ) {
         self.add_builtin(
             program_id,
-            "mockup".to_string(),
+            "mockup",
             LoadedProgram::new_builtin(self.slot, 0, builtin_function),
         );
     }
 
     /// Add a built-in program
-    pub fn add_builtin(&mut self, program_id: Pubkey, name: String, builtin: LoadedProgram) {
+    pub fn add_builtin(&mut self, program_id: Pubkey, name: &str, builtin: LoadedProgram) {
         debug!("Adding program {} under {:?}", name, program_id);
-        self.add_builtin_account(name.as_str(), &program_id, false);
+        self.add_builtin_account(name, &program_id, false);
         self.builtin_program_ids.insert(program_id);
         self.transaction_processor
             .program_cache
@@ -6971,7 +6971,7 @@ impl Bank {
     }
 
     /// Remove a built-in instruction processor
-    pub fn remove_builtin(&mut self, program_id: Pubkey, name: String) {
+    pub fn remove_builtin(&mut self, program_id: Pubkey, name: &str) {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
@@ -7223,7 +7223,7 @@ impl Bank {
                 if should_apply_action_for_feature_transition {
                     self.add_builtin(
                         builtin.program_id,
-                        builtin.name.to_string(),
+                        builtin.name,
                         LoadedProgram::new_builtin(
                             self.feature_set.activated_slot(&feature_id).unwrap_or(0),
                             builtin.name.len(),

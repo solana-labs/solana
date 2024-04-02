@@ -468,7 +468,7 @@ mod tests {
             let account =
                 AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
             bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.add_builtin(builtin_id, builtin_name, LoadedProgram::default());
+            bank.add_builtin(builtin_id, builtin_name.as_str(), LoadedProgram::default());
             account
         };
         assert_eq!(&bank.get_account(&builtin_id).unwrap(), &builtin_account);
