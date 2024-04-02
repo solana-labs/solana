@@ -62,6 +62,10 @@ fn parse_vote_instruction_data(
         VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, hash) => {
             Some((VoteTransaction::from(vote_state_update), Some(hash)))
         }
+        VoteInstruction::TowerSync(tower_sync) => Some((VoteTransaction::from(tower_sync), None)),
+        VoteInstruction::TowerSyncSwitch(tower_sync, hash) => {
+            Some((VoteTransaction::from(tower_sync), Some(hash)))
+        }
         VoteInstruction::Authorize(_, _)
         | VoteInstruction::AuthorizeChecked(_)
         | VoteInstruction::AuthorizeWithSeed(_)

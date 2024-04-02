@@ -28,13 +28,15 @@ use {
     },
 };
 
-#[frozen_abi(digest = "2AuJFjx7SYrJ2ugCfH1jFh3Lr9UHMEPfKwwk1NcjqND1")]
+#[frozen_abi(digest = "EcS3xgfomytEAQ1eVd8R76ZejwyHp2Ed8dHqQWh6zi5v")]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
     Vote(Vote),
     VoteStateUpdate(VoteStateUpdate),
     #[serde(with = "serde_compact_vote_state_update")]
     CompactVoteStateUpdate(VoteStateUpdate),
+    #[serde(with = "serde_tower_sync")]
+    TowerSync(TowerSync),
 }
 
 impl VoteTransaction {
@@ -43,6 +45,7 @@ impl VoteTransaction {
             VoteTransaction::Vote(vote) => vote.slots.clone(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.slots(),
             VoteTransaction::CompactVoteStateUpdate(vote_state_update) => vote_state_update.slots(),
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.slots(),
         }
     }
 
@@ -53,6 +56,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts[i].slot()
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.lockouts[i].slot(),
         }
     }
 
@@ -63,6 +67,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts.len()
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.lockouts.len(),
         }
     }
 
@@ -73,6 +78,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts.is_empty()
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.lockouts.is_empty(),
         }
     }
 
@@ -81,6 +87,7 @@ impl VoteTransaction {
             VoteTransaction::Vote(vote) => vote.hash,
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
             VoteTransaction::CompactVoteStateUpdate(vote_state_update) => vote_state_update.hash,
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.hash,
         }
     }
 
@@ -91,6 +98,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.timestamp
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.timestamp,
         }
     }
 
@@ -101,6 +109,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.timestamp = ts
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.timestamp = ts,
         }
     }
 
@@ -111,6 +120,7 @@ impl VoteTransaction {
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.last_voted_slot()
             }
+            VoteTransaction::TowerSync(tower_sync) => tower_sync.last_voted_slot(),
         }
     }
 
@@ -128,6 +138,12 @@ impl From<Vote> for VoteTransaction {
 impl From<VoteStateUpdate> for VoteTransaction {
     fn from(vote_state_update: VoteStateUpdate) -> Self {
         VoteTransaction::VoteStateUpdate(vote_state_update)
+    }
+}
+
+impl From<TowerSync> for VoteTransaction {
+    fn from(tower_sync: TowerSync) -> Self {
+        VoteTransaction::TowerSync(tower_sync)
     }
 }
 

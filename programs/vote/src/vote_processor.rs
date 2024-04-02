@@ -9,6 +9,7 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
+        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -192,7 +193,17 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &invoke_context.feature_set,
             )
         }
-
+        VoteInstruction::TowerSync(_tower_sync)
+        | VoteInstruction::TowerSyncSwitch(_tower_sync, _) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::enable_tower_sync_ix::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            // TODO: will fill in future PR
+            return Err(InstructionError::InvalidInstructionData);
+        }
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;

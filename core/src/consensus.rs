@@ -97,6 +97,9 @@ impl SwitchForkDecision {
                     v,
                 ))
             }
+            (SwitchForkDecision::SameFork, VoteTransaction::TowerSync(t)) => Some(
+                vote_instruction::tower_sync(vote_account_pubkey, authorized_voter_pubkey, t),
+            ),
             (SwitchForkDecision::SwitchProof(switch_proof_hash), VoteTransaction::Vote(v)) => {
                 Some(vote_instruction::vote_switch(
                     vote_account_pubkey,
@@ -114,6 +117,14 @@ impl SwitchForkDecision {
                 v,
                 *switch_proof_hash,
             )),
+            (SwitchForkDecision::SwitchProof(switch_proof_hash), VoteTransaction::TowerSync(t)) => {
+                Some(vote_instruction::tower_sync_switch(
+                    vote_account_pubkey,
+                    authorized_voter_pubkey,
+                    t,
+                    *switch_proof_hash,
+                ))
+            }
             (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(v)) => {
                 Some(vote_instruction::compact_update_vote_state(
                     vote_account_pubkey,
@@ -221,7 +232,7 @@ pub(crate) enum BlockhashStatus {
     Blockhash(Hash),
 }
 
-#[frozen_abi(digest = "iZi6s9BvytU3HbRsibrAD71jwMLvrqHdCjVk6qKcVvd")]
+#[frozen_abi(digest = "679XkZ4upGc389SwqAsjs5tr2qB4wisqjbwtei7fGhxC")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     pub node_pubkey: Pubkey,

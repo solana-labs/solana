@@ -171,6 +171,43 @@ pub fn parse_vote(
                 }),
             })
         }
+        VoteInstruction::TowerSync(tower_sync) => {
+            check_num_vote_accounts(&instruction.accounts, 2)?;
+            let tower_sync = json!({
+                "lockouts": tower_sync.lockouts,
+                "root": tower_sync.root,
+                "hash": tower_sync.hash.to_string(),
+                "timestamp": tower_sync.timestamp,
+                "blockId": tower_sync.block_id,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "towersync".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "towerSync": tower_sync,
+                }),
+            })
+        }
+        VoteInstruction::TowerSyncSwitch(tower_sync, hash) => {
+            check_num_vote_accounts(&instruction.accounts, 2)?;
+            let tower_sync = json!({
+                "lockouts": tower_sync.lockouts,
+                "root": tower_sync.root,
+                "hash": tower_sync.hash.to_string(),
+                "timestamp": tower_sync.timestamp,
+                "blockId": tower_sync.block_id,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "towersyncswitch".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "towerSync": tower_sync,
+                    "hash": hash.to_string(),
+                }),
+            })
+        }
         VoteInstruction::Withdraw(lamports) => {
             check_num_vote_accounts(&instruction.accounts, 3)?;
             Ok(ParsedInstructionEnum {

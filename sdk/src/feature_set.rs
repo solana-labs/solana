@@ -781,6 +781,10 @@ pub mod remove_rounding_in_fee_calculation {
     solana_sdk::declare_id!("BtVN7YjDzNE6Dk7kTT7YTDgMNUZTNgiSJgsdzAeTg2jF");
 }
 
+pub mod enable_tower_sync_ix {
+    solana_sdk::declare_id!("tSynMCspg4xFiCj1v3TDb4c7crMR5tSBhLz4sF7rrNA");
+}
+
 pub mod deprecate_unused_legacy_vote_plumbing {
     solana_sdk::declare_id!("6Uf8S75PVh91MYgPQSHnjRAPQq6an5BDv9vomrCwDqLe");
 }
@@ -976,6 +980,7 @@ lazy_static! {
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
         (remove_rounding_in_fee_calculation::id(), "Removing unwanted rounding in fee calculation #34982"),
         (deprecate_unused_legacy_vote_plumbing::id(), "Deprecate unused legacy vote tx plumbing"),
+        (enable_tower_sync_ix::id(), "Enable tower sync vote instruction"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
