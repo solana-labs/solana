@@ -54,8 +54,9 @@ use {
     solana_ledger::shred::Shred,
     solana_measure::measure::Measure,
     solana_net_utils::{
-        bind_common, bind_common_in_range, bind_in_range, bind_two_in_range_with_offset,
-        find_available_port_in_range, multi_bind_in_range, PortRange,
+        bind_common, bind_common_in_range, bind_in_range, bind_in_range_with_config,
+        bind_more_with_config, bind_two_in_range_with_offset_and_config,
+        find_available_port_in_range, multi_bind_in_range, PortRange, SocketConfig,
     },
     solana_perf::{
         data_budget::DataBudget,
@@ -2782,8 +2783,8 @@ pub struct Sockets {
     pub serve_repair: UdpSocket,
     pub serve_repair_quic: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
-    pub tpu_quic: UdpSocket,
-    pub tpu_forwards_quic: UdpSocket,
+    pub tpu_quic: Vec<UdpSocket>,
+    pub tpu_forwards_quic: Vec<UdpSocket>,
 }
 
 pub struct NodeConfig {
@@ -2793,6 +2794,8 @@ pub struct NodeConfig {
     pub public_tpu_addr: Option<SocketAddr>,
     pub public_tpu_forwards_addr: Option<SocketAddr>,
 }
+
+const QUIC_ENDPOINTS: usize = 10;
 
 #[derive(Debug)]
 pub struct Node {
@@ -2811,15 +2814,45 @@ impl Node {
         let unspecified_bind_addr = format!("{:?}:0", IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let port_range = (1024, 65535);
 
+        let udp_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: true,
+        };
+        let quic_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: true,
+        };
         let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+            bind_two_in_range_with_offset_and_config(
+                localhost_ip_addr,
+                port_range,
+                QUIC_PORT_OFFSET,
+                udp_config.clone(),
+                quic_config.clone(),
+            )
+            .unwrap();
+        let quic_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: true,
+        };
+        let tpu_quic =
+            bind_more_with_config(tpu_quic, QUIC_ENDPOINTS, quic_config.clone()).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
         let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let tvu_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+            bind_two_in_range_with_offset_and_config(
+                localhost_ip_addr,
+                port_range,
+                QUIC_PORT_OFFSET,
+                udp_config,
+                quic_config.clone(),
+            )
+            .unwrap();
+        let tpu_forwards_quic =
+            bind_more_with_config(tpu_forwards_quic, QUIC_ENDPOINTS, quic_config).unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
@@ -2906,7 +2939,19 @@ impl Node {
         }
     }
     fn bind(bind_ip_addr: IpAddr, port_range: PortRange) -> (u16, UdpSocket) {
-        bind_in_range(bind_ip_addr, port_range).expect("Failed to bind")
+        let config = SocketConfig {
+            reuseaddr: false,
+            reuseport: false,
+        };
+        Self::bind_with_config(bind_ip_addr, port_range, config)
+    }
+
+    fn bind_with_config(
+        bind_ip_addr: IpAddr,
+        port_range: PortRange,
+        config: SocketConfig,
+    ) -> (u16, UdpSocket) {
+        bind_in_range_with_config(bind_ip_addr, port_range, config).expect("Failed to bind")
     }
 
     pub fn new_single_bind(
@@ -2919,10 +2964,36 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
+        let udp_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: false,
+        };
+        let quic_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: true,
+        };
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+            bind_two_in_range_with_offset_and_config(
+                bind_ip_addr,
+                port_range,
+                QUIC_PORT_OFFSET,
+                udp_config.clone(),
+                quic_config.clone(),
+            )
+            .unwrap();
+        let tpu_quic =
+            bind_more_with_config(tpu_quic, QUIC_ENDPOINTS, quic_config.clone()).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+            bind_two_in_range_with_offset_and_config(
+                bind_ip_addr,
+                port_range,
+                QUIC_PORT_OFFSET,
+                udp_config,
+                quic_config.clone(),
+            )
+            .unwrap();
+        let tpu_forwards_quic =
+            bind_more_with_config(tpu_forwards_quic, QUIC_ENDPOINTS, quic_config).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (_, repair) = Self::bind(bind_ip_addr, port_range);
@@ -3004,21 +3075,31 @@ impl Node {
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
 
-        let (_tpu_port_quic, tpu_quic) = Self::bind(
+        let quic_config = SocketConfig {
+            reuseaddr: false,
+            reuseport: true,
+        };
+        let (_tpu_port_quic, tpu_quic) = Self::bind_with_config(
             bind_ip_addr,
             (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
+            quic_config.clone(),
         );
+        let tpu_quic =
+            bind_more_with_config(tpu_quic, QUIC_ENDPOINTS, quic_config.clone()).unwrap();
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
 
-        let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
+        let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind_with_config(
             bind_ip_addr,
             (
                 tpu_forwards_port + QUIC_PORT_OFFSET,
                 tpu_forwards_port + QUIC_PORT_OFFSET + 1,
             ),
+            quic_config.clone(),
         );
+        let tpu_forwards_quic =
+            bind_more_with_config(tpu_forwards_quic, QUIC_ENDPOINTS, quic_config.clone()).unwrap();
 
         let (tpu_vote_port, tpu_vote_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 1).expect("tpu_vote multi_bind");

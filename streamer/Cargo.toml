@@ -13,6 +13,7 @@ edition = { workspace = true }
 async-channel = { workspace = true }
 bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
+futures  = { workspace = true }
 futures-util = { workspace = true }
 histogram = { workspace = true }
 indexmap = { workspace = true }
@@ -37,6 +38,7 @@ x509-parser = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+socket2 = { workspace = true }
 solana-logger = { workspace = true }
 
 [lib]
