@@ -20,7 +20,7 @@ use {
     solana_accounts_db::{
         account_storage::AccountStorageMap,
         accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
-        accounts_file::AccountsFileError,
+        accounts_file::{AccountsFile, AccountsFileError},
         append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
@@ -446,9 +446,6 @@ pub enum ArchiveSnapshotPackageError {
     #[error("failed to create staging dir inside '{1}': {0}")]
     CreateStagingDir(#[source] IoError, PathBuf),
 
-    #[error("failed to create accounts staging dir '{1}': {0}")]
-    CreateAccountsStagingDir(#[source] IoError, PathBuf),
-
     #[error("failed to create snapshot staging dir '{1}': {0}")]
     CreateSnapshotStagingDir(#[source] IoError, PathBuf),
 
@@ -464,18 +461,6 @@ pub enum ArchiveSnapshotPackageError {
     #[error("failed to symlink version file from '{1}' to '{2}': {0}")]
     SymlinkVersionFile(#[source] IoError, PathBuf, PathBuf),
 
-    #[error("failed to flush account storage file '{1}': {0}")]
-    FlushAccountStorageFile(#[source] AccountsFileError, PathBuf),
-
-    #[error("failed to canonicalize account storage file '{1}': {0}")]
-    CanonicalizeAccountStorageFile(#[source] IoError, PathBuf),
-
-    #[error("failed to symlink account storage file from '{1}' to '{2}': {0}")]
-    SymlinkAccountStorageFile(#[source] IoError, PathBuf, PathBuf),
-
-    #[error("account storage staging file is invalid '{0}'")]
-    InvalidAccountStorageStagingFile(PathBuf),
-
     #[error("failed to create archive file '{1}': {0}")]
     CreateArchiveFile(#[source] IoError, PathBuf),
 
@@ -485,8 +470,8 @@ pub enum ArchiveSnapshotPackageError {
     #[error("failed to archive snapshots dir: {0}")]
     ArchiveSnapshotsDir(#[source] IoError),
 
-    #[error("failed to archive accounts dir: {0}")]
-    ArchiveAccountsDir(#[source] IoError),
+    #[error("failed to archive account storage file '{1}': {0}")]
+    ArchiveAccountStorageFile(#[source] IoError, PathBuf),
 
     #[error("failed to archive snapshot: {0}")]
     FinishArchive(#[source] IoError),
@@ -762,13 +747,7 @@ pub fn archive_snapshot_package(
         ))
         .tempdir_in(tar_dir)
         .map_err(|err| E::CreateStagingDir(err, tar_dir.to_path_buf()))?;
-
     let staging_snapshots_dir = staging_dir.path().join(SNAPSHOTS_DIR);
-    let staging_accounts_dir = staging_dir.path().join(ACCOUNTS_DIR);
-
-    // Create staging/accounts/
-    fs::create_dir_all(&staging_accounts_dir)
-        .map_err(|err| E::CreateAccountsStagingDir(err, staging_accounts_dir.clone()))?;
 
     let slot_str = snapshot_package.slot().to_string();
     let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
@@ -800,29 +779,6 @@ pub fn archive_snapshot_package(
         E::SymlinkVersionFile(err, src_version_file, staging_version_file.clone())
     })?;
 
-    // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.snapshot_storages.iter() {
-        let storage_path = storage.get_path();
-        storage
-            .flush()
-            .map_err(|err| E::FlushAccountStorageFile(err, storage_path.clone()))?;
-        let staging_storage_path = staging_accounts_dir.join(AppendVec::file_name(
-            storage.slot(),
-            storage.append_vec_id(),
-        ));
-
-        // `src_storage_path` - The file path where the AppendVec itself is located
-        // `staging_storage_path` - The file path where the AppendVec will be placed in the staging directory.
-        let src_storage_path = fs::canonicalize(&storage_path)
-            .map_err(|err| E::CanonicalizeAccountStorageFile(err, storage_path))?;
-        symlink::symlink_file(&src_storage_path, &staging_storage_path).map_err(|err| {
-            E::SymlinkAccountStorageFile(err, src_storage_path, staging_storage_path.clone())
-        })?;
-        if !staging_storage_path.is_file() {
-            return Err(E::InvalidAccountStorageStagingFile(staging_storage_path).into());
-        }
-    }
-
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
@@ -845,9 +801,23 @@ pub fn archive_snapshot_package(
             archive
                 .append_dir_all(SNAPSHOTS_DIR, &staging_snapshots_dir)
                 .map_err(E::ArchiveSnapshotsDir)?;
-            archive
-                .append_dir_all(ACCOUNTS_DIR, &staging_accounts_dir)
-                .map_err(E::ArchiveAccountsDir)?;
+
+            for storage in &snapshot_package.snapshot_storages {
+                let path_in_archive = Path::new(ACCOUNTS_DIR).join(AccountsFile::file_name(
+                    storage.slot(),
+                    storage.append_vec_id(),
+                ));
+                let mut header = tar::Header::new_gnu();
+                header
+                    .set_path(path_in_archive)
+                    .map_err(|err| E::ArchiveAccountStorageFile(err, storage.get_path()))?;
+                header.set_size(storage.capacity());
+                header.set_cksum();
+                archive
+                    .append(&header, storage.accounts.data_for_archive())
+                    .map_err(|err| E::ArchiveAccountStorageFile(err, storage.get_path()))?;
+            }
+
             archive.into_inner().map_err(E::FinishArchive)?;
             Ok(())
         };

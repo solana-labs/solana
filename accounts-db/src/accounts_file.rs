@@ -17,7 +17,7 @@ use {
         clock::Slot,
         pubkey::Pubkey,
     },
-    std::{borrow::Borrow, mem, path::PathBuf},
+    std::{borrow::Borrow, io::Read, mem, path::PathBuf},
     thiserror::Error,
 };
 
@@ -238,6 +238,17 @@ impl AccountsFile {
                     infos
                 })
                 .ok(),
+        }
+    }
+
+    /// Returns a Read implementation suitable for use when archiving accounts files
+    pub fn data_for_archive(&self) -> impl Read + '_ {
+        match self {
+            Self::AppendVec(av) => av.data_for_archive(),
+            Self::TieredStorage(ts) => ts
+                .reader()
+                .expect("must be a reader when archiving")
+                .data_for_archive(),
         }
     }
 }

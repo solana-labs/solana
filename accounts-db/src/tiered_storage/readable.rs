@@ -108,4 +108,11 @@ impl TieredStorageReader {
             Self::Hot(hot) => hot.accounts(index_offset),
         }
     }
+
+    /// Returns a slice suitable for use when archiving tiered storages
+    pub fn data_for_archive(&self) -> &[u8] {
+        match self {
+            Self::Hot(hot) => hot.data_for_archive(),
+        }
+    }
 }

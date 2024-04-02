@@ -553,6 +553,11 @@ impl HotStorageReader {
         }
         Ok(accounts)
     }
+
+    /// Returns a slice suitable for use when archiving hot storages
+    pub fn data_for_archive(&self) -> &[u8] {
+        self.mmap.as_ref()
+    }
 }
 
 fn write_optional_fields(

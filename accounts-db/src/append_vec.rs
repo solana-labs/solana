@@ -733,6 +733,11 @@ impl AppendVec {
             Some(rv)
         }
     }
+
+    /// Returns a slice suitable for use when archiving append vecs
+    pub fn data_for_archive(&self) -> &[u8] {
+        self.map.as_ref()
+    }
 }
 
 #[cfg(test)]
