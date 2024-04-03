@@ -6487,7 +6487,7 @@ impl AccountsDb {
                 self.write_accounts_to_cache(slot, accounts, txn_iter)
             }
             StoreTo::Storage(storage) => {
-                if accounts.has_hash_and_write_version() {
+                if accounts.has_hash() {
                     self.write_accounts_to_storage(
                         slot,
                         storage,

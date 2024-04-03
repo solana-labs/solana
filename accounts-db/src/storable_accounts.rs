@@ -35,23 +35,16 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
         false
     }
 
-    /// true iff the impl can provide hash and write_version
-    /// Otherwise, hash and write_version have to be provided separately to store functions.
-    fn has_hash_and_write_version(&self) -> bool {
+    /// true iff the impl can provide hash
+    /// Otherwise, hash has to be provided separately to store functions.
+    fn has_hash(&self) -> bool {
         false
     }
 
     /// return hash for account at 'index'
-    /// Should only be called if 'has_hash_and_write_version' = true
+    /// Should only be called if 'has_hash' = true
     fn hash(&self, _index: usize) -> &AccountHash {
-        // this should never be called if has_hash_and_write_version returns false
-        unimplemented!();
-    }
-
-    /// return write_version for account at 'index'
-    /// Should only be called if 'has_hash_and_write_version' = true
-    fn write_version(&self, _index: usize) -> u64 {
-        // this should never be called if has_hash_and_write_version returns false
+        // this should never be called if has_hash returns false
         unimplemented!();
     }
 }
@@ -142,14 +135,11 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for (Slot, &'a [&'a StoredA
     fn len(&self) -> usize {
         self.1.len()
     }
-    fn has_hash_and_write_version(&self) -> bool {
+    fn has_hash(&self) -> bool {
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
-    }
-    fn write_version(&self, index: usize) -> u64 {
-        self.account(index).write_version()
     }
 }
 
@@ -237,14 +227,11 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
     fn contains_multiple_slots(&self) -> bool {
         self.contains_multiple_slots
     }
-    fn has_hash_and_write_version(&self) -> bool {
+    fn has_hash(&self) -> bool {
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
-    }
-    fn write_version(&self, index: usize) -> u64 {
-        self.account(index).write_version()
     }
 }
 
@@ -269,14 +256,11 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn len(&self) -> usize {
         self.1.len()
     }
-    fn has_hash_and_write_version(&self) -> bool {
+    fn has_hash(&self) -> bool {
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
         self.account(index).hash()
-    }
-    fn write_version(&self, index: usize) -> u64 {
-        self.account(index).write_version()
     }
 }
 
@@ -525,7 +509,7 @@ pub mod tests {
                             })
                             .collect::<Vec<_>>();
                         let storable = StorableAccountsBySlot::new(99, &slots_and_accounts[..]);
-                        assert!(storable.has_hash_and_write_version());
+                        assert!(storable.has_hash());
                         assert_eq!(99, storable.target_slot());
                         assert_eq!(entries0 != entries, storable.contains_multiple_slots());
                         (0..entries).for_each(|index| {
@@ -534,7 +518,6 @@ pub mod tests {
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
                             assert_eq!(storable.hash(index), raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);
-                            assert_eq!(storable.write_version(index), raw2[index].write_version());
                         })
                     }
                 }

@@ -52,7 +52,7 @@ impl<
 {
     /// used when accounts contains hash and write version already
     pub fn new(accounts: &'b U) -> Self {
-        assert!(accounts.has_hash_and_write_version());
+        assert!(accounts.has_hash());
         Self {
             accounts,
             hashes_and_write_versions: None,
@@ -66,7 +66,7 @@ impl<
         hashes: Vec<V>,
         write_versions: Vec<StoredMetaWriteVersion>,
     ) -> Self {
-        assert!(!accounts.has_hash_and_write_version());
+        assert!(!accounts.has_hash());
         assert_eq!(accounts.len(), hashes.len());
         assert_eq!(write_versions.len(), hashes.len());
         Self {
@@ -80,11 +80,8 @@ impl<
     pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash, StoredMetaWriteVersion) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
-        let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
-            (
-                self.accounts.hash(index),
-                self.accounts.write_version(index),
-            )
+        let (hash, write_version) = if self.accounts.has_hash() {
+            (self.accounts.hash(index), StoredMetaWriteVersion::default())
         } else {
             let item = self.hashes_and_write_versions.as_ref().unwrap();
             (item.0[index].borrow(), item.1[index])

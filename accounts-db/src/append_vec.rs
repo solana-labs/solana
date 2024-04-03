@@ -878,7 +878,7 @@ pub mod tests {
     static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
 
     #[test]
-    #[should_panic(expected = "accounts.has_hash_and_write_version()")]
+    #[should_panic(expected = "accounts.has_hash()")]
     fn test_storable_accounts_with_hashes_and_write_versions_new() {
         let account = AccountSharedData::default();
         // for (Slot, &'a [(&'a Pubkey, &'a T)])
