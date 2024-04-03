@@ -8642,8 +8642,6 @@ impl AccountsDb {
         if accounts.next().is_none() {
             return SlotIndexGenerationInfo::default();
         }
-        let accounts = storage.accounts.account_iter();
-
         let secondary = !self.account_indexes.is_empty();
 
         let mut rent_paying_accounts_by_partition = Vec::default();
@@ -8652,46 +8650,87 @@ impl AccountsDb {
         let mut amount_to_top_off_rent = 0;
         let mut stored_size_alive = 0;
 
-        let items = accounts.map(|stored_account| {
-            stored_size_alive += stored_account.stored_size();
-            let pubkey = stored_account.pubkey();
-            if secondary {
+        let (dirty_pubkeys, insert_time_us, mut generate_index_results) = if !secondary {
+            let mut items_local = Vec::default();
+            storage.accounts.scan_index(|info| {
+                stored_size_alive += info.stored_size_aligned;
+                if info.index_info.lamports > 0 {
+                    accounts_data_len += info.index_info.data_len;
+                }
+                items_local.push(info.index_info);
+            });
+            let items = items_local.into_iter().map(|info| {
+                if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
+                    &info.pubkey,
+                    info.lamports,
+                    info.data_len as usize,
+                    info.rent_epoch,
+                    info.executable,
+                    rent_collector,
+                ) {
+                    amount_to_top_off_rent += amount_to_top_off_rent_this_account;
+                    num_accounts_rent_paying += 1;
+                    // remember this rent-paying account pubkey
+                    rent_paying_accounts_by_partition.push(info.pubkey);
+                }
+
+                (
+                    info.pubkey,
+                    AccountInfo::new(
+                        StorageLocation::AppendVec(store_id, info.offset), // will never be cached
+                        info.lamports,
+                    ),
+                )
+            });
+            self.accounts_index
+                .insert_new_if_missing_into_primary_index(
+                    slot,
+                    storage.approx_stored_count(),
+                    items,
+                )
+        } else {
+            let accounts = storage.accounts.account_iter();
+            let items = accounts.map(|stored_account| {
+                stored_size_alive += stored_account.stored_size();
+                let pubkey = stored_account.pubkey();
                 self.accounts_index.update_secondary_indexes(
                     pubkey,
                     &stored_account,
                     &self.account_indexes,
                 );
-            }
-            if !stored_account.is_zero_lamport() {
-                accounts_data_len += stored_account.data().len() as u64;
-            }
+                if !stored_account.is_zero_lamport() {
+                    accounts_data_len += stored_account.data().len() as u64;
+                }
 
-            if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
-                pubkey,
-                stored_account.lamports(),
-                stored_account.data().len(),
-                stored_account.rent_epoch(),
-                stored_account.executable(),
-                rent_collector,
-            ) {
-                amount_to_top_off_rent += amount_to_top_off_rent_this_account;
-                num_accounts_rent_paying += 1;
-                // remember this rent-paying account pubkey
-                rent_paying_accounts_by_partition.push(*pubkey);
-            }
-
-            (
-                *pubkey,
-                AccountInfo::new(
-                    StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
+                    pubkey,
                     stored_account.lamports(),
-                ),
-            )
-        });
+                    stored_account.data().len(),
+                    stored_account.rent_epoch(),
+                    stored_account.executable(),
+                    rent_collector,
+                ) {
+                    amount_to_top_off_rent += amount_to_top_off_rent_this_account;
+                    num_accounts_rent_paying += 1;
+                    // remember this rent-paying account pubkey
+                    rent_paying_accounts_by_partition.push(*pubkey);
+                }
 
-        let (dirty_pubkeys, insert_time_us, mut generate_index_results) = self
-            .accounts_index
-            .insert_new_if_missing_into_primary_index(slot, storage.approx_stored_count(), items);
+                (
+                    *pubkey,
+                    AccountInfo::new(
+                        StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                        stored_account.lamports(),
+                    ),
+                )
+            });
+            self.accounts_index
+                .insert_new_if_missing_into_primary_index(
+                    slot,
+                    storage.approx_stored_count(),
+                    items,
+                )
+        };
 
         if let Some(duplicates_this_slot) = std::mem::take(&mut generate_index_results.duplicates) {
             // there were duplicate pubkeys in this same slot

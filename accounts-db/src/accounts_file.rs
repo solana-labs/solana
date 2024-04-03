@@ -6,7 +6,7 @@ use {
         },
         accounts_db::AccountsFileId,
         accounts_hash::AccountHash,
-        append_vec::{AppendVec, AppendVecError},
+        append_vec::{AppendVec, AppendVecError, IndexInfo},
         storable_accounts::StorableAccounts,
         tiered_storage::{
             error::TieredStorageError, hot::HOT_FORMAT, index::IndexOffset, TieredStorage,
@@ -178,6 +178,14 @@ impl AccountsFile {
     /// Return iterator for account metadata
     pub fn account_iter(&self) -> AccountsFileIter {
         AccountsFileIter::new(self)
+    }
+
+    /// iterate over all entries to put in index
+    pub(crate) fn scan_index(&self, callback: impl FnMut(IndexInfo)) {
+        match self {
+            Self::AppendVec(av) => av.scan_index(callback),
+            Self::TieredStorage(_ts) => unimplemented!(),
+        }
     }
 
     /// iterate over all pubkeys

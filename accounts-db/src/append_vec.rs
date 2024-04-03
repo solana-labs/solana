@@ -197,6 +197,26 @@ impl<'append_vec> ReadableAccount for AppendVecStoredAccountMeta<'append_vec> {
     }
 }
 
+/// info from an entry useful for building an index
+pub(crate) struct IndexInfo {
+    /// size of entry, aligned to next u64
+    /// This matches the return of `get_account`
+    pub stored_size_aligned: usize,
+    /// info on the entry
+    pub index_info: IndexInfoInner,
+}
+
+/// info from an entry useful for building an index
+pub(crate) struct IndexInfoInner {
+    /// offset to this entry
+    pub offset: usize,
+    pub pubkey: Pubkey,
+    pub lamports: u64,
+    pub rent_epoch: Epoch,
+    pub executable: bool,
+    pub data_len: u64,
+}
+
 /// offsets to help navigate the persisted format of `AppendVec`
 #[derive(Debug)]
 struct AccountOffsets {
@@ -204,6 +224,8 @@ struct AccountOffsets {
     offset_to_end_of_data: usize,
     /// offset to the next account. This will be aligned.
     next_account_offset: usize,
+    /// # of bytes (aligned) to store this account, including variable sized data
+    stored_size_aligned: usize,
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
@@ -598,17 +620,50 @@ impl AppendVec {
     /// the next account is then aligned on a 64 bit boundary.
     /// With these helpers, we can skip over reading some of the data depending on what the caller wants.
     fn next_account_offset(start_offset: usize, stored_meta: &StoredMeta) -> AccountOffsets {
-        let start_of_data = start_offset
-            + std::mem::size_of::<StoredMeta>()
-            + std::mem::size_of::<AccountMeta>()
-            + std::mem::size_of::<AccountHash>();
-        let aligned_data_len = u64_align!(stored_meta.data_len as usize);
-        let next_account_offset = start_of_data + aligned_data_len;
-        let offset_to_end_of_data = start_of_data + stored_meta.data_len as usize;
+        let stored_size_unaligned = STORE_META_OVERHEAD + stored_meta.data_len as usize;
+        let stored_size_aligned = u64_align!(stored_size_unaligned);
+        let offset_to_end_of_data = start_offset + stored_size_unaligned;
+        let next_account_offset = start_offset + stored_size_aligned;
 
         AccountOffsets {
             next_account_offset,
             offset_to_end_of_data,
+            stored_size_aligned,
+        }
+    }
+
+    /// Iterate over all accounts and call `callback` with `IndexInfo` for each.
+    /// This fn can help generate an index of the data in this storage.
+    pub(crate) fn scan_index(&self, mut callback: impl FnMut(IndexInfo)) {
+        let mut offset = 0;
+        loop {
+            let Some((stored_meta, next)) = self.get_type::<StoredMeta>(offset) else {
+                // eof
+                break;
+            };
+            let Some((account_meta, _)) = self.get_type::<AccountMeta>(next) else {
+                // eof
+                break;
+            };
+            let next = Self::next_account_offset(offset, stored_meta);
+            if next.offset_to_end_of_data > self.len() {
+                // data doesn't fit, so don't include this account
+                break;
+            }
+            callback(IndexInfo {
+                index_info: {
+                    IndexInfoInner {
+                        pubkey: stored_meta.pubkey,
+                        lamports: account_meta.lamports,
+                        offset,
+                        data_len: stored_meta.data_len,
+                        executable: account_meta.executable,
+                        rent_epoch: account_meta.rent_epoch,
+                    }
+                },
+                stored_size_aligned: next.stored_size_aligned,
+            });
+            offset = next.next_account_offset;
         }
     }
 
