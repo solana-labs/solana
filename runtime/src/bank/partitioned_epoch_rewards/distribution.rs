@@ -136,8 +136,9 @@ impl Bank {
 mod tests {
     use {
         super::*,
-        crate::{
-            bank::tests::create_genesis_config, epoch_rewards_hasher::hash_rewards_into_partitions,
+        crate::bank::{
+            partitioned_epoch_rewards::epoch_rewards_hasher::hash_rewards_into_partitions,
+            tests::create_genesis_config,
         },
         rand::Rng,
         solana_sdk::{

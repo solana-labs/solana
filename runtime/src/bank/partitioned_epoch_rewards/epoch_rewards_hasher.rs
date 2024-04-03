@@ -3,7 +3,7 @@ use {
     solana_sdk::{epoch_rewards_hasher::EpochRewardsHasher, hash::Hash},
 };
 
-pub(crate) fn hash_rewards_into_partitions(
+pub(in crate::bank::partitioned_epoch_rewards) fn hash_rewards_into_partitions(
     stake_rewards: StakeRewards,
     parent_blockhash: &Hash,
     num_partitions: usize,
@@ -25,7 +25,13 @@ pub(crate) fn hash_rewards_into_partitions(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_accounts_db::stake_rewards::StakeReward, std::collections::HashMap};
+    use {
+        super::*,
+        crate::bank::{tests::create_genesis_config, Bank},
+        solana_accounts_db::stake_rewards::StakeReward,
+        solana_sdk::{epoch_schedule::EpochSchedule, native_token::LAMPORTS_PER_SOL},
+        std::collections::HashMap,
+    };
 
     #[test]
     fn test_hash_rewards_into_partitions() {
@@ -83,6 +89,30 @@ mod tests {
         for bucket in stake_rewards_in_bucket.iter().take(num_partitions) {
             assert!(bucket.is_empty());
         }
+    }
+
+    /// Test that reward partition range panics when passing out of range partition index
+    #[test]
+    #[should_panic(expected = "index out of bounds: the len is 10 but the index is 15")]
+    fn test_get_stake_rewards_partition_range_panic() {
+        let (mut genesis_config, _mint_keypair) =
+            create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+
+        // simulate 40K - 1 rewards, the expected num of credit blocks should be 10.
+        let expected_num = 40959;
+        let stake_rewards = (0..expected_num)
+            .map(|_| StakeReward::new_random())
+            .collect::<Vec<_>>();
+
+        let stake_rewards_bucket =
+            hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
+
+        bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+
+        // This call should panic, i.e. 15 is out of the num_credit_blocks
+        let _range = &stake_rewards_bucket[15];
     }
 
     fn compare(a: &StakeRewards, b: &StakeRewards) {

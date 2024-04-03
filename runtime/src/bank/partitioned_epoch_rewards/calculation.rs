@@ -1,14 +1,12 @@
 use {
     super::{
-        Bank, CalculateRewardsAndDistributeVoteRewardsResult, EpochRewardCalculateParamInfo,
+        epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
+        CalculateRewardsAndDistributeVoteRewardsResult, EpochRewardCalculateParamInfo,
         PartitionedRewardsCalculation, StakeRewardCalculationPartitioned, VoteRewardsAccounts,
     },
-    crate::{
-        bank::{
-            PrevEpochInflationRewards, RewardCalcTracer, RewardCalculationEvent, RewardsMetrics,
-            StakeRewardCalculation, VoteAccount,
-        },
-        epoch_rewards_hasher::hash_rewards_into_partitions,
+    crate::bank::{
+        PrevEpochInflationRewards, RewardCalcTracer, RewardCalculationEvent, RewardsMetrics,
+        StakeRewardCalculation, VoteAccount,
     },
     log::info,
     rayon::{
