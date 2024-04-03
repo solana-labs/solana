@@ -15,8 +15,8 @@ use {
             },
             mmap_utils::{get_pod, get_slice},
             owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
-            StorableAccounts, StorableAccountsWithHashesAndWriteVersions, TieredStorageError,
-            TieredStorageFormat, TieredStorageResult,
+            StorableAccounts, StorableAccountsWithHashes, TieredStorageError, TieredStorageFormat,
+            TieredStorageResult,
         },
     },
     bytemuck::{Pod, Zeroable},
@@ -634,7 +634,7 @@ impl HotStorageWriter {
         V: Borrow<AccountHash>,
     >(
         &mut self,
-        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
         skip: usize,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
         let mut footer = new_hot_footer();
@@ -648,7 +648,7 @@ impl HotStorageWriter {
         let total_input_accounts = len - skip;
         let mut stored_infos = Vec::with_capacity(total_input_accounts);
         for i in skip..len {
-            let (account, address, _account_hash, _write_version) = accounts.get(i);
+            let (account, address, _account_hash) = accounts.get(i);
             let index_entry = AccountIndexWriterEntry {
                 address,
                 offset: HotAccountOffset::new(cursor)?,
@@ -1372,17 +1372,8 @@ pub mod tests {
             .take(account_data_sizes.len())
             .collect();
 
-        let write_versions: Vec<_> = accounts
-            .iter()
-            .map(|account| account.0.write_version_obsolete)
-            .collect();
-
         let storable_accounts =
-            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                &account_data,
-                hashes.clone(),
-                write_versions.clone(),
-            );
+            StorableAccountsWithHashes::new_with_hashes(&account_data, hashes.clone());
 
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("test_write_account_and_index_blocks");
@@ -1401,7 +1392,7 @@ pub mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, _account_hash, _write_version) = storable_accounts.get(i);
+            let (account, address, _account_hash) = storable_accounts.get(i);
             verify_test_account(&stored_meta, account, address);
 
             assert_eq!(i + 1, next.0 as usize);
@@ -1419,8 +1410,7 @@ pub mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, _account_hash, _write_version) =
-                storable_accounts.get(stored_info.offset);
+            let (account, address, _account_hash) = storable_accounts.get(stored_info.offset);
             verify_test_account(&stored_meta, account, address);
         }
 
@@ -1429,7 +1419,7 @@ pub mod tests {
 
         // first, we verify everything
         for (i, stored_meta) in accounts.iter().enumerate() {
-            let (account, address, _account_hash, _write_version) = storable_accounts.get(i);
+            let (account, address, _account_hash) = storable_accounts.get(i);
             verify_test_account(stored_meta, account, address);
         }
 

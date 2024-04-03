@@ -4,9 +4,7 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_accounts_db::{
-        account_storage::meta::{
-            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMeta,
-        },
+        account_storage::meta::{StorableAccountsWithHashes, StoredAccountInfo, StoredMeta},
         accounts_hash::AccountHash,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
@@ -39,12 +37,7 @@ fn append_account(
     let accounts = [(&storage_meta.pubkey, account)];
     let slice = &accounts[..];
     let accounts = (slot_ignored, slice);
-    let storable_accounts =
-        StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-            &accounts,
-            vec![&hash],
-            vec![storage_meta.write_version_obsolete],
-        );
+    let storable_accounts = StorableAccountsWithHashes::new_with_hashes(&accounts, vec![&hash]);
     let res = vec.append_accounts(&storable_accounts, 0);
     res.and_then(|res| res.first().cloned())
 }

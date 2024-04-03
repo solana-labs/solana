@@ -26,7 +26,7 @@ use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
         account_storage::{
-            meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta},
+            meta::{StorableAccountsWithHashes, StoredAccountMeta},
             AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
@@ -5984,7 +5984,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         storage: &AccountStorageEntry,
-        accounts_and_meta_to_store: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts_and_meta_to_store: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
     ) -> Vec<AccountInfo> {
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
         let mut total_append_accounts_us = 0;
@@ -6491,21 +6491,14 @@ impl AccountsDb {
                     self.write_accounts_to_storage(
                         slot,
                         storage,
-                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &AccountHash>::new(
-                            accounts,
-                        ),
+                        &StorableAccountsWithHashes::<'_, '_, _, _, &AccountHash>::new(accounts),
                     )
                 } else {
-                    let write_versions = vec![0; accounts.len()];
                     match hashes {
                         Some(hashes) => self.write_accounts_to_storage(
                             slot,
                             storage,
-                            &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                                accounts,
-                                hashes,
-                                write_versions,
-                            ),
+                            &StorableAccountsWithHashes::new_with_hashes(accounts, hashes),
                         ),
                         None => {
                             // hash any accounts where we were lazy in calculating the hash
@@ -6513,11 +6506,9 @@ impl AccountsDb {
                             let len = accounts.len();
                             let mut hashes = Vec::with_capacity(len);
                             for index in 0..accounts.len() {
-                                let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                                let hash = Self::hash_account(
-                                    account,
-                                    pubkey,
-                                );
+                                let (pubkey, account) =
+                                    (accounts.pubkey(index), accounts.account(index));
+                                let hash = Self::hash_account(account, pubkey);
                                 hashes.push(hash);
                             }
                             hash_time.stop();
@@ -6526,10 +6517,10 @@ impl AccountsDb {
                                 .fetch_add(hash_time.as_us(), Ordering::Relaxed);
 
                             self.write_accounts_to_storage(
-                                    slot,
-                                    storage,
-                                    &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(accounts, hashes, write_versions),
-                                )
+                                slot,
+                                storage,
+                                &StorableAccountsWithHashes::new_with_hashes(accounts, hashes),
+                            )
                         }
                     }
                 }
@@ -9543,7 +9534,7 @@ pub mod tests {
         super::*,
         crate::{
             account_info::StoredSize,
-            account_storage::meta::{AccountMeta, StoredMeta, StoredMetaWriteVersion},
+            account_storage::meta::{AccountMeta, StoredMeta},
             accounts_file::AccountsFileProvider,
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
@@ -9689,13 +9680,7 @@ pub mod tests {
                 .iter()
                 .map(|_| AccountHash(Hash::default()))
                 .collect::<Vec<_>>();
-            let write_versions = data.iter().map(|_| 0).collect::<Vec<_>>();
-            let append =
-                StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                    &storable,
-                    hashes,
-                    write_versions,
-                );
+            let append = StorableAccountsWithHashes::new_with_hashes(&storable, hashes);
 
             // construct append vec with account to generate an index from
             append_vec.accounts.append_accounts(&append, 0);
@@ -10174,13 +10159,8 @@ pub mod tests {
                 let slice = &accounts[..];
                 let account_data = (slot, slice);
                 let hashes = (0..account_data.len()).map(|_| &hash).collect();
-                let write_versions = (0..account_data.len()).map(|_| 0).collect();
                 let storable_accounts =
-                    StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                        &account_data,
-                        hashes,
-                        write_versions,
-                    );
+                    StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
                 copied_storage
                     .accounts
                     .append_accounts(&storable_accounts, 0);
@@ -10220,13 +10200,8 @@ pub mod tests {
                 let slice = &accounts[..];
                 let account_data = (slot, slice);
                 let hashes = (0..account_data.len()).map(|_| &hash).collect();
-                let write_versions = (0..account_data.len()).map(|_| 0).collect();
                 let storable_accounts =
-                    StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                        &account_data,
-                        hashes,
-                        write_versions,
-                    );
+                    StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
                 copied_storage
                     .accounts
                     .append_accounts(&storable_accounts, 0);
@@ -10631,7 +10606,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10686,7 +10661,6 @@ pub mod tests {
         storage: &AccountStorageEntry,
         pubkey: &Pubkey,
         account: &AccountSharedData,
-        write_version: StoredMetaWriteVersion,
         mark_alive: bool,
         add_to_index: Option<&AccountInfoAccountsIndex>,
     ) {
@@ -10696,11 +10670,7 @@ pub mod tests {
         let account_data = (slot, slice);
         let hash = AccountHash(Hash::default());
         let storable_accounts =
-            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                &account_data,
-                vec![&hash],
-                vec![write_version],
-            );
+            StorableAccountsWithHashes::new_with_hashes(&account_data, vec![&hash]);
         let stored_accounts_info = storage
             .accounts
             .append_accounts(&storable_accounts, 0)
@@ -10756,7 +10726,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10785,7 +10755,6 @@ pub mod tests {
     fn append_sample_data_to_storage(
         storage: &Arc<AccountStorageEntry>,
         pubkey: &Pubkey,
-        write_version: StoredMetaWriteVersion,
         mark_alive: bool,
         account_data_size: Option<u64>,
     ) {
@@ -10794,29 +10763,20 @@ pub mod tests {
             account_data_size.unwrap_or(48) as usize,
             AccountSharedData::default().owner(),
         );
-        append_single_account_with_default_hash(
-            storage,
-            pubkey,
-            &acc,
-            write_version,
-            mark_alive,
-            None,
-        );
+        append_single_account_with_default_hash(storage, pubkey, &acc, mark_alive, None);
     }
 
     fn sample_storage_with_entries(
         tf: &TempFile,
-        write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
         mark_alive: bool,
     ) -> Arc<AccountStorageEntry> {
-        sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0, mark_alive, None)
+        sample_storage_with_entries_id(tf, slot, pubkey, 0, mark_alive, None)
     }
 
     fn sample_storage_with_entries_id_fill_percentage(
         tf: &TempFile,
-        write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
         id: AccountsFileId,
@@ -10842,13 +10802,12 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        append_sample_data_to_storage(&arc, pubkey, write_version, mark_alive, account_data_size);
+        append_sample_data_to_storage(&arc, pubkey, mark_alive, account_data_size);
         arc
     }
 
     fn sample_storage_with_entries_id(
         tf: &TempFile,
-        write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
         id: AccountsFileId,
@@ -10857,7 +10816,6 @@ pub mod tests {
     ) -> Arc<AccountStorageEntry> {
         sample_storage_with_entries_id_fill_percentage(
             tf,
-            write_version,
             slot,
             pubkey,
             id,
@@ -10875,12 +10833,10 @@ pub mod tests {
         let tf = crate::append_vec::test_utils::get_append_vec_path(
             "test_accountsdb_scan_account_storage_no_bank",
         );
-        let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let mark_alive = false;
-        let storage =
-            sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1, mark_alive);
+        let storage = sample_storage_with_entries(&tf, slot_expected, &pubkey1, mark_alive);
         let lamports = storage.accounts.account_iter().next().unwrap().lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
@@ -15185,12 +15141,10 @@ pub mod tests {
 
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
         let hashes = vec![AccountHash(Hash::default()); 1];
-        let write_version = vec![0; 1];
         storage.accounts.append_accounts(
-            &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+            &StorableAccountsWithHashes::new_with_hashes(
                 &(slot0, &[(&shared_key, &account)][..]),
                 hashes,
-                write_version,
             ),
             0,
         );
@@ -15250,12 +15204,10 @@ pub mod tests {
         let slot0 = 0;
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
         let hashes = vec![AccountHash(Hash::default()); 2];
-        let write_version = vec![0; 2];
         storage.accounts.append_accounts(
-            &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+            &StorableAccountsWithHashes::new_with_hashes(
                 &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
                 hashes,
-                write_version,
             ),
             0,
         );
@@ -16251,11 +16203,9 @@ pub mod tests {
             let tf = crate::append_vec::test_utils::get_append_vec_path(
                 "test_accountsdb_scan_account_storage_no_bank",
             );
-            let write_version1 = 0;
             let pubkey1 = solana_sdk::pubkey::new_rand();
             let mark_alive = false;
-            let storage =
-                sample_storage_with_entries(&tf, write_version1, slot, &pubkey1, mark_alive);
+            let storage = sample_storage_with_entries(&tf, slot, &pubkey1, mark_alive);
 
             let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash = hasher.finish();
@@ -16269,13 +16219,7 @@ pub mod tests {
                                      // can't assert hash here - it is a function of mod date
             assert!(load);
             let mut hasher = hash_map::DefaultHasher::new();
-            append_sample_data_to_storage(
-                &storage,
-                &solana_sdk::pubkey::new_rand(),
-                write_version1,
-                false,
-                None,
-            );
+            append_sample_data_to_storage(&storage, &solana_sdk::pubkey::new_rand(), false, None);
             let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash3 = hasher.finish();
             assert_ne!(hash2, hash3); // moddate and written size changed
@@ -17298,7 +17242,6 @@ pub mod tests {
         });
         let tf = tf.unwrap_or_else(|| local_tf.as_ref().unwrap());
 
-        let write_version1 = 0;
         let starting_id = db
             .storage
             .iter()
@@ -17310,7 +17253,6 @@ pub mod tests {
             let pubkey1 = solana_sdk::pubkey::new_rand();
             let storage = sample_storage_with_entries_id_fill_percentage(
                 tf,
-                write_version1,
                 starting_slot + (i as Slot),
                 &pubkey1,
                 id,
@@ -17347,7 +17289,6 @@ pub mod tests {
         });
         let tf = tf.unwrap_or_else(|| local_tf.as_ref().unwrap());
 
-        let write_version1 = 0;
         let starting_id = db
             .storage
             .iter()
@@ -17359,7 +17300,6 @@ pub mod tests {
             let pubkey1 = solana_sdk::pubkey::new_rand();
             let storage = sample_storage_with_entries_id(
                 tf,
-                write_version1,
                 starting_slot + (i as Slot),
                 &pubkey1,
                 id,
@@ -17513,9 +17453,8 @@ pub mod tests {
         let tf = crate::append_vec::test_utils::get_append_vec_path(
             "test_should_move_to_ancient_append_vec",
         );
-        let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let storage = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1, false);
+        let storage = sample_storage_with_entries(&tf, slot5, &pubkey1, false);
         let mut current_ancient = CurrentAncientAccountsFile::default();
 
         let should_move = db.should_move_to_ancient_accounts_file(
@@ -17659,7 +17598,7 @@ pub mod tests {
 
     fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>, mark_alive: bool) {
         for _ in 0..100 {
-            append_sample_data_to_storage(ancient, &Pubkey::default(), 0, mark_alive, None);
+            append_sample_data_to_storage(ancient, &Pubkey::default(), mark_alive, None);
         }
         // since we're not adding to the index, this is how we specify that all these accounts are alive
         adjust_alive_bytes(ancient, ancient.capacity() as usize);

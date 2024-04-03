@@ -1174,7 +1174,6 @@ pub mod tests {
                                     storage,
                                     &pk,
                                     &account,
-                                    0,
                                     true,
                                     Some(&db.accounts_index),
                                 );
@@ -1282,7 +1281,6 @@ pub mod tests {
                                     storage,
                                     &pk,
                                     &account,
-                                    0,
                                     true,
                                     Some(&db.accounts_index),
                                 );
@@ -1514,12 +1512,10 @@ pub mod tests {
                                 storages.iter().for_each(|storage| {
                                     let pk = solana_sdk::pubkey::new_rand();
                                     let alive = false;
-                                    let write_version = 0;
                                     append_single_account_with_default_hash(
                                         storage,
                                         &pk,
                                         &AccountSharedData::default(),
-                                        write_version,
                                         alive,
                                         Some(&db.accounts_index),
                                     );
@@ -1663,7 +1659,6 @@ pub mod tests {
                 &storage,
                 &pk_with_1_ref,
                 &account_with_1_ref,
-                0,
                 true,
                 Some(&db.accounts_index),
             );
@@ -1676,7 +1671,6 @@ pub mod tests {
                 &ignored_storage,
                 pk_with_2_refs,
                 &account_with_2_refs.to_account_shared_data(),
-                0,
                 true,
                 Some(&db.accounts_index),
             );
@@ -1843,7 +1837,6 @@ pub mod tests {
                 &storage,
                 &pk_with_1_ref,
                 &account_with_1_ref,
-                0,
                 true,
                 Some(&db.accounts_index),
             );

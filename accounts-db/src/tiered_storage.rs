@@ -14,7 +14,7 @@ mod test_utils;
 
 use {
     crate::{
-        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo},
+        account_storage::meta::{StorableAccountsWithHashes, StoredAccountInfo},
         accounts_hash::AccountHash,
         storable_accounts::StorableAccounts,
     },
@@ -119,7 +119,7 @@ impl TieredStorage {
         V: Borrow<AccountHash>,
     >(
         &self,
-        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
@@ -180,7 +180,6 @@ impl TieredStorage {
 mod tests {
     use {
         super::*,
-        crate::account_storage::meta::StoredMetaWriteVersion,
         file::TieredStorageMagicNumber,
         footer::TieredStorageFooter,
         hot::HOT_FORMAT,
@@ -213,11 +212,7 @@ mod tests {
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
         let account_data = (slot_ignored, account_refs.as_slice());
         let storable_accounts =
-            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                &account_data,
-                Vec::<AccountHash>::new(),
-                Vec::<StoredMetaWriteVersion>::new(),
-            );
+            StorableAccountsWithHashes::new_with_hashes(&account_data, Vec::<AccountHash>::new());
 
         let result = tiered_storage.write_accounts(&storable_accounts, 0, &HOT_FORMAT);
 
@@ -350,17 +345,8 @@ mod tests {
         let hashes: Vec<_> = std::iter::repeat_with(|| AccountHash(Hash::new_unique()))
             .take(account_data_sizes.len())
             .collect();
-        let write_versions: Vec<_> = accounts
-            .iter()
-            .map(|account| account.0.write_version_obsolete)
-            .collect();
 
-        let storable_accounts =
-            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                &account_data,
-                hashes,
-                write_versions,
-            );
+        let storable_accounts = StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
 
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join(path_suffix);
@@ -373,7 +359,7 @@ mod tests {
 
         let mut expected_accounts_map = HashMap::new();
         for i in 0..num_accounts {
-            let (account, address, _account_hash, _write_version) = storable_accounts.get(i);
+            let (account, address, _account_hash) = storable_accounts.get(i);
             expected_accounts_map.insert(address, account);
         }
 

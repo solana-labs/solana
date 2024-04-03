@@ -1,9 +1,7 @@
 use {
     crate::{
         account_info::AccountInfo,
-        account_storage::meta::{
-            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
-        },
+        account_storage::meta::{StorableAccountsWithHashes, StoredAccountInfo, StoredAccountMeta},
         accounts_db::AccountsFileId,
         accounts_hash::AccountHash,
         append_vec::{AppendVec, AppendVecError, IndexInfo},
@@ -229,7 +227,7 @@ impl AccountsFile {
         V: Borrow<AccountHash>,
     >(
         &self,
-        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         match self {

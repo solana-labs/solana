@@ -2,7 +2,7 @@
 use {
     criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput},
     solana_accounts_db::{
-        account_storage::meta::StorableAccountsWithHashesAndWriteVersions,
+        account_storage::meta::StorableAccountsWithHashes,
         accounts_hash::AccountHash,
         append_vec::{self, AppendVec},
         tiered_storage::hot::HotStorageWriter,
@@ -46,12 +46,10 @@ fn bench_write_accounts_file(c: &mut Criterion) {
         .collect();
         let accounts_refs: Vec<_> = accounts.iter().collect();
         let accounts_data = (Slot::MAX, accounts_refs.as_slice());
-        let storable_accounts =
-            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                &accounts_data,
-                vec![AccountHash(Hash::default()); accounts_count],
-                vec![0; accounts_count],
-            );
+        let storable_accounts = StorableAccountsWithHashes::new_with_hashes(
+            &accounts_data,
+            vec![AccountHash(Hash::default()); accounts_count],
+        );
 
         group.bench_function(BenchmarkId::new("append_vec", accounts_count), |b| {
             b.iter_batched_ref(

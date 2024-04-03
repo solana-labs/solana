@@ -25,8 +25,7 @@ lazy_static! {
 /// This struct contains what is needed to store accounts to a storage
 /// 1. account & pubkey (StorableAccounts)
 /// 2. hash per account (Maybe in StorableAccounts, otherwise has to be passed in separately)
-/// 3. write version per account (Maybe in StorableAccounts, otherwise has to be passed in separately)
-pub struct StorableAccountsWithHashesAndWriteVersions<
+pub struct StorableAccountsWithHashes<
     'a: 'b,
     'b,
     T: ReadableAccount + Sync + 'b,
@@ -35,10 +34,10 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
 > {
     /// accounts to store
     /// always has pubkey and account
-    /// may also have hash and write_version per account
+    /// may also have hash per account
     pub(crate) accounts: &'b U,
-    /// if accounts does not have hash and write version, this has a hash and write version per account
-    hashes_and_write_versions: Option<(Vec<V>, Vec<StoredMetaWriteVersion>)>,
+    /// if accounts does not have hash, this has a hash per account
+    hashes: Option<Vec<V>>,
     _phantom: PhantomData<&'a T>,
 }
 
@@ -48,45 +47,40 @@ impl<
         T: ReadableAccount + Sync + 'b,
         U: StorableAccounts<'a, T>,
         V: Borrow<AccountHash>,
-    > StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
+    > StorableAccountsWithHashes<'a, 'b, T, U, V>
 {
-    /// used when accounts contains hash and write version already
+    /// used when accounts contains hash already
     pub fn new(accounts: &'b U) -> Self {
         assert!(accounts.has_hash());
         Self {
             accounts,
-            hashes_and_write_versions: None,
+            hashes: None,
             _phantom: PhantomData,
         }
     }
-    /// used when accounts does NOT contains hash or write version
-    /// In this case, hashes and write_versions have to be passed in separately and zipped together.
-    pub fn new_with_hashes_and_write_versions(
-        accounts: &'b U,
-        hashes: Vec<V>,
-        write_versions: Vec<StoredMetaWriteVersion>,
-    ) -> Self {
+    /// used when accounts does NOT contains hash
+    /// In this case, hashes have to be passed in separately.
+    pub fn new_with_hashes(accounts: &'b U, hashes: Vec<V>) -> Self {
         assert!(!accounts.has_hash());
         assert_eq!(accounts.len(), hashes.len());
-        assert_eq!(write_versions.len(), hashes.len());
         Self {
             accounts,
-            hashes_and_write_versions: Some((hashes, write_versions)),
+            hashes: Some(hashes),
             _phantom: PhantomData,
         }
     }
 
     /// get all account fields at 'index'
-    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash, StoredMetaWriteVersion) {
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
-        let (hash, write_version) = if self.accounts.has_hash() {
-            (self.accounts.hash(index), StoredMetaWriteVersion::default())
+        let hash = if self.accounts.has_hash() {
+            self.accounts.hash(index)
         } else {
-            let item = self.hashes_and_write_versions.as_ref().unwrap();
-            (item.0[index].borrow(), item.1[index])
+            let item = self.hashes.as_ref().unwrap();
+            item[index].borrow()
         };
-        (account, pubkey, hash, write_version)
+        (account, pubkey, hash)
     }
 
     /// None if account at index has lamports == 0
