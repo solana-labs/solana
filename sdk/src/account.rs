@@ -6,9 +6,8 @@ use {
     crate::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         clock::{Epoch, INITIAL_RENT_EPOCH},
-        feature_set::{deprecate_executable_meta_update_in_bpf_loader, FeatureSet},
         lamports::LamportsError,
-        loader_v4, native_loader,
+        loader_v4,
         pubkey::Pubkey,
     },
     serde::{
@@ -40,9 +39,6 @@ pub struct Account {
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
-    ///
-    /// When feature `deprecate_executable_meta_update_in_bpf_loader` is active,
-    /// `executable` is deprecated, please use `fn is_executable(&account)` instead.
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
@@ -766,94 +762,6 @@ pub const PROGRAM_OWNERS: &[Pubkey] = &[
     bpf_loader_deprecated::id(),
     loader_v4::id(),
 ];
-
-const LOADER_V4_STATUS_BYTE_OFFSET: usize = 40;
-
-/// Create executable account meta data based on account's `owner`.
-///
-/// This function is only used for testing and an optimization during
-/// transaction loading.
-///
-/// When the program account is already present in the program cache, we don't
-/// need to load the full account data during transaction loading. Instead, all
-/// we need is a minimal executable account meta data, which is what this
-/// function returns.
-pub fn create_executable_meta(owner: &Pubkey) -> &[u8] {
-    // For upgradable program account, only `UpgradeableLoaderState::Program`
-    // variant (i.e. discriminant = 2) should *executable*, which means the
-    // discriminant for the enum at byte offset 0 in account data is 2.
-    const EXECUTABLE_META_FOR_BPF_LOADER_UPGRADABLE: [u8; 1] = [2];
-
-    // For loader v4 program, when LoaderV4Status (byte_offset = 40 in account
-    // data) is set, the program is executable.
-    const fn get_executable_meta_for_loader_v4() -> [u8; 41] {
-        let mut v = [0; LOADER_V4_STATUS_BYTE_OFFSET + 1];
-        v[LOADER_V4_STATUS_BYTE_OFFSET] = 1;
-        v
-    }
-    const EXECUTABLE_META_FOR_LOADER_V4: [u8; LOADER_V4_STATUS_BYTE_OFFSET + 1] =
-        get_executable_meta_for_loader_v4();
-
-    // For other owners, simple returns a 1 byte array would make it executable.
-    const DEFAULT_EXECUTABLE_META: [u8; 1] = [1];
-
-    if bpf_loader_upgradeable::check_id(owner) {
-        &EXECUTABLE_META_FOR_BPF_LOADER_UPGRADABLE
-    } else if loader_v4::check_id(owner) {
-        &EXECUTABLE_META_FOR_LOADER_V4
-    } else {
-        &DEFAULT_EXECUTABLE_META
-    }
-}
-
-/// Return true if the account program is executable.
-pub fn is_executable(account: &impl ReadableAccount, feature_set: &FeatureSet) -> bool {
-    if !feature_set.is_active(&deprecate_executable_meta_update_in_bpf_loader::id()) {
-        account.executable()
-    } else {
-        // First, check if the account is empty. Empty accounts are not executable.
-        if account.data().is_empty() {
-            return false;
-        }
-
-        // bpf_loader/bpf_loader_deprecated still relies on `executable` on the
-        // program account. When the program account is finalized, the loader will
-        // mark `executable` flag on the account. We can't emulate `executable` for
-        // these two loaders. However, when `deprecate_executable` is true, we
-        // should have already disabled the deployment of bpf_loader and
-        // bpf_loader_deprecated. Therefore, we can safely assume that all those
-        // programs are `executable`.
-        if bpf_loader::check_id(account.owner()) || bpf_loader_deprecated::check_id(account.owner())
-        {
-            return true;
-        }
-
-        if bpf_loader_upgradeable::check_id(account.owner()) {
-            // For upgradable program account, only
-            // `UpgradeableLoaderState::Program` variant (i.e. discriminant = 2) is
-            // *executable*.
-            return account.data()[0] == 2;
-        }
-
-        if loader_v4::check_id(account.owner()) {
-            // LoaderV4Status (byte_offset = 40)
-            // return account.data()[LOADER_V4_STATUS_BYTE_OFFSET] != 0;
-            return false; // TODO: return false for now
-        }
-
-        false
-    }
-}
-
-/// Return true if the account program is a builtin program.
-///
-/// This function also ensures that all valid builtin programs have non-empty
-/// program data. Typically, the program data contains only the "name" for the
-/// program. If, for some reason, the program account's data is empty, we should
-/// exclude such a program from `builtins`.
-pub fn is_builtin(account: &impl ReadableAccount) -> bool {
-    native_loader::check_id(account.owner()) && !account.data().is_empty()
-}
 
 #[cfg(test)]
 pub mod tests {

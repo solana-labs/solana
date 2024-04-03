@@ -44,7 +44,7 @@ use {
     },
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
-        account::{is_executable, Account},
+        account::Account,
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -1066,15 +1066,6 @@ fn get_default_program_keypair(program_location: &Option<String>) -> Keypair {
     program_keypair
 }
 
-fn is_account_executable(account: &Account) -> bool {
-    if account.owner == bpf_loader_deprecated::id() || account.owner == bpf_loader::id() {
-        account.executable
-    } else {
-        let feature_set = FeatureSet::all_enabled();
-        is_executable(account, &feature_set)
-    }
-}
-
 /// Deploy program using upgradeable loader. It also can process program upgrades
 #[allow(clippy::too_many_arguments)]
 fn process_program_deploy(
@@ -1131,7 +1122,7 @@ fn process_program_deploy(
             .into());
         }
 
-        if !is_account_executable(&account) {
+        if !account.executable {
             // Continue an initial deploy
             true
         } else if let Ok(UpgradeableLoaderState::Program {
@@ -2213,11 +2204,12 @@ fn do_process_program_write_and_deploy(
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-        .get_account_with_commitment(buffer_pubkey, config.commitment)?
-        .value
+    let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
+        rpc_client
+            .get_account_with_commitment(buffer_pubkey, config.commitment)?
+            .value
     {
-        complete_partial_program_init(
+        let (ixs, balance_needed) = complete_partial_program_init(
             loader_id,
             &fee_payer_signer.pubkey(),
             buffer_pubkey,
@@ -2229,7 +2221,11 @@ fn do_process_program_write_and_deploy(
             },
             min_rent_exempt_program_data_balance,
             allow_excessive_balance,
-        )?
+        )?;
+        let buffer_program_data = account
+            .data
+            .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+        (ixs, balance_needed, buffer_program_data)
     } else if loader_id == &bpf_loader_upgradeable::id() {
         (
             bpf_loader_upgradeable::create_buffer(
@@ -2240,6 +2236,7 @@ fn do_process_program_write_and_deploy(
                 program_len,
             )?,
             min_rent_exempt_program_data_balance,
+            vec![0; program_len],
         )
     } else {
         (
@@ -2251,6 +2248,7 @@ fn do_process_program_write_and_deploy(
                 loader_id,
             )],
             min_rent_exempt_program_data_balance,
+            vec![0; program_len],
         )
     };
     let initial_message = if !initial_instructions.is_empty() {
@@ -2281,7 +2279,10 @@ fn do_process_program_write_and_deploy(
     let mut write_messages = vec![];
     let chunk_size = calculate_max_chunk_size(&create_msg);
     for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-        write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
+        let offset = i * chunk_size;
+        if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+            write_messages.push(create_msg(offset as u32, chunk.to_vec()));
+        }
     }
 
     // Create and add final message
@@ -2370,31 +2371,37 @@ fn do_process_program_upgrade(
     let (initial_message, write_messages, balance_needed) =
         if let Some(buffer_signer) = buffer_signer {
             // Check Buffer account to see if partial initialization has occurred
-            let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-                .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
-                .value
-            {
-                complete_partial_program_init(
-                    &bpf_loader_upgradeable::id(),
-                    &fee_payer_signer.pubkey(),
-                    &buffer_signer.pubkey(),
-                    &account,
-                    UpgradeableLoaderState::size_of_buffer(program_len),
-                    min_rent_exempt_program_data_balance,
-                    true,
-                )?
-            } else {
-                (
-                    bpf_loader_upgradeable::create_buffer(
+            let (initial_instructions, balance_needed, buffer_program_data) =
+                if let Some(mut account) = rpc_client
+                    .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
+                    .value
+                {
+                    let (ixs, balance_needed) = complete_partial_program_init(
+                        &bpf_loader_upgradeable::id(),
                         &fee_payer_signer.pubkey(),
-                        buffer_pubkey,
-                        &upgrade_authority.pubkey(),
+                        &buffer_signer.pubkey(),
+                        &account,
+                        UpgradeableLoaderState::size_of_buffer(program_len),
                         min_rent_exempt_program_data_balance,
-                        program_len,
-                    )?,
-                    min_rent_exempt_program_data_balance,
-                )
-            };
+                        true,
+                    )?;
+                    let buffer_program_data = account
+                        .data
+                        .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+                    (ixs, balance_needed, buffer_program_data)
+                } else {
+                    (
+                        bpf_loader_upgradeable::create_buffer(
+                            &fee_payer_signer.pubkey(),
+                            buffer_pubkey,
+                            &upgrade_authority.pubkey(),
+                            min_rent_exempt_program_data_balance,
+                            program_len,
+                        )?,
+                        min_rent_exempt_program_data_balance,
+                        vec![0; program_len],
+                    )
+                };
 
             let initial_message = if !initial_instructions.is_empty() {
                 Some(Message::new_with_blockhash(
@@ -2426,7 +2433,10 @@ fn do_process_program_upgrade(
             let mut write_messages = vec![];
             let chunk_size = calculate_max_chunk_size(&create_msg);
             for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
+                let offset = i * chunk_size;
+                if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+                    write_messages.push(create_msg(offset as u32, chunk.to_vec()));
+                }
             }
 
             (initial_message, write_messages, balance_needed)
@@ -2515,7 +2525,7 @@ fn complete_partial_program_init(
 ) -> Result<(Vec<Instruction>, u64), Box<dyn std::error::Error>> {
     let mut instructions: Vec<Instruction> = vec![];
     let mut balance_needed = 0;
-    if is_account_executable(account) {
+    if account.executable {
         return Err("Buffer account is already executable".into());
     }
     if account.owner != *loader_id && !system_program::check_id(&account.owner) {

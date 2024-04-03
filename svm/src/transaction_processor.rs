@@ -17,7 +17,7 @@ use {
         compute_budget::ComputeBudget,
         loaded_programs::{
             ForkGraph, LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria,
-            LoadedProgramType, LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
+            LoadedProgramType, LoadedProgramsForTxBatch, ProgramCache, ProgramRuntimeEnvironment,
             ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
@@ -103,6 +103,10 @@ pub trait TransactionProcessingCallback {
     ) -> transaction::Result<()> {
         Ok(())
     }
+
+    fn get_program_match_criteria(&self, _program: &Pubkey) -> LoadedProgramMatchCriteria {
+        LoadedProgramMatchCriteria::NoCriteria
+    }
 }
 
 #[derive(Debug)]
@@ -128,14 +132,13 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Transaction fee structure
     fee_structure: FeeStructure,
 
-    pub check_program_modification_slot: bool,
-
     /// Optional config parameters that can override runtime behavior
     runtime_config: Arc<RuntimeConfig>,
 
     pub sysvar_cache: RwLock<SysvarCache>,
 
-    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
+    /// Programs required for transaction batch processing
+    pub program_cache: Arc<RwLock<ProgramCache<FG>>>,
 }
 
 impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
@@ -145,13 +148,9 @@ impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
             .field("epoch", &self.epoch)
             .field("epoch_schedule", &self.epoch_schedule)
             .field("fee_structure", &self.fee_structure)
-            .field(
-                "check_program_modification_slot",
-                &self.check_program_modification_slot,
-            )
             .field("runtime_config", &self.runtime_config)
             .field("sysvar_cache", &self.sysvar_cache)
-            .field("loaded_programs_cache", &self.loaded_programs_cache)
+            .field("program_cache", &self.program_cache)
             .finish()
     }
 }
@@ -163,10 +162,9 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
             epoch: Epoch::default(),
             epoch_schedule: EpochSchedule::default(),
             fee_structure: FeeStructure::default(),
-            check_program_modification_slot: false,
             runtime_config: Arc::<RuntimeConfig>::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            loaded_programs_cache: Arc::new(RwLock::new(LoadedPrograms::new(
+            program_cache: Arc::new(RwLock::new(ProgramCache::new(
                 Slot::default(),
                 Epoch::default(),
             ))),
@@ -181,17 +179,16 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         epoch_schedule: EpochSchedule,
         fee_structure: FeeStructure,
         runtime_config: Arc<RuntimeConfig>,
-        loaded_programs_cache: Arc<RwLock<LoadedPrograms<FG>>>,
+        program_cache: Arc<RwLock<ProgramCache<FG>>>,
     ) -> Self {
         Self {
             slot,
             epoch,
             epoch_schedule,
             fee_structure,
-            check_program_modification_slot: false,
             runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            loaded_programs_cache,
+            program_cache,
         }
     }
 
@@ -312,7 +309,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         execution_time.stop();
 
         const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
-        self.loaded_programs_cache
+        self.program_cache
             .write()
             .unwrap()
             .evict_using_2s_random_selection(
@@ -342,11 +339,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     fn filter_executable_program_accounts<'a, CB: TransactionProcessingCallback>(
         callbacks: &CB,
         txs: &[SanitizedTransaction],
-        lock_results: &mut [TransactionCheckResult],
+        check_results: &mut [TransactionCheckResult],
         program_owners: &'a [Pubkey],
     ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
         let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
-        lock_results.iter_mut().zip(txs).for_each(|etx| {
+        check_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
                 if lamports_per_signature.is_some() {
                     tx.message()
@@ -361,9 +358,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                                 if let Some(index) =
                                     callbacks.account_matches_owners(key, program_owners)
                                 {
-                                    program_owners
-                                        .get(index)
-                                        .map(|owner| entry.insert((owner, 1)));
+                                    if let Some(owner) = program_owners.get(index) {
+                                        entry.insert((owner, 1));
+                                    }
                                 }
                             }
                         });
@@ -378,8 +375,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         result
     }
 
-    /// Load program with a specific pubkey from loaded programs
-    /// cache, and update the program's access slot as a side-effect.
+    /// Load program with a specific pubkey from program cache, and
+    /// update the program's access slot as a side-effect.
     pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
@@ -387,8 +384,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         reload: bool,
         effective_epoch: Epoch,
     ) -> Arc<LoadedProgram> {
-        let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-        let environments = loaded_programs_cache.get_environments_for_epoch(effective_epoch);
+        let program_cache = self.program_cache.read().unwrap();
+        let environments = program_cache.get_environments_for_epoch(effective_epoch);
         let mut load_program_metrics = LoadProgramMetrics {
             program_id: pubkey.to_string(),
             ..LoadProgramMetrics::default()
@@ -467,10 +464,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         load_program_metrics.submit_datapoint(&mut timings);
         if !Arc::ptr_eq(
             &environments.program_runtime_v1,
-            &loaded_programs_cache.environments.program_runtime_v1,
+            &program_cache.environments.program_runtime_v1,
         ) || !Arc::ptr_eq(
             &environments.program_runtime_v2,
-            &loaded_programs_cache.environments.program_runtime_v2,
+            &program_cache.environments.program_runtime_v2,
         ) {
             // There can be two entries per program when the environment changes.
             // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
@@ -491,51 +488,33 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         limit_to_load_programs: bool,
     ) -> LoadedProgramsForTxBatch {
         let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
-            if self.check_program_modification_slot {
-                program_accounts_map
-                    .iter()
-                    .map(|(pubkey, (_, count))| {
-                        (
-                            *pubkey,
-                            (
-                                self.program_modification_slot(callback, pubkey)
-                                    .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
-                                        LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
-                                    }),
-                                *count,
-                            ),
-                        )
-                    })
-                    .collect()
-            } else {
-                program_accounts_map
-                    .iter()
-                    .map(|(pubkey, (_, count))| {
-                        (*pubkey, (LoadedProgramMatchCriteria::NoCriteria, *count))
-                    })
-                    .collect()
-            };
+            program_accounts_map
+                .iter()
+                .map(|(pubkey, (_, count))| {
+                    (
+                        *pubkey,
+                        (callback.get_program_match_criteria(pubkey), *count),
+                    )
+                })
+                .collect();
 
         let mut loaded_programs_for_txs = None;
         let mut program_to_store = None;
         loop {
             let (program_to_load, task_cookie, task_waiter) = {
                 // Lock the global cache.
-                let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+                let mut program_cache = self.program_cache.write().unwrap();
                 // Initialize our local cache.
                 let is_first_round = loaded_programs_for_txs.is_none();
                 if is_first_round {
                     loaded_programs_for_txs = Some(LoadedProgramsForTxBatch::new(
                         self.slot,
-                        loaded_programs_cache
-                            .get_environments_for_epoch(self.epoch)
-                            .clone(),
+                        program_cache.get_environments_for_epoch(self.epoch).clone(),
                     ));
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
-                    if loaded_programs_cache
-                        .finish_cooperative_loading_task(self.slot, key, program)
+                    if program_cache.finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
                         // This branch is taken when there is an error in assigning a program to a
@@ -543,21 +522,19 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         // tests purposes.
                         let mut ret = LoadedProgramsForTxBatch::new(
                             self.slot,
-                            loaded_programs_cache
-                                .get_environments_for_epoch(self.epoch)
-                                .clone(),
+                            program_cache.get_environments_for_epoch(self.epoch).clone(),
                         );
                         ret.hit_max_limit = true;
                         return ret;
                     }
                 }
                 // Figure out which program needs to be loaded next.
-                let program_to_load = loaded_programs_cache.extract(
+                let program_to_load = program_cache.extract(
                     &mut missing_programs,
                     loaded_programs_for_txs.as_mut().unwrap(),
                     is_first_round,
                 );
-                let task_waiter = Arc::clone(&loaded_programs_cache.loading_task_waiter);
+                let task_waiter = Arc::clone(&program_cache.loading_task_waiter);
                 (program_to_load, task_waiter.cookie(), task_waiter)
                 // Unlock the global cache again.
             };
@@ -763,7 +740,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
-    fn program_modification_slot<CB: TransactionProcessingCallback>(
+    /// Find the slot in which the program was most recently modified.
+    /// Returns slot 0 for programs deployed with v1/v2 loaders, since programs deployed
+    /// with those loaders do not retain deployment slot information.
+    /// Returns an error if the program's account state can not be found or parsed.
+    pub fn program_modification_slot<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
         pubkey: &Pubkey,
@@ -1215,7 +1196,7 @@ mod tests {
     fn test_load_program_from_bytes() {
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1281,7 +1262,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(20)
@@ -1309,7 +1290,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(20)
@@ -1321,7 +1302,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1382,7 +1363,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(0)
@@ -1394,7 +1375,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1462,7 +1443,7 @@ mod tests {
             0,
             LoadedProgramType::FailedVerification(
                 batch_processor
-                    .loaded_programs_cache
+                    .program_cache
                     .read()
                     .unwrap()
                     .get_environments_for_epoch(0)
@@ -1479,7 +1460,7 @@ mod tests {
 
         let mut dir = env::current_dir().unwrap();
         dir.push("tests");
-        dir.push("test_program.so");
+        dir.push("hello_solana_program.so");
         let mut file = File::open(dir.clone()).expect("file not found");
         let metadata = fs::metadata(dir).expect("Unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -1521,7 +1502,7 @@ mod tests {
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
         batch_processor
-            .loaded_programs_cache
+            .program_cache
             .write()
             .unwrap()
             .upcoming_environments = Some(ProgramRuntimeEnvironments::default());
@@ -1815,15 +1796,9 @@ mod tests {
     fn test_replenish_program_cache() {
         // Case 1
         let mut mock_bank = MockBankCallback::default();
-        let mut batch_processor = TransactionBatchProcessor::<TestForkGraph> {
-            check_program_modification_slot: true,
-            ..TransactionBatchProcessor::default()
-        };
-        batch_processor
-            .loaded_programs_cache
-            .write()
-            .unwrap()
-            .fork_graph = Some(Arc::new(RwLock::new(TestForkGraph {})));
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        batch_processor.program_cache.write().unwrap().fork_graph =
+            Some(Arc::new(RwLock::new(TestForkGraph {})));
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
@@ -1848,8 +1823,6 @@ mod tests {
         ));
 
         // Case 2
-        batch_processor.check_program_modification_slot = false;
-
         let result = batch_processor.replenish_program_cache(&mock_bank, &account_maps, true);
 
         let program1 = result.find(&key1).unwrap();

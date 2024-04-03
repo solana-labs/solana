@@ -333,9 +333,7 @@ pub fn string_from_winreg_value(val: &winreg::RegValue) -> Option<String> {
             let words = unsafe {
                 slice::from_raw_parts(val.bytes.as_ptr() as *const u16, val.bytes.len() / 2)
             };
-            let mut s = if let Ok(s) = String::from_utf16(words) {
-                s
-            } else {
+            let Ok(mut s) = String::from_utf16(words) else {
                 return None;
             };
             while s.ends_with('\u{0}') {
@@ -392,11 +390,9 @@ fn add_to_path(new_path: &str) -> bool {
         },
     };
 
-    let old_path = if let Some(s) =
+    let Some(old_path) =
         get_windows_path_var().unwrap_or_else(|err| panic!("Unable to get PATH: {}", err))
-    {
-        s
-    } else {
+    else {
         return false;
     };
 
@@ -1171,13 +1167,17 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         release_dir.join("solana-release"),
         config.active_release_dir(),
     )
-    .map_err(|err| {
-        format!(
+    .map_err(|err| match err.raw_os_error() {
+        #[cfg(windows)]
+        Some(os_err) if os_err == winapi::shared::winerror::ERROR_PRIVILEGE_NOT_HELD as i32 => {
+            "You need to run this command with administrator privileges.".to_string()
+        }
+        _ => format!(
             "Unable to symlink {:?} to {:?}: {}",
             release_dir,
             config.active_release_dir(),
             err
-        )
+        ),
     })?;
 
     config.save(config_file)?;

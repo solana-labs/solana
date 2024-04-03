@@ -156,24 +156,22 @@ fn set_vote_account_state(
             && (!vote_account
                 .is_rent_exempt_at_data_length(VoteStateVersions::vote_state_size_of(true))
                 || vote_account
-                    .set_data_length(VoteStateVersions::vote_state_size_of(true), feature_set)
+                    .set_data_length(VoteStateVersions::vote_state_size_of(true))
                     .is_err())
         {
             // Account cannot be resized to the size of a vote state as it will not be rent exempt, or failed to be
             // resized for other reasons.  So store the V1_14_11 version.
-            return vote_account.set_state(
-                &VoteStateVersions::V1_14_11(Box::new(VoteState1_14_11::from(vote_state))),
-                feature_set,
-            );
+            return vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
+                VoteState1_14_11::from(vote_state),
+            )));
         }
         // Vote account is large enough to store the newest version of vote state
-        vote_account.set_state(&VoteStateVersions::new_current(vote_state), feature_set)
+        vote_account.set_state(&VoteStateVersions::new_current(vote_state))
     // Else when the vote_state_add_vote_latency feature is not enabled, then the V1_14_11 version is stored
     } else {
-        vote_account.set_state(
-            &VoteStateVersions::V1_14_11(Box::new(VoteState1_14_11::from(vote_state))),
-            feature_set,
-        )
+        vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
+            VoteState1_14_11::from(vote_state),
+        )))
     }
 }
 
@@ -612,6 +610,9 @@ pub fn process_new_vote_state(
     let timely_vote_credits = feature_set.map_or(false, |f| {
         f.is_active(&feature_set::timely_vote_credits::id())
     });
+    let deprecate_unused_legacy_vote_plumbing = feature_set.map_or(false, |f| {
+        f.is_active(&feature_set::deprecate_unused_legacy_vote_plumbing::id())
+    });
     let mut earned_credits = if timely_vote_credits { 0_u64 } else { 1_u64 };
 
     if let Some(new_root) = new_root {
@@ -621,7 +622,11 @@ pub fn process_new_vote_state(
             if current_vote.slot() <= new_root {
                 if timely_vote_credits || (current_vote.slot() != new_root) {
                     earned_credits = earned_credits
-                        .checked_add(vote_state.credits_for_vote_at_index(current_vote_state_index))
+                        .checked_add(vote_state.credits_for_vote_at_index(
+                            current_vote_state_index,
+                            timely_vote_credits,
+                            deprecate_unused_legacy_vote_plumbing,
+                        ))
                         .expect("`earned_credits` does not overflow");
                 }
                 current_vote_state_index = current_vote_state_index
@@ -734,11 +739,19 @@ pub fn process_vote_unfiltered(
     slot_hashes: &[SlotHash],
     epoch: Epoch,
     current_slot: Slot,
+    timely_vote_credits: bool,
+    deprecate_unused_legacy_vote_plumbing: bool,
 ) -> Result<(), VoteError> {
     check_slots_are_valid(vote_state, vote_slots, &vote.hash, slot_hashes)?;
-    vote_slots
-        .iter()
-        .for_each(|s| vote_state.process_next_vote_slot(*s, epoch, current_slot));
+    vote_slots.iter().for_each(|s| {
+        vote_state.process_next_vote_slot(
+            *s,
+            epoch,
+            current_slot,
+            timely_vote_credits,
+            deprecate_unused_legacy_vote_plumbing,
+        )
+    });
     Ok(())
 }
 
@@ -748,6 +761,8 @@ pub fn process_vote(
     slot_hashes: &[SlotHash],
     epoch: Epoch,
     current_slot: Slot,
+    timely_vote_credits: bool,
+    deprecate_unused_legacy_vote_plumbing: bool,
 ) -> Result<(), VoteError> {
     if vote.slots.is_empty() {
         return Err(VoteError::EmptySlots);
@@ -769,6 +784,8 @@ pub fn process_vote(
         slot_hashes,
         epoch,
         current_slot,
+        timely_vote_credits,
+        deprecate_unused_legacy_vote_plumbing,
     )
 }
 
@@ -785,6 +802,8 @@ pub fn process_vote_unchecked(vote_state: &mut VoteState, vote: Vote) -> Result<
         &slot_hashes,
         vote_state.current_epoch(),
         0,
+        true,
+        true,
     )
 }
 
@@ -1002,11 +1021,11 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         }
     }
 
-    vote_account.checked_sub_lamports(lamports, feature_set)?;
+    vote_account.checked_sub_lamports(lamports)?;
     drop(vote_account);
     let mut to_account = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to_account.checked_add_lamports(lamports, feature_set)?;
+    to_account.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -1067,7 +1086,18 @@ pub fn process_vote_with_account<S: std::hash::BuildHasher>(
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
-    process_vote(&mut vote_state, vote, slot_hashes, clock.epoch, clock.slot)?;
+    let timely_vote_credits = feature_set.is_active(&feature_set::timely_vote_credits::id());
+    let deprecate_unused_legacy_vote_plumbing =
+        feature_set.is_active(&feature_set::deprecate_unused_legacy_vote_plumbing::id());
+    process_vote(
+        &mut vote_state,
+        vote,
+        slot_hashes,
+        clock.epoch,
+        clock.slot,
+        timely_vote_credits,
+        deprecate_unused_legacy_vote_plumbing,
+    )?;
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
@@ -1250,7 +1280,7 @@ mod tests {
             134, 135,
         ]
         .into_iter()
-        .for_each(|v| vote_state.process_next_vote_slot(v, 4, 0));
+        .for_each(|v| vote_state.process_next_vote_slot(v, 4, 0, false, true));
 
         let version1_14_11_serialized = bincode::serialize(&VoteStateVersions::V1_14_11(Box::new(
             VoteState1_14_11::from(vote_state.clone()),
@@ -1341,7 +1371,7 @@ mod tests {
         // Test that when the feature is enabled, if the vote account does have sufficient lamports, the
         // new vote state is written out
         assert_eq!(
-            borrowed_account.set_lamports(rent.minimum_balance(VoteState::size_of()), &feature_set),
+            borrowed_account.set_lamports(rent.minimum_balance(VoteState::size_of()),),
             Ok(())
         );
         assert_eq!(
@@ -1732,11 +1762,11 @@ mod tests {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
 
         assert_eq!(
-            process_vote(&mut vote_state_a, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state_a, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
         assert_eq!(
-            process_vote(&mut vote_state_b, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state_b, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
@@ -1749,12 +1779,12 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(0, vote.hash)];
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
         let recent = recent_votes(&vote_state);
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Err(VoteError::VoteTooOld)
         );
         assert_eq!(recent, recent_votes(&vote_state));
@@ -1814,7 +1844,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
         assert_eq!(
@@ -1830,7 +1860,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
 
@@ -1849,7 +1879,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Ok(())
         );
 
@@ -1866,7 +1896,7 @@ mod tests {
 
         let vote = Vote::new(vec![], Hash::default());
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &[], 0, 0),
+            process_vote(&mut vote_state, &vote, &[], 0, 0, true, true),
             Err(VoteError::EmptySlots)
         );
     }
@@ -2141,6 +2171,7 @@ mod tests {
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // For each vote group, process all vote groups leading up to it and it itself, and ensure that the number of
         // credits earned is correct for both regular votes and vote state updates
@@ -2163,7 +2194,9 @@ mod tests {
                         &vote,
                         &slot_hashes,
                         0,
-                        vote_group.1 // vote_group.1 is the slot in which the vote was cast
+                        vote_group.1, // vote_group.1 is the slot in which the vote was cast
+                        true,
+                        true
                     ),
                     Ok(())
                 );
@@ -2273,6 +2306,7 @@ mod tests {
 
         let mut feature_set = FeatureSet::default();
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+        feature_set.activate(&feature_set::deprecate_unused_legacy_vote_plumbing::id(), 1);
 
         // Retroactive voting is only possible with VoteStateUpdate transactions, which is why Vote transactions are
         // not tested here
@@ -3055,7 +3089,7 @@ mod tests {
         // error with `VotesTooOldAllFiltered`
         let slot_hashes = vec![(3, Hash::new_unique()), (2, Hash::new_unique())];
         assert_eq!(
-            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0),
+            process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true),
             Err(VoteError::VotesTooOldAllFiltered)
         );
 
@@ -3069,7 +3103,7 @@ mod tests {
             .1;
 
         let vote = Vote::new(vec![old_vote_slot, vote_slot], vote_slot_hash);
-        process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0).unwrap();
+        process_vote(&mut vote_state, &vote, &slot_hashes, 0, 0, true, true).unwrap();
         assert_eq!(
             vote_state
                 .votes
@@ -3098,8 +3132,17 @@ mod tests {
                 .unwrap()
                 .1;
             let vote = Vote::new(vote_slots, vote_hash);
-            process_vote_unfiltered(&mut vote_state, &vote.slots, &vote, slot_hashes, 0, 0)
-                .unwrap();
+            process_vote_unfiltered(
+                &mut vote_state,
+                &vote.slots,
+                &vote,
+                slot_hashes,
+                0,
+                0,
+                true,
+                true,
+            )
+            .unwrap();
         }
 
         vote_state

@@ -1,11 +1,11 @@
 use {
-    solana_client::thin_client::ThinClient,
+    solana_client::{thin_client::ThinClient, tpu_client::QuicTpuClient},
     solana_core::validator::{Validator, ValidatorConfig},
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::shred::Shred,
-    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair},
     solana_streamer::socket::SocketAddrSpace,
-    std::{path::PathBuf, sync::Arc},
+    std::{io::Result, path::PathBuf, sync::Arc},
 };
 
 pub struct ValidatorInfo {
@@ -38,6 +38,11 @@ impl ClusterValidatorInfo {
 pub trait Cluster {
     fn get_node_pubkeys(&self) -> Vec<Pubkey>;
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient>;
+    fn build_tpu_quic_client(&self) -> Result<QuicTpuClient>;
+    fn build_tpu_quic_client_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<QuicTpuClient>;
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo>;
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo;
     fn restart_node(

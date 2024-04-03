@@ -655,14 +655,14 @@ impl ReplayStage {
             };
             // Thread pool to (maybe) replay multiple threads in parallel
             let replay_mode = if replay_slots_concurrently {
-                ForkReplayMode::Serial
-            } else {
                 let pool = rayon::ThreadPoolBuilder::new()
                     .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
                     .thread_name(|i| format!("solReplayFork{i:02}"))
                     .build()
                     .expect("new rayon threadpool");
                 ForkReplayMode::Parallel(pool)
+            } else {
+                ForkReplayMode::Serial
             };
             // Thread pool to replay multiple transactions within one block in parallel
             let replay_tx_thread_pool = rayon::ThreadPoolBuilder::new()
@@ -1686,11 +1686,7 @@ impl ReplayStage {
             root_bank.clear_slot_signatures(slot);
 
             // Remove cached entries of the programs that were deployed in this slot.
-            root_bank
-                .loaded_programs_cache
-                .write()
-                .unwrap()
-                .prune_by_deployment_slot(slot);
+            root_bank.prune_program_cache_by_deployment_slot(slot);
 
             if let Some(bank_hash) = blockstore.get_bank_hash(slot) {
                 // If a descendant was successfully replayed and chained from a duplicate it must

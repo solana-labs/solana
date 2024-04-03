@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
+        file::TieredWritableFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     indexmap::set::IndexSet,
@@ -47,7 +47,7 @@ impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
     pub fn write_owners_block(
         &self,
-        file: &TieredStorageFile,
+        file: &mut TieredWritableFile,
         owners_table: &OwnersTable,
     ) -> TieredStorageResult<usize> {
         match self {
@@ -116,7 +116,7 @@ impl<'a> OwnersTable<'a> {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions,
+        super::*, crate::tiered_storage::file::TieredWritableFile, memmap2::MmapOptions,
         std::fs::OpenOptions, tempfile::TempDir,
     };
 
@@ -139,7 +139,7 @@ mod tests {
         };
 
         {
-            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
 
             let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {
@@ -147,12 +147,12 @@ mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners_table)
+                .write_owners_block(&mut file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new().read(true).open(path).unwrap();

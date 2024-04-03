@@ -88,6 +88,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --expected-bank-hash ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 == --expected-shred-version ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 == --accounts ]]; then
       args+=("$1" "$2")
       shift 2

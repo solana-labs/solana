@@ -772,7 +772,9 @@ impl Consumer {
             (0, 0),
             |(units, times), program_timings| {
                 (
-                    units.saturating_add(program_timings.accumulated_units),
+                    units
+                        .saturating_add(program_timings.accumulated_units)
+                        .saturating_add(program_timings.total_errored_units),
                     times.saturating_add(program_timings.accumulated_us),
                 )
             },

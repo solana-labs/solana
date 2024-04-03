@@ -1,6 +1,7 @@
 #![cfg(test)]
 //! Helper functions for TieredStorage tests
 use {
+    super::footer::TieredStorageFooter,
     crate::{
         account_storage::meta::{StoredAccountMeta, StoredMeta},
         accounts_hash::AccountHash,
@@ -60,4 +61,15 @@ pub(super) fn verify_test_account(
     assert_eq!(stored_meta.owner(), owner);
     assert_eq!(stored_meta.pubkey(), address);
     assert_eq!(*stored_meta.hash(), AccountHash(Hash::default()));
+}
+
+pub(super) fn verify_test_account_with_footer(
+    stored_meta: &StoredAccountMeta<'_>,
+    account: Option<&impl ReadableAccount>,
+    address: &Pubkey,
+    footer: &TieredStorageFooter,
+) {
+    verify_test_account(stored_meta, account, address);
+    assert!(footer.min_account_address <= *address);
+    assert!(footer.max_account_address >= *address);
 }
