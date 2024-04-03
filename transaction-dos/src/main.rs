@@ -248,6 +248,7 @@ fn run_transactions_dos(
             is_final: true,
             max_len: None,
             compute_unit_price: None,
+            max_sign_attempts: 5,
             skip_fee_check: true, // skip_fee_check
         });
 
