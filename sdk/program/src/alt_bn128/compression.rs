@@ -20,6 +20,8 @@ mod alt_bn128_compression_size {
     pub const G2_COMPRESSED: usize = 64;
 }
 
+// AltBn128CompressionError must be removed once the
+// simplify_alt_bn128_syscall_error_codes feature gets activated
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum AltBn128CompressionError {
     #[error("Unexpected error")]
@@ -51,13 +53,14 @@ impl From<u64> for AltBn128CompressionError {
 
 impl From<AltBn128CompressionError> for u64 {
     fn from(v: AltBn128CompressionError) -> u64 {
+        // note: should never return 0, as it risks to be confused with syscall success
         match v {
             AltBn128CompressionError::G1DecompressionFailed => 1,
             AltBn128CompressionError::G2DecompressionFailed => 2,
             AltBn128CompressionError::G1CompressionFailed => 3,
             AltBn128CompressionError::G2CompressionFailed => 4,
             AltBn128CompressionError::InvalidInputSize => 5,
-            AltBn128CompressionError::UnexpectedError => 0,
+            AltBn128CompressionError::UnexpectedError => 6,
         }
     }
 }
@@ -118,7 +121,7 @@ mod target_arch {
         .map_err(|_| AltBn128CompressionError::G1CompressionFailed)?;
         let mut g1_bytes = [0u8; alt_bn128_compression_size::G1_COMPRESSED];
         G1::serialize_compressed(&g1, g1_bytes.as_mut_slice())
-            .map_err(|_| AltBn128CompressionError::G2CompressionFailed)?;
+            .map_err(|_| AltBn128CompressionError::G1CompressionFailed)?;
         Ok(convert_endianness::<32, 32>(&g1_bytes))
     }
 
@@ -131,9 +134,12 @@ mod target_arch {
         if g2_bytes == [0u8; alt_bn128_compression_size::G2_COMPRESSED] {
             return Ok([0u8; alt_bn128_compression_size::G2]);
         }
-        let decompressed_g2 =
-            G2::deserialize_compressed(convert_endianness::<64, 64>(&g2_bytes).as_slice())
-                .map_err(|_| AltBn128CompressionError::G2DecompressionFailed)?;
+        let decompressed_g2 = G2::deserialize_with_mode(
+            convert_endianness::<64, 64>(&g2_bytes).as_slice(),
+            Compress::Yes,
+            Validate::No,
+        )
+        .map_err(|_| AltBn128CompressionError::G2DecompressionFailed)?;
         let mut decompressed_g2_bytes = [0u8; alt_bn128_compression_size::G2];
         decompressed_g2
             .x
@@ -160,7 +166,7 @@ mod target_arch {
             Compress::No,
             Validate::No,
         )
-        .map_err(|_| AltBn128CompressionError::G2DecompressionFailed)?;
+        .map_err(|_| AltBn128CompressionError::G2CompressionFailed)?;
         let mut g2_bytes = [0u8; alt_bn128_compression_size::G2_COMPRESSED];
         G2::serialize_compressed(&g2, g2_bytes.as_mut_slice())
             .map_err(|_| AltBn128CompressionError::G2CompressionFailed)?;
@@ -205,7 +211,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer),
-            error => Err(AltBn128CompressionError::from(error)),
+            _ => Err(AltBn128CompressionError::UnexpectedError),
         }
     }
 
@@ -222,7 +228,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer),
-            error => Err(AltBn128CompressionError::from(error)),
+            _ => Err(AltBn128CompressionError::UnexpectedError),
         }
     }
 
@@ -241,7 +247,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer),
-            error => Err(AltBn128CompressionError::from(error)),
+            _ => Err(AltBn128CompressionError::UnexpectedError),
         }
     }
 
@@ -260,7 +266,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer),
-            error => Err(AltBn128CompressionError::from(error)),
+            _ => Err(AltBn128CompressionError::UnexpectedError),
         }
     }
 }

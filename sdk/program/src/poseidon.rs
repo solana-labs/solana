@@ -7,6 +7,8 @@ use thiserror::Error;
 /// Length of Poseidon hash result.
 pub const HASH_BYTES: usize = 32;
 
+// PoseidonSyscallError must be removed once the
+// simplify_alt_bn128_syscall_error_codes feature gets activated
 #[derive(Error, Debug)]
 pub enum PoseidonSyscallError {
     #[error("Invalid parameters.")]
@@ -267,7 +269,7 @@ pub fn hashv(
 
         match result {
             0 => Ok(PoseidonHash::new(hash_result)),
-            e => Err(PoseidonSyscallError::from(e)),
+            _ => Err(PoseidonSyscallError::Unexpected),
         }
     }
 }

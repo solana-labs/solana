@@ -41,6 +41,8 @@ mod consts {
     pub const ALT_BN128_PAIRING: u64 = 3;
 }
 
+// AltBn128Error must be removed once the
+// simplify_alt_bn128_syscall_error_codes feature gets activated
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum AltBn128Error {
     #[error("The input data is invalid")]
@@ -72,13 +74,14 @@ impl From<u64> for AltBn128Error {
 
 impl From<AltBn128Error> for u64 {
     fn from(v: AltBn128Error) -> u64 {
+        // note: should never return 0, as it risks to be confused with syscall success
         match v {
             AltBn128Error::InvalidInputData => 1,
             AltBn128Error::GroupError => 2,
             AltBn128Error::SliceOutOfBounds => 3,
             AltBn128Error::TryIntoVecError(_) => 4,
             AltBn128Error::ProjectiveToG1Failed => 5,
-            AltBn128Error::UnexpectedError => 0,
+            AltBn128Error::UnexpectedError => 6,
         }
     }
 }
@@ -319,7 +322,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer.to_vec()),
-            error => Err(AltBn128Error::from(error)),
+            _ => Err(AltBn128Error::UnexpectedError),
         }
     }
 
@@ -339,7 +342,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer.to_vec()),
-            error => Err(AltBn128Error::from(error)),
+            _ => Err(AltBn128Error::UnexpectedError),
         }
     }
 
@@ -363,7 +366,7 @@ mod target_arch {
 
         match result {
             0 => Ok(result_buffer.to_vec()),
-            error => Err(AltBn128Error::from(error)),
+            _ => Err(AltBn128Error::UnexpectedError),
         }
     }
 }
