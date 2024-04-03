@@ -55,7 +55,10 @@ impl Bank {
     }
 
     /// Update EpochRewards sysvar with distributed rewards
-    pub(in crate::bank) fn update_epoch_rewards_sysvar(&self, distributed: u64) {
+    pub(in crate::bank::partitioned_epoch_rewards) fn update_epoch_rewards_sysvar(
+        &self,
+        distributed: u64,
+    ) {
         assert!(self.is_partitioned_rewards_code_enabled());
 
         let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards =
@@ -75,7 +78,7 @@ impl Bank {
         self.log_epoch_rewards_sysvar("update");
     }
 
-    pub(in crate::bank) fn destroy_epoch_rewards_sysvar(&self) {
+    pub(in crate::bank::partitioned_epoch_rewards) fn destroy_epoch_rewards_sysvar(&self) {
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             if account.lamports() > 0 {
                 info!(
