@@ -32,7 +32,7 @@ use {
 };
 
 /// Byte length of an authenticated encryption secret key
-const AE_KEY_LEN: usize = 16;
+pub const AE_KEY_LEN: usize = 16;
 
 /// Byte length of an authenticated encryption nonce component
 const NONCE_LEN: usize = 12;
@@ -102,7 +102,7 @@ impl AuthenticatedEncryption {
     }
 }
 
-#[derive(Debug, Zeroize)]
+#[derive(Debug, Zeroize, Eq, PartialEq)]
 pub struct AeKey([u8; AE_KEY_LEN]);
 impl AeKey {
     /// Deterministically derives an authenticated encryption key from a Solana signer and a public
@@ -210,6 +210,31 @@ impl SeedDerivable for AeKey {
     }
 }
 
+impl From<[u8; AE_KEY_LEN]> for AeKey {
+    fn from(bytes: [u8; AE_KEY_LEN]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<AeKey> for [u8; AE_KEY_LEN] {
+    fn from(key: AeKey) -> Self {
+        key.0
+    }
+}
+
+impl TryFrom<&[u8]> for AeKey {
+    type Error = AuthenticatedEncryptionError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != AE_KEY_LEN {
+            return Err(AuthenticatedEncryptionError::Deserialization);
+        }
+        bytes
+            .try_into()
+            .map(Self)
+            .map_err(|_| AuthenticatedEncryptionError::Deserialization)
+    }
+}
+
 /// For the purpose of encrypting balances for the spl token accounts, the nonce and ciphertext
 /// sizes should always be fixed.
 type Nonce = [u8; NONCE_LEN];
@@ -297,5 +322,27 @@ mod tests {
 
         let too_long_seed = vec![0; 65536];
         assert!(AeKey::from_seed(&too_long_seed).is_err());
+    }
+
+    #[test]
+    fn test_aes_key_from() {
+        let key = AeKey::from_seed(&[0; 32]).unwrap();
+        let key_bytes: [u8; AE_KEY_LEN] = AeKey::from_seed(&[0; 32]).unwrap().into();
+
+        assert_eq!(key, AeKey::from(key_bytes));
+    }
+
+    #[test]
+    fn test_aes_key_try_from() {
+        let key = AeKey::from_seed(&[0; 32]).unwrap();
+        let key_bytes: [u8; AE_KEY_LEN] = AeKey::from_seed(&[0; 32]).unwrap().into();
+
+        assert_eq!(key, AeKey::try_from(key_bytes.as_slice()).unwrap());
+    }
+
+    #[test]
+    fn test_aes_key_try_from_error() {
+        let too_many_bytes = vec![0_u8; 32];
+        assert!(AeKey::try_from(too_many_bytes.as_slice()).is_err());
     }
 }
