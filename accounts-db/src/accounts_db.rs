@@ -2625,9 +2625,10 @@ impl AccountsDb {
         self.handle_reclaims(
             (!reclaim_vecs.is_empty()).then(|| reclaim_vecs.iter().flatten()),
             None,
-            Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
+            Some(&mut reclaim_result),
             reset_accounts,
             &pubkeys_removed_from_accounts_index,
+            HandleReclaims::ProcessDeadSlots(&self.clean_accounts_stats.purge_stats),
         );
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
@@ -3350,9 +3351,10 @@ impl AccountsDb {
         self.handle_reclaims(
             (!reclaims.is_empty()).then(|| reclaims.iter()),
             None,
-            Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
+            Some(&mut reclaim_result),
             reset_accounts,
             &pubkeys_removed_from_accounts_index,
+            HandleReclaims::ProcessDeadSlots(&self.clean_accounts_stats.purge_stats),
         );
 
         reclaims_time.stop();
@@ -3497,46 +3499,42 @@ impl AccountsDb {
     ///    from store or slot shrinking, as those should only touch the slot they are
     ///    currently storing to or shrinking.
     ///
-    /// * `purge_stats_and_reclaim_result` - Option containing `purge_stats` and `reclaim_result`.
-    ///    `purge_stats`. `purge_stats` are stats used to track performance of purging dead slots.
+    /// * `reclaim_result` - Option containing `reclaim_result`.
     ///    `reclaim_result` contains information about accounts that were removed from storage,
     ///    does not include accounts that were removed from the cache.
-    ///    If `purge_stats_and_reclaim_result.is_none()`, this implies there can be no dead slots
-    ///    that happen as a result of this call, and the function will check that no slots are
-    ///    cleaned up/removed via `process_dead_slots`. For instance, on store, no slots should
-    ///    be cleaned up, but during the background clean accounts purges accounts from old rooted
-    ///    slots, so outdated slots may be removed.
     ///
     /// * `reset_accounts` - Reset the append_vec store when the store is dead (count==0)
     ///    From the clean and shrink paths it should be false since there may be an in-progress
     ///    hash operation and the stores may hold accounts that need to be unref'ed.
     /// * `pubkeys_removed_from_accounts_index` - These keys have already been removed from the accounts index
     ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    /// * `handle_reclaims`. `purge_stats` are stats used to track performance of purging dead slots if
+    ///    value is `ProcessDeadSlots`.
+    ///    Otherwise, there can be no dead slots
+    ///    that happen as a result of this call, and the function will check that no slots are
+    ///    cleaned up/removed via `process_dead_slots`. For instance, on store, no slots should
+    ///    be cleaned up, but during the background clean accounts purges accounts from old rooted
+    ///    slots, so outdated slots may be removed.
     fn handle_reclaims<'a, I>(
         &'a self,
         reclaims: Option<I>,
         expected_single_dead_slot: Option<Slot>,
-        purge_stats_and_reclaim_result: Option<(&PurgeStats, &mut ReclaimResult)>,
+        reclaim_result: Option<&mut ReclaimResult>,
         reset_accounts: bool,
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
+        handle_reclaims: HandleReclaims<'a>,
     ) where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
         if let Some(reclaims) = reclaims {
-            let (purge_stats, purged_account_slots, reclaimed_offsets) = if let Some((
-                purge_stats,
-                (ref mut purged_account_slots, ref mut reclaimed_offsets),
-            )) =
-                purge_stats_and_reclaim_result
-            {
-                (
-                    Some(purge_stats),
-                    Some(purged_account_slots),
-                    Some(reclaimed_offsets),
-                )
-            } else {
-                (None, None, None)
-            };
+            let (purged_account_slots, reclaimed_offsets) =
+                if let Some((ref mut purged_account_slots, ref mut reclaimed_offsets)) =
+                    reclaim_result
+                {
+                    (Some(purged_account_slots), Some(reclaimed_offsets))
+                } else {
+                    (None, None)
+                };
 
             let dead_slots = self.remove_dead_accounts(
                 reclaims,
@@ -3545,7 +3543,7 @@ impl AccountsDb {
                 reset_accounts,
             );
 
-            if let Some(purge_stats) = purge_stats {
+            if let HandleReclaims::ProcessDeadSlots(purge_stats) = handle_reclaims {
                 if let Some(expected_single_dead_slot) = expected_single_dead_slot {
                     assert!(dead_slots.len() <= 1);
                     if dead_slots.len() == 1 {
@@ -5791,9 +5789,10 @@ impl AccountsDb {
         self.handle_reclaims(
             (!reclaims.is_empty()).then(|| reclaims.iter()),
             expected_dead_slot,
-            Some((purge_stats, &mut ReclaimResult::default())),
+            Some(&mut ReclaimResult::default()),
             false,
             &pubkeys_removed_from_accounts_index,
+            HandleReclaims::ProcessDeadSlots(purge_stats),
         );
         handle_reclaims_elapsed.stop();
         purge_stats
@@ -8497,6 +8496,8 @@ impl AccountsDb {
                 None,
                 reset_accounts,
                 &HashSet::default(),
+                // this callsite does NOT process dead slots
+                HandleReclaims::DoNotProcessDeadSlots,
             );
             handle_reclaims_time.stop();
             handle_reclaims_elapsed = handle_reclaims_time.as_us();
@@ -9248,6 +9249,12 @@ impl AccountsDb {
 pub enum CalcAccountsHashDataSource {
     IndexForTests,
     Storages,
+}
+
+#[derive(Debug, Copy, Clone)]
+enum HandleReclaims<'a> {
+    ProcessDeadSlots(&'a PurgeStats),
+    DoNotProcessDeadSlots,
 }
 
 /// Which accounts hash calculation is being performed?
