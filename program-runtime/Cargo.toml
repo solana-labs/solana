@@ -21,7 +21,6 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 percentage = { workspace = true }
 rand = { workspace = true }
-serde = { workspace = true, features = ["derive", "rc"] }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
@@ -32,7 +31,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-libsecp256k1 = { workspace = true }
+serde = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 test-case = { workspace = true }

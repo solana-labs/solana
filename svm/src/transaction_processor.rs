@@ -4,6 +4,7 @@ use {
             load_accounts, LoadedTransaction, TransactionCheckResult, TransactionLoadResult,
         },
         account_overrides::AccountOverrides,
+        message_processor::MessageProcessor,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::{
@@ -22,7 +23,6 @@ use {
             ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
-        message_processor::MessageProcessor,
         runtime_config::RuntimeConfig,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},

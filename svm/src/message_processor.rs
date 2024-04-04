@@ -1,10 +1,10 @@
 use {
-    crate::{
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_program_runtime::{
         invoke_context::InvokeContext,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
-    serde::{Deserialize, Serialize},
-    solana_measure::measure::Measure,
     solana_sdk::{
         account::WritableAccount,
         message::SanitizedMessage,
@@ -34,7 +34,6 @@ impl MessageProcessor {
     /// For each instruction it calls the program entrypoint method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if every instruction succeeds.
-    #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         message: &SanitizedMessage,
         program_indices: &[Vec<IndexOfAccount>],
@@ -146,11 +145,10 @@ impl MessageProcessor {
 mod tests {
     use {
         super::*,
-        crate::{
+        solana_program_runtime::{
             compute_budget::ComputeBudget,
             declare_process_instruction,
             loaded_programs::{LoadedProgram, LoadedProgramsForTxBatch},
-            message_processor::MessageProcessor,
             sysvar_cache::SysvarCache,
         },
         solana_sdk::{
