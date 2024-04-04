@@ -6287,7 +6287,7 @@ impl AccountsDb {
                     (slot, &accounts[..]),
                     Some(hashes),
                     &flushed_store,
-                    StoreReclaims::Default,
+                    StoreReclaims::Ignore,
                 ));
             flush_stats.store_accounts_timing = store_accounts_timing_inner;
             flush_stats.store_accounts_total_us = Saturating(store_accounts_total_inner_us);
