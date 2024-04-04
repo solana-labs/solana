@@ -68,7 +68,7 @@ const ELGAMAL_PUBKEY_LEN: usize = RISTRETTO_POINT_LEN;
 const ELGAMAL_SECRET_KEY_LEN: usize = SCALAR_LEN;
 
 /// Byte length of an ElGamal keypair
-const ELGAMAL_KEYPAIR_LEN: usize = ELGAMAL_PUBKEY_LEN + ELGAMAL_SECRET_KEY_LEN;
+pub const ELGAMAL_KEYPAIR_LEN: usize = ELGAMAL_PUBKEY_LEN + ELGAMAL_SECRET_KEY_LEN;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ElGamalError {
@@ -82,6 +82,10 @@ pub enum ElGamalError {
     CiphertextDeserialization,
     #[error("failed to deserialize public key")]
     PubkeyDeserialization,
+    #[error("failed to deserialize keypair")]
+    KeypairDeserialization,
+    #[error("failed to deserialize secret key")]
+    SecretKeyDeserialization,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -235,6 +239,8 @@ impl ElGamalKeypair {
         &self.secret
     }
 
+    #[deprecated(note = "please use `into()` instead")]
+    #[allow(deprecated)]
     pub fn to_bytes(&self) -> [u8; ELGAMAL_KEYPAIR_LEN] {
         let mut bytes = [0u8; ELGAMAL_KEYPAIR_LEN];
         bytes[..ELGAMAL_PUBKEY_LEN].copy_from_slice(&self.public.to_bytes());
@@ -242,6 +248,8 @@ impl ElGamalKeypair {
         bytes
     }
 
+    #[deprecated(note = "please use `try_from()` instead")]
+    #[allow(deprecated)]
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != ELGAMAL_KEYPAIR_LEN {
             return None;
@@ -256,7 +264,7 @@ impl ElGamalKeypair {
     /// Reads a JSON-encoded keypair from a `Reader` implementor
     pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         let bytes: Vec<u8> = serde_json::from_reader(reader)?;
-        Self::from_bytes(&bytes).ok_or_else(|| {
+        Self::try_from(bytes.as_slice()).ok().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalKeypair").into()
         })
     }
@@ -268,8 +276,8 @@ impl ElGamalKeypair {
 
     /// Writes to a `Write` implementer with JSON-encoding
     pub fn write_json<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
-        let bytes = self.to_bytes();
-        let json = serde_json::to_string(&bytes.to_vec())?;
+        let json =
+            serde_json::to_string(&Into::<[u8; ELGAMAL_KEYPAIR_LEN]>::into(self).as_slice())?;
         writer.write_all(&json.clone().into_bytes())?;
         Ok(json)
     }
@@ -290,6 +298,40 @@ impl EncodableKey for ElGamalKeypair {
 
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         self.write_json(writer)
+    }
+}
+
+impl TryFrom<&[u8]> for ElGamalKeypair {
+    type Error = ElGamalError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != ELGAMAL_KEYPAIR_LEN {
+            return Err(ElGamalError::KeypairDeserialization);
+        }
+
+        Ok(Self {
+            public: ElGamalPubkey::try_from(&bytes[..ELGAMAL_PUBKEY_LEN])?,
+            secret: ElGamalSecretKey::try_from(&bytes[ELGAMAL_PUBKEY_LEN..])?,
+        })
+    }
+}
+
+impl From<ElGamalKeypair> for [u8; ELGAMAL_KEYPAIR_LEN] {
+    fn from(keypair: ElGamalKeypair) -> Self {
+        let mut bytes = [0u8; ELGAMAL_KEYPAIR_LEN];
+        bytes[..ELGAMAL_PUBKEY_LEN]
+            .copy_from_slice(&Into::<[u8; ELGAMAL_PUBKEY_LEN]>::into(keypair.public));
+        bytes[ELGAMAL_PUBKEY_LEN..].copy_from_slice(keypair.secret.as_bytes());
+        bytes
+    }
+}
+
+impl From<&ElGamalKeypair> for [u8; ELGAMAL_KEYPAIR_LEN] {
+    fn from(keypair: &ElGamalKeypair) -> Self {
+        let mut bytes = [0u8; ELGAMAL_KEYPAIR_LEN];
+        bytes[..ELGAMAL_PUBKEY_LEN]
+            .copy_from_slice(&Into::<[u8; ELGAMAL_PUBKEY_LEN]>::into(keypair.public));
+        bytes[ELGAMAL_PUBKEY_LEN..].copy_from_slice(keypair.secret.as_bytes());
+        bytes
     }
 }
 
@@ -343,10 +385,12 @@ impl ElGamalPubkey {
         &self.0
     }
 
+    #[deprecated(note = "please use `into()` instead")]
     pub fn to_bytes(&self) -> [u8; ELGAMAL_PUBKEY_LEN] {
         self.0.compress().to_bytes()
     }
 
+    #[deprecated(note = "please use `try_from()` instead")]
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
         if bytes.len() != ELGAMAL_PUBKEY_LEN {
             return None;
@@ -384,13 +428,13 @@ impl ElGamalPubkey {
 impl EncodableKey for ElGamalPubkey {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         let bytes: Vec<u8> = serde_json::from_reader(reader)?;
-        Self::from_bytes(&bytes).ok_or_else(|| {
+        Self::try_from(bytes.as_slice()).ok().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalPubkey").into()
         })
     }
 
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
-        let bytes = self.to_bytes();
+        let bytes = Into::<[u8; ELGAMAL_PUBKEY_LEN]>::into(*self);
         let json = serde_json::to_string(&bytes.to_vec())?;
         writer.write_all(&json.clone().into_bytes())?;
         Ok(json)
@@ -399,7 +443,38 @@ impl EncodableKey for ElGamalPubkey {
 
 impl fmt::Display for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", BASE64_STANDARD.encode(self.to_bytes()))
+        write!(
+            f,
+            "{}",
+            BASE64_STANDARD.encode(Into::<[u8; ELGAMAL_PUBKEY_LEN]>::into(*self))
+        )
+    }
+}
+
+impl TryFrom<&[u8]> for ElGamalPubkey {
+    type Error = ElGamalError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != ELGAMAL_PUBKEY_LEN {
+            return Err(ElGamalError::PubkeyDeserialization);
+        }
+
+        Ok(ElGamalPubkey(
+            CompressedRistretto::from_slice(bytes)
+                .decompress()
+                .ok_or(ElGamalError::PubkeyDeserialization)?,
+        ))
+    }
+}
+
+impl From<ElGamalPubkey> for [u8; ELGAMAL_PUBKEY_LEN] {
+    fn from(pubkey: ElGamalPubkey) -> Self {
+        pubkey.0.compress().to_bytes()
+    }
+}
+
+impl From<&ElGamalPubkey> for [u8; ELGAMAL_PUBKEY_LEN] {
+    fn from(pubkey: &ElGamalPubkey) -> Self {
+        pubkey.0.compress().to_bytes()
     }
 }
 
@@ -487,10 +562,12 @@ impl ElGamalSecretKey {
         self.0.as_bytes()
     }
 
+    #[deprecated(note = "please use `into()` instead")]
     pub fn to_bytes(&self) -> [u8; ELGAMAL_SECRET_KEY_LEN] {
         self.0.to_bytes()
     }
 
+    #[deprecated(note = "please use `try_from()` instead")]
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
         match bytes.try_into() {
             Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
@@ -502,13 +579,13 @@ impl ElGamalSecretKey {
 impl EncodableKey for ElGamalSecretKey {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         let bytes: Vec<u8> = serde_json::from_reader(reader)?;
-        Self::from_bytes(&bytes).ok_or_else(|| {
+        Self::try_from(bytes.as_slice()).ok().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalSecretKey").into()
         })
     }
 
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
-        let bytes = self.to_bytes();
+        let bytes = Into::<[u8; ELGAMAL_SECRET_KEY_LEN]>::into(self);
         let json = serde_json::to_string(&bytes.to_vec())?;
         writer.write_all(&json.clone().into_bytes())?;
         Ok(json)
@@ -543,6 +620,31 @@ impl SeedDerivable for ElGamalSecretKey {
 impl From<Scalar> for ElGamalSecretKey {
     fn from(scalar: Scalar) -> ElGamalSecretKey {
         ElGamalSecretKey(scalar)
+    }
+}
+
+impl TryFrom<&[u8]> for ElGamalSecretKey {
+    type Error = ElGamalError;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        match bytes.try_into() {
+            Ok(bytes) => Ok(ElGamalSecretKey::from(
+                Scalar::from_canonical_bytes(bytes)
+                    .ok_or(ElGamalError::SecretKeyDeserialization)?,
+            )),
+            _ => Err(ElGamalError::SecretKeyDeserialization),
+        }
+    }
+}
+
+impl From<ElGamalSecretKey> for [u8; ELGAMAL_SECRET_KEY_LEN] {
+    fn from(secret_key: ElGamalSecretKey) -> Self {
+        secret_key.0.to_bytes()
+    }
+}
+
+impl From<&ElGamalSecretKey> for [u8; ELGAMAL_SECRET_KEY_LEN] {
+    fn from(secret_key: &ElGamalSecretKey) -> Self {
+        secret_key.0.to_bytes()
     }
 }
 
@@ -954,10 +1056,10 @@ mod tests {
         assert!(Path::new(&outfile).exists());
         assert_eq!(
             keypair_vec,
-            ElGamalKeypair::read_json_file(&outfile)
-                .unwrap()
-                .to_bytes()
-                .to_vec()
+            Into::<[u8; ELGAMAL_KEYPAIR_LEN]>::into(
+                ElGamalKeypair::read_json_file(&outfile).unwrap()
+            )
+            .to_vec()
         );
 
         #[cfg(unix)]

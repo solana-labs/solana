@@ -62,7 +62,7 @@ impl CiphertextCommitmentEqualityProofData {
         amount: u64,
     ) -> Result<Self, ProofGenerationError> {
         let context = CiphertextCommitmentEqualityProofContext {
-            pubkey: pod::ElGamalPubkey(keypair.pubkey().to_bytes()),
+            pubkey: pod::ElGamalPubkey(keypair.pubkey().into()),
             ciphertext: pod::ElGamalCiphertext(ciphertext.to_bytes()),
             commitment: pod::PedersenCommitment(commitment.to_bytes()),
         };

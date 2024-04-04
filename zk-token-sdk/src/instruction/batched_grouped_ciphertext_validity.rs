@@ -70,8 +70,8 @@ impl BatchedGroupedCiphertext2HandlesValidityProofData {
         opening_lo: &PedersenOpening,
         opening_hi: &PedersenOpening,
     ) -> Result<Self, ProofGenerationError> {
-        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
-        let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.to_bytes());
+        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.into());
+        let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.into());
         let pod_grouped_ciphertext_lo = (*grouped_ciphertext_lo).into();
         let pod_grouped_ciphertext_hi = (*grouped_ciphertext_hi).into();
 

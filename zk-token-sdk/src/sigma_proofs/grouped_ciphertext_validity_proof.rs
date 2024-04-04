@@ -274,7 +274,7 @@ mod test {
     #[test]
     fn test_grouped_ciphertext_validity_proof_edge_cases() {
         // if destination public key zeroed, then the proof should always reject
-        let destination_pubkey = ElGamalPubkey::from_bytes(&[0u8; 32]).unwrap();
+        let destination_pubkey = ElGamalPubkey::try_from([0u8; 32].as_slice()).unwrap();
 
         let auditor_keypair = ElGamalKeypair::new_rand();
         let auditor_pubkey = auditor_keypair.pubkey();

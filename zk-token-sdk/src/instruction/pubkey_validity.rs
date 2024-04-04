@@ -50,7 +50,7 @@ pub struct PubkeyValidityProofContext {
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityData {
     pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofGenerationError> {
-        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
+        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().into());
 
         let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
 

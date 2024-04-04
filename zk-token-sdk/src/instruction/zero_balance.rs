@@ -54,7 +54,7 @@ impl ZeroBalanceProofData {
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
     ) -> Result<Self, ProofGenerationError> {
-        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().to_bytes());
+        let pod_pubkey = pod::ElGamalPubkey(keypair.pubkey().into());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
         let context = ZeroBalanceProofContext {

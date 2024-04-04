@@ -100,7 +100,7 @@ impl_from_str!(
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::ElGamalPubkey> for ElGamalPubkey {
     fn from(decoded_pubkey: decoded::ElGamalPubkey) -> Self {
-        Self(decoded_pubkey.to_bytes())
+        Self(decoded_pubkey.into())
     }
 }
 
@@ -109,7 +109,7 @@ impl TryFrom<ElGamalPubkey> for decoded::ElGamalPubkey {
     type Error = ElGamalError;
 
     fn try_from(pod_pubkey: ElGamalPubkey) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod_pubkey.0).ok_or(ElGamalError::PubkeyDeserialization)
+        Self::try_from(pod_pubkey.0.as_slice())
     }
 }
 

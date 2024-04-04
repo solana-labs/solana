@@ -63,8 +63,8 @@ impl GroupedCiphertext2HandlesValidityProofData {
         amount: u64,
         opening: &PedersenOpening,
     ) -> Result<Self, ProofGenerationError> {
-        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
-        let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.to_bytes());
+        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.into());
+        let pod_auditor_pubkey = pod::ElGamalPubkey(auditor_pubkey.into());
         let pod_grouped_ciphertext = (*grouped_ciphertext).into();
 
         let context = GroupedCiphertext2HandlesValidityProofContext {
