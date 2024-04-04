@@ -1,5 +1,6 @@
 use {
     super::Bank,
+    crate::bank::CollectorFeeDetails,
     log::{debug, warn},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -50,42 +51,76 @@ impl Bank {
         if collector_fees != 0 {
             let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
             if deposit > 0 {
-                let validate_fee_collector = self.validate_fee_collector_account();
-                match self.deposit_fees(
-                    &self.collector_id,
-                    deposit,
-                    DepositFeeOptions {
-                        check_account_owner: validate_fee_collector,
-                        check_rent_paying: validate_fee_collector,
-                    },
-                ) {
-                    Ok(post_balance) => {
-                        self.rewards.write().unwrap().push((
-                            self.collector_id,
-                            RewardInfo {
-                                reward_type: RewardType::Fee,
-                                lamports: deposit as i64,
-                                post_balance,
-                                commission: None,
-                            },
-                        ));
-                    }
-                    Err(err) => {
-                        debug!(
-                            "Burned {} lamport tx fee instead of sending to {} due to {}",
-                            deposit, self.collector_id, err
-                        );
-                        datapoint_warn!(
-                            "bank-burned_fee",
-                            ("slot", self.slot(), i64),
-                            ("num_lamports", deposit, i64),
-                            ("error", err.to_string(), String),
-                        );
-                        burn += deposit;
-                    }
-                }
+                self.deposit_or_burn_fee(deposit, &mut burn);
             }
             self.capitalization.fetch_sub(burn, Relaxed);
+        }
+    }
+
+    // NOTE: to replace `distribute_transaction_fees()`, it applies different burn/reward rate
+    //       on different fees:
+    //       transaction fee: same fee_rate_governor rule
+    //       priority fee: 100% reward
+    //       next PR will call it behind a feature gate
+    #[allow(dead_code)]
+    pub(super) fn distribute_transaction_fee_details(&self) {
+        let CollectorFeeDetails {
+            transaction_fee,
+            priority_fee,
+        } = *self.collector_fee_details.read().unwrap();
+
+        if transaction_fee.saturating_add(priority_fee) == 0 {
+            // nothing to distribute, exit early
+            return;
+        }
+
+        let (mut deposit, mut burn) = if transaction_fee != 0 {
+            self.fee_rate_governor.burn(transaction_fee)
+        } else {
+            (0, 0)
+        };
+        deposit = deposit.saturating_add(priority_fee);
+
+        if deposit > 0 {
+            self.deposit_or_burn_fee(deposit, &mut burn);
+        }
+        self.capitalization.fetch_sub(burn, Relaxed);
+    }
+
+    fn deposit_or_burn_fee(&self, deposit: u64, burn: &mut u64) {
+        let validate_fee_collector = self.validate_fee_collector_account();
+        match self.deposit_fees(
+            &self.collector_id,
+            deposit,
+            DepositFeeOptions {
+                check_account_owner: validate_fee_collector,
+                check_rent_paying: validate_fee_collector,
+            },
+        ) {
+            Ok(post_balance) => {
+                self.rewards.write().unwrap().push((
+                    self.collector_id,
+                    RewardInfo {
+                        reward_type: RewardType::Fee,
+                        lamports: deposit as i64,
+                        post_balance,
+                        commission: None,
+                    },
+                ));
+            }
+            Err(err) => {
+                debug!(
+                    "Burned {} lamport tx fee instead of sending to {} due to {}",
+                    deposit, self.collector_id, err
+                );
+                datapoint_warn!(
+                    "bank-burned_fee",
+                    ("slot", self.slot(), i64),
+                    ("num_lamports", deposit, i64),
+                    ("error", err.to_string(), String),
+                );
+                *burn = burn.saturating_add(deposit);
+            }
         }
     }
 
@@ -298,10 +333,11 @@ pub mod tests {
             account::AccountSharedData, feature_set, native_token::sol_to_lamports, pubkey,
             rent::Rent, signature::Signer,
         },
+        std::sync::RwLock,
     };
 
     #[test]
-    fn test_distribute_transaction_fees() {
+    fn test_deposit_or_burn_fee() {
         #[derive(PartialEq)]
         enum Scenario {
             Normal,
@@ -343,19 +379,16 @@ pub mod tests {
             let min_rent_exempt_balance = rent.minimum_balance(0);
             genesis.genesis_config.rent = rent; // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
             let bank = Bank::new_for_tests(&genesis.genesis_config);
-            let transaction_fees = 100;
-            bank.collector_fees.fetch_add(transaction_fees, Relaxed);
-            assert_eq!(transaction_fees, bank.collector_fees.load(Relaxed));
-            let (expected_collected_fees, burn_amount) =
-                bank.fee_rate_governor.burn(transaction_fees);
-            assert!(burn_amount > 0);
+
+            let deposit = 100;
+            let mut burn = 100;
 
             if test_case.scenario == Scenario::RentPaying {
                 // ensure that account balance + collected fees will make it rent-paying
                 let initial_balance = 100;
                 let account = AccountSharedData::new(initial_balance, 0, &system_program::id());
                 bank.store_account(bank.collector_id(), &account);
-                assert!(initial_balance + transaction_fees < min_rent_exempt_balance);
+                assert!(initial_balance + deposit < min_rent_exempt_balance);
             } else if test_case.scenario == Scenario::InvalidOwner {
                 // ensure that account owner is invalid and fee distribution will fail
                 let account =
@@ -367,17 +400,14 @@ pub mod tests {
                 bank.store_account(bank.collector_id(), &account);
             }
 
-            let initial_capitalization = bank.capitalization();
+            let initial_burn = burn;
             let initial_collector_id_balance = bank.get_balance(bank.collector_id());
-            bank.distribute_transaction_fees();
+            bank.deposit_or_burn_fee(deposit, &mut burn);
             let new_collector_id_balance = bank.get_balance(bank.collector_id());
 
             if test_case.scenario != Scenario::Normal && !test_case.disable_checks {
                 assert_eq!(initial_collector_id_balance, new_collector_id_balance);
-                assert_eq!(
-                    initial_capitalization - transaction_fees,
-                    bank.capitalization()
-                );
+                assert_eq!(initial_burn + deposit, burn);
                 let locked_rewards = bank.rewards.read().unwrap();
                 assert!(
                     locked_rewards.is_empty(),
@@ -385,11 +415,11 @@ pub mod tests {
                 );
             } else {
                 assert_eq!(
-                    initial_collector_id_balance + expected_collected_fees,
+                    initial_collector_id_balance + deposit,
                     new_collector_id_balance
                 );
 
-                assert_eq!(initial_capitalization - burn_amount, bank.capitalization());
+                assert_eq!(initial_burn, burn);
 
                 let locked_rewards = bank.rewards.read().unwrap();
                 assert_eq!(
@@ -400,7 +430,7 @@ pub mod tests {
 
                 let reward_info = &locked_rewards[0];
                 assert_eq!(
-                    reward_info.1.lamports, expected_collected_fees as i64,
+                    reward_info.1.lamports, deposit as i64,
                     "The reward amount should match the expected deposit"
                 );
                 assert_eq!(
@@ -410,6 +440,44 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_distribute_transaction_fees_normal() {
+        let genesis = create_genesis_config(0);
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
+        let transaction_fees = 100;
+        bank.collector_fees.fetch_add(transaction_fees, Relaxed);
+        assert_eq!(transaction_fees, bank.collector_fees.load(Relaxed));
+        let (expected_collected_fees, burn_amount) = bank.fee_rate_governor.burn(transaction_fees);
+
+        let initial_capitalization = bank.capitalization();
+        let initial_collector_id_balance = bank.get_balance(bank.collector_id());
+        bank.distribute_transaction_fees();
+        let new_collector_id_balance = bank.get_balance(bank.collector_id());
+
+        assert_eq!(
+            initial_collector_id_balance + expected_collected_fees,
+            new_collector_id_balance
+        );
+        assert_eq!(initial_capitalization - burn_amount, bank.capitalization());
+        let locked_rewards = bank.rewards.read().unwrap();
+        assert_eq!(
+            locked_rewards.len(),
+            1,
+            "There should be one reward distributed"
+        );
+
+        let reward_info = &locked_rewards[0];
+        assert_eq!(
+            reward_info.1.lamports, expected_collected_fees as i64,
+            "The reward amount should match the expected deposit"
+        );
+        assert_eq!(
+            reward_info.1.reward_type,
+            RewardType::Fee,
+            "The reward type should be Fee"
+        );
     }
 
     #[test]
@@ -817,5 +885,149 @@ pub mod tests {
                 assert_eq!(bank.rewards.read().unwrap().len(), 1);
             }
         }
+    }
+
+    #[test]
+    fn test_distribute_transaction_fee_details_normal() {
+        let genesis = create_genesis_config(0);
+        let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+        let transaction_fee = 100;
+        let priority_fee = 200;
+        bank.collector_fee_details = RwLock::new(CollectorFeeDetails {
+            transaction_fee,
+            priority_fee,
+        });
+        let (expected_deposit, expected_burn) = bank.fee_rate_governor.burn(transaction_fee);
+        let expected_rewards = expected_deposit + priority_fee;
+
+        let initial_capitalization = bank.capitalization();
+        let initial_collector_id_balance = bank.get_balance(bank.collector_id());
+        bank.distribute_transaction_fee_details();
+        let new_collector_id_balance = bank.get_balance(bank.collector_id());
+
+        assert_eq!(
+            initial_collector_id_balance + expected_rewards,
+            new_collector_id_balance
+        );
+        assert_eq!(
+            initial_capitalization - expected_burn,
+            bank.capitalization()
+        );
+        let locked_rewards = bank.rewards.read().unwrap();
+        assert_eq!(
+            locked_rewards.len(),
+            1,
+            "There should be one reward distributed"
+        );
+
+        let reward_info = &locked_rewards[0];
+        assert_eq!(
+            reward_info.1.lamports, expected_rewards as i64,
+            "The reward amount should match the expected deposit"
+        );
+        assert_eq!(
+            reward_info.1.reward_type,
+            RewardType::Fee,
+            "The reward type should be Fee"
+        );
+    }
+
+    #[test]
+    fn test_distribute_transaction_fee_details_zero() {
+        let genesis = create_genesis_config(0);
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
+        assert_eq!(
+            *bank.collector_fee_details.read().unwrap(),
+            CollectorFeeDetails::default()
+        );
+
+        let initial_capitalization = bank.capitalization();
+        let initial_collector_id_balance = bank.get_balance(bank.collector_id());
+        bank.distribute_transaction_fee_details();
+        let new_collector_id_balance = bank.get_balance(bank.collector_id());
+
+        assert_eq!(initial_collector_id_balance, new_collector_id_balance);
+        assert_eq!(initial_capitalization, bank.capitalization());
+        let locked_rewards = bank.rewards.read().unwrap();
+        assert!(
+            locked_rewards.is_empty(),
+            "There should be no rewards distributed"
+        );
+    }
+
+    #[test]
+    fn test_distribute_transaction_fee_details_burn_all() {
+        let mut genesis = create_genesis_config(0);
+        genesis.genesis_config.fee_rate_governor.burn_percent = 100;
+        let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+        let transaction_fee = 100;
+        let priority_fee = 200;
+        bank.collector_fee_details = RwLock::new(CollectorFeeDetails {
+            transaction_fee,
+            priority_fee,
+        });
+
+        let initial_capitalization = bank.capitalization();
+        let initial_collector_id_balance = bank.get_balance(bank.collector_id());
+        bank.distribute_transaction_fee_details();
+        let new_collector_id_balance = bank.get_balance(bank.collector_id());
+
+        assert_eq!(
+            initial_collector_id_balance + priority_fee,
+            new_collector_id_balance
+        );
+        assert_eq!(
+            initial_capitalization - transaction_fee,
+            bank.capitalization()
+        );
+        let locked_rewards = bank.rewards.read().unwrap();
+        assert_eq!(
+            locked_rewards.len(),
+            1,
+            "There should be one reward distributed"
+        );
+
+        let reward_info = &locked_rewards[0];
+        assert_eq!(
+            reward_info.1.lamports, priority_fee as i64,
+            "The reward amount should match the expected deposit"
+        );
+        assert_eq!(
+            reward_info.1.reward_type,
+            RewardType::Fee,
+            "The reward type should be Fee"
+        );
+    }
+
+    #[test]
+    fn test_distribute_transaction_fee_details_overflow_failure() {
+        let genesis = create_genesis_config(0);
+        let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+        let transaction_fee = 100;
+        let priority_fee = 200;
+        bank.collector_fee_details = RwLock::new(CollectorFeeDetails {
+            transaction_fee,
+            priority_fee,
+        });
+
+        // ensure that account balance will overflow and fee distribution will fail
+        let account = AccountSharedData::new(u64::MAX, 0, &system_program::id());
+        bank.store_account(bank.collector_id(), &account);
+
+        let initial_capitalization = bank.capitalization();
+        let initial_collector_id_balance = bank.get_balance(bank.collector_id());
+        bank.distribute_transaction_fee_details();
+        let new_collector_id_balance = bank.get_balance(bank.collector_id());
+
+        assert_eq!(initial_collector_id_balance, new_collector_id_balance);
+        assert_eq!(
+            initial_capitalization - transaction_fee - priority_fee,
+            bank.capitalization()
+        );
+        let locked_rewards = bank.rewards.read().unwrap();
+        assert!(
+            locked_rewards.is_empty(),
+            "There should be no rewards distributed"
+        );
     }
 }

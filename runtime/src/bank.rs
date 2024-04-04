@@ -268,8 +268,8 @@ impl AddAssign for SquashTiming {
 
 #[derive(AbiExample, Debug, Default, PartialEq)]
 pub(crate) struct CollectorFeeDetails {
-    pub transaction_fee: u64,
-    pub priority_fee: u64,
+    transaction_fee: u64,
+    priority_fee: u64,
 }
 
 impl CollectorFeeDetails {
