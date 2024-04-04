@@ -27,7 +27,7 @@ use {
 /// Identifies the type of built-in program targeted for Core BPF migration.
 /// The type of target determines whether the program should have a program
 /// account or not, which is checked before migration.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum CoreBpfMigrationTargetType {
     /// A standard (stateful) builtin program must have a program account.
     Builtin,
@@ -36,7 +36,7 @@ pub(crate) enum CoreBpfMigrationTargetType {
 }
 
 /// Configuration for migrating a built-in program to Core BPF.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CoreBpfMigrationConfig {
     /// The program ID of the source program to be used to replace the builtin.
     pub source_program_id: Pubkey,
