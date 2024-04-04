@@ -389,6 +389,18 @@ software. Refer again to
 [build from source](../cli/install.md#build-from-source). It is best for
 operators to build from source rather than using the pre built binaries.
 
+## Configure Solona CLI
+
+Configure your server to use your key.
+```
+solana config set --keypair ./validator-keypair.json
+```
+
+Configure your server to use testnet.
+```
+solana config set --url https://api.testnet.solana.com
+```
+
 ## Create A Validator Startup Script
 
 In your sol home directory (e.g. `/home/sol/`), create a folder called `bin`.
