@@ -81,6 +81,7 @@ impl AncientSlotInfos {
         slot: Slot,
         storage: Arc<AccountStorageEntry>,
         can_randomly_shrink: bool,
+        ideal_size: NonZeroU64,
     ) -> bool {
         let mut was_randomly_shrunk = false;
         let alive_bytes = storage.alive_bytes() as u64;
@@ -107,6 +108,12 @@ impl AncientSlotInfos {
                 // to reduce disk space used
                 saturating_add_assign!(self.total_alive_bytes_shrink, alive_bytes);
                 self.shrink_indexes.push(self.all_infos.len());
+            } else {
+                let already_ideal_size = u64::from(ideal_size) * 80 / 100;
+                if alive_bytes > already_ideal_size {
+                    // do not include this append vec at all. It is already ideal size and not a candidate for shrink.
+                    return was_randomly_shrunk;
+                }
             }
             self.all_infos.push(SlotInfo {
                 slot,
@@ -421,7 +428,11 @@ impl AccountsDb {
         slots: Vec<Slot>,
         tuning: &PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
-        let mut ancient_slot_infos = self.calc_ancient_slot_info(slots, tuning.can_randomly_shrink);
+        let mut ancient_slot_infos = self.calc_ancient_slot_info(
+            slots,
+            tuning.can_randomly_shrink,
+            tuning.ideal_storage_size,
+        );
 
         ancient_slot_infos.filter_ancient_slots(tuning);
         ancient_slot_infos
@@ -463,6 +474,7 @@ impl AccountsDb {
         &self,
         slots: Vec<Slot>,
         can_randomly_shrink: bool,
+        ideal_size: NonZeroU64,
     ) -> AncientSlotInfos {
         let len = slots.len();
         let mut infos = AncientSlotInfos {
@@ -474,7 +486,7 @@ impl AccountsDb {
 
         for slot in &slots {
             if let Some(storage) = self.storage.get_slot_storage_entry(*slot) {
-                if infos.add(*slot, storage, can_randomly_shrink) {
+                if infos.add(*slot, storage, can_randomly_shrink, ideal_size) {
                     randoms += 1;
                 }
             }
@@ -2152,10 +2164,19 @@ pub mod tests {
                 match method {
                     TestCollectInfo::Add => {
                         // test lower level 'add'
-                        infos.add(slot1, Arc::clone(&storage), can_randomly_shrink);
+                        infos.add(
+                            slot1,
+                            Arc::clone(&storage),
+                            can_randomly_shrink,
+                            NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                        );
                     }
                     TestCollectInfo::CalcAncientSlotInfo => {
-                        infos = db.calc_ancient_slot_info(vec![slot1], can_randomly_shrink);
+                        infos = db.calc_ancient_slot_info(
+                            vec![slot1],
+                            can_randomly_shrink,
+                            NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                        );
                     }
                     TestCollectInfo::CollectSortFilterInfo => {
                         let tuning = PackedAncientStorageTuning {
@@ -2169,7 +2190,7 @@ pub mod tests {
                         infos = db.collect_sort_filter_ancient_slots(vec![slot1], &tuning);
                     }
                 }
-                assert_eq!(infos.all_infos.len(), 1);
+                assert_eq!(infos.all_infos.len(), 1, "{method:?}");
                 let should_shrink = data_size.is_none();
                 assert_storage_info(infos.all_infos.first().unwrap(), &storage, should_shrink);
                 if should_shrink {
@@ -2203,9 +2224,18 @@ pub mod tests {
             let mut infos = AncientSlotInfos::default();
             let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
             if call_add {
-                infos.add(slot1, Arc::clone(&storage), can_randomly_shrink);
+                infos.add(
+                    slot1,
+                    Arc::clone(&storage),
+                    can_randomly_shrink,
+                    NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                );
             } else {
-                infos = db.calc_ancient_slot_info(vec![slot1], can_randomly_shrink);
+                infos = db.calc_ancient_slot_info(
+                    vec![slot1],
+                    can_randomly_shrink,
+                    NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                );
             }
             assert!(infos.all_infos.is_empty());
             assert!(infos.shrink_indexes.is_empty());
@@ -2231,7 +2261,11 @@ pub mod tests {
                         .iter()
                         .map(|storage| storage.alive_bytes() as u64)
                         .sum::<u64>();
-                    let infos = db.calc_ancient_slot_info(slot_vec.clone(), can_randomly_shrink);
+                    let infos = db.calc_ancient_slot_info(
+                        slot_vec.clone(),
+                        can_randomly_shrink,
+                        NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                    );
                     if !alive {
                         assert!(infos.all_infos.is_empty());
                         assert!(infos.shrink_indexes.is_empty());
@@ -2309,9 +2343,11 @@ pub mod tests {
                         .sum::<u64>();
 
                     let infos = match method {
-                        TestCollectInfo::CalcAncientSlotInfo => {
-                            db.calc_ancient_slot_info(slot_vec.clone(), can_randomly_shrink)
-                        }
+                        TestCollectInfo::CalcAncientSlotInfo => db.calc_ancient_slot_info(
+                            slot_vec.clone(),
+                            can_randomly_shrink,
+                            NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                        ),
                         TestCollectInfo::Add => {
                             continue; // unsupportable
                         }
@@ -2623,9 +2659,11 @@ pub mod tests {
                     .map(|storage| storage.alive_bytes() as u64)
                     .sum::<u64>();
                 let infos = match method {
-                    TestCollectInfo::CalcAncientSlotInfo => {
-                        db.calc_ancient_slot_info(slot_vec.clone(), can_randomly_shrink)
-                    }
+                    TestCollectInfo::CalcAncientSlotInfo => db.calc_ancient_slot_info(
+                        slot_vec.clone(),
+                        can_randomly_shrink,
+                        NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                    ),
                     TestCollectInfo::Add => {
                         continue; // unsupportable
                     }
