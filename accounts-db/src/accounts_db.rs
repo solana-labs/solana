@@ -3514,14 +3514,9 @@ impl AccountsDb {
     {
         let mut reclaim_result = ReclaimResult::default();
         if let Some(reclaims) = reclaims {
-            let (ref mut purged_account_slots, ref mut reclaimed_offsets) = reclaim_result;
-
-            let dead_slots = self.remove_dead_accounts(
-                reclaims,
-                expected_single_dead_slot,
-                Some(reclaimed_offsets),
-                reset_accounts,
-            );
+            let (dead_slots, reclaimed_offsets) =
+                self.remove_dead_accounts(reclaims, expected_single_dead_slot, reset_accounts);
+            reclaim_result.1 = reclaimed_offsets;
 
             if let HandleReclaims::ProcessDeadSlots(purge_stats) = handle_reclaims {
                 if let Some(expected_single_dead_slot) = expected_single_dead_slot {
@@ -3533,7 +3528,7 @@ impl AccountsDb {
 
                 self.process_dead_slots(
                     &dead_slots,
-                    Some(purged_account_slots),
+                    Some(&mut reclaim_result.0),
                     purge_stats,
                     pubkeys_removed_from_accounts_index,
                 );
@@ -7855,16 +7850,18 @@ impl AccountsDb {
         }
     }
 
+    /// returns (dead slots, reclaimed_offsets)
     fn remove_dead_accounts<'a, I>(
         &'a self,
         reclaims: I,
         expected_slot: Option<Slot>,
-        mut reclaimed_offsets: Option<&mut SlotOffsets>,
         reset_accounts: bool,
-    ) -> IntSet<Slot>
+    ) -> (IntSet<Slot>, SlotOffsets)
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
+        let mut reclaimed_offsets = SlotOffsets::default();
+
         assert!(self.storage.no_shrink_in_progress());
 
         let mut dead_slots = IntSet::default();
@@ -7873,12 +7870,10 @@ impl AccountsDb {
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
             assert!(!account_info.is_cached());
-            if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
-                reclaimed_offsets
-                    .entry(*slot)
-                    .or_default()
-                    .insert(account_info.offset());
-            }
+            reclaimed_offsets
+                .entry(*slot)
+                .or_default()
+                .insert(account_info.offset());
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
             }
@@ -7936,7 +7931,7 @@ impl AccountsDb {
             true
         });
 
-        dead_slots
+        (dead_slots, reclaimed_offsets)
     }
 
     /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
@@ -14002,7 +13997,7 @@ pub mod tests {
                 [0];
             assert_eq!(account_info.0, slot);
             let reclaims = [account_info];
-            accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
+            accounts_db.remove_dead_accounts(reclaims.iter(), None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Acquire);
             assert_eq!(before_size, after_size + account.stored_size());
         }
