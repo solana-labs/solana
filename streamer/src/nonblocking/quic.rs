@@ -17,6 +17,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
+    solana_measure::measure::Measure,
     solana_perf::packet::{PacketBatch, PACKETS_PER_BATCH},
     solana_sdk::{
         packet::{Meta, PACKET_DATA_SIZE},
@@ -27,9 +28,10 @@ use {
             QUIC_MIN_STAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS, QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
         },
-        signature::Keypair,
+        signature::{Keypair, Signature},
         timing,
     },
+    solana_transaction_metrics_tracker::signature_if_should_track_packet,
     std::{
         iter::repeat_with,
         net::{IpAddr, SocketAddr, UdpSocket},
@@ -94,6 +96,7 @@ struct PacketChunk {
 struct PacketAccumulator {
     pub meta: Meta,
     pub chunks: Vec<PacketChunk>,
+    pub start_time: Instant,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -646,6 +649,7 @@ async fn packet_batch_sender(
     trace!("enter packet_batch_sender");
     let mut batch_start_time = Instant::now();
     loop {
+        let mut packet_perf_measure: Vec<([u8; 64], std::time::Instant)> = Vec::default();
         let mut packet_batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
         let mut total_bytes: usize = 0;
 
@@ -665,6 +669,8 @@ async fn packet_batch_sender(
                 || (!packet_batch.is_empty() && elapsed >= coalesce)
             {
                 let len = packet_batch.len();
+                track_streamer_fetch_packet_performance(&mut packet_perf_measure, &stats);
+
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
                         .total_packet_batch_send_err
@@ -710,12 +716,46 @@ async fn packet_batch_sender(
 
                 total_bytes += packet_batch[i].meta().size;
 
+                if let Some(signature) = signature_if_should_track_packet(&packet_batch[i])
+                    .ok()
+                    .flatten()
+                {
+                    packet_perf_measure.push((*signature, packet_accumulator.start_time));
+                    // we set the PERF_TRACK_PACKET on
+                    packet_batch[i].meta_mut().set_track_performance(true);
+                }
                 stats
                     .total_chunks_processed_by_batcher
                     .fetch_add(num_chunks, Ordering::Relaxed);
             }
         }
     }
+}
+
+fn track_streamer_fetch_packet_performance(
+    packet_perf_measure: &mut [([u8; 64], Instant)],
+    stats: &Arc<StreamStats>,
+) {
+    if packet_perf_measure.is_empty() {
+        return;
+    }
+    let mut measure = Measure::start("track_perf");
+    let mut process_sampled_packets_us_hist = stats.process_sampled_packets_us_hist.lock().unwrap();
+
+    for (signature, start_time) in packet_perf_measure.iter() {
+        let duration = Instant::now().duration_since(*start_time);
+        debug!(
+            "QUIC streamer fetch stage took {duration:?} for transaction {:?}",
+            Signature::from(*signature)
+        );
+        process_sampled_packets_us_hist
+            .increment(duration.as_micros() as u64)
+            .unwrap();
+    }
+    measure.stop();
+    stats
+        .perf_track_overhead_us
+        .fetch_add(measure.as_us(), Ordering::Relaxed);
 }
 
 async fn handle_connection(
@@ -872,6 +912,7 @@ async fn handle_chunk(
                     *packet_accum = Some(PacketAccumulator {
                         meta,
                         chunks: Vec::new(),
+                        start_time: Instant::now(),
                     });
                 }
 
@@ -1471,6 +1512,7 @@ pub mod test {
                     offset,
                     end_of_chunk: size,
                 }],
+                start_time: Instant::now(),
             };
             ptk_sender.send(packet_accum).await.unwrap();
         }
