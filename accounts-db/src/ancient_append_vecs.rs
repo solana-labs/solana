@@ -20,10 +20,10 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
-    solana_sdk::{account::ReadableAccount, clock::Slot, saturating_add_assign},
+    solana_sdk::{account::ReadableAccount, clock::Slot},
     std::{
         collections::HashMap,
-        num::NonZeroU64,
+        num::{NonZeroU64, Saturating},
         sync::{atomic::Ordering, Arc, Mutex},
     },
 };
@@ -68,9 +68,9 @@ struct AncientSlotInfos {
     /// subset of all_infos
     shrink_indexes: Vec<usize>,
     /// total alive bytes across contents of 'shrink_indexes'
-    total_alive_bytes_shrink: u64,
+    total_alive_bytes_shrink: Saturating<u64>,
     /// total alive bytes across all slots
-    total_alive_bytes: u64,
+    total_alive_bytes: Saturating<u64>,
 }
 
 impl AncientSlotInfos {
@@ -106,7 +106,7 @@ impl AncientSlotInfos {
             if should_shrink {
                 // alive ratio is too low, so prioritize combining this slot with others
                 // to reduce disk space used
-                saturating_add_assign!(self.total_alive_bytes_shrink, alive_bytes);
+                self.total_alive_bytes_shrink += alive_bytes;
                 self.shrink_indexes.push(self.all_infos.len());
             } else {
                 let already_ideal_size = u64::from(ideal_size) * 80 / 100;
@@ -122,7 +122,7 @@ impl AncientSlotInfos {
                 alive_bytes,
                 should_shrink,
             });
-            saturating_add_assign!(self.total_alive_bytes, alive_bytes);
+            self.total_alive_bytes += alive_bytes;
         }
         was_randomly_shrunk
     }
@@ -150,20 +150,20 @@ impl AncientSlotInfos {
 
     /// clear 'should_shrink' for storages after a cutoff to limit how many storages we shrink
     fn clear_should_shrink_after_cutoff(&mut self, percent_of_alive_shrunk_data: u64) {
-        let mut bytes_to_shrink_due_to_ratio = 0;
+        let mut bytes_to_shrink_due_to_ratio = Saturating(0);
         // shrink enough slots to write 'percent_of_alive_shrunk_data'% of the total alive data
         // from slots that exceeded the shrink threshold.
         // The goal is to limit overall i/o in this pass while making progress.
-        let threshold_bytes = self.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100;
+        let threshold_bytes = self.total_alive_bytes_shrink.0 * percent_of_alive_shrunk_data / 100;
         for info_index in &self.shrink_indexes {
             let info = &mut self.all_infos[*info_index];
-            if bytes_to_shrink_due_to_ratio >= threshold_bytes {
+            if bytes_to_shrink_due_to_ratio.0 >= threshold_bytes {
                 // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to 'should_shrink'
                 // It MAY be shrunk based on total capacity still.
                 // Mark it as false for 'should_shrink' so it gets evaluated solely based on # of files.
                 info.should_shrink = false;
             } else {
-                saturating_add_assign!(bytes_to_shrink_due_to_ratio, info.alive_bytes);
+                bytes_to_shrink_due_to_ratio += info.alive_bytes;
             }
         }
     }
@@ -187,11 +187,11 @@ impl AncientSlotInfos {
         // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
-        let mut cumulative_bytes = 0u64;
+        let mut cumulative_bytes = Saturating(0u64);
         let low_threshold = max_storages * 50 / 100;
         for (i, info) in self.all_infos.iter().enumerate() {
-            saturating_add_assign!(cumulative_bytes, info.alive_bytes);
-            let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
+            cumulative_bytes += info.alive_bytes;
+            let ancient_storages_required = (cumulative_bytes.0 / ideal_storage_size + 1) as usize;
             let storages_remaining = total_storages - i - 1;
 
             // if the remaining uncombined storages and the # of resulting
@@ -459,11 +459,11 @@ impl AccountsDb {
 
         write_ancient_accounts.metrics.accumulate(&ShrinkStatsSub {
             store_accounts_timing,
-            rewrite_elapsed_us,
-            create_and_insert_store_elapsed_us,
-            unpackable_slots_count: 0,
-            newest_alive_packed_count: 0,
+            rewrite_elapsed_us: Saturating(rewrite_elapsed_us),
+            create_and_insert_store_elapsed_us: Saturating(create_and_insert_store_elapsed_us),
+            ..ShrinkStatsSub::default()
         });
+
         write_ancient_accounts
             .shrinks_in_progress
             .insert(target_slot, shrink_in_progress);
@@ -791,7 +791,7 @@ impl<'a> PackedAncientStorage<'a> {
         // starting at first entry in current_alive_accounts
         let mut partial_inner_index = 0;
         // 0 bytes written so far from the current set of accounts
-        let mut partial_bytes_written = 0;
+        let mut partial_bytes_written = Saturating(0);
         // pack a new storage each iteration of this outer loop
         loop {
             let mut bytes_total = 0usize;
@@ -806,11 +806,11 @@ impl<'a> PackedAncientStorage<'a> {
                     current_alive_accounts = accounts_to_combine.next();
                     // reset partial progress since we're starting over with a new set of alive accounts
                     partial_inner_index = 0;
-                    partial_bytes_written = 0;
+                    partial_bytes_written = Saturating(0);
                     continue;
                 }
                 let bytes_remaining_this_slot =
-                    alive_accounts.bytes.saturating_sub(partial_bytes_written);
+                    alive_accounts.bytes.saturating_sub(partial_bytes_written.0);
                 let bytes_total_with_this_slot =
                     bytes_total.saturating_add(bytes_remaining_this_slot);
                 let mut partial_inner_index_max_exclusive;
@@ -832,7 +832,7 @@ impl<'a> PackedAncientStorage<'a> {
                             break;
                         }
                         // this account fits
-                        saturating_add_assign!(partial_bytes_written, account_size);
+                        partial_bytes_written += account_size;
                         bytes_total = new_size;
                         partial_inner_index_max_exclusive += 1;
                     }
@@ -2203,12 +2203,15 @@ pub mod tests {
                             Vec::default()
                         }
                     );
-                    assert_eq!(infos.total_alive_bytes, alive_bytes_expected as u64);
-                    assert_eq!(infos.total_alive_bytes_shrink, alive_bytes_expected as u64);
+                    assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected as u64);
+                    assert_eq!(
+                        infos.total_alive_bytes_shrink.0,
+                        alive_bytes_expected as u64
+                    );
                 } else {
                     assert!(infos.shrink_indexes.is_empty());
-                    assert_eq!(infos.total_alive_bytes, alive_bytes_expected as u64);
-                    assert_eq!(infos.total_alive_bytes_shrink, 0);
+                    assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected as u64);
+                    assert_eq!(infos.total_alive_bytes_shrink.0, 0);
                 }
             }
         }
@@ -2239,8 +2242,8 @@ pub mod tests {
             }
             assert!(infos.all_infos.is_empty());
             assert!(infos.shrink_indexes.is_empty());
-            assert_eq!(infos.total_alive_bytes, 0);
-            assert_eq!(infos.total_alive_bytes_shrink, 0);
+            assert_eq!(infos.total_alive_bytes.0, 0);
+            assert_eq!(infos.total_alive_bytes_shrink.0, 0);
         }
     }
 
@@ -2269,8 +2272,8 @@ pub mod tests {
                     if !alive {
                         assert!(infos.all_infos.is_empty());
                         assert!(infos.shrink_indexes.is_empty());
-                        assert_eq!(infos.total_alive_bytes, 0);
-                        assert_eq!(infos.total_alive_bytes_shrink, 0);
+                        assert_eq!(infos.total_alive_bytes.0, 0);
+                        assert_eq!(infos.total_alive_bytes_shrink.0, 0);
                     } else {
                         assert_eq!(infos.all_infos.len(), slots);
                         let should_shrink = data_size.is_none();
@@ -2290,12 +2293,12 @@ pub mod tests {
                                     .map(|(i, _)| i)
                                     .collect::<Vec<_>>()
                             );
-                            assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
-                            assert_eq!(infos.total_alive_bytes_shrink, alive_bytes_expected);
+                            assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected);
+                            assert_eq!(infos.total_alive_bytes_shrink.0, alive_bytes_expected);
                         } else {
                             assert!(infos.shrink_indexes.is_empty());
-                            assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
-                            assert_eq!(infos.total_alive_bytes_shrink, 0);
+                            assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected);
+                            assert_eq!(infos.total_alive_bytes_shrink.0, 0);
                         }
                     }
                 }
@@ -2382,12 +2385,12 @@ pub mod tests {
                                 Vec::default()
                             }
                         );
-                        assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
-                        assert_eq!(infos.total_alive_bytes_shrink, alive_bytes_expected);
+                        assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected);
+                        assert_eq!(infos.total_alive_bytes_shrink.0, alive_bytes_expected);
                     } else {
                         assert!(infos.shrink_indexes.is_empty());
-                        assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
-                        assert_eq!(infos.total_alive_bytes_shrink, 0);
+                        assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected);
+                        assert_eq!(infos.total_alive_bytes_shrink.0, 0);
                     }
                 }
             }
@@ -2702,8 +2705,8 @@ pub mod tests {
                             .collect::<Vec<_>>()
                     }
                 );
-                assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
-                assert_eq!(infos.total_alive_bytes_shrink, dead_bytes);
+                assert_eq!(infos.total_alive_bytes.0, alive_bytes_expected);
+                assert_eq!(infos.total_alive_bytes_shrink.0, dead_bytes);
             }
         }
     }
@@ -2869,8 +2872,13 @@ pub mod tests {
                     if swap {
                         infos.all_infos = infos.all_infos.into_iter().rev().collect();
                     }
-                    infos.total_alive_bytes_shrink =
-                        infos.all_infos.iter().map(|info| info.alive_bytes).sum();
+                    infos.total_alive_bytes_shrink = Saturating(
+                        infos
+                            .all_infos
+                            .iter()
+                            .map(|info| info.alive_bytes)
+                            .sum::<u64>(),
+                    );
                     match method {
                         TestShouldShrink::FilterAncientSlots => {
                             let tuning = PackedAncientStorageTuning {
@@ -2900,7 +2908,7 @@ pub mod tests {
                             percent_of_alive_shrunk_data == 89 || percent_of_alive_shrunk_data == 90
                         } else {
                             infos.all_infos[infos.shrink_indexes[0]].alive_bytes
-                                >= infos.total_alive_bytes_shrink * percent_of_alive_shrunk_data
+                                >= infos.total_alive_bytes_shrink.0 * percent_of_alive_shrunk_data
                                     / 100
                         };
                         if modify {
