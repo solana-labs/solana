@@ -45,7 +45,7 @@ impl Bank {
                 EpochRewardStatus::Active(_)
             ));
             self.epoch_reward_status = EpochRewardStatus::Inactive;
-            self.destroy_epoch_rewards_sysvar();
+            self.set_epoch_rewards_sysvar_to_inactive();
         }
     }
 
@@ -211,7 +211,10 @@ mod tests {
         let total_rewards = 1_000_000_000;
         bank.create_epoch_rewards_sysvar(total_rewards, 0, 42);
         let pre_epoch_rewards_account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
-        assert_eq!(pre_epoch_rewards_account.lamports(), total_rewards);
+        let expected_balance =
+            bank.get_minimum_balance_for_rent_exemption(pre_epoch_rewards_account.data().len());
+        // Expected balance is the sysvar rent-exempt balance
+        assert_eq!(pre_epoch_rewards_account.lamports(), expected_balance);
 
         // Set up a partition of rewards to distribute
         let expected_num = 100;
@@ -230,22 +233,18 @@ mod tests {
         bank.distribute_epoch_rewards_in_partition(&all_rewards, 0);
         let post_cap = bank.capitalization();
         let post_epoch_rewards_account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
-        let expected_epoch_rewards_sysvar_lamports_remaining =
-            total_rewards - rewards_to_distribute;
 
-        // Assert that epoch rewards sysvar lamports decreases by the distributed rewards
-        assert_eq!(
-            post_epoch_rewards_account.lamports(),
-            expected_epoch_rewards_sysvar_lamports_remaining
-        );
+        // Assert that epoch rewards sysvar lamports balance does not change
+        assert_eq!(post_epoch_rewards_account.lamports(), expected_balance);
 
         let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
             from_account(&post_epoch_rewards_account).unwrap();
         assert_eq!(epoch_rewards.total_rewards, total_rewards);
         assert_eq!(epoch_rewards.distributed_rewards, rewards_to_distribute,);
 
-        // Assert that the bank total capital didn't change
-        assert_eq!(pre_cap, post_cap);
+        // Assert that the bank total capital changed by the amount of rewards
+        // distributed
+        assert_eq!(pre_cap + rewards_to_distribute, post_cap);
     }
 
     /// Test partitioned credits and reward history updates of epoch rewards do cover all the rewards

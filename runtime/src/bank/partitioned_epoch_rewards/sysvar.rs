@@ -33,6 +33,8 @@ impl Bank {
     ) {
         assert!(self.is_partitioned_rewards_code_enabled());
 
+        assert!(total_rewards >= distributed_rewards);
+
         let epoch_rewards = sysvar::epoch_rewards::EpochRewards {
             total_rewards,
             distributed_rewards,
@@ -42,13 +44,10 @@ impl Bank {
         };
 
         self.update_sysvar_account(&sysvar::epoch_rewards::id(), |account| {
-            let mut inherited_account_fields =
-                self.inherit_specially_retained_account_fields(account);
-
-            assert!(total_rewards >= distributed_rewards);
-            // set the account lamports to the undistributed rewards
-            inherited_account_fields.0 = total_rewards - distributed_rewards;
-            create_account(&epoch_rewards, inherited_account_fields)
+            create_account(
+                &epoch_rewards,
+                self.inherit_specially_retained_account_fields(account),
+            )
         });
 
         self.log_epoch_rewards_sysvar("create");
@@ -66,30 +65,37 @@ impl Bank {
         epoch_rewards.distribute(distributed);
 
         self.update_sysvar_account(&sysvar::epoch_rewards::id(), |account| {
-            let mut inherited_account_fields =
-                self.inherit_specially_retained_account_fields(account);
-
-            let lamports = inherited_account_fields.0;
-            assert!(lamports >= distributed);
-            inherited_account_fields.0 = lamports - distributed;
-            create_account(&epoch_rewards, inherited_account_fields)
+            create_account(
+                &epoch_rewards,
+                self.inherit_specially_retained_account_fields(account),
+            )
         });
 
         self.log_epoch_rewards_sysvar("update");
     }
 
-    pub(in crate::bank::partitioned_epoch_rewards) fn destroy_epoch_rewards_sysvar(&self) {
-        if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
-            if account.lamports() > 0 {
-                info!(
-                    "burning {} extra lamports in EpochRewards sysvar account at slot {}",
-                    account.lamports(),
-                    self.slot()
-                );
-                self.log_epoch_rewards_sysvar("burn");
-                self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
-            }
-        }
+    /// Update EpochRewards sysvar with distributed rewards
+    pub(in crate::bank::partitioned_epoch_rewards) fn set_epoch_rewards_sysvar_to_inactive(&self) {
+        let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(
+            &self
+                .get_account(&sysvar::epoch_rewards::id())
+                .unwrap_or_default(),
+        )
+        .unwrap_or_default();
+        assert_eq!(
+            epoch_rewards.distributed_rewards,
+            epoch_rewards.total_rewards
+        );
+        epoch_rewards.active = false;
+
+        self.update_sysvar_account(&sysvar::epoch_rewards::id(), |account| {
+            create_account(
+                &epoch_rewards,
+                self.inherit_specially_retained_account_fields(account),
+            )
+        });
+
+        self.log_epoch_rewards_sysvar("set_inactive");
     }
 }
 
@@ -129,14 +135,17 @@ mod tests {
 
         bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
         let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
-        assert_eq!(account.lamports(), total_rewards - 10);
+        let expected_balance = bank.get_minimum_balance_for_rent_exemption(account.data().len());
+        // Expected balance is the sysvar rent-exempt balance
+        assert_eq!(account.lamports(), expected_balance);
         let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
         assert_eq!(epoch_rewards, expected_epoch_rewards);
 
         // make a distribution from epoch rewards sysvar
         bank.update_epoch_rewards_sysvar(10);
         let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
-        assert_eq!(account.lamports(), total_rewards - 20);
+        // Balance should not change
+        assert_eq!(account.lamports(), expected_balance);
         let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
         let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards {
             distribution_starting_block_height: 42,
@@ -148,10 +157,5 @@ mod tests {
             active: true,
         };
         assert_eq!(epoch_rewards, expected_epoch_rewards);
-
-        // burn epoch rewards sysvar
-        bank.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
-        let account = bank.get_account(&sysvar::epoch_rewards::id());
-        assert!(account.is_none());
     }
 }

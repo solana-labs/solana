@@ -65,10 +65,11 @@ fn epoch_reward_sysvar_getter_process_instruction(
     // input[0] == 1 indicates the bank is in reward period.
     if input[0] == 0 {
         // epoch rewards sysvar should not exist for banks that are not in reward period
-        let epoch_rewards = EpochRewards::get();
-        assert!(epoch_rewards.is_err());
+        let epoch_rewards = EpochRewards::get()?;
+        assert!(!epoch_rewards.active);
     } else {
-        let _epoch_rewards = EpochRewards::get()?;
+        let epoch_rewards = EpochRewards::get()?;
+        assert!(epoch_rewards.active);
     }
 
     Ok(())
