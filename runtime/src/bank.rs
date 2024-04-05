@@ -1253,16 +1253,19 @@ impl Bank {
                 {
                     let effective_epoch = program_cache.latest_root_epoch.saturating_add(1);
                     drop(program_cache);
-                    let recompiled = new.load_program(&key, false, effective_epoch);
-                    recompiled
-                        .tx_usage_counter
-                        .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
-                    recompiled
-                        .ix_usage_counter
-                        .fetch_add(program_to_recompile.ix_usage_counter.load(Relaxed), Relaxed);
-                    let mut program_cache =
-                        new.transaction_processor.program_cache.write().unwrap();
-                    program_cache.assign_program(key, recompiled);
+                    if let Some(recompiled) = new.load_program(&key, false, effective_epoch) {
+                        recompiled.tx_usage_counter.fetch_add(
+                            program_to_recompile.tx_usage_counter.load(Relaxed),
+                            Relaxed,
+                        );
+                        recompiled.ix_usage_counter.fetch_add(
+                            program_to_recompile.ix_usage_counter.load(Relaxed),
+                            Relaxed,
+                        );
+                        let mut program_cache =
+                            new.transaction_processor.program_cache.write().unwrap();
+                        program_cache.assign_program(key, recompiled);
+                    }
                 }
             } else if new.epoch() != program_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -6886,7 +6889,7 @@ impl Bank {
         pubkey: &Pubkey,
         reload: bool,
         effective_epoch: Epoch,
-    ) -> Arc<LoadedProgram> {
+    ) -> Option<Arc<LoadedProgram>> {
         self.transaction_processor
             .load_program_with_pubkey(self, pubkey, reload, effective_epoch)
     }
