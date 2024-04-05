@@ -1,8 +1,5 @@
 //! The `recvmmsg` module provides recvmmsg() API implementation
 
-#[cfg(target_os = "linux")]
-#[allow(deprecated)]
-use nix::sys::socket::InetAddr;
 pub use solana_perf::packet::NUM_RCVMMSGS;
 use {
     crate::packet::{Meta, Packet},
@@ -12,7 +9,11 @@ use {
 use {
     itertools::izip,
     libc::{iovec, mmsghdr, sockaddr_storage, socklen_t, AF_INET, AF_INET6, MSG_WAITFORONE},
-    std::{mem, os::unix::io::AsRawFd},
+    std::{
+        mem,
+        net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+        os::unix::io::AsRawFd,
+    },
 };
 
 #[cfg(not(target_os = "linux"))]
@@ -43,22 +44,31 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num
 }
 
 #[cfg(target_os = "linux")]
-#[allow(deprecated)]
-fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<InetAddr> {
+fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<SocketAddr> {
     use libc::{sa_family_t, sockaddr_in, sockaddr_in6};
     const SOCKADDR_IN_SIZE: usize = std::mem::size_of::<sockaddr_in>();
     const SOCKADDR_IN6_SIZE: usize = std::mem::size_of::<sockaddr_in6>();
     if addr.ss_family == AF_INET as sa_family_t
         && hdr.msg_hdr.msg_namelen == SOCKADDR_IN_SIZE as socklen_t
     {
-        let addr = addr as *const _ as *const sockaddr_in;
-        return Some(unsafe { InetAddr::V4(*addr) });
+        // ref: https://github.com/rust-lang/socket2/blob/65085d9dff270e588c0fbdd7217ec0b392b05ef2/src/sockaddr.rs#L167-L172
+        let addr = unsafe { &*(addr as *const _ as *const sockaddr_in) };
+        return Some(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes()),
+            u16::from_be(addr.sin_port),
+        )));
     }
     if addr.ss_family == AF_INET6 as sa_family_t
         && hdr.msg_hdr.msg_namelen == SOCKADDR_IN6_SIZE as socklen_t
     {
-        let addr = addr as *const _ as *const sockaddr_in6;
-        return Some(unsafe { InetAddr::V6(*addr) });
+        // ref: https://github.com/rust-lang/socket2/blob/65085d9dff270e588c0fbdd7217ec0b392b05ef2/src/sockaddr.rs#L174-L189
+        let addr = unsafe { &*(addr as *const _ as *const sockaddr_in6) };
+        return Some(SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::from(addr.sin6_addr.s6_addr),
+            u16::from_be(addr.sin6_port),
+            addr.sin6_flowinfo,
+            addr.sin6_scope_id,
+        )));
     }
     error!(
         "recvmmsg unexpected ss_family:{} msg_namelen:{}",
@@ -118,7 +128,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
     for (addr, hdr, pkt) in izip!(addrs, hdrs, packets.iter_mut()).take(nrecv) {
         pkt.meta_mut().size = hdr.msg_len as usize;
         if let Some(addr) = cast_socket_addr(&addr, &hdr) {
-            pkt.meta_mut().set_socket_addr(&addr.to_std());
+            pkt.meta_mut().set_socket_addr(&addr);
         }
     }
     Ok(nrecv)
