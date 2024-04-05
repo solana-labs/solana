@@ -1,7 +1,7 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
     base64::{prelude::BASE64_STANDARD, Engine},
-    chrono::{Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
+    chrono::{DateTime, Local, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_cli_config::SettingType,
@@ -715,10 +715,8 @@ pub fn new_spinner_progress_bar() -> ProgressBar {
 }
 
 pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
-    match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
-        Some(ndt) => Utc
-            .from_utc_datetime(&ndt)
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
+    match DateTime::from_timestamp(unix_timestamp, 0) {
+        Some(ndt) => ndt.to_rfc3339_opts(SecondsFormat::Secs, true),
         None => format!("UnixTimestamp {unix_timestamp}"),
     }
 }
@@ -975,5 +973,10 @@ Rewards:
             &format_labeled_address(&pubkey, &address_labels),
             "abcdefghijklmnopqrstuvwxyz12345 (1111..1111)"
         );
+    }
+
+    #[test]
+    fn test_unix_timestamp_to_string() {
+        assert_eq!(unix_timestamp_to_string(1628633791), "2021-08-10T22:16:31Z");
     }
 }
