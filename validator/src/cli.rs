@@ -2211,7 +2211,10 @@ impl DefaultArgs {
         DefaultArgs {
             bind_address: "0.0.0.0".to_string(),
             ledger_path: "ledger".to_string(),
-            dynamic_port_range: format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1),
+            dynamic_port_range: format!(
+                "{}-{}",
+                VALIDATOR_PORT_RANGE.start, VALIDATOR_PORT_RANGE.end
+            ),
             maximum_local_snapshot_age: "2500".to_string(),
             genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string(),
             rpc_max_multiple_accounts: MAX_MULTIPLE_ACCOUNTS.to_string(),
@@ -2302,14 +2305,14 @@ pub fn port_validator(port: String) -> Result<(), String> {
 }
 
 pub fn port_range_validator(port_range: String) -> Result<(), String> {
-    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
-        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
+    if let Some(port_range) = solana_net_utils::parse_port_range(&port_range) {
+        if port_range.len() < usize::from(MINIMUM_VALIDATOR_PORT_RANGE_WIDTH) {
             Err(format!(
                 "Port range is too small.  Try --dynamic-port-range {}-{}",
-                start,
-                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
+                port_range.start,
+                port_range.start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
             ))
-        } else if end.checked_add(QUIC_PORT_OFFSET).is_none() {
+        } else if port_range.end.checked_add(QUIC_PORT_OFFSET).is_none() {
             Err("Invalid dynamic_port_range.".to_string())
         } else {
             Ok(())

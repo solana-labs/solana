@@ -96,7 +96,7 @@ fn main() -> Result<()> {
     let recycler = PacketBatchRecycler::default();
     let (_port, read_sockets) = solana_net_utils::multi_bind_in_range(
         ip_addr,
-        (port, port + num_sockets as u16),
+        port..port + num_sockets as u16,
         num_sockets,
     )
     .unwrap();

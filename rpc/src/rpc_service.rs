@@ -624,8 +624,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let cluster_info = Arc::new(new_test_cluster_info());
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let (rpc_port, _) =
-            solana_net_utils::bind_common_in_range(ip_addr, (10000, 65535)).unwrap();
+        let (rpc_port, _) = solana_net_utils::bind_common_in_range(ip_addr, 10000..65535).unwrap();
         let rpc_addr = SocketAddr::new(ip_addr, rpc_port);
         let bank_forks = BankForks::new_rw_arc(bank);
         let ledger_path = get_tmp_ledger_path_auto_delete!();

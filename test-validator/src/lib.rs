@@ -107,7 +107,7 @@ impl Default for TestValidatorNodeConfig {
         const MAX_PORT_RANGE: u16 = 65535;
 
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
+        let port_range = MIN_PORT_RANGE..MAX_PORT_RANGE;
 
         Self {
             gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, 0),
@@ -950,7 +950,7 @@ impl TestValidator {
         let mut node = Node::new_single_bind(
             &validator_identity.pubkey(),
             &config.node_config.gossip_addr,
-            config.node_config.port_range,
+            config.node_config.port_range.clone(),
             config.node_config.bind_ip_addr,
         );
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
