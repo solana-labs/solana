@@ -586,7 +586,7 @@ impl LocalCluster {
         let alive_node_contact_infos = self.discover_nodes(socket_addr_space, test_name);
         info!(
             "{} looking minimum root {} on all nodes",
-            min_root, test_name
+            test_name, min_root
         );
         cluster_tests::check_min_slot_is_rooted(
             min_root,
@@ -907,23 +907,36 @@ impl Cluster for LocalCluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (Node, Option<ContactInfo>) {
+    ) -> (Node, Vec<ContactInfo>) {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
         cluster_validator_info.config.rpc_addrs =
             Some((node.info.rpc().unwrap(), node.info.rpc_pubsub().unwrap()));
 
-        let entry_point_info = {
-            if pubkey == self.entry_point_info.pubkey() {
-                self.entry_point_info = node.info.clone();
-                None
-            } else {
-                Some(self.entry_point_info.clone())
-            }
-        };
+        if pubkey == self.entry_point_info.pubkey() {
+            self.entry_point_info = node.info.clone();
+        }
 
-        (node, entry_point_info)
+        let mut is_entrypoint_alive = false;
+        let mut entry_point_infos: Vec<ContactInfo> = self
+            .validators
+            .values()
+            .map(|validator| {
+                // Should not be restarting a validator that is still alive
+                assert!(validator.info.contact_info.pubkey() != pubkey);
+                if validator.info.contact_info.pubkey() == self.entry_point_info.pubkey() {
+                    is_entrypoint_alive = true;
+                }
+                validator.info.contact_info.clone()
+            })
+            .collect();
+
+        if !is_entrypoint_alive {
+            entry_point_infos.push(self.entry_point_info.clone());
+        }
+
+        (node, entry_point_infos)
     }
 
     fn set_entry_point(&mut self, entry_point_info: ContactInfo) {
@@ -951,7 +964,7 @@ impl Cluster for LocalCluster {
 
     fn restart_node_with_context(
         mut cluster_validator_info: ClusterValidatorInfo,
-        (node, entry_point_info): (Node, Option<ContactInfo>),
+        (node, entry_point_infos): (Node, Vec<ContactInfo>),
         socket_addr_space: SocketAddrSpace,
     ) -> ClusterValidatorInfo {
         // Restart the node
@@ -966,11 +979,10 @@ impl Cluster for LocalCluster {
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![validator_info.voting_keypair.clone()])),
-            entry_point_info
-                .map(|entry_point_info| {
-                    vec![LegacyContactInfo::try_from(&entry_point_info).unwrap()]
-                })
-                .unwrap_or_default(),
+            entry_point_infos
+                .into_iter()
+                .map(|entry_point_info| LegacyContactInfo::try_from(&entry_point_info).unwrap())
+                .collect(),
             &safe_clone_config(&cluster_validator_info.config),
             true, // should_check_duplicate_instance
             None, // rpc_to_plugin_manager_receiver

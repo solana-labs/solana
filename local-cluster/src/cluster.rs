@@ -59,10 +59,10 @@ pub trait Cluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (Node, Option<ContactInfo>);
+    ) -> (Node, Vec<ContactInfo>);
     fn restart_node_with_context(
         cluster_validator_info: ClusterValidatorInfo,
-        restart_context: (Node, Option<ContactInfo>),
+        restart_context: (Node, Vec<ContactInfo>),
         socket_addr_space: SocketAddrSpace,
     ) -> ClusterValidatorInfo;
     fn add_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo);
