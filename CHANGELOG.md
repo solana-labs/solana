@@ -19,6 +19,8 @@ Release channels have their own copy of this changelog:
   * `solana-rpc-client-api`: `RpcFilterError` depends on `base64` version 0.22, so users may need to upgrade to `base64` version 0.22
   * Changed default value for `--health-check-slot-distance` from 150 to 128
   * CLI: Can specify `--with-compute-unit-price` and `--max-sign-attempts` during program deployment
+  * RPC's `simulateTransaction` now returns an extra `replacementBlockhash` field in the response
+    when the `replaceRecentBlockhash` config param is `true` (#380)
 
 ## [1.18.0]
 * Changes
