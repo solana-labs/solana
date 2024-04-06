@@ -14,7 +14,7 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
         client_error::{ErrorKind as ClientErrorKind, Result as ClientResult},
-        config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
+        config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig},
         request::RpcError,
         response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     },
@@ -137,6 +137,51 @@ fn test_rpc_send_tx() {
     );
     let json: Value = post_rpc(req, &rpc_url);
     info!("{:?}", json["result"]["value"]);
+}
+
+#[test]
+fn test_simulation_replaced_blockhash() -> ClientResult<()> {
+    solana_logger::setup();
+
+    let alice = Keypair::new();
+    let validator = TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+    let rpc_client = RpcClient::new(validator.rpc_url());
+
+    let bob = Keypair::new();
+    let lamports = 50;
+
+    let res = rpc_client.simulate_transaction_with_config(
+        &system_transaction::transfer(&alice, &bob.pubkey(), lamports, Hash::default()),
+        RpcSimulateTransactionConfig {
+            replace_recent_blockhash: true,
+            ..Default::default()
+        },
+    )?;
+    assert!(
+        res.value.replacement_blockhash.is_some(),
+        "replaced_blockhash response is None"
+    );
+    let blockhash = res.value.replacement_blockhash.unwrap();
+    // ensure nothing weird is going on
+    assert_ne!(
+        blockhash.blockhash,
+        Hash::default().to_string(),
+        "replaced_blockhash is default"
+    );
+
+    let res = rpc_client.simulate_transaction_with_config(
+        &system_transaction::transfer(&alice, &bob.pubkey(), lamports, Hash::default()),
+        RpcSimulateTransactionConfig {
+            replace_recent_blockhash: false,
+            ..Default::default()
+        },
+    )?;
+    assert!(
+        res.value.replacement_blockhash.is_none(),
+        "replaced_blockhash is Some when nothing should be replaced"
+    );
+
+    Ok(())
 }
 
 #[test]
