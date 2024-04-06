@@ -3,7 +3,6 @@
 use {
     crossbeam_channel::unbounded,
     log::*,
-    rand::{thread_rng, Rng},
     socket2::{Domain, SockAddr, Socket, Type},
     std::{
         collections::{BTreeMap, HashSet},
@@ -558,29 +557,6 @@ pub fn bind_two_in_range_with_offset(
     ))
 }
 
-pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<u16> {
-    let (start, end) = range;
-    let mut tries_left = end - start;
-    let mut rand_port = thread_rng().gen_range(start..end);
-    loop {
-        match bind_common(ip_addr, rand_port, false) {
-            Ok(_) => {
-                break Ok(rand_port);
-            }
-            Err(err) => {
-                if tries_left == 0 {
-                    return Err(err);
-                }
-            }
-        }
-        rand_port += 1;
-        if rand_port == end {
-            rand_port = start;
-        }
-        tries_left -= 1;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use {super::*, std::net::Ipv4Addr};
@@ -715,20 +691,6 @@ mod tests {
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
         bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
-    }
-
-    #[test]
-    fn test_find_available_port_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        assert_eq!(
-            find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
-            3000
-        );
-        let port = find_available_port_in_range(ip_addr, (3000, 3050)).unwrap();
-        assert!((3000..3050).contains(&port));
-
-        let _socket = bind_to(ip_addr, port, false).unwrap();
-        find_available_port_in_range(ip_addr, (port, port + 1)).unwrap_err();
     }
 
     #[test]

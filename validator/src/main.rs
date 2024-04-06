@@ -1821,12 +1821,12 @@ pub fn main() {
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
-                |err| {
+            let (gossip_port, _) = solana_net_utils::bind_common_in_range(bind_address, (0, 1))
+                .unwrap_or_else(|err| {
                     eprintln!("Unable to find an available gossip port: {err}");
                     exit(1);
-                },
-            )
+                });
+            gossip_port
         }),
     );
 

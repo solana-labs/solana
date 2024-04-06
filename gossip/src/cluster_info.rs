@@ -55,7 +55,7 @@ use {
     solana_measure::measure::Measure,
     solana_net_utils::{
         bind_common, bind_common_in_range, bind_in_range, bind_two_in_range_with_offset,
-        find_available_port_in_range, multi_bind_in_range, PortRange,
+        multi_bind_in_range, PortRange,
     },
     solana_perf::{
         data_budget::DataBudget,
@@ -2822,9 +2822,9 @@ impl Node {
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
-        let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let (rpc_port, _) = bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let rpc_addr = SocketAddr::new(localhost_ip_addr, rpc_port);
-        let rpc_pubsub_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let (rpc_pubsub_port, _) = bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let rpc_pubsub_addr = SocketAddr::new(localhost_ip_addr, rpc_pubsub_port);
         let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
@@ -2931,8 +2931,8 @@ impl Node {
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
 
-        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
+        let (rpc_port, _) = bind_common_in_range(bind_ip_addr, port_range).unwrap();
+        let (rpc_pubsub_port, _) = bind_common_in_range(bind_ip_addr, port_range).unwrap();
 
         let addr = gossip_addr.ip();
         let mut info = ContactInfo::new(

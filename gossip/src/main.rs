@@ -236,11 +236,10 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                (0, 1),
-            )
-            .expect("unable to find an available gossip port")
+            let (gossip_port, _) =
+                solana_net_utils::bind_common_in_range(IpAddr::V4(Ipv4Addr::UNSPECIFIED), (0, 1))
+                    .expect("unable to find an available gossip port");
+            gossip_port
         }),
     );
     let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
