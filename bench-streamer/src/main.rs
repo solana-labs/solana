@@ -94,12 +94,9 @@ fn main() -> Result<()> {
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
     let recycler = PacketBatchRecycler::default();
-    let (_port, read_sockets) = solana_net_utils::multi_bind_in_range(
-        ip_addr,
-        port..port + num_sockets as u16,
-        num_sockets,
-    )
-    .unwrap();
+    let mut port_range = port..port + num_sockets as u16;
+    let (_port, read_sockets) =
+        solana_net_utils::multi_bind_in_range(ip_addr, &mut port_range, num_sockets).unwrap();
     let stats = Arc::new(StreamerReceiveStats::new("bench-streamer-test"));
     for read in read_sockets {
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();

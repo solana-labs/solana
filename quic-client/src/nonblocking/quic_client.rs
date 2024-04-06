@@ -106,7 +106,7 @@ impl QuicLazyInitializedEndpoint {
         } else {
             let client_socket = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                VALIDATOR_PORT_RANGE,
+                &mut VALIDATOR_PORT_RANGE.clone(),
             )
             .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range")
             .1;

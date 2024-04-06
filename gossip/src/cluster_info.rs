@@ -2729,8 +2729,9 @@ impl ClusterInfo {
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+        let mut port_range = VALIDATOR_PORT_RANGE.clone();
         let (port, (gossip_socket, ip_echo)) =
-            Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
+            Node::get_gossip_port(gossip_addr, &mut port_range, bind_ip_addr);
         let contact_info =
             Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port), shred_version);
 
@@ -2743,7 +2744,8 @@ impl ClusterInfo {
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let (_, gossip_socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
+        let mut port_range = VALIDATOR_PORT_RANGE.clone();
+        let (_, gossip_socket) = bind_in_range(bind_ip_addr, &mut port_range).unwrap();
         let contact_info = Self::gossip_contact_info(id, socketaddr_any!(), shred_version);
 
         (contact_info, gossip_socket, None)
@@ -2809,25 +2811,25 @@ impl Node {
         let localhost_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let localhost_bind_addr = format!("{localhost_ip_addr:?}:0");
         let unspecified_bind_addr = format!("{:?}:0", IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-        let port_range = 1024..65535;
+        let mut port_range = 1024..65535;
 
         let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range.clone(), QUIC_PORT_OFFSET)
+            bind_two_in_range_with_offset(localhost_ip_addr, &mut port_range, QUIC_PORT_OFFSET)
                 .unwrap();
         let (gossip_port, (gossip, ip_echo)) =
-            bind_common_in_range(localhost_ip_addr, port_range.clone()).unwrap();
+            bind_common_in_range(localhost_ip_addr, &mut port_range).unwrap();
         let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
         let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let tvu_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(localhost_ip_addr, port_range.clone(), QUIC_PORT_OFFSET)
+            bind_two_in_range_with_offset(localhost_ip_addr, &mut port_range, QUIC_PORT_OFFSET)
                 .unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
-        let (rpc_port, _) = bind_common_in_range(localhost_ip_addr, port_range.clone()).unwrap();
+        let (rpc_port, _) = bind_common_in_range(localhost_ip_addr, &mut port_range).unwrap();
         let rpc_addr = SocketAddr::new(localhost_ip_addr, rpc_port);
         let (rpc_pubsub_port, _) =
-            bind_common_in_range(localhost_ip_addr, port_range.clone()).unwrap();
+            bind_common_in_range(localhost_ip_addr, &mut port_range).unwrap();
         let rpc_pubsub_addr = SocketAddr::new(localhost_ip_addr, rpc_pubsub_port);
         let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
@@ -2894,7 +2896,7 @@ impl Node {
 
     fn get_gossip_port(
         gossip_addr: &SocketAddr,
-        port_range: PortRange,
+        port_range: &mut impl ExactSizeIterator<Item = u16>,
         bind_ip_addr: IpAddr,
     ) -> (u16, (UdpSocket, TcpListener)) {
         if gossip_addr.port() != 0 {
@@ -2908,37 +2910,37 @@ impl Node {
             bind_common_in_range(bind_ip_addr, port_range).expect("Failed to bind")
         }
     }
-    fn bind(bind_ip_addr: IpAddr, port_range: PortRange) -> (u16, UdpSocket) {
+    fn bind(
+        bind_ip_addr: IpAddr,
+        port_range: &mut impl ExactSizeIterator<Item = u16>,
+    ) -> (u16, UdpSocket) {
         bind_in_range(bind_ip_addr, port_range).expect("Failed to bind")
     }
 
     pub fn new_single_bind(
         pubkey: &Pubkey,
         gossip_addr: &SocketAddr,
-        port_range: PortRange,
+        mut port_range: PortRange,
         bind_ip_addr: IpAddr,
     ) -> Self {
         let (gossip_port, (gossip, ip_echo)) =
-            Self::get_gossip_port(gossip_addr, port_range.clone(), bind_ip_addr);
-        let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range.clone());
-        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range.clone());
+            Self::get_gossip_port(gossip_addr, &mut port_range, bind_ip_addr);
+        let (tvu_port, tvu) = Self::bind(bind_ip_addr, &mut port_range);
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, &mut port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range.clone(), QUIC_PORT_OFFSET)
-                .unwrap();
+            bind_two_in_range_with_offset(bind_ip_addr, &mut port_range, QUIC_PORT_OFFSET).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range.clone(), QUIC_PORT_OFFSET)
-                .unwrap();
-        let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range.clone());
-        let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range.clone());
-        let (_, repair) = Self::bind(bind_ip_addr, port_range.clone());
-        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range.clone());
-        let (serve_repair_quic_port, serve_repair_quic) =
-            Self::bind(bind_ip_addr, port_range.clone());
-        let (_, broadcast) = Self::bind(bind_ip_addr, port_range.clone());
-        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range.clone());
+            bind_two_in_range_with_offset(bind_ip_addr, &mut port_range, QUIC_PORT_OFFSET).unwrap();
+        let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, &mut port_range);
+        let (_, retransmit_socket) = Self::bind(bind_ip_addr, &mut port_range);
+        let (_, repair) = Self::bind(bind_ip_addr, &mut port_range);
+        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, &mut port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, &mut port_range);
+        let (_, broadcast) = Self::bind(bind_ip_addr, &mut port_range);
+        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, &mut port_range);
 
-        let (rpc_port, _) = bind_common_in_range(bind_ip_addr, port_range.clone()).unwrap();
-        let (rpc_pubsub_port, _) = bind_common_in_range(bind_ip_addr, port_range.clone()).unwrap();
+        let (rpc_port, _) = bind_common_in_range(bind_ip_addr, &mut port_range).unwrap();
+        let (rpc_pubsub_port, _) = bind_common_in_range(bind_ip_addr, &mut port_range).unwrap();
 
         let addr = gossip_addr.ip();
         let mut info = ContactInfo::new(
@@ -2995,50 +2997,43 @@ impl Node {
     pub fn new_with_external_ip(pubkey: &Pubkey, config: NodeConfig) -> Node {
         let NodeConfig {
             gossip_addr,
-            port_range,
+            mut port_range,
             bind_ip_addr,
             public_tpu_addr,
             public_tpu_forwards_addr,
         } = config;
 
         let (gossip_port, (gossip, ip_echo)) =
-            Self::get_gossip_port(&gossip_addr, port_range.clone(), bind_ip_addr);
+            Self::get_gossip_port(&gossip_addr, &mut port_range, bind_ip_addr);
 
         let (tvu_port, tvu_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range.clone(), 8).expect("tvu multi_bind");
-        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range.clone());
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 8).expect("tvu multi_bind");
+        let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, &mut port_range);
         let (tpu_port, tpu_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range.clone(), 32).expect("tpu multi_bind");
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 32).expect("tpu multi_bind");
 
-        let (_tpu_port_quic, tpu_quic) = Self::bind(
-            bind_ip_addr,
-            tpu_port + QUIC_PORT_OFFSET..tpu_port + QUIC_PORT_OFFSET + 1,
-        );
+        let (_tpu_port_quic, tpu_quic) = Self::bind(bind_ip_addr, &mut port_range);
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range.clone(), 8)
-                .expect("tpu_forwards multi_bind");
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 8).expect("tpu_forwards multi_bind");
 
-        let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
-            bind_ip_addr,
-            tpu_forwards_port + QUIC_PORT_OFFSET..tpu_forwards_port + QUIC_PORT_OFFSET + 1,
-        );
+        let (_tpu_forwards_port_quic, tpu_forwards_quic) =
+            Self::bind(bind_ip_addr, &mut port_range);
 
         let (tpu_vote_port, tpu_vote_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range.clone(), 1).expect("tpu_vote multi_bind");
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 1).expect("tpu_vote multi_bind");
 
-        let (_, retransmit_sockets) = multi_bind_in_range(bind_ip_addr, port_range.clone(), 8)
-            .expect("retransmit multi_bind");
+        let (_, retransmit_sockets) =
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 8).expect("retransmit multi_bind");
 
-        let (_, repair) = Self::bind(bind_ip_addr, port_range.clone());
-        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range.clone());
-        let (serve_repair_quic_port, serve_repair_quic) =
-            Self::bind(bind_ip_addr, port_range.clone());
+        let (_, repair) = Self::bind(bind_ip_addr, &mut port_range);
+        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, &mut port_range);
+        let (serve_repair_quic_port, serve_repair_quic) = Self::bind(bind_ip_addr, &mut port_range);
 
         let (_, broadcast) =
-            multi_bind_in_range(bind_ip_addr, port_range.clone(), 4).expect("broadcast multi_bind");
+            multi_bind_in_range(bind_ip_addr, &mut port_range, 4).expect("broadcast multi_bind");
 
-        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range.clone());
+        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, &mut port_range);
 
         let mut info = ContactInfo::new(
             *pubkey,
@@ -3620,10 +3615,10 @@ mod tests {
         // port returned by `bind_in_range()` might be snatched up before `Node::new_with_external_ip()` runs
         let new_start = VALIDATOR_PORT_RANGE.end + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
         let new_end = VALIDATOR_PORT_RANGE.end + (2 * MINIMUM_VALIDATOR_PORT_RANGE_WIDTH);
-        let port_range = new_start..new_end;
+        let mut port_range = new_start..new_end;
 
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        let port = bind_in_range(ip, port_range.clone())
+        let port = bind_in_range(ip, &mut port_range)
             .expect("Failed to bind")
             .0;
         let config = NodeConfig {

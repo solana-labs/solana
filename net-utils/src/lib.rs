@@ -414,9 +414,9 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
 // Find a port in the given range that is available for both TCP and UDP
 pub fn bind_common_in_range(
     ip_addr: IpAddr,
-    range: PortRange,
+    range: &mut impl ExactSizeIterator<Item = u16>,
 ) -> io::Result<(u16, (UdpSocket, TcpListener))> {
-    for port in range.clone() {
+    for port in range.by_ref() {
         if let Ok((sock, listener)) = bind_common(ip_addr, port, false) {
             return Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
         }
@@ -424,14 +424,17 @@ pub fn bind_common_in_range(
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available TCP/UDP ports in {range:?}"),
+        "No available TCP/UDP ports in range".to_string(),
     ))
 }
 
-pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpSocket)> {
+pub fn bind_in_range(
+    ip_addr: IpAddr,
+    range: &mut impl ExactSizeIterator<Item = u16>,
+) -> io::Result<(u16, UdpSocket)> {
     let sock = udp_socket(false)?;
 
-    for port in range.clone() {
+    for port in range.by_ref() {
         let addr = SocketAddr::new(ip_addr, port);
 
         if sock.bind(&SockAddr::from(addr)).is_ok() {
@@ -442,7 +445,7 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available UDP ports in {range:?}"),
+        "No available UDP ports in range".to_string(),
     ))
 }
 
@@ -461,7 +464,7 @@ pub fn bind_with_any_port(ip_addr: IpAddr) -> io::Result<UdpSocket> {
 // binds many sockets to the same port in a range
 pub fn multi_bind_in_range(
     ip_addr: IpAddr,
-    range: PortRange,
+    range: &mut impl ExactSizeIterator<Item = u16>,
     mut num: usize,
 ) -> io::Result<(u16, Vec<UdpSocket>)> {
     if cfg!(windows) && num != 1 {
@@ -479,7 +482,7 @@ pub fn multi_bind_in_range(
     let mut error = None;
     for _ in 0..NUM_TRIES {
         port = {
-            let (port, _) = bind_in_range(ip_addr, range.clone())?;
+            let (port, _) = bind_in_range(ip_addr, range)?;
             port
         }; // drop the probe, port should be available... briefly.
 
@@ -528,7 +531,7 @@ pub fn bind_common(
 
 pub fn bind_two_in_range_with_offset(
     ip_addr: IpAddr,
-    range: PortRange,
+    range: &mut impl ExactSizeIterator<Item = u16>,
     offset: u16,
 ) -> io::Result<((u16, UdpSocket), (u16, UdpSocket))> {
     if range.len() < usize::from(offset) {
@@ -537,7 +540,7 @@ pub fn bind_two_in_range_with_offset(
             "range too small to find two ports with the correct offset".to_string(),
         ));
     }
-    for port in range.clone() {
+    while let Some(port) = range.next() {
         if let Ok(first_bind) = bind_to(ip_addr, port, false) {
             if range.len() >= usize::from(offset) {
                 if let Ok(second_bind) = bind_to(ip_addr, port + offset, false) {
@@ -658,7 +661,7 @@ mod tests {
     #[test]
     fn test_bind() {
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        assert_eq!(bind_in_range(ip_addr, 2000..2001).unwrap().0, 2000);
+        assert_eq!(bind_in_range(ip_addr, &mut (2000..2001)).unwrap().0, 2000);
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_to(ip_addr, 2002, true).unwrap();
         let y = bind_to(ip_addr, 2002, true).unwrap();
@@ -667,9 +670,9 @@ mod tests {
             y.local_addr().unwrap().port()
         );
         bind_to(ip_addr, 2002, false).unwrap_err();
-        bind_in_range(ip_addr, 2002..2003).unwrap_err();
+        bind_in_range(ip_addr, &mut (2002..2003)).unwrap_err();
 
-        let (port, v) = multi_bind_in_range(ip_addr, 2010..2110, 10).unwrap();
+        let (port, v) = multi_bind_in_range(ip_addr, &mut (2010..2110), 10).unwrap();
         for sock in &v {
             assert_eq!(port, sock.local_addr().unwrap().port());
         }
@@ -689,16 +692,16 @@ mod tests {
     #[test]
     fn test_bind_in_range_nil() {
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        bind_in_range(ip_addr, 2000..2000).unwrap_err();
+        bind_in_range(ip_addr, &mut (2000..2000)).unwrap_err();
     }
 
     #[test]
     fn test_bind_common_in_range() {
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let (port, _sockets) = bind_common_in_range(ip_addr, 3100..3150).unwrap();
+        let (port, _sockets) = bind_common_in_range(ip_addr, &mut (3100..3150)).unwrap();
         assert!((3100..3150).contains(&port));
 
-        bind_common_in_range(ip_addr, port..port + 1).unwrap_err();
+        bind_common_in_range(ip_addr, &mut (port..port + 1)).unwrap_err();
     }
 
     #[test]
@@ -706,7 +709,7 @@ mod tests {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         let _runtime = ip_echo_server(
             server_tcp_listener,
@@ -728,9 +731,9 @@ mod tests {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
         let (client_port, (client_udp_socket, client_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         let _runtime = ip_echo_server(
             server_tcp_listener,
@@ -756,14 +759,14 @@ mod tests {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         // make the socket unreachable by not running the ip echo server!
 
         let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
 
         let (correct_client_port, (_client_udp_socket, client_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         assert!(!do_verify_reachable_ports(
             &server_ip_echo_addr,
@@ -779,14 +782,14 @@ mod tests {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         // make the socket unreachable by not running the ip echo server!
 
         let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
 
         let (_correct_client_port, (client_udp_socket, _client_tcp_listener)) =
-            bind_common_in_range(ip_addr, 3200..3250).unwrap();
+            bind_common_in_range(ip_addr, &mut (3200..3250)).unwrap();
 
         assert!(!do_verify_reachable_ports(
             &server_ip_echo_addr,
@@ -803,16 +806,16 @@ mod tests {
         let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let offset = 6;
         if let Ok(((port1, _), (port2, _))) =
-            bind_two_in_range_with_offset(ip_addr, 1024..65535, offset)
+            bind_two_in_range_with_offset(ip_addr, &mut (1024..65535), offset)
         {
             assert!(port2 == port1 + offset);
         }
         let offset = 42;
         if let Ok(((port1, _), (port2, _))) =
-            bind_two_in_range_with_offset(ip_addr, 1024..65535, offset)
+            bind_two_in_range_with_offset(ip_addr, &mut (1024..65535), offset)
         {
             assert!(port2 == port1 + offset);
         }
-        assert!(bind_two_in_range_with_offset(ip_addr, 1024..1044, offset).is_err());
+        assert!(bind_two_in_range_with_offset(ip_addr, &mut (1024..1044), offset).is_err());
     }
 }
