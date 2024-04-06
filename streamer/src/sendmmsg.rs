@@ -1,9 +1,6 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
 #[cfg(target_os = "linux")]
-#[allow(deprecated)]
-use nix::sys::socket::InetAddr;
-#[cfg(target_os = "linux")]
 use {
     itertools::izip,
     libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage},
@@ -76,21 +73,26 @@ fn mmsghdr_for_packet(
     hdr.msg_hdr.msg_iovlen = 1;
     hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
 
-    #[allow(deprecated)]
-    match InetAddr::from_std(dest) {
-        InetAddr::V4(dest) => {
+    match dest {
+        SocketAddr::V4(socket_addr_v4) => {
             unsafe {
-                std::ptr::write(addr as *mut _ as *mut _, dest);
+                std::ptr::write(
+                    addr as *mut _ as *mut _,
+                    *nix::sys::socket::SockaddrIn::from(*socket_addr_v4).as_ref(),
+                );
             }
             hdr.msg_hdr.msg_namelen = SIZE_OF_SOCKADDR_IN as u32;
         }
-        InetAddr::V6(dest) => {
+        SocketAddr::V6(socket_addr_v6) => {
             unsafe {
-                std::ptr::write(addr as *mut _ as *mut _, dest);
+                std::ptr::write(
+                    addr as *mut _ as *mut _,
+                    *nix::sys::socket::SockaddrIn6::from(*socket_addr_v6).as_ref(),
+                );
             }
             hdr.msg_hdr.msg_namelen = SIZE_OF_SOCKADDR_IN6 as u32;
         }
-    };
+    }
 }
 
 #[cfg(target_os = "linux")]
