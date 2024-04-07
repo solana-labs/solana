@@ -1794,7 +1794,7 @@ fn supermajority_root_from_vote_accounts(
 // Processes and replays the contents of a single slot, returns Error
 // if failed to play the slot
 #[allow(clippy::too_many_arguments)]
-fn process_single_slot(
+pub fn process_single_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
     replay_tx_thread_pool: &ThreadPool,
