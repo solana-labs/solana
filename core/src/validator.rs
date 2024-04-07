@@ -73,7 +73,6 @@ use {
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
     },
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_rayon_threadlimit::get_max_thread_count,
     solana_rpc::{
         max_slots::MaxSlots,
@@ -98,6 +97,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,

@@ -1,6 +1,7 @@
 use {
     crate::{
         bank::{builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankSlotDelta},
+        runtime_config::RuntimeConfig,
         serde_snapshot::{
             bank_from_streams, bank_to_stream, fields_from_streams,
             BankIncrementalSnapshotPersistence, SerdeStyle,
@@ -36,7 +37,6 @@ use {
         utils::delete_contents_of_path,
     },
     solana_measure::{measure, measure::Measure},
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::Slot,
         feature_set,

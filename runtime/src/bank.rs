@@ -49,6 +49,7 @@ use {
         bank_forks::BankForks,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
+        runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         stake_account::StakeAccount,
@@ -101,7 +102,6 @@ use {
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, ProgramCache,
         },
-        runtime_config::RuntimeConfig,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{

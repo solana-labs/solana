@@ -5,6 +5,7 @@ use {
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
+        runtime_config::RuntimeConfig,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_results::{
@@ -23,7 +24,6 @@ use {
             DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
-        runtime_config::RuntimeConfig,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},
     },

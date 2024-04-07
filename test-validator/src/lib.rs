@@ -29,12 +29,12 @@ use {
         create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
-    solana_program_runtime::{compute_budget::ComputeBudget, runtime_config::RuntimeConfig},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client::{nonblocking, rpc_client::RpcClient},
     solana_runtime::{
         bank_forks::BankForks, genesis_utils::create_genesis_config_with_leader_ex,
-        snapshot_config::SnapshotConfig,
+        runtime_config::RuntimeConfig, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, WritableAccount},

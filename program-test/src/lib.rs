@@ -17,8 +17,7 @@ use {
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
         compute_budget::ComputeBudget, ic_msg, invoke_context::BuiltinFunctionWithContext,
-        loaded_programs::LoadedProgram, runtime_config::RuntimeConfig, stable_log,
-        timings::ExecuteTimings,
+        loaded_programs::LoadedProgram, stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -26,6 +25,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},

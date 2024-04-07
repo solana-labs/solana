@@ -27,10 +27,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_metrics::datapoint_error,
-    solana_program_runtime::{
-        runtime_config::RuntimeConfig,
-        timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
-    },
+    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -40,6 +37,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
+        runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{

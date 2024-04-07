@@ -15,7 +15,6 @@ use {
         snapshot_packager_service::SnapshotPackagerService,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
@@ -24,6 +23,7 @@ use {
         bank::{epoch_accounts_hash_utils, Bank},
         bank_forks::BankForks,
         genesis_utils::{self, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
         snapshot_config::SnapshotConfig,

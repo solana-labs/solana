@@ -12,7 +12,6 @@ use {
         loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, ProgramCache, ProgramRuntimeEnvironments,
         },
-        runtime_config::RuntimeConfig,
         solana_rbpf::{
             program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
             vm::Config,
@@ -35,6 +34,7 @@ use {
     },
     solana_svm::{
         account_loader::TransactionCheckResult,
+        runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingCallback,

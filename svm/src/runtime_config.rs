@@ -1,4 +1,4 @@
-use crate::compute_budget::ComputeBudget;
+use solana_program_runtime::compute_budget::ComputeBudget;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for RuntimeConfig {

@@ -7,6 +7,7 @@ mod tests {
                 test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
             genesis_utils::activate_all_features,
+            runtime_config::RuntimeConfig,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
                 SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
@@ -31,7 +32,6 @@ mod tests {
             epoch_accounts_hash::EpochAccountsHash,
             stake_rewards::StakeReward,
         },
-        solana_program_runtime::runtime_config::RuntimeConfig,
         solana_sdk::{
             epoch_schedule::EpochSchedule,
             genesis_config::create_genesis_config,

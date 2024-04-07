@@ -4,6 +4,7 @@ use {
     crate::{
         bank::{builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankRc},
         epoch_stakes::EpochStakes,
+        runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
             self, SnapshotError, StorageAndNextAccountsFileId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
@@ -28,7 +29,6 @@ use {
         epoch_accounts_hash::EpochAccountsHash,
     },
     solana_measure::measure::Measure,
-    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,

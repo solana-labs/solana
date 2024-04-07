@@ -195,6 +195,7 @@ mod tests {
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
+            runtime_config::RuntimeConfig,
         },
         assert_matches::assert_matches,
         solana_accounts_db::{
@@ -204,7 +205,6 @@ mod tests {
             accounts_index::AccountSecondaryIndexes,
             partitioned_rewards::TestPartitionedEpochRewards,
         },
-        solana_program_runtime::runtime_config::RuntimeConfig,
         solana_sdk::{
             epoch_schedule::EpochSchedule,
             native_token::LAMPORTS_PER_SOL,
