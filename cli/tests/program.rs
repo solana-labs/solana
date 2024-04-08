@@ -459,7 +459,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert!(program_account.executable);
+    assert!(!programdata_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
