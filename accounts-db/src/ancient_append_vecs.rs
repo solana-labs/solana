@@ -8,7 +8,7 @@ use {
         account_storage::{meta::StoredAccountMeta, ShrinkInProgress},
         accounts_db::{
             AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
-            ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
+            ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
         },
         accounts_file::AccountsFile,
         accounts_hash::AccountHash,
@@ -454,7 +454,6 @@ impl AccountsDb {
             accounts_to_write,
             None::<Vec<AccountHash>>,
             shrink_in_progress.new_storage(),
-            StoreReclaims::Ignore,
         ));
 
         write_ancient_accounts.metrics.accumulate(&ShrinkStatsSub {

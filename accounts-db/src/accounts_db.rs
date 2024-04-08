@@ -390,7 +390,6 @@ impl CurrentAncientAccountsFile {
             (self.slot(), accounts, accounts_to_store.slot()),
             None::<Vec<AccountHash>>,
             self.accounts_file(),
-            StoreReclaims::Ignore,
         );
         let bytes_written =
             previous_available.saturating_sub(self.accounts_file().accounts.remaining_bytes());
@@ -3982,7 +3981,6 @@ impl AccountsDb {
                 (slot, &shrink_collect.alive_accounts.alive_accounts()[..]),
                 None::<Vec<AccountHash>>,
                 shrink_in_progress.new_storage(),
-                StoreReclaims::Ignore,
             );
 
             rewrite_elapsed.stop();
@@ -6287,13 +6285,9 @@ impl AccountsDb {
             // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, flush_stats.total_size.0, "flush_slot_cache");
-            let (store_accounts_timing_inner, store_accounts_total_inner_us) = measure_us!(self
-                .store_accounts_frozen(
-                    (slot, &accounts[..]),
-                    Some(hashes),
-                    &flushed_store,
-                    StoreReclaims::Ignore,
-                ));
+            let (store_accounts_timing_inner, store_accounts_total_inner_us) = measure_us!(
+                self.store_accounts_frozen((slot, &accounts[..]), Some(hashes), &flushed_store,)
+            );
             flush_stats.store_accounts_timing = store_accounts_timing_inner;
             flush_stats.store_accounts_total_us = Saturating(store_accounts_total_inner_us);
 
@@ -8398,7 +8392,6 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<AccountHash>>>,
         storage: &Arc<AccountStorageEntry>,
-        reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
         // the append vec so that hashing could happen on the store
@@ -8410,7 +8403,7 @@ impl AccountsDb {
             &StoreTo::Storage(storage),
             reset_accounts,
             None,
-            reclaim,
+            StoreReclaims::Ignore,
             UpdateIndexThreadSelection::PoolWithThreshold,
         )
     }

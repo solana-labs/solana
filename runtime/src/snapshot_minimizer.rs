@@ -9,9 +9,7 @@ use {
         prelude::ParallelSlice,
     },
     solana_accounts_db::{
-        accounts_db::{
-            AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats, StoreReclaims,
-        },
+        accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats},
         accounts_partition,
     },
     solana_measure::measure,
@@ -371,7 +369,6 @@ impl<'a> SnapshotMinimizer<'a> {
                 (slot, &accounts[..]),
                 Some(hashes),
                 new_storage,
-                StoreReclaims::Ignore,
             );
 
             new_storage.flush().unwrap();
