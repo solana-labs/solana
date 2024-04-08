@@ -3138,7 +3138,7 @@ impl Bank {
 
         // Add additional builtin programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
-            self.add_builtin_account(name, program_id, false);
+            self.add_builtin_account(name, program_id);
         }
     }
 
@@ -3155,7 +3155,7 @@ impl Bank {
 
     // NOTE: must hold idempotent for the same set of arguments
     /// Add a builtin program account
-    pub fn add_builtin_account(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
+    pub fn add_builtin_account(&self, name: &str, program_id: &Pubkey) {
         let existing_genuine_program =
             self.get_account_with_fixed_root(program_id)
                 .and_then(|account| {
@@ -3171,25 +3171,10 @@ impl Bank {
                     }
                 });
 
-        if must_replace {
-            // updating builtin program
-            match &existing_genuine_program {
-                None => panic!(
-                    "There is no account to replace with builtin program ({name}, {program_id})."
-                ),
-                Some(account) => {
-                    if *name == String::from_utf8_lossy(account.data()) {
-                        // The existing account is well formed
-                        return;
-                    }
-                }
-            }
-        } else {
-            // introducing builtin program
-            if existing_genuine_program.is_some() {
-                // The existing account is sufficient
-                return;
-            }
+        // introducing builtin program
+        if existing_genuine_program.is_some() {
+            // The existing account is sufficient
+            return;
         }
 
         assert!(
@@ -6450,7 +6435,7 @@ impl Bank {
     /// Add a built-in program
     pub fn add_builtin(&mut self, program_id: Pubkey, name: &str, builtin: LoadedProgram) {
         debug!("Adding program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, &program_id, false);
+        self.add_builtin_account(name, &program_id);
         self.builtin_program_ids.insert(program_id);
         self.transaction_processor
             .program_cache
