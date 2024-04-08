@@ -361,9 +361,9 @@ fn recv_send(
 pub fn recv_packet_batches(
     recvr: &PacketBatchReceiver,
 ) -> Result<(Vec<PacketBatch>, usize, Duration)> {
+    let recv_start = Instant::now();
     let timer = Duration::new(1, 0);
     let packet_batch = recvr.recv_timeout(timer)?;
-    let recv_start = Instant::now();
     trace!("got packets");
     let mut num_packets = packet_batch.len();
     let mut packet_batches = vec![packet_batch];
