@@ -7886,7 +7886,6 @@ impl AccountsDb {
         }
 
         reclaimed_offsets.iter().for_each(|(slot, offsets)| {
-            let mut check_for_shrink = true;
             if let Some(store) = self
                 .storage
                 .get_slot_storage_entry(*slot)
@@ -7896,27 +7895,28 @@ impl AccountsDb {
                     "AccountsDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let mut offsets = offsets.iter().cloned().collect::<Vec<_>>();
-                // sort so offsets are in order. This improves efficiency of loading the accounts.
-                offsets.sort_unstable();
-                offsets.iter().for_each(|offset| {
-                    let account = store.accounts.get_account(*offset).unwrap();
-                    let stored_size = account.0.stored_size();
-                    let count = store.remove_accounts(stored_size, reset_accounts, 1);
-                    if count == 0 {
-                        self.dirty_stores.insert(*slot, store.clone());
-                        dead_slots.insert(*slot);
-                    } else if check_for_shrink && Self::is_shrinking_productive(*slot, &store)
+                if offsets.len() == store.count() {
+                    store.remove_accounts(store.alive_bytes(), reset_accounts, offsets.len());
+                    self.dirty_stores.insert(*slot, store.clone());
+                    dead_slots.insert(*slot);
+                }
+                else {
+                    let mut offsets = offsets.iter().cloned().collect::<Vec<_>>();
+                    offsets.sort_unstable();
+                    let dead_bytes = offsets.iter().map(|offset| {
+                        let account = store.accounts.get_account(*offset).unwrap();
+                        account.0.stored_size()}).sum();
+                    store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
+                    if Self::is_shrinking_productive(*slot, &store)
                         && self.is_candidate_for_shrink(&store, false)
                     {
                         // Checking that this single storage entry is ready for shrinking,
                         // should be a sufficient indication that the slot is ready to be shrunk
                         // because slots should only have one storage entry, namely the one that was
                         // created by `flush_slot_cache()`.
-                            new_shrink_candidates.insert(*slot);
-                            check_for_shrink = false;
+                        new_shrink_candidates.insert(*slot);
                     }
-                });
+                }
             }
         });
         measure.stop();
