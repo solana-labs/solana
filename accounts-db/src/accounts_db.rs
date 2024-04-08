@@ -764,7 +764,7 @@ pub type AtomicAccountsFileId = AtomicU32;
 pub type AccountsFileId = u32;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
-type SlotOffsets = HashMap<Slot, HashSet<usize>>;
+type SlotOffsets = HashMap<Slot, IntSet<usize>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
 type ShrinkCandidates = IntSet<Slot>;
