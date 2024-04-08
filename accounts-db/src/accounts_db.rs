@@ -7896,10 +7896,9 @@ impl AccountsDb {
                 }
                 else {
                     let mut offsets = offsets.iter().cloned().collect::<Vec<_>>();
+                    // sort so offsets are in order. This improves efficiency of loading the accounts.
                     offsets.sort_unstable();
-                    let dead_bytes = offsets.iter().map(|offset| {
-                        let account = store.accounts.get_account(*offset).unwrap();
-                        account.0.stored_size()}).sum();
+                    let dead_bytes = store.accounts.get_account_sizes(&offsets).iter().sum();
                     store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
                     if Self::is_shrinking_productive(*slot, &store)
                         && self.is_candidate_for_shrink(&store, false)

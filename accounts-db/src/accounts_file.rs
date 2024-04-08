@@ -178,6 +178,13 @@ impl AccountsFile {
         AccountsFileIter::new(self)
     }
 
+    pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
+        match self {
+            Self::AppendVec(av) => av.get_account_sizes(sorted_offsets),
+            Self::TieredStorage(_) => unimplemented!(),
+        }
+    }
+
     /// iterate over all entries to put in index
     pub(crate) fn scan_index(&self, callback: impl FnMut(IndexInfo)) {
         match self {

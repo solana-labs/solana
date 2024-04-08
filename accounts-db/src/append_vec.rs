@@ -595,9 +595,13 @@ impl AppendVec {
         let r1 = self.get_account(offset);
         let r2 = self.get_stored_account(offset);
         let r3 = self.get_account_meta(offset);
+        let sizes = self.get_account_sizes(&[offset]);
         if r1.is_some() {
             // r3 can return Some when r1 and r2 do not
             assert!(r3.is_some());
+            assert_eq!(sizes, vec![r1.as_ref().unwrap().0.stored_size()]);
+        } else {
+            assert!(sizes.is_empty());
         }
         if let Some(r2) = r2.as_ref() {
             let meta = r3.unwrap();
@@ -665,6 +669,23 @@ impl AppendVec {
             });
             offset = next.next_account_offset;
         }
+    }
+
+    /// for each offset in `sorted_offsets`, get the size of the account. No other information is needed for the account.
+    pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
+        let mut result = Vec::with_capacity(sorted_offsets.len());
+        for offset in sorted_offsets.iter().cloned() {
+            let Some((stored_meta, _)) = self.get_type::<StoredMeta>(offset) else {
+                break;
+            };
+            let next = Self::next_account_offset(offset, stored_meta);
+            if next.offset_to_end_of_data > self.len() {
+                // data doesn't fit, so don't include
+                break;
+            }
+            result.push(next.stored_size_aligned);
+        }
+        result
     }
 
     /// iterate over all pubkeys and call `callback`.
@@ -1217,11 +1238,14 @@ pub mod tests {
         let size = 1000;
         let mut indexes = vec![];
         let now = Instant::now();
+        let mut sizes = vec![];
         for sample in 0..size {
             let account = create_test_account(sample);
+            sizes.push(aligned_stored_size(account.1.data().len()));
             let pos = av.append_account_test(&account).unwrap();
             assert_eq!(av.get_account_test(pos).unwrap(), account);
-            indexes.push(pos)
+            indexes.push(pos);
+            assert_eq!(sizes, av.get_account_sizes(&indexes));
         }
         trace!("append time: {} ms", duration_as_ms(&now.elapsed()),);
 
