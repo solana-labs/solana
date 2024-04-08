@@ -24,13 +24,20 @@ pub struct ModifiableTracerPacketStats {
 
 #[derive(Debug, Default)]
 pub struct TracerPacketStats {
-    id: u32,
+    id: String,
     last_report: u64,
     modifiable_tracer_packet_stats: Option<ModifiableTracerPacketStats>,
 }
 
 impl TracerPacketStats {
     pub fn new(id: u32) -> Self {
+        Self {
+            id: id.to_string(),
+            ..Self::default()
+        }
+    }
+
+    fn reset(id: String) -> Self {
         Self {
             id,
             ..Self::default()
@@ -116,7 +123,7 @@ impl TracerPacketStats {
             {
                 datapoint_info!(
                     "tracer-packet-stats",
-                    ("id", self.id, i64),
+                    "id" => &self.id,
                     (
                         "total_removed_before_sigverify",
                         modifiable_tracer_packet_stats
@@ -199,8 +206,7 @@ impl TracerPacketStats {
                     )
                 );
 
-                let id = self.id;
-                *self = Self::new(id);
+                *self = Self::reset(self.id.clone());
                 self.last_report = timestamp();
             }
         }

@@ -32,10 +32,10 @@ impl LeaderExecuteAndCommitTimings {
         self.execute_timings.accumulate(&other.execute_timings);
     }
 
-    pub fn report(&self, id: u32, slot: Slot) {
+    pub fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_execute_and_commit_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             ("collect_balances_us", self.collect_balances_us as i64, i64),
             ("load_execute_us", self.load_execute_us as i64, i64),
@@ -52,7 +52,7 @@ impl LeaderExecuteAndCommitTimings {
 
         datapoint_info!(
             "banking_stage-leader_slot_record_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "execution_results_to_transactions_us",
@@ -96,7 +96,7 @@ impl LeaderSlotTimingMetrics {
         }
     }
 
-    pub(crate) fn report(&self, id: u32, slot: Slot) {
+    pub(crate) fn report(&self, id: &str, slot: Slot) {
         self.outer_loop_timings.report(id, slot);
         self.process_buffered_packets_timings.report(id, slot);
         self.consume_buffered_packets_timings.report(id, slot);
@@ -148,10 +148,10 @@ impl OuterLoopTimings {
             self.bank_detected_time.elapsed().as_micros() as u64;
     }
 
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_loop_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "bank_detected_to_slot_end_detected_us",
@@ -191,10 +191,10 @@ pub(crate) struct ProcessBufferedPacketsTimings {
     pub forward_and_hold_us: u64,
 }
 impl ProcessBufferedPacketsTimings {
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_process_buffered_packets_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             ("make_decision_us", self.make_decision_us as i64, i64),
             (
@@ -215,10 +215,10 @@ pub(crate) struct ConsumeBufferedPacketsTimings {
 }
 
 impl ConsumeBufferedPacketsTimings {
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_consume_buffered_packets_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "process_packets_transactions_us",
@@ -247,10 +247,10 @@ pub(crate) struct ProcessPacketsTimings {
 }
 
 impl ProcessPacketsTimings {
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_process_packets_timings",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "transactions_from_packets_us",

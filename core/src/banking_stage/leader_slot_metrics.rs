@@ -84,10 +84,10 @@ impl LeaderPrioritizationFeesMetrics {
         }
     }
 
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_prioritization_fees_info",
-            ("id", id, i64),
+            "id" => id,
             ("slot", slot, i64),
             (
                 "min_prioritization_fees_per_cu",
@@ -199,10 +199,10 @@ impl LeaderSlotPacketCountMetrics {
         Self::default()
     }
 
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_packet_counts",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "total_new_valid_packets",
@@ -328,7 +328,7 @@ pub(crate) struct LeaderSlotMetrics {
     // banking_stage creates one QosService instance per working threads, that is uniquely
     // identified by id. This field allows to categorize metrics for gossip votes, TPU votes
     // and other transactions.
-    id: u32,
+    id: String,
 
     // aggregate metrics per slot
     slot: Slot,
@@ -355,7 +355,7 @@ impl LeaderSlotMetrics {
         unprocessed_transaction_storage: Option<&UnprocessedTransactionStorage>,
     ) -> Self {
         Self {
-            id,
+            id: id.to_string(),
             slot,
             packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
             transaction_error_metrics: TransactionErrorMetrics::new(),
@@ -371,11 +371,11 @@ impl LeaderSlotMetrics {
     pub(crate) fn report(&mut self) {
         self.is_reported = true;
 
-        self.timing_metrics.report(self.id, self.slot);
-        self.transaction_error_metrics.report(self.id, self.slot);
-        self.packet_count_metrics.report(self.id, self.slot);
-        self.vote_packet_count_metrics.report(self.id, self.slot);
-        self.prioritization_fees_metric.report(self.id, self.slot);
+        self.timing_metrics.report(&self.id, self.slot);
+        self.transaction_error_metrics.report(&self.id, self.slot);
+        self.packet_count_metrics.report(&self.id, self.slot);
+        self.vote_packet_count_metrics.report(&self.id, self.slot);
+        self.prioritization_fees_metric.report(&self.id, self.slot);
     }
 
     /// Returns `Some(self.slot)` if the metrics have been reported, otherwise returns None
@@ -408,10 +408,10 @@ impl VotePacketCountMetrics {
         Self::default()
     }
 
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-vote_packet_counts",
-            ("id", id, i64),
+            "id" => id,
             ("slot", slot, i64),
             ("dropped_gossip_votes", self.dropped_gossip_votes, i64),
             ("dropped_tpu_votes", self.dropped_tpu_votes, i64)

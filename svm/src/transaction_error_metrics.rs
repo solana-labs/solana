@@ -88,10 +88,10 @@ impl TransactionErrorMetrics {
         );
     }
 
-    pub fn report(&self, id: u32, slot: Slot) {
+    pub fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_transaction_errors",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             ("total", self.total as i64, i64),
             ("account_in_use", self.account_in_use as i64, i64),

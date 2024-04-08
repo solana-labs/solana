@@ -88,7 +88,7 @@ const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
     last_report: AtomicInterval,
-    id: u32,
+    id: String,
     receive_and_buffer_packets_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
@@ -113,7 +113,7 @@ pub struct BankingStageStats {
 impl BankingStageStats {
     pub fn new(id: u32) -> Self {
         BankingStageStats {
-            id,
+            id: id.to_string(),
             batch_packet_indexes_len: Histogram::configure()
                 .max_value(PACKETS_PER_BATCH as u64)
                 .build()
@@ -157,7 +157,7 @@ impl BankingStageStats {
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
-                ("id", self.id, i64),
+                "id" => self.id,
                 (
                     "receive_and_buffer_packets_count",
                     self.receive_and_buffer_packets_count

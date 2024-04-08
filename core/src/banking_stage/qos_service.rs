@@ -391,7 +391,7 @@ struct QosServiceMetrics {
     /// banking_stage creates one QosService instance per working threads, that is uniquely
     /// identified by id. This field allows to categorize metrics for gossip votes, TPU votes
     /// and other transactions.
-    id: u32,
+    id: String,
 
     /// aggregate metrics per slot
     slot: AtomicU64,
@@ -460,7 +460,7 @@ struct QosServiceMetricsErrors {
 impl QosServiceMetrics {
     pub fn new(id: u32) -> Self {
         QosServiceMetrics {
-            id,
+            id: id.to_string(),
             ..QosServiceMetrics::default()
         }
     }
@@ -469,7 +469,7 @@ impl QosServiceMetrics {
         if bank_slot != self.slot.load(Ordering::Relaxed) {
             datapoint_info!(
                 "qos-service-stats",
-                ("id", self.id, i64),
+                "id" => self.id,
                 ("bank_slot", bank_slot, i64),
                 (
                     "compute_cost_time",
@@ -532,7 +532,7 @@ impl QosServiceMetrics {
             );
             datapoint_info!(
                 "qos-service-errors",
-                ("id", self.id, i64),
+                "id" => self.id,
                 ("bank_slot", bank_slot, i64),
                 (
                     "retried_txs_per_block_limit_count",

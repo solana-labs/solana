@@ -169,7 +169,7 @@ fn try_drain_iter<T>(work: T, receiver: &Receiver<T>) -> impl Iterator<Item = T>
 /// since the consume worker thread is sleeping unless there is work to be
 /// done.
 pub(crate) struct ConsumeWorkerMetrics {
-    id: u32,
+    id: String,
     interval: AtomicInterval,
     has_data: AtomicBool,
 
@@ -185,15 +185,15 @@ impl ConsumeWorkerMetrics {
         if self.interval.should_update(REPORT_INTERVAL_MS)
             && self.has_data.swap(false, Ordering::Relaxed)
         {
-            self.count_metrics.report_and_reset(self.id);
-            self.timing_metrics.report_and_reset(self.id);
-            self.error_metrics.report_and_reset(self.id);
+            self.count_metrics.report_and_reset(&self.id);
+            self.timing_metrics.report_and_reset(&self.id);
+            self.error_metrics.report_and_reset(&self.id);
         }
     }
 
     fn new(id: u32) -> Self {
         Self {
-            id,
+            id: id.to_string(),
             interval: AtomicInterval::default(),
             has_data: AtomicBool::new(false),
             count_metrics: ConsumeWorkerCountMetrics::default(),
@@ -428,10 +428,10 @@ impl Default for ConsumeWorkerCountMetrics {
 }
 
 impl ConsumeWorkerCountMetrics {
-    fn report_and_reset(&self, id: u32) {
+    fn report_and_reset(&self, id: &str) {
         datapoint_info!(
             "banking_stage_worker_counts",
-            ("id", id, i64),
+            "id" => id,
             (
                 "transactions_attempted_execution_count",
                 self.transactions_attempted_execution_count
@@ -495,10 +495,10 @@ struct ConsumeWorkerTimingMetrics {
 }
 
 impl ConsumeWorkerTimingMetrics {
-    fn report_and_reset(&self, id: u32) {
+    fn report_and_reset(&self, id: &str) {
         datapoint_info!(
             "banking_stage_worker_timing",
-            ("id", id, i64),
+            "id" => id,
             (
                 "cost_model_us",
                 self.cost_model_us.swap(0, Ordering::Relaxed),
@@ -573,10 +573,10 @@ struct ConsumeWorkerTransactionErrorMetrics {
 }
 
 impl ConsumeWorkerTransactionErrorMetrics {
-    fn report_and_reset(&self, id: u32) {
+    fn report_and_reset(&self, id: &str) {
         datapoint_info!(
             "banking_stage_worker_error_metrics",
-            ("id", id, i64),
+            "id" => id,
             ("total", self.total.swap(0, Ordering::Relaxed), i64),
             (
                 "account_in_use",
