@@ -178,10 +178,14 @@ impl AccountsFile {
         AccountsFileIter::new(self)
     }
 
+    /// for each offset in `sorted_offsets`, return the account size
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
         match self {
             Self::AppendVec(av) => av.get_account_sizes(sorted_offsets),
-            Self::TieredStorage(_) => unimplemented!(),
+            Self::TieredStorage(ts) => ts
+                .reader()
+                .and_then(|reader| reader.get_account_sizes(sorted_offsets).ok())
+                .unwrap_or_default(),
         }
     }
 

@@ -124,6 +124,16 @@ impl TieredStorageReader {
         }
     }
 
+    /// for each offset in `sorted_offsets`, return the account size
+    pub(crate) fn get_account_sizes(
+        &self,
+        sorted_offsets: &[usize],
+    ) -> TieredStorageResult<Vec<usize>> {
+        match self {
+            Self::Hot(hot) => hot.get_account_sizes(sorted_offsets),
+        }
+    }
+
     /// Returns a slice suitable for use when archiving tiered storages
     pub fn data_for_archive(&self) -> &[u8] {
         match self {

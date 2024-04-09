@@ -674,7 +674,7 @@ impl AppendVec {
     /// for each offset in `sorted_offsets`, get the size of the account. No other information is needed for the account.
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
         let mut result = Vec::with_capacity(sorted_offsets.len());
-        for offset in sorted_offsets.iter().cloned() {
+        for &offset in sorted_offsets {
             let Some((stored_meta, _)) = self.get_type::<StoredMeta>(offset) else {
                 break;
             };

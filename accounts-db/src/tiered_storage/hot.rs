@@ -579,6 +579,23 @@ impl HotStorageReader {
         Ok(())
     }
 
+    /// for each offset in `sorted_offsets`, return the account size
+    pub(crate) fn get_account_sizes(
+        &self,
+        sorted_offsets: &[usize],
+    ) -> TieredStorageResult<Vec<usize>> {
+        let mut result = Vec::with_capacity(sorted_offsets.len());
+        for &offset in sorted_offsets {
+            let index_offset = IndexOffset(AccountInfo::get_reduced_offset(offset));
+            let account_offset = self.get_account_offset(index_offset)?;
+            let meta = self.get_account_meta_from_offset(account_offset)?;
+            let account_block = self.get_account_block(account_offset, index_offset)?;
+            let data_len = meta.account_data_size(account_block);
+            result.push(stored_size(data_len));
+        }
+        Ok(result)
+    }
+
     /// iterate over all entries to put in index
     pub(crate) fn scan_index(
         &self,
