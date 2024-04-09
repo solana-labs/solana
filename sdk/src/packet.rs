@@ -35,6 +35,8 @@ bitflags! {
         const ROUND_COMPUTE_UNIT_PRICE = 0b0010_0000;
         /// For tracking performance
         const PERF_TRACK_PACKET  = 0b0100_0000;
+        /// For marking packets from staked nodes
+        const FROM_STAKED_NODE = 0b1000_0000;
     }
 }
 
@@ -215,6 +217,11 @@ impl Meta {
         self.port = socket_addr.port();
     }
 
+    pub fn set_from_staked_node(&mut self, from_staked_node: bool) {
+        self.flags
+            .set(PacketFlags::FROM_STAKED_NODE, from_staked_node);
+    }
+
     #[inline]
     pub fn discard(&self) -> bool {
         self.flags.contains(PacketFlags::DISCARD)
@@ -277,6 +284,11 @@ impl Meta {
     #[inline]
     pub fn round_compute_unit_price(&self) -> bool {
         self.flags.contains(PacketFlags::ROUND_COMPUTE_UNIT_PRICE)
+    }
+
+    #[inline]
+    pub fn is_from_staked_node(&self) -> bool {
+        self.flags.contains(PacketFlags::FROM_STAKED_NODE)
     }
 }
 

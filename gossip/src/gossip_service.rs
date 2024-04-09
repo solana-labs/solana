@@ -63,6 +63,7 @@ impl GossipService {
             Duration::from_millis(1), // coalesce
             false,
             None,
+            false,
         );
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(

@@ -117,6 +117,7 @@ fn main() -> Result<()> {
             Duration::from_millis(1), // coalesce
             true,
             None,
+            false,
         ));
     }
 

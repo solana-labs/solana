@@ -175,6 +175,7 @@ impl ShredFetchStage {
                     PACKET_COALESCE_DURATION,
                     true, // use_pinned_memory
                     None, // in_vote_only_mode
+                    false,
                 )
             })
             .collect();

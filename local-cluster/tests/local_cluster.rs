@@ -9,7 +9,7 @@ use {
     solana_accounts_db::{
         hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
     },
-    solana_client::thin_client::ThinClient,
+    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
         consensus::{
             tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
@@ -56,12 +56,9 @@ use {
         response::RpcSignatureResult,
     },
     solana_runtime::{
-        commitment::VOTE_THRESHOLD_SIZE,
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_bank_utils,
-        snapshot_config::SnapshotConfig,
-        snapshot_package::SnapshotKind,
-        snapshot_utils::{self},
+        commitment::VOTE_THRESHOLD_SIZE, snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_bank_utils, snapshot_config::SnapshotConfig, snapshot_package::SnapshotKind,
+        snapshot_utils,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -78,7 +75,7 @@ use {
         system_program, system_transaction,
         vote::state::VoteStateUpdate,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_turbine::broadcast_stage::{
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
         BroadcastStageType,
@@ -90,11 +87,12 @@ use {
         fs,
         io::Read,
         iter,
+        net::{IpAddr, Ipv4Addr},
         num::NonZeroUsize,
         path::Path,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -363,6 +361,13 @@ fn test_forwarding() {
         ),
         ..ClusterConfig::default()
     };
+
+    let client_keypair = Keypair::new();
+    let mut overrides = HashMap::new();
+    let stake = DEFAULT_NODE_STAKE * 10;
+    let total_stake = stake + config.node_stakes.iter().sum::<u64>();
+    overrides.insert(client_keypair.pubkey(), stake);
+    config.validator_configs[1].staked_nodes_overrides = Arc::new(RwLock::new(overrides));
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
     let cluster_nodes = discover_cluster(
@@ -380,11 +385,28 @@ fn test_forwarding() {
         .find(|c| c.pubkey() != &leader_pubkey)
         .unwrap();
 
+    let stakes = HashMap::from([
+        (client_keypair.pubkey(), stake),
+        (Pubkey::new_unique(), total_stake - stake),
+    ]);
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+        Arc::new(stakes),
+        HashMap::<Pubkey, u64>::default(), // overrides
+    )));
+
+    let client_connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+        "client-connection-cache",
+        1,
+        None,
+        Some((&client_keypair, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))),
+        Some((&staked_nodes, &client_keypair.pubkey())),
+    ));
+
     // Confirm that transactions were forwarded to and processed by the leader.
     cluster_tests::send_many_transactions(
         validator_info,
         &cluster.funding_keypair,
-        &cluster.connection_cache,
+        &client_connection_cache,
         10,
         20,
     );

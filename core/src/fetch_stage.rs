@@ -171,6 +171,7 @@ impl FetchStage {
                         coalesce,
                         true,
                         in_vote_only_mode.clone(),
+                        false, // unstaked connections
                     )
                 })
                 .collect()
@@ -194,6 +195,7 @@ impl FetchStage {
                         coalesce,
                         true,
                         in_vote_only_mode.clone(),
+                        false, // unstaked connections
                     )
                 })
                 .collect()
@@ -216,6 +218,7 @@ impl FetchStage {
                     coalesce,
                     true,
                     None,
+                    true, // only staked connections should be voting
                 )
             })
             .collect();

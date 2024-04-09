@@ -110,6 +110,7 @@ fn recv_loop(
     coalesce: Duration,
     use_pinned_memory: bool,
     in_vote_only_mode: Option<Arc<AtomicBool>>,
+    is_staked_service: bool,
 ) -> Result<()> {
     loop {
         let mut packet_batch = if use_pinned_memory {
@@ -147,7 +148,9 @@ fn recv_loop(
                     if len == PACKETS_PER_BATCH {
                         full_packet_batches_count.fetch_add(1, Ordering::Relaxed);
                     }
-
+                    packet_batch
+                        .iter_mut()
+                        .for_each(|p| p.meta_mut().set_from_staked_node(is_staked_service));
                     packet_batch_sender.send(packet_batch)?;
                 }
                 break;
@@ -156,6 +159,7 @@ fn recv_loop(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn receiver(
     thread_name: String,
     socket: Arc<UdpSocket>,
@@ -166,6 +170,7 @@ pub fn receiver(
     coalesce: Duration,
     use_pinned_memory: bool,
     in_vote_only_mode: Option<Arc<AtomicBool>>,
+    is_staked_service: bool,
 ) -> JoinHandle<()> {
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
@@ -181,6 +186,7 @@ pub fn receiver(
                 coalesce,
                 use_pinned_memory,
                 in_vote_only_mode,
+                is_staked_service,
             );
         })
         .unwrap()
@@ -490,6 +496,7 @@ mod test {
             Duration::from_millis(1), // coalesce
             true,
             None,
+            false,
         );
         const NUM_PACKETS: usize = 5;
         let t_responder = {
