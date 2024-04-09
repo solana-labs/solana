@@ -70,6 +70,9 @@ pub enum StakeError {
 
     #[error("redelegated stake must be fully activated before deactivation")]
     RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
+
+    #[error("stake action is not permitted while the epoch rewards period is active")]
+    EpochRewardsActive,
 }
 
 impl<E> DecodeError<E> for StakeError {

@@ -13,7 +13,7 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         stake::{
-            instruction::{LockupArgs, StakeInstruction},
+            instruction::{LockupArgs, StakeError, StakeInstruction},
             program::id,
             state::{Authorized, Lockup},
         },
@@ -64,14 +64,29 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         Ok(me)
     };
 
+    // The EpochRewards sysvar only exists after the
+    // enable_partitioned_epoch_reward feature is activated. If it exists, check
+    // the `active` field
+    let epoch_rewards_active = invoke_context
+        .get_sysvar_cache()
+        .get_epoch_rewards()
+        .map(|epoch_rewards| epoch_rewards.active)
+        .unwrap_or(false);
+
     let signers = instruction_context.get_signers(transaction_context)?;
-    match limited_deserialize(data) {
-        Ok(StakeInstruction::Initialize(authorized, lockup)) => {
+
+    let stake_instruction: StakeInstruction = limited_deserialize(data)?;
+    if epoch_rewards_active && !matches!(stake_instruction, StakeInstruction::GetMinimumDelegation)
+    {
+        return Err(StakeError::EpochRewardsActive.into());
+    }
+    match stake_instruction {
+        StakeInstruction::Initialize(authorized, lockup) => {
             let mut me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             initialize(&mut me, &authorized, &lockup, &rent)
         }
-        Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
+        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             let mut me = get_stake_account()?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
@@ -88,7 +103,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 custodian_pubkey,
             )
         }
-        Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
+        StakeInstruction::AuthorizeWithSeed(args) => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
@@ -109,7 +124,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 custodian_pubkey,
             )
         }
-        Ok(StakeInstruction::DelegateStake) => {
+        StakeInstruction::DelegateStake => {
             let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
@@ -133,7 +148,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &invoke_context.feature_set,
             )
         }
-        Ok(StakeInstruction::Split(lamports)) => {
+        StakeInstruction::Split(lamports) => {
             let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             drop(me);
@@ -147,7 +162,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
             )
         }
-        Ok(StakeInstruction::Merge) => {
+        StakeInstruction::Merge => {
             let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
@@ -169,7 +184,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
             )
         }
-        Ok(StakeInstruction::Withdraw(lamports)) => {
+        StakeInstruction::Withdraw(lamports) => {
             let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
@@ -198,18 +213,18 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 new_warmup_cooldown_rate_epoch(invoke_context),
             )
         }
-        Ok(StakeInstruction::Deactivate) => {
+        StakeInstruction::Deactivate => {
             let mut me = get_stake_account()?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
             deactivate(invoke_context, &mut me, &clock, &signers)
         }
-        Ok(StakeInstruction::SetLockup(lockup)) => {
+        StakeInstruction::SetLockup(lockup) => {
             let mut me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
             set_lockup(&mut me, &lockup, &signers, &clock)
         }
-        Ok(StakeInstruction::InitializeChecked) => {
+        StakeInstruction::InitializeChecked => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(4)?;
             let staker_pubkey = transaction_context.get_key_of_account_at_index(
@@ -230,7 +245,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             initialize(&mut me, &authorized, &Lockup::default(), &rent)
         }
-        Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
+        StakeInstruction::AuthorizeChecked(stake_authorize) => {
             let mut me = get_stake_account()?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
@@ -253,7 +268,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 custodian_pubkey,
             )
         }
-        Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
+        StakeInstruction::AuthorizeCheckedWithSeed(args) => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
@@ -281,7 +296,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 custodian_pubkey,
             )
         }
-        Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
+        StakeInstruction::SetLockupChecked(lockup_checked) => {
             let mut me = get_stake_account()?;
             let custodian_pubkey =
                 get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
@@ -294,7 +309,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
             set_lockup(&mut me, &lockup, &signers, &clock)
         }
-        Ok(StakeInstruction::GetMinimumDelegation) => {
+        StakeInstruction::GetMinimumDelegation => {
             let feature_set = invoke_context.feature_set.as_ref();
             let minimum_delegation = crate::get_minimum_delegation(feature_set);
             let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
@@ -302,7 +317,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 .transaction_context
                 .set_return_data(id(), minimum_delegation)
         }
-        Ok(StakeInstruction::DeactivateDelinquent) => {
+        StakeInstruction::DeactivateDelinquent => {
             let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(3)?;
 
@@ -317,7 +332,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 clock.epoch,
             )
         }
-        Ok(StakeInstruction::Redelegate) => {
+        StakeInstruction::Redelegate => {
             let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
@@ -337,7 +352,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        Err(err) => Err(err),
     }
 });
 
@@ -382,7 +396,11 @@ mod tests {
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
             system_program,
-            sysvar::{clock, epoch_schedule, rent, rewards, stake_history},
+            sysvar::{
+                clock,
+                epoch_rewards::{self, EpochRewards},
+                epoch_schedule, rent, rewards, stake_history,
+            },
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
         std::{collections::HashSet, str::FromStr, sync::Arc},
@@ -448,11 +466,9 @@ mod tests {
         )
     }
 
-    fn process_instruction_as_one_arg(
-        feature_set: Arc<FeatureSet>,
+    fn get_default_transaction_accounts(
         instruction: &Instruction,
-        expected_result: Result<(), InstructionError>,
-    ) -> Vec<AccountSharedData> {
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         let mut pubkeys: HashSet<Pubkey> = instruction
             .accounts
             .iter()
@@ -461,7 +477,7 @@ mod tests {
         pubkeys.insert(clock::id());
         pubkeys.insert(epoch_schedule::id());
         #[allow(deprecated)]
-        let transaction_accounts = pubkeys
+        pubkeys
             .iter()
             .map(|pubkey| {
                 (
@@ -489,7 +505,15 @@ mod tests {
                     },
                 )
             })
-            .collect();
+            .collect()
+    }
+
+    fn process_instruction_as_one_arg(
+        feature_set: Arc<FeatureSet>,
+        instruction: &Instruction,
+        expected_result: Result<(), InstructionError>,
+    ) -> Vec<AccountSharedData> {
+        let transaction_accounts = get_default_transaction_accounts(instruction);
         process_instruction(
             Arc::clone(&feature_set),
             &instruction.data,
@@ -7828,6 +7852,188 @@ mod tests {
             &uninitialized_stake_address,
             &uninitialized_stake_account,
             Err(StakeError::RedelegateToSameVoteAccount.into()),
+        );
+    }
+
+    #[test]
+    fn test_stake_process_instruction_with_epoch_rewards_active() {
+        let feature_set = feature_set_all_enabled();
+
+        let process_instruction_as_one_arg = |feature_set: Arc<FeatureSet>,
+                                              instruction: &Instruction,
+                                              expected_result: Result<(), InstructionError>|
+         -> Vec<AccountSharedData> {
+            let mut transaction_accounts = get_default_transaction_accounts(instruction);
+
+            // Initialize EpochRewards sysvar account
+            let epoch_rewards_sysvar = EpochRewards {
+                active: true,
+                ..EpochRewards::default()
+            };
+            transaction_accounts.push((
+                epoch_rewards::id(),
+                create_account_shared_data_for_test(&epoch_rewards_sysvar),
+            ));
+
+            process_instruction(
+                Arc::clone(&feature_set),
+                &instruction.data,
+                transaction_accounts,
+                instruction.accounts.clone(),
+                expected_result,
+            )
+        };
+
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::initialize(
+                &Pubkey::new_unique(),
+                &Authorized::default(),
+                &Lockup::default(),
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::authorize(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                StakeAuthorize::Staker,
+                None,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::delegate_stake(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::split(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
+                &invalid_stake_state_pubkey(),
+            )[2],
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::withdraw(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
+                None,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::deactivate_stake(&Pubkey::new_unique(), &Pubkey::new_unique()),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::set_lockup(
+                &Pubkey::new_unique(),
+                &LockupArgs::default(),
+                &Pubkey::new_unique(),
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::merge(
+                &Pubkey::new_unique(),
+                &invalid_stake_state_pubkey(),
+                &Pubkey::new_unique(),
+            )[0],
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::authorize_with_seed(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                "seed".to_string(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                StakeAuthorize::Staker,
+                None,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::initialize_checked(&Pubkey::new_unique(), &Authorized::default()),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::authorize_checked(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                StakeAuthorize::Staker,
+                None,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::authorize_checked_with_seed(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                "seed".to_string(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                StakeAuthorize::Staker,
+                None,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::set_lockup_checked(
+                &Pubkey::new_unique(),
+                &LockupArgs::default(),
+                &Pubkey::new_unique(),
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+                &Pubkey::new_unique(),
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::redelegate(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+            )[2],
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+
+        // Only GetMinimumDelegation should not return StakeError::EpochRewardsActive
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::get_minimum_delegation(),
+            Ok(()),
         );
     }
 }
