@@ -109,6 +109,12 @@ impl TieredStorageReader {
         }
     }
 
+    pub fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) -> TieredStorageResult<()> {
+        match self {
+            Self::Hot(hot) => hot.scan_pubkeys(callback),
+        }
+    }
+
     /// Returns a slice suitable for use when archiving tiered storages
     pub fn data_for_archive(&self) -> &[u8] {
         match self {

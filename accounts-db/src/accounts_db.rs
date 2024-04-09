@@ -2418,8 +2418,24 @@ impl AccountsDb {
         AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
+    pub fn new_single_for_tests_with_provider(file_provider: AccountsFileProvider) -> Self {
+        AccountsDb::new_for_tests_with_provider(
+            Vec::new(),
+            &ClusterType::Development,
+            file_provider,
+        )
+    }
+
     pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(
+        Self::new_for_tests_with_provider(paths, cluster_type, AccountsFileProvider::default())
+    }
+
+    fn new_for_tests_with_provider(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        accounts_file_provider: AccountsFileProvider,
+    ) -> Self {
+        let mut db = AccountsDb::new_with_config(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
@@ -2427,7 +2443,9 @@ impl AccountsDb {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
-        )
+        );
+        db.accounts_file_provider = accounts_file_provider;
+        db
     }
 
     pub fn new_with_config(
@@ -15328,10 +15346,11 @@ pub mod tests {
     ///     - ensure Account1 has *not* been purged
     /// - call `clean_accounts()` with `last_full_snapshot_slot` set to 3
     ///     - ensure Account1 *has* been purged
-    #[test]
-    fn test_clean_accounts_with_last_full_snapshot_slot() {
+    #[test_case(AccountsFileProvider::AppendVec)]
+    #[test_case(AccountsFileProvider::HotStorage)]
+    fn test_clean_accounts_with_last_full_snapshot_slot(file_provider: AccountsFileProvider) {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_single_for_tests();
+        let accounts_db = AccountsDb::new_single_for_tests_with_provider(file_provider);
         let pubkey = solana_sdk::pubkey::new_rand();
         let owner = solana_sdk::pubkey::new_rand();
         let space = 0;

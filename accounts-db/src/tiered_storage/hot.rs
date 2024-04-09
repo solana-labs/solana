@@ -554,6 +554,14 @@ impl HotStorageReader {
         Ok(accounts)
     }
 
+    pub fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) -> TieredStorageResult<()> {
+        for i in 0..self.footer.account_entry_count {
+            let address = self.get_account_address(IndexOffset(i))?;
+            callback(address);
+        }
+        Ok(())
+    }
+
     /// Returns a slice suitable for use when archiving hot storages
     pub fn data_for_archive(&self) -> &[u8] {
         self.mmap.as_ref()

@@ -197,7 +197,11 @@ impl AccountsFile {
     pub(crate) fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) {
         match self {
             Self::AppendVec(av) => av.scan_pubkeys(callback),
-            Self::TieredStorage(_) => unimplemented!(),
+            Self::TieredStorage(ts) => {
+                if let Some(reader) = ts.reader() {
+                    _ = reader.scan_pubkeys(callback);
+                }
+            }
         }
     }
 
