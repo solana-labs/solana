@@ -649,7 +649,7 @@ async fn packet_batch_sender(
     trace!("enter packet_batch_sender");
     let mut batch_start_time = Instant::now();
     loop {
-        let mut packet_perf_measure: Vec<([u8; 64], std::time::Instant)> = Vec::default();
+        let mut packet_perf_measure: Vec<([u8; 64], Instant)> = Vec::default();
         let mut packet_batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
         let mut total_bytes: usize = 0;
 
@@ -669,7 +669,7 @@ async fn packet_batch_sender(
                 || (!packet_batch.is_empty() && elapsed >= coalesce)
             {
                 let len = packet_batch.len();
-                track_streamer_fetch_packet_performance(&mut packet_perf_measure, &stats);
+                track_streamer_fetch_packet_performance(&packet_perf_measure, &stats);
 
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
@@ -733,8 +733,8 @@ async fn packet_batch_sender(
 }
 
 fn track_streamer_fetch_packet_performance(
-    packet_perf_measure: &mut [([u8; 64], Instant)],
-    stats: &Arc<StreamStats>,
+    packet_perf_measure: &[([u8; 64], Instant)],
+    stats: &StreamStats,
 ) {
     if packet_perf_measure.is_empty() {
         return;
@@ -742,8 +742,9 @@ fn track_streamer_fetch_packet_performance(
     let mut measure = Measure::start("track_perf");
     let mut process_sampled_packets_us_hist = stats.process_sampled_packets_us_hist.lock().unwrap();
 
-    for (signature, start_time) in packet_perf_measure.iter() {
-        let duration = Instant::now().duration_since(*start_time);
+    let now = Instant::now();
+    for (signature, start_time) in packet_perf_measure {
+        let duration = now.duration_since(*start_time);
         debug!(
             "QUIC streamer fetch stage took {duration:?} for transaction {:?}",
             Signature::from(*signature)
@@ -752,6 +753,8 @@ fn track_streamer_fetch_packet_performance(
             .increment(duration.as_micros() as u64)
             .unwrap();
     }
+
+    drop(process_sampled_packets_us_hist);
     measure.stop();
     stats
         .perf_track_overhead_us
