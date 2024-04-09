@@ -7576,7 +7576,14 @@ impl AccountsDb {
                 |accum: &DashMap<Pubkey, AccountHash>, loaded_account: LoadedAccount| {
                     let mut loaded_hash = loaded_account.loaded_hash();
                     if loaded_hash == AccountHash(Hash::default()) {
-                        loaded_hash = Self::hash_account(&loaded_account, loaded_account.pubkey())
+                        loaded_hash = Self::hash_account_data(
+                            loaded_account.lamports(),
+                            loaded_account.owner(),
+                            loaded_account.executable(),
+                            loaded_account.rent_epoch(),
+                            loaded_account.data(),
+                            loaded_account.pubkey(),
+                        )
                     }
                     accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },
