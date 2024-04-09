@@ -7605,13 +7605,12 @@ impl AccountsDb {
              loaded_account: LoadedAccount| {
                 // Storage may have duplicates so only keep the latest version for each key
                 let mut loaded_hash = loaded_account.loaded_hash();
+                let key = *loaded_account.pubkey();
+                let account = loaded_account.take_account();
                 if loaded_hash == AccountHash(Hash::default()) {
-                    loaded_hash = Self::hash_account(&loaded_account, loaded_account.pubkey())
+                    loaded_hash = Self::hash_account(&account, &key)
                 }
-                accum.insert(
-                    *loaded_account.pubkey(),
-                    (loaded_hash, loaded_account.take_account()),
-                );
+                accum.insert(key, (loaded_hash, account));
             },
         );
 
