@@ -5743,33 +5743,25 @@ impl AccountsDb {
         // with this function call. This means, if we get into this case, we can be
         // confident that the entire state for this slot has been flushed to the storage
         // already.
-        let mut scan_storages_elasped = Measure::start("scan_storages_elasped");
-        type ScanResult = ScanStorageResult<Pubkey, Arc<Mutex<HashSet<(Pubkey, Slot)>>>>;
-        let scan_result: ScanResult = self.scan_account_storage(
-            remove_slot,
-            |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
-            |accum: &Arc<Mutex<HashSet<(Pubkey, Slot)>>>, loaded_account: LoadedAccount| {
-                accum
-                    .lock()
-                    .unwrap()
-                    .insert((*loaded_account.pubkey(), remove_slot));
-            },
-        );
-        scan_storages_elasped.stop();
+        let mut scan_storages_elapsed = Measure::start("scan_storages_elapsed");
+        let mut stored_keys = HashSet::new();
+        if let Some(storage) = self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(remove_slot)
+        {
+            storage.accounts.scan_pubkeys(|pk| {
+                stored_keys.insert((*pk, remove_slot));
+            });
+        }
+        scan_storages_elapsed.stop();
         purge_stats
             .scan_storages_elapsed
-            .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
+            .fetch_add(scan_storages_elapsed.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
-        let (reclaims, pubkeys_removed_from_accounts_index) = match scan_result {
-            ScanStorageResult::Cached(_) => {
-                panic!("Should not see cached keys in this `else` branch, since we checked this slot did not exist in the cache above");
-            }
-            ScanStorageResult::Stored(stored_keys) => {
-                // Purge this slot from the accounts index
-                self.purge_keys_exact(stored_keys.lock().unwrap().iter())
-            }
-        };
+        // Purge this slot from the accounts index
+        let (reclaims, pubkeys_removed_from_accounts_index) =
+            self.purge_keys_exact(stored_keys.iter());
         purge_accounts_index_elapsed.stop();
         purge_stats
             .purge_accounts_index_elapsed
