@@ -6078,6 +6078,7 @@ dependencies = [
  "solana-quic-client",
  "solana-rpc",
  "solana-rpc-client",
+ "solana-runtime",
  "solana-sdk",
  "solana-streamer",
  "solana-tpu-client",

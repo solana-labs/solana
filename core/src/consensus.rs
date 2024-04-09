@@ -642,6 +642,7 @@ impl Tower {
         }
     }
 
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         self.record_bank_vote_and_update_lockouts(slot, hash)
     }

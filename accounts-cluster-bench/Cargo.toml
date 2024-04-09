@@ -33,7 +33,7 @@ spl-token = { workspace = true, features = ["no-entrypoint"] }
 
 [dev-dependencies]
 solana-accounts-db = { workspace = true }
-solana-core = { workspace = true }
+solana-core = { workspace = true, features = ["dev-context-only-utils"] }
 solana-local-cluster = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-test-validator = { workspace = true }
