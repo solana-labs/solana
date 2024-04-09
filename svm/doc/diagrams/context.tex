@@ -1,0 +1,35 @@
+%%\documentclass[dvisvgm]{minimal}
+\documentclass{minimal}
+
+\usepackage{tikz}
+\usetikzlibrary{graphs, graphdrawing, shapes.misc}
+\usegdlibrary{trees}
+
+\begin{document}
+
+\tikzset{terminal/.style={
+    % The shape:
+    rectangle,
+    rounded corners=3mm,
+    minimum size=20mm,
+    % The rest
+    very thick,draw=black!50,
+    top color=white,bottom color=black!20,
+    font=\ttfamily},
+}
+
+\begin{tikzpicture}
+  \graph[tree layout, grow'=right, level sep=10mm] {
+    bank [terminal]
+    -> {
+         { a/"transaction processor"[terminal, orient=right, orient tail=bank]
+        -> b/"program runtime"[terminal]
+        -> c/"BPF VM"[terminal] }, , , , , , , ,
+           d/"accounts-db"[terminal, orient=down, orient tail=bank]
+    };
+    runtime [draw] // { bank };
+    SVM [draw] // { a, b, c }
+  };
+\end{tikzpicture}
+
+\end{document}
