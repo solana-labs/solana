@@ -17,8 +17,10 @@ use {
 };
 
 pub type EntryType = CalculateHashIntermediate;
-pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
+
+#[cfg(test)]
+pub type SavedType = Vec<Vec<EntryType>>;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
