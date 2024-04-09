@@ -4278,7 +4278,7 @@ fn test_cpi_change_account_data_memory_allocation() {
         ..
     } = create_genesis_config(100_123_456_789);
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     declare_process_instruction!(MockBuiltin, 42, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
@@ -4314,7 +4314,8 @@ fn test_cpi_change_account_data_memory_allocation() {
     });
 
     let builtin_program_id = Pubkey::new_unique();
-    bank.add_builtin(
+    bank.get_transaction_processor().add_builtin(
+        &bank,
         builtin_program_id,
         "test_cpi_change_account_data_memory_allocation_builtin",
         LoadedProgram::new_builtin(0, 42, MockBuiltin::vm),

@@ -4700,12 +4700,14 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
             continue;
         }
 
-        bank.add_builtin(
+        bank.transaction_processor.add_builtin(
+            &bank,
             vote_id,
             "mock_program1",
             LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),
         );
-        bank.add_builtin(
+        bank.transaction_processor.add_builtin(
+            &bank,
             stake_id,
             "mock_program2",
             LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),
@@ -6286,7 +6288,7 @@ fn test_ref_account_key_after_program_id() {
 fn test_fuzz_instructions() {
     solana_logger::setup();
     use rand::{thread_rng, Rng};
-    let mut bank = create_simple_test_bank(1_000_000_000);
+    let bank = create_simple_test_bank(1_000_000_000);
 
     let max_programs = 5;
     let program_keys: Vec<_> = (0..max_programs)
@@ -6294,7 +6296,8 @@ fn test_fuzz_instructions() {
         .map(|i| {
             let key = solana_sdk::pubkey::new_rand();
             let name = format!("program{i:?}");
-            bank.add_builtin(
+            bank.transaction_processor.add_builtin(
+                &bank,
                 key,
                 name.as_str(),
                 LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),

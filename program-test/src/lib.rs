@@ -806,7 +806,7 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_with_paths(
+        let bank = Bank::new_with_paths(
             &genesis_config,
             Arc::new(RuntimeConfig {
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
@@ -837,7 +837,8 @@ impl ProgramTest {
         let mut builtin_programs = Vec::new();
         std::mem::swap(&mut self.builtin_programs, &mut builtin_programs);
         for (program_id, name, builtin) in builtin_programs.into_iter() {
-            bank.add_builtin(program_id, name, builtin);
+            bank.get_transaction_processor()
+                .add_builtin(&bank, program_id, name, builtin);
         }
 
         for (address, account) in self.accounts.iter() {

@@ -281,7 +281,11 @@ impl Bank {
         self.store_account(&source.program_data_address, &AccountSharedData::default());
 
         // Remove the built-in program from the bank's list of built-ins.
-        self.builtin_program_ids.remove(&target.program_address);
+        self.transaction_processor
+            .builtin_program_ids
+            .write()
+            .unwrap()
+            .remove(&target.program_address);
 
         // Update the account data size delta.
         self.calculate_and_update_accounts_data_size_delta_off_chain(old_data_size, new_data_size);
@@ -427,7 +431,12 @@ mod tests {
 
             // The bank's builtins should no longer contain the builtin
             // program ID.
-            assert!(!bank.builtin_program_ids.contains(&self.builtin_id));
+            assert!(!bank
+                .transaction_processor
+                .builtin_program_ids
+                .read()
+                .unwrap()
+                .contains(&self.builtin_id));
 
             // The cache should contain the target program.
             let program_cache = bank.transaction_processor.program_cache.read().unwrap();
@@ -468,7 +477,12 @@ mod tests {
             let account =
                 AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
             bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.add_builtin(builtin_id, builtin_name.as_str(), LoadedProgram::default());
+            bank.transaction_processor.add_builtin(
+                &bank,
+                builtin_id,
+                builtin_name.as_str(),
+                LoadedProgram::default(),
+            );
             account
         };
         assert_eq!(&bank.get_account(&builtin_id).unwrap(), &builtin_account);

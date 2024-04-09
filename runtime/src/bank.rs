@@ -555,7 +555,6 @@ impl PartialEq for Bank {
             epoch_stakes,
             is_delta,
             // TODO: Confirm if all these fields are intentionally ignored!
-            builtin_program_ids: _,
             runtime_config: _,
             rewards: _,
             cluster_type: _,
@@ -761,8 +760,6 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    builtin_program_ids: HashSet<Pubkey>,
-
     /// Optional config parameters that can override runtime behavior
     pub(crate) runtime_config: Arc<RuntimeConfig>,
 
@@ -923,7 +920,6 @@ impl Bank {
             stakes_cache: StakesCache::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            builtin_program_ids: HashSet::<Pubkey>::default(),
             runtime_config: Arc::<RuntimeConfig>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
@@ -958,6 +954,7 @@ impl Bank {
                 Slot::default(),
                 Epoch::default(),
             ))),
+            HashSet::default(),
         );
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1110,8 +1107,12 @@ impl Bank {
 
         let (epoch_stakes, epoch_stakes_time_us) = measure_us!(parent.epoch_stakes.clone());
 
-        let (builtin_program_ids, builtin_program_ids_time_us) =
-            measure_us!(parent.builtin_program_ids.clone());
+        let (builtin_program_ids, builtin_program_ids_time_us) = measure_us!(parent
+            .transaction_processor
+            .builtin_program_ids
+            .read()
+            .unwrap()
+            .clone());
 
         let (rewards_pool_pubkeys, rewards_pool_pubkeys_time_us) =
             measure_us!(parent.rewards_pool_pubkeys.clone());
@@ -1167,7 +1168,6 @@ impl Bank {
             ancestors: Ancestors::default(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
-            builtin_program_ids,
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             runtime_config: parent.runtime_config.clone(),
@@ -1208,6 +1208,7 @@ impl Bank {
             new.fee_structure.clone(),
             new.runtime_config.clone(),
             parent.transaction_processor.program_cache.clone(),
+            builtin_program_ids,
         );
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1629,7 +1630,6 @@ impl Bank {
             stakes_cache: StakesCache::new(stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
-            builtin_program_ids: HashSet::<Pubkey>::default(),
             runtime_config,
             rewards: RwLock::new(vec![]),
             cluster_type: Some(genesis_config.cluster_type),
@@ -1662,6 +1662,7 @@ impl Bank {
             bank.fee_structure.clone(),
             bank.runtime_config.clone(),
             Arc::new(RwLock::new(ProgramCache::new(fields.slot, fields.epoch))),
+            HashSet::default(),
         );
 
         bank.finish_init(
@@ -3153,44 +3154,6 @@ impl Bank {
         self.calculate_and_update_accounts_data_size_delta_off_chain(old_data_size, 0);
     }
 
-    // NOTE: must hold idempotent for the same set of arguments
-    /// Add a builtin program account
-    pub fn add_builtin_account(&self, name: &str, program_id: &Pubkey) {
-        let existing_genuine_program =
-            self.get_account_with_fixed_root(program_id)
-                .and_then(|account| {
-                    // it's very unlikely to be squatted at program_id as non-system account because of burden to
-                    // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
-                    // safe to assume it's a genuine program.
-                    if native_loader::check_id(account.owner()) {
-                        Some(account)
-                    } else {
-                        // malicious account is pre-occupying at program_id
-                        self.burn_and_purge_account(program_id, account);
-                        None
-                    }
-                });
-
-        // introducing builtin program
-        if existing_genuine_program.is_some() {
-            // The existing account is sufficient
-            return;
-        }
-
-        assert!(
-            !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new builtin program ({name}, {program_id}). \
-            Maybe, inconsistent program activation is detected on snapshot restore?"
-        );
-
-        // Add a bogus executable builtin account, which will be loaded and ignored.
-        let account = native_loader::create_loadable_account_with_fields(
-            name,
-            self.inherit_specially_retained_account_fields(&existing_genuine_program),
-        );
-        self.store_account_and_update_capitalization(program_id, &account);
-    }
-
     /// Add a precompiled program account
     pub fn add_precompiled_account(&self, program_id: &Pubkey) {
         self.add_precompiled_account_with_owner(program_id, native_loader::id())
@@ -3919,7 +3882,6 @@ impl Bank {
                 recording_config,
                 timings,
                 account_overrides,
-                self.builtin_program_ids.iter(),
                 log_messages_bytes_limit,
                 limit_to_load_programs,
             );
@@ -5338,7 +5300,8 @@ impl Bank {
                 .chain(additional_builtins.unwrap_or(&[]).iter())
             {
                 if builtin.enable_feature_id.is_none() {
-                    self.add_builtin(
+                    self.transaction_processor.add_builtin(
+                        self,
                         builtin.program_id,
                         builtin.name,
                         LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint),
@@ -5402,10 +5365,6 @@ impl Bank {
                 .unwrap()
                 .register(new_hard_fork_slot);
         }
-    }
-
-    pub(crate) fn get_builtin_program_ids(&self) -> &HashSet<Pubkey> {
-        &self.builtin_program_ids
     }
 
     // Hi! leaky abstraction here....
@@ -6425,24 +6384,12 @@ impl Bank {
         program_id: Pubkey,
         builtin_function: BuiltinFunctionWithContext,
     ) {
-        self.add_builtin(
+        self.transaction_processor.add_builtin(
+            self,
             program_id,
             "mockup",
             LoadedProgram::new_builtin(self.slot, 0, builtin_function),
         );
-    }
-
-    /// Add a built-in program
-    pub fn add_builtin(&mut self, program_id: Pubkey, name: &str, builtin: LoadedProgram) {
-        debug!("Adding program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, &program_id);
-        self.builtin_program_ids.insert(program_id);
-        self.transaction_processor
-            .program_cache
-            .write()
-            .unwrap()
-            .assign_program(program_id, Arc::new(builtin));
-        debug!("Added program {} under {:?}", name, program_id);
     }
 
     /// Remove a built-in instruction processor
@@ -6450,7 +6397,8 @@ impl Bank {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
-        self.add_builtin(
+        self.transaction_processor.add_builtin(
+            self,
             program_id,
             name,
             LoadedProgram::new_tombstone(self.slot, LoadedProgramType::Closed),
@@ -6696,7 +6644,8 @@ impl Bank {
                         self.feature_set.is_active(&feature_id)
                     };
                 if should_apply_action_for_feature_transition {
-                    self.add_builtin(
+                    self.transaction_processor.add_builtin(
+                        self,
                         builtin.program_id,
                         builtin.name,
                         LoadedProgram::new_builtin(
@@ -6878,6 +6827,10 @@ impl Bank {
         self.transaction_processor
             .load_program_with_pubkey(self, pubkey, reload, effective_epoch)
     }
+
+    pub fn get_transaction_processor(&self) -> &TransactionBatchProcessor<BankForks> {
+        &self.transaction_processor
+    }
 }
 
 impl TransactionProcessingCallback for Bank {
@@ -6939,6 +6892,44 @@ impl TransactionProcessingCallback for Bank {
         } else {
             LoadedProgramMatchCriteria::NoCriteria
         }
+    }
+
+    // NOTE: must hold idempotent for the same set of arguments
+    /// Add a builtin program account
+    fn add_builtin_account(&self, name: &str, program_id: &Pubkey) {
+        let existing_genuine_program =
+            self.get_account_with_fixed_root(program_id)
+                .and_then(|account| {
+                    // it's very unlikely to be squatted at program_id as non-system account because of burden to
+                    // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
+                    // safe to assume it's a genuine program.
+                    if native_loader::check_id(account.owner()) {
+                        Some(account)
+                    } else {
+                        // malicious account is pre-occupying at program_id
+                        self.burn_and_purge_account(program_id, account);
+                        None
+                    }
+                });
+
+        // introducing builtin program
+        if existing_genuine_program.is_some() {
+            // The existing account is sufficient
+            return;
+        }
+
+        assert!(
+            !self.freeze_started(),
+            "Can't change frozen bank by adding not-existing new builtin program ({name}, {program_id}). \
+            Maybe, inconsistent program activation is detected on snapshot restore?"
+        );
+
+        // Add a bogus executable builtin account, which will be loaded and ignored.
+        let account = native_loader::create_loadable_account_with_fields(
+            name,
+            self.inherit_specially_retained_account_fields(&existing_genuine_program),
+        );
+        self.store_account_and_update_capitalization(program_id, &account);
     }
 }
 

@@ -26,7 +26,6 @@ use {
         fee::FeeStructure,
         hash::Hash,
         instruction::AccountMeta,
-        native_loader,
         pubkey::Pubkey,
         signature::Signature,
         sysvar::SysvarId,
@@ -43,7 +42,7 @@ use {
     },
     std::{
         cmp::Ordering,
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         env,
         fs::{self, File},
         io::Read,
@@ -133,48 +132,8 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
     BuiltinProgram::new_loader(vm_config, function_registry)
 }
 
-fn create_executable_environment(
-    mock_bank: &mut MockBankCallback,
-) -> (ProgramCache<MockForkGraph>, Vec<Pubkey>) {
+fn create_executable_environment(mock_bank: &mut MockBankCallback) -> ProgramCache<MockForkGraph> {
     let mut program_cache = ProgramCache::<MockForkGraph>::new(0, 20);
-
-    // We must register the bpf loader account as a loadable account, otherwise programs
-    // won't execute.
-    let account_data = native_loader::create_loadable_account_with_fields(
-        BPF_LOADER_NAME,
-        (5000, DEPLOYMENT_EPOCH),
-    );
-    mock_bank
-        .account_shared_data
-        .insert(bpf_loader_upgradeable::id(), account_data);
-
-    // The bpf loader needs an executable as well
-    program_cache.assign_program(
-        bpf_loader_upgradeable::id(),
-        Arc::new(LoadedProgram::new_builtin(
-            DEPLOYMENT_SLOT,
-            BPF_LOADER_NAME.len(),
-            solana_bpf_loader_program::Entrypoint::vm,
-        )),
-    );
-
-    // In order to perform a transference of native tokens using the system instruction,
-    // the system program builtin must be registered.
-    let account_data = native_loader::create_loadable_account_with_fields(
-        SYSTEM_PROGRAM_NAME,
-        (5000, DEPLOYMENT_EPOCH),
-    );
-    mock_bank
-        .account_shared_data
-        .insert(solana_system_program::id(), account_data);
-    program_cache.assign_program(
-        solana_system_program::id(),
-        Arc::new(LoadedProgram::new_builtin(
-            DEPLOYMENT_SLOT,
-            SYSTEM_PROGRAM_NAME.len(),
-            solana_system_program::system_processor::Entrypoint::vm,
-        )),
-    );
 
     program_cache.environments = ProgramRuntimeEnvironments {
         program_runtime_v1: Arc::new(create_custom_environment()),
@@ -204,11 +163,10 @@ fn create_executable_environment(
     account_data.set_data(bincode::serialize(&clock).unwrap());
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(Clock::id(), account_data);
 
-    // Inform SVM of the registered builins
-    let registered_built_ins = vec![bpf_loader_upgradeable::id(), solana_system_program::id()];
-    (program_cache, registered_built_ins)
+    program_cache
 }
 
 fn load_program(name: String) -> Vec<u8> {
@@ -240,6 +198,7 @@ fn deploy_program(name: String, mock_bank: &mut MockBankCallback) -> Pubkey {
     account_data.set_owner(bpf_loader_upgradeable::id());
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(program_account, account_data);
 
     let mut account_data = AccountSharedData::default();
@@ -261,9 +220,41 @@ fn deploy_program(name: String, mock_bank: &mut MockBankCallback) -> Pubkey {
     account_data.set_data(header);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(program_data_account, account_data);
 
     program_account
+}
+
+fn register_builtins(
+    mock_bank: &MockBankCallback,
+    batch_processor: &TransactionBatchProcessor<MockForkGraph>,
+) {
+    // We must register the bpf loader account as a loadable account, otherwise programs
+    // won't execute.
+    batch_processor.add_builtin(
+        mock_bank,
+        bpf_loader_upgradeable::id(),
+        BPF_LOADER_NAME,
+        LoadedProgram::new_builtin(
+            DEPLOYMENT_SLOT,
+            BPF_LOADER_NAME.len(),
+            solana_bpf_loader_program::Entrypoint::vm,
+        ),
+    );
+
+    // In order to perform a transference of native tokens using the system instruction,
+    // the system program builtin must be registered.
+    batch_processor.add_builtin(
+        mock_bank,
+        solana_system_program::id(),
+        SYSTEM_PROGRAM_NAME,
+        LoadedProgram::new_builtin(
+            DEPLOYMENT_SLOT,
+            SYSTEM_PROGRAM_NAME.len(),
+            solana_system_program::system_processor::Entrypoint::vm,
+        ),
+    );
 }
 
 fn prepare_transactions(
@@ -289,6 +280,7 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(fee_payer, account_data);
 
     // A simple funds transfer between accounts
@@ -333,18 +325,23 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(fee_payer, account_data);
 
     // sender
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(900000);
-    mock_bank.account_shared_data.insert(sender, account_data);
+    mock_bank
+        .account_shared_data
+        .borrow_mut()
+        .insert(sender, account_data);
 
     // recipient
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(recipient, account_data);
 
     // The system account is set in `create_executable_environment`
@@ -364,6 +361,7 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(fee_payer, account_data);
 
     // A transaction that fails
@@ -405,18 +403,23 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(fee_payer, account_data);
 
     // Sender without enough funds
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(900000);
-    mock_bank.account_shared_data.insert(sender, account_data);
+    mock_bank
+        .account_shared_data
+        .borrow_mut()
+        .insert(sender, account_data);
 
     // recipient
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
+        .borrow_mut()
         .insert(recipient, account_data);
 
     // A transaction whose verification has already failed
@@ -430,7 +433,7 @@ fn prepare_transactions(
 fn svm_integration() {
     let mut mock_bank = MockBankCallback::default();
     let (transactions, mut check_results) = prepare_transactions(&mut mock_bank);
-    let (program_cache, builtins) = create_executable_environment(&mut mock_bank);
+    let program_cache = create_executable_environment(&mut mock_bank);
     let program_cache = Arc::new(RwLock::new(program_cache));
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         EXECUTION_SLOT,
@@ -439,10 +442,12 @@ fn svm_integration() {
         FeeStructure::default(),
         Arc::new(RuntimeConfig::default()),
         program_cache.clone(),
+        HashSet::default(),
     );
 
     // The sysvars must be put in the cache
     batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
+    register_builtins(&mock_bank, &batch_processor);
 
     let mut error_counter = TransactionErrorMetrics::default();
     let recording_config = ExecutionRecordingConfig {
@@ -460,7 +465,6 @@ fn svm_integration() {
         recording_config,
         &mut timings,
         None,
-        builtins.iter(),
         None,
         false,
     );
