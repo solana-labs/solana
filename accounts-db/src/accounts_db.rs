@@ -919,17 +919,6 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn compute_hash(&self, pubkey: &Pubkey) -> AccountHash {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                AccountsDb::hash_account(stored_account_meta, stored_account_meta.pubkey())
-            }
-            LoadedAccount::Cached(cached_account) => {
-                AccountsDb::hash_account(&cached_account.account, pubkey)
-            }
-        }
-    }
-
     pub fn take_account(self) -> AccountSharedData {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
@@ -2272,7 +2261,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
 
         let hash_is_missing = loaded_hash == AccountHash(Hash::default());
         if self.config.check_hash || hash_is_missing {
-            let computed_hash = loaded_account.compute_hash(pubkey);
+            let computed_hash = AccountsDb::hash_account(loaded_account, loaded_account.pubkey());
             if hash_is_missing {
                 loaded_hash = computed_hash;
             } else if self.config.check_hash && computed_hash != loaded_hash {
@@ -6639,8 +6628,7 @@ impl AccountsDb {
                                             let balance = loaded_account.lamports();
                                             let hash_is_missing = loaded_hash == AccountHash(Hash::default());
                                             if config.check_hash || hash_is_missing {
-                                                let computed_hash =
-                                                    loaded_account.compute_hash(pubkey);
+                                                let computed_hash = AccountsDb::hash_account(&loaded_account, loaded_account.pubkey());
                                                 if hash_is_missing {
                                                     loaded_hash = computed_hash;
                                                 }
