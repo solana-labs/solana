@@ -2,6 +2,7 @@ use {
     crate::{
         account_storage::meta::StoredAccountMeta,
         accounts_file::MatchAccountOwnerError,
+        append_vec::IndexInfo,
         tiered_storage::{
             file::TieredReadableFile,
             footer::{AccountMetaFormat, TieredStorageFooter},
@@ -109,9 +110,17 @@ impl TieredStorageReader {
         }
     }
 
+    /// iterate over all pubkeys
     pub fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) -> TieredStorageResult<()> {
         match self {
             Self::Hot(hot) => hot.scan_pubkeys(callback),
+        }
+    }
+
+    /// iterate over all entries to put in index
+    pub(crate) fn scan_index(&self, callback: impl FnMut(IndexInfo)) -> TieredStorageResult<()> {
+        match self {
+            Self::Hot(hot) => hot.scan_index(callback),
         }
     }
 

@@ -2,9 +2,11 @@
 
 use {
     crate::{
+        account_info::AccountInfo,
         account_storage::meta::{StoredAccountInfo, StoredAccountMeta},
         accounts_file::MatchAccountOwnerError,
         accounts_hash::AccountHash,
+        append_vec::{IndexInfo, IndexInfoInner},
         tiered_storage::{
             byte_block,
             file::{TieredReadableFile, TieredWritableFile},
@@ -243,6 +245,25 @@ impl TieredAccountMeta for HotAccountMeta {
             .flatten()
     }
 
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  RENT_EXEMPT_RENT_EPOCH will be returned
+    /// if the account is rent-exempt.
+    ///
+    /// For a zero-lamport account, Epoch::default() will be returned to
+    /// default states of an AccountSharedData.
+    fn final_rent_epoch(&self, account_block: &[u8]) -> Epoch {
+        self.rent_epoch(account_block)
+            .unwrap_or(if self.lamports() != 0 {
+                RENT_EXEMPT_RENT_EPOCH
+            } else {
+                // While there is no valid-values for any fields of a zero
+                // lamport account, here we return Epoch::default() to
+                // match the default states of AccountSharedData.  Otherwise,
+                // a hash mismatch will occur.
+                Epoch::default()
+            })
+    }
+
     /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, account_block: &[u8]) -> usize {
@@ -296,6 +317,11 @@ impl<'accounts_file, M: TieredAccountMeta> HotAccount<'accounts_file, M> {
     pub fn data(&self) -> &'accounts_file [u8] {
         self.meta.account_data(self.account_block)
     }
+
+    /// Returns the approximate stored size of this account.
+    pub fn stored_size(&self) -> usize {
+        stored_size(self.meta.account_data_size(self.account_block))
+    }
 }
 
 impl<'accounts_file, M: TieredAccountMeta> ReadableAccount for HotAccount<'accounts_file, M> {
@@ -321,17 +347,7 @@ impl<'accounts_file, M: TieredAccountMeta> ReadableAccount for HotAccount<'accou
     /// For a zero-lamport account, Epoch::default() will be returned to
     /// default states of an AccountSharedData.
     fn rent_epoch(&self) -> Epoch {
-        self.meta
-            .rent_epoch(self.account_block)
-            .unwrap_or(if self.lamports() != 0 {
-                RENT_EXEMPT_RENT_EPOCH
-            } else {
-                // While there is no valid-values for any fields of a zero
-                // lamport account, here we return Epoch::default() to
-                // match the default states of AccountSharedData.  Otherwise,
-                // a hash mismatch will occur.
-                Epoch::default()
-            })
+        self.meta.final_rent_epoch(self.account_block)
     }
 
     /// Returns the data associated to this account.
@@ -554,6 +570,7 @@ impl HotStorageReader {
         Ok(accounts)
     }
 
+    /// iterate over all pubkeys
     pub fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) -> TieredStorageResult<()> {
         for i in 0..self.footer.account_entry_count {
             let address = self.get_account_address(IndexOffset(i))?;
@@ -562,10 +579,47 @@ impl HotStorageReader {
         Ok(())
     }
 
+    /// iterate over all entries to put in index
+    pub(crate) fn scan_index(
+        &self,
+        mut callback: impl FnMut(IndexInfo),
+    ) -> TieredStorageResult<()> {
+        for i in 0..self.footer.account_entry_count {
+            let index_offset = IndexOffset(i);
+            let account_offset = self.get_account_offset(index_offset)?;
+
+            let meta = self.get_account_meta_from_offset(account_offset)?;
+            let pubkey = self.get_account_address(index_offset)?;
+            let lamports = meta.lamports();
+            let account_block = self.get_account_block(account_offset, index_offset)?;
+            let data_len = meta.account_data_size(account_block);
+            callback(IndexInfo {
+                index_info: {
+                    IndexInfoInner {
+                        pubkey: *pubkey,
+                        lamports,
+                        offset: AccountInfo::reduced_offset_to_offset(i),
+                        data_len: data_len as u64,
+                        executable: meta.flags().executable(),
+                        rent_epoch: meta.final_rent_epoch(account_block),
+                    }
+                },
+                stored_size_aligned: stored_size(data_len),
+            });
+        }
+        Ok(())
+    }
+
     /// Returns a slice suitable for use when archiving hot storages
     pub fn data_for_archive(&self) -> &[u8] {
         self.mmap.as_ref()
     }
+}
+
+/// return an approximation of the cost to store an account.
+/// Some fields like owner are shared across multiple accounts.
+fn stored_size(data_len: usize) -> usize {
+    data_len + std::mem::size_of::<Pubkey>()
 }
 
 fn write_optional_fields(

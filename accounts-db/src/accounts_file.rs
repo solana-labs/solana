@@ -189,7 +189,11 @@ impl AccountsFile {
     pub(crate) fn scan_index(&self, callback: impl FnMut(IndexInfo)) {
         match self {
             Self::AppendVec(av) => av.scan_index(callback),
-            Self::TieredStorage(_ts) => unimplemented!(),
+            Self::TieredStorage(ts) => {
+                if let Some(reader) = ts.reader() {
+                    _ = reader.scan_index(callback);
+                }
+            }
         }
     }
 

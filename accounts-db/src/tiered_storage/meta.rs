@@ -68,6 +68,14 @@ pub trait TieredAccountMeta: Sized {
     /// does not persist this optional field.
     fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch>;
 
+    /// Returns the epoch that this account will next owe rent by parsing
+    /// the specified account block.  RENT_EXEMPT_RENT_EPOCH will be returned
+    /// if the account is rent-exempt.
+    ///
+    /// For a zero-lamport account, Epoch::default() will be returned to
+    /// default states of an AccountSharedData.
+    fn final_rent_epoch(&self, account_block: &[u8]) -> Epoch;
+
     /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, _account_block: &[u8]) -> usize;

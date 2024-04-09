@@ -127,7 +127,7 @@ impl<'storage> StoredAccountMeta<'storage> {
     pub fn stored_size(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.stored_size(),
-            Self::Hot(_) => unimplemented!(),
+            Self::Hot(hot) => hot.stored_size(),
         }
     }
 
