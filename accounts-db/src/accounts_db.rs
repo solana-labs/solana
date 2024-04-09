@@ -937,6 +937,11 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Cached(_) => true,
         }
     }
+
+    /// data_len can be calculated without having access to `&data` in future implementations
+    pub fn data_len(&self) -> usize {
+        self.data().len()
+    }
 }
 
 impl<'a> ReadableAccount for LoadedAccount<'a> {
@@ -9118,11 +9123,12 @@ impl AccountsDb {
                                 maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                             );
                             let loaded_account = accessor.check_and_get_loaded_account();
-                            accounts_data_len_from_duplicates += loaded_account.data().len();
+                            let data_len = loaded_account.data_len();
+                            accounts_data_len_from_duplicates += data_len;
                             if let Some(lamports_to_top_off) = Self::stats_for_rent_payers(
                                 pubkey,
                                 loaded_account.lamports(),
-                                loaded_account.data().len(),
+                                data_len,
                                 loaded_account.rent_epoch(),
                                 loaded_account.executable(),
                                 rent_collector,
