@@ -201,16 +201,16 @@ impl Accounts {
     /// returns only the latest/current version of B for this slot
     pub fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
-        F: Fn(LoadedAccount) -> Option<B> + Send + Sync,
+        F: Fn(&LoadedAccount) -> Option<B> + Send + Sync,
         B: Sync + Send + Default + std::cmp::Eq,
     {
         let scan_result = self.accounts_db.scan_account_storage(
             slot,
-            |loaded_account: LoadedAccount| {
+            |loaded_account: &LoadedAccount| {
                 // Cache only has one version per key, don't need to worry about versioning
                 func(loaded_account)
             },
-            |accum: &DashMap<Pubkey, B>, loaded_account: LoadedAccount| {
+            |accum: &DashMap<Pubkey, B>, loaded_account: &LoadedAccount| {
                 let loaded_account_pubkey = *loaded_account.pubkey();
                 if let Some(val) = func(loaded_account) {
                     accum.insert(loaded_account_pubkey, val);
