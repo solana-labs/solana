@@ -298,8 +298,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     validated_fee_payer = true;
                 }
 
-                callbacks.check_account_access(message, i, &account, error_counters)?;
-
                 tx_rent += rent;
                 rent_debits.insert(key, rent, account.lamports());
 

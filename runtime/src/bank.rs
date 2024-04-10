@@ -42,8 +42,7 @@ use {
             builtins::{BuiltinPrototype, BUILTINS},
             metrics::*,
             partitioned_epoch_rewards::{
-                EpochRewardCalculateParamInfo, EpochRewardStatus, RewardInterval, StakeRewards,
-                VoteRewardsAccounts,
+                EpochRewardCalculateParamInfo, EpochRewardStatus, StakeRewards, VoteRewardsAccounts,
             },
         },
         bank_forks::BankForks,
@@ -6860,26 +6859,6 @@ impl TransactionProcessingCallback for Bank {
 
     fn get_feature_set(&self) -> Arc<FeatureSet> {
         self.feature_set.clone()
-    }
-
-    fn check_account_access(
-        &self,
-        message: &SanitizedMessage,
-        account_index: usize,
-        account: &AccountSharedData,
-        error_counters: &mut TransactionErrorMetrics,
-    ) -> Result<()> {
-        if self.get_reward_interval() == RewardInterval::InsideInterval
-            && message.is_writable(account_index)
-            && solana_stake_program::check_id(account.owner())
-        {
-            error_counters.program_execution_temporarily_restricted += 1;
-            Err(TransactionError::ProgramExecutionTemporarilyRestricted {
-                account_index: account_index as u8,
-            })
-        } else {
-            Ok(())
-        }
     }
 
     fn get_program_match_criteria(&self, program: &Pubkey) -> LoadedProgramMatchCriteria {
