@@ -84,6 +84,37 @@ a `TransactionBatchProcessor` object the client need to specify the
 `slot`, `epoch`, `epoch_schedule`, `fee_structure`, `runtime_config`,
 and `program_cache`.
 
+- `slot: Slot` is a u64 value representing the ordinal number of a
+    particular blockchain state in context of which the transactions
+    are executed. This value is used to locate the on-chain program
+    versions used in the transaction execution.
+- `epoch: Epoch` is a u64 value representing the ordinal number of
+    a Solana epoch, in which the slot was created. This is another
+    index used to locate the onchain programs used in the execution of
+    transactions in the batch.
+- `epoch_schedule: EpochSchedule` is a struct that contains
+    information about epoch configuration, such as number of slots per
+    epoch, etc. TransactionBatchProcessor needs an instance of
+    EpochSchedule to obtain the first slot in the epoch in which the
+    transactions batch is being executed. This slot is sometimes
+    required for updating the information about the slot when a program
+    account has been accessed most recently. This is needed for
+    program cache bookkeeping.
+- `fee_structure: FeeStructure` an instance of `FeeStructure` is
+    needed to check the validity of every transaction in a batch when
+    the transaction accounts are being loaded and checked for
+    compliance with required fees for transaction execution.
+- `runtime_config: Arc<RuntimeConfig>` is a reference to a
+    RuntimeConfig struct instance. The `RuntimeConfig` is a collection
+    of fields that control parameters of runtime, such as compute
+    budget, the maximal size of log messages in bytes, etc.
+- `program_cache: Arc<RwLock<ProgramCache<FG>>>` is a reference to
+    a ProgramCache instance. All on chain programs used in transaction
+    batch execution are loaded from the program cache.
+
+In addition, `TransactionBatchProcessor` needs an instance of
+`SysvarCache` and a set of pubkeys of builtin program IDs.
+
 The main entry point to the SVM is the method
 `load_and_execute_sanitized_transactions`. In addition
 `TransactionBatchProcessor` provides utility methods
