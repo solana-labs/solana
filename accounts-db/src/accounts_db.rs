@@ -82,7 +82,7 @@ use {
     solana_nohash_hasher::{IntMap, IntSet},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount},
         clock::{BankId, Epoch, Slot},
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -942,9 +942,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn data_len(&self) -> usize {
         self.data().len()
     }
-}
 
-impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn lamports(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.lamports(),
@@ -958,7 +956,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
             LoadedAccount::Cached(cached_account) => cached_account.account.data(),
         }
     }
-    fn owner(&self) -> &Pubkey {
+    pub(crate) fn owner(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.owner(),
             LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
@@ -974,19 +972,6 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.rent_epoch(),
             LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
-        }
-    }
-    fn to_account_shared_data(&self) -> AccountSharedData {
-        match self {
-            LoadedAccount::Stored(_stored_account_meta) => AccountSharedData::create(
-                self.lamports(),
-                self.data().to_vec(),
-                *self.owner(),
-                self.executable(),
-                self.rent_epoch(),
-            ),
-            // clone here to prevent data copy
-            LoadedAccount::Cached(cached_account) => cached_account.account.clone(),
         }
     }
 }
@@ -2266,7 +2251,14 @@ impl<'a> AppendVecScan for ScanState<'a> {
 
         let hash_is_missing = loaded_hash == AccountHash(Hash::default());
         if self.config.check_hash || hash_is_missing {
-            let computed_hash = AccountsDb::hash_account(loaded_account, loaded_account.pubkey());
+            let computed_hash = AccountsDb::hash_account_data(
+                loaded_account.lamports(),
+                loaded_account.owner(),
+                loaded_account.executable(),
+                loaded_account.rent_epoch(),
+                loaded_account.data(),
+                loaded_account.pubkey(),
+            );
             if hash_is_missing {
                 loaded_hash = computed_hash;
             } else if self.config.check_hash && computed_hash != loaded_hash {
@@ -6624,7 +6616,14 @@ impl AccountsDb {
                                             let balance = loaded_account.lamports();
                                             let hash_is_missing = loaded_hash == AccountHash(Hash::default());
                                             if config.check_hash || hash_is_missing {
-                                                let computed_hash = AccountsDb::hash_account(&loaded_account, loaded_account.pubkey());
+                                                let computed_hash = Self::hash_account_data(
+                                                    loaded_account.lamports(),
+                                                    loaded_account.owner(),
+                                                    loaded_account.executable(),
+                                                    loaded_account.rent_epoch(),
+                                                    loaded_account.data(),
+                                                    loaded_account.pubkey(),
+                                                );
                                                 if hash_is_missing {
                                                     loaded_hash = computed_hash;
                                                 }
