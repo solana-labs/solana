@@ -360,6 +360,7 @@ fn test_forwarding() {
         ),
         ..ClusterConfig::default()
     };
+
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
     let cluster_nodes = discover_cluster(
