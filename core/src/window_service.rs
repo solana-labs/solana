@@ -169,6 +169,11 @@ fn run_check_duplicate(
             shred_slot,
             &root_bank,
         );
+        let chained_merkle_conflict_duplicate_proofs = cluster_nodes::check_feature_activation(
+            &feature_set::chained_merkle_conflict_duplicate_proofs::id(),
+            shred_slot,
+            &root_bank,
+        );
         let (shred1, shred2) = match shred {
             PossibleDuplicateShred::LastIndexConflict(shred, conflict)
             | PossibleDuplicateShred::ErasureConflict(shred, conflict) => {
@@ -180,6 +185,24 @@ fn run_check_duplicate(
             }
             PossibleDuplicateShred::MerkleRootConflict(shred, conflict) => {
                 if merkle_conflict_duplicate_proofs {
+                    // Although this proof can be immediately stored on detection, we wait until
+                    // here in order to check the feature flag, as storage in blockstore can
+                    // preclude the detection of other duplicate proofs in this slot
+                    if blockstore.has_duplicate_shreds_in_slot(shred_slot) {
+                        return Ok(());
+                    }
+                    blockstore.store_duplicate_slot(
+                        shred_slot,
+                        conflict.clone(),
+                        shred.clone().into_payload(),
+                    )?;
+                    (shred, conflict)
+                } else {
+                    return Ok(());
+                }
+            }
+            PossibleDuplicateShred::ChainedMerkleRootConflict(shred, conflict) => {
+                if chained_merkle_conflict_duplicate_proofs {
                     // Although this proof can be immediately stored on detection, we wait until
                     // here in order to check the feature flag, as storage in blockstore can
                     // preclude the detection of other duplicate proofs in this slot

@@ -292,10 +292,14 @@ impl ShredId {
 }
 
 /// Tuple which identifies erasure coding set that the shred belongs to.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub(crate) struct ErasureSetId(Slot, /*fec_set_index:*/ u32);
 
 impl ErasureSetId {
+    pub(crate) fn new(slot: Slot, fec_set_index: u32) -> Self {
+        Self(slot, fec_set_index)
+    }
+
     pub(crate) fn slot(&self) -> Slot {
         self.0
     }
@@ -310,7 +314,6 @@ impl ErasureSetId {
 macro_rules! dispatch {
     ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)?) $(-> $out:ty)?) => {
         #[inline]
-        #[allow(dead_code)]
         $vis fn $name(&self $(, $arg:$ty)?) $(-> $out)? {
             match self {
                 Self::ShredCode(shred) => shred.$name($($arg, )?),
@@ -728,7 +731,6 @@ pub mod layout {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_chained_merkle_root(shred: &[u8]) -> Option<Hash> {
         let offset = match get_shred_variant(shred).ok()? {
             ShredVariant::LegacyCode | ShredVariant::LegacyData => None,

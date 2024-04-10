@@ -773,6 +773,10 @@ pub mod enable_gossip_duplicate_proof_ingestion {
     solana_sdk::declare_id!("FNKCMBzYUdjhHyPdsKG2LSmdzH8TCHXn3ytj8RNBS4nG");
 }
 
+pub mod chained_merkle_conflict_duplicate_proofs {
+    solana_sdk::declare_id!("mustrekeyVfuxJKNRGkyTDokLwWxx6kD2ZLsqQHaDD8");
+}
+
 pub mod enable_chained_merkle_shreds {
     solana_sdk::declare_id!("7uZBkJXJ1HkuP6R3MJfZs7mLwymBcDbKdqbF51ZWLier");
 }
@@ -981,6 +985,7 @@ lazy_static! {
         (remove_rounding_in_fee_calculation::id(), "Removing unwanted rounding in fee calculation #34982"),
         (deprecate_unused_legacy_vote_plumbing::id(), "Deprecate unused legacy vote tx plumbing"),
         (enable_tower_sync_ix::id(), "Enable tower sync vote instruction"),
+        (chained_merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for chained merkle root conflicts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

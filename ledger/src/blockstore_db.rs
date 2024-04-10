@@ -151,6 +151,8 @@ pub enum BlockstoreError {
     MissingTransactionMetadata,
     #[error("transaction-index overflow")]
     TransactionIndexOverflow,
+    #[error("invalid erasure config")]
+    InvalidErasureConfig,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
