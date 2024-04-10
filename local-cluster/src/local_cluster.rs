@@ -2,6 +2,7 @@ use {
     crate::{
         cluster::{Cluster, ClusterValidatorInfo, QuicTpuClient, ValidatorInfo},
         cluster_tests,
+        integration_tests::DEFAULT_NODE_STAKE,
         validator_configs::*,
     },
     itertools::izip,
@@ -47,7 +48,7 @@ use {
         transaction::Transaction,
     },
     solana_stake_program::stake_state,
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_tpu_client::tpu_client::{
         TpuClient, TpuClientConfig, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
         DEFAULT_TPU_USE_QUIC,
@@ -60,7 +61,7 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
-        net::UdpSocket,
+        net::{IpAddr, Ipv4Addr, UdpSocket},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -188,6 +189,46 @@ impl LocalCluster {
 
     pub fn new(config: &mut ClusterConfig, socket_addr_space: SocketAddrSpace) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
+
+        let connection_cache = match config.tpu_use_quic {
+            true => {
+                let client_keypair = Keypair::new();
+                let stake = DEFAULT_NODE_STAKE;
+
+                for validator_config in config.validator_configs.iter_mut() {
+                    let mut overrides = HashMap::new();
+                    overrides.insert(client_keypair.pubkey(), stake);
+                    validator_config.staked_nodes_overrides = Arc::new(RwLock::new(overrides));
+                }
+
+                assert!(
+                    config.tpu_use_quic,
+                    "no support for staked override forwarding without quic"
+                );
+
+                let total_stake = config.node_stakes.iter().sum::<u64>();
+                let stakes = HashMap::from([
+                    (client_keypair.pubkey(), stake),
+                    (Pubkey::new_unique(), total_stake.saturating_sub(stake)),
+                ]);
+                let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+                    Arc::new(stakes),
+                    HashMap::<Pubkey, u64>::default(), // overrides
+                )));
+
+                Arc::new(ConnectionCache::new_with_client_options(
+                    "connection_cache_local_cluster_quic_staked",
+                    config.tpu_connection_pool_size,
+                    None,
+                    Some((&client_keypair, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))),
+                    Some((&staked_nodes, &client_keypair.pubkey())),
+                ))
+            }
+            false => Arc::new(ConnectionCache::with_udp(
+                "connection_cache_local_cluster_udp",
+                config.tpu_connection_pool_size,
+            )),
+        };
 
         let mut validator_keys = {
             if let Some(ref keys) = config.validator_keys {
@@ -321,16 +362,7 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
-            connection_cache: match config.tpu_use_quic {
-                true => Arc::new(ConnectionCache::new_quic(
-                    "connection_cache_local_cluster_quic",
-                    config.tpu_connection_pool_size,
-                )),
-                false => Arc::new(ConnectionCache::with_udp(
-                    "connection_cache_local_cluster_udp",
-                    config.tpu_connection_pool_size,
-                )),
-            },
+            connection_cache,
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
