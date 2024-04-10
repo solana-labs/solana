@@ -130,9 +130,9 @@ resolver = "2"
 
 [workspace.package]
 version = "2.0.0"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solanalabs.com/"
+authors = ["Anza Maintainers <maintainers@anza.xyz>"]
+repository = "https://github.com/anza-xyz/agave"
+homepage = "https://anza.xyz/"
 license = "Apache-2.0"
 edition = "2021"
 

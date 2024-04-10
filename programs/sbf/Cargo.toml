@@ -1,9 +1,9 @@
 [workspace.package]
 version = "2.0.0"
 description = "Solana SBF test program written in Rust"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solanalabs.com/"
+authors = ["Anza Maintainers <maintainers@anza.xyz>"]
+repository = "https://github.com/anza-xyz/agave"
+homepage = "https://anza.xyz"
 license = "Apache-2.0"
 edition = "2021"
 
@@ -69,10 +69,7 @@ edition = { workspace = true }
 [features]
 sbf_c = []
 sbf_rust = []
-dummy-for-ci-check = [
-    "sbf_c",
-    "sbf_rust",
-]
+dummy-for-ci-check = ["sbf_c", "sbf_rust"]
 
 [build-dependencies]
 walkdir = "2"

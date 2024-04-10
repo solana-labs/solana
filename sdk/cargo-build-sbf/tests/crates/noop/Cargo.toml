@@ -2,10 +2,10 @@
 name = "noop"
 version = "2.0.0"
 description = "Solana SBF test program written in Rust"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
+authors = ["Anza Maintainers <maintainers@anza.xyz>"]
+repository = "https://github.com/anza-xyz/agave"
 license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
+homepage = "https://anza.xyz"
 edition = "2021"
 publish = false
 
