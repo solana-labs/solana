@@ -1,7 +1,8 @@
 use {
     crate::{
         nonblocking::stream_throttle::{
-            ConnectionStreamCounter, StakedStreamLoadEMA, STREAM_STOP_CODE_THROTTLING,
+            ConnectionStreamCounter, StakedStreamLoadEMA, MAX_STREAMS_PER_MS,
+            STREAM_STOP_CODE_THROTTLING, STREAM_THROTTLING_INTERVAL_MS,
         },
         quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
@@ -500,10 +501,16 @@ async fn setup_connection(
                         stats.clone(),
                     ),
                     |(pubkey, stake, total_stake, max_stake, min_stake)| {
-                        let peer_type = if stake > 0 {
-                            ConnectionPeerType::Staked(stake)
-                        } else {
+                        // The heuristic is that the stake should be large engouh to have 1 stream pass throuh within one throttle
+                        // interval during which we allow max (MAX_STREAMS_PER_MS * STREAM_THROTTLING_INTERVAL_MS) streams.
+                        let min_stake_ratio =
+                            1_f64 / (MAX_STREAMS_PER_MS * STREAM_THROTTLING_INTERVAL_MS) as f64;
+                        let stake_ratio = stake as f64 / total_stake as f64;
+                        let peer_type = if stake_ratio < min_stake_ratio {
+                            // If it is a staked connection with ultra low stake ratio, treat it as unstaked.
                             ConnectionPeerType::Unstaked
+                        } else {
+                            ConnectionPeerType::Staked(stake)
                         };
                         NewConnectionHandlerParams {
                             packet_sender,
