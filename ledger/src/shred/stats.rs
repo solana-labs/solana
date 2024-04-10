@@ -32,21 +32,21 @@ pub struct ProcessShredsStats {
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct ShredFetchStats {
-    pub index_overrun: usize,
+    pub(super) index_overrun: usize,
     pub shred_count: usize,
-    pub(crate) num_shreds_merkle_code: usize,
-    pub(crate) num_shreds_merkle_code_chained: usize,
-    pub(crate) num_shreds_merkle_data: usize,
-    pub(crate) num_shreds_merkle_data_chained: usize,
+    pub(super) num_shreds_merkle_code: usize,
+    pub(super) num_shreds_merkle_code_chained: usize,
+    pub(super) num_shreds_merkle_data: usize,
+    pub(super) num_shreds_merkle_data_chained: usize,
     pub ping_count: usize,
     pub ping_err_verify_count: usize,
-    pub(crate) index_bad_deserialize: usize,
-    pub(crate) index_out_of_bounds: usize,
-    pub(crate) slot_bad_deserialize: usize,
-    pub slot_out_of_range: usize,
-    pub(crate) bad_shred_type: usize,
-    pub shred_version_mismatch: usize,
-    pub(crate) bad_parent_offset: usize,
+    pub(super) index_bad_deserialize: usize,
+    pub(super) index_out_of_bounds: usize,
+    pub(super) slot_bad_deserialize: usize,
+    pub(super) slot_out_of_range: usize,
+    pub(super) bad_shred_type: usize,
+    pub(super) shred_version_mismatch: usize,
+    pub(super) bad_parent_offset: usize,
     since: Option<Instant>,
 }
 
