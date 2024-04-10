@@ -345,7 +345,7 @@ impl<I> CircBuf<I> {
 
     pub fn last(&self) -> Option<&I> {
         if !self.is_empty {
-            Some(&self.buf[self.idx])
+            self.buf.get(self.idx)
         } else {
             None
         }
@@ -787,7 +787,9 @@ impl VoteState {
             // 2) not be equal to latest epoch otherwise this
             //    function would have returned TooSoonToReauthorize error
             //    above
-            assert!(target_epoch > *latest_epoch);
+            if target_epoch <= *latest_epoch {
+                return Err(InstructionError::InvalidAccountData);
+            }
 
             // Commit the new state
             self.prior_voters.append((
@@ -1619,5 +1621,13 @@ mod tests {
         let vote = VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash);
         let bytes = bincode::serialize(&vote).unwrap();
         assert_eq!(vote, bincode::deserialize(&bytes).unwrap());
+    }
+
+    #[test]
+    fn test_circbuf_oob() {
+        // Craft an invalid CircBuf with out-of-bounds index
+        let data: &[u8] = &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00];
+        let circ_buf: CircBuf<()> = bincode::deserialize(data).unwrap();
+        assert_eq!(circ_buf.last(), None);
     }
 }
