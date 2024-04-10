@@ -1,14 +1,11 @@
-#![allow(deprecated)]
-
 use {
     bip39::{Mnemonic, MnemonicType, Seed},
-    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command, PossibleValue},
     solana_clap_v3_utils::{
-        input_parsers::{value_of, STDOUT_OUTFILE_TOKEN},
-        input_validators::is_prompt_signer_source,
+        input_parsers::{signer::SignerSourceParserBuilder, STDOUT_OUTFILE_TOKEN},
         keygen::{
             check_for_overwrite,
-            mnemonic::{acquire_language, acquire_passphrase_and_message, WORD_COUNT_ARG},
+            mnemonic::{acquire_passphrase_and_message, try_get_language, try_get_word_count},
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
         keypair::{
@@ -52,7 +49,7 @@ fn app(crate_version: &str) -> Command {
                     Arg::new("type")
                         .index(1)
                         .takes_value(true)
-                        .possible_values(["elgamal", "aes128"])
+                        .value_parser(clap::value_parser!(KeyType))
                         .value_name("TYPE")
                         .required(true)
                         .help("The type of encryption key")
@@ -86,7 +83,9 @@ fn app(crate_version: &str) -> Command {
                     Arg::new("type")
                         .index(1)
                         .takes_value(true)
-                        .possible_values(["elgamal"])
+                        .value_parser([
+                            PossibleValue::new("elgamal")
+                        ])
                         .value_name("TYPE")
                         .required(true)
                         .help("The type of keypair")
@@ -112,7 +111,7 @@ fn app(crate_version: &str) -> Command {
                     Arg::new("type")
                         .index(1)
                         .takes_value(true)
-                        .possible_values(["elgamal", "aes128"])
+                        .value_parser(clap::value_parser!(KeyType))
                         .value_name("TYPE")
                         .required(true)
                         .help("The type of keypair")
@@ -122,7 +121,7 @@ fn app(crate_version: &str) -> Command {
                         .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(is_prompt_signer_source)
+                        .value_parser(SignerSourceParserBuilder::default().allow_prompt().allow_legacy().build())
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
@@ -157,12 +156,12 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let subcommand = matches.subcommand().unwrap();
     match subcommand {
         ("new", matches) => {
-            let key_type: KeyType = value_of(matches, "type").unwrap();
+            let key_type = matches.try_get_one::<KeyType>("type")?.unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile")
-            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").map(|s| s.as_str())
+            } else if matches.try_contains_id(NO_OUTFILE_ARG.name)? {
                 None
             } else {
                 path.extend([".config", "solana", key_type.default_file_name()]);
@@ -175,15 +174,15 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
+            let word_count = try_get_word_count(matches)?.unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-            let language = acquire_language(matches);
+            let language = try_get_language(matches)?.unwrap();
 
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
             let seed = Seed::new(&mnemonic, &passphrase);
 
-            let silent = matches.is_present("silent");
+            let silent = matches.try_contains_id("silent")?;
 
             match key_type {
                 KeyType::ElGamal => {
@@ -229,11 +228,16 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("pubkey", matches) => {
-            let key_type: KeyType = value_of(matches, "type").unwrap();
+            let key_type = matches.try_get_one::<String>("type")?.unwrap();
+            let key_type = if key_type == "elgamal" {
+                KeyType::ElGamal
+            } else {
+                return Err("unsupported key type".into());
+            };
 
             let mut path = dirs_next::home_dir().expect("home directory");
-            let path = if matches.is_present("keypair") {
-                matches.value_of("keypair").unwrap()
+            let path = if matches.try_contains_id("keypair")? {
+                matches.get_one::<String>("keypair").unwrap()
             } else {
                 path.extend([".config", "solana", key_type.default_file_name()]);
                 path.to_str().unwrap()
@@ -252,11 +256,11 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("recover", matches) => {
-            let key_type: KeyType = value_of(matches, "type").unwrap();
+            let key_type = matches.try_get_one::<KeyType>("type")?.unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile").unwrap()
+            let outfile = if matches.try_contains_id("outfile")? {
+                matches.get_one::<String>("outfile").unwrap()
             } else {
                 path.extend([".config", "solana", key_type.default_file_name()]);
                 path.to_str().unwrap()
@@ -269,21 +273,23 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let name = "recover";
             match key_type {
                 KeyType::ElGamal => {
-                    let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                    let keypair = if let Some(path) =
+                        matches.try_get_one::<String>("prompt_signer")?
+                    {
                         elgamal_keypair_from_path(matches, path, name, true)?
                     } else {
                         let skip_validation =
-                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                            matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
                         elgamal_keypair_from_seed_phrase(name, skip_validation, true, None, true)?
                     };
                     output_encodable_key(&keypair, outfile, "recovered ElGamal keypair")?;
                 }
                 KeyType::Aes128 => {
-                    let key = if let Some(path) = matches.value_of("prompt_signer") {
+                    let key = if let Some(path) = matches.try_get_one::<String>("prompt_signer")? {
                         ae_key_from_path(matches, path, name)?
                     } else {
                         let skip_validation =
-                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                            matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
                         ae_key_from_seed_phrase(name, skip_validation, None, true)?
                     };
                     output_encodable_key(&key, outfile, "recovered AES128 key")?;
@@ -296,6 +302,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
+#[derive(Clone)]
 enum KeyType {
     ElGamal,
     Aes128,
