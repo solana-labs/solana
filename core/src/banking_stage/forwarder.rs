@@ -161,6 +161,7 @@ impl Forwarder {
         self.update_data_budget();
         let packet_vec: Vec<_> = forwardable_packets
             .filter(|p| !p.meta().forwarded())
+            .filter(|p| p.meta().is_from_staked_node())
             .filter(|p| self.data_budget.take(p.meta().size))
             .filter_map(|p| p.data(..).map(|data| data.to_vec()))
             .collect();

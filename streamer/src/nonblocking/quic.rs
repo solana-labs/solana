@@ -908,6 +908,7 @@ async fn handle_chunk(
                 if packet_accum.is_none() {
                     let mut meta = Meta::default();
                     meta.set_socket_addr(remote_addr);
+                    meta.set_from_staked_node(matches!(peer_type, ConnectionPeerType::Staked));
                     *packet_accum = Some(PacketAccumulator {
                         meta,
                         chunks: Vec::new(),
