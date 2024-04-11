@@ -44,8 +44,7 @@ use {
         compute_budget::ComputeBudget,
         compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
-        invoke_context::mock_process_instruction,
-        loaded_programs::{LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -7172,7 +7171,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1, false, None);
+    let program = bank.load_program(&key1, false, None).unwrap();
     assert_matches!(program.program, LoadedProgramType::LegacyV1(_));
     assert_eq!(
         program.account_size,
@@ -7197,6 +7196,26 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         &bpf_loader_upgradeable::id(),
     );
     let upgrade_authority_keypair = Keypair::new();
+
+    // Invoke not yet deployed program
+    let instruction = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
+    let invocation_message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let binding = mint_keypair.insecure_clone();
+    let transaction = Transaction::new(
+        &[&binding],
+        invocation_message.clone(),
+        bank.last_blockhash(),
+    );
+    assert_eq!(
+        bank.process_transaction(&transaction),
+        Err(TransactionError::ProgramAccountNotFound),
+    );
+    {
+        // Make sure it is not in the cache because the account owner is not a loader
+        let program_cache = bank.loaded_programs_cache.read().unwrap();
+        let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
+        assert!(slot_versions.is_empty());
+    }
 
     // Load program file
     let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so")
@@ -7245,6 +7264,28 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         &bpf_loader_upgradeable::id(),
     );
 
+    // Test buffer invocation
+    bank.store_account(&buffer_address, &buffer_account);
+    let instruction = Instruction::new_with_bytes(buffer_address, &[], Vec::new());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let transaction = Transaction::new(&[&binding], message, bank.last_blockhash());
+    assert_eq!(
+        bank.process_transaction(&transaction),
+        Err(TransactionError::InstructionError(
+            0,
+            InstructionError::InvalidAccountData,
+        )),
+    );
+    {
+        let program_cache = bank.loaded_programs_cache.read().unwrap();
+        let slot_versions = program_cache.get_slot_versions_for_tests(&buffer_address);
+        assert_eq!(slot_versions.len(), 1);
+        assert!(matches!(
+            slot_versions[0].program,
+            LoadedProgramType::Closed,
+        ));
+    }
+
     // Test successful deploy
     let payer_base_balance = LAMPORTS_PER_SOL;
     let deploy_fees = {
@@ -7262,7 +7303,6 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
             &system_program::id(),
         ),
     );
-    bank.store_account(&buffer_address, &buffer_account);
     bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
     bank.store_account(&programdata_address, &AccountSharedData::default());
     let message = Message::new(
@@ -7327,30 +7367,15 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
-    let loaded_program = bank.load_program(&program_keypair.pubkey(), false, None);
+    // Advance the bank so that the program becomes effective
+    goto_end_of_slot(bank.clone());
+    let bank = bank_client
+        .advance_slot(1, bank_forks.as_ref(), &mint_keypair.pubkey())
+        .unwrap();
 
-    // Invoke deployed program
-    mock_process_instruction(
-        &bpf_loader_upgradeable::id(),
-        vec![0, 1],
-        &[],
-        vec![
-            (programdata_address, post_programdata_account),
-            (program_keypair.pubkey(), post_program_account),
-        ],
-        Vec::new(),
-        Ok(()),
-        solana_bpf_loader_program::Entrypoint::vm,
-        |invoke_context| {
-            invoke_context
-                .programs_modified_by_tx
-                .set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
-            invoke_context
-                .programs_modified_by_tx
-                .replenish(program_keypair.pubkey(), loaded_program.clone());
-        },
-        |_invoke_context| {},
-    );
+    // Invoke the deployed program
+    let transaction = Transaction::new(&[&binding], invocation_message, bank.last_blockhash());
+    assert!(bank.process_transaction(&transaction).is_ok());
 
     // Test initialized program account
     bank.clear_signatures();

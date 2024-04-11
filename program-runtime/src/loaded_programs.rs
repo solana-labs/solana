@@ -62,8 +62,11 @@ pub trait ForkGraph {
 
 #[derive(Default)]
 pub enum LoadedProgramType {
-    /// Tombstone for undeployed, closed or unloadable programs
+    /// Tombstone for programs which currently do not pass the verifier but could if the feature set changed.
     FailedVerification(ProgramRuntimeEnvironment),
+    /// Tombstone for programs that were either explicitly closed or never deployed.
+    ///
+    /// It's also used for accounts belonging to program loaders, that don't actually contain program code (e.g. buffer accounts for LoaderV3 programs).
     #[default]
     Closed,
     DelayVisibility,
@@ -1100,6 +1103,14 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         for k in keys {
             self.entries.remove(&k);
         }
+    }
+
+    /// Returns the `slot_versions` of the second level for the given program id.
+    pub fn get_slot_versions_for_tests(&self, key: &Pubkey) -> &[Arc<LoadedProgram>] {
+        self.entries
+            .get(key)
+            .map(|second_level| second_level.slot_versions.as_ref())
+            .unwrap_or(&[])
     }
 
     fn unload_program(&mut self, id: &Pubkey) {

@@ -116,7 +116,7 @@ use {
         loaded_programs::{
             LoadProgramMetrics, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
             LoadedPrograms, LoadedProgramsForTxBatch, ProgramRuntimeEnvironment,
-            ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
+            DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         message_processor::MessageProcessor,
@@ -308,8 +308,7 @@ impl BankRc {
 }
 
 enum ProgramAccountLoadResult {
-    AccountNotFound,
-    InvalidAccountData(ProgramRuntimeEnvironment),
+    InvalidAccountData,
     ProgramOfLoaderV1orV2(AccountSharedData),
     ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
     ProgramOfLoaderV4(AccountSharedData, Slot),
@@ -1375,9 +1374,12 @@ impl Bank {
                     loaded_programs_cache.programs_to_recompile.pop()
                 {
                     drop(loaded_programs_cache);
-                    let recompiled = new.load_program(&key, false, Some(program_to_recompile));
-                    let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
-                    loaded_programs_cache.assign_program(key, recompiled);
+                    if let Some(recompiled) =
+                        new.load_program(&key, false, Some(program_to_recompile))
+                    {
+                        let mut loaded_programs_cache = new.loaded_programs_cache.write().unwrap();
+                        loaded_programs_cache.assign_program(key, recompiled);
+                    }
                 }
             } else if new.epoch() != loaded_programs_cache.latest_root_epoch
                 || slot_index.saturating_add(slots_in_recompilation_phase) >= slots_in_epoch
@@ -4556,58 +4558,52 @@ impl Bank {
         }
     }
 
-    fn load_program_accounts(
-        &self,
-        pubkey: &Pubkey,
-        environments: &ProgramRuntimeEnvironments,
-    ) -> ProgramAccountLoadResult {
-        let program_account = match self.get_account_with_fixed_root(pubkey) {
-            None => return ProgramAccountLoadResult::AccountNotFound,
-            Some(account) => account,
-        };
+    fn load_program_accounts(&self, pubkey: &Pubkey) -> Option<ProgramAccountLoadResult> {
+        let program_account = self.get_account_with_fixed_root(pubkey)?;
 
         debug_assert!(solana_bpf_loader_program::check_loader_id(
             program_account.owner()
         ));
 
         if loader_v4::check_id(program_account.owner()) {
-            return solana_loader_v4_program::get_state(program_account.data())
-                .ok()
-                .and_then(|state| {
-                    (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
-                })
-                .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
-                .unwrap_or(ProgramAccountLoadResult::InvalidAccountData(
-                    environments.program_runtime_v2.clone(),
-                ));
+            return Some(
+                solana_loader_v4_program::get_state(program_account.data())
+                    .ok()
+                    .and_then(|state| {
+                        (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                    })
+                    .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
+                    .unwrap_or(ProgramAccountLoadResult::InvalidAccountData),
+            );
         }
 
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
-            return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
+            return Some(ProgramAccountLoadResult::ProgramOfLoaderV1orV2(
+                program_account,
+            ));
         }
 
         if let Ok(UpgradeableLoaderState::Program {
             programdata_address,
         }) = program_account.state()
         {
-            let programdata_account = match self.get_account_with_fixed_root(&programdata_address) {
-                None => return ProgramAccountLoadResult::AccountNotFound,
-                Some(account) => account,
-            };
-
-            if let Ok(UpgradeableLoaderState::ProgramData {
-                slot,
-                upgrade_authority_address: _,
-            }) = programdata_account.state()
+            if let Some(programdata_account) =
+                self.get_account_with_fixed_root(&programdata_address)
             {
-                return ProgramAccountLoadResult::ProgramOfLoaderV3(
-                    program_account,
-                    programdata_account,
+                if let Ok(UpgradeableLoaderState::ProgramData {
                     slot,
-                );
+                    upgrade_authority_address: _,
+                }) = programdata_account.state()
+                {
+                    return Some(ProgramAccountLoadResult::ProgramOfLoaderV3(
+                        program_account,
+                        programdata_account,
+                        slot,
+                    ));
+                }
             }
         }
-        ProgramAccountLoadResult::InvalidAccountData(environments.program_runtime_v1.clone())
+        Some(ProgramAccountLoadResult::InvalidAccountData)
     }
 
     fn load_program_from_bytes(
@@ -4652,7 +4648,7 @@ impl Bank {
         pubkey: &Pubkey,
         reload: bool,
         recompile: Option<Arc<LoadedProgram>>,
-    ) -> Arc<LoadedProgram> {
+    ) -> Option<Arc<LoadedProgram>> {
         let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
         let effective_epoch = if recompile.is_some() {
             loaded_programs_cache.latest_root_epoch.saturating_add(1)
@@ -4665,13 +4661,11 @@ impl Bank {
             ..LoadProgramMetrics::default()
         };
 
-        let mut loaded_program = match self.load_program_accounts(pubkey, environments) {
-            ProgramAccountLoadResult::AccountNotFound => Ok(LoadedProgram::new_tombstone(
+        let mut loaded_program = match self.load_program_accounts(pubkey)? {
+            ProgramAccountLoadResult::InvalidAccountData => Ok(LoadedProgram::new_tombstone(
                 self.slot,
                 LoadedProgramType::Closed,
             )),
-
-            ProgramAccountLoadResult::InvalidAccountData(env) => Err((self.slot, env)),
 
             ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                 Self::load_program_from_bytes(
@@ -4755,7 +4749,7 @@ impl Bank {
                 AtomicU64::new(recompile.ix_usage_counter.load(Ordering::Relaxed));
         }
         loaded_program.update_access_slot(self.slot());
-        Arc::new(loaded_program)
+        Some(Arc::new(loaded_program))
     }
 
     pub fn clear_program_cache(&self) {
@@ -5013,7 +5007,9 @@ impl Bank {
 
             if let Some((key, count)) = program_to_load {
                 // Load, verify and compile one program.
-                let program = self.load_program(&key, false, None);
+                let program = self
+                    .load_program(&key, false, None)
+                    .expect("called load_program() with nonexistent account");
                 program.tx_usage_counter.store(count, Ordering::Relaxed);
                 program_to_store = Some((key, program));
             } else if missing_programs.is_empty() {
