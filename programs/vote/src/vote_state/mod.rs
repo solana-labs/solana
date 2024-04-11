@@ -860,7 +860,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
                 clock
                     .leader_schedule_epoch
                     .checked_add(1)
-                    .expect("epoch should be much less than u64::MAX"),
+                    .ok_or(InstructionError::InvalidAccountData)?,
                 |epoch_authorized_voter| {
                     // current authorized withdrawer or authorized voter must say "yay"
                     if authorized_withdrawer_signer {
