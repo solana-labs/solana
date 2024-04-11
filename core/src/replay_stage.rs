@@ -3390,6 +3390,8 @@ impl ReplayStage {
                                     progress
                                         .get_hash(last_voted_slot)
                                         .expect("Must exist for us to have frozen descendant"),
+                                    bank.feature_set
+                                        .is_active(&feature_set::enable_tower_sync_ix::id()),
                                 );
                                 // Since we are updating our tower we need to update associated caches for previously computed
                                 // slots as well.

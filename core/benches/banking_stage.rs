@@ -1,7 +1,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![feature(test)]
 
-use solana_core::validator::BlockProductionMethod;
+use {
+    solana_core::validator::BlockProductionMethod,
+    solana_vote_program::{vote_state::TowerSync, vote_transaction::new_tower_sync_transaction},
+};
 
 extern crate test;
 
@@ -50,9 +53,6 @@ use {
         transaction::{Transaction, VersionedTransaction},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_vote_program::{
-        vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
-    },
     std::{
         iter::repeat_with,
         sync::{atomic::Ordering, Arc},
@@ -169,11 +169,11 @@ fn make_vote_txs(txes: usize) -> Vec<Transaction> {
         .map(|i| {
             // Quarter of the votes should be filtered out
             let vote = if i % 4 == 0 {
-                VoteStateUpdate::from(vec![(2, 1)])
+                TowerSync::from(vec![(2, 1)])
             } else {
-                VoteStateUpdate::from(vec![(i as u64, 1)])
+                TowerSync::from(vec![(i as u64, 1)])
             };
-            new_vote_state_update_transaction(
+            new_tower_sync_transaction(
                 vote,
                 Hash::new_unique(),
                 &keypairs[i % num_voters],

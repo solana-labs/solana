@@ -1,7 +1,7 @@
 use {
     solana_program::vote::{
         self,
-        state::{Vote, VoteStateUpdate},
+        state::{TowerSync, Vote, VoteStateUpdate},
     },
     solana_sdk::{
         clock::Slot,
@@ -93,6 +93,36 @@ pub fn new_compact_vote_state_update_transaction(
             &vote_keypair.pubkey(),
             &authorized_voter_keypair.pubkey(),
             vote_state_update,
+        )
+    };
+
+    let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+
+    vote_tx.partial_sign(&[node_keypair], blockhash);
+    vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
+    vote_tx
+}
+
+pub fn new_tower_sync_transaction(
+    tower_sync: TowerSync,
+    blockhash: Hash,
+    node_keypair: &Keypair,
+    vote_keypair: &Keypair,
+    authorized_voter_keypair: &Keypair,
+    switch_proof_hash: Option<Hash>,
+) -> Transaction {
+    let vote_ix = if let Some(switch_proof_hash) = switch_proof_hash {
+        vote::instruction::tower_sync_switch(
+            &vote_keypair.pubkey(),
+            &authorized_voter_keypair.pubkey(),
+            tower_sync,
+            switch_proof_hash,
+        )
+    } else {
+        vote::instruction::tower_sync(
+            &vote_keypair.pubkey(),
+            &authorized_voter_keypair.pubkey(),
+            tower_sync,
         )
     };
 

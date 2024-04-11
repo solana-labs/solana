@@ -12,7 +12,7 @@ use {
         slot_hashes::SlotHashes,
         sysvar,
     },
-    solana_vote::vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
+    solana_vote::vote_transaction::VoteTransaction,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
@@ -231,7 +231,7 @@ impl VerifiedVotePackets {
                     let timestamp = vote.timestamp();
 
                     match vote {
-                        VoteStateUpdate(_) => {
+                        VoteTransaction::VoteStateUpdate(_) | VoteTransaction::TowerSync(_) => {
                             let (latest_gossip_slot, latest_timestamp) =
                                 self.0.get(&vote_account_key).map_or((0, None), |vote| {
                                     (vote.get_latest_gossip_slot(), vote.get_latest_timestamp())
