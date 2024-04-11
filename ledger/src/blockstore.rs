@@ -7665,7 +7665,7 @@ pub mod tests {
         assert_eq!(slot_meta.last_index, Some(num_shreds - 1));
         assert!(slot_meta.is_full());
 
-        let (shreds, _) = make_slot_entries(0, 0, 22, /*merkle_variant:*/ true);
+        let (shreds, _) = make_slot_entries(0, 0, 600, /*merkle_variant:*/ true);
         assert!(shreds.len() > num_shreds as usize);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let slot_meta = blockstore.meta(0).unwrap().unwrap();
@@ -10240,15 +10240,13 @@ pub mod tests {
             .flat_map(|x| x.0)
             .collect();
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        // Should only be one shred in slot 9
-        assert!(blockstore
-            .get_data_shred(unconfirmed_slot, 0)
-            .unwrap()
-            .is_some());
-        assert!(blockstore
-            .get_data_shred(unconfirmed_slot, 1)
-            .unwrap()
-            .is_none());
+        // There are 32 data shreds in slot 9.
+        for index in 0..32 {
+            assert_matches!(
+                blockstore.get_data_shred(unconfirmed_slot, index as u64),
+                Ok(Some(_))
+            );
+        }
         blockstore.set_dead_slot(unconfirmed_slot).unwrap();
 
         // Purge the slot
@@ -10281,10 +10279,10 @@ pub mod tests {
             .into_iter()
             .flat_map(|x| x.0)
             .collect();
-        assert_eq!(shreds.len(), 2);
+        assert_eq!(shreds.len(), 2 * 32);
 
-        // Save off unconfirmed_slot for later, just one shred at shreds[1]
-        let unconfirmed_slot_shreds = vec![shreds[1].clone()];
+        // Save off unconfirmed_slot for later, just one shred at shreds[32]
+        let unconfirmed_slot_shreds = vec![shreds[32].clone()];
         assert_eq!(unconfirmed_slot_shreds[0].slot(), unconfirmed_slot);
 
         // Insert into slot 9

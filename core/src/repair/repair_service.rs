@@ -1665,7 +1665,7 @@ mod test {
             vec![
                 ShredRepairType::Shred(2, 0),
                 ShredRepairType::HighestShred(82, 0),
-                ShredRepairType::HighestShred(7, 3),
+                ShredRepairType::Shred(7, 3),
             ],
         );
     }

@@ -2163,7 +2163,7 @@ mod tests {
         // TODO: The test previously relied on corrupting shred payload
         // size which we no longer want to expose. Current test no longer
         // covers packet size check in repair_response_packet_from_bytes.
-        shreds.remove(0);
+        shreds.retain(|shred| shred.slot() != 1);
         blockstore
             .insert_shreds(shreds, None, false)
             .expect("Expect successful ledger write");
@@ -2192,7 +2192,7 @@ mod tests {
         let expected = vec![repair_response::repair_response_packet(
             &blockstore,
             2,
-            0,
+            31, // shred_index
             &socketaddr_any!(),
             nonce,
         )

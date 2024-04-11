@@ -513,7 +513,7 @@ mod tests {
         assert_eq!(verify, shred.verify(pk));
     }
 
-    fn run_test_data_shredder(slot: Slot, chained: bool) {
+    fn run_test_data_shredder(slot: Slot, chained: bool, is_last_in_slot: bool) {
         let keypair = Arc::new(Keypair::new());
 
         // Test that parent cannot be > current slot
@@ -538,11 +538,15 @@ mod tests {
             })
             .collect();
 
-        let is_last_in_slot = true;
         let size = serialized_size(&entries).unwrap() as usize;
         // Integer division to ensure we have enough shreds to fit all the data
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
         let num_expected_data_shreds = (size + data_buffer_size - 1) / data_buffer_size;
+        let num_expected_data_shreds = num_expected_data_shreds.max(if is_last_in_slot {
+            DATA_SHREDS_PER_FEC_BLOCK
+        } else {
+            1
+        });
         let num_expected_coding_shreds =
             get_erasure_batch_size(num_expected_data_shreds, is_last_in_slot)
                 - num_expected_data_shreds;
@@ -574,8 +578,8 @@ mod tests {
                 slot,
                 parent_slot,
                 &keypair.pubkey(),
-                true,
-                is_last,
+                true, // verify
+                is_last && is_last_in_slot,
                 is_last,
             );
             assert!(!data_shred_indexes.contains(&index));
@@ -607,10 +611,12 @@ mod tests {
         assert_eq!(entries, deshred_entries);
     }
 
-    #[test_case(false)]
-    #[test_case(true)]
-    fn test_data_shredder(chained: bool) {
-        run_test_data_shredder(0x1234_5678_9abc_def0, chained);
+    #[test_case(false, false)]
+    #[test_case(false, true)]
+    #[test_case(true, false)]
+    #[test_case(true, true)]
+    fn test_data_shredder(chained: bool, is_last_in_slot: bool) {
+        run_test_data_shredder(0x1234_5678_9abc_def0, chained, is_last_in_slot);
     }
 
     #[test_case(false)]
