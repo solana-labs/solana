@@ -14,7 +14,6 @@ use {
         accounts_hash::AccountHash,
         accounts_index::{AccountsIndexScanResult, ZeroLamport},
         active_stats::ActiveStatItem,
-        append_vec::aligned_stored_size,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
@@ -822,7 +821,7 @@ impl<'a> PackedAncientStorage<'a> {
                     // look at each account and stop when we exceed the ideal size
                     while partial_inner_index_max_exclusive < alive_accounts.accounts.len() {
                         let account = alive_accounts.accounts[partial_inner_index_max_exclusive];
-                        let account_size = aligned_stored_size(account.data().len());
+                        let account_size = account.stored_size();
                         let new_size = bytes_total.saturating_add(account_size);
                         if new_size > ideal_size && bytes_total > 0 {
                             full = true;
