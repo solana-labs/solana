@@ -9,6 +9,7 @@ use {
         },
         snapshot_config::SnapshotConfig,
     },
+    crossbeam_channel::SendError,
     log::*,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
@@ -26,6 +27,7 @@ use {
         },
         time::Instant,
     },
+    thiserror::Error,
 };
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
@@ -41,6 +43,12 @@ impl ReadOnlyAtomicSlot {
         // Thus, to ensure atomic ordering correctness, we must use Acquire-Release semantics.
         self.slot.load(Ordering::Acquire)
     }
+}
+
+#[derive(Error, Debug)]
+pub enum SetRootError {
+    #[error("failed to send epoch accounts hash request for bank {0}: {1}")]
+    SendEpochAccountHashError(Slot, SendError<SnapshotRequest>),
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -280,7 +288,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
+    ) -> Result<(Vec<Arc<Bank>>, SetRootMetrics), SetRootError> {
         let old_epoch = self.root_bank().epoch();
         // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
         // BankForks first *and* from a different thread, this store *must* be at least Release to
@@ -353,14 +361,16 @@ impl BankForks {
                 .accounts_db
                 .epoch_accounts_hash_manager
                 .set_in_flight(eah_bank.slot());
-            accounts_background_request_sender
-                .send_snapshot_request(SnapshotRequest {
+            if let Err(e) =
+                accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
                     snapshot_root_bank: Arc::clone(eah_bank),
                     status_cache_slot_deltas: Vec::default(),
                     request_kind: SnapshotRequestKind::EpochAccountsHash,
                     enqueued: Instant::now(),
                 })
-                .expect("send epoch accounts hash request");
+            {
+                return Err(SetRootError::SendEpochAccountHashError(eah_bank.slot(), e));
+            };
         }
         drop(eah_banks);
 
@@ -425,7 +435,7 @@ impl BankForks {
         drop(parents);
         drop_parent_banks_time.stop();
 
-        (
+        Ok((
             removed_banks,
             SetRootMetrics {
                 timings: SetRootTimings {
@@ -441,7 +451,7 @@ impl BankForks {
                 dropped_banks_len: dropped_banks_len as i64,
                 accounts_data_len,
             },
-        )
+        ))
     }
 
     pub fn prune_program_cache(&self, root: Slot) {
@@ -455,14 +465,14 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_super_majority_root: Option<Slot>,
-    ) -> Vec<Arc<Bank>> {
+    ) -> Result<Vec<Arc<Bank>>, SetRootError> {
         let program_cache_prune_start = Instant::now();
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
             accounts_background_request_sender,
             highest_super_majority_root,
-        );
+        )?;
         datapoint_info!(
             "bank-forks_set_root",
             (
@@ -548,7 +558,7 @@ impl BankForks {
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
             ("accounts_data_len", set_root_metrics.accounts_data_len, i64),
         );
-        removed_banks
+        Ok(removed_banks)
     }
 
     pub fn root(&self) -> Slot {
@@ -848,7 +858,7 @@ mod tests {
         let bank0 = Bank::new_for_tests(&genesis_config);
         let bank_forks0 = BankForks::new_rw_arc(bank0);
         let mut bank_forks0 = bank_forks0.write().unwrap();
-        bank_forks0.set_root(0, &abs_request_sender, None);
+        bank_forks0.set_root(0, &abs_request_sender, None).unwrap();
 
         let bank1 = Bank::new_for_tests(&genesis_config);
         let bank_forks1 = BankForks::new_rw_arc(bank1);
@@ -883,7 +893,9 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &abs_request_sender, None);
+            bank_forks0
+                .set_root(slot, &abs_request_sender, None)
+                .unwrap();
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
@@ -948,11 +960,15 @@ mod tests {
                 (4, vec![]),
             ])
         );
-        bank_forks.write().unwrap().set_root(
-            2,
-            &AbsRequestSender::default(),
-            None, // highest confirmed root
-        );
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(
+                2,
+                &AbsRequestSender::default(),
+                None, // highest confirmed root
+            )
+            .unwrap();
         bank_forks.read().unwrap().get(2).unwrap().squash();
         assert_eq!(
             bank_forks.read().unwrap().ancestors(),
@@ -1011,11 +1027,15 @@ mod tests {
                 (4, vec![]),
             ])
         );
-        bank_forks.write().unwrap().set_root(
-            2,
-            &AbsRequestSender::default(),
-            Some(1), // highest confirmed root
-        );
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(
+                2,
+                &AbsRequestSender::default(),
+                Some(1), // highest confirmed root
+            )
+            .unwrap();
         bank_forks.read().unwrap().get(2).unwrap().squash();
         assert_eq!(
             bank_forks.read().unwrap().ancestors(),
@@ -1101,11 +1121,13 @@ mod tests {
 
         assert_matches!(bank_forks.relationship(1, 13), BlockRelation::Unknown);
         assert_matches!(bank_forks.relationship(13, 2), BlockRelation::Unknown);
-        bank_forks.set_root(
-            2,
-            &AbsRequestSender::default(),
-            Some(1), // highest confirmed root
-        );
+        bank_forks
+            .set_root(
+                2,
+                &AbsRequestSender::default(),
+                Some(1), // highest confirmed root
+            )
+            .unwrap();
         assert_matches!(bank_forks.relationship(1, 2), BlockRelation::Unknown);
         assert_matches!(bank_forks.relationship(2, 0), BlockRelation::Unknown);
     }

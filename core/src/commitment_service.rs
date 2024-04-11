@@ -555,7 +555,8 @@ mod tests {
             bank_forks
                 .write()
                 .unwrap()
-                .set_root(x, &AbsRequestSender::default(), None);
+                .set_root(x, &AbsRequestSender::default(), None)
+                .unwrap();
         }
 
         // Add an additional bank/vote that will root slot 2
@@ -596,11 +597,15 @@ mod tests {
             .read()
             .unwrap()
             .highest_super_majority_root();
-        bank_forks.write().unwrap().set_root(
-            root,
-            &AbsRequestSender::default(),
-            Some(highest_super_majority_root),
-        );
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(
+                root,
+                &AbsRequestSender::default(),
+                Some(highest_super_majority_root),
+            )
+            .unwrap();
         let highest_super_majority_root_bank =
             bank_forks.read().unwrap().get(highest_super_majority_root);
         assert!(highest_super_majority_root_bank.is_some());
@@ -675,11 +680,15 @@ mod tests {
             .read()
             .unwrap()
             .highest_super_majority_root();
-        bank_forks.write().unwrap().set_root(
-            root,
-            &AbsRequestSender::default(),
-            Some(highest_super_majority_root),
-        );
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(
+                root,
+                &AbsRequestSender::default(),
+                Some(highest_super_majority_root),
+            )
+            .unwrap();
         let highest_super_majority_root_bank =
             bank_forks.read().unwrap().get(highest_super_majority_root);
         assert!(highest_super_majority_root_bank.is_some());

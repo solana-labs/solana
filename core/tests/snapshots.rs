@@ -237,7 +237,8 @@ fn run_bank_forks_snapshot_n<F>(
             bank_forks
                 .write()
                 .unwrap()
-                .set_root(bank.slot(), &request_sender, None);
+                .set_root(bank.slot(), &request_sender, None)
+                .unwrap();
             snapshot_request_handler.handle_snapshot_requests(
                 false,
                 0,
@@ -633,7 +634,8 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
             bank_forks
                 .write()
                 .unwrap()
-                .set_root(current_bank.slot(), &request_sender, None);
+                .set_root(current_bank.slot(), &request_sender, None)
+                .unwrap();
 
             // Since the accounts background services are not running, EpochAccountsHash
             // calculation requests will not be handled. To prevent banks from hanging during
@@ -789,7 +791,8 @@ fn test_bank_forks_incremental_snapshot(
             bank_forks
                 .write()
                 .unwrap()
-                .set_root(bank.slot(), &request_sender, None);
+                .set_root(bank.slot(), &request_sender, None)
+                .unwrap();
             snapshot_request_handler.handle_snapshot_requests(
                 false,
                 0,
@@ -1090,7 +1093,8 @@ fn test_snapshots_with_background_services(
             bank_forks
                 .write()
                 .unwrap()
-                .set_root(slot, &abs_request_sender, None);
+                .set_root(slot, &abs_request_sender, None)
+                .unwrap();
         }
 
         // If a snapshot should be taken this slot, wait for it to complete

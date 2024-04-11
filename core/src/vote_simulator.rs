@@ -227,6 +227,7 @@ impl VoteSimulator {
             &mut EpochSlotsFrozenSlots::default(),
             &drop_bank_sender,
         )
+        .unwrap()
     }
 
     pub fn create_and_vote_new_branch(

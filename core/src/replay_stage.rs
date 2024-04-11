@@ -59,7 +59,7 @@ use {
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::{bank_hash_details, Bank, NewBankOptions},
-        bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
+        bank_forks::{BankForks, SetRootError, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -980,7 +980,7 @@ impl ReplayStage {
                         );
                     }
 
-                    Self::handle_votable_bank(
+                    if let Err(e) = Self::handle_votable_bank(
                         vote_bank,
                         switch_fork_decision,
                         &bank_forks,
@@ -1007,7 +1007,10 @@ impl ReplayStage {
                         &mut epoch_slots_frozen_slots,
                         &drop_bank_sender,
                         wait_to_vote_slot,
-                    );
+                    ) {
+                        error!("Unable to set root: {e}");
+                        return;
+                    }
                 }
                 voting_time.stop();
 
@@ -2306,7 +2309,7 @@ impl ReplayStage {
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
         wait_to_vote_slot: Option<Slot>,
-    ) {
+    ) -> Result<(), SetRootError> {
         if bank.is_empty() {
             datapoint_info!("replay_stage-voted_empty_bank", ("slot", bank.slot(), i64));
         }
@@ -2362,7 +2365,7 @@ impl ReplayStage {
                 vote_signatures,
                 epoch_slots_frozen_slots,
                 drop_bank_sender,
-            );
+            )?;
 
             blockstore.slots_stats.mark_rooted(new_root);
 
@@ -2406,6 +2409,7 @@ impl ReplayStage {
             voting_sender,
             wait_to_vote_slot,
         );
+        Ok(())
     }
 
     fn generate_vote_tx(
@@ -4136,13 +4140,13 @@ impl ReplayStage {
         voted_signatures: &mut Vec<Signature>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
         drop_bank_sender: &Sender<Vec<Arc<Bank>>>,
-    ) {
+    ) -> Result<(), SetRootError> {
         bank_forks.read().unwrap().prune_program_cache(new_root);
         let removed_banks = bank_forks.write().unwrap().set_root(
             new_root,
             accounts_background_request_sender,
             highest_super_majority_root,
-        );
+        )?;
 
         drop_bank_sender
             .send(removed_banks)
@@ -4173,6 +4177,7 @@ impl ReplayStage {
 
         unfrozen_gossip_verified_vote_hashes.set_root(new_root);
         *epoch_slots_frozen_slots = epoch_slots_frozen_slots.split_off(&new_root);
+        Ok(())
         // epoch_slots_frozen_slots now only contains entries >= `new_root`
     }
 
@@ -4694,7 +4699,8 @@ pub(crate) mod tests {
             &mut Vec::new(),
             &mut epoch_slots_frozen_slots,
             &drop_bank_sender,
-        );
+        )
+        .unwrap();
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
         assert!(progress.get(&root).is_some());
@@ -4772,7 +4778,8 @@ pub(crate) mod tests {
             &mut Vec::new(),
             &mut EpochSlotsFrozenSlots::default(),
             &drop_bank_sender,
-        );
+        )
+        .unwrap();
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
         assert!(bank_forks.read().unwrap().get(fork).is_none());
@@ -5797,7 +5804,9 @@ pub(crate) mod tests {
         bank_forks.insert(Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 9));
         let bank9 = bank_forks.get(9).unwrap();
         bank_forks.insert(Bank::new_from_parent(bank9, &Pubkey::default(), 10));
-        bank_forks.set_root(9, &AbsRequestSender::default(), None);
+        bank_forks
+            .set_root(9, &AbsRequestSender::default(), None)
+            .unwrap();
         let total_epoch_stake = bank0.total_epoch_stake();
 
         // Insert new ForkProgress for slot 10 and its
@@ -5891,7 +5900,9 @@ pub(crate) mod tests {
             .get_propagated_stats_mut(0)
             .unwrap()
             .is_leader_slot = true;
-        bank_forks.set_root(0, &AbsRequestSender::default(), None);
+        bank_forks
+            .set_root(0, &AbsRequestSender::default(), None)
+            .unwrap();
         let total_epoch_stake = bank_forks.root_bank().total_epoch_stake();
 
         // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
@@ -5974,7 +5985,9 @@ pub(crate) mod tests {
             .get_propagated_stats_mut(0)
             .unwrap()
             .is_leader_slot = true;
-        bank_forks.set_root(0, &AbsRequestSender::default(), None);
+        bank_forks
+            .set_root(0, &AbsRequestSender::default(), None)
+            .unwrap();
 
         let total_epoch_stake = num_validators as u64 * stake_per_validator;
 
@@ -6596,7 +6609,8 @@ pub(crate) mod tests {
         bank_forks
             .write()
             .unwrap()
-            .set_root(3, &AbsRequestSender::default(), None);
+            .set_root(3, &AbsRequestSender::default(), None)
+            .unwrap();
         let mut descendants = bank_forks.read().unwrap().descendants();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         let slot_3_descendants = descendants.get(&3).unwrap().clone();

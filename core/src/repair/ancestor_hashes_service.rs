@@ -1908,7 +1908,9 @@ mod test {
         {
             let mut w_bank_forks = bank_forks.write().unwrap();
             w_bank_forks.insert(new_root_bank);
-            w_bank_forks.set_root(new_root_slot, &AbsRequestSender::default(), None);
+            w_bank_forks
+                .set_root(new_root_slot, &AbsRequestSender::default(), None)
+                .unwrap();
         }
         popular_pruned_slot_pool.insert(dead_duplicate_confirmed_slot);
         assert!(!dead_slot_pool.is_empty());

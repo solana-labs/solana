@@ -5087,11 +5087,11 @@ pub mod tests {
             self.bank_forks.write().unwrap().insert(new_bank);
 
             for root in roots.iter() {
-                self.bank_forks.write().unwrap().set_root(
-                    *root,
-                    &AbsRequestSender::default(),
-                    Some(0),
-                );
+                self.bank_forks
+                    .write()
+                    .unwrap()
+                    .set_root(*root, &AbsRequestSender::default(), Some(0))
+                    .unwrap();
                 let block_time = self
                     .bank_forks
                     .read()

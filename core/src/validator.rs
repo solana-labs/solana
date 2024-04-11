@@ -2097,11 +2097,13 @@ fn maybe_warp_slot(
             warp_slot,
             solana_accounts_db::accounts_db::CalcAccountsHashDataSource::Storages,
         ));
-        bank_forks.set_root(
-            warp_slot,
-            accounts_background_request_sender,
-            Some(warp_slot),
-        );
+        bank_forks
+            .set_root(
+                warp_slot,
+                accounts_background_request_sender,
+                Some(warp_slot),
+            )
+            .map_err(|err| err.to_string())?;
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
         let full_snapshot_archive_info = match snapshot_bank_utils::bank_to_full_snapshot_archive(
