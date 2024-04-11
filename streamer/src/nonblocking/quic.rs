@@ -842,7 +842,7 @@ async fn handle_connection(
                         while !stream_exit.load(Ordering::Relaxed) {
                             if let Ok(chunk) = tokio::time::timeout(
                                 exit_check_interval,
-                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                                stream.read_chunk(PACKET_DATA_SIZE, true),
                             )
                             .await
                             {
