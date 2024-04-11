@@ -170,6 +170,7 @@ impl AncestorHashesService {
             Duration::from_millis(1), // coalesce
             false,                    // use_pinned_memory
             None,                     // in_vote_only_mode
+            false,                    //  is_staked_service
         );
 
         let (quic_endpoint_response_sender, quic_endpoint_response_receiver) = unbounded();
@@ -1302,6 +1303,7 @@ mod test {
                 Duration::from_millis(1), // coalesce
                 false,
                 None,
+                false,
             );
             let (remote_request_sender, remote_request_receiver) = unbounded();
             let t_packet_adapter = Builder::new()
