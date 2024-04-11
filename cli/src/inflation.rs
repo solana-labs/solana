@@ -7,7 +7,7 @@ use {
         keypair::*,
     },
     solana_cli_output::{
-        CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
+        CliEpochRewardsMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
@@ -128,7 +128,7 @@ fn process_rewards(
             });
         }
         let block_time = rpc_client.get_block_time(first_reward.effective_slot)?;
-        Some(CliEpochRewardshMetadata {
+        Some(CliEpochRewardsMetadata {
             epoch: first_reward.epoch,
             effective_slot: first_reward.effective_slot,
             block_time,

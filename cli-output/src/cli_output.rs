@@ -978,7 +978,7 @@ pub struct CliKeyedEpochReward {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliEpochRewardshMetadata {
+pub struct CliEpochRewardsMetadata {
     pub epoch: Epoch,
     pub effective_slot: Slot,
     pub block_time: UnixTimestamp,
@@ -988,7 +988,7 @@ pub struct CliEpochRewardshMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct CliKeyedEpochRewards {
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    pub epoch_metadata: Option<CliEpochRewardshMetadata>,
+    pub epoch_metadata: Option<CliEpochRewardsMetadata>,
     pub rewards: Vec<CliKeyedEpochReward>,
 }
 
