@@ -50,9 +50,8 @@ fn main() {
             break;
         }
         info!(
-            "  account: {:?} version: {} lamports: {} data: {} hash: {:?}",
+            "  account: {:?} lamports: {} data: {} hash: {:?}",
             account.pubkey(),
-            account.write_version(),
             account.lamports(),
             account.data_len(),
             account.hash()
@@ -69,7 +68,6 @@ fn main() {
 fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
     account.hash() == &AccountHash(Hash::default())
         && account.data_len() == 0
-        && account.write_version() == 0
         && account.pubkey() == &Pubkey::default()
         && account.to_account_shared_data() == AccountSharedData::default()
 }
