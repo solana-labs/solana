@@ -14,7 +14,7 @@ fn nice(adjustment: i8) -> Result<i8, nix::errno::Errno> {
         }
     }
     .map(|niceness| i8::try_from(niceness).expect("Unexpected niceness value"))
-    .map_err(nix::errno::from_i32)
+    .map_err(nix::errno::Errno::from_raw)
 }
 
 /// Adds `adjustment` to the nice value of calling thread. Negative `adjustment` increases priority,

@@ -31,7 +31,7 @@ solana-vote-program = { workspace = true }
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = { workspace = true }
 libc = { workspace = true }
-nix = { workspace = true }
+nix = { workspace = true, features = ["user"] }
 
 [lib]
 name = "solana_perf"

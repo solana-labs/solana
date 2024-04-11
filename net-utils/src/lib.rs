@@ -397,16 +397,16 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
             setsockopt,
             sockopt::{ReuseAddr, ReusePort},
         },
-        std::os::unix::io::AsRawFd,
+        std::os::fd::AsFd,
     };
 
     let sock = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
-    let sock_fd = sock.as_raw_fd();
+    let sock_fd = sock.as_fd();
 
     if reuseaddr {
         // best effort, i.e. ignore errors here, we'll get the failure in caller
-        setsockopt(sock_fd, ReusePort, &true).ok();
-        setsockopt(sock_fd, ReuseAddr, &true).ok();
+        setsockopt(&sock_fd, ReusePort, &true).ok();
+        setsockopt(&sock_fd, ReuseAddr, &true).ok();
     }
 
     Ok(sock)
