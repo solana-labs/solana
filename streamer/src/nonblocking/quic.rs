@@ -14,6 +14,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
+    smallvec::SmallVec,
     solana_perf::packet::{PacketBatch, PACKETS_PER_BATCH},
     solana_sdk::{
         packet::{Meta, PACKET_DATA_SIZE},
@@ -95,7 +96,7 @@ struct PacketChunk {
 // the Packet and then when copying the Packet into a PacketBatch)
 struct PacketAccumulator {
     pub meta: Meta,
-    pub chunks: Vec<PacketChunk>,
+    pub chunks: SmallVec<[PacketChunk; 2]>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -911,7 +912,7 @@ async fn handle_chunk(
                     meta.set_from_staked_node(matches!(peer_type, ConnectionPeerType::Staked));
                     *packet_accum = Some(PacketAccumulator {
                         meta,
-                        chunks: Vec::new(),
+                        chunks: SmallVec::new(),
                     });
                 }
 
@@ -1496,7 +1497,7 @@ pub mod test {
             meta.size = size;
             let packet_accum = PacketAccumulator {
                 meta,
-                chunks: vec![PacketChunk {
+                chunks: smallvec::smallvec![PacketChunk {
                     bytes,
                     offset,
                     end_of_chunk: size,
