@@ -6405,19 +6405,18 @@ impl AccountsDb {
                     .account_default_if_zero_lamport(i)
                     .map(|account| account.to_account_shared_data())
                     .unwrap_or_default();
+                let pubkey = accounts_and_meta_to_store.pubkey(i);
                 let account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
 
                 self.notify_account_at_accounts_update(
                     slot,
                     &account,
                     txn,
-                    accounts_and_meta_to_store.pubkey(i),
+                    pubkey,
                     &mut write_version_producer,
                 );
 
-                let cached_account =
-                    self.accounts_cache
-                        .store(slot, accounts_and_meta_to_store.pubkey(i), account);
+                let cached_account = self.accounts_cache.store(slot, pubkey, account);
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
