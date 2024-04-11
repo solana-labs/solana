@@ -1203,8 +1203,9 @@ impl AccountStorageEntry {
         count
     }
 
-    pub fn get_path(&self) -> PathBuf {
-        self.accounts.get_path()
+    /// Returns the path to the underlying accounts storage file
+    pub fn path(&self) -> &Path {
+        self.accounts.path()
     }
 }
 
@@ -5508,13 +5509,13 @@ impl AccountsDb {
         let store = Arc::new(self.new_storage_entry(slot, Path::new(&paths[path_index]), size));
 
         debug!(
-            "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
+            "creating store: {} slot: {} len: {} size: {} from: {} path: {}",
             store.append_vec_id(),
             slot,
             store.accounts.len(),
             store.accounts.capacity(),
             from,
-            store.accounts.get_path()
+            store.accounts.path().display(),
         );
 
         store
@@ -6790,7 +6791,7 @@ impl AccountsDb {
         if let Some(append_vec) = storage {
             // hash info about this storage
             append_vec.written_bytes().hash(hasher);
-            let storage_file = append_vec.accounts.get_path();
+            let storage_file = append_vec.accounts.path();
             slot.hash(hasher);
             storage_file.hash(hasher);
             let amod = std::fs::metadata(storage_file);

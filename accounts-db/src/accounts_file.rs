@@ -15,7 +15,12 @@ use {
         clock::Slot,
         pubkey::Pubkey,
     },
-    std::{borrow::Borrow, io::Read, mem, path::PathBuf},
+    std::{
+        borrow::Borrow,
+        io::Read,
+        mem,
+        path::{Path, PathBuf},
+    },
     thiserror::Error,
 };
 
@@ -166,10 +171,10 @@ impl AccountsFile {
     }
 
     /// Return the path of the underlying account file.
-    pub fn get_path(&self) -> PathBuf {
+    pub fn path(&self) -> &Path {
         match self {
-            Self::AppendVec(av) => av.get_path(),
-            Self::TieredStorage(ts) => ts.path().to_path_buf(),
+            Self::AppendVec(av) => av.path(),
+            Self::TieredStorage(ts) => ts.path(),
         }
     }
 

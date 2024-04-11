@@ -453,7 +453,7 @@ fn test_concurrent_snapshot_packaging(
                 .unwrap()
                 .get_snapshot_storages(None)
                 .into_iter()
-                .map(|s| s.get_path())
+                .map(|s| s.path().to_path_buf())
                 .collect();
 
             // Only save off the files returned by `get_snapshot_storages`. This is because

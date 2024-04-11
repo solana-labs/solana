@@ -808,14 +808,16 @@ pub fn archive_snapshot_package(
                     storage.append_vec_id(),
                 ));
                 let mut header = tar::Header::new_gnu();
-                header
-                    .set_path(path_in_archive)
-                    .map_err(|err| E::ArchiveAccountStorageFile(err, storage.get_path()))?;
+                header.set_path(path_in_archive).map_err(|err| {
+                    E::ArchiveAccountStorageFile(err, storage.path().to_path_buf())
+                })?;
                 header.set_size(storage.capacity());
                 header.set_cksum();
                 archive
                     .append(&header, storage.accounts.data_for_archive())
-                    .map_err(|err| E::ArchiveAccountStorageFile(err, storage.get_path()))?;
+                    .map_err(|err| {
+                        E::ArchiveAccountStorageFile(err, storage.path().to_path_buf())
+                    })?;
             }
 
             archive.into_inner().map_err(E::FinishArchive)?;
@@ -1229,9 +1231,9 @@ pub fn hard_link_storages_to_snapshot(
 
     let mut account_paths: HashSet<PathBuf> = HashSet::new();
     for storage in snapshot_storages {
-        let storage_path = storage.accounts.get_path();
+        let storage_path = storage.accounts.path();
         let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
-            &storage_path,
+            storage_path,
             bank_slot,
             &mut account_paths,
             &accounts_hardlinks_dir,
@@ -1240,8 +1242,12 @@ pub fn hard_link_storages_to_snapshot(
         // Use the storage slot and id to compose a consistent file name for the hard-link file.
         let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
         let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
-        fs::hard_link(&storage_path, &hard_link_path).map_err(|err| {
-            HardLinkStoragesToSnapshotError::HardLinkStorage(err, storage_path, hard_link_path)
+        fs::hard_link(storage_path, &hard_link_path).map_err(|err| {
+            HardLinkStoragesToSnapshotError::HardLinkStorage(
+                err,
+                storage_path.to_path_buf(),
+                hard_link_path,
+            )
         })?;
     }
     Ok(())

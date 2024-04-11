@@ -59,7 +59,7 @@ mod tests {
         let mut next_append_vec_id = 0;
         for storage_entry in storage_entries.into_iter() {
             // Copy file to new directory
-            let storage_path = storage_entry.get_path();
+            let storage_path = storage_entry.path();
             let file_name =
                 AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
             let output_path = output_dir.as_ref().join(file_name);

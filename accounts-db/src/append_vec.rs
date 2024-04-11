@@ -29,7 +29,7 @@ use {
         fs::{remove_file, OpenOptions},
         io::{Seek, SeekFrom, Write},
         mem,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
@@ -615,8 +615,9 @@ impl AppendVec {
         Some((meta, stored_account.to_account_shared_data()))
     }
 
-    pub fn get_path(&self) -> PathBuf {
-        self.path.clone()
+    /// Returns the path to the file where the data is stored
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
     }
 
     /// help with the math of offsets when navigating the on-disk layout in an AppendVec.

@@ -100,9 +100,9 @@ pub fn add_bank_snapshot(
         );
 
         let (_, measure_flush) = measure!(for storage in snapshot_storages {
-            storage
-                .flush()
-                .map_err(|err| AddBankSnapshotError::FlushStorage(err, storage.get_path()))?;
+            storage.flush().map_err(|err| {
+                AddBankSnapshotError::FlushStorage(err, storage.path().to_path_buf())
+            })?;
         });
 
         // We are constructing the snapshot directory to contain the full snapshot state information to allow
