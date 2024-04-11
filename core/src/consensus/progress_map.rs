@@ -5,14 +5,12 @@ use {
         consensus::{Stake, ThresholdDecision, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
-    solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-    solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
+    solana_ledger::blockstore_processor::{ConfirmationProgress, ReplaySlotStats},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
-        ops::Index,
         sync::{Arc, RwLock},
         time::Instant,
     },
@@ -21,120 +19,6 @@ use {
 type VotedSlot = Slot;
 type ExpirationSlot = Slot;
 pub type LockoutIntervals = BTreeMap<ExpirationSlot, Vec<(VotedSlot, Pubkey)>>;
-
-#[derive(Default)]
-pub struct ReplaySlotStats(ConfirmationTiming);
-impl std::ops::Deref for ReplaySlotStats {
-    type Target = ConfirmationTiming;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for ReplaySlotStats {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl ReplaySlotStats {
-    pub fn report_stats(
-        &self,
-        slot: Slot,
-        num_txs: usize,
-        num_entries: usize,
-        num_shreds: u64,
-        bank_complete_time_us: u64,
-    ) {
-        lazy! {
-            datapoint_info!(
-                "replay-slot-stats",
-                ("slot", slot as i64, i64),
-                ("fetch_entries_time", self.fetch_elapsed as i64, i64),
-                (
-                    "fetch_entries_fail_time",
-                    self.fetch_fail_elapsed as i64,
-                    i64
-                ),
-                (
-                    "entry_poh_verification_time",
-                    self.poh_verify_elapsed as i64,
-                    i64
-                ),
-                (
-                    "entry_transaction_verification_time",
-                    self.transaction_verify_elapsed as i64,
-                    i64
-                ),
-                ("confirmation_time_us", self.confirmation_elapsed as i64, i64),
-                ("replay_time", self.replay_elapsed as i64, i64),
-                ("execute_batches_us", self.batch_execute.wall_clock_us as i64, i64),
-                (
-                    "replay_total_elapsed",
-                    self.started.elapsed().as_micros() as i64,
-                    i64
-                ),
-                ("bank_complete_time_us", bank_complete_time_us, i64),
-                ("total_transactions", num_txs as i64, i64),
-                ("total_entries", num_entries as i64, i64),
-                ("total_shreds", num_shreds as i64, i64),
-                // Everything inside the `eager!` block will be eagerly expanded before
-                // evaluation of the rest of the surrounding macro.
-                eager!{report_execute_timings!(self.batch_execute.totals)}
-            );
-        };
-
-        self.batch_execute.slowest_thread.report_stats(slot);
-
-        let mut per_pubkey_timings: Vec<_> = self
-            .batch_execute
-            .totals
-            .details
-            .per_program_timings
-            .iter()
-            .collect();
-        per_pubkey_timings.sort_by(|a, b| b.1.accumulated_us.cmp(&a.1.accumulated_us));
-        let (total_us, total_units, total_count, total_errored_units, total_errored_count) =
-            per_pubkey_timings.iter().fold(
-                (0, 0, 0, 0, 0),
-                |(sum_us, sum_units, sum_count, sum_errored_units, sum_errored_count), a| {
-                    (
-                        sum_us + a.1.accumulated_us,
-                        sum_units + a.1.accumulated_units,
-                        sum_count + a.1.count,
-                        sum_errored_units + a.1.total_errored_units,
-                        sum_errored_count + a.1.errored_txs_compute_consumed.len(),
-                    )
-                },
-            );
-
-        for (pubkey, time) in per_pubkey_timings.iter().take(5) {
-            datapoint_trace!(
-                "per_program_timings",
-                ("slot", slot as i64, i64),
-                ("pubkey", pubkey.to_string(), String),
-                ("execute_us", time.accumulated_us, i64),
-                ("accumulated_units", time.accumulated_units, i64),
-                ("errored_units", time.total_errored_units, i64),
-                ("count", time.count, i64),
-                (
-                    "errored_count",
-                    time.errored_txs_compute_consumed.len(),
-                    i64
-                ),
-            );
-        }
-        datapoint_info!(
-            "per_program_timings",
-            ("slot", slot as i64, i64),
-            ("pubkey", "all", String),
-            ("execute_us", total_us, i64),
-            ("accumulated_units", total_units, i64),
-            ("count", total_count, i64),
-            ("errored_units", total_errored_units, i64),
-            ("errored_count", total_errored_count, i64)
-        );
-    }
-}
 
 #[derive(Debug)]
 pub struct ValidatorStakeInfo {

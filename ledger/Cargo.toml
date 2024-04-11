@@ -18,6 +18,7 @@ chrono = { workspace = true, features = ["default", "serde"] }
 chrono-humanize = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
+eager = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }

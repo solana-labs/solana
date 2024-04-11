@@ -1,5 +1,6 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::arithmetic_side_effects)]
+#![recursion_limit = "2048"]
 
 pub mod bank_forks_utils;
 pub mod bigtable_delete;
@@ -32,6 +33,9 @@ mod staking_utils;
 pub mod token_balances;
 mod transaction_address_lookup_table_scanner;
 pub mod use_snapshot_archives_at_startup;
+
+#[macro_use]
+extern crate eager;
 
 #[macro_use]
 extern crate solana_metrics;
