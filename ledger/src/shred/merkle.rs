@@ -124,6 +124,7 @@ impl Shred {
 
 #[cfg(test)]
 impl Shred {
+    dispatch!(fn chained_merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(fn merkle_root(&self) -> Result<Hash, Error>);
     dispatch!(fn proof_size(&self) -> Result<u8, Error>);
 
@@ -1372,11 +1373,12 @@ mod test {
         itertools::Itertools,
         rand::{seq::SliceRandom, CryptoRng, Rng},
         rayon::ThreadPoolBuilder,
+        reed_solomon_erasure::Error::TooFewShardsPresent,
         solana_sdk::{
             packet::PACKET_DATA_SIZE,
             signature::{Keypair, Signer},
         },
-        std::{cmp::Ordering, iter::repeat_with},
+        std::{cmp::Ordering, collections::HashMap, iter::repeat_with},
         test_case::test_case,
     };
 
@@ -1623,9 +1625,23 @@ mod test {
             assert!(shred.verify(&keypair.pubkey()));
             assert_matches!(shred.sanitize(), Ok(()));
         }
+        verify_erasure_recovery(rng, &shreds, reed_solomon_cache);
+    }
+
+    fn verify_erasure_recovery<R: Rng>(
+        rng: &mut R,
+        shreds: &[Shred],
+        reed_solomon_cache: &ReedSolomonCache,
+    ) {
         assert_eq!(shreds.iter().map(Shred::signature).dedup().count(), 1);
-        for size in num_data_shreds..num_shreds {
-            let mut shreds = shreds.clone();
+        assert_eq!(shreds.iter().map(Shred::fec_set_index).dedup().count(), 1);
+        let num_shreds = shreds.len();
+        let num_data_shreds = shreds
+            .iter()
+            .filter(|shred| shred.shred_type() == ShredType::Data)
+            .count();
+        for size in 0..num_shreds {
+            let mut shreds = Vec::from(shreds);
             shreds.shuffle(rng);
             let mut removed_shreds = shreds.split_off(size);
             // Should at least contain one coding shred.
@@ -1638,6 +1654,13 @@ mod test {
                 assert_matches!(
                     recover(shreds, reed_solomon_cache),
                     Err(Error::ErasureError(TooFewParityShards))
+                );
+                continue;
+            }
+            if shreds.len() < num_data_shreds {
+                assert_matches!(
+                    recover(shreds, reed_solomon_cache),
+                    Err(Error::ErasureError(TooFewShardsPresent))
                 );
                 continue;
             }
@@ -1816,6 +1839,12 @@ mod test {
             let shred_type = ShredType::from(shred_variant);
             let key = ShredId::new(slot, index, shred_type);
             let merkle_root = shred.merkle_root().unwrap();
+            let chained_merkle_root = if chained {
+                Some(shred.chained_merkle_root().unwrap())
+            } else {
+                assert_matches!(shred.chained_merkle_root(), Err(Error::InvalidShredVariant));
+                None
+            };
             assert!(signature.verify(pubkey.as_ref(), merkle_root.as_ref()));
             // Verify shred::layout api.
             let shred = shred.payload();
@@ -1830,6 +1859,10 @@ mod test {
             assert_eq!(shred::layout::get_version(shred), Some(version));
             assert_eq!(shred::layout::get_shred_id(shred), Some(key));
             assert_eq!(shred::layout::get_merkle_root(shred), Some(merkle_root));
+            assert_eq!(
+                shred::layout::get_chained_merkle_root(shred),
+                chained_merkle_root
+            );
             assert_eq!(shred::layout::get_signed_data_offsets(shred), None);
             let data = shred::layout::get_signed_data(shred).unwrap();
             assert_eq!(data, SignedData::MerkleRoot(merkle_root));
@@ -1889,6 +1922,27 @@ mod test {
             }
         }
         assert!(num_coding_shreds >= num_data_shreds);
+        // Verify chained Merkle roots.
+        if let Some(chained_merkle_root) = chained_merkle_root {
+            let chained_merkle_roots: HashMap<u32, Hash> =
+                std::iter::once((0, chained_merkle_root))
+                    .chain(
+                        shreds
+                            .iter()
+                            .dedup_by(|shred, other| shred.fec_set_index() == other.fec_set_index())
+                            .map(|shred| (shred.fec_set_index(), shred.merkle_root().unwrap())),
+                    )
+                    .sorted()
+                    .tuple_windows()
+                    .map(|((_, merkle_root), (fec_set_index, _))| (fec_set_index, merkle_root))
+                    .collect();
+            for shred in &shreds {
+                assert_eq!(
+                    shred.chained_merkle_root().unwrap(),
+                    chained_merkle_roots[&shred.fec_set_index()]
+                );
+            }
+        }
         // Assert that only the last shred is LAST_SHRED_IN_SLOT.
         assert_eq!(
             data_shreds
@@ -1938,6 +1992,14 @@ mod test {
                 Shred::ShredCode(_) => panic!("Invalid shred type!"),
                 Shred::ShredData(shred) => assert_eq!(shred, *other),
             }
+        }
+        // Verify erasure recovery for each erasure batch.
+        for shreds in shreds
+            .into_iter()
+            .into_group_map_by(Shred::fec_set_index)
+            .values()
+        {
+            verify_erasure_recovery(rng, shreds, reed_solomon_cache);
         }
     }
 }

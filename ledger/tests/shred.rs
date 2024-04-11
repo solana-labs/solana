@@ -16,12 +16,14 @@ use {
         convert::TryInto,
         sync::Arc,
     },
+    test_case::test_case,
 };
 
 type IndexShredsMap = BTreeMap<u32, Vec<Shred>>;
 
-#[test]
-fn test_multi_fec_block_coding() {
+#[test_case(false)]
+#[test_case(true)]
+fn test_multi_fec_block_coding(is_last_in_slot: bool) {
     let keypair = Arc::new(Keypair::new());
     let slot = 0x1234_5678_9abc_def0;
     let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
@@ -52,7 +54,7 @@ fn test_multi_fec_block_coding() {
     let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
         &keypair,
         &entries,
-        true,  // is_last_in_slot
+        is_last_in_slot,
         None,  // chained_merkle_root
         0,     // next_shred_index
         0,     // next_code_index

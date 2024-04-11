@@ -40,8 +40,9 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     let (data_shreds, _) = shredder.entries_to_shreds(
         &Keypair::new(),
         &entries,
-        true,  // is_last_in_slot
-        None,  // chained_merkle_root
+        true, // is_last_in_slot
+        // chained_merkle_root
+        Some(Hash::new_from_array(rand::thread_rng().gen())),
         0,     // next_shred_index
         0,     // next_code_index
         false, // merkle_variant
