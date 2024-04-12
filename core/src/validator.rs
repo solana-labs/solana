@@ -942,7 +942,6 @@ impl Validator {
                 bank.clone(),
                 None,
                 bank.ticks_per_slot(),
-                &id,
                 blockstore.clone(),
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,

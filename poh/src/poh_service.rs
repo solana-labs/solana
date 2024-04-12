@@ -391,9 +391,7 @@ mod tests {
         solana_measure::measure::Measure,
         solana_perf::test_tx::test_tx,
         solana_runtime::bank::Bank,
-        solana_sdk::{
-            clock, hash::hash, pubkey::Pubkey, timing, transaction::VersionedTransaction,
-        },
+        solana_sdk::{clock, hash::hash, timing, transaction::VersionedTransaction},
         std::{thread::sleep, time::Duration},
     };
 
@@ -427,7 +425,6 @@ mod tests {
             bank.clone(),
             Some((4, 4)),
             ticks_per_slot,
-            &Pubkey::default(),
             blockstore,
             &leader_schedule_cache,
             &poh_config,
