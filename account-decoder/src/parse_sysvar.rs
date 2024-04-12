@@ -94,7 +94,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
         } else if pubkey == &sysvar::epoch_rewards::id() {
             deserialize::<EpochRewards>(data)
                 .ok()
-                .map(SysvarAccountType::EpochRewards)
+                .map(|epoch_rewards| SysvarAccountType::EpochRewards(epoch_rewards.into()))
         } else {
             None
         }
@@ -119,7 +119,7 @@ pub enum SysvarAccountType {
     SlotHistory(UiSlotHistory),
     StakeHistory(Vec<UiStakeHistoryEntry>),
     LastRestartSlot(UiLastRestartSlot),
-    EpochRewards(EpochRewards),
+    EpochRewards(UiEpochRewards),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -237,6 +237,32 @@ pub struct UiStakeHistoryEntry {
 #[serde(rename_all = "camelCase")]
 pub struct UiLastRestartSlot {
     pub last_restart_slot: Slot,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiEpochRewards {
+    pub distribution_starting_block_height: u64,
+    pub num_partitions: u64,
+    pub parent_blockhash: String,
+    pub total_points: u128,
+    pub total_rewards: u64,
+    pub distributed_rewards: u64,
+    pub active: bool,
+}
+
+impl From<EpochRewards> for UiEpochRewards {
+    fn from(epoch_rewards: EpochRewards) -> Self {
+        Self {
+            distribution_starting_block_height: epoch_rewards.distribution_starting_block_height,
+            num_partitions: epoch_rewards.num_partitions,
+            parent_blockhash: epoch_rewards.parent_blockhash.to_string(),
+            total_points: epoch_rewards.total_points,
+            total_rewards: epoch_rewards.total_rewards,
+            distributed_rewards: epoch_rewards.distributed_rewards,
+            active: epoch_rewards.active,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -381,7 +407,7 @@ mod test {
         let epoch_rewards_sysvar = create_account_for_test(&epoch_rewards);
         assert_eq!(
             parse_sysvar(&epoch_rewards_sysvar.data, &sysvar::epoch_rewards::id()).unwrap(),
-            SysvarAccountType::EpochRewards(epoch_rewards),
+            SysvarAccountType::EpochRewards(epoch_rewards.into()),
         );
     }
 }

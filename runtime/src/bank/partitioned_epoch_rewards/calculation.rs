@@ -181,7 +181,7 @@ impl Bank {
     }
 
     /// Calculate rewards from previous epoch to prepare for partitioned distribution.
-    pub(in crate::bank) fn calculate_rewards_for_partitioning(
+    pub(super) fn calculate_rewards_for_partitioning(
         &self,
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,

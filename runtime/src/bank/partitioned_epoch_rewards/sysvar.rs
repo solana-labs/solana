@@ -2,9 +2,7 @@ use {
     super::Bank,
     log::info,
     solana_sdk::{
-        account::{
-            create_account_shared_data_with_fields as create_account, from_account, ReadableAccount,
-        },
+        account::{create_account_shared_data_with_fields as create_account, from_account},
         sysvar,
     },
 };
@@ -15,10 +13,7 @@ impl Bank {
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
                 from_account(&account).unwrap();
-            info!(
-                "{prefix} epoch_rewards sysvar: {:?}",
-                (account.lamports(), epoch_rewards)
-            );
+            info!("{prefix} epoch_rewards sysvar: {:?}", epoch_rewards);
         } else {
             info!("{prefix} epoch_rewards sysvar: none");
         }
@@ -60,8 +55,9 @@ impl Bank {
     ) {
         assert!(self.is_partitioned_rewards_code_enabled());
 
-        let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards =
-            from_account(&self.get_account(&sysvar::epoch_rewards::id()).unwrap()).unwrap();
+        let mut epoch_rewards = self.get_epoch_rewards_sysvar();
+        assert!(epoch_rewards.active);
+
         epoch_rewards.distribute(distributed);
 
         self.update_sysvar_account(&sysvar::epoch_rewards::id(), |account| {
@@ -76,12 +72,7 @@ impl Bank {
 
     /// Update EpochRewards sysvar with distributed rewards
     pub(in crate::bank::partitioned_epoch_rewards) fn set_epoch_rewards_sysvar_to_inactive(&self) {
-        let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(
-            &self
-                .get_account(&sysvar::epoch_rewards::id())
-                .unwrap_or_default(),
-        )
-        .unwrap_or_default();
+        let mut epoch_rewards = self.get_epoch_rewards_sysvar();
         assert_eq!(
             epoch_rewards.distributed_rewards,
             epoch_rewards.total_rewards
@@ -97,6 +88,19 @@ impl Bank {
 
         self.log_epoch_rewards_sysvar("set_inactive");
     }
+
+    /// Get EpochRewards sysvar. Returns EpochRewards::default() if sysvar
+    /// account cannot be found or cannot be deserialized.
+    pub(in crate::bank::partitioned_epoch_rewards) fn get_epoch_rewards_sysvar(
+        &self,
+    ) -> sysvar::epoch_rewards::EpochRewards {
+        from_account(
+            &self
+                .get_account(&sysvar::epoch_rewards::id())
+                .unwrap_or_default(),
+        )
+        .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
@@ -105,13 +109,14 @@ mod tests {
         super::*,
         crate::bank::tests::create_genesis_config,
         solana_sdk::{
-            epoch_schedule::EpochSchedule, feature_set, hash::Hash, native_token::LAMPORTS_PER_SOL,
+            account::ReadableAccount, epoch_schedule::EpochSchedule, feature_set, hash::Hash,
+            native_token::LAMPORTS_PER_SOL,
         },
     };
 
     /// Test `EpochRewards` sysvar creation, distribution, and burning.
     /// This test covers the following epoch_rewards_sysvar bank member functions, i.e.
-    /// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account`.
+    /// `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `test_epoch_rewards_sysvar`.
     #[test]
     fn test_epoch_rewards_sysvar() {
         let (mut genesis_config, _mint_keypair) =
@@ -133,12 +138,21 @@ mod tests {
             active: true,
         };
 
+        let epoch_rewards = bank.get_epoch_rewards_sysvar();
+        assert_eq!(
+            epoch_rewards,
+            sysvar::epoch_rewards::EpochRewards::default()
+        );
+
         bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
         let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
         let expected_balance = bank.get_minimum_balance_for_rent_exemption(account.data().len());
         // Expected balance is the sysvar rent-exempt balance
         assert_eq!(account.lamports(), expected_balance);
         let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();
+        assert_eq!(epoch_rewards, expected_epoch_rewards);
+
+        let epoch_rewards = bank.get_epoch_rewards_sysvar();
         assert_eq!(epoch_rewards, expected_epoch_rewards);
 
         // make a distribution from epoch rewards sysvar
