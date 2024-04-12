@@ -23,11 +23,16 @@ use {
 const CACHE_ENTRY_SIZE: usize =
     std::mem::size_of::<ReadOnlyAccountCacheEntry>() + 2 * std::mem::size_of::<ReadOnlyCacheKey>();
 
-type ReadOnlyCacheKey = (Pubkey, Slot);
+type ReadOnlyCacheKey = Pubkey;
 
 #[derive(Debug)]
 struct ReadOnlyAccountCacheEntry {
     account: AccountSharedData,
+    /// 'slot' tracks when the 'account' is stored. This important for
+    /// correctness. When 'loading' from the cache by pubkey+slot, we need to
+    /// make sure that both pubkey and slot matches in the cache. Otherwise, we
+    /// may return the wrong account.
+    slot: Slot,
     /// Index of the entry in the eviction queue.
     index: AtomicU32,
     /// lower bits of last timestamp when eviction queue was updated, in ms
@@ -142,33 +147,42 @@ impl ReadOnlyAccountsCache {
 
     /// true if pubkey is in cache at slot
     pub(crate) fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
-        self.cache.contains_key(&(*pubkey, slot))
+        if let Some(entry) = self.cache.get(pubkey) {
+            entry.slot == slot
+        } else {
+            false
+        }
     }
 
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let (account, load_us) = measure_us!({
-            let key = (pubkey, slot);
-            let Some(entry) = self.cache.get(&key) else {
-                self.stats.misses.fetch_add(1, Ordering::Relaxed);
-                return None;
-            };
-            // Move the entry to the end of the queue.
-            // self.queue is modified while holding a reference to the cache entry;
-            // so that another thread cannot write to the same key.
-            // If we updated the eviction queue within this much time, then leave it where it is. We're likely to hit it again.
-            let update_lru = entry.ms_since_last_update() >= self.ms_to_skip_lru_update;
-            if update_lru {
-                let mut queue = self.queue.lock().unwrap();
-                queue.remove(entry.index());
-                entry.set_index(queue.insert_last(key));
-                entry
-                    .last_update_time
-                    .store(ReadOnlyAccountCacheEntry::timestamp(), Ordering::Release);
+            let mut found = None;
+            if let Some(entry) = self.cache.get(&pubkey) {
+                if entry.slot == slot {
+                    // Move the entry to the end of the queue.
+                    // self.queue is modified while holding a reference to the cache entry;
+                    // so that another thread cannot write to the same key.
+                    // If we updated the eviction queue within this much time, then leave it where it is. We're likely to hit it again.
+                    let update_lru = entry.ms_since_last_update() >= self.ms_to_skip_lru_update;
+                    if update_lru {
+                        let mut queue = self.queue.lock().unwrap();
+                        queue.remove(entry.index());
+                        entry.set_index(queue.insert_last(pubkey));
+                        entry
+                            .last_update_time
+                            .store(ReadOnlyAccountCacheEntry::timestamp(), Ordering::Release);
+                    }
+                    let account = entry.account.clone();
+                    drop(entry);
+                    self.stats.hits.fetch_add(1, Ordering::Relaxed);
+                    found = Some(account);
+                }
             }
-            let account = entry.account.clone();
-            drop(entry);
-            self.stats.hits.fetch_add(1, Ordering::Relaxed);
-            Some(account)
+
+            if found.is_none() {
+                self.stats.misses.fetch_add(1, Ordering::Relaxed);
+            }
+            found
         });
         self.stats.load_us.fetch_add(load_us, Ordering::Relaxed);
         account
@@ -181,27 +195,27 @@ impl ReadOnlyAccountsCache {
     pub(crate) fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
         let measure_store = Measure::start("");
         self.highest_slot_stored.fetch_max(slot, Ordering::Release);
-        let key = (pubkey, slot);
         let account_size = Self::account_size(&account);
         self.data_size.fetch_add(account_size, Ordering::Relaxed);
         // self.queue is modified while holding a reference to the cache entry;
         // so that another thread cannot write to the same key.
-        match self.cache.entry(key) {
+        match self.cache.entry(pubkey) {
             Entry::Vacant(entry) => {
                 // Insert the entry at the end of the queue.
                 let mut queue = self.queue.lock().unwrap();
-                let index = queue.insert_last(key);
-                entry.insert(ReadOnlyAccountCacheEntry::new(account, index));
+                let index = queue.insert_last(pubkey);
+                entry.insert(ReadOnlyAccountCacheEntry::new(account, slot, index));
             }
             Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
                 let account_size = Self::account_size(&entry.account);
                 self.data_size.fetch_sub(account_size, Ordering::Relaxed);
                 entry.account = account;
+                entry.slot = slot;
                 // Move the entry to the end of the queue.
                 let mut queue = self.queue.lock().unwrap();
                 queue.remove(entry.index());
-                entry.set_index(queue.insert_last(key));
+                entry.set_index(queue.insert_last(pubkey));
             }
         };
 
@@ -219,18 +233,14 @@ impl ReadOnlyAccountsCache {
 
     /// remove entry if it exists.
     /// Assume the entry does not exist for performance.
-    pub(crate) fn remove_assume_not_present(
-        &self,
-        pubkey: Pubkey,
-        slot: Slot,
-    ) -> Option<AccountSharedData> {
+    pub(crate) fn remove_assume_not_present(&self, pubkey: Pubkey) -> Option<AccountSharedData> {
         // get read lock first to see if the entry exists
-        _ = self.cache.get(&(pubkey, slot))?;
-        self.remove(pubkey, slot)
+        _ = self.cache.get(&pubkey)?;
+        self.remove(pubkey)
     }
 
-    pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
-        Self::do_remove(&(pubkey, slot), &self.cache, &self.queue, &self.data_size)
+    pub(crate) fn remove(&self, pubkey: Pubkey) -> Option<AccountSharedData> {
+        Self::do_remove(&pubkey, &self.cache, &self.queue, &self.data_size)
     }
 
     /// Removes `key` from the cache, if present, and returns the removed account
@@ -338,11 +348,12 @@ impl ReadOnlyAccountsCache {
 }
 
 impl ReadOnlyAccountCacheEntry {
-    fn new(account: AccountSharedData, index: Index) -> Self {
+    fn new(account: AccountSharedData, slot: Slot, index: Index) -> Self {
         let index = unsafe { std::mem::transmute::<Index, u32>(index) };
         let index = AtomicU32::new(index);
         Self {
             account,
+            slot,
             index,
             last_update_time: AtomicU32::new(Self::timestamp()),
         }
@@ -423,7 +434,7 @@ mod tests {
         assert!(cache.load(Pubkey::default(), slot).is_none());
         assert_eq!(0, cache.cache_len());
         assert_eq!(0, cache.data_size());
-        cache.remove(Pubkey::default(), slot); // assert no panic
+        cache.remove(Pubkey::default()); // assert no panic
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
@@ -439,6 +450,10 @@ mod tests {
         cache.evict_in_foreground();
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
+        // pass a wrong slot and check that load fails
+        assert!(cache.load(key1, slot + 1).is_none());
+        // insert another entry for slot+1, and assert only one entry for key1 is in the cache
+        cache.store(key1, slot + 1, account1.clone());
         assert_eq!(1, cache.cache_len());
         cache.store(key2, slot, account2.clone());
         cache.evict_in_foreground();
@@ -450,7 +465,7 @@ mod tests {
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.remove(key2, slot);
+        cache.remove(key2);
         assert_eq!(0, cache.data_size());
         assert_eq!(0, cache.cache_len());
 
@@ -507,16 +522,18 @@ mod tests {
             rng.fill(&mut arr[..]);
             Pubkey::new_from_array(arr)
         })
-        .take(7)
+        .take(35)
         .collect();
-        let mut hash_map = HashMap::<ReadOnlyCacheKey, (AccountSharedData, usize)>::new();
+        let mut hash_map = HashMap::<ReadOnlyCacheKey, (AccountSharedData, Slot, usize)>::new();
         for ix in 0..1000 {
             if rng.gen_bool(0.1) {
-                let key = *cache.cache.iter().choose(&mut rng).unwrap().key();
-                let (pubkey, slot) = key;
-                let account = cache.load(pubkey, slot).unwrap();
-                let (other, index) = hash_map.get_mut(&key).unwrap();
+                let element = cache.cache.iter().choose(&mut rng).unwrap();
+                let (pubkey, entry) = element.pair();
+                let slot = entry.slot;
+                let account = cache.load(*pubkey, slot).unwrap();
+                let (other, other_slot, index) = hash_map.get_mut(pubkey).unwrap();
                 assert_eq!(account, *other);
+                assert_eq!(slot, *other_slot);
                 *index = ix;
             } else {
                 let mut data = vec![0u8; DATA_SIZE];
@@ -530,8 +547,7 @@ mod tests {
                 });
                 let slot = *slots.choose(&mut rng).unwrap();
                 let pubkey = *pubkeys.choose(&mut rng).unwrap();
-                let key = (pubkey, slot);
-                hash_map.insert(key, (account.clone(), ix));
+                hash_map.insert(pubkey, (account.clone(), slot, ix));
                 cache.store(pubkey, slot, account);
                 cache.evict_in_foreground();
             }
@@ -541,11 +557,10 @@ mod tests {
         let index = hash_map
             .iter()
             .filter(|(k, _)| cache.cache.contains_key(k))
-            .map(|(_, (_, ix))| *ix)
+            .map(|(_, (_, _, ix))| *ix)
             .min()
             .unwrap();
-        for (key, (account, ix)) in hash_map {
-            let (pubkey, slot) = key;
+        for (pubkey, (account, slot, ix)) in hash_map {
             assert_eq!(
                 cache.load(pubkey, slot),
                 if ix < index { None } else { Some(account) }
