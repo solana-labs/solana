@@ -1929,10 +1929,10 @@ mod test {
                     .chain(
                         shreds
                             .iter()
+                            .sorted_unstable_by_key(|shred| shred.fec_set_index())
                             .dedup_by(|shred, other| shred.fec_set_index() == other.fec_set_index())
                             .map(|shred| (shred.fec_set_index(), shred.merkle_root().unwrap())),
                     )
-                    .sorted()
                     .tuple_windows()
                     .map(|((_, merkle_root), (fec_set_index, _))| (fec_set_index, merkle_root))
                     .collect();
