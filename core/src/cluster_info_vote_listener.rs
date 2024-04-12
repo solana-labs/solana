@@ -915,7 +915,7 @@ mod tests {
         },
         solana_vote::vote_sender_types::ReplayVoteSender,
         solana_vote_program::{
-            vote_state::{Vote, VoteStateUpdate},
+            vote_state::{TowerSync, Vote},
             vote_transaction,
         },
         std::{
@@ -1837,17 +1837,16 @@ mod tests {
         let mut new_optimistic_confirmed_slots = vec![];
 
         let validator0_keypairs = &validator_keypairs[0];
-        let (vote_pubkey, vote, _, signature) = vote_parser::parse_vote_transaction(
-            &vote_transaction::new_vote_state_update_transaction(
-                VoteStateUpdate::from(vec![(1, 3), (2, 2), (6, 1)]),
+        let (vote_pubkey, vote, _, signature) =
+            vote_parser::parse_vote_transaction(&vote_transaction::new_tower_sync_transaction(
+                TowerSync::from(vec![(1, 3), (2, 2), (6, 1)]),
                 Hash::default(),
                 &validator0_keypairs.node_keypair,
                 &validator0_keypairs.vote_keypair,
                 &validator0_keypairs.vote_keypair,
                 None,
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
 
         ClusterInfoVoteListener::track_new_votes_and_notify_confirmations(
             vote,
@@ -1869,17 +1868,16 @@ mod tests {
 
         // Vote on a new slot, only those later than 6 should show up. 4 is skipped.
         diff.clear();
-        let (vote_pubkey, vote, _, signature) = vote_parser::parse_vote_transaction(
-            &vote_transaction::new_vote_state_update_transaction(
-                VoteStateUpdate::from(vec![(1, 6), (2, 5), (3, 4), (4, 3), (7, 2), (8, 1)]),
+        let (vote_pubkey, vote, _, signature) =
+            vote_parser::parse_vote_transaction(&vote_transaction::new_tower_sync_transaction(
+                TowerSync::from(vec![(1, 6), (2, 5), (3, 4), (4, 3), (7, 2), (8, 1)]),
                 Hash::default(),
                 &validator0_keypairs.node_keypair,
                 &validator0_keypairs.vote_keypair,
                 &validator0_keypairs.vote_keypair,
                 None,
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
 
         ClusterInfoVoteListener::track_new_votes_and_notify_confirmations(
             vote,

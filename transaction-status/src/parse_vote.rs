@@ -178,7 +178,7 @@ pub fn parse_vote(
                 "root": tower_sync.root,
                 "hash": tower_sync.hash.to_string(),
                 "timestamp": tower_sync.timestamp,
-                "blockId": tower_sync.block_id,
+                "blockId": tower_sync.block_id.to_string(),
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "towersync".to_string(),
@@ -196,7 +196,7 @@ pub fn parse_vote(
                 "root": tower_sync.root,
                 "hash": tower_sync.hash.to_string(),
                 "timestamp": tower_sync.timestamp,
-                "blockId": tower_sync.block_id,
+                "blockId": tower_sync.block_id.to_string(),
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "towersyncswitch".to_string(),
@@ -292,7 +292,9 @@ mod test {
             sysvar,
             vote::{
                 instruction as vote_instruction,
-                state::{Vote, VoteAuthorize, VoteInit, VoteStateUpdate, VoteStateVersions},
+                state::{
+                    TowerSync, Vote, VoteAuthorize, VoteInit, VoteStateUpdate, VoteStateVersions,
+                },
             },
         },
     };
@@ -882,6 +884,95 @@ mod test {
                         "root": None::<u64>,
                         "hash": Hash::default().to_string(),
                         "timestamp": None::<u64>,
+                    },
+                    "hash": proof_hash.to_string(),
+                }),
+            }
+        );
+        assert!(parse_vote(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
+    }
+
+    #[test]
+    fn test_parse_tower_sync_ix() {
+        let tower_sync = TowerSync::from(vec![(0, 3), (1, 2), (2, 1)]);
+
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_voter_pubkey = Pubkey::new_unique();
+        let instruction = vote_instruction::tower_sync(
+            &vote_pubkey,
+            &authorized_voter_pubkey,
+            tower_sync.clone(),
+        );
+        let mut message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_vote(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "towersync".to_string(),
+                info: json!({
+                    "voteAccount": vote_pubkey.to_string(),
+                    "voteAuthority": authorized_voter_pubkey.to_string(),
+                    "towerSync": {
+                        "lockouts": tower_sync.lockouts,
+                        "root": None::<u64>,
+                        "hash": Hash::default().to_string(),
+                        "timestamp": None::<u64>,
+                        "blockId": Hash::default().to_string(),
+                    },
+                }),
+            }
+        );
+        assert!(parse_vote(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
+    }
+
+    #[test]
+    fn test_parse_tower_sync_switch_ix() {
+        let tower_sync = TowerSync::from(vec![(0, 3), (1, 2), (2, 1)]);
+
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_voter_pubkey = Pubkey::new_unique();
+        let proof_hash = Hash::new_from_array([2; 32]);
+        let instruction = vote_instruction::tower_sync_switch(
+            &vote_pubkey,
+            &authorized_voter_pubkey,
+            tower_sync.clone(),
+            proof_hash,
+        );
+        let mut message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_vote(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "towersyncswitch".to_string(),
+                info: json!({
+                    "voteAccount": vote_pubkey.to_string(),
+                    "voteAuthority": authorized_voter_pubkey.to_string(),
+                    "towerSync": {
+                        "lockouts": tower_sync.lockouts,
+                        "root": None::<u64>,
+                        "hash": Hash::default().to_string(),
+                        "timestamp": None::<u64>,
+                        "blockId": Hash::default().to_string(),
                     },
                     "hash": proof_hash.to_string(),
                 }),

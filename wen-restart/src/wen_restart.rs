@@ -705,7 +705,7 @@ mod tests {
         },
         solana_program::{
             hash::Hash,
-            vote::state::{Vote, VoteStateUpdate},
+            vote::state::{TowerSync, Vote},
         },
         solana_runtime::genesis_utils::{
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
@@ -1077,7 +1077,7 @@ mod tests {
             prost::DecodeError::new("invalid wire type value: 7")
         );
         remove_file(&test_state.wen_restart_proto_path).unwrap();
-        let invalid_last_vote = VoteTransaction::from(VoteStateUpdate::from(vec![(0, 8), (1, 1)]));
+        let invalid_last_vote = VoteTransaction::from(TowerSync::from(vec![(0, 8), (1, 1)]));
         assert_eq!(
             initialize(
                 &test_state.wen_restart_proto_path,

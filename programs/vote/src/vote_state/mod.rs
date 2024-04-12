@@ -191,34 +191,6 @@ fn set_vote_account_state(
     }
 }
 
-fn check_and_filter_vote_state_update(
-    vote_state: &VoteState,
-    vote_state_update: &mut VoteStateUpdate,
-    slot_hashes: &[(Slot, Hash)],
-) -> Result<(), VoteError> {
-    check_and_filter_proposed_vote_state(
-        vote_state,
-        &mut vote_state_update.lockouts,
-        &mut vote_state_update.root,
-        vote_state_update.hash,
-        slot_hashes,
-    )
-}
-
-fn check_and_filter_tower_sync(
-    vote_state: &VoteState,
-    tower_sync: &mut TowerSync,
-    slot_hashes: &[(Slot, Hash)],
-) -> Result<(), VoteError> {
-    check_and_filter_proposed_vote_state(
-        vote_state,
-        &mut tower_sync.lockouts,
-        &mut tower_sync.root,
-        tower_sync.hash,
-        slot_hashes,
-    )
-}
-
 /// Checks the proposed vote state with the current and
 /// slot hashes, making adjustments to the root / filtering
 /// votes as needed.
@@ -685,7 +657,7 @@ pub fn process_new_vote_state(
     }
 
     // For any slots newly added to the new vote state, the vote latency of that slot is not provided by the
-    // VoteStateUpdate instruction contents, but instead is computed from the actual latency of the VoteStateUpdate
+    // vote instruction contents, but instead is computed from the actual latency of the vote
     // instruction. This prevents other validators from manipulating their own vote latencies within their vote states
     // and forcing the rest of the cluster to accept these possibly fraudulent latency values.  If the
     // timly_vote_credits feature is not enabled then vote latency is set to 0 for new votes.
@@ -693,11 +665,11 @@ pub fn process_new_vote_state(
     // For any slot that is in both the new state and the current state, the vote latency of the new state is taken
     // from the current state.
     //
-    // Thus vote latencies are set here for any newly vote-on slots when a VoteStateUpdate instruction is received.
-    // They are copied into the new vote state after every VoteStateUpdate for already voted-on slots.
+    // Thus vote latencies are set here for any newly vote-on slots when a vote instruction is received.
+    // They are copied into the new vote state after every vote for already voted-on slots.
     // And when voted-on slots are rooted, the vote latencies stored in the vote state of all the rooted slots is used
     // to compute credits earned.
-    // All validators compute the same vote latencies because all process the same VoteStateUpdate instruction at the
+    // All validators compute the same vote latencies because all process the same vote instruction at the
     // same slot, and the only time vote latencies are ever computed is at the time that their slot is first voted on;
     // after that, the latencies are retained unaltered until the slot is rooted.
 
@@ -1181,7 +1153,13 @@ pub fn do_process_vote_state_update(
     mut vote_state_update: VoteStateUpdate,
     feature_set: Option<&FeatureSet>,
 ) -> Result<(), VoteError> {
-    check_and_filter_vote_state_update(vote_state, &mut vote_state_update, slot_hashes)?;
+    check_and_filter_proposed_vote_state(
+        vote_state,
+        &mut vote_state_update.lockouts,
+        &mut vote_state_update.root,
+        vote_state_update.hash,
+        slot_hashes,
+    )?;
     process_new_vote_state(
         vote_state,
         vote_state_update
@@ -1225,7 +1203,13 @@ fn do_process_tower_sync(
     mut tower_sync: TowerSync,
     feature_set: Option<&FeatureSet>,
 ) -> Result<(), VoteError> {
-    check_and_filter_tower_sync(vote_state, &mut tower_sync, slot_hashes)?;
+    check_and_filter_proposed_vote_state(
+        vote_state,
+        &mut tower_sync.lockouts,
+        &mut tower_sync.root,
+        tower_sync.hash,
+        slot_hashes,
+    )?;
     process_new_vote_state(
         vote_state,
         tower_sync
@@ -3236,14 +3220,26 @@ mod tests {
         // Test with empty TowerSync, should return EmptySlots error
         let mut tower_sync = TowerSync::from(vec![]);
         assert_eq!(
-            check_and_filter_tower_sync(&empty_vote_state, &mut tower_sync, &empty_slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &empty_vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &empty_slot_hashes
+            ),
             Err(VoteError::EmptySlots),
         );
 
         // Test with non-empty TowerSync, should return SlotsMismatch since nothing exists in SlotHashes
         let mut tower_sync = TowerSync::from(vec![(0, 1)]);
         assert_eq!(
-            check_and_filter_tower_sync(&empty_vote_state, &mut tower_sync, &empty_slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &empty_vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &empty_slot_hashes
+            ),
             Err(VoteError::SlotsMismatch),
         );
     }
@@ -3258,7 +3254,13 @@ mod tests {
         // should return error `VoteTooOld`
         let mut tower_sync = TowerSync::from(vec![(latest_vote, 1)]);
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::VoteTooOld),
         );
 
@@ -3269,7 +3271,13 @@ mod tests {
         let slot_hashes = build_slot_hashes(vec![earliest_slot_in_history]);
         let mut tower_sync = TowerSync::from(vec![(earliest_slot_in_history - 1, 1)]);
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::VoteTooOld),
         );
     }
@@ -3319,7 +3327,14 @@ mod tests {
         let mut tower_sync = TowerSync::from(proposed_slots_and_lockouts);
         tower_sync.hash = proposed_hash;
         tower_sync.root = Some(proposed_root);
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
         assert_eq!(tower_sync.root, expected_root);
 
         // The proposed root slot should become the biggest slot in the current vote state less than
@@ -3484,7 +3499,13 @@ mod tests {
         let mut tower_sync = TowerSync::from(vec![(2, 2), (1, 3), (vote_slot, 1)]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::SlotsNotOrdered),
         );
 
@@ -3492,7 +3513,13 @@ mod tests {
         let mut tower_sync = TowerSync::from(vec![(2, 2), (2, 2), (vote_slot, 1)]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::SlotsNotOrdered),
         );
     }
@@ -3521,7 +3548,14 @@ mod tests {
             (vote_slot, 3),
         ]);
         tower_sync.hash = vote_slot_hash;
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
 
         // Check the earlier slot was filtered out
         assert_eq!(
@@ -3567,7 +3601,14 @@ mod tests {
         let mut tower_sync =
             TowerSync::from(vec![(existing_older_than_history_slot, 3), (vote_slot, 2)]);
         tower_sync.hash = vote_slot_hash;
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
         // Check the earlier slot was *NOT* filtered out
         assert_eq!(tower_sync.lockouts.len(), 2);
         assert_eq!(
@@ -3627,7 +3668,14 @@ mod tests {
             (vote_slot, 1),
         ]);
         tower_sync.hash = vote_slot_hash;
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
         assert_eq!(tower_sync.lockouts.len(), 3);
         assert_eq!(
             tower_sync
@@ -3675,7 +3723,13 @@ mod tests {
         let mut tower_sync = TowerSync::from(vec![(missing_vote_slot, 2), (vote_slot, 3)]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::SlotsMismatch),
         );
 
@@ -3690,7 +3744,13 @@ mod tests {
         ]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::SlotsMismatch),
         );
     }
@@ -3720,7 +3780,13 @@ mod tests {
         tower_sync.hash = vote_slot_hash;
         tower_sync.root = Some(new_root);
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::RootOnDifferentFork),
         );
     }
@@ -3740,7 +3806,13 @@ mod tests {
         let mut tower_sync = TowerSync::from(vec![(8, 2), (missing_vote_slot, 3)]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes
+            ),
             Err(VoteError::SlotsMismatch),
         );
     }
@@ -3763,7 +3835,14 @@ mod tests {
             .1;
         let mut tower_sync = TowerSync::from(vec![(2, 4), (4, 3), (6, 2), (vote_slot, 1)]);
         tower_sync.hash = vote_slot_hash;
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
 
         // Nothing in the update should have been filtered out
         assert_eq!(
@@ -3809,7 +3888,14 @@ mod tests {
             .1;
         let mut tower_sync = TowerSync::from(vec![(4, 2), (vote_slot, 1)]);
         tower_sync.hash = vote_slot_hash;
-        check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes).unwrap();
+        check_and_filter_proposed_vote_state(
+            &vote_state,
+            &mut tower_sync.lockouts,
+            &mut tower_sync.root,
+            tower_sync.hash,
+            &slot_hashes,
+        )
+        .unwrap();
 
         // Nothing in the update should have been filtered out
         assert_eq!(
@@ -3854,7 +3940,13 @@ mod tests {
         let mut tower_sync = TowerSync::from(vec![(2, 4), (4, 3), (6, 2), (vote_slot, 1)]);
         tower_sync.hash = vote_slot_hash;
         assert_eq!(
-            check_and_filter_tower_sync(&vote_state, &mut tower_sync, &slot_hashes,),
+            check_and_filter_proposed_vote_state(
+                &vote_state,
+                &mut tower_sync.lockouts,
+                &mut tower_sync.root,
+                tower_sync.hash,
+                &slot_hashes,
+            ),
             Err(VoteError::SlotHashMismatch),
         );
     }

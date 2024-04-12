@@ -73,7 +73,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_program, system_transaction,
-        vote::state::VoteStateUpdate,
+        vote::state::TowerSync,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_turbine::broadcast_stage::{
@@ -3915,13 +3915,13 @@ fn run_duplicate_shreds_broadcast_leader(vote_on_duplicate: bool) {
                             .zip(1..)
                             .collect();
                     vote_slots.reverse();
-                    let mut vote = VoteStateUpdate::from(vote_slots);
+                    let mut vote = TowerSync::from(vote_slots);
                     let root =
                         AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
                             .nth(MAX_LOCKOUT_HISTORY);
                     vote.root = root;
                     vote.hash = vote_hash;
-                    let vote_tx = vote_transaction::new_compact_vote_state_update_transaction(
+                    let vote_tx = vote_transaction::new_tower_sync_transaction(
                         vote,
                         leader_vote_tx.message.recent_blockhash,
                         &node_keypair,

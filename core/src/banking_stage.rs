@@ -814,7 +814,7 @@ mod tests {
         },
         solana_streamer::socket::SocketAddrSpace,
         solana_vote_program::{
-            vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+            vote_state::TowerSync, vote_transaction::new_tower_sync_transaction,
         },
         std::{
             sync::atomic::{AtomicBool, Ordering},
@@ -1382,8 +1382,8 @@ mod tests {
             // Send a bunch of votes and transfers
             let tpu_votes = (0..100_usize)
                 .map(|i| {
-                    new_vote_state_update_transaction(
-                        VoteStateUpdate::from(vec![
+                    new_tower_sync_transaction(
+                        TowerSync::from(vec![
                             (0, 8),
                             (1, 7),
                             (i as u64 + 10, 6),
@@ -1399,12 +1399,12 @@ mod tests {
                 .collect_vec();
             let gossip_votes = (0..100_usize)
                 .map(|i| {
-                    new_vote_state_update_transaction(
-                        VoteStateUpdate::from(vec![
-                            (0, 8),
-                            (1, 7),
-                            (i as u64 + 64 + 5, 6),
-                            (i as u64 + 7, 1),
+                    new_tower_sync_transaction(
+                        TowerSync::from(vec![
+                            (0, 9),
+                            (1, 8),
+                            (i as u64 + 5, 6),
+                            (i as u64 + 63, 1),
                         ]),
                         Hash::new_unique(),
                         &keypairs[i],

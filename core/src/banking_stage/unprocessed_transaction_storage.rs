@@ -1000,7 +1000,7 @@ mod tests {
             transaction::Transaction,
         },
         solana_vote_program::{
-            vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+            vote_state::TowerSync, vote_transaction::new_tower_sync_transaction,
         },
         std::error::Error,
     };
@@ -1207,8 +1207,8 @@ mod tests {
         )?;
         let mut vote = Packet::from_data(
             None,
-            new_vote_state_update_transaction(
-                VoteStateUpdate::default(),
+            new_tower_sync_transaction(
+                TowerSync::default(),
                 Hash::new_unique(),
                 &keypair,
                 &vote_keypair,

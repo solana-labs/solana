@@ -314,7 +314,7 @@ mod tests {
         crossbeam_channel::{unbounded, Receiver, Sender},
         solana_perf::packet::Packet,
         solana_sdk::slot_hashes::MAX_ENTRIES,
-        solana_vote_program::vote_state::{Lockout, Vote, VoteStateUpdate},
+        solana_vote_program::vote_state::{Lockout, TowerSync, Vote},
         std::collections::VecDeque,
     };
 
@@ -616,10 +616,10 @@ mod tests {
         let (s, r) = unbounded();
         let vote_account_key = solana_sdk::pubkey::new_rand();
 
-        // Send three vote state updates that are out of order
-        let first_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
-        let second_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (11, 1)]);
-        let third_vote = VoteStateUpdate::from(vec![(2, 5), (4, 4), (11, 3), (12, 2), (13, 1)]);
+        // Send three tower syncs that are out of order
+        let first_vote = TowerSync::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
+        let second_vote = TowerSync::from(vec![(2, 4), (4, 3), (11, 1)]);
+        let third_vote = TowerSync::from(vec![(2, 5), (4, 4), (11, 3), (12, 2), (13, 1)]);
 
         for vote in [second_vote, first_vote] {
             s.send(vec![VerifiedVoteMetadata {
@@ -664,10 +664,10 @@ mod tests {
         assert_eq!(13, slot);
     }
 
-    fn send_vote_state_update_and_process(
+    fn send_tower_sync_and_process(
         s: &Sender<Vec<VerifiedVoteMetadata>>,
         r: &Receiver<Vec<VerifiedVoteMetadata>>,
-        vote: VoteStateUpdate,
+        vote: TowerSync,
         vote_account_key: Pubkey,
         verified_vote_packets: &mut VerifiedVotePackets,
     ) -> GossipVote {
@@ -692,8 +692,8 @@ mod tests {
         let (s, r) = unbounded();
         let vote_account_key = solana_sdk::pubkey::new_rand();
 
-        // Send identical vote state updates with different timestamps
-        let mut vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
+        // Send identical tower syncs with different timestamps
+        let mut vote = TowerSync::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
         vote.timestamp = Some(5);
 
         let mut vote_later_ts = vote.clone();
@@ -710,7 +710,7 @@ mod tests {
         // Original vote
         let GossipVote {
             slot, timestamp, ..
-        } = send_vote_state_update_and_process(
+        } = send_tower_sync_and_process(
             &s,
             &r,
             vote.clone(),
@@ -723,7 +723,7 @@ mod tests {
         // Same vote with later timestamp should override
         let GossipVote {
             slot, timestamp, ..
-        } = send_vote_state_update_and_process(
+        } = send_tower_sync_and_process(
             &s,
             &r,
             vote_later_ts.clone(),
@@ -736,7 +736,7 @@ mod tests {
         // Same vote with earlier timestamp should not override
         let GossipVote {
             slot, timestamp, ..
-        } = send_vote_state_update_and_process(
+        } = send_tower_sync_and_process(
             &s,
             &r,
             vote_earlier_ts,
@@ -749,7 +749,7 @@ mod tests {
         // Same vote with no timestamp should not override
         let GossipVote {
             slot, timestamp, ..
-        } = send_vote_state_update_and_process(
+        } = send_tower_sync_and_process(
             &s,
             &r,
             vote_no_ts,
@@ -798,9 +798,10 @@ mod tests {
                     Lockout::new_with_confirmation_count(slot, confirmation_count)
                 })
                 .collect::<VecDeque<Lockout>>();
-            let vote = VoteTransaction::from(VoteStateUpdate::new(
+            let vote = VoteTransaction::from(TowerSync::new(
                 slots,
                 Some(i - 32),
+                Hash::new_unique(),
                 Hash::new_unique(),
             ));
             s.send(vec![VerifiedVoteMetadata {
@@ -858,7 +859,7 @@ mod tests {
         let vote_account_key = solana_sdk::pubkey::new_rand();
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
-        let vote = VoteTransaction::from(VoteStateUpdate::from(vec![(42, 1)]));
+        let vote = VoteTransaction::from(TowerSync::from(vec![(42, 1)]));
         let hash_42 = vote.hash();
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,

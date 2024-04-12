@@ -358,8 +358,8 @@ mod tests {
         },
         solana_sdk::{hash::Hash, signature::Signer, system_transaction::transfer},
         solana_vote_program::{
-            vote_state::VoteStateUpdate,
-            vote_transaction::{new_vote_state_update_transaction, new_vote_transaction},
+            vote_state::TowerSync,
+            vote_transaction::{new_tower_sync_transaction, new_vote_transaction},
         },
         std::{sync::Arc, thread::Builder},
     };
@@ -370,9 +370,9 @@ mod tests {
         keypairs: &ValidatorVoteKeypairs,
         timestamp: Option<UnixTimestamp>,
     ) -> LatestValidatorVotePacket {
-        let mut vote = VoteStateUpdate::from(slots);
+        let mut vote = TowerSync::from(slots);
         vote.timestamp = timestamp;
-        let vote_tx = new_vote_state_update_transaction(
+        let vote_tx = new_tower_sync_transaction(
             vote,
             Hash::new_unique(),
             &keypairs.node_keypair,
@@ -435,10 +435,10 @@ mod tests {
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
-        let mut vote_state_update = Packet::from_data(
+        let mut tower_sync = Packet::from_data(
             None,
-            new_vote_state_update_transaction(
-                VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]),
+            new_tower_sync_transaction(
+                TowerSync::from(vec![(0, 3), (1, 2), (2, 1)]),
                 blockhash,
                 &keypairs.node_keypair,
                 &keypairs.vote_keypair,
@@ -447,14 +447,14 @@ mod tests {
             ),
         )
         .unwrap();
-        vote_state_update
+        tower_sync
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
-        let mut vote_state_update_switch = Packet::from_data(
+        let mut tower_sync_switch = Packet::from_data(
             None,
-            new_vote_state_update_transaction(
-                VoteStateUpdate::from(vec![(0, 3), (1, 2), (3, 1)]),
+            new_tower_sync_transaction(
+                TowerSync::from(vec![(0, 3), (1, 2), (3, 1)]),
                 blockhash,
                 &keypairs.node_keypair,
                 &keypairs.vote_keypair,
@@ -463,7 +463,7 @@ mod tests {
             ),
         )
         .unwrap();
-        vote_state_update_switch
+        tower_sync_switch
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
@@ -480,8 +480,8 @@ mod tests {
         let packet_batch = PacketBatch::new(vec![
             vote,
             vote_switch,
-            vote_state_update,
-            vote_state_update_switch,
+            tower_sync,
+            tower_sync_switch,
             random_transaction,
         ]);
 
