@@ -776,17 +776,12 @@ impl<FG: ForkGraph> ProgramCache<FG> {
             Ok(index) => {
                 let existing = slot_versions.get_mut(index).unwrap();
                 match (&existing.program, &entry.program) {
-                    // Add test for Closed => Loaded transition in same slot
                     (LoadedProgramType::Builtin(_), LoadedProgramType::Builtin(_))
-                    | (LoadedProgramType::Closed, LoadedProgramType::LegacyV0(_))
-                    | (LoadedProgramType::Closed, LoadedProgramType::LegacyV1(_))
-                    | (LoadedProgramType::Closed, LoadedProgramType::Typed(_))
                     | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV0(_))
                     | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV1(_))
                     | (LoadedProgramType::Unloaded(_), LoadedProgramType::Typed(_)) => {}
                     #[cfg(test)]
-                    (LoadedProgramType::Closed, LoadedProgramType::TestLoaded(_))
-                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::TestLoaded(_)) => {}
+                    (LoadedProgramType::Unloaded(_), LoadedProgramType::TestLoaded(_)) => {}
                     _ => {
                         // Something is wrong, I can feel it ...
                         error!("ProgramCache::assign_program() failed key={:?} existing={:?} entry={:?}", key, slot_versions, entry);
@@ -1684,6 +1679,7 @@ mod tests {
 
     #[test_matrix(
         (
+            LoadedProgramType::Closed,
             LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
             LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
         ),
@@ -1697,7 +1693,6 @@ mod tests {
     )]
     #[test_matrix(
         (
-            LoadedProgramType::Closed,
             LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
         ),
         (
@@ -1746,10 +1741,6 @@ mod tests {
         );
     }
 
-    #[test_case(
-        LoadedProgramType::Closed,
-        LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock()))
-    )]
     #[test_case(
         LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
         LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock()))
