@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{

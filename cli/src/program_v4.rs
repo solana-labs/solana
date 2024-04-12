@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     crate::{
         checks::*,

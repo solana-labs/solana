@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     crate::{
         checks::{check_account_for_balance_with_commitment, get_fee_for_messages},

@@ -1,4 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
 macro_rules! ACCOUNT_STRING {
     () => {
         r#" Address is one of:

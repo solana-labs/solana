@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     crate::cli::CliError,
     solana_rpc_client::rpc_client::RpcClient,

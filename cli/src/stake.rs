@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use {
     crate::{
         checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
