@@ -985,10 +985,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 mod tests {
     use {
         super::*,
-        solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
         solana_program_runtime::{
             loaded_programs::{BlockRelation, ProgramRuntimeEnvironments},
-            solana_rbpf::{elf::Executable, program::BuiltinProgram},
+            solana_rbpf::program::BuiltinProgram,
         },
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
@@ -2373,27 +2372,16 @@ mod tests {
     fn test_add_builtin() {
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        batch_processor.program_cache.write().unwrap().fork_graph =
+            Some(Arc::new(RwLock::new(TestForkGraph {})));
 
         let key = Pubkey::new_unique();
         let name = "a_builtin_name";
-        let program = LoadedProgram {
-            program: LoadedProgramType::LegacyV0(
-                Executable::load(
-                    load_test_program().as_slice(),
-                    Arc::new(
-                        create_program_runtime_environment_v1(
-                            &FeatureSet::default(),
-                            &ComputeBudget::default(),
-                            false,
-                            false,
-                        )
-                        .unwrap(),
-                    ),
-                )
-                .unwrap(),
-            ),
-            ..Default::default()
-        };
+        let program = LoadedProgram::new_builtin(
+            0,
+            name.len(),
+            |_invoke_context, _param0, _param1, _param2, _param3, _param4| {},
+        );
 
         batch_processor.add_builtin(&mock_bank, key, name, program);
 
@@ -2402,41 +2390,24 @@ mod tests {
             name.as_bytes()
         );
 
-        assert!(batch_processor
-            .builtin_program_ids
-            .read()
-            .unwrap()
-            .contains(&key));
-        let fetched_program = batch_processor
-            .program_cache
-            .read()
-            .unwrap()
-            .get_flattened_entries(true, true);
-        let entry = fetched_program
-            .iter()
-            .find(|(entry_key, _)| *entry_key == key)
-            .map(|(_, value)| value.clone())
-            .unwrap();
+        let mut loaded_programs_for_tx_batch = LoadedProgramsForTxBatch::new_from_cache(
+            0,
+            0,
+            &batch_processor.program_cache.read().unwrap(),
+        );
+        batch_processor.program_cache.write().unwrap().extract(
+            &mut vec![(key, (LoadedProgramMatchCriteria::NoCriteria, 1))],
+            &mut loaded_programs_for_tx_batch,
+            true,
+        );
+        let entry = loaded_programs_for_tx_batch.find(&key).unwrap();
 
         // Repeating code because LoadedProgram does not implement clone.
-        let program = LoadedProgram {
-            program: LoadedProgramType::LegacyV0(
-                Executable::load(
-                    load_test_program().as_slice(),
-                    Arc::new(
-                        create_program_runtime_environment_v1(
-                            &FeatureSet::default(),
-                            &ComputeBudget::default(),
-                            false,
-                            false,
-                        )
-                        .unwrap(),
-                    ),
-                )
-                .unwrap(),
-            ),
-            ..Default::default()
-        };
+        let program = LoadedProgram::new_builtin(
+            0,
+            name.len(),
+            |_invoke_context, _param0, _param1, _param2, _param3, _param4| {},
+        );
         assert_eq!(entry, Arc::new(program));
     }
 }
