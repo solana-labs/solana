@@ -2,16 +2,8 @@
 //!
 //! This module is a simple wrapper of the `Aes128GcmSiv` implementation specialized for SPL
 //! token-2022 where the plaintext is always `u64`.
-#[cfg(not(target_os = "solana"))]
 use {
-    aes_gcm_siv::{
-        aead::{Aead, NewAead},
-        Aes128GcmSiv,
-    },
-    rand::{rngs::OsRng, Rng},
-    thiserror::Error,
-};
-use {
+    crate::errors::AuthenticatedEncryptionError,
     base64::{prelude::BASE64_STANDARD, Engine},
     sha3::{Digest, Sha3_512},
     solana_sdk::{
@@ -30,6 +22,14 @@ use {
     subtle::ConstantTimeEq,
     zeroize::Zeroize,
 };
+#[cfg(not(target_os = "solana"))]
+use {
+    aes_gcm_siv::{
+        aead::{Aead, NewAead},
+        Aes128GcmSiv,
+    },
+    rand::{rngs::OsRng, Rng},
+};
 
 /// Byte length of an authenticated encryption secret key
 pub const AE_KEY_LEN: usize = 16;
@@ -43,18 +43,6 @@ const CIPHERTEXT_LEN: usize = 24;
 /// Byte length of a complete authenticated encryption ciphertext component that includes the
 /// ciphertext and nonce components
 const AE_CIPHERTEXT_LEN: usize = 36;
-
-#[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum AuthenticatedEncryptionError {
-    #[error("key derivation method not supported")]
-    DerivationMethodNotSupported,
-    #[error("seed length too short for derivation")]
-    SeedLengthTooShort,
-    #[error("seed length too long for derivation")]
-    SeedLengthTooLong,
-    #[error("failed to deserialize")]
-    Deserialization,
-}
 
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {

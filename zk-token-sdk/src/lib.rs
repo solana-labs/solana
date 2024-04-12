@@ -23,16 +23,14 @@ pub(crate) mod macros;
 #[cfg(not(target_os = "solana"))]
 pub mod encryption;
 #[cfg(not(target_os = "solana"))]
-pub mod errors;
-#[cfg(not(target_os = "solana"))]
 mod range_proof;
 #[cfg(not(target_os = "solana"))]
 mod sigma_proofs;
 #[cfg(not(target_os = "solana"))]
 mod transcript;
 
-// TODO: re-organize visibility
 pub mod curve25519;
+pub mod errors;
 pub mod instruction;
 pub mod zk_token_elgamal;
 pub mod zk_token_proof_instruction;

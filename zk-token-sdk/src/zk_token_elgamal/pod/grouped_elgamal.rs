@@ -1,7 +1,7 @@
 //! Plain Old Data types for the Grouped ElGamal encryption scheme.
 
 #[cfg(not(target_os = "solana"))]
-use crate::encryption::{elgamal::ElGamalError, grouped_elgamal::GroupedElGamalCiphertext};
+use crate::{encryption::grouped_elgamal::GroupedElGamalCiphertext, errors::ElGamalError};
 use {
     crate::zk_token_elgamal::pod::{
         elgamal::DECRYPT_HANDLE_LEN, pedersen::PEDERSEN_COMMITMENT_LEN, Pod, Zeroable,

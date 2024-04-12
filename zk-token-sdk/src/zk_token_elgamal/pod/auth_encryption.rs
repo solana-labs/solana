@@ -1,7 +1,7 @@
 //! Plain Old Data types for the AES128-GCM-SIV authenticated encryption scheme.
 
 #[cfg(not(target_os = "solana"))]
-use crate::encryption::auth_encryption::{self as decoded, AuthenticatedEncryptionError};
+use crate::{encryption::auth_encryption as decoded, errors::AuthenticatedEncryptionError};
 use {
     crate::zk_token_elgamal::pod::{impl_from_str, Pod, Zeroable},
     base64::{prelude::BASE64_STANDARD, Engine},

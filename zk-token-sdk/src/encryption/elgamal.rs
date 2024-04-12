@@ -21,6 +21,7 @@ use {
                 Pedersen, PedersenCommitment, PedersenOpening, G, H, PEDERSEN_COMMITMENT_LEN,
             },
         },
+        errors::ElGamalError,
         RISTRETTO_POINT_LEN, SCALAR_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
@@ -41,7 +42,6 @@ use {
     },
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
-    thiserror::Error,
     zeroize::Zeroize,
 };
 #[cfg(not(target_os = "solana"))]
@@ -69,24 +69,6 @@ const ELGAMAL_SECRET_KEY_LEN: usize = SCALAR_LEN;
 
 /// Byte length of an ElGamal keypair
 pub const ELGAMAL_KEYPAIR_LEN: usize = ELGAMAL_PUBKEY_LEN + ELGAMAL_SECRET_KEY_LEN;
-
-#[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum ElGamalError {
-    #[error("key derivation method not supported")]
-    DerivationMethodNotSupported,
-    #[error("seed length too short for derivation")]
-    SeedLengthTooShort,
-    #[error("seed length too long for derivation")]
-    SeedLengthTooLong,
-    #[error("failed to deserialize ciphertext")]
-    CiphertextDeserialization,
-    #[error("failed to deserialize public key")]
-    PubkeyDeserialization,
-    #[error("failed to deserialize keypair")]
-    KeypairDeserialization,
-    #[error("failed to deserialize secret key")]
-    SecretKeyDeserialization,
-}
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
 pub struct ElGamal;

@@ -49,7 +49,7 @@ impl From<PodRistrettoPoint> for pod::DecryptHandle {
 mod target_arch {
     use {
         super::pod,
-        crate::{curve25519::scalar::PodScalar, encryption::elgamal::ElGamalError},
+        crate::{curve25519::scalar::PodScalar, errors::ElGamalError},
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
     };
