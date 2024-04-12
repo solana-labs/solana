@@ -66,12 +66,12 @@ impl TieredStorageReader {
     }
 
     /// Returns the account located at the specified index offset.
-    pub fn get_account(
+    pub fn get_stored_account_meta(
         &self,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, IndexOffset)>> {
         match self {
-            Self::Hot(hot) => hot.get_account(index_offset),
+            Self::Hot(hot) => hot.get_stored_account_meta(index_offset),
         }
     }
 

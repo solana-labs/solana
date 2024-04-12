@@ -132,7 +132,7 @@ impl AccountsFile {
             // IndexOffset that is equivalent to AccountInfo::reduced_offset.
             Self::TieredStorage(ts) => ts
                 .reader()?
-                .get_account(IndexOffset(AccountInfo::get_reduced_offset(offset)))
+                .get_stored_account_meta(IndexOffset(AccountInfo::get_reduced_offset(offset)))
                 .ok()?
                 .map(|(metas, index_offset)| {
                     (metas, AccountInfo::reduced_offset_to_offset(index_offset.0))

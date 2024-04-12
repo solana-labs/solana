@@ -527,7 +527,7 @@ impl HotStorageReader {
     }
 
     /// Returns the account located at the specified index offset.
-    pub fn get_account(
+    pub fn get_stored_account_meta(
         &self,
         index_offset: IndexOffset,
     ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, IndexOffset)>> {
@@ -589,7 +589,7 @@ impl HotStorageReader {
                 .account_entry_count
                 .saturating_sub(index_offset.0) as usize,
         );
-        while let Some((account, next)) = self.get_account(index_offset)? {
+        while let Some((account, next)) = self.get_stored_account_meta(index_offset)? {
             accounts.push(account);
             index_offset = next;
         }
@@ -1328,10 +1328,10 @@ pub mod tests {
     }
 
     #[test]
-    fn test_hot_storage_get_account() {
+    fn test_get_stored_account_meta() {
         // Generate a new temp path that is guaranteed to NOT already have a file.
         let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().join("test_hot_storage_get_account");
+        let path = temp_dir.path().join("test");
 
         let mut rng = rand::thread_rng();
 
@@ -1418,25 +1418,25 @@ pub mod tests {
         let hot_storage = HotStorageReader::new(file).unwrap();
 
         for i in 0..NUM_ACCOUNTS {
-            let (stored_meta, next) = hot_storage
-                .get_account(IndexOffset(i as u32))
+            let (stored_account_meta, next) = hot_storage
+                .get_stored_account_meta(IndexOffset(i as u32))
                 .unwrap()
                 .unwrap();
-            assert_eq!(stored_meta.lamports(), account_metas[i].lamports());
-            assert_eq!(stored_meta.data().len(), account_datas[i].len());
-            assert_eq!(stored_meta.data(), account_datas[i]);
+            assert_eq!(stored_account_meta.lamports(), account_metas[i].lamports());
+            assert_eq!(stored_account_meta.data().len(), account_datas[i].len());
+            assert_eq!(stored_account_meta.data(), account_datas[i]);
             assert_eq!(
-                *stored_meta.owner(),
+                *stored_account_meta.owner(),
                 owners[account_metas[i].owner_offset().0 as usize]
             );
-            assert_eq!(*stored_meta.pubkey(), addresses[i]);
+            assert_eq!(*stored_account_meta.pubkey(), addresses[i]);
 
             assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
         assert_matches!(
-            hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
+            hot_storage.get_stored_account_meta(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
         );
     }
@@ -1605,31 +1605,31 @@ pub mod tests {
 
         let num_accounts = account_data_sizes.len();
         for i in 0..num_accounts {
-            let (stored_meta, next) = hot_storage
-                .get_account(IndexOffset(i as u32))
+            let (stored_account_meta, next) = hot_storage
+                .get_stored_account_meta(IndexOffset(i as u32))
                 .unwrap()
                 .unwrap();
 
             let (account, address, _account_hash) = storable_accounts.get(i);
-            verify_test_account(&stored_meta, account, address);
+            verify_test_account(&stored_account_meta, account, address);
 
             assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
         assert_matches!(
-            hot_storage.get_account(IndexOffset(num_accounts as u32)),
+            hot_storage.get_stored_account_meta(IndexOffset(num_accounts as u32)),
             Ok(None)
         );
 
         for stored_info in stored_infos {
-            let (stored_meta, _) = hot_storage
-                .get_account(IndexOffset(stored_info.offset as u32))
+            let (stored_account_meta, _) = hot_storage
+                .get_stored_account_meta(IndexOffset(stored_info.offset as u32))
                 .unwrap()
                 .unwrap();
 
             let (account, address, _account_hash) = storable_accounts.get(stored_info.offset);
-            verify_test_account(&stored_meta, account, address);
+            verify_test_account(&stored_account_meta, account, address);
         }
 
         // verify get_accounts

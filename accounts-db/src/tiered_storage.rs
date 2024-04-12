@@ -372,20 +372,22 @@ mod tests {
         let mut min_pubkey_ref = &MAX_PUBKEY;
         let mut max_pubkey_ref = &MIN_PUBKEY;
 
-        while let Some((stored_meta, next)) = reader.get_account(index_offset).unwrap() {
-            if let Some(account) = expected_accounts_map.get(stored_meta.pubkey()) {
+        while let Some((stored_account_meta, next)) =
+            reader.get_stored_account_meta(index_offset).unwrap()
+        {
+            if let Some(account) = expected_accounts_map.get(stored_account_meta.pubkey()) {
                 verify_test_account_with_footer(
-                    &stored_meta,
+                    &stored_account_meta,
                     *account,
-                    stored_meta.pubkey(),
+                    stored_account_meta.pubkey(),
                     footer,
                 );
-                verified_accounts.insert(stored_meta.pubkey());
-                if *min_pubkey_ref > *stored_meta.pubkey() {
-                    min_pubkey_ref = stored_meta.pubkey();
+                verified_accounts.insert(stored_account_meta.pubkey());
+                if *min_pubkey_ref > *stored_account_meta.pubkey() {
+                    min_pubkey_ref = stored_account_meta.pubkey();
                 }
-                if *max_pubkey_ref < *stored_meta.pubkey() {
-                    max_pubkey_ref = stored_meta.pubkey();
+                if *max_pubkey_ref < *stored_account_meta.pubkey() {
+                    max_pubkey_ref = stored_account_meta.pubkey();
                 }
             }
             index_offset = next;
