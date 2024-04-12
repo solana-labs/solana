@@ -11,7 +11,7 @@ use {
             TieredStorageResult,
         },
     },
-    solana_sdk::pubkey::Pubkey,
+    solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
     std::path::Path,
 };
 
@@ -72,6 +72,16 @@ impl TieredStorageReader {
     ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, IndexOffset)>> {
         match self {
             Self::Hot(hot) => hot.get_account(index_offset),
+        }
+    }
+
+    /// Returns the account located at the specified index offset.
+    pub fn get_account_shared_data(
+        &self,
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<Option<AccountSharedData>> {
+        match self {
+            Self::Hot(hot) => hot.get_account_shared_data(index_offset),
         }
     }
 

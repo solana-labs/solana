@@ -144,7 +144,13 @@ impl AccountsFile {
     pub(crate) fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
         match self {
             Self::AppendVec(av) => av.get_stored_account(offset),
-            Self::TieredStorage(_) => unimplemented!(),
+            Self::TieredStorage(ts) => {
+                // Note: The conversion here is needed as the AccountsDB currently
+                // assumes all offsets are multiple of 8 while TieredStorage uses
+                // IndexOffset that is equivalent to AccountInfo::reduced_offset.
+                let index_offset = IndexOffset(AccountInfo::get_reduced_offset(offset));
+                ts.reader()?.get_account_shared_data(index_offset).ok()?
+            }
         }
     }
 

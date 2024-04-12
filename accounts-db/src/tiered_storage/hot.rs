@@ -25,7 +25,9 @@ use {
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
     solana_sdk::{
-        account::ReadableAccount, pubkey::Pubkey, rent_collector::RENT_EXEMPT_RENT_EPOCH,
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        pubkey::Pubkey,
+        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         stake_history::Epoch,
     },
     std::{borrow::Borrow, option::Option, path::Path},
@@ -549,6 +551,30 @@ impl HotStorageReader {
                 account_block,
             }),
             IndexOffset(index_offset.0.saturating_add(1)),
+        )))
+    }
+
+    /// Returns the account located at the specified index offset.
+    pub fn get_account_shared_data(
+        &self,
+        index_offset: IndexOffset,
+    ) -> TieredStorageResult<Option<AccountSharedData>> {
+        if index_offset.0 >= self.footer.account_entry_count {
+            return Ok(None);
+        }
+
+        let account_offset = self.get_account_offset(index_offset)?;
+
+        let meta = self.get_account_meta_from_offset(account_offset)?;
+        let account_block = self.get_account_block(account_offset, index_offset)?;
+
+        let lamports = meta.lamports();
+        let data = meta.account_data(account_block).to_vec();
+        let owner = *self.get_owner_address(meta.owner_offset())?;
+        let executable = meta.flags().executable();
+        let rent_epoch = meta.final_rent_epoch(account_block);
+        Ok(Some(AccountSharedData::create(
+            lamports, data, owner, executable, rent_epoch,
         )))
     }
 
@@ -1411,6 +1437,119 @@ pub mod tests {
         // while loop in actual accounts-db read case.
         assert_matches!(
             hot_storage.get_account(IndexOffset(NUM_ACCOUNTS as u32)),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn test_get_account_shared_data() {
+        // Generate a new temp path that is guaranteed to NOT already have a file.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("test");
+
+        let mut rng = rand::thread_rng();
+
+        // create owners
+        const NUM_OWNERS: usize = 10;
+        let owners: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_OWNERS)
+            .collect();
+
+        // create account data
+        const NUM_ACCOUNTS: usize = 20;
+        let account_datas: Vec<_> = (0..NUM_ACCOUNTS)
+            .map(|i| vec![i as u8; rng.gen_range(0..4096)])
+            .collect();
+
+        // create account metas that link to its data and owner
+        let account_metas: Vec<_> = (0..NUM_ACCOUNTS)
+            .map(|i| {
+                HotAccountMeta::new()
+                    .with_lamports(rng.gen_range(0..u64::MAX))
+                    .with_owner_offset(OwnerOffset(rng.gen_range(0..NUM_OWNERS) as u32))
+                    .with_account_data_padding(padding_bytes(account_datas[i].len()))
+            })
+            .collect();
+
+        // create account addresses
+        let addresses: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_ACCOUNTS)
+            .collect();
+
+        let mut footer = TieredStorageFooter {
+            account_meta_format: AccountMetaFormat::Hot,
+            account_entry_count: NUM_ACCOUNTS as u32,
+            owner_count: NUM_OWNERS as u32,
+            ..TieredStorageFooter::default()
+        };
+
+        {
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            let mut current_offset = 0;
+
+            // write accounts blocks
+            let padding_buffer = [0u8; HOT_ACCOUNT_ALIGNMENT];
+            let index_writer_entries: Vec<_> = account_metas
+                .iter()
+                .zip(account_datas.iter())
+                .zip(addresses.iter())
+                .map(|((meta, data), address)| {
+                    let prev_offset = current_offset;
+                    current_offset += file.write_pod(meta).unwrap();
+                    current_offset += file.write_bytes(data).unwrap();
+                    current_offset += file
+                        .write_bytes(&padding_buffer[0..padding_bytes(data.len()) as usize])
+                        .unwrap();
+                    AccountIndexWriterEntry {
+                        address,
+                        offset: HotAccountOffset::new(prev_offset).unwrap(),
+                    }
+                })
+                .collect();
+
+            // write index blocks
+            footer.index_block_offset = current_offset as u64;
+            current_offset += footer
+                .index_block_format
+                .write_index_block(&mut file, &index_writer_entries)
+                .unwrap();
+
+            // write owners block
+            footer.owners_block_offset = current_offset as u64;
+            let mut owners_table = OwnersTable::default();
+            owners.iter().for_each(|owner_address| {
+                owners_table.insert(owner_address);
+            });
+            footer
+                .owners_block_format
+                .write_owners_block(&mut file, &owners_table)
+                .unwrap();
+
+            footer.write_footer_block(&mut file).unwrap();
+        }
+
+        let file = TieredReadableFile::new(&path).unwrap();
+        let hot_storage = HotStorageReader::new(file).unwrap();
+
+        for i in 0..NUM_ACCOUNTS {
+            let index_offset = IndexOffset(i as u32);
+            let account = hot_storage
+                .get_account_shared_data(index_offset)
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(account.lamports(), account_metas[i].lamports());
+            assert_eq!(account.data().len(), account_datas[i].len());
+            assert_eq!(account.data(), account_datas[i]);
+            assert_eq!(
+                *account.owner(),
+                owners[account_metas[i].owner_offset().0 as usize],
+            );
+        }
+        // Make sure it returns None on NUM_ACCOUNTS to allow termination on
+        // while loop in actual accounts-db read case.
+        assert_matches!(
+            hot_storage.get_account_shared_data(IndexOffset(NUM_ACCOUNTS as u32)),
             Ok(None)
         );
     }
