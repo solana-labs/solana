@@ -7953,6 +7953,32 @@ fn test_compute_active_feature_set() {
 }
 
 #[test]
+fn test_reserved_account_keys() {
+    let bank0 = create_simple_test_arc_bank(100_000).0;
+    let mut bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
+    bank.feature_set = Arc::new(FeatureSet::default());
+
+    assert_eq!(
+        bank.get_reserved_account_keys().len(),
+        20,
+        "before activating the new feature, bank should already have active reserved keys"
+    );
+
+    // Activate `add_new_reserved_account_keys` feature
+    bank.store_account(
+        &feature_set::add_new_reserved_account_keys::id(),
+        &feature::create_account(&Feature::default(), 42),
+    );
+    bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, true);
+
+    assert_eq!(
+        bank.get_reserved_account_keys().len(),
+        29,
+        "after activating the new feature, bank should have new active reserved keys"
+    );
+}
+
+#[test]
 fn test_program_replacement() {
     let mut bank = create_simple_test_bank(0);
 

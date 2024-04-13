@@ -22,6 +22,16 @@ mod zk_token_proof_program {
     solana_sdk::declare_id!("ZkTokenProof1111111111111111111111111111111");
 }
 
+// ReservedAccountKeys is not serialized into or deserialized from bank
+// snapshots but the bank requires this trait to be implemented anyways.
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl ::solana_frozen_abi::abi_example::AbiExample for ReservedAccountKeys {
+    fn example() -> Self {
+        // ReservedAccountKeys is not Serialize so just rely on Default.
+        ReservedAccountKeys::default()
+    }
+}
+
 /// `ReservedAccountKeys` holds the set of currently active/inactive
 /// account keys that are reserved by the protocol and may not be write-locked
 /// during transaction processing.
