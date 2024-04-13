@@ -3165,7 +3165,7 @@ pub mod tests {
         let data_size = None;
         let (_db, storages, _slots, _infos) = get_sample_storages(num_slots, data_size);
 
-        let account = storages[0].accounts.get_account(0).unwrap().0;
+        let account = storages[0].accounts.get_stored_account_meta(0).unwrap().0;
         let slot = 1;
         let capacity = 0;
         for i in 0..4usize {

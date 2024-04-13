@@ -1133,7 +1133,7 @@ impl AccountStorageEntry {
     }
 
     fn get_stored_account_meta(&self, offset: usize) -> Option<StoredAccountMeta> {
-        Some(self.accounts.get_account(offset)?.0)
+        Some(self.accounts.get_stored_account_meta(offset)?.0)
     }
 
     fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
@@ -8745,7 +8745,11 @@ impl AccountsDb {
             duplicates_this_slot
                 .into_iter()
                 .for_each(|(pubkey, (_slot, info))| {
-                    let duplicate = storage.accounts.get_account(info.offset()).unwrap().0;
+                    let duplicate = storage
+                        .accounts
+                        .get_stored_account_meta(info.offset())
+                        .unwrap()
+                        .0;
                     assert_eq!(&pubkey, duplicate.pubkey());
                     stored_size_alive = stored_size_alive.saturating_sub(duplicate.stored_size());
                     if !duplicate.is_zero_lamport() {

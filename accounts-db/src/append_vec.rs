@@ -95,7 +95,7 @@ impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
     type Item = StoredAccountMeta<'append_vec>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
+        if let Some((account, next_offset)) = self.append_vec.get_stored_account_meta(self.offset) {
             self.offset = next_offset;
             Some(account)
         } else {
@@ -435,7 +435,7 @@ impl AppendVec {
         // extend it to be reused here because it would allow attackers to accumulate
         // some measurable amount of memory needlessly.
         let mut num_accounts = 0;
-        while let Some((account, next_offset)) = self.get_account(offset) {
+        while let Some((account, next_offset)) = self.get_stored_account_meta(offset) {
             if !account.sanitize() {
                 return (false, num_accounts);
             }
@@ -519,7 +519,7 @@ impl AppendVec {
     /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
+    pub fn get_stored_account_meta(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
         let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&AccountHash, _) = self.get_type(next)?;
@@ -592,7 +592,7 @@ impl AppendVec {
         &self,
         offset: usize,
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
-        let r1 = self.get_account(offset);
+        let r1 = self.get_stored_account_meta(offset);
         let r2 = self.get_stored_account(offset);
         let r3 = self.get_account_meta(offset);
         let sizes = self.get_account_sizes(&[offset]);
@@ -719,7 +719,7 @@ impl AppendVec {
     /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
-        while let Some((account, next)) = self.get_account(offset) {
+        while let Some((account, next)) = self.get_stored_account_meta(offset) {
             accounts.push(account);
             offset = next;
         }
