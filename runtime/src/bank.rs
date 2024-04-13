@@ -2421,7 +2421,7 @@ impl Bank {
         &self,
         stakes: &'a Stakes<StakeAccount<Delegation>>,
     ) -> EpochRewardCalculateParamInfo<'a> {
-        let stake_history = self.stakes_cache.stakes().history().clone();
+        let stake_history = stakes.history().clone();
 
         let stake_delegations = self.filter_stake_delegations(stakes);
 
