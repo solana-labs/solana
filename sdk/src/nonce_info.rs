@@ -124,6 +124,7 @@ mod tests {
             instruction::Instruction,
             message::Message,
             nonce::{self, state::DurableNonce},
+            reserved_account_keys::ReservedAccountKeys,
             signature::{keypair_from_seed, Signer},
             system_instruction, system_program,
         },
@@ -133,7 +134,11 @@ mod tests {
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
     ) -> SanitizedMessage {
-        SanitizedMessage::try_from_legacy_message(Message::new(instructions, payer)).unwrap()
+        SanitizedMessage::try_from_legacy_message(
+            Message::new(instructions, payer),
+            &ReservedAccountKeys::empty_key_set(),
+        )
+        .unwrap()
     }
 
     #[test]

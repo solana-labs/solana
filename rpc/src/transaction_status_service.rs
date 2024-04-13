@@ -225,6 +225,7 @@ pub(crate) mod tests {
             nonce_info::{NonceFull, NoncePartial},
             pubkey::Pubkey,
             rent_debits::RentDebits,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signature, Signer},
             system_transaction,
             transaction::{
@@ -335,6 +336,7 @@ pub(crate) mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty_key_set(),
         )
         .unwrap();
 
@@ -364,7 +366,10 @@ pub(crate) mod tests {
             durable_nonce_fee: Some(DurableNonceFee::from(
                 &NonceFull::from_partial(
                     &rollback_partial,
-                    &SanitizedMessage::Legacy(LegacyMessage::new(message)),
+                    &SanitizedMessage::Legacy(LegacyMessage::new(
+                        message,
+                        &ReservedAccountKeys::empty_key_set(),
+                    )),
                     &[(pubkey, nonce_account)],
                     &rent_debits,
                 )

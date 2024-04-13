@@ -381,7 +381,12 @@ impl SchedulerController {
             let (transactions, fee_budget_limits_vec): (Vec<_>, Vec<_>) = chunk
                 .iter()
                 .filter_map(|packet| {
-                    packet.build_sanitized_transaction(feature_set, vote_only, bank.as_ref())
+                    packet.build_sanitized_transaction(
+                        feature_set,
+                        vote_only,
+                        bank.as_ref(),
+                        bank.get_reserved_account_keys(),
+                    )
                 })
                 .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
                 .filter(|tx| {

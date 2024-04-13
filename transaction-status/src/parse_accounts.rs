@@ -54,6 +54,7 @@ mod test {
         solana_sdk::{
             message::{v0, v0::LoadedAddresses, MessageHeader},
             pubkey::Pubkey,
+            reserved_account_keys::ReservedAccountKeys,
         },
     };
 
@@ -126,6 +127,7 @@ mod test {
                 writable: vec![pubkey4],
                 readonly: vec![pubkey5],
             },
+            &ReservedAccountKeys::empty_key_set(),
         );
 
         assert_eq!(

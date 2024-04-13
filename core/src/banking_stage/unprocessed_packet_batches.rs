@@ -310,6 +310,7 @@ mod tests {
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
             message::Message,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signer},
             system_instruction, system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
@@ -490,6 +491,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(2, txs.count());
@@ -500,6 +502,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(0, txs.count());
@@ -519,6 +522,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(3, txs.count());
@@ -529,6 +533,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(2, txs.count());
@@ -548,6 +553,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(3, txs.count());
@@ -558,6 +564,7 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             });
             assert_eq!(3, txs.count());

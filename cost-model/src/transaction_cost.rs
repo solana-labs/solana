@@ -203,6 +203,7 @@ mod tests {
             feature_set::FeatureSet,
             hash::Hash,
             message::SimpleAddressLoader,
+            reserved_account_keys::ReservedAccountKeys,
             signer::keypair::Keypair,
             transaction::{MessageHash, SanitizedTransaction, VersionedTransaction},
         },
@@ -231,6 +232,7 @@ mod tests {
             MessageHash::Compute,
             Some(true),
             SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty_key_set(),
         )
         .unwrap();
 
@@ -240,6 +242,7 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty_key_set(),
         )
         .unwrap();
 

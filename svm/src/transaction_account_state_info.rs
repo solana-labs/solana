@@ -82,6 +82,7 @@ mod test {
             instruction::CompiledInstruction,
             message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             rent::Rent,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signer},
             transaction::TransactionError,
             transaction_context::TransactionContext,
@@ -114,8 +115,10 @@ mod test {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = SanitizedMessage::Legacy(LegacyMessage::new(
+            message,
+            &ReservedAccountKeys::empty_key_set(),
+        ));
 
         let transaction_accounts = vec![
             (key1.pubkey(), AccountSharedData::default()),
@@ -166,8 +169,10 @@ mod test {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = SanitizedMessage::Legacy(LegacyMessage::new(
+            message,
+            &ReservedAccountKeys::empty_key_set(),
+        ));
 
         let transaction_accounts = vec![
             (key1.pubkey(), AccountSharedData::default()),

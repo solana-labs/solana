@@ -4,6 +4,7 @@ use {
         instruction::{AccountMeta, CompiledInstruction},
         message::{Message, MessageHeader},
         pubkey::Pubkey,
+        reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
         transaction::{SanitizedTransaction, Transaction},
     },
@@ -126,7 +127,11 @@ impl SanitizedTransactionBuilder {
             message,
         };
 
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap()
+        SanitizedTransaction::try_from_legacy_transaction(
+            transaction,
+            &ReservedAccountKeys::new_all_activated().active,
+        )
+        .unwrap()
     }
 }
 

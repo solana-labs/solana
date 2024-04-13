@@ -160,6 +160,7 @@ mod tests {
             native_loader::{self, create_loadable_account_for_test},
             pubkey::Pubkey,
             rent::Rent,
+            reserved_account_keys::ReservedAccountKeys,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program, system_program,
             transaction_context::TransactionContext,
@@ -177,7 +178,8 @@ mod tests {
     }
 
     fn new_sanitized_message(message: Message) -> SanitizedMessage {
-        SanitizedMessage::try_from_legacy_message(message).unwrap()
+        SanitizedMessage::try_from_legacy_message(message, &ReservedAccountKeys::empty_key_set())
+            .unwrap()
     }
 
     #[test]

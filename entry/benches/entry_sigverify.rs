@@ -5,6 +5,7 @@ use {
     solana_perf::test_tx::test_tx,
     solana_sdk::{
         hash::Hash,
+        reserved_account_keys::ReservedAccountKeys,
         transaction::{
             Result, SanitizedTransaction, SimpleAddressLoader, TransactionVerificationMode,
             VersionedTransaction,
@@ -41,6 +42,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     message_hash,
                     None,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             }?;
 
@@ -84,6 +86,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
                     message_hash,
                     None,
                     SimpleAddressLoader::Disabled,
+                    &ReservedAccountKeys::empty_key_set(),
                 )
             }?;
 

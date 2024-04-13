@@ -7,6 +7,7 @@ use {
         instruction::{AccountMeta, Instruction},
         message::{Message, SanitizedMessage},
         pubkey::{self, Pubkey},
+        reserved_account_keys::ReservedAccountKeys,
         sysvar::instructions::{self, construct_instructions_data},
     },
     test::Bencher,
@@ -29,10 +30,10 @@ fn bench_bincode_instruction_serialize(b: &mut Bencher) {
 #[bench]
 fn bench_construct_instructions_data(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = SanitizedMessage::try_from_legacy_message(Message::new(
-        &instructions,
-        Some(&Pubkey::new_unique()),
-    ))
+    let message = SanitizedMessage::try_from_legacy_message(
+        Message::new(&instructions, Some(&Pubkey::new_unique())),
+        &ReservedAccountKeys::empty_key_set(),
+    )
     .unwrap();
     b.iter(|| {
         let instructions = message.decompile_instructions();
@@ -52,10 +53,10 @@ fn bench_bincode_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = SanitizedMessage::try_from_legacy_message(Message::new(
-        &instructions,
-        Some(&Pubkey::new_unique()),
-    ))
+    let message = SanitizedMessage::try_from_legacy_message(
+        Message::new(&instructions, Some(&Pubkey::new_unique())),
+        &ReservedAccountKeys::empty_key_set(),
+    )
     .unwrap();
     let serialized = construct_instructions_data(&message.decompile_instructions());
     b.iter(|| {
@@ -69,10 +70,10 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = SanitizedMessage::try_from_legacy_message(Message::new(
-        &instructions,
-        Some(&Pubkey::new_unique()),
-    ))
+    let message = SanitizedMessage::try_from_legacy_message(
+        Message::new(&instructions, Some(&Pubkey::new_unique())),
+        &ReservedAccountKeys::empty_key_set(),
+    )
     .unwrap();
     let serialized = construct_instructions_data(&message.decompile_instructions());
     b.iter(|| {

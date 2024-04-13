@@ -995,6 +995,7 @@ mod tests {
             fee_calculator::FeeCalculator,
             message::{LegacyMessage, Message, MessageHeader},
             rent_debits::RentDebits,
+            reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signature},
             sysvar::{self, rent::Rent},
             transaction::{SanitizedTransaction, Transaction, TransactionError},
@@ -1006,6 +1007,13 @@ mod tests {
             io::Read,
         },
     };
+
+    fn new_unchecked_sanitized_message(message: Message) -> SanitizedMessage {
+        SanitizedMessage::Legacy(LegacyMessage::new(
+            message,
+            &ReservedAccountKeys::empty_key_set(),
+        ))
+    }
 
     struct TestForkGraph {}
 
@@ -1711,8 +1719,7 @@ mod tests {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = new_unchecked_sanitized_message(message);
         let loaded_programs = LoadedProgramsForTxBatch::default();
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
@@ -1836,8 +1843,7 @@ mod tests {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = new_unchecked_sanitized_message(message);
         let loaded_programs = LoadedProgramsForTxBatch::default();
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
@@ -1954,8 +1960,7 @@ mod tests {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = new_unchecked_sanitized_message(message);
 
         let sanitized_transaction_1 = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1985,8 +1990,7 @@ mod tests {
             recent_blockhash: Hash::default(),
         };
 
-        let legacy = LegacyMessage::new(message);
-        let sanitized_message = SanitizedMessage::Legacy(legacy);
+        let sanitized_message = new_unchecked_sanitized_message(message);
 
         let sanitized_transaction_2 = SanitizedTransaction::new_for_tests(
             sanitized_message,
