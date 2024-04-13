@@ -26,6 +26,7 @@ ok=true
 for program in solana-{faucet,genesis,keygen,validator}; do
   $program -V || ok=false
 done
+spl-token -V || ok=false
 $ok || {
   echo
   echo "Unable to locate required programs.  Try building them first with:"
@@ -64,6 +65,12 @@ if [[ -e $validator_stake_account ]]; then
   echo "Use existing validator stake account keypair"
 else
   solana-keygen new --no-passphrase -so "$validator_stake_account"
+fi
+token_program="$dataDir/token-program.json"
+if [[ -e $token_program ]]; then
+  echo "Use existing validator token program account keypair"
+else
+  solana-keygen new --no-passphrase -so "$token_program"
 fi
 
 if [[ -e "$ledgerDir"/genesis.bin || -e "$ledgerDir"/genesis.tar.bz2 ]]; then
