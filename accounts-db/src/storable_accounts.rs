@@ -120,7 +120,7 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [&'a 
 
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for (Slot, &'a [&'a StoredAccountMeta<'a>]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.account(index).pubkey()
+        self.1[index].pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         self.1[index]
@@ -139,7 +139,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for (Slot, &'a [&'a StoredA
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        self.account(index).hash()
+        self.1[index].hash()
     }
 }
 
@@ -208,7 +208,8 @@ impl<'a> StorableAccountsBySlot<'a> {
 
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<'a> {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.account(index).pubkey()
+        let indexes = self.find_internal_index(index);
+        self.slots_and_accounts[indexes.0].1[indexes.1].pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         let indexes = self.find_internal_index(index);
@@ -231,7 +232,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        self.account(index).hash()
+        let indexes = self.find_internal_index(index);
+        self.slots_and_accounts[indexes.0].1[indexes.1].hash()
     }
 }
 
@@ -241,7 +243,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (Slot, &'a [&'a StoredAccountMeta<'a>], Slot)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.account(index).pubkey()
+        self.1[index].pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         self.1[index]
@@ -260,7 +262,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &AccountHash {
-        self.account(index).hash()
+        self.1[index].hash()
     }
 }
 
