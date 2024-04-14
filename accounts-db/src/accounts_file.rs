@@ -141,9 +141,9 @@ impl AccountsFile {
     }
 
     /// return an `AccountSharedData` for an account at `offset`, if any.  Otherwise return None.
-    pub(crate) fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
+    pub(crate) fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
         match self {
-            Self::AppendVec(av) => av.get_stored_account(offset),
+            Self::AppendVec(av) => av.get_account_shared_data(offset),
             Self::TieredStorage(ts) => {
                 // Note: The conversion here is needed as the AccountsDB currently
                 // assumes all offsets are multiple of 8 while TieredStorage uses

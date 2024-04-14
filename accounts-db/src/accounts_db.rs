@@ -822,7 +822,7 @@ impl<'a> LoadedAccountAccessor<'a> {
                 // from the storage map after we grabbed the storage entry, the recycler should not
                 // reset the storage entry until we drop the reference to the storage entry.
                 maybe_storage_entry
-                            .get_stored_account(*offset)
+                            .get_account_shared_data(*offset)
                     .expect("If a storage entry was found in the storage map, it must not have been reset yet")
             }
             _ => self.check_and_get_loaded_account().take_account(),
@@ -1136,8 +1136,8 @@ impl AccountStorageEntry {
         Some(self.accounts.get_stored_account_meta(offset)?.0)
     }
 
-    fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
-        self.accounts.get_stored_account(offset)
+    fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
+        self.accounts.get_account_shared_data(offset)
     }
 
     fn add_account(&self, num_bytes: usize) {

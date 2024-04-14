@@ -540,7 +540,7 @@ impl AppendVec {
 
     /// return an `AccountSharedData` for an account at `offset`.
     /// This fn can efficiently return exactly what is needed by a caller.
-    pub(crate) fn get_stored_account(&self, offset: usize) -> Option<AccountSharedData> {
+    pub(crate) fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
         let (meta, next) = self.get_type::<StoredMeta>(offset)?;
         let (account_meta, next) = self.get_type::<AccountMeta>(next)?;
         let next = next + std::mem::size_of::<AccountHash>();
@@ -593,7 +593,7 @@ impl AppendVec {
         offset: usize,
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
         let r1 = self.get_stored_account_meta(offset);
-        let r2 = self.get_stored_account(offset);
+        let r2 = self.get_account_shared_data(offset);
         let r3 = self.get_account_meta(offset);
         let sizes = self.get_account_sizes(&[offset]);
         if r1.is_some() {
