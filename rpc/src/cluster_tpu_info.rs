@@ -153,7 +153,6 @@ mod test {
             bank.clone(),
             Some((2, 2)),
             bank.ticks_per_slot(),
-            &Pubkey::default(),
             Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             &PohConfig::default(),

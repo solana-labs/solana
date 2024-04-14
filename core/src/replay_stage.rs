@@ -1942,16 +1942,17 @@ impl ReplayStage {
 
         assert!(!poh_recorder.read().unwrap().has_bank());
 
-        let (poh_slot, parent_slot) = match poh_recorder.read().unwrap().reached_leader_slot() {
-            PohLeaderStatus::Reached {
-                poh_slot,
-                parent_slot,
-            } => (poh_slot, parent_slot),
-            PohLeaderStatus::NotReached => {
-                trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
-                return;
-            }
-        };
+        let (poh_slot, parent_slot) =
+            match poh_recorder.read().unwrap().reached_leader_slot(my_pubkey) {
+                PohLeaderStatus::Reached {
+                    poh_slot,
+                    parent_slot,
+                } => (poh_slot, parent_slot),
+                PohLeaderStatus::NotReached => {
+                    trace!("{} poh_recorder hasn't reached_leader_slot", my_pubkey);
+                    return;
+                }
+            };
 
         trace!("{} reached_leader_slot", my_pubkey);
 
@@ -4380,7 +4381,6 @@ pub(crate) mod tests {
                 working_bank.clone(),
                 None,
                 working_bank.ticks_per_slot(),
-                &Pubkey::default(),
                 blockstore.clone(),
                 &leader_schedule_cache,
                 &PohConfig::default(),
