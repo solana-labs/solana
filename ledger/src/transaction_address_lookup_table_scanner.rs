@@ -4,14 +4,14 @@ use {
     solana_sdk::{
         address_lookup_table::{self, instruction::ProgramInstruction},
         pubkey::Pubkey,
-        sdk_ids::SDK_IDS,
+        reserved_account_keys::ReservedAccountKeys,
         transaction::SanitizedVersionedTransaction,
     },
     std::collections::HashSet,
 };
 
 lazy_static! {
-    static ref SDK_IDS_SET: HashSet<Pubkey> = SDK_IDS.iter().cloned().collect();
+    static ref RESERVED_IDS_SET: HashSet<Pubkey> = ReservedAccountKeys::new_all_activated().active;
 }
 
 pub struct ScannedLookupTableExtensions {
@@ -24,7 +24,7 @@ pub fn scan_transaction(
 ) -> ScannedLookupTableExtensions {
     // Accumulate accounts from account lookup table extension instructions
     let mut accounts = Vec::new();
-    let mut native_only = true;
+    let mut no_user_programs = true;
     for (program_id, instruction) in transaction.get_message().program_instructions_iter() {
         if address_lookup_table::program::check_id(program_id) {
             if let Ok(ProgramInstruction::ExtendLookupTable { new_addresses }) =
@@ -33,12 +33,12 @@ pub fn scan_transaction(
                 accounts.extend(new_addresses);
             }
         } else {
-            native_only &= SDK_IDS_SET.contains(program_id);
+            no_user_programs &= RESERVED_IDS_SET.contains(program_id);
         }
     }
 
     ScannedLookupTableExtensions {
-        possibly_incomplete: !native_only,
+        possibly_incomplete: !no_user_programs,
         accounts,
     }
 }

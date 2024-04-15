@@ -19,7 +19,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
         pubkey::Pubkey,
-        sdk_ids,
+        reserved_account_keys::ReservedAccountKeys,
     },
     std::{
         collections::HashSet,
@@ -60,9 +60,8 @@ impl<'a> SnapshotMinimizer<'a> {
 
         minimizer.add_accounts(Self::get_active_bank_features, "active bank features");
         minimizer.add_accounts(Self::get_inactive_bank_features, "inactive bank features");
-        minimizer.add_accounts(Self::get_builtins, "builtin accounts");
         minimizer.add_accounts(Self::get_static_runtime_accounts, "static runtime accounts");
-        minimizer.add_accounts(Self::get_sdk_accounts, "sdk accounts");
+        minimizer.add_accounts(Self::get_reserved_accounts, "reserved accounts");
 
         minimizer.add_accounts(
             Self::get_rent_collection_accounts,
@@ -109,19 +108,6 @@ impl<'a> SnapshotMinimizer<'a> {
         });
     }
 
-    /// Used to get builtin accounts in `minimize`
-    fn get_builtins(&self) {
-        self.bank
-            .get_transaction_processor()
-            .builtin_program_ids
-            .read()
-            .unwrap()
-            .iter()
-            .for_each(|program_id| {
-                self.minimized_account_set.insert(*program_id);
-            });
-    }
-
     /// Used to get static runtime accounts in `minimize`
     fn get_static_runtime_accounts(&self) {
         static_ids::STATIC_IDS.iter().for_each(|pubkey| {
@@ -129,11 +115,11 @@ impl<'a> SnapshotMinimizer<'a> {
         });
     }
 
-    /// Used to get sdk accounts in `minimize`
-    fn get_sdk_accounts(&self) {
-        sdk_ids::SDK_IDS.iter().for_each(|pubkey| {
+    /// Used to get reserved accounts in `minimize`
+    fn get_reserved_accounts(&self) {
+        ReservedAccountKeys::all_keys_iter().for_each(|pubkey| {
             self.minimized_account_set.insert(*pubkey);
-        });
+        })
     }
 
     /// Used to get rent collection accounts in `minimize`

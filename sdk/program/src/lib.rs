@@ -561,6 +561,10 @@ pub mod config {
 }
 
 /// A vector of Solana SDK IDs.
+#[deprecated(
+    since = "2.0.0",
+    note = "Please use `solana_sdk::reserved_account_keys::ReservedAccountKeys` instead"
+)]
 pub mod sdk_ids {
     use {
         crate::{
