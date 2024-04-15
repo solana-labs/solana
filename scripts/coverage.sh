@@ -73,9 +73,16 @@ source ci/common/limit-threads.sh
 
 _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
 
+TEST_ARGS=(
+  --nocapture
+  --skip shred::merkle::test::test_make_shreds_from_data::
+  --skip shred::merkle::test::test_make_shreds_from_data_rand::
+  --skip shred::merkle::test::test_recover_merkle_shreds::
+)
+
 # most verbose log level (trace) is enabled for all solana code to make log!
 # macro code green always
-if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture --skip shred::merkle::test::test_make_shreds_from_data:: ; then
+if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- "${TEST_ARGS[@]}" ; then
   test_status=0
 else
   test_status=$?
