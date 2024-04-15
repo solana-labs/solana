@@ -1,12 +1,13 @@
 use {
     super::{
         epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
-        CalculateRewardsAndDistributeVoteRewardsResult, EpochRewardCalculateParamInfo,
-        PartitionedRewardsCalculation, StakeRewardCalculationPartitioned, VoteRewardsAccounts,
+        CalculateRewardsAndDistributeVoteRewardsResult, CalculateValidatorRewardsResult,
+        EpochRewardCalculateParamInfo, PartitionedRewardsCalculation,
+        StakeRewardCalculationPartitioned, VoteRewardsAccounts,
     },
     crate::bank::{
         PrevEpochInflationRewards, RewardCalcTracer, RewardCalculationEvent, RewardsMetrics,
-        StakeRewardCalculation, VoteAccount,
+        VoteAccount,
     },
     log::info,
     rayon::{
@@ -38,6 +39,7 @@ impl Bank {
         let CalculateRewardsAndDistributeVoteRewardsResult {
             total_rewards,
             distributed_rewards,
+            total_points,
             stake_rewards_by_partition,
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
@@ -49,11 +51,19 @@ impl Bank {
         let slot = self.slot();
         let credit_start = self.block_height() + self.get_reward_calculation_num_blocks();
 
+        let num_partitions = stake_rewards_by_partition.len() as u64;
+
         self.set_epoch_reward_status_active(stake_rewards_by_partition);
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_start), total capital will increase by (total_rewards - distributed_rewards)
-        self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_start);
+        self.create_epoch_rewards_sysvar(
+            total_rewards,
+            distributed_rewards,
+            credit_start,
+            num_partitions,
+            total_points,
+        );
 
         datapoint_info!(
             "epoch-rewards-status-update",
@@ -82,6 +92,7 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
+            total_points,
         } = self.calculate_rewards_for_partitioning(
             prev_epoch,
             reward_calc_tracer,
@@ -150,6 +161,7 @@ impl Bank {
         CalculateRewardsAndDistributeVoteRewardsResult {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
+            total_points,
             stake_rewards_by_partition,
         }
     }
@@ -198,7 +210,11 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
-        let (vote_account_rewards, mut stake_rewards) = self
+        let CalculateValidatorRewardsResult {
+            vote_rewards_accounts: vote_account_rewards,
+            stake_reward_calculation: mut stake_rewards,
+            total_points,
+        } = self
             .calculate_validator_rewards(
                 prev_epoch,
                 validator_rewards,
@@ -231,6 +247,7 @@ impl Bank {
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
+            total_points,
         }
     }
 
@@ -242,7 +259,7 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> Option<(VoteRewardsAccounts, StakeRewardCalculation)> {
+    ) -> Option<CalculateValidatorRewardsResult> {
         let stakes = self.stakes_cache.stakes();
         let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
 
@@ -253,14 +270,21 @@ impl Bank {
             metrics,
         )
         .map(|point_value| {
-            self.calculate_stake_vote_rewards(
-                &reward_calculate_param,
-                rewarded_epoch,
-                point_value,
-                thread_pool,
-                reward_calc_tracer,
-                metrics,
-            )
+            let total_points = point_value.points;
+            let (vote_rewards_accounts, stake_reward_calculation) = self
+                .calculate_stake_vote_rewards(
+                    &reward_calculate_param,
+                    rewarded_epoch,
+                    point_value,
+                    thread_pool,
+                    reward_calc_tracer,
+                    metrics,
+                );
+            CalculateValidatorRewardsResult {
+                vote_rewards_accounts,
+                stake_reward_calculation,
+                total_points,
+            }
         })
     }
 
@@ -478,8 +502,11 @@ mod tests {
             &mut rewards_metrics,
         );
 
-        let vote_rewards = &calculated_rewards.as_ref().unwrap().0;
-        let stake_rewards = &calculated_rewards.as_ref().unwrap().1;
+        let vote_rewards = &calculated_rewards.as_ref().unwrap().vote_rewards_accounts;
+        let stake_rewards = &calculated_rewards
+            .as_ref()
+            .unwrap()
+            .stake_reward_calculation;
 
         let total_vote_rewards: u64 = vote_rewards
             .rewards

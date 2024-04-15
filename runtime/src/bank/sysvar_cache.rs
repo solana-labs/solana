@@ -6,7 +6,7 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            feature_set, genesis_config::create_genesis_config, hash::Hash, pubkey::Pubkey,
+            feature_set, genesis_config::create_genesis_config, pubkey::Pubkey,
             sysvar::epoch_rewards::EpochRewards,
         },
         std::sync::Arc,
@@ -120,11 +120,13 @@ mod tests {
 
         // inject a reward sysvar for test
         bank1.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+        let num_partitions = 2; // num_partitions is arbitrary and unimportant for this test
+        let total_points = 42_000; // total_points is arbitrary for the purposes of this test
         let expected_epoch_rewards = EpochRewards {
             distribution_starting_block_height: 42,
-            num_partitions: 0,
-            parent_blockhash: Hash::default(),
-            total_points: 0,
+            num_partitions,
+            parent_blockhash: bank1.parent().unwrap().last_blockhash(),
+            total_points,
             total_rewards: 100,
             distributed_rewards: 10,
             active: true,
@@ -133,6 +135,8 @@ mod tests {
             expected_epoch_rewards.total_rewards,
             expected_epoch_rewards.distributed_rewards,
             expected_epoch_rewards.distribution_starting_block_height,
+            num_partitions,
+            total_points,
         );
 
         bank1
