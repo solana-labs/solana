@@ -10,8 +10,8 @@ use {
         deserialize_utils::default_on_eof,
         message::v0::LoadedAddresses,
         pubkey::Pubkey,
+        reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
-        sysvar::is_sysvar_id,
         timing::AtomicInterval,
         transaction::{TransactionError, VersionedTransaction},
     },
@@ -938,6 +938,7 @@ impl LedgerStorage {
             entries,
         } = confirmed_block;
 
+        let reserved_account_keys = ReservedAccountKeys::new_all_activated();
         let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
@@ -947,7 +948,11 @@ impl LedgerStorage {
             let memo = extract_and_fmt_memos(transaction_with_meta);
 
             for address in transaction_with_meta.account_keys().iter() {
-                if !is_sysvar_id(address) {
+                // Historical note that previously only a set of sysvar ids were
+                // skipped from being uploaded. Now we skip uploaded for the set
+                // of all reserved account keys which will continue to grow in
+                // the future.
+                if !reserved_account_keys.is_reserved(address) {
                     by_addr
                         .entry(address)
                         .or_default()
@@ -1083,9 +1088,13 @@ impl LedgerStorage {
                     let err = None;
 
                     for address in transaction.message.account_keys.iter() {
-                        if !is_sysvar_id(address) {
-                            addresses.insert(address);
-                        }
+                        // We could skip deleting addresses that are known
+                        // reserved keys but it's hard to be sure whether we
+                        // previously uploaded rows for reserved keys or not. So
+                        // to ensure everything is deleted properly, we attempt
+                        // to delete rows for all addresses even if they might
+                        // not have been uploaded.
+                        addresses.insert(address);
                     }
 
                     expected_tx_infos.insert(
@@ -1100,9 +1109,13 @@ impl LedgerStorage {
                     let err = meta.status.clone().err();
 
                     for address in tx_with_meta.account_keys().iter() {
-                        if !is_sysvar_id(address) {
-                            addresses.insert(address);
-                        }
+                        // We could skip deleting addresses that are known
+                        // reserved keys but it's hard to be sure whether we
+                        // previously uploaded rows for reserved keys or not. So
+                        // to ensure everything is deleted properly, we attempt
+                        // to delete rows for all addresses even if they might
+                        // not have been uploaded.
+                        addresses.insert(address);
                     }
 
                     expected_tx_infos.insert(

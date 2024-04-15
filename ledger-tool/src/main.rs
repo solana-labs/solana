@@ -2778,7 +2778,7 @@ fn main() {
                         for (pubkey, warped_account) in all_accounts {
                             // Don't output sysvars; it's always updated but not related to
                             // inflation.
-                            if solana_sdk::sysvar::is_sysvar_id(&pubkey) {
+                            if solana_sdk::sysvar::check_id(warped_account.owner()) {
                                 continue;
                             }
 

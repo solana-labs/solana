@@ -118,6 +118,10 @@ lazy_static! {
 }
 
 /// Returns `true` of the given `Pubkey` is a sysvar account.
+#[deprecated(
+    since = "2.0.0",
+    note = "please check the account's owner or use solana_sdk::reserved_account_keys::ReservedAccountKeys instead"
+)]
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
 }

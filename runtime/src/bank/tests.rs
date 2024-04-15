@@ -4366,7 +4366,7 @@ fn test_bank_get_program_accounts() {
     assert!(
         genesis_accounts
             .iter()
-            .any(|(pubkey, _, _)| solana_sdk::sysvar::is_sysvar_id(pubkey)),
+            .any(|(_, account, _)| solana_sdk::sysvar::check_id(account.owner())),
         "no sysvars found"
     );
 

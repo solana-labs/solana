@@ -643,9 +643,9 @@ struct AccountsScanner {
 
 impl AccountsScanner {
     /// Returns true if this account should be included in the output
-    fn should_process_account(&self, account: &AccountSharedData, pubkey: &Pubkey) -> bool {
+    fn should_process_account(&self, account: &AccountSharedData) -> bool {
         solana_accounts_db::accounts::Accounts::is_loadable(account.lamports())
-            && (self.config.include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
+            && (self.config.include_sysvars || !solana_sdk::sysvar::check_id(account.owner()))
     }
 
     fn maybe_output_account<S>(
@@ -688,8 +688,8 @@ impl AccountsScanner {
         };
 
         let scan_func = |account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-            if let Some((pubkey, account, slot)) = account_tuple
-                .filter(|(pubkey, account, _)| self.should_process_account(account, pubkey))
+            if let Some((pubkey, account, slot)) =
+                account_tuple.filter(|(_, account, _)| self.should_process_account(account))
             {
                 total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
                 self.maybe_output_account(
@@ -710,7 +710,7 @@ impl AccountsScanner {
                 if let Some((account, slot)) = self
                     .bank
                     .get_account_modified_slot_with_fixed_root(pubkey)
-                    .filter(|(account, _)| self.should_process_account(account, pubkey))
+                    .filter(|(account, _)| self.should_process_account(account))
                 {
                     total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
                     self.maybe_output_account(
@@ -727,7 +727,7 @@ impl AccountsScanner {
                 .get_program_accounts(program_pubkey, &ScanConfig::default())
                 .unwrap()
                 .iter()
-                .filter(|(pubkey, account)| self.should_process_account(account, pubkey))
+                .filter(|(_, account)| self.should_process_account(account))
                 .for_each(|(pubkey, account)| {
                     total_accounts_stats.accumulate_account(pubkey, account, rent_collector);
                     self.maybe_output_account(
