@@ -747,48 +747,51 @@ impl HotStorageWriter {
         let total_input_accounts = len - skip;
         let mut stored_infos = Vec::with_capacity(total_input_accounts);
         for i in skip..len {
-            let (account, address, _account_hash) = accounts.get(i);
-            let index_entry = AccountIndexWriterEntry {
-                address: *address,
-                offset: HotAccountOffset::new(cursor)?,
-            };
-            address_range.update(address);
+            accounts.get::<TieredStorageResult<()>>(i, |(account, address, _account_hash)| {
+                let index_entry = AccountIndexWriterEntry {
+                    address: *address,
+                    offset: HotAccountOffset::new(cursor)?,
+                };
+                address_range.update(address);
 
-            // Obtain necessary fields from the account, or default fields
-            // for a zero-lamport account in the None case.
-            let (lamports, owner, data, executable, rent_epoch) = account
-                .as_ref()
-                .map(|acc| {
-                    (
-                        acc.lamports(),
-                        acc.owner(),
-                        acc.data(),
-                        acc.executable(),
-                        // only persist rent_epoch for those rent-paying accounts
-                        (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH).then_some(acc.rent_epoch()),
-                    )
-                })
-                .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
-            let owner_offset = owners_table.insert(owner);
-            let stored_size =
-                self.write_account(lamports, owner_offset, data, executable, rent_epoch)?;
-            cursor += stored_size;
+                // Obtain necessary fields from the account, or default fields
+                // for a zero-lamport account in the None case.
+                let (lamports, owner, data, executable, rent_epoch) = account
+                    .as_ref()
+                    .map(|acc| {
+                        (
+                            acc.lamports(),
+                            acc.owner(),
+                            acc.data(),
+                            acc.executable(),
+                            // only persist rent_epoch for those rent-paying accounts
+                            (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH)
+                                .then_some(acc.rent_epoch()),
+                        )
+                    })
+                    .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
+                let owner_offset = owners_table.insert(owner);
+                let stored_size =
+                    self.write_account(lamports, owner_offset, data, executable, rent_epoch)?;
+                cursor += stored_size;
 
-            stored_infos.push(StoredAccountInfo {
-                // Here we pass the IndexOffset as the get_account() API
-                // takes IndexOffset.  Given the account address is also
-                // maintained outside the TieredStorage, a potential optimization
-                // is to store AccountOffset instead, which can further save
-                // one jump from the index block to the accounts block.
-                offset: index.len(),
-                // Here we only include the stored size that the account directly
-                // contribute (i.e., account entry + index entry that include the
-                // account meta, data, optional fields, its address, and AccountOffset).
-                // Storage size from those shared blocks like footer and owners block
-                // is not included.
-                size: stored_size + footer.index_block_format.entry_size::<HotAccountOffset>(),
-            });
-            index.push(index_entry);
+                stored_infos.push(StoredAccountInfo {
+                    // Here we pass the IndexOffset as the get_account() API
+                    // takes IndexOffset.  Given the account address is also
+                    // maintained outside the TieredStorage, a potential optimization
+                    // is to store AccountOffset instead, which can further save
+                    // one jump from the index block to the accounts block.
+                    offset: index.len(),
+                    // Here we only include the stored size that the account directly
+                    // contribute (i.e., account entry + index entry that include the
+                    // account meta, data, optional fields, its address, and AccountOffset).
+                    // Storage size from those shared blocks like footer and owners block
+                    // is not included.
+                    size: stored_size + footer.index_block_format.entry_size::<HotAccountOffset>(),
+                });
+                index.push(index_entry);
+                Ok(())
+            })?;
         }
         footer.account_entry_count = total_input_accounts as u32;
 
@@ -1559,8 +1562,9 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, _account_hash) = storable_accounts.get(i);
-            verify_test_account(&stored_account_meta, account.as_ref(), address);
+            storable_accounts.get(i, |(account, address, _account_hash)| {
+                verify_test_account(&stored_account_meta, account.as_ref(), address);
+            });
 
             assert_eq!(i + 1, next.0 as usize);
         }
@@ -1577,8 +1581,9 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            let (account, address, _account_hash) = storable_accounts.get(stored_info.offset);
-            verify_test_account(&stored_account_meta, account.as_ref(), address);
+            storable_accounts.get(stored_info.offset, |(account, address, _account_hash)| {
+                verify_test_account(&stored_account_meta, account.as_ref(), address);
+            });
         }
 
         // verify get_accounts
@@ -1586,8 +1591,9 @@ mod tests {
 
         // first, we verify everything
         for (i, stored_meta) in accounts.iter().enumerate() {
-            let (account, address, _account_hash) = storable_accounts.get(i);
-            verify_test_account(stored_meta, account.as_ref(), address);
+            storable_accounts.get(i, |(account, address, _account_hash)| {
+                verify_test_account(stored_meta, account.as_ref(), address);
+            });
         }
 
         // second, we verify various initial position

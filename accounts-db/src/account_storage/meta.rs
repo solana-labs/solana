@@ -61,8 +61,11 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
     }
 
     /// get all account fields at 'index'
-    pub fn get(&self, index: usize) -> (Option<AccountForStorage>, &Pubkey, &AccountHash) {
-        let account = self.accounts.account_default_if_zero_lamport(index);
+    pub fn get<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut((Option<AccountForStorage>, &Pubkey, &AccountHash)) -> Ret,
+    ) -> Ret {
         let pubkey = self.accounts.pubkey(index);
         let hash = if self.accounts.has_hash() {
             self.accounts.hash(index)
@@ -70,14 +73,19 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
             let item = self.hashes.as_ref().unwrap();
             item[index].borrow()
         };
-        (account, pubkey, hash)
+        let account = self.accounts.account_default_if_zero_lamport(index);
+        callback((account, pubkey, hash))
     }
 
     /// None if account at index has lamports == 0
     /// Otherwise, Some(account)
     /// This is the only way to access the account.
-    pub fn account(&self, index: usize) -> Option<AccountForStorage<'a>> {
-        self.accounts.account_default_if_zero_lamport(index)
+    pub fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
+    ) -> Ret {
+        callback(self.accounts.account_default_if_zero_lamport(index))
     }
 
     /// # accounts to write

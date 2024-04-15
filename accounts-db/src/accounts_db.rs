@@ -5988,23 +5988,24 @@ impl AccountsDb {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
-                let account = accounts_and_meta_to_store.account(infos.len());
-                let data_len = account
-                    .map(|account| account.data().len())
-                    .unwrap_or_default();
-                let data_len = (data_len + STORE_META_OVERHEAD) as u64;
-                if !self.has_space_available(slot, data_len) {
-                    info!(
-                        "write_accounts_to_storage, no space: {}, {}, {}, {}, {}",
-                        storage.accounts.capacity(),
-                        storage.accounts.remaining_bytes(),
-                        data_len,
-                        infos.len(),
-                        accounts_and_meta_to_store.len()
-                    );
-                    let special_store_size = std::cmp::max(data_len * 2, self.file_size);
-                    self.create_and_insert_store(slot, special_store_size, "large create");
-                }
+                accounts_and_meta_to_store.account(infos.len(), |account| {
+                    let data_len = account
+                        .map(|account| account.data().len())
+                        .unwrap_or_default();
+                    let data_len = (data_len + STORE_META_OVERHEAD) as u64;
+                    if !self.has_space_available(slot, data_len) {
+                        info!(
+                            "write_accounts_to_storage, no space: {}, {}, {}, {}, {}",
+                            storage.accounts.capacity(),
+                            storage.accounts.remaining_bytes(),
+                            data_len,
+                            infos.len(),
+                            accounts_and_meta_to_store.len()
+                        );
+                        let special_store_size = std::cmp::max(data_len * 2, self.file_size);
+                        self.create_and_insert_store(slot, special_store_size, "large create");
+                    }
+                });
                 continue;
             }
 
@@ -6014,10 +6015,11 @@ impl AccountsDb {
 
                 infos.push(AccountInfo::new(
                     StorageLocation::AppendVec(store_id, stored_account_info.offset),
-                    accounts_and_meta_to_store
-                        .account(i)
-                        .map(|account| account.lamports())
-                        .unwrap_or_default(),
+                    accounts_and_meta_to_store.account(i, |account| {
+                        account
+                            .map(|account| account.lamports())
+                            .unwrap_or_default()
+                    }),
                 ));
             }
             // restore the state to available
