@@ -819,8 +819,8 @@ impl HotStorageWriter {
         footer
             .owners_block_format
             .write_owners_block(&mut self.storage, &owners_table)?;
-        footer.min_account_address = *address_range.min;
-        footer.max_account_address = *address_range.max;
+        footer.min_account_address = address_range.min;
+        footer.max_account_address = address_range.max;
         footer.write_footer_block(&mut self.storage)?;
 
         Ok(stored_infos)
