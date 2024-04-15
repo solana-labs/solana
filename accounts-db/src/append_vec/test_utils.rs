@@ -1,4 +1,5 @@
 //! Helpers for AppendVec tests and benches
+#![cfg(feature = "dev-context-only-utils")]
 use {
     super::StoredMeta,
     rand::{distributions::Alphanumeric, Rng},
