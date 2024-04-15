@@ -1035,7 +1035,6 @@ pub fn should_discard_shred(
     root: Slot,
     max_slot: Slot,
     shred_version: u16,
-    should_drop_legacy_shreds: impl Fn(Slot) -> bool,
     enable_chained_merkle_shreds: impl Fn(Slot) -> bool,
     stats: &mut ShredFetchStats,
 ) -> bool {
@@ -1112,9 +1111,7 @@ pub fn should_discard_shred(
     }
     match shred_variant {
         ShredVariant::LegacyCode | ShredVariant::LegacyData => {
-            if should_drop_legacy_shreds(slot) {
-                return true;
-            }
+            return true;
         }
         ShredVariant::MerkleCode { chained: false, .. } => {
             stats.num_shreds_merkle_code = stats.num_shreds_merkle_code.saturating_add(1);
@@ -1199,7 +1196,9 @@ mod tests {
         bincode::serialized_size,
         rand::Rng,
         rand_chacha::{rand_core::SeedableRng, ChaChaRng},
+        rayon::ThreadPoolBuilder,
         solana_sdk::{shred_version, signature::Signer, signer::keypair::keypair_from_seed},
+        std::io::{Cursor, Seek, SeekFrom, Write},
         test_case::test_case,
     };
 
@@ -1317,185 +1316,271 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_should_discard_shred() {
+    #[test_case(false, false)]
+    #[test_case(false, true)]
+    #[test_case(true, false)]
+    #[test_case(true, true)]
+    fn test_should_discard_shred(chained: bool, is_last_in_slot: bool) {
         solana_logger::setup();
+        let mut rng = rand::thread_rng();
+        let thread_pool = ThreadPoolBuilder::new().num_threads(2).build().unwrap();
+        let reed_solomon_cache = ReedSolomonCache::default();
+        let keypair = Keypair::new();
+        let chained_merkle_root = chained.then(|| Hash::new_from_array(rng.gen()));
+        let slot = 18_291;
+        let parent_slot = rng.gen_range(1..slot);
+        let shred_version = rng.gen();
+        let reference_tick = rng.gen_range(1..64);
+        let next_shred_index = rng.gen_range(0..671);
+        let next_code_index = rng.gen_range(0..781);
+        let mut data = vec![0u8; 1200 * 5];
+        rng.fill(&mut data[..]);
+        let shreds = merkle::make_shreds_from_data(
+            &thread_pool,
+            &keypair,
+            chained_merkle_root,
+            &data[..],
+            slot,
+            parent_slot,
+            shred_version,
+            reference_tick,
+            is_last_in_slot,
+            next_shred_index,
+            next_code_index,
+            &reed_solomon_cache,
+            &mut ProcessShredsStats::default(),
+        )
+        .unwrap();
+        assert_eq!(shreds.len(), 1);
+        let shreds: Vec<_> = shreds.into_iter().flatten().map(Shred::from).collect();
+
+        let root = rng.gen_range(0..parent_slot);
+        let max_slot = slot + rng.gen_range(1..65536);
         let mut packet = Packet::default();
-        let root = 1;
-        let shred_version = 798;
-        let max_slot = 16;
-        let shred = Shred::new_from_data(
-            2,   // slot
-            3,   // index
-            1,   // parent_offset
-            &[], // data
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0, // reference_tick
-            shred_version,
-            0, // fec_set_index
-        );
-        shred.copy_to_packet(&mut packet);
-        let mut stats = ShredFetchStats::default();
-        assert!(!should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats, ShredFetchStats::default());
 
-        packet.meta_mut().size = OFFSET_OF_SHRED_VARIANT;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats.index_overrun, 1);
+        // Data shred sanity checks!
+        {
+            let shred = shreds.first().unwrap();
+            assert_eq!(shred.shred_type(), ShredType::Data);
+            shred.copy_to_packet(&mut packet);
+            let mut stats = ShredFetchStats::default();
+            assert!(!should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+        }
+        {
+            let mut packet = packet.clone();
+            let mut stats = ShredFetchStats::default();
+            packet.meta_mut().size = OFFSET_OF_SHRED_VARIANT;
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_overrun, 1);
 
-        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats.index_overrun, 2);
+            packet.meta_mut().size = OFFSET_OF_SHRED_INDEX;
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_overrun, 2);
 
-        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + 1;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats.index_overrun, 3);
+            packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + 1;
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_overrun, 3);
 
-        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats.index_overrun, 4);
+            packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_overrun, 4);
 
-        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 2;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(stats.bad_parent_offset, 1);
+            packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 2;
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.bad_parent_offset, 1);
+        }
+        {
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version.wrapping_add(1),
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.shred_version_mismatch, 1);
+        }
+        {
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                parent_slot + 1, // root
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.slot_out_of_range, 1);
+        }
+        {
+            let parent_offset = 0u16;
+            {
+                let mut cursor = Cursor::new(packet.buffer_mut());
+                cursor.seek(SeekFrom::Start(83)).unwrap();
+                cursor.write_all(&parent_offset.to_le_bytes()).unwrap();
+            }
+            assert_eq!(
+                layout::get_parent_offset(packet.data(..).unwrap()),
+                Some(parent_offset)
+            );
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.slot_out_of_range, 1);
+        }
+        {
+            let parent_offset = u16::try_from(slot + 1).unwrap();
+            {
+                let mut cursor = Cursor::new(packet.buffer_mut());
+                cursor.seek(SeekFrom::Start(83)).unwrap();
+                cursor.write_all(&parent_offset.to_le_bytes()).unwrap();
+            }
+            assert_eq!(
+                layout::get_parent_offset(packet.data(..).unwrap()),
+                Some(parent_offset)
+            );
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.bad_parent_offset, 1);
+        }
+        {
+            let index = std::u32::MAX - 10;
+            {
+                let mut cursor = Cursor::new(packet.buffer_mut());
+                cursor
+                    .seek(SeekFrom::Start(OFFSET_OF_SHRED_INDEX as u64))
+                    .unwrap();
+                cursor.write_all(&index.to_le_bytes()).unwrap();
+            }
+            assert_eq!(layout::get_index(packet.data(..).unwrap()), Some(index));
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_out_of_bounds, 1);
+        }
 
-        let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data
-            4,   // num_code
-            1,   // position
-            shred_version,
-        );
-        shred.copy_to_packet(&mut packet);
-        assert!(!should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-
-        let shred = Shred::new_from_data(
-            2,                  // slot
-            std::u32::MAX - 10, // index
-            1,                  // parent_offset
-            &[],                // data
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0, // reference_tick
-            shred_version,
-            0, // fec_set_index
-        );
-        shred.copy_to_packet(&mut packet);
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(1, stats.index_out_of_bounds);
-
-        let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data_shreds
-            4,   // num_coding_shreds
-            3,   // position
-            shred_version,
-        );
-        shred.copy_to_packet(&mut packet);
-        assert!(!should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
-
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(1, stats.bad_shred_type);
-        assert_eq!(stats.shred_version_mismatch, 0);
-
-        packet.buffer_mut()[OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 1] = u8::MAX;
-        assert!(should_discard_shred(
-            &packet,
-            root,
-            max_slot,
-            shred_version,
-            |_| false, // should_drop_legacy_shreds
-            |_| true,  // enable_chained_merkle_shreds
-            &mut stats
-        ));
-        assert_eq!(1, stats.bad_shred_type);
-        assert_eq!(stats.shred_version_mismatch, 1);
+        // Coding shred sanity checks!
+        {
+            let shred = shreds.last().unwrap();
+            assert_eq!(shred.shred_type(), ShredType::Code);
+            shreds.last().unwrap().copy_to_packet(&mut packet);
+            let mut stats = ShredFetchStats::default();
+            assert!(!should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+        }
+        {
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version.wrapping_add(1),
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.shred_version_mismatch, 1);
+        }
+        {
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                slot, // root
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.slot_out_of_range, 1);
+        }
+        {
+            let index = u32::try_from(MAX_CODE_SHREDS_PER_SLOT).unwrap();
+            {
+                let mut cursor = Cursor::new(packet.buffer_mut());
+                cursor
+                    .seek(SeekFrom::Start(OFFSET_OF_SHRED_INDEX as u64))
+                    .unwrap();
+                cursor.write_all(&index.to_le_bytes()).unwrap();
+            }
+            assert_eq!(layout::get_index(packet.data(..).unwrap()), Some(index));
+            let mut stats = ShredFetchStats::default();
+            assert!(should_discard_shred(
+                &packet,
+                root,
+                max_slot,
+                shred_version,
+                |_| true, // enable_chained_merkle_shreds
+                &mut stats
+            ));
+            assert_eq!(stats.index_out_of_bounds, 1);
+        }
     }
 
     // Asserts that ShredType is backward compatible with u8.
