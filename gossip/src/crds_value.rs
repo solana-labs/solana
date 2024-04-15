@@ -656,7 +656,7 @@ impl CrdsValue {
             CrdsData::RestartHeaviestFork(_) => CrdsValueLabel::RestartHeaviestFork(self.pubkey()),
         }
     }
-    pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
+    pub(crate) fn contact_info(&self) -> Option<&LegacyContactInfo> {
         match &self.data {
             CrdsData::LegacyContactInfo(contact_info) => Some(contact_info),
             _ => None,
