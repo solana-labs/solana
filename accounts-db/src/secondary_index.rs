@@ -74,12 +74,15 @@ pub struct RwLockSecondaryIndexEntry {
 
 impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
     fn insert_if_not_exists(&self, key: &Pubkey, inner_keys_count: &AtomicU64) {
-        let exists = self.account_keys.read().unwrap().contains(key);
-        if !exists {
-            let mut w_account_keys = self.account_keys.write().unwrap();
-            w_account_keys.insert(*key);
+        if self.account_keys.read().unwrap().contains(key) {
+            // the key already exists, so nothing to do here
+            return;
+        }
+
+        let was_newly_inserted = self.account_keys.write().unwrap().insert(*key);
+        if was_newly_inserted {
             inner_keys_count.fetch_add(1, Ordering::Relaxed);
-        };
+        }
     }
 
     fn remove_inner_key(&self, key: &Pubkey) -> bool {
