@@ -12,14 +12,14 @@ use {
         },
         accounts_file::AccountsFile,
         accounts_hash::AccountHash,
-        accounts_index::{AccountsIndexScanResult, ZeroLamport},
+        accounts_index::AccountsIndexScanResult,
         active_stats::ActiveStatItem,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
-    solana_sdk::{account::ReadableAccount, clock::Slot},
+    solana_sdk::clock::Slot,
     std::{
         collections::HashMap,
         num::{NonZeroU64, Saturating},
@@ -440,10 +440,10 @@ impl AccountsDb {
     /// create append vec of size 'bytes'
     /// write 'accounts_to_write' into it
     /// return shrink_in_progress and some metrics
-    fn write_ancient_accounts<'a, 'b: 'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    fn write_ancient_accounts<'a, 'b: 'a>(
         &'b self,
         bytes: u64,
-        accounts_to_write: impl StorableAccounts<'a, T>,
+        accounts_to_write: impl StorableAccounts<'a>,
         write_ancient_accounts: &mut WriteAncientAccounts<'b>,
     ) {
         let target_slot = accounts_to_write.target_slot();

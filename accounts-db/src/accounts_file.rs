@@ -10,11 +10,7 @@ use {
             error::TieredStorageError, hot::HOT_FORMAT, index::IndexOffset, TieredStorage,
         },
     },
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::Slot,
-        pubkey::Pubkey,
-    },
+    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
     std::{
         borrow::Borrow,
         io::Read,
@@ -249,15 +245,9 @@ impl AccountsFile {
     /// So, return.len() is 1 + (number of accounts written)
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    pub fn append_accounts<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<AccountHash>,
-    >(
+    pub fn append_accounts<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
         &self,
-        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, U, V>,
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         match self {

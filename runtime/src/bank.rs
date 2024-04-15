@@ -88,7 +88,7 @@ use {
         epoch_accounts_hash::EpochAccountsHash,
         sorted_storages::SortedStorages,
         stake_rewards::StakeReward,
-        storable_accounts::StorableAccounts,
+        storable_accounts::{AccountForStorage, StorableAccounts},
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
@@ -3094,7 +3094,7 @@ impl Bank {
                 self.get_account(pubkey).is_none(),
                 "{pubkey} repeated in genesis config"
             );
-            self.store_account(pubkey, account);
+            self.store_account(pubkey, &account.to_account_shared_data());
             self.capitalization.fetch_add(account.lamports(), Relaxed);
             self.accounts_data_size_initial += account.data().len() as u64;
         }
@@ -3107,7 +3107,7 @@ impl Bank {
                 self.get_account(pubkey).is_none(),
                 "{pubkey} repeated in genesis config"
             );
-            self.store_account(pubkey, account);
+            self.store_account(pubkey, &account.to_account_shared_data());
             self.accounts_data_size_initial += account.data().len() as u64;
         }
 
@@ -5170,25 +5170,24 @@ impl Bank {
 
     /// fn store the single `account` with `pubkey`.
     /// Uses `store_accounts`, which works on a vector of accounts.
-    pub fn store_account<T: ReadableAccount + Sync + ZeroLamport>(
+    pub fn store_account<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
-        pubkey: &Pubkey,
-        account: &T,
-    ) {
+        pubkey: &'a Pubkey,
+        account: &'a T,
+    ) where
+        AccountForStorage<'a>: From<&'a T>,
+    {
         self.store_accounts((self.slot(), &[(pubkey, account)][..]))
     }
 
-    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
-        &self,
-        accounts: impl StorableAccounts<'a, T>,
-    ) {
+    pub fn store_accounts<'a>(&self, accounts: impl StorableAccounts<'a>) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         (0..accounts.len()).for_each(|i| {
             self.stakes_cache.check_and_store(
                 accounts.pubkey(i),
-                accounts.account(i),
+                &accounts.account(i),
                 new_warmup_cooldown_rate_epoch,
             )
         });

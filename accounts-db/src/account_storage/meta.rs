@@ -3,7 +3,7 @@ use {
         account_info::AccountInfo,
         accounts_hash::AccountHash,
         append_vec::AppendVecStoredAccountMeta,
-        storable_accounts::StorableAccounts,
+        storable_accounts::{AccountForStorage, StorableAccounts},
         tiered_storage::hot::{HotAccount, HotAccountMeta},
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
@@ -26,29 +26,18 @@ lazy_static! {
 /// This struct contains what is needed to store accounts to a storage
 /// 1. account & pubkey (StorableAccounts)
 /// 2. hash per account (Maybe in StorableAccounts, otherwise has to be passed in separately)
-pub struct StorableAccountsWithHashes<
-    'a: 'b,
-    'b,
-    T: ReadableAccount + Sync + 'b,
-    U: StorableAccounts<'a, T>,
-    V: Borrow<AccountHash>,
-> {
+pub struct StorableAccountsWithHashes<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>> {
     /// accounts to store
     /// always has pubkey and account
     /// may also have hash per account
     pub(crate) accounts: &'b U,
     /// if accounts does not have hash, this has a hash per account
     hashes: Option<Vec<V>>,
-    _phantom: PhantomData<&'a T>,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl<
-        'a: 'b,
-        'b,
-        T: ReadableAccount + Sync + 'b,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<AccountHash>,
-    > StorableAccountsWithHashes<'a, 'b, T, U, V>
+impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
+    StorableAccountsWithHashes<'a, 'b, U, V>
 {
     /// used when accounts contains hash already
     pub fn new(accounts: &'b U) -> Self {
@@ -72,7 +61,7 @@ impl<
     }
 
     /// get all account fields at 'index'
-    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &AccountHash) {
+    pub fn get(&self, index: usize) -> (Option<AccountForStorage>, &Pubkey, &AccountHash) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
         let hash = if self.accounts.has_hash() {
@@ -87,7 +76,7 @@ impl<
     /// None if account at index has lamports == 0
     /// Otherwise, Some(account)
     /// This is the only way to access the account.
-    pub fn account(&self, index: usize) -> Option<&T> {
+    pub fn account(&self, index: usize) -> Option<AccountForStorage<'a>> {
         self.accounts.account_default_if_zero_lamport(index)
     }
 

@@ -143,10 +143,13 @@ fn store_accounts_with_possible_contention<F: 'static>(
     let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
         .take(num_keys)
         .collect();
-    let accounts_data: Vec<_> = std::iter::repeat(Account {
-        lamports: 1,
-        ..Default::default()
-    })
+    let accounts_data: Vec<_> = std::iter::repeat(
+        Account {
+            lamports: 1,
+            ..Default::default()
+        }
+        .to_account_shared_data(),
+    )
     .take(num_keys)
     .collect();
     let storable_accounts: Vec<_> = pubkeys.iter().zip(accounts_data.iter()).collect();

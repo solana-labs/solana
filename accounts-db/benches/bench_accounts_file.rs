@@ -8,7 +8,7 @@ use {
         tiered_storage::hot::HotStorageWriter,
     },
     solana_sdk::{
-        account::Account, clock::Slot, hash::Hash, pubkey::Pubkey,
+        account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
     },
 };
@@ -34,7 +34,7 @@ fn bench_write_accounts_file(c: &mut Criterion) {
         let accounts: Vec<_> = std::iter::repeat_with(|| {
             (
                 Pubkey::new_unique(),
-                Account::new_rent_epoch(
+                AccountSharedData::new_rent_epoch(
                     lamports,
                     space,
                     &Pubkey::new_unique(),

@@ -21,8 +21,12 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        account::Account, feature_set::apply_cost_tracker_during_replay, signature::Keypair,
-        signer::Signer, stake_history::Epoch, system_program, system_transaction,
+        account::{Account, ReadableAccount},
+        feature_set::apply_cost_tracker_during_replay,
+        signature::Keypair,
+        signer::Signer,
+        stake_history::Epoch,
+        system_program, system_transaction,
         transaction::SanitizedTransaction,
     },
     std::sync::{
@@ -55,7 +59,8 @@ fn create_funded_accounts(bank: &Bank, num: usize) -> Vec<Keypair> {
                 owner: system_program::id(),
                 executable: false,
                 rent_epoch: Epoch::MAX,
-            },
+            }
+            .to_account_shared_data(),
         );
     });
 

@@ -733,15 +733,9 @@ impl AppendVec {
     /// So, return.len() is 1 + (number of accounts written)
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    pub fn append_accounts<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<AccountHash>,
-    >(
+    pub fn append_accounts<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
         &self,
-        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, U, V>,
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         let _lock = self.append_lock.lock().unwrap();
@@ -775,6 +769,7 @@ impl AppendVec {
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
             let data_ptr = account
+                .as_ref()
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
@@ -902,7 +897,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)])
         let slot = 0 as Slot;
         let pubkey = Pubkey::default();
-        StorableAccountsWithHashes::<'_, '_, _, _, &AccountHash>::new(&(
+        StorableAccountsWithHashes::<'_, '_, _, &AccountHash>::new(&(
             slot,
             &[(&pubkey, &account)][..],
         ));
@@ -996,7 +991,7 @@ pub mod tests {
         let accounts2 = (slot, &accounts[..]);
         let storable = StorableAccountsWithHashes::new_with_hashes(&accounts2, hashes);
         let get_account = storable.account(0);
-        assert!(accounts_equal(&account, get_account.unwrap()));
+        assert!(accounts_equal(&account, &get_account.unwrap()));
     }
 
     #[test]

@@ -4,7 +4,7 @@ use {
             AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount, ScanAccountStorageData,
             ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
         },
-        accounts_index::{IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport},
+        accounts_index::{IndexKey, ScanConfig, ScanError, ScanResult},
         ancestors::Ancestors,
         storable_accounts::StorableAccounts,
     },
@@ -677,10 +677,7 @@ impl Accounts {
             .store_cached_inline_update_index((slot, &accounts_to_store[..]), Some(&transactions));
     }
 
-    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
-        &self,
-        accounts: impl StorableAccounts<'a, T>,
-    ) {
+    pub fn store_accounts_cached<'a>(&self, accounts: impl StorableAccounts<'a>) {
         self.accounts_db.store_cached(accounts, None)
     }
 

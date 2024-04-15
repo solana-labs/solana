@@ -24,7 +24,6 @@ use {
     index::IndexBlockFormat,
     owners::OwnersBlockFormat,
     readable::TieredStorageReader,
-    solana_sdk::account::ReadableAccount,
     std::{
         borrow::Borrow,
         fs, io,
@@ -111,15 +110,9 @@ impl TieredStorage {
     ///
     /// Note that this function can only be called once per a TieredStorage
     /// instance.  Otherwise, it will trigger panic.
-    pub fn write_accounts<
-        'a,
-        'b,
-        T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
-        V: Borrow<AccountHash>,
-    >(
+    pub fn write_accounts<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
         &self,
-        accounts: &StorableAccountsWithHashes<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashes<'a, 'b, U, V>,
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
@@ -378,7 +371,7 @@ mod tests {
             if let Some(account) = expected_accounts_map.get(stored_account_meta.pubkey()) {
                 verify_test_account_with_footer(
                     &stored_account_meta,
-                    *account,
+                    account.as_ref(),
                     stored_account_meta.pubkey(),
                     footer,
                 );
