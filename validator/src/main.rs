@@ -1338,6 +1338,7 @@ pub fn main() {
         ip_echo_server_threads,
         replay_forks_threads,
         replay_transactions_threads,
+        tvu_receive_threads,
     } = cli::thread_args::parse_num_threads_args(&matches);
 
     let mut validator_config = ValidatorConfig {
@@ -1853,6 +1854,7 @@ pub fn main() {
         bind_ip_addr: bind_address,
         public_tpu_addr,
         public_tpu_forwards_addr,
+        num_tvu_sockets: tvu_receive_threads,
     };
 
     let cluster_entrypoints = entrypoint_addrs

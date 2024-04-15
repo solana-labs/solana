@@ -89,6 +89,7 @@ use {
         io::BufReader,
         iter::repeat,
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+        num::NonZeroUsize,
         ops::{Deref, Div},
         path::{Path, PathBuf},
         result::Result,
@@ -143,6 +144,11 @@ pub(crate) const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 8192;
 const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 /// Minimum number of staked nodes for enforcing stakes in gossip.
 const MIN_NUM_STAKED_NODES: usize = 500;
+
+// Must have at least one socket to monitor the TVU port
+// The unsafes are safe because we're using fixed, known non-zero values
+pub const MINIMUM_NUM_TVU_SOCKETS: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
+pub const DEFAULT_NUM_TVU_SOCKETS: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(8) };
 
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ClusterInfoError {
@@ -2792,6 +2798,8 @@ pub struct NodeConfig {
     pub bind_ip_addr: IpAddr,
     pub public_tpu_addr: Option<SocketAddr>,
     pub public_tpu_forwards_addr: Option<SocketAddr>,
+    /// The number of TVU sockets to create
+    pub num_tvu_sockets: NonZeroUsize,
 }
 
 #[derive(Debug)]
@@ -2993,13 +3001,15 @@ impl Node {
             bind_ip_addr,
             public_tpu_addr,
             public_tpu_forwards_addr,
+            num_tvu_sockets,
         } = config;
 
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(&gossip_addr, port_range, bind_ip_addr);
 
         let (tvu_port, tvu_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
+            multi_bind_in_range(bind_ip_addr, port_range, num_tvu_sockets.get())
+                .expect("tvu multi_bind");
         let (tvu_quic_port, tvu_quic) = Self::bind(bind_ip_addr, port_range);
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
@@ -3576,7 +3586,7 @@ mod tests {
     }
 
     fn check_sockets(sockets: &[UdpSocket], ip: IpAddr, range: (u16, u16)) {
-        assert!(sockets.len() > 1);
+        assert!(!sockets.is_empty());
         let port = sockets[0].local_addr().unwrap().port();
         for socket in sockets.iter() {
             check_socket(socket, ip, range);
@@ -3608,6 +3618,7 @@ mod tests {
             bind_ip_addr: IpAddr::V4(ip),
             public_tpu_addr: None,
             public_tpu_forwards_addr: None,
+            num_tvu_sockets: MINIMUM_NUM_TVU_SOCKETS,
         };
 
         let node = Node::new_with_external_ip(&solana_sdk::pubkey::new_rand(), config);
@@ -3631,6 +3642,7 @@ mod tests {
             bind_ip_addr: ip,
             public_tpu_addr: None,
             public_tpu_forwards_addr: None,
+            num_tvu_sockets: MINIMUM_NUM_TVU_SOCKETS,
         };
 
         let node = Node::new_with_external_ip(&solana_sdk::pubkey::new_rand(), config);

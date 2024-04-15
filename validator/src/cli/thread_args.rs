@@ -12,6 +12,7 @@ pub struct DefaultThreadArgs {
     pub ip_echo_server_threads: String,
     pub replay_forks_threads: String,
     pub replay_transactions_threads: String,
+    pub tvu_receive_threads: String,
 }
 
 impl Default for DefaultThreadArgs {
@@ -20,6 +21,7 @@ impl Default for DefaultThreadArgs {
             ip_echo_server_threads: IpEchoServerThreadsArg::default().to_string(),
             replay_forks_threads: ReplayForksThreadsArg::default().to_string(),
             replay_transactions_threads: ReplayTransactionsThreadsArg::default().to_string(),
+            tvu_receive_threads: TvuReceiveThreadsArg::default().to_string(),
         }
     }
 }
@@ -29,6 +31,7 @@ pub fn thread_args<'a>(defaults: &DefaultThreadArgs) -> Vec<Arg<'_, 'a>> {
         new_thread_arg::<IpEchoServerThreadsArg>(&defaults.ip_echo_server_threads),
         new_thread_arg::<ReplayForksThreadsArg>(&defaults.replay_forks_threads),
         new_thread_arg::<ReplayTransactionsThreadsArg>(&defaults.replay_transactions_threads),
+        new_thread_arg::<TvuReceiveThreadsArg>(&defaults.tvu_receive_threads),
     ]
 }
 
@@ -47,6 +50,7 @@ pub struct NumThreadConfig {
     pub ip_echo_server_threads: NonZeroUsize,
     pub replay_forks_threads: NonZeroUsize,
     pub replay_transactions_threads: NonZeroUsize,
+    pub tvu_receive_threads: NonZeroUsize,
 }
 
 pub fn parse_num_threads_args(matches: &ArgMatches) -> NumThreadConfig {
@@ -66,6 +70,7 @@ pub fn parse_num_threads_args(matches: &ArgMatches) -> NumThreadConfig {
             ReplayTransactionsThreadsArg::NAME,
             NonZeroUsize
         ),
+        tvu_receive_threads: value_t_or_exit!(matches, TvuReceiveThreadsArg::NAME, NonZeroUsize),
     }
 }
 
@@ -134,5 +139,20 @@ impl ThreadArg for ReplayTransactionsThreadsArg {
 
     fn default() -> usize {
         get_max_thread_count()
+    }
+}
+
+struct TvuReceiveThreadsArg;
+impl ThreadArg for TvuReceiveThreadsArg {
+    const NAME: &'static str = "tvu_receive_threads";
+    const LONG_NAME: &'static str = "tvu-receive-threads";
+    const HELP: &'static str =
+        "Number of threads (and sockets) to use for receiving shreds on the TVU port";
+
+    fn default() -> usize {
+        solana_gossip::cluster_info::DEFAULT_NUM_TVU_SOCKETS.get()
+    }
+    fn min() -> usize {
+        solana_gossip::cluster_info::MINIMUM_NUM_TVU_SOCKETS.get()
     }
 }
