@@ -1,8 +1,8 @@
 use {
     crate::{
         nonblocking::stream_throttle::{
-            ConnectionStreamCounter, StakedStreamLoadEMA, MAX_STREAMS_PER_MS,
-            STREAM_STOP_CODE_THROTTLING, STREAM_THROTTLING_INTERVAL_MS,
+            ConnectionStreamCounter, StakedStreamLoadEMA, STREAM_STOP_CODE_THROTTLING,
+            STREAM_THROTTLING_INTERVAL_MS,
         },
         quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
@@ -76,6 +76,9 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
+/// Limit to 250K PPS
+pub const DEFAULT_MAX_STREAMS_PER_MS: u64 = 250;
+
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
 struct PacketChunk {
@@ -124,6 +127,7 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
+    max_streams_per_ms: u64,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
@@ -147,6 +151,7 @@ pub fn spawn_server(
         staked_nodes,
         max_staked_connections,
         max_unstaked_connections,
+        max_streams_per_ms,
         stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
@@ -164,6 +169,7 @@ async fn run_server(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
+    max_streams_per_ms: u64,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
@@ -176,6 +182,7 @@ async fn run_server(
     let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(
         stats.clone(),
         max_unstaked_connections,
+        max_streams_per_ms,
     ));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new()));
@@ -206,6 +213,7 @@ async fn run_server(
                 staked_nodes.clone(),
                 max_staked_connections,
                 max_unstaked_connections,
+                max_streams_per_ms,
                 stats.clone(),
                 wait_for_chunk_timeout,
                 stream_load_ema.clone(),
@@ -484,6 +492,7 @@ async fn setup_connection(
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
+    max_streams_per_ms: u64,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     stream_load_ema: Arc<StakedStreamLoadEMA>,
@@ -505,7 +514,7 @@ async fn setup_connection(
                         // The heuristic is that the stake should be large engouh to have 1 stream pass throuh within one throttle
                         // interval during which we allow max (MAX_STREAMS_PER_MS * STREAM_THROTTLING_INTERVAL_MS) streams.
                         let min_stake_ratio =
-                            1_f64 / (MAX_STREAMS_PER_MS * STREAM_THROTTLING_INTERVAL_MS) as f64;
+                            1_f64 / (max_streams_per_ms * STREAM_THROTTLING_INTERVAL_MS) as f64;
                         let stake_ratio = stake as f64 / total_stake as f64;
                         let peer_type = if stake_ratio < min_stake_ratio {
                             // If it is a staked connection with ultra low stake ratio, treat it as unstaked.
@@ -1327,6 +1336,7 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            DEFAULT_MAX_STREAMS_PER_MS,
             Duration::from_secs(2),
             DEFAULT_TPU_COALESCE,
         )
@@ -1762,6 +1772,7 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
+            DEFAULT_MAX_STREAMS_PER_MS,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -1791,6 +1802,7 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            DEFAULT_MAX_STREAMS_PER_MS,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

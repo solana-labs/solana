@@ -10,8 +10,10 @@ mod tests {
         },
         solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::SpawnServerResult,
-            streamer::StakedNodes, tls_certificates::new_dummy_x509_certificate,
+            nonblocking::quic::{DEFAULT_MAX_STREAMS_PER_MS, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT},
+            quic::SpawnServerResult,
+            streamer::StakedNodes,
+            tls_certificates::new_dummy_x509_certificate,
         },
         std::{
             net::{SocketAddr, UdpSocket},
@@ -82,6 +84,7 @@ mod tests {
             staked_nodes,
             10,
             10,
+            DEFAULT_MAX_STREAMS_PER_MS,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -161,6 +164,7 @@ mod tests {
             staked_nodes,
             10,
             10,
+            DEFAULT_MAX_STREAMS_PER_MS,
             Duration::from_secs(1), // wait_for_chunk_timeout
             DEFAULT_TPU_COALESCE,
         )
@@ -223,6 +227,7 @@ mod tests {
             staked_nodes.clone(),
             10,
             10,
+            DEFAULT_MAX_STREAMS_PER_MS,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -251,6 +256,7 @@ mod tests {
             staked_nodes,
             10,
             10,
+            DEFAULT_MAX_STREAMS_PER_MS,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
