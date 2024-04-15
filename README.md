@@ -47,8 +47,8 @@ $ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang 
 ## **2. Download the source code.**
 
 ```bash
-$ git clone https://github.com/solana-labs/solana.git
-$ cd solana
+$ git clone https://github.com/anza-xyz/agave.git
+$ cd agave
 ```
 
 ## **3. Build.**
