@@ -755,7 +755,7 @@ impl HotStorageWriter {
         for i in skip..len {
             let (account, address, _account_hash) = accounts.get(i);
             let index_entry = AccountIndexWriterEntry {
-                address,
+                address: *address,
                 offset: HotAccountOffset::new(cursor)?,
             };
             address_range.update(address);
@@ -927,7 +927,7 @@ mod tests {
                         .write_bytes(&padding_buffer[0..padding_bytes(data.len()) as usize])
                         .unwrap();
                     AccountIndexWriterEntry {
-                        address,
+                        address: *address,
                         offset: HotAccountOffset::new(prev_offset).unwrap(),
                     }
                 })
@@ -1242,7 +1242,7 @@ mod tests {
         let index_writer_entries: Vec<_> = addresses
             .iter()
             .map(|address| AccountIndexWriterEntry {
-                address,
+                address: *address,
                 offset: HotAccountOffset::new(
                     rng.gen_range(0..u32::MAX) as usize * HOT_ACCOUNT_ALIGNMENT,
                 )
@@ -1280,7 +1280,7 @@ mod tests {
             let account_address = hot_storage
                 .get_account_address(IndexOffset(i as u32))
                 .unwrap();
-            assert_eq!(account_address, index_writer_entry.address);
+            assert_eq!(account_address, &index_writer_entry.address);
         }
     }
 
