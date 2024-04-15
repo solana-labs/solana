@@ -792,6 +792,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "enable-threaded")]
     fn test_encrypt_decrypt_correctness_multithreaded() {
         let ElGamalKeypair { public, secret } = ElGamalKeypair::new_rand();
         let amount: u32 = 57;

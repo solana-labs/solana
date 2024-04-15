@@ -16,6 +16,8 @@
 
 #![cfg(not(target_os = "solana"))]
 
+#[cfg(feature = "enable-threaded")]
+use std::thread;
 use {
     crate::RISTRETTO_POINT_LEN,
     curve25519_dalek::{
@@ -26,7 +28,7 @@ use {
     },
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, thread},
+    std::collections::HashMap,
     thiserror::Error,
 };
 
@@ -284,12 +286,12 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!("single thread discrete log computation secs: {computation_secs:?} sec");
+        println!("no threads discrete log computation secs: {computation_secs:?} sec");
     }
 
     #[test]
-    #[cfg(feature = "single-threaded")]
-    fn test_decode_correctness_single_threaded_feat() {
+    #[cfg(not(feature = "enable-threaded"))]
+    fn test_decode_correctness_no_threads_feat() {
         // general case
         let amount: u64 = 4294967295;
 
