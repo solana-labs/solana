@@ -41,4 +41,5 @@ zeroize = { workspace = true, features = ["zeroize_derive"] }
 crate-type = ["cdylib", "rlib"]
 
 [features]
-single-threaded = []
+default = ["enable-threaded"]
+enable-threaded = []

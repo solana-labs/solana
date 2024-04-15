@@ -140,7 +140,7 @@ impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
-        #[cfg(feature = "single_thread")]
+        #[cfg(not(feature = "enable-threaded"))]
         {
             let ristretto_iterator =
                 RistrettoIterator::new((self.target, 0_u64), (-(&self.step_point), 1_u64));
@@ -151,7 +151,7 @@ impl DiscreteLog {
             )
         }
 
-        #[cfg(not(feature = "single_thread"))]
+        #[cfg(feature = "enable-threaded")]
         {
             let mut starting_point = self.target;
             let handles = (0..self.num_threads)
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "single-threaded"))]
+    #[cfg(feature = "enable-threaded")]
     fn test_decode_correctness() {
         // general case
         let amount: u64 = 4294967295;
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "single-threaded"))]
+    #[cfg(feature = "enable-threaded")]
     fn test_decode_correctness_threaded() {
         // general case
         let amount: u64 = 55;
