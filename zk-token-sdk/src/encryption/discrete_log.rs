@@ -137,41 +137,53 @@ impl DiscreteLog {
 
         Ok(())
     }
-
     /// Solves the discrete log problem under the assumption that the solution
     /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
-        let mut starting_point = self.target;
-        let handles = (0..self.num_threads)
-            .map(|i| {
-                let ristretto_iterator = RistrettoIterator::new(
-                    (starting_point, i as u64),
-                    (-(&self.step_point), self.num_threads as u64),
-                );
-
-                let handle = thread::spawn(move || {
-                    Self::decode_range(
-                        ristretto_iterator,
-                        self.range_bound,
-                        self.compression_batch_size,
-                    )
-                });
-
-                starting_point -= G;
-                handle
-            })
-            .collect::<Vec<_>>();
-
-        let mut solution = None;
-        for handle in handles {
-            let discrete_log = handle.join().unwrap();
-            if discrete_log.is_some() {
-                solution = discrete_log;
-            }
+        #[cfg(feature = "single_thread")]
+        {
+            let ristretto_iterator =
+                RistrettoIterator::new((self.target, 0_u64), (-(&self.step_point), 1_u64));
+            Self::decode_range(
+                ristretto_iterator,
+                self.range_bound,
+                self.compression_batch_size,
+            )
         }
-        solution
-    }
 
+        #[cfg(not(feature = "single_thread"))]
+        {
+            let mut starting_point = self.target;
+            let handles = (0..self.num_threads)
+                .map(|i| {
+                    let ristretto_iterator = RistrettoIterator::new(
+                        (starting_point, i as u64),
+                        (-(&self.step_point), self.num_threads as u64),
+                    );
+
+                    let handle = thread::spawn(move || {
+                        Self::decode_range(
+                            ristretto_iterator,
+                            self.range_bound,
+                            self.compression_batch_size,
+                        )
+                    });
+
+                    starting_point -= G;
+                    handle
+                })
+                .collect::<Vec<_>>();
+
+            let mut solution = None;
+            for handle in handles {
+                let discrete_log = handle.join().unwrap();
+                if discrete_log.is_some() {
+                    solution = discrete_log;
+                }
+            }
+            solution
+        }
+    }
     fn decode_range(
         ristretto_iterator: RistrettoIterator,
         range_bound: usize,
@@ -258,6 +270,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "single-threaded"))]
     fn test_decode_correctness() {
         // general case
         let amount: u64 = 4294967295;
@@ -275,6 +288,25 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "single-threaded")]
+    fn test_decode_correctness_single_threaded_feat() {
+        // general case
+        let amount: u64 = 4294967295;
+
+        let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
+
+        // Very informal measurements for now
+        let start_computation = Instant::now();
+        let decoded = instance.decode_u32();
+        let computation_secs = start_computation.elapsed().as_secs_f64();
+
+        assert_eq!(amount, decoded.unwrap());
+
+        println!("single thread discrete log computation secs: {computation_secs:?} sec");
+    }
+
+    #[test]
+    #[cfg(not(feature = "single-threaded"))]
     fn test_decode_correctness_threaded() {
         // general case
         let amount: u64 = 55;
