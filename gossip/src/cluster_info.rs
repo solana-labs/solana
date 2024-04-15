@@ -1961,14 +1961,17 @@ impl ClusterInfo {
             requests
                 .into_par_iter()
                 .with_min_len(1024)
-                .filter(|(_, _, caller)| match caller.contact_info() {
-                    None => false,
-                    Some(caller) if caller.pubkey() == &self_pubkey => {
-                        warn!("PullRequest ignored, I'm talking to myself");
-                        self.stats.window_request_loopback.add_relaxed(1);
-                        false
+                .filter(|(_, _, caller)| match &caller.data {
+                    CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
+                        if caller.pubkey() == self_pubkey {
+                            warn!("PullRequest ignored, I'm talking to myself");
+                            self.stats.window_request_loopback.add_relaxed(1);
+                            false
+                        } else {
+                            true
+                        }
                     }
-                    Some(_) => true,
+                    _ => false,
                 })
                 .map(|(from_addr, filter, caller)| PullData {
                     from_addr,
