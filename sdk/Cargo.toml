@@ -20,7 +20,6 @@ default = [
   "full" # functionality that is not compatible or needed for on-chain programs
 ]
 full = [
-    "assert_matches",
     "byteorder",
     "chrono",
     "generic-array",
@@ -30,7 +29,6 @@ full = [
     "serde_json",
     "ed25519-dalek",
     "ed25519-dalek-bip32",
-    "solana-logger",
     "libsecp256k1",
     "sha3",
     "digest",
@@ -38,7 +36,6 @@ full = [
 dev-context-only-utils = []
 
 [dependencies]
-assert_matches = { workspace = true, optional = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bitflags = { workspace = true }
@@ -78,7 +75,6 @@ sha3 = { workspace = true, optional = true }
 siphasher = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-logger = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-sdk-macro = { workspace = true }
 thiserror = { workspace = true }
@@ -90,8 +86,10 @@ js-sys = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+assert_matches = { workspace = true }
 curve25519-dalek = { workspace = true }
 hex = { workspace = true }
+solana-logger = { workspace = true }
 solana-sdk = { path = ".", features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }

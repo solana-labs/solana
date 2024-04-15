@@ -6161,7 +6161,6 @@ dependencies = [
 name = "solana-sdk"
 version = "2.0.0"
 dependencies = [
- "assert_matches",
  "base64 0.22.0",
  "bincode",
  "bitflags 2.4.2",
@@ -6202,7 +6201,6 @@ dependencies = [
  "siphasher",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger",
  "solana-program",
  "solana-sdk-macro",
  "thiserror",
