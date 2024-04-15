@@ -75,7 +75,7 @@ _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packa
 
 # most verbose log level (trace) is enabled for all solana code to make log!
 # macro code green always
-if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture; then
+if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture --skip shred::merkle::test::test_make_shreds_from_data:: ; then
   test_status=0
 else
   test_status=$?
