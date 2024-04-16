@@ -5045,11 +5045,13 @@ impl Bank {
         let mut m = Measure::start("stakes_cache.check_and_store");
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         (0..accounts.len()).for_each(|i| {
-            self.stakes_cache.check_and_store(
-                accounts.pubkey(i),
-                &accounts.account(i),
-                new_warmup_cooldown_rate_epoch,
-            )
+            accounts.account(i, |account| {
+                self.stakes_cache.check_and_store(
+                    accounts.pubkey(i),
+                    &account,
+                    new_warmup_cooldown_rate_epoch,
+                )
+            })
         });
         self.rc.accounts.store_accounts_cached(accounts);
         m.stop();

@@ -25,9 +25,13 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [StakeReward]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
         let entry = &self.1[index];
-        (&entry.stake_account).into()
+        callback((&entry.stake_account).into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot when per-account slot is not included in the source data

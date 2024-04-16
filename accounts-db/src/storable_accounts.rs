@@ -84,11 +84,17 @@ pub trait StorableAccounts<'a>: Sync {
     /// pubkey at 'index'
     fn pubkey(&self, index: usize) -> &Pubkey;
     /// account at 'index'
-    fn account(&self, index: usize) -> AccountForStorage<'a>;
+    fn account<Ret>(&self, index: usize, callback: impl FnMut(AccountForStorage<'a>) -> Ret)
+        -> Ret;
     /// None if account is zero lamports
-    fn account_default_if_zero_lamport(&self, index: usize) -> Option<AccountForStorage<'a>> {
-        let account = self.account(index);
-        (account.lamports() != 0).then_some(account)
+    fn account_default_if_zero_lamport<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
+    ) -> Ret {
+        self.account(index, |account| {
+            callback((!account.is_zero_lamport()).then_some(account))
+        })
     }
     // current slot for account at 'index'
     fn slot(&self, index: usize) -> Slot;
@@ -139,8 +145,12 @@ where
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.accounts[index].0
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
-        self.accounts[index].1.into()
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
+        callback(self.accounts[index].1.into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot, but it is different than 'target_slot'
@@ -162,8 +172,12 @@ where
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
-        self.1[index].1.into()
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
+        callback(self.1[index].1.into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot when per-account slot is not included in the source data
@@ -183,8 +197,12 @@ where
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].0
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
-        (&self.1[index].1).into()
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
+        callback((&self.1[index].1).into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot when per-account slot is not included in the source data
@@ -202,8 +220,12 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].pubkey()
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
-        self.1[index].into()
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
+        callback(self.1[index].into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot when per-account slot is not included in the source data
@@ -291,9 +313,13 @@ impl<'a> StorableAccounts<'a> for StorableAccountsBySlot<'a> {
         let indexes = self.find_internal_index(index);
         self.slots_and_accounts[indexes.0].1[indexes.1].pubkey()
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
         let indexes = self.find_internal_index(index);
-        self.slots_and_accounts[indexes.0].1[indexes.1].into()
+        callback(self.slots_and_accounts[indexes.0].1[indexes.1].into())
     }
     fn slot(&self, index: usize) -> Slot {
         let indexes = self.find_internal_index(index);
@@ -323,8 +349,12 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>], Slot) 
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].pubkey()
     }
-    fn account(&self, index: usize) -> AccountForStorage<'a> {
-        self.1[index].into()
+    fn account<Ret>(
+        &self,
+        index: usize,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+    ) -> Ret {
+        callback(self.1[index].into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // same other slot for all accounts
@@ -364,7 +394,11 @@ pub mod tests {
         assert_eq!(a.is_empty(), b.is_empty());
         (0..a.len()).for_each(|i| {
             assert_eq!(a.pubkey(i), b.pubkey(i));
-            assert!(accounts_equal(&a.account(i), &b.account(i)));
+            b.account(i, |account| {
+                a.account(i, |account_a| {
+                    assert!(accounts_equal(&account_a, &account));
+                });
+            });
         })
     }
 
@@ -486,7 +520,9 @@ pub mod tests {
                     compare(&test2, &test_moving_slots2);
                     for (i, raw) in raw.iter().enumerate() {
                         assert_eq!(raw.0, *test3.pubkey(i));
-                        assert!(accounts_equal(&raw.1, &test3.account(i)));
+                        test3.account(i, |account| {
+                            assert!(accounts_equal(&raw.1, &account));
+                        });
                         assert_eq!(raw.2, test3.slot(i));
                         assert_eq!(target_slot, test4.slot(i));
                         assert_eq!(target_slot, test2.slot(i));
@@ -587,7 +623,9 @@ pub mod tests {
                         assert_eq!(entries0 != entries, storable.contains_multiple_slots());
                         (0..entries).for_each(|index| {
                             let index = index as usize;
-                            assert!(accounts_equal(&storable.account(index), &raw2[index]));
+                            storable.account(index, |account| {
+                                assert!(accounts_equal(&account, &raw2[index]));
+                            });
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
                             assert_eq!(storable.hash(index), raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);

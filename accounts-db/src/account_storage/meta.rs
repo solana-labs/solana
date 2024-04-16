@@ -73,8 +73,8 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
             let item = self.hashes.as_ref().unwrap();
             item[index].borrow()
         };
-        let account = self.accounts.account_default_if_zero_lamport(index);
-        callback((account, pubkey, hash))
+        self.accounts
+            .account_default_if_zero_lamport(index, |account| callback((account, pubkey, hash)))
     }
 
     /// None if account at index has lamports == 0
@@ -83,9 +83,10 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
     pub fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
+        callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
     ) -> Ret {
-        callback(self.accounts.account_default_if_zero_lamport(index))
+        self.accounts
+            .account_default_if_zero_lamport(index, callback)
     }
 
     /// # accounts to write

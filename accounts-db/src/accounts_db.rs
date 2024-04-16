@@ -6397,29 +6397,31 @@ impl AccountsDb {
         txn_iter
             .enumerate()
             .map(|(i, txn)| {
-                let account = accounts_and_meta_to_store
-                    .account_default_if_zero_lamport(i)
-                    .map(|account| account.to_account_shared_data())
-                    .unwrap_or_default();
-                let pubkey = accounts_and_meta_to_store.pubkey(i);
-                let account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
+                let mut account_info = AccountInfo::default();
+                accounts_and_meta_to_store.account_default_if_zero_lamport(i, |account| {
+                    let account = account
+                        .map(|account| account.to_account_shared_data())
+                        .unwrap_or_default();
+                    let pubkey = accounts_and_meta_to_store.pubkey(i);
+                    account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
 
-                self.notify_account_at_accounts_update(
-                    slot,
-                    &account,
-                    txn,
-                    pubkey,
-                    &mut write_version_producer,
-                );
+                    self.notify_account_at_accounts_update(
+                        slot,
+                        &account,
+                        txn,
+                        pubkey,
+                        &mut write_version_producer,
+                    );
 
-                let cached_account = self.accounts_cache.store(slot, pubkey, account);
-                // hash this account in the bg
-                match &self.sender_bg_hasher {
-                    Some(ref sender) => {
-                        let _ = sender.send(cached_account);
-                    }
-                    None => (),
-                };
+                    let cached_account = self.accounts_cache.store(slot, pubkey, account);
+                    // hash this account in the bg
+                    match &self.sender_bg_hasher {
+                        Some(ref sender) => {
+                            let _ = sender.send(cached_account);
+                        }
+                        None => (),
+                    };
+                });
                 account_info
             })
             .collect()
@@ -6484,10 +6486,11 @@ impl AccountsDb {
                             let len = accounts.len();
                             let mut hashes = Vec::with_capacity(len);
                             for index in 0..accounts.len() {
-                                let (pubkey, account) =
-                                    (accounts.pubkey(index), accounts.account(index));
-                                let hash = Self::hash_account(&account, pubkey);
-                                hashes.push(hash);
+                                let pubkey = accounts.pubkey(index);
+                                accounts.account(index, |account| {
+                                    let hash = Self::hash_account(&account, pubkey);
+                                    hashes.push(hash);
+                                });
                             }
                             hash_time.stop();
                             self.stats
@@ -7785,19 +7788,20 @@ impl AccountsDb {
 
             (start..end).for_each(|i| {
                 let info = infos[i];
-                let pubkey_account = (accounts.pubkey(i), accounts.account(i));
-                let pubkey = pubkey_account.0;
-                let old_slot = accounts.slot(i);
-                self.accounts_index.upsert(
-                    target_slot,
-                    old_slot,
-                    pubkey,
-                    &pubkey_account.1,
-                    &self.account_indexes,
-                    info,
-                    &mut reclaims,
-                    reclaim,
-                );
+                let pubkey = accounts.pubkey(i);
+                accounts.account(i, |account| {
+                    let old_slot = accounts.slot(i);
+                    self.accounts_index.upsert(
+                        target_slot,
+                        old_slot,
+                        pubkey,
+                        &account,
+                        &self.account_indexes,
+                        info,
+                        &mut reclaims,
+                        reclaim,
+                    );
+                });
             });
             reclaims
         };
@@ -8213,9 +8217,10 @@ impl AccountsDb {
         let mut stats = BankHashStats::default();
         let mut total_data = 0;
         (0..accounts.len()).for_each(|index| {
-            let account = accounts.account(index);
-            total_data += account.data().len();
-            stats.update(&account);
+            accounts.account(index, |account| {
+                total_data += account.data().len();
+                stats.update(&account);
+            })
         });
 
         self.stats
@@ -9637,8 +9642,12 @@ pub mod tests {
         fn pubkey(&self, index: usize) -> &Pubkey {
             self.1[index].0
         }
-        fn account(&self, index: usize) -> AccountForStorage<'a> {
-            self.1[index].1.into()
+        fn account<Ret>(
+            &self,
+            index: usize,
+            mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        ) -> Ret {
+            callback(self.1[index].1.into())
         }
         fn slot(&self, index: usize) -> Slot {
             // note that this could be different than 'target_slot()' PER account
