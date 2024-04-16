@@ -97,13 +97,16 @@ lazy_static! {
 /// All legacy callers do not have a unique slot per account to store.
 pub trait StorableAccounts<'a>: Sync {
     /// account at 'index'
-    fn account<Ret>(&self, index: usize, callback: impl FnMut(AccountForStorage<'a>) -> Ret)
-        -> Ret;
+    fn account<Ret>(
+        &self,
+        index: usize,
+        callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
+    ) -> Ret;
     /// None if account is zero lamports
     fn account_default_if_zero_lamport<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         self.account(index, |account| {
             callback(if account.lamports() != 0 {
@@ -166,7 +169,7 @@ where
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         callback((self.accounts[index].0, self.accounts[index].1).into())
     }
@@ -190,7 +193,7 @@ where
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'c> FnMut(AccountForStorage<'c>) -> Ret,
     ) -> Ret {
         callback((self.1[index].0, self.1[index].1).into())
     }
@@ -212,7 +215,7 @@ where
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         callback((&self.1[index].0, &self.1[index].1).into())
     }
@@ -232,7 +235,7 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>]) {
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         callback(self.1[index].into())
     }
@@ -321,7 +324,7 @@ impl<'a> StorableAccounts<'a> for StorableAccountsBySlot<'a> {
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         let indexes = self.find_internal_index(index);
         callback(self.slots_and_accounts[indexes.0].1[indexes.1].into())
@@ -354,7 +357,7 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>], Slot) 
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
     ) -> Ret {
         callback(self.1[index].into())
     }

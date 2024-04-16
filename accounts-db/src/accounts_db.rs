@@ -9634,7 +9634,7 @@ pub mod tests {
         fn account<Ret>(
             &self,
             index: usize,
-            mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
+            mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
         ) -> Ret {
             callback(self.1[index].1.into())
         }
