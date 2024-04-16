@@ -1,4 +1,7 @@
-use solana_sdk::message::{v0::LoadedMessage, Message};
+use solana_sdk::{
+    message::{v0::LoadedMessage, Message},
+    reserved_account_keys::ReservedAccountKeys,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -17,11 +20,12 @@ pub enum ParsedAccountSource {
 }
 
 pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
+    let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
-            writable: message.is_maybe_writable(i),
+            writable: message.is_maybe_writable(i, Some(&reserved_account_keys)),
             signer: message.is_signer(i),
             source: Some(ParsedAccountSource::Transaction),
         });

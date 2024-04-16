@@ -13,6 +13,7 @@ use {
         native_token::lamports_to_sol,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
         stake,
         transaction::{TransactionError, TransactionVersion, VersionedTransaction},
@@ -217,6 +218,7 @@ fn write_transaction<W: io::Write>(
     write_recent_blockhash(w, message.recent_blockhash(), prefix)?;
     write_signatures(w, &transaction.signatures, sigverify_status, prefix)?;
 
+    let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
     let mut fee_payer_index = None;
     for (account_index, account) in account_keys.iter().enumerate() {
         if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
@@ -225,7 +227,7 @@ fn write_transaction<W: io::Write>(
 
         let account_meta = CliAccountMeta {
             is_signer: message.is_signer(account_index),
-            is_writable: message.is_maybe_writable(account_index),
+            is_writable: message.is_maybe_writable(account_index, Some(&reserved_account_keys)),
             is_invoked: message.is_invoked(account_index),
         };
 

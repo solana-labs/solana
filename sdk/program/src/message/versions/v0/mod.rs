@@ -9,21 +9,23 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
-use crate::{
-    address_lookup_table_account::AddressLookupTableAccount,
-    bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::{CompiledInstruction, Instruction},
-    message::{
-        compiled_keys::{CompileError, CompiledKeys},
-        legacy::is_builtin_key_or_sysvar,
-        AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
-    },
-    pubkey::Pubkey,
-    sanitize::SanitizeError,
-    short_vec,
-};
 pub use loaded::*;
+use {
+    crate::{
+        address_lookup_table_account::AddressLookupTableAccount,
+        bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{CompiledInstruction, Instruction},
+        message::{
+            compiled_keys::{CompileError, CompiledKeys},
+            AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
+        },
+        pubkey::Pubkey,
+        sanitize::SanitizeError,
+        short_vec,
+    },
+    std::collections::HashSet,
+};
 
 mod loaded;
 
@@ -335,23 +337,39 @@ impl Message {
     }
 
     /// Returns true if the account at the specified index was requested as
-    /// writable. Before loading addresses and without the reserved account keys
-    /// set, we can't demote write locks properly so this should not be used by
-    /// the runtime.
-    pub fn is_maybe_writable(&self, key_index: usize) -> bool {
+    /// writable. Before loading addresses, we can't demote write locks properly
+    /// so this should not be used by the runtime. The `reserved_account_keys`
+    /// param is optional to allow clients to approximate writability without
+    /// requiring fetching the latest set of reserved account keys.
+    pub fn is_maybe_writable(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
         self.is_writable_index(key_index)
-            && !{
-                // demote reserved ids
-                self.account_keys
-                    .get(key_index)
-                    .map(is_builtin_key_or_sysvar)
-                    .unwrap_or_default()
-            }
+            && !self.is_account_maybe_reserved(key_index, reserved_account_keys)
             && !{
                 // demote program ids
                 self.is_key_called_as_program(key_index)
                     && !self.is_upgradeable_loader_in_static_keys()
             }
+    }
+
+    /// Returns true if the account at the specified index is in the reserved
+    /// account keys set. Before loading addresses, we can't detect reserved
+    /// account keys properly so this shouldn't be used by the runtime.
+    fn is_account_maybe_reserved(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
+        let mut is_maybe_reserved = false;
+        if let Some(reserved_account_keys) = reserved_account_keys {
+            if let Some(key) = self.account_keys.get(key_index) {
+                is_maybe_reserved = reserved_account_keys.contains(key);
+            }
+        }
+        is_maybe_reserved
     }
 }
 
@@ -685,5 +703,72 @@ mod tests {
                 }],
             })
         );
+    }
+
+    #[test]
+    fn test_is_maybe_writable() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+        let key4 = Pubkey::new_unique();
+        let key5 = Pubkey::new_unique();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 3,
+                num_readonly_signed_accounts: 2,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3, key4, key5],
+            address_table_lookups: vec![MessageAddressTableLookup {
+                account_key: Pubkey::new_unique(),
+                writable_indexes: vec![0],
+                readonly_indexes: vec![1],
+            }],
+            ..Message::default()
+        };
+
+        let reserved_account_keys = HashSet::from([key3]);
+
+        assert!(message.is_maybe_writable(0, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(1, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(2, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(3, Some(&reserved_account_keys)));
+        assert!(message.is_maybe_writable(3, None));
+        assert!(message.is_maybe_writable(4, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(5, Some(&reserved_account_keys)));
+        assert!(message.is_maybe_writable(6, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(7, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(8, Some(&reserved_account_keys)));
+    }
+
+    #[test]
+    fn test_is_account_maybe_reserved() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+
+        let message = Message {
+            account_keys: vec![key0, key1],
+            address_table_lookups: vec![MessageAddressTableLookup {
+                account_key: Pubkey::new_unique(),
+                writable_indexes: vec![0],
+                readonly_indexes: vec![1],
+            }],
+            ..Message::default()
+        };
+
+        let reserved_account_keys = HashSet::from([key1]);
+
+        assert!(!message.is_account_maybe_reserved(0, Some(&reserved_account_keys)));
+        assert!(message.is_account_maybe_reserved(1, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(2, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(3, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(4, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(0, None));
+        assert!(!message.is_account_maybe_reserved(1, None));
+        assert!(!message.is_account_maybe_reserved(2, None));
+        assert!(!message.is_account_maybe_reserved(3, None));
+        assert!(!message.is_account_maybe_reserved(4, None));
     }
 }

@@ -22,7 +22,7 @@ use {
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
-    std::{convert::TryFrom, str::FromStr},
+    std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
 
 lazy_static! {
@@ -58,6 +58,10 @@ lazy_static! {
     };
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "please use `solana_sdk::reserved_account_keys::ReservedAccountKeys::is_reserved` instead"
+)]
 #[allow(deprecated)]
 pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
     if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
@@ -564,6 +568,7 @@ impl Message {
     /// isn't used here to demote write locks, this shouldn't be used in the
     /// runtime.
     #[deprecated(since = "2.0.0", note = "Please use `is_maybe_writable` instead")]
+    #[allow(deprecated)]
     pub fn is_writable(&self, i: usize) -> bool {
         (self.is_writable_index(i))
             && !is_builtin_key_or_sysvar(&self.account_keys[i])
@@ -571,13 +576,35 @@ impl Message {
     }
 
     /// Returns true if the account at the specified index is writable by the
-    /// instructions in this message. Since the dynamic set of reserved accounts
-    /// isn't used here to demote write locks, this shouldn't be used in the
-    /// runtime.
-    pub fn is_maybe_writable(&self, i: usize) -> bool {
+    /// instructions in this message. The `reserved_account_keys` param has been
+    /// optional to allow clients to approximate writability without requiring
+    /// fetching the latest set of reserved account keys. If this method is
+    /// called by the runtime, the latest set of reserved account keys must be
+    /// passed.
+    pub fn is_maybe_writable(
+        &self,
+        i: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
         (self.is_writable_index(i))
-            && !is_builtin_key_or_sysvar(&self.account_keys[i])
+            && !self.is_account_maybe_reserved(i, reserved_account_keys)
             && !self.demote_program_id(i)
+    }
+
+    /// Returns true if the account at the specified index is in the optional
+    /// reserved account keys set.
+    fn is_account_maybe_reserved(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
+        let mut is_maybe_reserved = false;
+        if let Some(reserved_account_keys) = reserved_account_keys {
+            if let Some(key) = self.account_keys.get(key_index) {
+                is_maybe_reserved = reserved_account_keys.contains(key);
+            }
+        }
+        is_maybe_reserved
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -589,7 +616,7 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_maybe_writable(i) {
+            if self.is_maybe_writable(i, None) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -775,6 +802,58 @@ mod tests {
         assert!(message.is_writable(3));
         assert!(message.is_writable(4));
         assert!(!message.is_writable(5));
+    }
+
+    #[test]
+    fn test_is_maybe_writable() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+        let key4 = Pubkey::new_unique();
+        let key5 = Pubkey::new_unique();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 3,
+                num_readonly_signed_accounts: 2,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3, key4, key5],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+
+        let reserved_account_keys = HashSet::from([key3]);
+
+        assert!(message.is_maybe_writable(0, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(1, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(2, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(3, Some(&reserved_account_keys)));
+        assert!(message.is_maybe_writable(3, None));
+        assert!(message.is_maybe_writable(4, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(5, Some(&reserved_account_keys)));
+        assert!(!message.is_maybe_writable(6, Some(&reserved_account_keys)));
+    }
+
+    #[test]
+    fn test_is_account_maybe_reserved() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+
+        let message = Message {
+            account_keys: vec![key0, key1],
+            ..Message::default()
+        };
+
+        let reserved_account_keys = HashSet::from([key1]);
+
+        assert!(!message.is_account_maybe_reserved(0, Some(&reserved_account_keys)));
+        assert!(message.is_account_maybe_reserved(1, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(2, Some(&reserved_account_keys)));
+        assert!(!message.is_account_maybe_reserved(0, None));
+        assert!(!message.is_account_maybe_reserved(1, None));
+        assert!(!message.is_account_maybe_reserved(2, None));
     }
 
     #[test]

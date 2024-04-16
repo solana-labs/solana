@@ -12,7 +12,7 @@ use {
         ser::{SerializeTuple, Serializer},
         Deserialize, Serialize,
     },
-    std::fmt,
+    std::{collections::HashSet, fmt},
 };
 
 mod sanitized;
@@ -77,10 +77,14 @@ impl VersionedMessage {
     /// instructions in this message. Since dynamically loaded addresses can't
     /// have write locks demoted without loading addresses, this shouldn't be
     /// used in the runtime.
-    pub fn is_maybe_writable(&self, index: usize) -> bool {
+    pub fn is_maybe_writable(
+        &self,
+        index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
         match self {
-            Self::Legacy(message) => message.is_maybe_writable(index),
-            Self::V0(message) => message.is_maybe_writable(index),
+            Self::Legacy(message) => message.is_maybe_writable(index, reserved_account_keys),
+            Self::V0(message) => message.is_maybe_writable(index, reserved_account_keys),
         }
     }
 
