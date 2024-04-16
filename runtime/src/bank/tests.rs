@@ -12826,6 +12826,18 @@ fn test_filter_program_errors_and_collect_fee_details() {
         transaction_fee: 15_000,
         priority_fee: 3_000,
     };
+    let lamports_per_signature = 9;
+    let nonce_account = AccountSharedData::new_data(
+        99,
+        &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
+            Pubkey::default(),
+            DurableNonce::from_blockhash(&Hash::new_unique()),
+            lamports_per_signature,
+        ))),
+        &system_program::id(),
+    )
+    .unwrap();
+
     let expected_collect_results = vec![
         Err(TransactionError::AccountNotFound),
         Ok(()),
@@ -12839,7 +12851,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(initial_payer_balance, &Pubkey::new_unique(), 3);
-    genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
+    genesis_config.fee_rate_governor = FeeRateGovernor::new(lamports_per_signature, 0);
     let bank = Bank::new_for_tests(&genesis_config);
 
     let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
@@ -12862,7 +12874,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
             )),
-            Some(&NonceFull::default()),
+            Some(&NonceFull::new(Pubkey::new_unique(), nonce_account, None)),
         ),
         new_execution_result(
             Err(TransactionError::InstructionError(
