@@ -1563,7 +1563,13 @@ mod tests {
                 .unwrap();
 
             storable_accounts.get(i, |(account, address, _account_hash)| {
-                verify_test_account(&stored_account_meta, account.as_ref(), address);
+                verify_test_account(
+                    &stored_account_meta,
+                    &account
+                        .map(|account| account.to_account_shared_data())
+                        .unwrap_or_default(),
+                    address,
+                );
             });
 
             assert_eq!(i + 1, next.0 as usize);
@@ -1582,7 +1588,13 @@ mod tests {
                 .unwrap();
 
             storable_accounts.get(stored_info.offset, |(account, address, _account_hash)| {
-                verify_test_account(&stored_account_meta, account.as_ref(), address);
+                verify_test_account(
+                    &stored_account_meta,
+                    &account
+                        .map(|account| account.to_account_shared_data())
+                        .unwrap_or_default(),
+                    address,
+                );
             });
         }
 
@@ -1592,7 +1604,13 @@ mod tests {
         // first, we verify everything
         for (i, stored_meta) in accounts.iter().enumerate() {
             storable_accounts.get(i, |(account, address, _account_hash)| {
-                verify_test_account(stored_meta, account.as_ref(), address);
+                verify_test_account(
+                    stored_meta,
+                    &account
+                        .map(|account| account.to_account_shared_data())
+                        .unwrap_or_default(),
+                    address,
+                );
             });
         }
 

@@ -358,7 +358,9 @@ mod tests {
             storable_accounts.get(i, |(account, address, _account_hash)| {
                 expected_accounts_map.insert(
                     *address,
-                    account.map(|account| account.to_account_shared_data()),
+                    account
+                        .map(|account| account.to_account_shared_data())
+                        .unwrap_or_default(),
                 );
             });
         }
@@ -378,7 +380,7 @@ mod tests {
             if let Some(account) = expected_accounts_map.get(stored_account_meta.pubkey()) {
                 verify_test_account_with_footer(
                     &stored_account_meta,
-                    account.as_ref(),
+                    account,
                     stored_account_meta.pubkey(),
                     footer,
                 );

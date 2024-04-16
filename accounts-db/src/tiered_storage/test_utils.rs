@@ -5,7 +5,6 @@ use {
     crate::{
         account_storage::meta::{StoredAccountMeta, StoredMeta},
         accounts_hash::AccountHash,
-        tiered_storage::owners::OWNER_NO_OWNER,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
@@ -47,12 +46,11 @@ pub(super) fn create_test_account(seed: u64) -> (StoredMeta, AccountSharedData) 
 
 pub(super) fn verify_test_account(
     stored_meta: &StoredAccountMeta<'_>,
-    account: Option<&impl ReadableAccount>,
+    acc: &impl ReadableAccount,
     address: &Pubkey,
 ) {
-    let (lamports, owner, data, executable) = account
-        .map(|acc| (acc.lamports(), acc.owner(), acc.data(), acc.executable()))
-        .unwrap_or((0, &OWNER_NO_OWNER, &[], false));
+    let (lamports, owner, data, executable) =
+        (acc.lamports(), acc.owner(), acc.data(), acc.executable());
 
     assert_eq!(stored_meta.lamports(), lamports);
     assert_eq!(stored_meta.data().len(), data.len());
@@ -65,7 +63,7 @@ pub(super) fn verify_test_account(
 
 pub(super) fn verify_test_account_with_footer(
     stored_meta: &StoredAccountMeta<'_>,
-    account: Option<&impl ReadableAccount>,
+    account: &impl ReadableAccount,
     address: &Pubkey,
     footer: &TieredStorageFooter,
 ) {
