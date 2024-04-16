@@ -5035,7 +5035,7 @@ impl Bank {
         pubkey: &'a Pubkey,
         account: &'a T,
     ) where
-        AccountForStorage<'a>: From<&'a T>,
+        AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
     {
         self.store_accounts((self.slot(), &[(pubkey, account)][..]))
     }

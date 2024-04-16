@@ -31,7 +31,7 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [StakeReward]) {
         mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
     ) -> Ret {
         let entry = &self.1[index];
-        callback((&entry.stake_account).into())
+        callback((&self.1[index].stake_pubkey, &entry.stake_account).into())
     }
     fn slot(&self, _index: usize) -> Slot {
         // per-index slot is not unique per slot when per-account slot is not included in the source data
