@@ -7,6 +7,10 @@ use {
             log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
             ProcessResult,
         },
+        compute_budget::{
+            set_compute_budget_ixs_if_needed, simulate_and_update_compute_unit_limit,
+            UpdateComputeUnitLimitResult,
+        },
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -31,16 +35,12 @@ use {
     },
     solana_client::{
         connection_cache::ConnectionCache,
-        rpc_config::RpcSimulateTransactionConfig,
         send_and_confirm_transactions_in_parallel::{
             send_and_confirm_transactions_in_parallel_blocking, SendAndConfirmConfig,
         },
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_program_runtime::{
-        compute_budget::ComputeBudget, compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT,
-        invoke_context::InvokeContext,
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
     solana_rbpf::{elf::Executable, verifier::RequisiteVerifier},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
@@ -53,10 +53,9 @@ use {
     solana_sdk::{
         account::Account,
         account_utils::StateMut,
-        borsh1::try_from_slice_unchecked,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        compute_budget::{self, ComputeBudgetInstruction},
+        compute_budget,
         feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
         loader_instruction,
@@ -2693,70 +2692,6 @@ fn check_payer(
     Ok(())
 }
 
-// This enum is equivalent to an Option but was added to self-document
-// the ok variants and has the benefit of not forcing the caller to use
-// the result if they don't care about it.
-enum UpdateComputeUnitLimitResult {
-    UpdatedInstructionIndex(usize),
-    NoInstructionFound,
-}
-
-// Returns the index of the compute unit limit instruction
-fn simulate_and_update_compute_unit_limit(
-    rpc_client: &RpcClient,
-    transaction: &mut Transaction,
-) -> Result<UpdateComputeUnitLimitResult, Box<dyn std::error::Error>> {
-    let Some(compute_unit_limit_ix_index) = transaction
-        .message
-        .instructions
-        .iter()
-        .enumerate()
-        .find_map(|(ix_index, instruction)| {
-            let ix_program_id = transaction.message.program_id(ix_index)?;
-            if ix_program_id != &compute_budget::id() {
-                return None;
-            }
-
-            matches!(
-                try_from_slice_unchecked(&instruction.data),
-                Ok(ComputeBudgetInstruction::SetComputeUnitLimit(_))
-            )
-            .then_some(ix_index)
-        })
-    else {
-        return Ok(UpdateComputeUnitLimitResult::NoInstructionFound);
-    };
-
-    let simulate_result = rpc_client
-        .simulate_transaction_with_config(
-            transaction,
-            RpcSimulateTransactionConfig {
-                replace_recent_blockhash: true,
-                commitment: Some(rpc_client.commitment()),
-                ..RpcSimulateTransactionConfig::default()
-            },
-        )?
-        .value;
-
-    // Bail if the simulated transaction failed
-    if let Some(err) = simulate_result.err {
-        return Err(err.into());
-    }
-
-    let units_consumed = simulate_result
-        .units_consumed
-        .expect("compute units unavailable");
-
-    // Overwrite the compute unit limit instruction with the actual units consumed
-    let compute_unit_limit = u32::try_from(units_consumed)?;
-    transaction.message.instructions[compute_unit_limit_ix_index].data =
-        ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit).data;
-
-    Ok(UpdateComputeUnitLimitResult::UpdatedInstructionIndex(
-        compute_unit_limit_ix_index,
-    ))
-}
-
 #[allow(clippy::too_many_arguments)]
 fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
@@ -2927,24 +2862,6 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
     eprintln!("[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{divider}");
-}
-
-fn set_compute_budget_ixs_if_needed(ixs: &mut Vec<Instruction>, compute_unit_price: Option<u64>) {
-    let Some(compute_unit_price) = compute_unit_price else {
-        return;
-    };
-
-    // Default to the max compute unit limit because later transactions will be
-    // simulated to get the exact compute units consumed.
-    ixs.insert(
-        0,
-        ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-    );
-
-    ixs.insert(
-        0,
-        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-    );
 }
 
 #[cfg(test)]
