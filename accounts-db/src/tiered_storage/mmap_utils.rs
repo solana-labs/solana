@@ -24,7 +24,7 @@ pub fn get_pod<T: bytemuck::AnyBitPattern>(mmap: &Mmap, offset: usize) -> IoResu
 /// and bytemuck's Pod and AnyBitPattern for more information.
 pub unsafe fn get_type<T>(mmap: &Mmap, offset: usize) -> IoResult<(&T, usize)> {
     let (data, next) = get_slice(mmap, offset, std::mem::size_of::<T>())?;
-    let ptr = data.as_ptr() as *const T;
+    let ptr = data.as_ptr().cast();
     debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
     // SAFETY: The caller ensures it is safe to cast bytes to T,
     // we ensure the size is safe by querying T directly,

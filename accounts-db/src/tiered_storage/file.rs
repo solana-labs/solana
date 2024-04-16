@@ -6,6 +6,7 @@ use {
         io::{BufWriter, Read, Result as IoResult, Seek, SeekFrom, Write},
         mem,
         path::Path,
+        ptr,
     },
 };
 
@@ -83,7 +84,7 @@ impl TieredReadableFile {
     /// Refer to the Safety sections in std::slice::from_raw_parts()
     /// and bytemuck's Pod and AnyBitPattern for more information.
     pub unsafe fn read_type<T>(&self, value: &mut T) -> IoResult<()> {
-        let ptr = value as *mut _ as *mut u8;
+        let ptr = ptr::from_mut(value).cast();
         // SAFETY: The caller ensures it is safe to cast bytes to T,
         // we ensure the size is safe by querying T directly,
         // and Rust ensures ptr is aligned.
@@ -136,7 +137,7 @@ impl TieredWritableFile {
     /// Refer to the Safety sections in std::slice::from_raw_parts()
     /// and bytemuck's Pod and NoUninit for more information.
     pub unsafe fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
-        let ptr = value as *const _ as *const u8;
+        let ptr = ptr::from_ref(value).cast();
         let bytes = unsafe { std::slice::from_raw_parts(ptr, mem::size_of::<T>()) };
         self.write_bytes(bytes)
     }

@@ -5,7 +5,7 @@ use {
     crate::tiered_storage::{footer::AccountBlockFormat, meta::AccountMetaOptionalFields},
     std::{
         io::{Cursor, Read, Result as IoResult, Write},
-        mem,
+        mem, ptr,
     },
 };
 
@@ -74,7 +74,7 @@ impl ByteBlockWriter {
     /// and bytemuck's Pod and NoUninit for more information.
     pub unsafe fn write_type<T>(&mut self, value: &T) -> IoResult<usize> {
         let size = mem::size_of::<T>();
-        let ptr = value as *const _ as *const u8;
+        let ptr = ptr::from_ref(value).cast();
         // SAFETY: The caller ensures that `value` contains no uninitialized bytes,
         // we ensure the size is safe by querying T directly,
         // and Rust ensures all values are at least byte-aligned.
@@ -158,7 +158,7 @@ pub unsafe fn read_type<T>(byte_block: &[u8], offset: usize) -> Option<&T> {
     if overflow || next > byte_block.len() {
         return None;
     }
-    let ptr = byte_block[offset..].as_ptr() as *const T;
+    let ptr = byte_block[offset..].as_ptr().cast();
     debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
     // SAFETY: The caller ensures it is safe to cast bytes to T,
     // we ensure the size is safe by querying T directly,
@@ -195,7 +195,7 @@ mod tests {
         let (next, overflow) = offset.overflowing_add(size);
         assert!(!overflow && next <= buffer.len());
         let data = &buffer[offset..next];
-        let ptr = data.as_ptr() as *const T;
+        let ptr = data.as_ptr().cast();
 
         (unsafe { std::ptr::read_unaligned(ptr) }, next)
     }
