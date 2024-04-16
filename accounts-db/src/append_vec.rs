@@ -753,30 +753,22 @@ impl AppendVec {
                 break;
             }
             accounts.get(i, |(account, pubkey, hash)| {
-                let account_meta = account
-                    .map(|account| AccountMeta {
-                        lamports: account.lamports(),
-                        owner: *account.owner(),
-                        rent_epoch: account.rent_epoch(),
-                        executable: account.executable(),
-                    })
-                    .unwrap_or_default();
+                let account_meta = AccountMeta {
+                    lamports: account.lamports(),
+                    owner: *account.owner(),
+                    rent_epoch: account.rent_epoch(),
+                    executable: account.executable(),
+                };
 
                 let stored_meta = StoredMeta {
                     pubkey: *pubkey,
-                    data_len: account
-                        .map(|account| account.data().len())
-                        .unwrap_or_default() as u64,
+                    data_len: account.data().len() as u64,
                     write_version_obsolete: 0,
                 };
                 let meta_ptr = &stored_meta as *const StoredMeta;
                 let account_meta_ptr = &account_meta as *const AccountMeta;
                 let data_len = stored_meta.data_len as usize;
-                let data_ptr = account
-                    .as_ref()
-                    .map(|account| account.data())
-                    .unwrap_or_default()
-                    .as_ptr();
+                let data_ptr = account.data().as_ptr();
                 let hash_ptr = bytemuck::bytes_of(hash).as_ptr();
                 let ptrs = [
                     (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
@@ -983,7 +975,7 @@ pub mod tests {
         let accounts2 = (slot, &accounts[..]);
         let storable = StorableAccountsWithHashes::new_with_hashes(&accounts2, hashes.clone());
         storable.account(0, |get_account| {
-            assert!(get_account.is_none());
+            assert!(accounts_equal(&get_account, &AccountSharedData::default()));
         });
 
         // non-zero lamports, data should be correct
@@ -998,7 +990,7 @@ pub mod tests {
         let accounts2 = (slot, &accounts[..]);
         let storable = StorableAccountsWithHashes::new_with_hashes(&accounts2, hashes);
         storable.account(0, |get_account| {
-            assert!(accounts_equal(&account, &get_account.unwrap()));
+            assert!(accounts_equal(&account, &get_account));
         });
     }
 

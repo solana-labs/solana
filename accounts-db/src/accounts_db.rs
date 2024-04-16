@@ -5989,9 +5989,7 @@ impl AccountsDb {
 
                 // See if an account overflows the append vecs in the slot.
                 accounts_and_meta_to_store.account(infos.len(), |account| {
-                    let data_len = account
-                        .map(|account| account.data().len())
-                        .unwrap_or_default();
+                    let data_len = account.data().len();
                     let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                     if !self.has_space_available(slot, data_len) {
                         info!(
@@ -6015,11 +6013,7 @@ impl AccountsDb {
 
                 infos.push(AccountInfo::new(
                     StorageLocation::AppendVec(store_id, stored_account_info.offset),
-                    accounts_and_meta_to_store.account(i, |account| {
-                        account
-                            .map(|account| account.lamports())
-                            .unwrap_or_default()
-                    }),
+                    accounts_and_meta_to_store.account(i, |account| account.lamports()),
                 ));
             }
             // restore the state to available
@@ -6399,9 +6393,7 @@ impl AccountsDb {
             .map(|(i, txn)| {
                 let mut account_info = AccountInfo::default();
                 accounts_and_meta_to_store.account_default_if_zero_lamport(i, |account| {
-                    let account = account
-                        .map(|account| account.to_account_shared_data())
-                        .unwrap_or_default();
+                    let account = account.to_account_shared_data();
                     let pubkey = accounts_and_meta_to_store.pubkey(i);
                     account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
 

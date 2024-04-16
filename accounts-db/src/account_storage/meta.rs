@@ -64,7 +64,7 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
     pub fn get<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut((Option<AccountForStorage>, &Pubkey, &AccountHash)) -> Ret,
+        mut callback: impl FnMut((AccountForStorage, &Pubkey, &AccountHash)) -> Ret,
     ) -> Ret {
         let pubkey = self.accounts.pubkey(index);
         let hash = if self.accounts.has_hash() {
@@ -83,7 +83,7 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
     pub fn account<Ret>(
         &self,
         index: usize,
-        callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
+        callback: impl FnMut(AccountForStorage<'a>) -> Ret,
     ) -> Ret {
         self.accounts
             .account_default_if_zero_lamport(index, callback)

@@ -75,6 +75,12 @@ impl<'a> ReadableAccount for AccountForStorage<'a> {
     }
 }
 
+lazy_static! {
+    static ref DEFAULT_ACCOUNT_SHARED_DATA: AccountSharedData = AccountSharedData::default();
+    pub static ref DEFAULT_ACCOUNT: AccountForStorage<'static> =
+        AccountForStorage::AccountSharedData(&DEFAULT_ACCOUNT_SHARED_DATA);
+}
+
 /// abstract access to pubkey, account, slot, target_slot of either:
 /// a. (slot, &[&Pubkey, &ReadableAccount])
 /// b. (slot, &[&Pubkey, &ReadableAccount, Slot]) (we will use this later)
@@ -90,10 +96,14 @@ pub trait StorableAccounts<'a>: Sync {
     fn account_default_if_zero_lamport<Ret>(
         &self,
         index: usize,
-        mut callback: impl FnMut(Option<AccountForStorage<'a>>) -> Ret,
+        mut callback: impl FnMut(AccountForStorage<'a>) -> Ret,
     ) -> Ret {
         self.account(index, |account| {
-            callback((!account.is_zero_lamport()).then_some(account))
+            callback(if account.lamports() != 0 {
+                account
+            } else {
+                *DEFAULT_ACCOUNT
+            })
         })
     }
     // current slot for account at 'index'

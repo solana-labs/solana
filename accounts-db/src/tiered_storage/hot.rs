@@ -16,7 +16,7 @@ use {
                 AccountAddressRange, AccountMetaFlags, AccountMetaOptionalFields, TieredAccountMeta,
             },
             mmap_utils::{get_pod, get_slice},
-            owners::{OwnerOffset, OwnersBlockFormat, OwnersTable, OWNER_NO_OWNER},
+            owners::{OwnerOffset, OwnersBlockFormat, OwnersTable},
             StorableAccounts, StorableAccountsWithHashes, TieredStorageError, TieredStorageFormat,
             TieredStorageResult,
         },
@@ -756,20 +756,17 @@ impl HotStorageWriter {
 
                 // Obtain necessary fields from the account, or default fields
                 // for a zero-lamport account in the None case.
-                let (lamports, owner, data, executable, rent_epoch) = account
-                    .as_ref()
-                    .map(|acc| {
-                        (
-                            acc.lamports(),
-                            acc.owner(),
-                            acc.data(),
-                            acc.executable(),
-                            // only persist rent_epoch for those rent-paying accounts
-                            (acc.rent_epoch() != RENT_EXEMPT_RENT_EPOCH)
-                                .then_some(acc.rent_epoch()),
-                        )
-                    })
-                    .unwrap_or((0, &OWNER_NO_OWNER, &[], false, None));
+                let (lamports, owner, data, executable, rent_epoch) = {
+                    (
+                        account.lamports(),
+                        account.owner(),
+                        account.data(),
+                        account.executable(),
+                        // only persist rent_epoch for those rent-paying accounts
+                        (account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH)
+                            .then_some(account.rent_epoch()),
+                    )
+                };
                 let owner_offset = owners_table.insert(owner);
                 let stored_size =
                     self.write_account(lamports, owner_offset, data, executable, rent_epoch)?;
@@ -1565,9 +1562,7 @@ mod tests {
             storable_accounts.get(i, |(account, address, _account_hash)| {
                 verify_test_account(
                     &stored_account_meta,
-                    &account
-                        .map(|account| account.to_account_shared_data())
-                        .unwrap_or_default(),
+                    &account.to_account_shared_data(),
                     address,
                 );
             });
@@ -1590,9 +1585,7 @@ mod tests {
             storable_accounts.get(stored_info.offset, |(account, address, _account_hash)| {
                 verify_test_account(
                     &stored_account_meta,
-                    &account
-                        .map(|account| account.to_account_shared_data())
-                        .unwrap_or_default(),
+                    &account.to_account_shared_data(),
                     address,
                 );
             });
@@ -1604,13 +1597,7 @@ mod tests {
         // first, we verify everything
         for (i, stored_meta) in accounts.iter().enumerate() {
             storable_accounts.get(i, |(account, address, _account_hash)| {
-                verify_test_account(
-                    stored_meta,
-                    &account
-                        .map(|account| account.to_account_shared_data())
-                        .unwrap_or_default(),
-                    address,
-                );
+                verify_test_account(stored_meta, &account.to_account_shared_data(), address);
             });
         }
 
