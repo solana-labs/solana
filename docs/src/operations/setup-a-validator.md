@@ -384,7 +384,7 @@ su - sol
 ## Install The Solana CLI on Remote Machine
 
 Your remote machine will need the Solana cli installed to run the validator
-software. Refer again to
+software with the `sol` user. Refer again to
 [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) or
 [build from source](../cli/install.md#build-from-source). It is best for
 operators to build from source rather than using the pre built binaries.
@@ -409,9 +409,10 @@ nano /home/sol/bin/validator.sh
 Copy and paste the following contents into `validator.sh` then save the file:
 
 ```
+#!/bin/bash
 exec solana-validator \
-    --identity validator-keypair.json \
-    --vote-account vote-account-keypair.json \
+    --identity /home/sol/validator-keypair.json \
+    --vote-account /home/sol/vote-account-keypair.json \
     --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
     --known-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
     --known-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
@@ -419,6 +420,7 @@ exec solana-validator \
     --only-known-rpc \
     --log /home/sol/solana-validator.log \
     --ledger /mnt/ledger \
+    --accounts /mnt/accounts \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8020 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
@@ -508,7 +510,7 @@ through the validator log output.
 
 ### Solana Validators
 
-After you have verified that your validator is in gossip, you can verify that
+After you have verified that your validator is in gossip, you need stake some SOL to your validor. Then you can verify that
 your validator has joined the network using the `solana validators` command. The
 command lists all validators in the network, but like before, we can `grep` the
 output for the validator we care about:
