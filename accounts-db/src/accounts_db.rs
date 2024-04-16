@@ -15157,9 +15157,7 @@ pub mod tests {
         assert!(!accounts.is_candidate_for_shrink(&entry, false));
     }
 
-    #[test]
-    fn test_calculate_storage_count_and_alive_bytes() {
-        let accounts = AccountsDb::new_single_for_tests();
+    define_accounts_db_test!(test_calculate_storage_count_and_alive_bytes, |accounts| {
         accounts.accounts_index.set_startup(Startup::Startup);
         let shared_key = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
@@ -15188,74 +15186,97 @@ pub mod tests {
         );
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
+            let expected_stored_size =
+                if accounts.accounts_file_provider == AccountsFileProvider::HotStorage {
+                    33
+                } else {
+                    144
+                };
             assert_eq!(
                 (entry.key(), entry.value().count, entry.value().stored_size),
-                (&0, 1, 144)
+                (&0, 1, expected_stored_size)
             );
         }
         accounts.accounts_index.set_startup(Startup::Normal);
-    }
+    });
 
-    #[test]
-    fn test_calculate_storage_count_and_alive_bytes_0_accounts() {
-        let accounts = AccountsDb::new_single_for_tests();
-        // empty store
-        let storage = accounts.create_and_insert_store(0, 1, "test");
-        let storage_info = StorageSizeAndCountMap::default();
-        accounts.generate_index_for_slot(&storage, 0, 0, &RentCollector::default(), &storage_info);
-        assert!(storage_info.is_empty());
-    }
+    define_accounts_db_test!(
+        test_calculate_storage_count_and_alive_bytes_0_accounts,
+        |accounts| {
+            // empty store
+            let storage = accounts.create_and_insert_store(0, 1, "test");
+            let storage_info = StorageSizeAndCountMap::default();
+            accounts.generate_index_for_slot(
+                &storage,
+                0,
+                0,
+                &RentCollector::default(),
+                &storage_info,
+            );
+            assert!(storage_info.is_empty());
+        }
+    );
 
-    #[test]
-    fn test_calculate_storage_count_and_alive_bytes_2_accounts() {
-        let accounts = AccountsDb::new_single_for_tests();
-        let keys = [
-            solana_sdk::pubkey::Pubkey::from([0; 32]),
-            solana_sdk::pubkey::Pubkey::from([255; 32]),
-        ];
-        accounts.accounts_index.set_startup(Startup::Startup);
+    define_accounts_db_test!(
+        test_calculate_storage_count_and_alive_bytes_2_accounts,
+        |accounts| {
+            let keys = [
+                solana_sdk::pubkey::Pubkey::from([0; 32]),
+                solana_sdk::pubkey::Pubkey::from([255; 32]),
+            ];
+            accounts.accounts_index.set_startup(Startup::Startup);
 
-        // make sure accounts are in 2 different bins
-        assert!(
-            (accounts.accounts_index.bins() == 1)
-                ^ (accounts
-                    .accounts_index
-                    .bin_calculator
-                    .bin_from_pubkey(&keys[0])
-                    != accounts
+            // make sure accounts are in 2 different bins
+            assert!(
+                (accounts.accounts_index.bins() == 1)
+                    ^ (accounts
                         .accounts_index
                         .bin_calculator
-                        .bin_from_pubkey(&keys[1]))
-        );
-        let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
-        let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
-        let slot0 = 0;
-        let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![AccountHash(Hash::default()); 2];
-        storage.accounts.append_accounts(
-            &StorableAccountsWithHashes::new_with_hashes(
-                &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
-                hashes,
-            ),
-            0,
-        );
-
-        let storage_info = StorageSizeAndCountMap::default();
-        accounts.generate_index_for_slot(&storage, 0, 0, &RentCollector::default(), &storage_info);
-        assert_eq!(storage_info.len(), 1);
-        for entry in storage_info.iter() {
-            assert_eq!(
-                (entry.key(), entry.value().count, entry.value().stored_size),
-                (&0, 2, 1280)
+                        .bin_from_pubkey(&keys[0])
+                        != accounts
+                            .accounts_index
+                            .bin_calculator
+                            .bin_from_pubkey(&keys[1]))
             );
+            let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
+            let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
+            let slot0 = 0;
+            let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
+            let hashes = vec![AccountHash(Hash::default()); 2];
+            storage.accounts.append_accounts(
+                &StorableAccountsWithHashes::new_with_hashes(
+                    &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
+                    hashes,
+                ),
+                0,
+            );
+
+            let storage_info = StorageSizeAndCountMap::default();
+            accounts.generate_index_for_slot(
+                &storage,
+                0,
+                0,
+                &RentCollector::default(),
+                &storage_info,
+            );
+            assert_eq!(storage_info.len(), 1);
+            for entry in storage_info.iter() {
+                let expected_stored_size =
+                    if accounts.accounts_file_provider == AccountsFileProvider::HotStorage {
+                        1065
+                    } else {
+                        1280
+                    };
+                assert_eq!(
+                    (entry.key(), entry.value().count, entry.value().stored_size),
+                    (&0, 2, expected_stored_size)
+                );
+            }
+            accounts.accounts_index.set_startup(Startup::Normal);
         }
-        accounts.accounts_index.set_startup(Startup::Normal);
-    }
+    );
 
-    #[test]
-    fn test_set_storage_count_and_alive_bytes() {
-        let accounts = AccountsDb::new_single_for_tests();
-
+    define_accounts_db_test!(test_set_storage_count_and_alive_bytes, |accounts| {
         // make sure we have storage 0
         let shared_key = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
@@ -15295,7 +15316,7 @@ pub mod tests {
             assert_eq!(store.count_and_status.read().0, count);
             assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
         }
-    }
+    });
 
     define_accounts_db_test!(test_purge_alive_unrooted_slots_after_clean, |accounts| {
         // Key shared between rooted and nonrooted slot
