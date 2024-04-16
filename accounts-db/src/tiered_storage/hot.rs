@@ -747,12 +747,12 @@ impl HotStorageWriter {
         let total_input_accounts = len - skip;
         let mut stored_infos = Vec::with_capacity(total_input_accounts);
         for i in skip..len {
-            accounts.get::<TieredStorageResult<()>>(i, |(account, address, _account_hash)| {
+            accounts.get::<TieredStorageResult<()>>(i, |account, _account_hash| {
                 let index_entry = AccountIndexWriterEntry {
-                    address: *address,
+                    address: *account.pubkey(),
                     offset: HotAccountOffset::new(cursor)?,
                 };
-                address_range.update(address);
+                address_range.update(account.pubkey());
 
                 // Obtain necessary fields from the account, or default fields
                 // for a zero-lamport account in the None case.
@@ -1559,11 +1559,11 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            storable_accounts.get(i, |(account, address, _account_hash)| {
+            storable_accounts.get(i, |account, _account_hash| {
                 verify_test_account(
                     &stored_account_meta,
                     &account.to_account_shared_data(),
-                    address,
+                    account.pubkey(),
                 );
             });
 
@@ -1582,11 +1582,11 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            storable_accounts.get(stored_info.offset, |(account, address, _account_hash)| {
+            storable_accounts.get(stored_info.offset, |account, _account_hash| {
                 verify_test_account(
                     &stored_account_meta,
                     &account.to_account_shared_data(),
-                    address,
+                    account.pubkey(),
                 );
             });
         }
@@ -1596,8 +1596,12 @@ mod tests {
 
         // first, we verify everything
         for (i, stored_meta) in accounts.iter().enumerate() {
-            storable_accounts.get(i, |(account, address, _account_hash)| {
-                verify_test_account(stored_meta, &account.to_account_shared_data(), address);
+            storable_accounts.get(i, |account, _account_hash| {
+                verify_test_account(
+                    stored_meta,
+                    &account.to_account_shared_data(),
+                    account.pubkey(),
+                );
             });
         }
 

@@ -6393,19 +6393,20 @@ impl AccountsDb {
             .map(|(i, txn)| {
                 let mut account_info = AccountInfo::default();
                 accounts_and_meta_to_store.account_default_if_zero_lamport(i, |account| {
-                    let account = account.to_account_shared_data();
-                    let pubkey = accounts_and_meta_to_store.pubkey(i);
+                    let account_shared_data = account.to_account_shared_data();
+                    let pubkey = account.pubkey();
                     account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
 
                     self.notify_account_at_accounts_update(
                         slot,
-                        &account,
+                        &account_shared_data,
                         txn,
                         pubkey,
                         &mut write_version_producer,
                     );
 
-                    let cached_account = self.accounts_cache.store(slot, pubkey, account);
+                    let cached_account =
+                        self.accounts_cache.store(slot, pubkey, account_shared_data);
                     // hash this account in the bg
                     match &self.sender_bg_hasher {
                         Some(ref sender) => {
@@ -6433,11 +6434,12 @@ impl AccountsDb {
             .can_slot_be_in_cache(accounts.target_slot())
         {
             (0..accounts.len()).for_each(|index| {
-                let pubkey = accounts.pubkey(index);
-                // based on the patterns of how a validator writes accounts, it is almost always the case that there is no read only cache entry
-                // for this pubkey and slot. So, we can give that hint to the `remove` for performance.
-                self.read_only_accounts_cache
-                    .remove_assume_not_present(*pubkey);
+                accounts.account(index, |account| {
+                    // based on the patterns of how a validator writes accounts, it is almost always the case that there is no read only cache entry
+                    // for this pubkey and slot. So, we can give that hint to the `remove` for performance.
+                    self.read_only_accounts_cache
+                        .remove_assume_not_present(*account.pubkey());
+                })
             });
         }
         calc_stored_meta_time.stop();
@@ -6478,9 +6480,8 @@ impl AccountsDb {
                             let len = accounts.len();
                             let mut hashes = Vec::with_capacity(len);
                             for index in 0..accounts.len() {
-                                let pubkey = accounts.pubkey(index);
                                 accounts.account(index, |account| {
-                                    let hash = Self::hash_account(&account, pubkey);
+                                    let hash = Self::hash_account(&account, account.pubkey());
                                     hashes.push(hash);
                                 });
                             }
@@ -7780,13 +7781,12 @@ impl AccountsDb {
 
             (start..end).for_each(|i| {
                 let info = infos[i];
-                let pubkey = accounts.pubkey(i);
                 accounts.account(i, |account| {
                     let old_slot = accounts.slot(i);
                     self.accounts_index.upsert(
                         target_slot,
                         old_slot,
-                        pubkey,
+                        account.pubkey(),
                         &account,
                         &self.account_indexes,
                         info,
@@ -9631,9 +9631,6 @@ pub mod tests {
     where
         AccountForStorage<'a>: From<&'a T>,
     {
-        fn pubkey(&self, index: usize) -> &Pubkey {
-            self.1[index].0
-        }
         fn account<Ret>(
             &self,
             index: usize,

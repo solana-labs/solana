@@ -754,7 +754,7 @@ impl AppendVec {
             if stop {
                 break;
             }
-            accounts.get(i, |(account, pubkey, hash)| {
+            accounts.get(i, |account, hash| {
                 let account_meta = AccountMeta {
                     lamports: account.lamports(),
                     owner: *account.owner(),
@@ -763,7 +763,7 @@ impl AppendVec {
                 };
 
                 let stored_meta = StoredMeta {
-                    pubkey: *pubkey,
+                    pubkey: *account.pubkey(),
                     data_len: account.data().len() as u64,
                     write_version_obsolete: 0,
                 };
@@ -954,9 +954,9 @@ pub mod tests {
         assert_eq!(storable.len(), pubkeys.len());
         assert!(!storable.is_empty());
         (0..2).for_each(|i| {
-            storable.get(i, |(_, pubkey, hash)| {
+            storable.get(i, |account, hash| {
                 assert_eq!(hash, &hashes[i]);
-                assert_eq!(pubkey, &pubkeys[i]);
+                assert_eq!(account.pubkey(), &pubkeys[i]);
             });
         });
     }

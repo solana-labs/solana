@@ -5064,7 +5064,7 @@ impl Bank {
         (0..accounts.len()).for_each(|i| {
             accounts.account(i, |account| {
                 self.stakes_cache.check_and_store(
-                    accounts.pubkey(i),
+                    account.pubkey(),
                     &account,
                     new_warmup_cooldown_rate_epoch,
                 )

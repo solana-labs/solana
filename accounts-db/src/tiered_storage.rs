@@ -355,8 +355,8 @@ mod tests {
 
         let mut expected_accounts_map = HashMap::new();
         for i in 0..num_accounts {
-            storable_accounts.get(i, |(account, address, _account_hash)| {
-                expected_accounts_map.insert(*address, account.to_account_shared_data());
+            storable_accounts.get(i, |account, _account_hash| {
+                expected_accounts_map.insert(*account.pubkey(), account.to_account_shared_data());
             });
         }
 

@@ -22,9 +22,6 @@ impl StakeReward {
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
 impl<'a> StorableAccounts<'a> for (Slot, &'a [StakeReward]) {
-    fn pubkey(&self, index: usize) -> &Pubkey {
-        &self.1[index].stake_pubkey
-    }
     fn account<Ret>(
         &self,
         index: usize,
