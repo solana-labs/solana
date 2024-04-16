@@ -565,6 +565,7 @@ pub mod config {
     since = "2.0.0",
     note = "Please use `solana_sdk::reserved_account_keys::ReservedAccountKeys` instead"
 )]
+#[allow(deprecated)]
 pub mod sdk_ids {
     use {
         crate::{

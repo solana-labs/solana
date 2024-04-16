@@ -11,6 +11,8 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
+#[allow(deprecated)]
+pub use builtins::{BUILTIN_PROGRAMS_KEYS, MAYBE_BUILTIN_KEY_OR_SYSVAR};
 use {
     crate::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -21,41 +23,48 @@ use {
         sanitize::{Sanitize, SanitizeError},
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
-    lazy_static::lazy_static,
     std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
 
-lazy_static! {
-    // This will be deprecated and so this list shouldn't be modified
-    pub static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
-        let parse = |s| Pubkey::from_str(s).unwrap();
-        [
-            parse("Config1111111111111111111111111111111111111"),
-            parse("Feature111111111111111111111111111111111111"),
-            parse("NativeLoader1111111111111111111111111111111"),
-            parse("Stake11111111111111111111111111111111111111"),
-            parse("StakeConfig11111111111111111111111111111111"),
-            parse("Vote111111111111111111111111111111111111111"),
-            system_program::id(),
-            bpf_loader::id(),
-            bpf_loader_deprecated::id(),
-            bpf_loader_upgradeable::id(),
-        ]
-    };
-}
+#[deprecated(
+    since = "2.0.0",
+    note = "please use `solana_sdk::reserved_account_keys::ReservedAccountKeys` instead"
+)]
+#[allow(deprecated)]
+mod builtins {
+    use {super::*, lazy_static::lazy_static};
 
-lazy_static! {
-    // Each element of a key is a u8. We use key[0] as an index into this table of 256 boolean
-    // elements, to store whether or not the first element of any key is present in the static
-    // lists of built-in-program keys or system ids. By using this lookup table, we can very
-    // quickly determine that a key under consideration cannot be in either of these lists (if
-    // the value is "false"), or might be in one of these lists (if the value is "true")
-    pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
-        let mut temp_table: [bool; 256] = [false; 256];
-        BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
-        sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
-        temp_table
-    };
+    lazy_static! {
+        pub static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
+            let parse = |s| Pubkey::from_str(s).unwrap();
+            [
+                parse("Config1111111111111111111111111111111111111"),
+                parse("Feature111111111111111111111111111111111111"),
+                parse("NativeLoader1111111111111111111111111111111"),
+                parse("Stake11111111111111111111111111111111111111"),
+                parse("StakeConfig11111111111111111111111111111111"),
+                parse("Vote111111111111111111111111111111111111111"),
+                system_program::id(),
+                bpf_loader::id(),
+                bpf_loader_deprecated::id(),
+                bpf_loader_upgradeable::id(),
+            ]
+        };
+    }
+
+    lazy_static! {
+        // Each element of a key is a u8. We use key[0] as an index into this table of 256 boolean
+        // elements, to store whether or not the first element of any key is present in the static
+        // lists of built-in-program keys or system ids. By using this lookup table, we can very
+        // quickly determine that a key under consideration cannot be in either of these lists (if
+        // the value is "false"), or might be in one of these lists (if the value is "true")
+        pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
+            let mut temp_table: [bool; 256] = [false; 256];
+            BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+            sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+            temp_table
+        };
+    }
 }
 
 #[deprecated(

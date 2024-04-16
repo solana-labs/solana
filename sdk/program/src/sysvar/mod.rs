@@ -81,10 +81,9 @@
 //!
 //! [sysvardoc]: https://docs.solanalabs.com/runtime/sysvars
 
-use {
-    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
-    lazy_static::lazy_static,
-};
+use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+#[allow(deprecated)]
+pub use sysvar_ids::ALL_IDS;
 
 pub mod clock;
 pub mod epoch_rewards;
@@ -99,22 +98,29 @@ pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake_history;
 
-lazy_static! {
-    // This will be deprecated and so this list shouldn't be modified
-    pub static ref ALL_IDS: Vec<Pubkey> = vec![
-        clock::id(),
-        epoch_schedule::id(),
-        #[allow(deprecated)]
-        fees::id(),
-        #[allow(deprecated)]
-        recent_blockhashes::id(),
-        rent::id(),
-        rewards::id(),
-        slot_hashes::id(),
-        slot_history::id(),
-        stake_history::id(),
-        instructions::id(),
-    ];
+#[deprecated(
+    since = "2.0.0",
+    note = "please use `solana_sdk::reserved_account_keys::ReservedAccountKeys` instead"
+)]
+mod sysvar_ids {
+    use {super::*, lazy_static::lazy_static};
+    lazy_static! {
+        // This will be deprecated and so this list shouldn't be modified
+        pub static ref ALL_IDS: Vec<Pubkey> = vec![
+            clock::id(),
+            epoch_schedule::id(),
+            #[allow(deprecated)]
+            fees::id(),
+            #[allow(deprecated)]
+            recent_blockhashes::id(),
+            rent::id(),
+            rewards::id(),
+            slot_hashes::id(),
+            slot_history::id(),
+            stake_history::id(),
+            instructions::id(),
+        ];
+    }
 }
 
 /// Returns `true` of the given `Pubkey` is a sysvar account.
@@ -122,6 +128,7 @@ lazy_static! {
     since = "2.0.0",
     note = "please check the account's owner or use solana_sdk::reserved_account_keys::ReservedAccountKeys instead"
 )]
+#[allow(deprecated)]
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
 }
