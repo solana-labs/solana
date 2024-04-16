@@ -13,6 +13,7 @@ use {
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         epoch_schedule::EpochSchedule,
         feature_set::{self, FeatureSet},
+        genesis_config::ClusterType,
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
     },
@@ -70,6 +71,10 @@ impl ShredFetchStage {
             )
         };
         let mut stats = ShredFetchStats::default();
+        let cluster_type = {
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            root_bank.cluster_type()
+        };
 
         for mut packet_batch in recvr {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
@@ -105,12 +110,13 @@ impl ShredFetchStage {
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
             let enable_chained_merkle_shreds = |shred_slot| {
-                check_feature_activation(
-                    &feature_set::enable_chained_merkle_shreds::id(),
-                    shred_slot,
-                    &feature_set,
-                    &epoch_schedule,
-                )
+                cluster_type == ClusterType::Development
+                    || check_feature_activation(
+                        &feature_set::enable_chained_merkle_shreds::id(),
+                        shred_slot,
+                        &feature_set,
+                        &epoch_schedule,
+                    )
             };
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {

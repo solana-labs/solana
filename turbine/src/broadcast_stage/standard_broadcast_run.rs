@@ -527,8 +527,8 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
-fn should_chain_merkle_shreds(_slot: Slot, _cluster_type: ClusterType) -> bool {
-    false
+fn should_chain_merkle_shreds(_slot: Slot, cluster_type: ClusterType) -> bool {
+    cluster_type == ClusterType::Development
 }
 
 #[cfg(test)]

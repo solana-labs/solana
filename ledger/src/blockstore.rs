@@ -4998,7 +4998,7 @@ pub mod tests {
             blockstore_options::{BlockstoreRocksFifoOptions, ShredStorageType},
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
-            shred::{max_ticks_per_n_shreds, ShredFlags},
+            shred::{max_ticks_per_n_shreds, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
         },
         assert_matches::assert_matches,
         bincode::serialize,
@@ -10629,7 +10629,7 @@ pub mod tests {
         let larger_last_shred_index = 8;
 
         let setup_test_shreds = |slot: Slot| -> Vec<Shred> {
-            let num_entries = max_ticks_per_n_shreds(num_shreds, None);
+            let num_entries = max_ticks_per_n_shreds(num_shreds, Some(LEGACY_SHRED_DATA_CAPACITY));
             let (mut shreds, _) =
                 make_slot_entries(slot, 0, num_entries, /*merkle_variant:*/ false);
             shreds[smaller_last_shred_index].set_last_in_slot();
