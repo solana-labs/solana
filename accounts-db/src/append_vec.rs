@@ -30,6 +30,7 @@ use {
         io::{Seek, SeekFrom, Write},
         mem,
         path::{Path, PathBuf},
+        ptr,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
@@ -173,8 +174,9 @@ impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
         // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
         // Yes, this really happens; see test_new_from_file_crafted_executable
         let executable_bool: &bool = &self.account_meta.executable;
+        let executable_bool_ptr = ptr::from_ref(executable_bool);
         // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+        let executable_byte: &u8 = unsafe { &*(executable_bool_ptr.cast()) };
         executable_byte
     }
 }
@@ -476,8 +478,8 @@ impl AppendVec {
         //Mutex<()> guarantees exclusive write access to the memory occupied in
         //the range.
         unsafe {
-            let dst = data.as_ptr() as *mut u8;
-            std::ptr::copy(src, dst, len);
+            let dst = data.as_ptr() as *mut _;
+            ptr::copy(src, dst, len);
         };
         *offset = pos + len;
     }
@@ -510,7 +512,7 @@ impl AppendVec {
     /// that falls on a 64-byte boundary.
     fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
-        let ptr: *const T = data.as_ptr() as *const T;
+        let ptr = data.as_ptr().cast();
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
         //and the lifetime of the &T is tied to self, which holds the underlying memory map
         Some((unsafe { &*ptr }, next))
@@ -858,7 +860,7 @@ pub mod tests {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             unsafe {
                 #[allow(invalid_reference_casting)]
-                std::ptr::write(
+                ptr::write(
                     std::mem::transmute::<*const u64, *mut u64>(&self.meta.data_len),
                     new_data_len,
                 );
@@ -876,7 +878,7 @@ pub mod tests {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
                 #[allow(invalid_reference_casting)]
-                std::ptr::write(
+                ptr::write(
                     std::mem::transmute::<*const bool, *mut u8>(&self.account_meta.executable),
                     new_executable_byte,
                 );
