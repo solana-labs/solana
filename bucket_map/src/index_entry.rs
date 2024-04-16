@@ -468,14 +468,14 @@ impl<T: Copy + PartialEq + 'static> IndexEntryPlaceInBucket<T> {
 
 fn get_from_bytes<T>(item_slice: &[u8]) -> &T {
     debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
-    let item = item_slice.as_ptr() as *const T;
+    let item = item_slice.as_ptr().cast();
     debug_assert!(item as usize % std::mem::align_of::<T>() == 0);
     unsafe { &*item }
 }
 
 fn get_mut_from_bytes<T>(item_slice: &mut [u8]) -> &mut T {
     debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
-    let item = item_slice.as_mut_ptr() as *mut T;
+    let item = item_slice.as_mut_ptr().cast();
     debug_assert!(item as usize % std::mem::align_of::<T>() == 0);
     unsafe { &mut *item }
 }
