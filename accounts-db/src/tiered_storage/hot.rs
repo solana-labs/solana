@@ -526,6 +526,18 @@ impl HotStorageReader {
         Ok(data)
     }
 
+    /// calls `callback` with the account located at the specified index offset.
+    pub fn get_stored_account_meta_callback<'a>(
+        &'a self,
+        index_offset: IndexOffset,
+        mut callback: impl FnMut(StoredAccountMeta<'a>),
+    ) -> TieredStorageResult<()> {
+        if let Some((account, _offset)) = self.get_stored_account_meta(index_offset)? {
+            callback(account)
+        }
+        Ok(())
+    }
+
     /// Returns the account located at the specified index offset.
     pub fn get_stored_account_meta(
         &self,

@@ -85,6 +85,17 @@ impl TieredStorageReader {
         }
     }
 
+    /// calls `callback` with the account located at the specified index offset.
+    pub fn get_stored_account_meta_callback<'a>(
+        &'a self,
+        index_offset: IndexOffset,
+        callback: impl FnMut(StoredAccountMeta<'a>),
+    ) -> TieredStorageResult<()> {
+        match self {
+            Self::Hot(hot) => hot.get_stored_account_meta_callback(index_offset, callback),
+        }
+    }
+
     /// Returns Ok(index_of_matching_owner) if the account owner at
     /// `account_offset` is one of the pubkeys in `owners`.
     ///

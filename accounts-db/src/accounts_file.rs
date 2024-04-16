@@ -136,6 +136,28 @@ impl AccountsFile {
         }
     }
 
+    /// calls `callback` with the account located at the specified index offset.
+    pub fn get_stored_account_meta_callback<'a>(
+        &'a self,
+        offset: usize,
+        callback: impl FnMut(StoredAccountMeta<'a>),
+    ) {
+        match self {
+            Self::AppendVec(av) => av.get_stored_account_meta_callback(offset, callback),
+            // Note: The conversion here is needed as the AccountsDB currently
+            // assumes all offsets are multiple of 8 while TieredStorage uses
+            // IndexOffset that is equivalent to AccountInfo::reduced_offset.
+            Self::TieredStorage(ts) => {
+                if let Some(reader) = ts.reader() {
+                    _ = reader.get_stored_account_meta_callback(
+                        IndexOffset(AccountInfo::get_reduced_offset(offset)),
+                        callback,
+                    );
+                }
+            }
+        }
+    }
+
     /// return an `AccountSharedData` for an account at `offset`, if any.  Otherwise return None.
     pub(crate) fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
         match self {

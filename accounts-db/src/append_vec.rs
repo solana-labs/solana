@@ -540,6 +540,17 @@ impl AppendVec {
         ))
     }
 
+    /// calls `callback` with the account located at the specified index offset.
+    pub fn get_stored_account_meta_callback<'a>(
+        &'a self,
+        offset: usize,
+        mut callback: impl FnMut(StoredAccountMeta<'a>),
+    ) {
+        if let Some((account, _offset)) = self.get_stored_account_meta(offset) {
+            callback(account)
+        }
+    }
+
     /// return an `AccountSharedData` for an account at `offset`.
     /// This fn can efficiently return exactly what is needed by a caller.
     pub(crate) fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
