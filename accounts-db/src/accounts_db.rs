@@ -10215,14 +10215,16 @@ pub mod tests {
     );
 
     #[test]
-    #[should_panic(expected = "MismatchedAccountsHash")]
     fn test_accountsdb_scan_snapshot_stores_check_hash() {
         solana_logger::setup();
         let accounts_db = AccountsDb::new_single_for_tests();
         let (storages, _raw_expected) = sample_storages_and_accounts(&accounts_db);
         let max_slot = storages.iter().map(|storage| storage.slot()).max().unwrap();
 
-        let hash =
+        // bogus_hash is ignored during appendvec store. When we verify hashes
+        // later during scan, the test will recompute the "correct" hash and
+        // should not mismatch.
+        let bogus_hash =
             AccountHash(Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap());
 
         // replace the sample storages, storing bogus hash values so that we trigger the hash mismatch
@@ -10242,7 +10244,7 @@ pub mod tests {
                     .collect::<Vec<_>>();
                 let slice = &accounts[..];
                 let account_data = (slot, slice);
-                let hashes = (0..account_data.len()).map(|_| &hash).collect();
+                let hashes = (0..account_data.len()).map(|_| &bogus_hash).collect();
                 let storable_accounts =
                     StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
                 copied_storage

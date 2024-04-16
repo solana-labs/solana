@@ -4,11 +4,13 @@ use {
     rayon::prelude::*,
     solana_accounts_db::{
         accounts_db::{AccountsDb, LoadHint},
+        accounts_hash::AccountHash,
         ancestors::Ancestors,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
+        hash::Hash,
         pubkey::Pubkey,
         sysvar::epoch_schedule::EpochSchedule,
     },
@@ -128,11 +130,29 @@ fn test_bad_bank_hash() {
         db.store_cached((some_slot, &account_refs[..]), None);
         for pass in 0..2 {
             for (key, account) in &account_refs {
-                assert_eq!(
-                    db.load_account_hash(&ancestors, key, Some(some_slot), LoadHint::Unspecified)
+                if pass == 1 {
+                    assert_eq!(
+                        db.load_account_hash(
+                            &ancestors,
+                            key,
+                            Some(some_slot),
+                            LoadHint::Unspecified
+                        )
                         .unwrap(),
-                    AccountsDb::hash_account(*account, key)
-                );
+                        AccountHash(Hash::default())
+                    );
+                } else {
+                    assert_eq!(
+                        db.load_account_hash(
+                            &ancestors,
+                            key,
+                            Some(some_slot),
+                            LoadHint::Unspecified
+                        )
+                        .unwrap(),
+                        AccountsDb::hash_account(*account, key)
+                    );
+                }
             }
             if pass == 0 {
                 // flush the write cache so we're reading from append vecs on the next iteration

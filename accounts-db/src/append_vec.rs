@@ -20,6 +20,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
+        hash::Hash,
         pubkey::Pubkey,
         stake_history::Epoch,
     },
@@ -752,8 +753,8 @@ impl AppendVec {
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         let _lock = self.append_lock.lock().unwrap();
+        let default_hash: Hash = Hash::default(); // [0_u8; 32];
         let mut offset = self.len();
-
         let len = accounts.accounts.len();
         // Here we have `len - skip` number of accounts.  The +1 extra capacity
         // is for storing the aligned offset of the last entry to that is used
@@ -765,7 +766,7 @@ impl AppendVec {
             if stop {
                 break;
             }
-            accounts.get(i, |account, hash| {
+            accounts.get(i, |account, _hash| {
                 let account_meta = AccountMeta {
                     lamports: account.lamports(),
                     owner: *account.owner(),
@@ -782,7 +783,7 @@ impl AppendVec {
                 let account_meta_ptr = &account_meta as *const AccountMeta;
                 let data_len = stored_meta.data_len as usize;
                 let data_ptr = account.data().as_ptr();
-                let hash_ptr = bytemuck::bytes_of(hash).as_ptr();
+                let hash_ptr = bytemuck::bytes_of(&default_hash).as_ptr();
                 let ptrs = [
                     (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                     (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
