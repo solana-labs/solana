@@ -79,7 +79,9 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                     HotStorageWriter::new(path).unwrap()
                 },
                 |hot_storage| {
-                    let res = hot_storage.write_accounts(&storable_accounts, 0).unwrap();
+                    let res = hot_storage
+                        .write_accounts(storable_accounts.accounts, 0)
+                        .unwrap();
                     let accounts_written_count = res.len();
                     assert_eq!(accounts_written_count, accounts_count);
                 },

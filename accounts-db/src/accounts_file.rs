@@ -277,7 +277,7 @@ impl AccountsFile {
             // assumes all offsets are multiple of 8 while TieredStorage uses
             // IndexOffset that is equivalent to AccountInfo::reduced_offset.
             Self::TieredStorage(ts) => ts
-                .write_accounts(accounts, skip, &HOT_FORMAT)
+                .write_accounts(accounts.accounts, skip, &HOT_FORMAT)
                 .map(|mut infos| {
                     infos.iter_mut().for_each(|info| {
                         info.offset = AccountInfo::reduced_offset_to_offset(info.offset as u32);

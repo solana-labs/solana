@@ -13,11 +13,7 @@ pub mod readable;
 mod test_utils;
 
 use {
-    crate::{
-        account_storage::meta::{StorableAccountsWithHashes, StoredAccountInfo},
-        accounts_hash::AccountHash,
-        storable_accounts::StorableAccounts,
-    },
+    crate::{account_storage::meta::StoredAccountInfo, storable_accounts::StorableAccounts},
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat},
     hot::{HotStorageWriter, HOT_FORMAT},
@@ -25,7 +21,6 @@ use {
     owners::OwnersBlockFormat,
     readable::TieredStorageReader,
     std::{
-        borrow::Borrow,
         fs, io,
         path::{Path, PathBuf},
         sync::{
@@ -110,9 +105,9 @@ impl TieredStorage {
     ///
     /// Note that this function can only be called once per a TieredStorage
     /// instance.  Otherwise, it will trigger panic.
-    pub fn write_accounts<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
+    pub fn write_accounts<'a>(
         &self,
-        accounts: &StorableAccountsWithHashes<'a, 'b, U, V>,
+        accounts: &impl StorableAccounts<'a>,
         skip: usize,
         format: &TieredStorageFormat,
     ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
@@ -180,7 +175,6 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             clock::Slot,
-            hash::Hash,
             pubkey::Pubkey,
             system_instruction::MAX_PERMITTED_DATA_LENGTH,
         },
@@ -206,9 +200,7 @@ mod tests {
     ) {
         let slot_ignored = Slot::MAX;
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
-        let account_data = (slot_ignored, account_refs.as_slice());
-        let storable_accounts =
-            StorableAccountsWithHashes::new_with_hashes(&account_data, Vec::<AccountHash>::new());
+        let storable_accounts = (slot_ignored, account_refs.as_slice());
 
         let result = tiered_storage.write_accounts(&storable_accounts, 0, &HOT_FORMAT);
 
@@ -337,12 +329,7 @@ mod tests {
             .collect();
 
         // Slot information is not used here
-        let account_data = (Slot::MAX, &account_refs[..]);
-        let hashes: Vec<_> = std::iter::repeat_with(|| AccountHash(Hash::new_unique()))
-            .take(account_data_sizes.len())
-            .collect();
-
-        let storable_accounts = StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
+        let storable_accounts = (Slot::MAX, &account_refs[..]);
 
         let temp_dir = tempdir().unwrap();
         let tiered_storage_path = temp_dir.path().join(path_suffix);
@@ -355,7 +342,7 @@ mod tests {
 
         let mut expected_accounts_map = HashMap::new();
         for i in 0..num_accounts {
-            storable_accounts.get(i, |account, _account_hash| {
+            storable_accounts.account_default_if_zero_lamport(i, |account| {
                 expected_accounts_map.insert(*account.pubkey(), account.to_account_shared_data());
             });
         }
