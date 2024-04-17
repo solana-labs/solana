@@ -26,8 +26,7 @@ use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
         account_storage::{
-            meta::{StorableAccountsWithHashes, StoredAccountMeta},
-            AccountStorage, AccountStorageStatus, ShrinkInProgress,
+            meta::StoredAccountMeta, AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::{
@@ -5969,11 +5968,11 @@ impl AccountsDb {
         AccountHash(Hash::new_from_array(hasher.finalize().into()))
     }
 
-    fn write_accounts_to_storage<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
+    fn write_accounts_to_storage<'a>(
         &self,
         slot: Slot,
         storage: &AccountStorageEntry,
-        accounts_and_meta_to_store: &StorableAccountsWithHashes<'a, 'b, U, V>,
+        accounts_and_meta_to_store: &impl StorableAccounts<'a>,
     ) -> Vec<AccountInfo> {
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
         let mut total_append_accounts_us = 0;
@@ -5981,29 +5980,32 @@ impl AccountsDb {
             let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage
                 .accounts
-                .append_accounts(accounts_and_meta_to_store.accounts, infos.len());
+                .append_accounts(accounts_and_meta_to_store, infos.len());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
             if rvs.is_none() {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
-                accounts_and_meta_to_store.account(infos.len(), |account| {
-                    let data_len = account.data().len();
-                    let data_len = (data_len + STORE_META_OVERHEAD) as u64;
-                    if !self.has_space_available(slot, data_len) {
-                        info!(
-                            "write_accounts_to_storage, no space: {}, {}, {}, {}, {}",
-                            storage.accounts.capacity(),
-                            storage.accounts.remaining_bytes(),
-                            data_len,
-                            infos.len(),
-                            accounts_and_meta_to_store.len()
-                        );
-                        let special_store_size = std::cmp::max(data_len * 2, self.file_size);
-                        self.create_and_insert_store(slot, special_store_size, "large create");
-                    }
-                });
+                accounts_and_meta_to_store.account_default_if_zero_lamport(
+                    infos.len(),
+                    |account| {
+                        let data_len = account.data().len();
+                        let data_len = (data_len + STORE_META_OVERHEAD) as u64;
+                        if !self.has_space_available(slot, data_len) {
+                            info!(
+                                "write_accounts_to_storage, no space: {}, {}, {}, {}, {}",
+                                storage.accounts.capacity(),
+                                storage.accounts.remaining_bytes(),
+                                data_len,
+                                infos.len(),
+                                accounts_and_meta_to_store.len()
+                            );
+                            let special_store_size = std::cmp::max(data_len * 2, self.file_size);
+                            self.create_and_insert_store(slot, special_store_size, "large create");
+                        }
+                    },
+                );
                 continue;
             }
 
@@ -6013,7 +6015,8 @@ impl AccountsDb {
 
                 infos.push(AccountInfo::new(
                     StorageLocation::AppendVec(store_id, stored_account_info.offset),
-                    accounts_and_meta_to_store.account(i, |account| account.lamports()),
+                    accounts_and_meta_to_store
+                        .account_default_if_zero_lamport(i, |account| account.lamports()),
                 ));
             }
             // restore the state to available
@@ -6423,7 +6426,7 @@ impl AccountsDb {
     fn store_accounts_to<'a: 'c, 'b, 'c>(
         &self,
         accounts: &'c impl StorableAccounts<'b>,
-        hashes: Option<Vec<impl Borrow<AccountHash>>>,
+        _hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         transactions: Option<&[Option<&'a SanitizedTransaction>]>,
     ) -> Vec<AccountInfo> {
@@ -6460,45 +6463,7 @@ impl AccountsDb {
 
                 self.write_accounts_to_cache(slot, accounts, txn_iter)
             }
-            StoreTo::Storage(storage) => {
-                if accounts.has_hash() {
-                    self.write_accounts_to_storage(
-                        slot,
-                        storage,
-                        &StorableAccountsWithHashes::<'_, '_, _, &AccountHash>::new(accounts),
-                    )
-                } else {
-                    match hashes {
-                        Some(hashes) => self.write_accounts_to_storage(
-                            slot,
-                            storage,
-                            &StorableAccountsWithHashes::new_with_hashes(accounts, hashes),
-                        ),
-                        None => {
-                            // hash any accounts where we were lazy in calculating the hash
-                            let mut hash_time = Measure::start("hash_accounts");
-                            let len = accounts.len();
-                            let mut hashes = Vec::with_capacity(len);
-                            for index in 0..accounts.len() {
-                                accounts.account(index, |account| {
-                                    let hash = Self::hash_account(&account, account.pubkey());
-                                    hashes.push(hash);
-                                });
-                            }
-                            hash_time.stop();
-                            self.stats
-                                .store_hash_accounts
-                                .fetch_add(hash_time.as_us(), Ordering::Relaxed);
-
-                            self.write_accounts_to_storage(
-                                slot,
-                                storage,
-                                &StorableAccountsWithHashes::new_with_hashes(accounts, hashes),
-                            )
-                        }
-                    }
-                }
-            }
+            StoreTo::Storage(storage) => self.write_accounts_to_storage(slot, storage, accounts),
         }
     }
 
@@ -9708,15 +9673,10 @@ pub mod tests {
         }
         let expected_accounts_data_len = data.last().unwrap().1.data().len();
         let expected_alive_bytes = aligned_stored_size(expected_accounts_data_len);
-        let storable = (slot0, &data[..]);
-        let hashes = data
-            .iter()
-            .map(|_| AccountHash(Hash::default()))
-            .collect::<Vec<_>>();
-        let append = StorableAccountsWithHashes::new_with_hashes(&storable, hashes);
+        let storable_accounts = (slot0, &data[..]);
 
         // construct append vec with account to generate an index from
-        append_vec.accounts.append_accounts(append.accounts, 0);
+        append_vec.accounts.append_accounts(&storable_accounts, 0);
         // append vecs set this at load
         append_vec
             .approx_store_count
@@ -10181,8 +10141,6 @@ pub mod tests {
                 accounts_db.storage.remove(&storage.slot(), false);
             });
 
-            let hash = AccountHash(Hash::default());
-
             // replace the sample storages, storing default hash values so that we rehash during scan
             let storages = storages
                 .iter()
@@ -10199,13 +10157,10 @@ pub mod tests {
                         .map(|stored| (&stored.0, &stored.1))
                         .collect::<Vec<_>>();
                     let slice = &accounts[..];
-                    let account_data = (slot, slice);
-                    let hashes = (0..account_data.len()).map(|_| &hash).collect();
-                    let storable_accounts =
-                        StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
+                    let storable_accounts = (slot, slice);
                     copied_storage
                         .accounts
-                        .append_accounts(storable_accounts.accounts, 0);
+                        .append_accounts(&storable_accounts, 0);
                     copied_storage
                 })
                 .collect::<Vec<_>>();
@@ -10221,13 +10176,7 @@ pub mod tests {
         let (storages, _raw_expected) = sample_storages_and_accounts(&accounts_db);
         let max_slot = storages.iter().map(|storage| storage.slot()).max().unwrap();
 
-        // bogus_hash is ignored during appendvec store. When we verify hashes
-        // later during scan, the test will recompute the "correct" hash and
-        // should not mismatch.
-        let bogus_hash =
-            AccountHash(Hash::from_str("7JcmM6TFZMkcDkZe6RKVkGaWwN5dXciGC4fa3RxvqQc9").unwrap());
-
-        // replace the sample storages, storing bogus hash values so that we trigger the hash mismatch
+        // replace the sample storages, storing default hash values so that we rehash during scan
         let storages = storages
             .iter()
             .map(|storage| {
@@ -10243,13 +10192,10 @@ pub mod tests {
                     .map(|stored| (&stored.0, &stored.1))
                     .collect::<Vec<_>>();
                 let slice = &accounts[..];
-                let account_data = (slot, slice);
-                let hashes = (0..account_data.len()).map(|_| &bogus_hash).collect();
-                let storable_accounts =
-                    StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
+                let storable_accounts = (slot, slice);
                 copied_storage
                     .accounts
-                    .append_accounts(storable_accounts.accounts, 0);
+                    .append_accounts(&storable_accounts, 0);
                 copied_storage
             })
             .collect::<Vec<_>>();
@@ -10713,13 +10659,10 @@ pub mod tests {
         let slot = storage.slot();
         let accounts = [(pubkey, account)];
         let slice = &accounts[..];
-        let account_data = (slot, slice);
-        let hash = AccountHash(Hash::default());
-        let storable_accounts =
-            StorableAccountsWithHashes::new_with_hashes(&account_data, vec![&hash]);
+        let storable_accounts = (slot, slice);
         let stored_accounts_info = storage
             .accounts
-            .append_accounts(storable_accounts.accounts, 0)
+            .append_accounts(&storable_accounts, 0)
             .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
@@ -15168,15 +15111,9 @@ pub mod tests {
         accounts.accounts_index.set_startup(Startup::Startup);
 
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-        let hashes = vec![AccountHash(Hash::default()); 1];
-        storage.accounts.append_accounts(
-            StorableAccountsWithHashes::new_with_hashes(
-                &(slot0, &[(&shared_key, &account)][..]),
-                hashes,
-            )
-            .accounts,
-            0,
-        );
+        storage
+            .accounts
+            .append_accounts(&(slot0, &[(&shared_key, &account)][..]), 0);
 
         let storage = accounts.storage.get_slot_storage_entry(slot0).unwrap();
         let storage_info = StorageSizeAndCountMap::default();
@@ -15245,13 +15182,8 @@ pub mod tests {
             let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
             let slot0 = 0;
             let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
-            let hashes = vec![AccountHash(Hash::default()); 2];
             storage.accounts.append_accounts(
-                StorableAccountsWithHashes::new_with_hashes(
-                    &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
-                    hashes,
-                )
-                .accounts,
+                &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
                 0,
             );
 
