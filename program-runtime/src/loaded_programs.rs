@@ -177,7 +177,7 @@ pub struct LoadedProgram {
 
 /// Global cache statistics for [ProgramCache].
 #[derive(Debug, Default)]
-pub struct Stats {
+pub struct LoadedProgramStats {
     /// a program was already in the cache
     pub hits: AtomicU64,
     /// a program was not found and loaded instead
@@ -202,9 +202,11 @@ pub struct Stats {
     pub empty_entries: AtomicU64,
 }
 
-impl Stats {
-    /// Logs the measurement values
-    pub fn submit(&self, slot: Slot) {
+impl LoadedProgramStats {
+    pub fn reset(&mut self) {
+        *self = LoadedProgramStats::default();
+    }
+    pub fn log(&self) {
         let hits = self.hits.load(Ordering::Relaxed);
         let misses = self.misses.load(Ordering::Relaxed);
         let evictions: u64 = self.evictions.values().sum();
@@ -216,21 +218,6 @@ impl Stats {
         let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
         let prunes_environment = self.prunes_environment.load(Ordering::Relaxed);
         let empty_entries = self.empty_entries.load(Ordering::Relaxed);
-        datapoint_info!(
-            "loaded-programs-cache-stats",
-            ("slot", slot, i64),
-            ("hits", hits, i64),
-            ("misses", misses, i64),
-            ("evictions", evictions, i64),
-            ("reloads", reloads, i64),
-            ("insertions", insertions, i64),
-            ("lost_insertions", lost_insertions, i64),
-            ("replace_entry", replacements, i64),
-            ("one_hit_wonders", one_hit_wonders, i64),
-            ("prunes_orphan", prunes_orphan, i64),
-            ("prunes_environment", prunes_environment, i64),
-            ("empty_entries", empty_entries, i64),
-        );
         debug!(
             "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Reloads: {}, Insertions: {} Lost-Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Environment: {}, Empty: {}",
             hits, misses, evictions, reloads, insertions, lost_insertions, replacements, one_hit_wonders, prunes_orphan, prunes_environment, empty_entries
@@ -253,10 +240,6 @@ impl Stats {
                 evictions
             );
         }
-    }
-
-    pub fn reset(&mut self) {
-        *self = Stats::default();
     }
 }
 
@@ -613,7 +596,7 @@ pub struct ProgramCache<FG: ForkGraph> {
     /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
     pub programs_to_recompile: Vec<(Pubkey, Arc<LoadedProgram>)>,
     /// Statistics counters
-    pub stats: Stats,
+    pub stats: LoadedProgramStats,
     /// Reference to the block store
     pub fork_graph: Option<Arc<RwLock<FG>>>,
     /// Coordinates TX batches waiting for others to complete their task during cooperative loading
@@ -758,7 +741,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
             environments: ProgramRuntimeEnvironments::default(),
             upcoming_environments: None,
             programs_to_recompile: Vec::default(),
-            stats: Stats::default(),
+            stats: LoadedProgramStats::default(),
             fork_graph: None,
             loading_task_waiter: Arc::new(LoadingTaskWaiter::default()),
         }

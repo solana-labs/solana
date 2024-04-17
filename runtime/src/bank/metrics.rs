@@ -1,7 +1,11 @@
 use {
     crate::bank::Bank,
+    solana_program_runtime::loaded_programs::LoadedProgramStats,
     solana_sdk::clock::{Epoch, Slot},
-    std::sync::atomic::{AtomicU64, Ordering::Relaxed},
+    std::sync::atomic::{
+        AtomicU64,
+        Ordering::{self, Relaxed},
+    },
 };
 
 pub(crate) struct NewEpochTimings {
@@ -198,4 +202,35 @@ pub(crate) fn report_partitioned_reward_metrics(bank: &Bank, timings: RewardsSto
         ("pre_capitalization", timings.pre_capitalization, i64),
         ("post_capitalization", timings.post_capitalization, i64),
     );
+}
+
+/// Logs the measurement values
+pub(crate) fn report_loaded_programs_stats(stats: &LoadedProgramStats, slot: Slot) {
+    let hits = stats.hits.load(Ordering::Relaxed);
+    let misses = stats.misses.load(Ordering::Relaxed);
+    let evictions: u64 = stats.evictions.values().sum();
+    let reloads = stats.reloads.load(Ordering::Relaxed);
+    let insertions = stats.insertions.load(Ordering::Relaxed);
+    let lost_insertions = stats.lost_insertions.load(Ordering::Relaxed);
+    let replacements = stats.replacements.load(Ordering::Relaxed);
+    let one_hit_wonders = stats.one_hit_wonders.load(Ordering::Relaxed);
+    let prunes_orphan = stats.prunes_orphan.load(Ordering::Relaxed);
+    let prunes_environment = stats.prunes_environment.load(Ordering::Relaxed);
+    let empty_entries = stats.empty_entries.load(Ordering::Relaxed);
+    datapoint_info!(
+        "loaded-programs-cache-stats",
+        ("slot", slot, i64),
+        ("hits", hits, i64),
+        ("misses", misses, i64),
+        ("evictions", evictions, i64),
+        ("reloads", reloads, i64),
+        ("insertions", insertions, i64),
+        ("lost_insertions", lost_insertions, i64),
+        ("replace_entry", replacements, i64),
+        ("one_hit_wonders", one_hit_wonders, i64),
+        ("prunes_orphan", prunes_orphan, i64),
+        ("prunes_environment", prunes_environment, i64),
+        ("empty_entries", empty_entries, i64),
+    );
+    stats.log();
 }

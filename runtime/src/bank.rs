@@ -1360,13 +1360,15 @@ impl Bank {
             },
         );
 
-        parent
-            .transaction_processor
-            .program_cache
-            .read()
-            .unwrap()
-            .stats
-            .submit(parent.slot());
+        report_loaded_programs_stats(
+            &parent
+                .transaction_processor
+                .program_cache
+                .read()
+                .unwrap()
+                .stats,
+            parent.slot(),
+        );
 
         new.transaction_processor
             .program_cache
