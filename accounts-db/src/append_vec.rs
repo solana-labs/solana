@@ -7,8 +7,7 @@
 use {
     crate::{
         account_storage::meta::{
-            AccountMeta, StorableAccountsWithHashes, StoredAccountInfo, StoredAccountMeta,
-            StoredMeta, StoredMetaWriteVersion,
+            AccountMeta, StoredAccountInfo, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
         accounts_file::{AccountsFileError, MatchAccountOwnerError, Result, ALIGN_BOUNDARY_OFFSET},
         accounts_hash::AccountHash,
@@ -25,7 +24,6 @@ use {
         stake_history::Epoch,
     },
     std::{
-        borrow::Borrow,
         convert::TryFrom,
         fs::{remove_file, OpenOptions},
         io::{Seek, SeekFrom, Write},
@@ -746,15 +744,15 @@ impl AppendVec {
     /// So, return.len() is 1 + (number of accounts written)
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    pub fn append_accounts<'a, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>(
+    pub fn append_accounts<'a>(
         &self,
-        accounts: &StorableAccountsWithHashes<'a, 'b, U, V>,
+        accounts: &impl StorableAccounts<'a>,
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         let _lock = self.append_lock.lock().unwrap();
         let default_hash: Hash = Hash::default(); // [0_u8; 32];
         let mut offset = self.len();
-        let len = accounts.accounts.len();
+        let len = accounts.len();
         // Here we have `len - skip` number of accounts.  The +1 extra capacity
         // is for storing the aligned offset of the last entry to that is used
         // to compute the StoredAccountInfo of the last entry.
@@ -765,7 +763,7 @@ impl AppendVec {
             if stop {
                 break;
             }
-            accounts.get(i, |account, _hash| {
+            accounts.account_default_if_zero_lamport(i, |account| {
                 let account_meta = AccountMeta {
                     lamports: account.lamports(),
                     owner: *account.owner(),
@@ -826,6 +824,7 @@ impl AppendVec {
 pub mod tests {
     use {
         super::{test_utils::*, *},
+        crate::account_storage::meta::StorableAccountsWithHashes,
         assert_matches::assert_matches,
         memoffset::offset_of,
         rand::{thread_rng, Rng},
@@ -846,10 +845,7 @@ pub mod tests {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
             let slice = &accounts[..];
-            let account_data = (slot_ignored, slice);
-            let hash = AccountHash(Hash::default());
-            let storable_accounts =
-                StorableAccountsWithHashes::new_with_hashes(&account_data, vec![&hash]);
+            let storable_accounts = (slot_ignored, slice);
 
             self.append_accounts(&storable_accounts, 0)
                 .map(|res| res[0].offset)

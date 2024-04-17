@@ -59,7 +59,9 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                     AppendVec::new(path, true, file_size)
                 },
                 |append_vec| {
-                    let res = append_vec.append_accounts(&storable_accounts, 0).unwrap();
+                    let res = append_vec
+                        .append_accounts(storable_accounts.accounts, 0)
+                        .unwrap();
                     let accounts_written_count = res.len();
                     assert_eq!(accounts_written_count, accounts_count);
                 },

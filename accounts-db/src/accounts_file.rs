@@ -272,7 +272,7 @@ impl AccountsFile {
         skip: usize,
     ) -> Option<Vec<StoredAccountInfo>> {
         match self {
-            Self::AppendVec(av) => av.append_accounts(accounts, skip),
+            Self::AppendVec(av) => av.append_accounts(accounts.accounts, skip),
             // Note: The conversion here is needed as the AccountsDB currently
             // assumes all offsets are multiple of 8 while TieredStorage uses
             // IndexOffset that is equivalent to AccountInfo::reduced_offset.

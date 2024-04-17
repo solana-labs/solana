@@ -30,7 +30,7 @@ pub struct StorableAccountsWithHashes<'a: 'b, 'b, U: StorableAccounts<'a>, V: Bo
     /// accounts to store
     /// always has pubkey and account
     /// may also have hash per account
-    pub(crate) accounts: &'b U,
+    pub accounts: &'b U,
     /// if accounts does not have hash, this has a hash per account
     hashes: Option<Vec<V>>,
     _phantom: PhantomData<&'a ()>,
