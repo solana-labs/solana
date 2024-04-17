@@ -8,8 +8,8 @@ use {
             ProcessResult,
         },
         compute_budget::{
-            set_compute_budget_ixs_if_needed, simulate_and_update_compute_unit_limit,
-            UpdateComputeUnitLimitResult,
+            simulate_and_update_compute_unit_limit, ComputeUnitConfig,
+            UpdateComputeUnitLimitResult, WithComputeUnitConfig,
         },
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
@@ -2289,7 +2289,7 @@ fn do_process_program_write_and_deploy(
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (mut initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
+    let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
         rpc_client
             .get_account_with_commitment(buffer_pubkey, config.commitment)?
             .value
@@ -2338,9 +2338,9 @@ fn do_process_program_write_and_deploy(
     };
 
     let initial_message = if !initial_instructions.is_empty() {
-        set_compute_budget_ixs_if_needed(&mut initial_instructions, compute_unit_price);
         Some(Message::new_with_blockhash(
-            &initial_instructions,
+            &initial_instructions
+                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
         ))
@@ -2361,8 +2361,8 @@ fn do_process_program_write_and_deploy(
             loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
 
-        let mut instructions = vec![instruction];
-        set_compute_budget_ixs_if_needed(&mut instructions, compute_unit_price);
+        let instructions =
+            vec![instruction].with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
         Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
     };
 
@@ -2378,7 +2378,7 @@ fn do_process_program_write_and_deploy(
     // Create and add final message
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
-            let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            let instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
                 &fee_payer_signer.pubkey(),
                 &program_signers[0].pubkey(),
                 buffer_pubkey,
@@ -2387,13 +2387,13 @@ fn do_process_program_write_and_deploy(
                     UpgradeableLoaderState::size_of_program(),
                 )?,
                 program_data_max_len,
-            )?;
+            )?
+            .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
 
-            set_compute_budget_ixs_if_needed(&mut instructions, compute_unit_price);
             Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
         } else {
-            let mut instructions = vec![loader_instruction::finalize(buffer_pubkey, loader_id)];
-            set_compute_budget_ixs_if_needed(&mut instructions, compute_unit_price);
+            let instructions = vec![loader_instruction::finalize(buffer_pubkey, loader_id)]
+                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
             Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
         };
         Some(message)
@@ -2462,42 +2462,42 @@ fn do_process_program_upgrade(
         buffer_signer
     {
         // Check Buffer account to see if partial initialization has occurred
-        let (mut initial_instructions, balance_needed, buffer_program_data) =
-            if let Some(mut account) = rpc_client
+        let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
+            rpc_client
                 .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
                 .value
-            {
-                let (ixs, balance_needed) = complete_partial_program_init(
-                    &bpf_loader_upgradeable::id(),
+        {
+            let (ixs, balance_needed) = complete_partial_program_init(
+                &bpf_loader_upgradeable::id(),
+                &fee_payer_signer.pubkey(),
+                &buffer_signer.pubkey(),
+                &account,
+                UpgradeableLoaderState::size_of_buffer(program_len),
+                min_rent_exempt_program_data_balance,
+                true,
+            )?;
+            let buffer_program_data = account
+                .data
+                .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+            (ixs, balance_needed, buffer_program_data)
+        } else {
+            (
+                bpf_loader_upgradeable::create_buffer(
                     &fee_payer_signer.pubkey(),
-                    &buffer_signer.pubkey(),
-                    &account,
-                    UpgradeableLoaderState::size_of_buffer(program_len),
+                    buffer_pubkey,
+                    &upgrade_authority.pubkey(),
                     min_rent_exempt_program_data_balance,
-                    true,
-                )?;
-                let buffer_program_data = account
-                    .data
-                    .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
-                (ixs, balance_needed, buffer_program_data)
-            } else {
-                (
-                    bpf_loader_upgradeable::create_buffer(
-                        &fee_payer_signer.pubkey(),
-                        buffer_pubkey,
-                        &upgrade_authority.pubkey(),
-                        min_rent_exempt_program_data_balance,
-                        program_len,
-                    )?,
-                    min_rent_exempt_program_data_balance,
-                    vec![0; program_len],
-                )
-            };
+                    program_len,
+                )?,
+                min_rent_exempt_program_data_balance,
+                vec![0; program_len],
+            )
+        };
 
         let initial_message = if !initial_instructions.is_empty() {
-            set_compute_budget_ixs_if_needed(&mut initial_instructions, compute_unit_price);
             Some(Message::new_with_blockhash(
-                &initial_instructions,
+                &initial_instructions
+                    .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
                 Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             ))
@@ -2508,14 +2508,13 @@ fn do_process_program_upgrade(
         let buffer_signer_pubkey = buffer_signer.pubkey();
         let upgrade_authority_pubkey = upgrade_authority.pubkey();
         let create_msg = |offset: u32, bytes: Vec<u8>| {
-            let mut instructions = vec![bpf_loader_upgradeable::write(
+            let instructions = vec![bpf_loader_upgradeable::write(
                 &buffer_signer_pubkey,
                 &upgrade_authority_pubkey,
                 offset,
                 bytes,
-            )];
-
-            set_compute_budget_ixs_if_needed(&mut instructions, compute_unit_price);
+            )]
+            .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
             Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
         };
 
@@ -2535,14 +2534,13 @@ fn do_process_program_upgrade(
     };
 
     // Create and add final message
-    let mut final_instructions = vec![bpf_loader_upgradeable::upgrade(
+    let final_instructions = vec![bpf_loader_upgradeable::upgrade(
         program_id,
         buffer_pubkey,
         &upgrade_authority.pubkey(),
         &fee_payer_signer.pubkey(),
-    )];
-
-    set_compute_budget_ixs_if_needed(&mut final_instructions, compute_unit_price);
+    )]
+    .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
     let final_message = Message::new_with_blockhash(
         &final_instructions,
         Some(&fee_payer_signer.pubkey()),

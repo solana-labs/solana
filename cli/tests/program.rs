@@ -2220,29 +2220,30 @@ fn cli_program_deploy_with_args(compute_unit_price: Option<u64>) {
 
     if let Some(compute_unit_price) = compute_unit_price {
         for tx in [&initial_tx, &write_tx, &final_tx] {
-            for i in [0, 1] {
+            let ix_len = tx.message.instructions.len();
+            for i in [1, 2] {
                 assert_eq!(
-                    tx.message.instructions[i].program_id(&tx.message.account_keys),
+                    tx.message.instructions[ix_len - i].program_id(&tx.message.account_keys),
                     &compute_budget::id()
                 );
             }
 
             assert_matches!(
-                try_from_slice_unchecked(&tx.message.instructions[0].data),
+                try_from_slice_unchecked(&tx.message.instructions[ix_len - 2].data),
                 Ok(ComputeBudgetInstruction::SetComputeUnitPrice(price)) if price == compute_unit_price
             );
         }
 
         assert_matches!(
-            try_from_slice_unchecked(&initial_tx.message.instructions[1].data),
+            try_from_slice_unchecked(&initial_tx.message.instructions.last().unwrap().data),
             Ok(ComputeBudgetInstruction::SetComputeUnitLimit(2820))
         );
         assert_matches!(
-            try_from_slice_unchecked(&write_tx.message.instructions[1].data),
+            try_from_slice_unchecked(&write_tx.message.instructions.last().unwrap().data),
             Ok(ComputeBudgetInstruction::SetComputeUnitLimit(2670))
         );
         assert_matches!(
-            try_from_slice_unchecked(&final_tx.message.instructions[1].data),
+            try_from_slice_unchecked(&final_tx.message.instructions.last().unwrap().data),
             Ok(ComputeBudgetInstruction::SetComputeUnitLimit(2970))
         );
     } else {

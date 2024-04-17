@@ -76,27 +76,6 @@ pub(crate) fn simulate_and_update_compute_unit_limit(
     ))
 }
 
-pub(crate) fn set_compute_budget_ixs_if_needed(
-    ixs: &mut Vec<Instruction>,
-    compute_unit_price: Option<u64>,
-) {
-    let Some(compute_unit_price) = compute_unit_price else {
-        return;
-    };
-
-    // Default to the max compute unit limit because later transactions will be
-    // simulated to get the exact compute units consumed.
-    ixs.insert(
-        0,
-        ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-    );
-
-    ixs.insert(
-        0,
-        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-    );
-}
-
 pub(crate) trait WithComputeUnitPrice {
     fn with_compute_unit_price(self, compute_unit_price: Option<&u64>) -> Self;
 }
@@ -106,6 +85,31 @@ impl WithComputeUnitPrice for Vec<Instruction> {
         if let Some(compute_unit_price) = compute_unit_price {
             self.push(ComputeBudgetInstruction::set_compute_unit_price(
                 *compute_unit_price,
+            ));
+        }
+        self
+    }
+}
+
+pub(crate) struct ComputeUnitConfig {
+    pub(crate) compute_unit_price: Option<u64>,
+}
+
+pub(crate) trait WithComputeUnitConfig {
+    fn with_compute_unit_config(self, config: &ComputeUnitConfig) -> Self;
+}
+
+impl WithComputeUnitConfig for Vec<Instruction> {
+    fn with_compute_unit_config(mut self, config: &ComputeUnitConfig) -> Self {
+        if let Some(compute_unit_price) = config.compute_unit_price {
+            self.push(ComputeBudgetInstruction::set_compute_unit_price(
+                compute_unit_price,
+            ));
+
+            // Default to the max compute unit limit because later transactions will be
+            // simulated to get the exact compute units consumed.
+            self.push(ComputeBudgetInstruction::set_compute_unit_limit(
+                MAX_COMPUTE_UNIT_LIMIT,
             ));
         }
         self
