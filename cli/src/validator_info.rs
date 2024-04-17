@@ -3,6 +3,7 @@
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        compute_budget::WithComputeUnitPrice,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     bincode::{deserialize, serialized_size},
@@ -13,8 +14,9 @@ use {
         self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
     },
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         hidden_unless_forced,
-        input_parsers::pubkey_of,
+        input_parsers::{pubkey_of, value_of},
         input_validators::{is_pubkey, is_url},
         keypair::DefaultSigner,
     },
@@ -218,7 +220,8 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .takes_value(false)
                                 .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                                 .help("Override keybase username validity check"),
-                        ),
+                        )
+                        .arg(compute_unit_price_arg()),
                 )
                 .subcommand(
                     SubCommand::with_name("get")
@@ -245,6 +248,7 @@ pub fn parse_validator_info_command(
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
     // Prepare validator info
     let validator_info = parse_args(matches);
     Ok(CliCommandInfo {
@@ -252,6 +256,7 @@ pub fn parse_validator_info_command(
             validator_info,
             force_keybase: matches.is_present("force"),
             info_pubkey,
+            compute_unit_price,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -273,6 +278,7 @@ pub fn process_set_validator_info(
     validator_info: &Value,
     force_keybase: bool,
     info_pubkey: Option<Pubkey>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     // Validate keybase username
     if let Some(string) = validator_info.get("keybaseUsername") {
@@ -356,7 +362,8 @@ pub fn process_set_validator_info(
                 &info_pubkey,
                 lamports,
                 keys.clone(),
-            );
+            )
+            .with_compute_unit_price(compute_unit_price);
             instructions.extend_from_slice(&[config_instruction::store(
                 &info_pubkey,
                 true,
@@ -375,7 +382,8 @@ pub fn process_set_validator_info(
                 false,
                 keys,
                 &validator_info,
-            )];
+            )]
+            .with_compute_unit_price(compute_unit_price);
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
         }
     };

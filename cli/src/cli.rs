@@ -313,6 +313,7 @@ pub enum CliCommand {
         validator_info: Value,
         force_keybase: bool,
         info_pubkey: Option<Pubkey>,
+        compute_unit_price: Option<u64>,
     },
     // Vote Commands
     CreateVoteAccount {
@@ -1398,12 +1399,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             validator_info,
             force_keybase,
             info_pubkey,
+            compute_unit_price,
         } => process_set_validator_info(
             &rpc_client,
             config,
             validator_info,
             *force_keybase,
             *info_pubkey,
+            compute_unit_price.as_ref(),
         ),
 
         // Vote Commands
