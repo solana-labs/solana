@@ -2,13 +2,11 @@
 use {
     criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput},
     solana_accounts_db::{
-        account_storage::meta::StorableAccountsWithHashes,
-        accounts_hash::AccountHash,
         append_vec::{self, AppendVec},
         tiered_storage::hot::HotStorageWriter,
     },
     solana_sdk::{
-        account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey,
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
     },
 };
@@ -45,11 +43,7 @@ fn bench_write_accounts_file(c: &mut Criterion) {
         .take(accounts_count)
         .collect();
         let accounts_refs: Vec<_> = accounts.iter().collect();
-        let accounts_data = (Slot::MAX, accounts_refs.as_slice());
-        let storable_accounts = StorableAccountsWithHashes::new_with_hashes(
-            &accounts_data,
-            vec![AccountHash(Hash::default()); accounts_count],
-        );
+        let storable_accounts = (Slot::MAX, accounts_refs.as_slice());
 
         group.bench_function(BenchmarkId::new("append_vec", accounts_count), |b| {
             b.iter_batched_ref(
@@ -59,9 +53,7 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                     AppendVec::new(path, true, file_size)
                 },
                 |append_vec| {
-                    let res = append_vec
-                        .append_accounts(storable_accounts.accounts, 0)
-                        .unwrap();
+                    let res = append_vec.append_accounts(&storable_accounts, 0).unwrap();
                     let accounts_written_count = res.len();
                     assert_eq!(accounts_written_count, accounts_count);
                 },
@@ -79,9 +71,7 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                     HotStorageWriter::new(path).unwrap()
                 },
                 |hot_storage| {
-                    let res = hot_storage
-                        .write_accounts(storable_accounts.accounts, 0)
-                        .unwrap();
+                    let res = hot_storage.write_accounts(&storable_accounts, 0).unwrap();
                     let accounts_written_count = res.len();
                     assert_eq!(accounts_written_count, accounts_count);
                 },

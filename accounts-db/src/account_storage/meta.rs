@@ -3,11 +3,9 @@ use {
         account_info::AccountInfo,
         accounts_hash::AccountHash,
         append_vec::AppendVecStoredAccountMeta,
-        storable_accounts::{AccountForStorage, StorableAccounts},
         tiered_storage::hot::{HotAccount, HotAccountMeta},
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
-    std::{borrow::Borrow, marker::PhantomData},
 };
 
 pub type StoredMetaWriteVersion = u64;
@@ -20,82 +18,6 @@ pub struct StoredAccountInfo {
 
 lazy_static! {
     static ref DEFAULT_ACCOUNT_HASH: AccountHash = AccountHash(Hash::default());
-}
-
-/// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
-/// This struct contains what is needed to store accounts to a storage
-/// 1. account & pubkey (StorableAccounts)
-/// 2. hash per account (Maybe in StorableAccounts, otherwise has to be passed in separately)
-pub struct StorableAccountsWithHashes<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>> {
-    /// accounts to store
-    /// always has pubkey and account
-    /// may also have hash per account
-    pub accounts: &'b U,
-    /// if accounts does not have hash, this has a hash per account
-    hashes: Option<Vec<V>>,
-    _phantom: PhantomData<&'a ()>,
-}
-
-impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
-    StorableAccountsWithHashes<'a, 'b, U, V>
-{
-    /// used when accounts contains hash already
-    pub fn new(accounts: &'b U) -> Self {
-        assert!(accounts.has_hash());
-        Self {
-            accounts,
-            hashes: None,
-            _phantom: PhantomData,
-        }
-    }
-    /// used when accounts does NOT contains hash
-    /// In this case, hashes have to be passed in separately.
-    pub fn new_with_hashes(accounts: &'b U, hashes: Vec<V>) -> Self {
-        assert!(!accounts.has_hash());
-        assert_eq!(accounts.len(), hashes.len());
-        Self {
-            accounts,
-            hashes: Some(hashes),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// get all account fields at 'index'
-    pub fn get<Ret>(
-        &self,
-        index: usize,
-        mut callback: impl FnMut(AccountForStorage, &AccountHash) -> Ret,
-    ) -> Ret {
-        let hash = if self.accounts.has_hash() {
-            self.accounts.hash(index)
-        } else {
-            let item = self.hashes.as_ref().unwrap();
-            item[index].borrow()
-        };
-        self.accounts
-            .account_default_if_zero_lamport(index, |account| callback(account, hash))
-    }
-
-    /// None if account at index has lamports == 0
-    /// Otherwise, Some(account)
-    /// This is the only way to access the account.
-    pub fn account<Ret>(
-        &self,
-        index: usize,
-        callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
-    ) -> Ret {
-        self.accounts
-            .account_default_if_zero_lamport(index, callback)
-    }
-
-    /// # accounts to write
-    pub fn len(&self) -> usize {
-        self.accounts.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
 }
 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
