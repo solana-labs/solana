@@ -12628,7 +12628,7 @@ pub mod tests {
         }
     );
 
-    fn do_full_clean_refcount(store1_first: bool, store_size: u64) {
+    fn do_full_clean_refcount(mut accounts: AccountsDb, store1_first: bool, store_size: u64) {
         let pubkey1 = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
         let pubkey2 = Pubkey::from_str("My22211111111111111111111111111111111111111").unwrap();
         let pubkey3 = Pubkey::from_str("My33311111111111111111111111111111111111111").unwrap();
@@ -12649,10 +12649,7 @@ pub mod tests {
         let zero_lamport_account = AccountSharedData::new(zero_lamport, data_size, &owner);
 
         let mut current_slot = 0;
-        let accounts = AccountsDb {
-            file_size: store_size,
-            ..AccountsDb::new_single_for_tests()
-        };
+        accounts.file_size = store_size;
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
@@ -12735,24 +12732,25 @@ pub mod tests {
         assert_eq!(accounts.ref_count_for_pubkey(&pubkey3), 0);
     }
 
-    #[test]
-    fn test_full_clean_refcount() {
-        solana_logger::setup();
+    // Setup 3 scenarios which try to differentiate between pubkey1 being in an
+    // Available slot or a Full slot which would cause a different reset behavior
+    // when pubkey1 is cleaned and therefore cause the ref count to be incorrect
+    // preventing a removal of that key.
+    //
+    // do stores with a 4mb size so only 1 store is created per slot
+    define_accounts_db_test!(test_full_clean_refcount_no_first_4m, |accounts| {
+        do_full_clean_refcount(accounts, false, 4 * 1024 * 1024);
+    });
 
-        // Setup 3 scenarios which try to differentiate between pubkey1 being in an
-        // Available slot or a Full slot which would cause a different reset behavior
-        // when pubkey1 is cleaned and therefore cause the ref count to be incorrect
-        // preventing a removal of that key.
-        //
-        // do stores with a 4mb size so only 1 store is created per slot
-        do_full_clean_refcount(false, 4 * 1024 * 1024);
+    // do stores with a 4k size and store pubkey1 first
+    define_accounts_db_test!(test_full_clean_refcount_no_first_4k, |accounts| {
+        do_full_clean_refcount(accounts, false, 4 * 1024);
+    });
 
-        // do stores with a 4k size and store pubkey1 first
-        do_full_clean_refcount(false, 4096);
-
-        // do stores with a 4k size and store pubkey1 2nd
-        do_full_clean_refcount(true, 4096);
-    }
+    // do stores with a 4k size and store pubkey1 2nd
+    define_accounts_db_test!(test_full_clean_refcount_first_4k, |accounts| {
+        do_full_clean_refcount(accounts, true, 4 * 1024);
+    });
 
     #[test]
     fn test_clean_stored_dead_slots_empty() {
