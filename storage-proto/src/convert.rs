@@ -818,6 +818,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
             34 => TransactionError::ResanitizationNeeded,
             36 => TransactionError::UnbalancedTransaction,
+            37 => TransactionError::ProgramCacheHitMaxLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -935,6 +936,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::UnbalancedTransaction => {
                     tx_by_addr::TransactionErrorType::UnbalancedTransaction
+                }
+                TransactionError::ProgramCacheHitMaxLimit => {
+                    tx_by_addr::TransactionErrorType::ProgramCacheHitMaxLimit
                 }
             } as i32,
             instruction_error: match transaction_error {

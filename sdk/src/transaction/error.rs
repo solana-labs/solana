@@ -169,6 +169,10 @@ pub enum TransactionError {
     /// The total balance before the transaction does not equal the total balance after the transaction
     #[error("Sum of account balances before and after transaction do not match")]
     UnbalancedTransaction,
+
+    /// Program cache hit max limit.
+    #[error("Program cache hit max limit")]
+    ProgramCacheHitMaxLimit,
 }
 
 impl From<SanitizeError> for TransactionError {
