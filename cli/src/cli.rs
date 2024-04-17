@@ -462,6 +462,15 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
+impl CliCommandInfo {
+    pub fn without_signers(command: CliCommand) -> Self {
+        Self {
+            command,
+            signers: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum CliError {
     #[error("Bad parameter: {0}")]
@@ -604,14 +613,12 @@ pub fn parse_command(
         ("block-production", Some(matches)) => parse_show_block_production(matches),
         ("block-time", Some(matches)) => parse_get_block_time(matches),
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
-        ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::ClusterDate,
-            signers: vec![],
-        }),
-        ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::ClusterVersion,
-            signers: vec![],
-        }),
+        ("cluster-date", Some(_matches)) => {
+            Ok(CliCommandInfo::without_signers(CliCommand::ClusterDate))
+        }
+        ("cluster-version", Some(_matches)) => {
+            Ok(CliCommandInfo::without_signers(CliCommand::ClusterVersion))
+        }
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("feature", Some(matches)) => {
@@ -619,32 +626,25 @@ pub fn parse_command(
         }
         ("fees", Some(matches)) => {
             let blockhash = value_of::<Hash>(matches, "blockhash");
-            Ok(CliCommandInfo {
-                command: CliCommand::Fees { blockhash },
-                signers: vec![],
-            })
+            Ok(CliCommandInfo::without_signers(CliCommand::Fees {
+                blockhash,
+            }))
         }
-        ("first-available-block", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::FirstAvailableBlock,
-            signers: vec![],
-        }),
-        ("genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::GetGenesisHash,
-            signers: vec![],
-        }),
-        ("gossip", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::ShowGossip,
-            signers: vec![],
-        }),
+        ("first-available-block", Some(_matches)) => Ok(CliCommandInfo::without_signers(
+            CliCommand::FirstAvailableBlock,
+        )),
+        ("genesis-hash", Some(_matches)) => {
+            Ok(CliCommandInfo::without_signers(CliCommand::GetGenesisHash))
+        }
+        ("gossip", Some(_matches)) => Ok(CliCommandInfo::without_signers(CliCommand::ShowGossip)),
         ("inflation", Some(matches)) => {
             parse_inflation_subcommand(matches, default_signer, wallet_manager)
         }
         ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
         ("leader-schedule", Some(matches)) => parse_leader_schedule(matches),
-        ("live-slots", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::LiveSlots,
-            signers: vec![],
-        }),
+        ("live-slots", Some(_matches)) => {
+            Ok(CliCommandInfo::without_signers(CliCommand::LiveSlots))
+        }
         ("logs", Some(matches)) => parse_logs(matches, wallet_manager),
         ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer, wallet_manager),
         ("rent", Some(matches)) => {
@@ -652,13 +652,10 @@ pub fn parse_command(
                 .unwrap()
                 .length();
             let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommandInfo {
-                command: CliCommand::Rent {
-                    data_length,
-                    use_lamports_unit,
-                },
-                signers: vec![],
-            })
+            Ok(CliCommandInfo::without_signers(CliCommand::Rent {
+                data_length,
+                use_lamports_unit,
+            }))
         }
         ("slot", Some(matches)) => parse_get_slot(matches),
         ("stakes", Some(matches)) => parse_show_stakes(matches, wallet_manager),
@@ -700,10 +697,9 @@ pub fn parse_command(
         }
         ("wait-for-max-stake", Some(matches)) => {
             let max_stake_percent = value_t_or_exit!(matches, "max_percent", f32);
-            Ok(CliCommandInfo {
-                command: CliCommand::WaitForMaxStake { max_stake_percent },
-                signers: vec![],
-            })
+            Ok(CliCommandInfo::without_signers(
+                CliCommand::WaitForMaxStake { max_stake_percent },
+            ))
         }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
@@ -807,10 +803,9 @@ pub fn parse_command(
         ("airdrop", Some(matches)) => parse_airdrop(matches, default_signer, wallet_manager),
         ("balance", Some(matches)) => parse_balance(matches, default_signer, wallet_manager),
         ("confirm", Some(matches)) => match matches.value_of("signature").unwrap().parse() {
-            Ok(signature) => Ok(CliCommandInfo {
-                command: CliCommand::Confirm(signature),
-                signers: vec![],
-            }),
+            Ok(signature) => Ok(CliCommandInfo::without_signers(CliCommand::Confirm(
+                signature,
+            ))),
             _ => Err(CliError::BadParameter("Invalid signature".to_string())),
         },
         ("create-address-with-seed", Some(matches)) => {
@@ -822,10 +817,9 @@ pub fn parse_command(
         ("decode-transaction", Some(matches)) => parse_decode_transaction(matches),
         ("resolve-signer", Some(matches)) => {
             let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
-            Ok(CliCommandInfo {
-                command: CliCommand::ResolveSigner(signer_path),
-                signers: vec![],
-            })
+            Ok(CliCommandInfo::without_signers(CliCommand::ResolveSigner(
+                signer_path,
+            )))
         }
         ("transfer", Some(matches)) => parse_transfer(matches, default_signer, wallet_manager),
         ("sign-offchain-message", Some(matches)) => {
@@ -1869,13 +1863,10 @@ mod tests {
                 .get_matches_from(vec!["test", "airdrop", "50", &pubkey_string]);
         assert_eq!(
             parse_command(&test_airdrop, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Airdrop {
-                    pubkey: Some(pubkey),
-                    lamports: 50_000_000_000,
-                },
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Airdrop {
+                pubkey: Some(pubkey),
+                lamports: 50_000_000_000,
+            })
         );
 
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
@@ -1886,13 +1877,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_balance, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Balance {
-                    pubkey: Some(keypair.pubkey()),
-                    use_lamports_unit: false,
-                },
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Balance {
+                pubkey: Some(keypair.pubkey()),
+                use_lamports_unit: false,
+            })
         );
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1902,13 +1890,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_balance, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Balance {
-                    pubkey: Some(keypair.pubkey()),
-                    use_lamports_unit: true,
-                },
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Balance {
+                pubkey: Some(keypair.pubkey()),
+                use_lamports_unit: true,
+            })
         );
         let test_balance =
             test_commands
@@ -1934,10 +1919,7 @@ mod tests {
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
             parse_command(&test_confirm, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Confirm(signature),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Confirm(signature))
         );
         let test_bad_signature = test_commands
             .clone()
@@ -1962,14 +1944,11 @@ mod tests {
             ]);
             assert_eq!(
                 parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
-                CliCommandInfo {
-                    command: CliCommand::CreateAddressWithSeed {
-                        from_pubkey: Some(from_pubkey),
-                        seed: "seed".to_string(),
-                        program_id: *program_id
-                    },
-                    signers: vec![],
-                }
+                CliCommandInfo::without_signers(CliCommand::CreateAddressWithSeed {
+                    from_pubkey: Some(from_pubkey),
+                    seed: "seed".to_string(),
+                    program_id: *program_id
+                })
             );
         }
         let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![
@@ -1997,10 +1976,7 @@ mod tests {
                 .get_matches_from(vec!["test", "resolve-signer", &keypair_file]);
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::ResolveSigner(Some(keypair_file.clone())))
         );
         // Test ResolveSigner Subcommand, SignerSource::Pubkey (Presigner)
         let test_resolve_signer =
@@ -2009,10 +1985,7 @@ mod tests {
                 .get_matches_from(vec!["test", "resolve-signer", &pubkey_string]);
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(pubkey.to_string())),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::ResolveSigner(Some(pubkey.to_string())))
         );
 
         // Test SignOffchainMessage

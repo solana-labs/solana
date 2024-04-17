@@ -397,22 +397,18 @@ pub fn parse_program_v4_subcommand(
                         .pubkey()
                 };
 
-            CliCommandInfo {
-                command: CliCommand::ProgramV4(ProgramV4CliCommand::Show {
-                    account_pubkey: pubkey_of(matches, "account"),
-                    authority,
-                    all: matches.is_present("all"),
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::ProgramV4(ProgramV4CliCommand::Show {
+                account_pubkey: pubkey_of(matches, "account"),
+                authority,
+                all: matches.is_present("all"),
+            }))
         }
-        ("dump", Some(matches)) => CliCommandInfo {
-            command: CliCommand::ProgramV4(ProgramV4CliCommand::Dump {
+        ("dump", Some(matches)) => {
+            CliCommandInfo::without_signers(CliCommand::ProgramV4(ProgramV4CliCommand::Dump {
                 account_pubkey: pubkey_of(matches, "account"),
                 output_location: matches.value_of("output_location").unwrap().to_string(),
-            }),
-            signers: vec![],
-        },
+            }))
+        }
         _ => unreachable!(),
     };
     Ok(response)

@@ -481,14 +481,11 @@ pub fn parse_address_lookup_table_subcommand(
         ("get", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
-            CliCommandInfo {
-                command: CliCommand::AddressLookupTable(
-                    AddressLookupTableCliCommand::ShowLookupTable {
-                        lookup_table_pubkey,
-                    },
-                ),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::AddressLookupTable(
+                AddressLookupTableCliCommand::ShowLookupTable {
+                    lookup_table_pubkey,
+                },
+            ))
         }
         _ => unreachable!(),
     };

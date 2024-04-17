@@ -66,10 +66,9 @@ pub fn parse_inflation_subcommand(
         }
         _ => InflationCliCommand::Show,
     };
-    Ok(CliCommandInfo {
-        command: CliCommand::Inflation(command),
-        signers: vec![],
-    })
+    Ok(CliCommandInfo::without_signers(CliCommand::Inflation(
+        command,
+    )))
 }
 
 pub fn process_inflation_subcommand(

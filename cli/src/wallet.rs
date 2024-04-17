@@ -407,14 +407,11 @@ pub fn parse_account(
     let account_pubkey = pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
     let output_file = matches.value_of("output_file");
     let use_lamports_unit = matches.is_present("lamports");
-    Ok(CliCommandInfo {
-        command: CliCommand::ShowAccount {
-            pubkey: account_pubkey,
-            output_file: output_file.map(ToString::to_string),
-            use_lamports_unit,
-        },
-        signers: vec![],
-    })
+    Ok(CliCommandInfo::without_signers(CliCommand::ShowAccount {
+        pubkey: account_pubkey,
+        output_file: output_file.map(ToString::to_string),
+        use_lamports_unit,
+    }))
 }
 
 pub fn parse_airdrop(
@@ -465,10 +462,9 @@ pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 
     let encoded_transaction = EncodedTransaction::Binary(blob, binary_encoding);
     if let Some(transaction) = encoded_transaction.decode() {
-        Ok(CliCommandInfo {
-            command: CliCommand::DecodeTransaction(transaction),
-            signers: vec![],
-        })
+        Ok(CliCommandInfo::without_signers(
+            CliCommand::DecodeTransaction(transaction),
+        ))
     } else {
         Err(CliError::BadParameter(
             "Unable to decode transaction".to_string(),
@@ -542,10 +538,9 @@ pub fn parse_find_program_derived_address(
         })
         .unwrap_or_default();
 
-    Ok(CliCommandInfo {
-        command: CliCommand::FindProgramDerivedAddress { seeds, program_id },
-        signers: vec![],
-    })
+    Ok(CliCommandInfo::without_signers(
+        CliCommand::FindProgramDerivedAddress { seeds, program_id },
+    ))
 }
 
 pub fn parse_transfer(

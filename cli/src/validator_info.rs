@@ -266,10 +266,9 @@ pub fn parse_get_validator_info_command(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
-    Ok(CliCommandInfo {
-        command: CliCommand::GetValidatorInfo(info_pubkey),
-        signers: vec![],
-    })
+    Ok(CliCommandInfo::without_signers(
+        CliCommand::GetValidatorInfo(info_pubkey),
+    ))
 }
 
 pub fn process_set_validator_info(

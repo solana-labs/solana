@@ -675,15 +675,14 @@ pub fn parse_vote_get_account_command(
     } else {
         None
     };
-    Ok(CliCommandInfo {
-        command: CliCommand::ShowVoteAccount {
+    Ok(CliCommandInfo::without_signers(
+        CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
             use_csv,
             with_rewards,
         },
-        signers: vec![],
-    })
+    ))
 }
 
 pub fn parse_withdraw_from_vote_account(

@@ -273,10 +273,9 @@ pub fn parse_get_nonce(
     let nonce_account_pubkey =
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
 
-    Ok(CliCommandInfo {
-        command: CliCommand::GetNonce(nonce_account_pubkey),
-        signers: vec![],
-    })
+    Ok(CliCommandInfo::without_signers(CliCommand::GetNonce(
+        nonce_account_pubkey,
+    )))
 }
 
 pub fn parse_new_nonce(
@@ -316,13 +315,12 @@ pub fn parse_show_nonce_account(
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
 
-    Ok(CliCommandInfo {
-        command: CliCommand::ShowNonceAccount {
+    Ok(CliCommandInfo::without_signers(
+        CliCommand::ShowNonceAccount {
             nonce_account_pubkey,
             use_lamports_unit,
         },
-        signers: vec![],
-    })
+    ))
 }
 
 pub fn parse_withdraw_from_nonce_account(
@@ -818,10 +816,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_get_nonce, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::GetNonce(nonce_account_keypair.pubkey()),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::GetNonce(nonce_account_keypair.pubkey()))
         );
 
         // Test NewNonce SubCommand
@@ -876,13 +871,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_show_nonce_account, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::ShowNonceAccount {
-                    nonce_account_pubkey: nonce_account_keypair.pubkey(),
-                    use_lamports_unit: false,
-                },
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::ShowNonceAccount {
+                nonce_account_pubkey: nonce_account_keypair.pubkey(),
+                use_lamports_unit: false,
+            })
         );
 
         // Test WithdrawFromNonceAccount Subcommand

@@ -540,13 +540,10 @@ pub fn parse_feature_subcommand(
             let display_all =
                 matches.is_present("display_all") || features.len() < FEATURE_NAMES.len();
             features.sort();
-            CliCommandInfo {
-                command: CliCommand::Feature(FeatureCliCommand::Status {
-                    features,
-                    display_all,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Feature(FeatureCliCommand::Status {
+                features,
+                display_all,
+            }))
         }
         _ => unreachable!(),
     };

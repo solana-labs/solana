@@ -861,25 +861,21 @@ pub fn parse_program_subcommand(
                     .pubkey()
             };
 
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: pubkey_of(matches, "account"),
-                    authority_pubkey,
-                    get_programs: matches.is_present("programs"),
-                    get_buffers: matches.is_present("buffers"),
-                    all: matches.is_present("all"),
-                    use_lamports_unit: matches.is_present("lamports"),
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: pubkey_of(matches, "account"),
+                authority_pubkey,
+                get_programs: matches.is_present("programs"),
+                get_buffers: matches.is_present("buffers"),
+                all: matches.is_present("all"),
+                use_lamports_unit: matches.is_present("lamports"),
+            }))
         }
-        ("dump", Some(matches)) => CliCommandInfo {
-            command: CliCommand::Program(ProgramCliCommand::Dump {
+        ("dump", Some(matches)) => {
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Dump {
                 account_pubkey: pubkey_of(matches, "account"),
                 output_location: matches.value_of("output_location").unwrap().to_string(),
-            }),
-            signers: vec![],
-        },
+            }))
+        }
         ("close", Some(matches)) => {
             let account_pubkey = if matches.is_present("buffers") {
                 None
@@ -3590,17 +3586,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: Some(buffer_pubkey),
-                    authority_pubkey: default_keypair.pubkey(),
-                    get_programs: false,
-                    get_buffers: false,
-                    all: false,
-                    use_lamports_unit: false,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: Some(buffer_pubkey),
+                authority_pubkey: default_keypair.pubkey(),
+                get_programs: false,
+                get_buffers: false,
+                all: false,
+                use_lamports_unit: false,
+            }))
         );
 
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -3613,17 +3606,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: None,
-                    authority_pubkey: default_keypair.pubkey(),
-                    get_programs: true,
-                    get_buffers: false,
-                    all: true,
-                    use_lamports_unit: true,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: None,
+                authority_pubkey: default_keypair.pubkey(),
+                get_programs: true,
+                get_buffers: false,
+                all: true,
+                use_lamports_unit: true,
+            }))
         );
 
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -3636,17 +3626,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: None,
-                    authority_pubkey: default_keypair.pubkey(),
-                    get_programs: false,
-                    get_buffers: true,
-                    all: true,
-                    use_lamports_unit: true,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: None,
+                authority_pubkey: default_keypair.pubkey(),
+                get_programs: false,
+                get_buffers: true,
+                all: true,
+                use_lamports_unit: true,
+            }))
         );
 
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -3659,17 +3646,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: None,
-                    authority_pubkey: authority_keypair.pubkey(),
-                    get_programs: false,
-                    get_buffers: true,
-                    all: false,
-                    use_lamports_unit: false,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: None,
+                authority_pubkey: authority_keypair.pubkey(),
+                get_programs: false,
+                get_buffers: true,
+                all: false,
+                use_lamports_unit: false,
+            }))
         );
 
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -3682,17 +3666,14 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::Show {
-                    account_pubkey: None,
-                    authority_pubkey: authority_keypair.pubkey(),
-                    get_programs: false,
-                    get_buffers: true,
-                    all: false,
-                    use_lamports_unit: false,
-                }),
-                signers: vec![],
-            }
+            CliCommandInfo::without_signers(CliCommand::Program(ProgramCliCommand::Show {
+                account_pubkey: None,
+                authority_pubkey: authority_keypair.pubkey(),
+                get_programs: false,
+                get_buffers: true,
+                all: false,
+                use_lamports_unit: false,
+            }))
         );
     }
 
