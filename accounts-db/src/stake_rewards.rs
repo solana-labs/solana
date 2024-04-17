@@ -25,7 +25,7 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [StakeReward]) {
     fn account<Ret>(
         &self,
         index: usize,
-        mut callback: impl for<'b> FnMut(AccountForStorage<'b>) -> Ret,
+        mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
     ) -> Ret {
         let entry = &self.1[index];
         callback((&self.1[index].stake_pubkey, &entry.stake_account).into())

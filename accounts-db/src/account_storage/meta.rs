@@ -82,7 +82,7 @@ impl<'a: 'b, 'b, U: StorableAccounts<'a>, V: Borrow<AccountHash>>
     pub fn account<Ret>(
         &self,
         index: usize,
-        callback: impl for<'c> FnMut(AccountForStorage<'c>) -> Ret,
+        callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
     ) -> Ret {
         self.accounts
             .account_default_if_zero_lamport(index, callback)
