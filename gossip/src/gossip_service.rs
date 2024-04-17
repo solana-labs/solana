@@ -284,7 +284,7 @@ fn spy(
         if let Some(num) = num_nodes {
             // Only consider validators and archives for `num_nodes`
             let mut nodes: Vec<_> = tvu_peers.iter().collect();
-            nodes.sort();
+            nodes.sort_unstable_by_key(|node| node.pubkey());
             nodes.dedup();
 
             if nodes.len() >= num {
