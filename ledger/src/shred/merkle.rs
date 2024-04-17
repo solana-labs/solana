@@ -189,20 +189,25 @@ impl ShredData {
     fn chained_merkle_root_offset(&self) -> Result<usize, Error> {
         let ShredVariant::MerkleData {
             proof_size,
-            chained: true,
+            chained,
             resigned,
         } = self.common_header.shred_variant
         else {
             return Err(Error::InvalidShredVariant);
         };
-        Self::get_chained_merkle_root_offset(proof_size, resigned)
+        Self::get_chained_merkle_root_offset(proof_size, chained, resigned)
     }
 
     pub(super) fn get_chained_merkle_root_offset(
         proof_size: u8,
+        chained: bool,
         resigned: bool,
     ) -> Result<usize, Error> {
-        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, /*chained:*/ true, resigned)?)
+        if !chained {
+            return Err(Error::InvalidShredVariant);
+        }
+        debug_assert!(chained);
+        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, chained, resigned)?)
     }
 
     pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
@@ -375,20 +380,25 @@ impl ShredCode {
     fn chained_merkle_root_offset(&self) -> Result<usize, Error> {
         let ShredVariant::MerkleCode {
             proof_size,
-            chained: true,
+            chained,
             resigned,
         } = self.common_header.shred_variant
         else {
             return Err(Error::InvalidShredVariant);
         };
-        Self::get_chained_merkle_root_offset(proof_size, resigned)
+        Self::get_chained_merkle_root_offset(proof_size, chained, resigned)
     }
 
     pub(super) fn get_chained_merkle_root_offset(
         proof_size: u8,
+        chained: bool,
         resigned: bool,
     ) -> Result<usize, Error> {
-        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, /*chained:*/ true, resigned)?)
+        if !chained {
+            return Err(Error::InvalidShredVariant);
+        }
+        debug_assert!(chained);
+        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, chained, resigned)?)
     }
 
     pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {

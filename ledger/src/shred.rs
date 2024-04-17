@@ -733,28 +733,19 @@ pub mod layout {
 
     pub(crate) fn get_chained_merkle_root(shred: &[u8]) -> Option<Hash> {
         let offset = match get_shred_variant(shred).ok()? {
-            ShredVariant::LegacyCode | ShredVariant::LegacyData => None,
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => return None,
             ShredVariant::MerkleCode {
                 proof_size,
-                chained: true,
+                chained,
                 resigned,
-            } => merkle::ShredCode::get_chained_merkle_root_offset(proof_size, resigned).ok(),
+            } => merkle::ShredCode::get_chained_merkle_root_offset(proof_size, chained, resigned),
             ShredVariant::MerkleData {
                 proof_size,
-                chained: true,
+                chained,
                 resigned,
-            } => merkle::ShredData::get_chained_merkle_root_offset(proof_size, resigned).ok(),
-            ShredVariant::MerkleCode {
-                proof_size: _,
-                chained: false,
-                resigned: _,
-            } => None,
-            ShredVariant::MerkleData {
-                proof_size: _,
-                chained: false,
-                resigned: _,
-            } => None,
-        }?;
+            } => merkle::ShredData::get_chained_merkle_root_offset(proof_size, chained, resigned),
+        }
+        .ok()?;
         shred
             .get(offset..offset + SIZE_OF_MERKLE_ROOT)
             .map(Hash::new)
