@@ -92,7 +92,7 @@ use {
         transaction::SanitizedTransaction,
     },
     std::{
-        borrow::{Borrow, Cow},
+        borrow::Cow,
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
         fs,
@@ -396,7 +396,6 @@ impl CurrentAncientAccountsFile {
         let previous_available = self.accounts_file().accounts.remaining_bytes();
         let timing = db.store_accounts_frozen(
             (self.slot(), accounts, accounts_to_store.slot()),
-            None::<Vec<AccountHash>>,
             self.accounts_file(),
         );
         let bytes_written =
@@ -3999,7 +3998,6 @@ impl AccountsDb {
             // mutating rooted slots; There should be no writers to them.
             stats_sub.store_accounts_timing = self.store_accounts_frozen(
                 (slot, &shrink_collect.alive_accounts.alive_accounts()[..]),
-                None::<Vec<AccountHash>>,
                 shrink_in_progress.new_storage(),
             );
 
@@ -6253,7 +6251,7 @@ impl AccountsDb {
             }
         }
 
-        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<AccountHash>) = iter_items
+        let accounts: Vec<(&Pubkey, &AccountSharedData)> = iter_items
             .iter()
             .filter_map(|iter_item| {
                 let key = iter_item.key();
@@ -6263,10 +6261,9 @@ impl AccountsDb {
                     .map(|should_flush_f| should_flush_f(key, account))
                     .unwrap_or(true);
                 if should_flush {
-                    let hash = iter_item.value().hash();
                     flush_stats.total_size += aligned_stored_size(account.data().len()) as u64;
                     flush_stats.num_flushed += 1;
-                    Some(((key, account), hash))
+                    Some((key, account))
                 } else {
                     // If we don't flush, we have to remove the entry from the
                     // index, since it's equivalent to purging
@@ -6276,7 +6273,7 @@ impl AccountsDb {
                     None
                 }
             })
-            .unzip();
+            .collect();
 
         let is_dead_slot = accounts.is_empty();
         // Remove the account index entries from earlier roots that are outdated by later roots.
@@ -6295,9 +6292,8 @@ impl AccountsDb {
             // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, flush_stats.total_size.0, "flush_slot_cache");
-            let (store_accounts_timing_inner, store_accounts_total_inner_us) = measure_us!(
-                self.store_accounts_frozen((slot, &accounts[..]), Some(hashes), &flushed_store,)
-            );
+            let (store_accounts_timing_inner, store_accounts_total_inner_us) =
+                measure_us!(self.store_accounts_frozen((slot, &accounts[..]), &flushed_store,));
             flush_stats.store_accounts_timing = store_accounts_timing_inner;
             flush_stats.store_accounts_total_us = Saturating(store_accounts_total_inner_us);
 
@@ -6426,7 +6422,6 @@ impl AccountsDb {
     fn store_accounts_to<'a: 'c, 'b, 'c>(
         &self,
         accounts: &'c impl StorableAccounts<'b>,
-        _hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         transactions: Option<&[Option<&'a SanitizedTransaction>]>,
     ) -> Vec<AccountInfo> {
@@ -8197,7 +8192,6 @@ impl AccountsDb {
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(
             accounts,
-            None::<Vec<AccountHash>>,
             store_to,
             transactions,
             reclaim,
@@ -8347,7 +8341,6 @@ impl AccountsDb {
     fn store_accounts_unfrozen<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
@@ -8363,7 +8356,6 @@ impl AccountsDb {
 
         self.store_accounts_custom(
             accounts,
-            hashes,
             store_to,
             reset_accounts,
             transactions,
@@ -8375,7 +8367,6 @@ impl AccountsDb {
     pub fn store_accounts_frozen<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         storage: &Arc<AccountStorageEntry>,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
@@ -8384,7 +8375,6 @@ impl AccountsDb {
         let reset_accounts = false;
         self.store_accounts_custom(
             accounts,
-            hashes,
             &StoreTo::Storage(storage),
             reset_accounts,
             None,
@@ -8396,7 +8386,6 @@ impl AccountsDb {
     fn store_accounts_custom<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        hashes: Option<Vec<impl Borrow<AccountHash>>>,
         store_to: &StoreTo,
         reset_accounts: bool,
         transactions: Option<&[Option<&SanitizedTransaction>]>,
@@ -8407,7 +8396,7 @@ impl AccountsDb {
             .store_num_accounts
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let mut store_accounts_time = Measure::start("store_accounts");
-        let infos = self.store_accounts_to(&accounts, hashes, store_to, transactions);
+        let infos = self.store_accounts_to(&accounts, store_to, transactions);
         store_accounts_time.stop();
         self.stats
             .store_accounts
@@ -12259,7 +12248,6 @@ pub mod tests {
         // put wrong hash value in store so we get a mismatch
         db.store_accounts_unfrozen(
             (some_slot, &[(&key, &account)][..]),
-            Some(vec![&AccountHash(Hash::default())]),
             &StoreTo::Storage(&db.find_storage_candidate(some_slot)),
             None,
             StoreReclaims::Default,
@@ -12489,10 +12477,8 @@ pub mod tests {
         db.update_accounts_hash_for_tests(some_slot, &ancestors, false, false);
 
         // provide bogus account hashes
-        let some_hash = AccountHash(Hash::new(&[0xca; HASH_BYTES]));
         db.store_accounts_unfrozen(
             (some_slot, accounts),
-            Some(vec![&some_hash]),
             &StoreTo::Storage(&db.find_storage_candidate(some_slot)),
             None,
             StoreReclaims::Default,

@@ -11,7 +11,6 @@ use {
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
         },
         accounts_file::AccountsFile,
-        accounts_hash::AccountHash,
         accounts_index::AccountsIndexScanResult,
         active_stats::ActiveStatItem,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
@@ -449,11 +448,9 @@ impl AccountsDb {
         let target_slot = accounts_to_write.target_slot();
         let (shrink_in_progress, create_and_insert_store_elapsed_us) =
             measure_us!(self.get_store_for_shrink(target_slot, bytes));
-        let (store_accounts_timing, rewrite_elapsed_us) = measure_us!(self.store_accounts_frozen(
-            accounts_to_write,
-            None::<Vec<AccountHash>>,
-            shrink_in_progress.new_storage(),
-        ));
+        let (store_accounts_timing, rewrite_elapsed_us) = measure_us!(
+            self.store_accounts_frozen(accounts_to_write, shrink_in_progress.new_storage(),)
+        );
 
         write_ancient_accounts.metrics.accumulate(&ShrinkStatsSub {
             store_accounts_timing,
@@ -999,6 +996,7 @@ pub mod tests {
                 },
                 ShrinkCollectRefs,
             },
+            accounts_hash::AccountHash,
             accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
             storable_accounts::StorableAccountsBySlot,
