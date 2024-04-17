@@ -99,7 +99,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
-            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, ProgramCache,
+            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramOwner, LoadedProgramType,
+            ProgramCache,
         },
         timings::{ExecuteTimingType, ExecuteTimings},
     },
@@ -6312,7 +6313,11 @@ impl Bank {
             self,
             program_id,
             name,
-            LoadedProgram::new_tombstone(self.slot, LoadedProgramType::Closed),
+            LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramOwner::NativeLoader,
+                LoadedProgramType::Closed,
+            ),
         );
         debug!("Removed program {}", program_id);
     }

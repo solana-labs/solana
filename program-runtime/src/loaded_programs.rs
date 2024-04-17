@@ -16,7 +16,7 @@ use {
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         clock::{Epoch, Slot},
-        loader_v4,
+        loader_v4, native_loader,
         pubkey::Pubkey,
         saturating_add_assign,
     },
@@ -60,6 +60,48 @@ pub trait ForkGraph {
     }
 }
 
+/// The owner of a programs accounts, thus the loader of a program
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LoadedProgramOwner {
+    #[default]
+    NativeLoader,
+    LoaderV1,
+    LoaderV2,
+    LoaderV3,
+    LoaderV4,
+}
+
+impl TryFrom<&Pubkey> for LoadedProgramOwner {
+    type Error = ();
+    fn try_from(loader_key: &Pubkey) -> Result<Self, ()> {
+        if native_loader::check_id(loader_key) {
+            Ok(LoadedProgramOwner::NativeLoader)
+        } else if bpf_loader_deprecated::check_id(loader_key) {
+            Ok(LoadedProgramOwner::LoaderV1)
+        } else if bpf_loader::check_id(loader_key) {
+            Ok(LoadedProgramOwner::LoaderV2)
+        } else if bpf_loader_upgradeable::check_id(loader_key) {
+            Ok(LoadedProgramOwner::LoaderV3)
+        } else if loader_v4::check_id(loader_key) {
+            Ok(LoadedProgramOwner::LoaderV4)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<LoadedProgramOwner> for Pubkey {
+    fn from(loaded_program_owner: LoadedProgramOwner) -> Self {
+        match loaded_program_owner {
+            LoadedProgramOwner::NativeLoader => native_loader::id(),
+            LoadedProgramOwner::LoaderV1 => bpf_loader_deprecated::id(),
+            LoadedProgramOwner::LoaderV2 => bpf_loader::id(),
+            LoadedProgramOwner::LoaderV3 => bpf_loader_upgradeable::id(),
+            LoadedProgramOwner::LoaderV4 => loader_v4::id(),
+        }
+    }
+}
+
 /// Actual payload of [LoadedProgram].
 #[derive(Default)]
 pub enum LoadedProgramType {
@@ -76,14 +118,8 @@ pub enum LoadedProgramType {
     ///
     /// It continues to track usage statistics even when the compiled executable of the program is evicted from memory.
     Unloaded(ProgramRuntimeEnvironment),
-    /// Verified and compiled program of loader-v1 or loader-v2
-    LegacyV0(Executable<InvokeContext<'static>>),
-    /// Verified and compiled program of loader-v3 (aka upgradable loader)
-    LegacyV1(Executable<InvokeContext<'static>>),
-    /// Verified and compiled program of loader-v4
-    Typed(Executable<InvokeContext<'static>>),
-    #[cfg(test)]
-    TestLoaded(ProgramRuntimeEnvironment),
+    /// Verified and compiled program
+    Loaded(Executable<InvokeContext<'static>>),
     /// A built-in program which is not stored on-chain but backed into and distributed with the validator
     Builtin(BuiltinProgram<InvokeContext<'static>>),
 }
@@ -97,11 +133,7 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
             LoadedProgramType::DelayVisibility => write!(f, "LoadedProgramType::DelayVisibility"),
             LoadedProgramType::Unloaded(_) => write!(f, "LoadedProgramType::Unloaded"),
-            LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
-            LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
-            LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(_) => write!(f, "LoadedProgramType::TestLoaded"),
+            LoadedProgramType::Loaded(_) => write!(f, "LoadedProgramType::Loaded"),
             LoadedProgramType::Builtin(_) => write!(f, "LoadedProgramType::Builtin"),
         }
     }
@@ -111,14 +143,10 @@ impl LoadedProgramType {
     /// Returns a reference to its environment if it has one
     pub fn get_environment(&self) -> Option<&ProgramRuntimeEnvironment> {
         match self {
-            LoadedProgramType::LegacyV0(program)
-            | LoadedProgramType::LegacyV1(program)
-            | LoadedProgramType::Typed(program) => Some(program.get_loader()),
+            LoadedProgramType::Loaded(program) => Some(program.get_loader()),
             LoadedProgramType::FailedVerification(env) | LoadedProgramType::Unloaded(env) => {
                 Some(env)
             }
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(environment) => Some(environment),
             _ => None,
         }
     }
@@ -131,6 +159,8 @@ impl LoadedProgramType {
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
+    /// The loader of this entry
+    pub account_owner: LoadedProgramOwner,
     /// Size of account that stores the program and program data
     pub account_size: usize,
     /// Slot in which the program was (re)deployed
@@ -355,22 +385,13 @@ impl LoadedProgram {
             metrics.jit_compile_us = jit_compile_time.end_as_us();
         }
 
-        let program = if bpf_loader_deprecated::check_id(loader_key) {
-            LoadedProgramType::LegacyV0(executable)
-        } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
-            LoadedProgramType::LegacyV1(executable)
-        } else if loader_v4::check_id(loader_key) {
-            LoadedProgramType::Typed(executable)
-        } else {
-            panic!();
-        };
-
         Ok(Self {
             deployment_slot,
+            account_owner: LoadedProgramOwner::try_from(loader_key).unwrap(),
             account_size,
             effective_slot,
             tx_usage_counter: AtomicU64::new(0),
-            program,
+            program: LoadedProgramType::Loaded(executable),
             ix_usage_counter: AtomicU64::new(0),
             latest_access_slot: AtomicU64::new(0),
         })
@@ -378,11 +399,7 @@ impl LoadedProgram {
 
     pub fn to_unloaded(&self) -> Option<Self> {
         match &self.program {
-            LoadedProgramType::LegacyV0(_)
-            | LoadedProgramType::LegacyV1(_)
-            | LoadedProgramType::Typed(_) => {}
-            #[cfg(test)]
-            LoadedProgramType::TestLoaded(_) => {}
+            LoadedProgramType::Loaded(_) => {}
             LoadedProgramType::FailedVerification(_)
             | LoadedProgramType::Closed
             | LoadedProgramType::DelayVisibility
@@ -393,6 +410,7 @@ impl LoadedProgram {
         }
         Some(Self {
             program: LoadedProgramType::Unloaded(self.program.get_environment()?.clone()),
+            account_owner: self.account_owner,
             account_size: self.account_size,
             deployment_slot: self.deployment_slot,
             effective_slot: self.effective_slot,
@@ -414,6 +432,7 @@ impl LoadedProgram {
             .unwrap();
         Self {
             deployment_slot,
+            account_owner: LoadedProgramOwner::NativeLoader,
             account_size,
             effective_slot: deployment_slot,
             tx_usage_counter: AtomicU64::new(0),
@@ -423,9 +442,14 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone(slot: Slot, reason: LoadedProgramType) -> Self {
+    pub fn new_tombstone(
+        slot: Slot,
+        account_owner: LoadedProgramOwner,
+        reason: LoadedProgramType,
+    ) -> Self {
         let tombstone = Self {
             program: reason,
+            account_owner,
             account_size: 0,
             deployment_slot: slot,
             effective_slot: slot,
@@ -463,6 +487,10 @@ impl LoadedProgram {
         // Shifting the u64 value for more than 63 will cause an overflow.
         let decaying_for = std::cmp::min(63, now.saturating_sub(last_access));
         self.tx_usage_counter.load(Ordering::Relaxed) >> decaying_for
+    }
+
+    pub fn account_owner(&self) -> Pubkey {
+        self.account_owner.into()
     }
 }
 
@@ -691,6 +719,7 @@ impl LoadedProgramsForTxBatch {
                 // the tombstone to reflect that.
                 Arc::new(LoadedProgram::new_tombstone(
                     entry.deployment_slot,
+                    entry.account_owner,
                     LoadedProgramType::DelayVisibility,
                 ))
             } else {
@@ -777,11 +806,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                 let existing = slot_versions.get_mut(index).unwrap();
                 match (&existing.program, &entry.program) {
                     (LoadedProgramType::Builtin(_), LoadedProgramType::Builtin(_))
-                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV0(_))
-                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::LegacyV1(_))
-                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::Typed(_)) => {}
-                    #[cfg(test)]
-                    (LoadedProgramType::Unloaded(_), LoadedProgramType::TestLoaded(_)) => {}
+                    | (LoadedProgramType::Unloaded(_), LoadedProgramType::Loaded(_)) => {}
                     _ => {
                         // Something is wrong, I can feel it ...
                         error!("ProgramCache::assign_program() failed key={:?} existing={:?} entry={:?}", key, slot_versions, entry);
@@ -967,6 +992,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                             // the tombstone to reflect that.
                             Arc::new(LoadedProgram::new_tombstone(
                                 entry.deployment_slot,
+                                entry.account_owner,
                                 LoadedProgramType::DelayVisibility,
                             ))
                         } else {
@@ -1061,16 +1087,17 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                     .slot_versions
                     .iter()
                     .filter_map(move |program| match program.program {
-                        LoadedProgramType::LegacyV0(_) | LoadedProgramType::LegacyV1(_)
-                            if include_program_runtime_v1 =>
-                        {
-                            Some((*id, program.clone()))
+                        LoadedProgramType::Loaded(_) => {
+                            if (program.account_owner != LoadedProgramOwner::LoaderV4
+                                && include_program_runtime_v1)
+                                || (program.account_owner == LoadedProgramOwner::LoaderV4
+                                    && include_program_runtime_v2)
+                            {
+                                Some((*id, program.clone()))
+                            } else {
+                                None
+                            }
                         }
-                        LoadedProgramType::Typed(_) if include_program_runtime_v2 => {
-                            Some((*id, program.clone()))
-                        }
-                        #[cfg(test)]
-                        LoadedProgramType::TestLoaded(_) => Some((*id, program.clone())),
                         _ => None,
                     })
             })
@@ -1207,15 +1234,17 @@ impl<FG: ForkGraph> solana_frozen_abi::abi_example::AbiExample for ProgramCache<
 mod tests {
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedProgramsForTxBatch, ProgramCache, ProgramRuntimeEnvironment,
-            ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria,
+            LoadedProgramOwner, LoadedProgramType, LoadedProgramsForTxBatch, ProgramCache,
+            ProgramRuntimeEnvironment, ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         assert_matches::assert_matches,
         percentage::Percentage,
-        solana_rbpf::program::BuiltinProgram,
+        solana_rbpf::{elf::Executable, program::BuiltinProgram},
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
+            fs::File,
+            io::Read,
             ops::ControlFlow,
             sync::{
                 atomic::{AtomicU64, Ordering},
@@ -1228,17 +1257,30 @@ mod tests {
     static MOCK_ENVIRONMENT: std::sync::OnceLock<ProgramRuntimeEnvironment> =
         std::sync::OnceLock::<ProgramRuntimeEnvironment>::new();
 
+    fn get_mock_env() -> ProgramRuntimeEnvironment {
+        MOCK_ENVIRONMENT
+            .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
+            .clone()
+    }
+
     fn new_mock_cache<FG: ForkGraph>() -> ProgramCache<FG> {
         let mut cache = ProgramCache::new(0, 0);
-
-        cache.environments.program_runtime_v1 = MOCK_ENVIRONMENT
-            .get_or_init(|| Arc::new(BuiltinProgram::new_mock()))
-            .clone();
+        cache.environments.program_runtime_v1 = get_mock_env();
         cache
     }
 
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
+    }
+
+    fn new_loaded_program(env: ProgramRuntimeEnvironment) -> LoadedProgramType {
+        let mut elf = Vec::new();
+        File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so")
+            .unwrap()
+            .read_to_end(&mut elf)
+            .unwrap();
+        let executable = Executable::load(&elf, env).unwrap();
+        LoadedProgramType::Loaded(executable)
     }
 
     fn new_test_loaded_program_with_usage(
@@ -1247,7 +1289,8 @@ mod tests {
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded(MOCK_ENVIRONMENT.get().unwrap().clone()),
+            program: new_loaded_program(get_mock_env()),
+            account_owner: LoadedProgramOwner::LoaderV2,
             account_size: 0,
             deployment_slot,
             effective_slot,
@@ -1260,6 +1303,7 @@ mod tests {
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
+            account_owner: LoadedProgramOwner::NativeLoader,
             account_size: 0,
             deployment_slot,
             effective_slot,
@@ -1275,7 +1319,11 @@ mod tests {
         slot: Slot,
         reason: LoadedProgramType,
     ) -> Arc<LoadedProgram> {
-        let program = Arc::new(LoadedProgram::new_tombstone(slot, reason));
+        let program = Arc::new(LoadedProgram::new_tombstone(
+            slot,
+            LoadedProgramOwner::LoaderV2,
+            reason,
+        ));
         cache.assign_program(key, program.clone());
         program
     }
@@ -1285,21 +1333,9 @@ mod tests {
         key: Pubkey,
         slot: Slot,
     ) -> Arc<LoadedProgram> {
-        let unloaded = Arc::new(
-            LoadedProgram {
-                program: LoadedProgramType::TestLoaded(
-                    cache.environments.program_runtime_v1.clone(),
-                ),
-                account_size: 0,
-                deployment_slot: slot,
-                effective_slot: slot.saturating_add(1),
-                tx_usage_counter: AtomicU64::default(),
-                ix_usage_counter: AtomicU64::default(),
-                latest_access_slot: AtomicU64::default(),
-            }
-            .to_unloaded()
-            .expect("Failed to unload the program"),
-        );
+        let loaded =
+            new_test_loaded_program_with_usage(slot, slot.saturating_add(1), AtomicU64::default());
+        let unloaded = Arc::new(loaded.to_unloaded().expect("Failed to unload the program"));
         cache.assign_program(key, unloaded.clone());
         unloaded
     }
@@ -1439,7 +1475,7 @@ mod tests {
         // Count the number of loaded, unloaded and tombstone entries.
         programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded(_))
+            matches!(program_type, LoadedProgramType::Loaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded(_))
@@ -1468,7 +1504,7 @@ mod tests {
 
         // Count the number of loaded, unloaded and tombstone entries.
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded(_))
+            matches!(program_type, LoadedProgramType::Loaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded(_))
@@ -1527,7 +1563,7 @@ mod tests {
         // Count the number of loaded, unloaded and tombstone entries.
         programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded(_))
+            matches!(program_type, LoadedProgramType::Loaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded(_))
@@ -1573,7 +1609,7 @@ mod tests {
 
         // Count the number of loaded, unloaded and tombstone entries.
         let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded(_))
+            matches!(program_type, LoadedProgramType::Loaded(_))
         });
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded(_))
@@ -1681,13 +1717,13 @@ mod tests {
         (
             LoadedProgramType::Closed,
             LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
-            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+            new_loaded_program(get_mock_env()),
         ),
         (
             LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
             LoadedProgramType::Closed,
             LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
-            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+            new_loaded_program(get_mock_env()),
             LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
         )
     )]
@@ -1708,7 +1744,7 @@ mod tests {
             LoadedProgramType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
             LoadedProgramType::Closed,
             LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
-            LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock())),
+            new_loaded_program(get_mock_env()),
         )
     )]
     #[should_panic(expected = "Unexpected replacement of an entry")]
@@ -1719,6 +1755,7 @@ mod tests {
             program_id,
             Arc::new(LoadedProgram {
                 program: old,
+                account_owner: LoadedProgramOwner::LoaderV2,
                 account_size: 0,
                 deployment_slot: 10,
                 effective_slot: 11,
@@ -1731,6 +1768,7 @@ mod tests {
             program_id,
             Arc::new(LoadedProgram {
                 program: new,
+                account_owner: LoadedProgramOwner::LoaderV2,
                 account_size: 0,
                 deployment_slot: 10,
                 effective_slot: 11,
@@ -1743,7 +1781,7 @@ mod tests {
 
     #[test_case(
         LoadedProgramType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
-        LoadedProgramType::TestLoaded(Arc::new(BuiltinProgram::new_mock()))
+        new_loaded_program(get_mock_env())
     )]
     #[test_case(
         LoadedProgramType::Builtin(BuiltinProgram::new_mock()),
@@ -1756,6 +1794,7 @@ mod tests {
             program_id,
             Arc::new(LoadedProgram {
                 program: old,
+                account_owner: LoadedProgramOwner::LoaderV2,
                 account_size: 0,
                 deployment_slot: 10,
                 effective_slot: 11,
@@ -1768,6 +1807,7 @@ mod tests {
             program_id,
             Arc::new(LoadedProgram {
                 program: new,
+                account_owner: LoadedProgramOwner::LoaderV2,
                 account_size: 0,
                 deployment_slot: 10,
                 effective_slot: 11,
@@ -1781,14 +1821,21 @@ mod tests {
     #[test]
     fn test_tombstone() {
         let env = Arc::new(BuiltinProgram::new_mock());
-        let tombstone =
-            LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification(env.clone()));
+        let tombstone = LoadedProgram::new_tombstone(
+            0,
+            LoadedProgramOwner::LoaderV2,
+            LoadedProgramType::FailedVerification(env.clone()),
+        );
         assert_matches!(tombstone.program, LoadedProgramType::FailedVerification(_));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 0);
         assert_eq!(tombstone.effective_slot, 0);
 
-        let tombstone = LoadedProgram::new_tombstone(100, LoadedProgramType::Closed);
+        let tombstone = LoadedProgram::new_tombstone(
+            100,
+            LoadedProgramOwner::LoaderV2,
+            LoadedProgramType::Closed,
+        );
         assert_matches!(tombstone.program, LoadedProgramType::Closed);
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 100);
@@ -1921,7 +1968,8 @@ mod tests {
             program_runtime_v2: new_env.clone(),
         });
         let updated_program = Arc::new(LoadedProgram {
-            program: LoadedProgramType::TestLoaded(new_env.clone()),
+            program: new_loaded_program(new_env.clone()),
+            account_owner: LoadedProgramOwner::LoaderV2,
             account_size: 0,
             deployment_slot: 20,
             effective_slot: 20,
@@ -2460,6 +2508,7 @@ mod tests {
         ] {
             let entry = Arc::new(LoadedProgram {
                 program: loaded_program_type,
+                account_owner: LoadedProgramOwner::LoaderV2,
                 account_size: 0,
                 deployment_slot: 0,
                 effective_slot: 0,
@@ -2623,7 +2672,11 @@ mod tests {
     #[test]
     fn test_usable_entries_for_slot() {
         new_mock_cache::<TestForkGraph>();
-        let tombstone = Arc::new(LoadedProgram::new_tombstone(0, LoadedProgramType::Closed));
+        let tombstone = Arc::new(LoadedProgram::new_tombstone(
+            0,
+            LoadedProgramOwner::LoaderV2,
+            LoadedProgramType::Closed,
+        ));
 
         assert!(
             ProgramCache::<TestForkGraph>::matches_loaded_program_criteria(

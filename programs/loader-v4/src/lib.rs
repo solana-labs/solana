@@ -608,7 +608,7 @@ pub fn process_instruction_inner(
                 ic_logger_msg!(log_collector, "Program is not deployed");
                 Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
             }
-            LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
+            LoadedProgramType::Loaded(executable) => execute(invoke_context, executable),
             _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
         }
     }

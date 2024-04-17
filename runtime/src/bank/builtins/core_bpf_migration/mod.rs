@@ -454,7 +454,7 @@ mod tests {
             assert_eq!(target_entry.latest_access_slot.load(Relaxed), bank.slot());
 
             // The target program entry should now be a BPF program.
-            assert_matches!(target_entry.program, LoadedProgramType::LegacyV1(..));
+            assert_matches!(target_entry.program, LoadedProgramType::Loaded(..));
         }
     }
 

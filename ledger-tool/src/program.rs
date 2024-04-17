@@ -344,7 +344,7 @@ fn load_program<'a>(
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {
-                LoadedProgramType::LegacyV1(program) => Ok(program),
+                LoadedProgramType::Loaded(program) => Ok(program),
                 _ => unreachable!(),
             },
             Err(err) => Err(format!("Loading executable failed: {err:?}")),

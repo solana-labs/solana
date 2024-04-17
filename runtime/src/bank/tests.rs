@@ -7106,7 +7106,7 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1, false, bank.epoch()).unwrap();
-    assert_matches!(program.program, LoadedProgramType::LegacyV1(_));
+    assert_matches!(program.program, LoadedProgramType::Loaded(_));
     assert_eq!(
         program.account_size,
         program_account.data().len() + programdata_account.data().len()
@@ -7352,7 +7352,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(slot_versions[1].effective_slot, 1);
         assert!(matches!(
             slot_versions[1].program,
-            LoadedProgramType::LegacyV1(_),
+            LoadedProgramType::Loaded(_),
         ));
     }
 

@@ -10,7 +10,8 @@ use {
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SerializedAccountMetadata, SyscallContext},
         loaded_programs::{
-            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadProgramMetrics, LoadedProgram, LoadedProgramOwner, LoadedProgramType,
+            DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         stable_log,
@@ -456,8 +457,7 @@ pub fn process_instruction_inner(
             ic_logger_msg!(log_collector, "Program is not deployed");
             Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
         }
-        LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
-        LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
+        LoadedProgramType::Loaded(executable) => execute(executable, invoke_context),
         _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
     }
     .map(|_| 0)
@@ -1113,6 +1113,7 @@ fn process_loader_upgradeable_instruction(
                                 program_key,
                                 Arc::new(LoadedProgram::new_tombstone(
                                     clock.slot,
+                                    LoadedProgramOwner::LoaderV3,
                                     LoadedProgramType::Closed,
                                 )),
                             );
@@ -3761,6 +3762,7 @@ mod tests {
         let env = Arc::new(BuiltinProgram::new_mock());
         let program = LoadedProgram {
             program: LoadedProgramType::Unloaded(env),
+            account_owner: LoadedProgramOwner::LoaderV2,
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
@@ -3804,6 +3806,7 @@ mod tests {
         let env = Arc::new(BuiltinProgram::new_mock());
         let program = LoadedProgram {
             program: LoadedProgramType::Unloaded(env),
+            account_owner: LoadedProgramOwner::LoaderV2,
             account_size: 0,
             deployment_slot: 0,
             effective_slot: 0,
