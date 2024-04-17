@@ -4,10 +4,16 @@ use {
     log::{debug, warn},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
+        feature_set::{
+            include_loaded_accounts_data_size_in_fee_calculation,
+            remove_rounding_in_fee_calculation, reward_full_priority_fee,
+        },
+        fee::FeeBudgetLimits,
         pubkey::Pubkey,
         reward_info::RewardInfo,
         reward_type::RewardType,
         system_program,
+        transaction::SanitizedTransaction,
     },
     solana_svm::account_rent_state::RentState,
     solana_vote::vote_account::VoteAccountsHashMap,
@@ -49,7 +55,7 @@ impl Bank {
     pub(super) fn distribute_transaction_fees(&self) {
         let collector_fees = self.collector_fees.load(Relaxed);
         if collector_fees != 0 {
-            let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
+            let (deposit, mut burn) = self.calculate_reward_and_burn_fees(collector_fees);
             if deposit > 0 {
                 self.deposit_or_burn_fee(deposit, &mut burn);
             }
@@ -57,34 +63,65 @@ impl Bank {
         }
     }
 
-    // NOTE: to replace `distribute_transaction_fees()`, it applies different burn/reward rate
-    //       on different fees:
-    //       transaction fee: same fee_rate_governor rule
-    //       priority fee: 100% reward
-    //       next PR will call it behind a feature gate
-    #[allow(dead_code)]
+    // Replace `distribute_transaction_fees()` after Feature Gate: Reward full priority fee to
+    // validators #34731;
     pub(super) fn distribute_transaction_fee_details(&self) {
-        let CollectorFeeDetails {
-            transaction_fee,
-            priority_fee,
-        } = *self.collector_fee_details.read().unwrap();
-
-        if transaction_fee.saturating_add(priority_fee) == 0 {
+        let fee_details = self.collector_fee_details.read().unwrap();
+        if fee_details.total() == 0 {
             // nothing to distribute, exit early
             return;
         }
 
-        let (mut deposit, mut burn) = if transaction_fee != 0 {
-            self.fee_rate_governor.burn(transaction_fee)
-        } else {
-            (0, 0)
-        };
-        deposit = deposit.saturating_add(priority_fee);
+        let (deposit, mut burn) = self.calculate_reward_and_burn_fee_details(&fee_details);
 
         if deposit > 0 {
             self.deposit_or_burn_fee(deposit, &mut burn);
         }
         self.capitalization.fetch_sub(burn, Relaxed);
+    }
+
+    pub fn calculate_reward_for_transaction(
+        &self,
+        transaction: &SanitizedTransaction,
+        fee_budget_limits: &FeeBudgetLimits,
+    ) -> u64 {
+        let (reward, _burn) = if self.feature_set.is_active(&reward_full_priority_fee::id()) {
+            let fee_details = self.fee_structure.calculate_fee_details(
+                transaction.message(),
+                fee_budget_limits,
+                self.feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            );
+            self.calculate_reward_and_burn_fee_details(&CollectorFeeDetails::from(fee_details))
+        } else {
+            let fee = self.fee_structure.calculate_fee(
+                transaction.message(),
+                5_000, // this just needs to be non-zero
+                fee_budget_limits,
+                self.feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                self.feature_set
+                    .is_active(&remove_rounding_in_fee_calculation::id()),
+            );
+            self.calculate_reward_and_burn_fees(fee)
+        };
+        reward
+    }
+
+    fn calculate_reward_and_burn_fees(&self, fee: u64) -> (u64, u64) {
+        self.fee_rate_governor.burn(fee)
+    }
+
+    fn calculate_reward_and_burn_fee_details(
+        &self,
+        fee_details: &CollectorFeeDetails,
+    ) -> (u64, u64) {
+        let (deposit, burn) = if fee_details.transaction_fee != 0 {
+            self.fee_rate_governor.burn(fee_details.transaction_fee)
+        } else {
+            (0, 0)
+        };
+        (deposit.saturating_add(fee_details.priority_fee), burn)
     }
 
     fn deposit_or_burn_fee(&self, deposit: u64, burn: &mut u64) {
