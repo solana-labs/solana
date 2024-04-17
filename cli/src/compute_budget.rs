@@ -6,6 +6,7 @@ use {
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         instruction::Instruction,
+        message::Message,
         transaction::Transaction,
     },
 };
@@ -21,32 +22,33 @@ pub(crate) enum UpdateComputeUnitLimitResult {
 // Returns the index of the compute unit limit instruction
 pub(crate) fn simulate_and_update_compute_unit_limit(
     rpc_client: &RpcClient,
-    transaction: &mut Transaction,
+    message: &mut Message,
 ) -> Result<UpdateComputeUnitLimitResult, Box<dyn std::error::Error>> {
-    let Some(compute_unit_limit_ix_index) = transaction
-        .message
-        .instructions
-        .iter()
-        .enumerate()
-        .find_map(|(ix_index, instruction)| {
-            let ix_program_id = transaction.message.program_id(ix_index)?;
-            if ix_program_id != &compute_budget::id() {
-                return None;
-            }
+    let Some(compute_unit_limit_ix_index) =
+        message
+            .instructions
+            .iter()
+            .enumerate()
+            .find_map(|(ix_index, instruction)| {
+                let ix_program_id = message.program_id(ix_index)?;
+                if ix_program_id != &compute_budget::id() {
+                    return None;
+                }
 
-            matches!(
-                try_from_slice_unchecked(&instruction.data),
-                Ok(ComputeBudgetInstruction::SetComputeUnitLimit(_))
-            )
-            .then_some(ix_index)
-        })
+                matches!(
+                    try_from_slice_unchecked(&instruction.data),
+                    Ok(ComputeBudgetInstruction::SetComputeUnitLimit(_))
+                )
+                .then_some(ix_index)
+            })
     else {
         return Ok(UpdateComputeUnitLimitResult::NoInstructionFound);
     };
 
+    let transaction = Transaction::new_unsigned(message.clone());
     let simulate_result = rpc_client
         .simulate_transaction_with_config(
-            transaction,
+            &transaction,
             RpcSimulateTransactionConfig {
                 replace_recent_blockhash: true,
                 commitment: Some(rpc_client.commitment()),
@@ -66,7 +68,7 @@ pub(crate) fn simulate_and_update_compute_unit_limit(
 
     // Overwrite the compute unit limit instruction with the actual units consumed
     let compute_unit_limit = u32::try_from(units_consumed)?;
-    transaction.message.instructions[compute_unit_limit_ix_index].data =
+    message.instructions[compute_unit_limit_ix_index].data =
         ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit).data;
 
     Ok(UpdateComputeUnitLimitResult::UpdatedInstructionIndex(

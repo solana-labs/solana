@@ -2416,9 +2416,9 @@ fn do_process_program_write_and_deploy(
     let final_tx_sig = send_deploy_messages(
         rpc_client,
         config,
-        &initial_message,
-        &write_messages,
-        &final_message,
+        initial_message,
+        write_messages,
+        final_message,
         fee_payer_signer,
         buffer_signer,
         Some(buffer_authority_signer),
@@ -2565,9 +2565,9 @@ fn do_process_program_upgrade(
     let final_tx_sig = send_deploy_messages(
         rpc_client,
         config,
-        &initial_message,
-        &write_messages,
-        &final_message,
+        initial_message,
+        write_messages,
+        final_message,
         fee_payer_signer,
         buffer_signer,
         Some(upgrade_authority),
@@ -2696,22 +2696,20 @@ fn check_payer(
 fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
-    initial_message: &Option<Message>,
-    write_messages: &[Message],
-    final_message: &Option<Message>,
+    initial_message: Option<Message>,
+    mut write_messages: Vec<Message>,
+    final_message: Option<Message>,
     fee_payer_signer: &dyn Signer,
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
     max_sign_attempts: usize,
 ) -> Result<Option<Signature>, Box<dyn std::error::Error>> {
-    if let Some(message) = initial_message {
+    if let Some(mut message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
-
+            simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?;
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
-            simulate_and_update_compute_unit_limit(&rpc_client, &mut initial_transaction)?;
-
             let blockhash = rpc_client.get_latest_blockhash()?;
 
             // Most of the initial_transaction combinations require both the fee-payer and new program
@@ -2738,11 +2736,10 @@ fn send_deploy_messages(
             // Simulate the first write message to get the number of compute units
             // consumed and then reuse that value as the compute unit limit for all
             // write messages.
-            let mut write_messages = write_messages.to_vec();
             {
-                let mut transaction = Transaction::new_unsigned(write_messages[0].clone());
+                let mut message = write_messages[0].clone();
                 if let UpdateComputeUnitLimitResult::UpdatedInstructionIndex(ix_index) =
-                    simulate_and_update_compute_unit_limit(&rpc_client, &mut transaction)?
+                    simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?
                 {
                     for msg in &mut write_messages {
                         // Write messages are all assumed to be identical except
@@ -2752,7 +2749,7 @@ fn send_deploy_messages(
                         // instruction.
                         assert_eq!(msg.program_id(ix_index), Some(&compute_budget::id()));
                         msg.instructions[ix_index].data =
-                            transaction.message.instructions[ix_index].data.clone();
+                            message.instructions[ix_index].data.clone();
                     }
                 }
             }
@@ -2813,13 +2810,12 @@ fn send_deploy_messages(
         }
     }
 
-    if let Some(message) = final_message {
+    if let Some(mut message) = final_message {
         if let Some(final_signers) = final_signers {
             trace!("Deploying program");
 
-            let mut final_tx = Transaction::new_unsigned(message.clone());
-            simulate_and_update_compute_unit_limit(&rpc_client, &mut final_tx)?;
-
+            simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?;
+            let mut final_tx = Transaction::new_unsigned(message);
             let blockhash = rpc_client.get_latest_blockhash()?;
             let mut signers = final_signers.to_vec();
             signers.push(fee_payer_signer);
