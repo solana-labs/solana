@@ -86,11 +86,11 @@ impl TieredStorageReader {
     }
 
     /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<'a>(
+    pub fn get_stored_account_meta_callback<'a, Ret>(
         &'a self,
         index_offset: IndexOffset,
-        callback: impl FnMut(StoredAccountMeta<'a>),
-    ) -> TieredStorageResult<()> {
+        callback: impl FnMut(StoredAccountMeta<'a>) -> Ret,
+    ) -> TieredStorageResult<Option<Ret>> {
         match self {
             Self::Hot(hot) => hot.get_stored_account_meta_callback(index_offset, callback),
         }

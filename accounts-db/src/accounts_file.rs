@@ -137,24 +137,23 @@ impl AccountsFile {
     }
 
     /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<'a>(
+    pub fn get_stored_account_meta_callback<'a, Ret>(
         &'a self,
         offset: usize,
-        callback: impl FnMut(StoredAccountMeta<'a>),
-    ) {
+        callback: impl FnMut(StoredAccountMeta<'a>) -> Ret,
+    ) -> Option<Ret> {
         match self {
             Self::AppendVec(av) => av.get_stored_account_meta_callback(offset, callback),
             // Note: The conversion here is needed as the AccountsDB currently
             // assumes all offsets are multiple of 8 while TieredStorage uses
             // IndexOffset that is equivalent to AccountInfo::reduced_offset.
-            Self::TieredStorage(ts) => {
-                if let Some(reader) = ts.reader() {
-                    _ = reader.get_stored_account_meta_callback(
-                        IndexOffset(AccountInfo::get_reduced_offset(offset)),
-                        callback,
-                    );
-                }
-            }
+            Self::TieredStorage(ts) => ts
+                .reader()?
+                .get_stored_account_meta_callback(
+                    IndexOffset(AccountInfo::get_reduced_offset(offset)),
+                    callback,
+                )
+                .ok()?,
         }
     }
 
