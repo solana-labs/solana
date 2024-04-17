@@ -5981,7 +5981,7 @@ impl AccountsDb {
             let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage
                 .accounts
-                .append_accounts(accounts_and_meta_to_store, infos.len());
+                .append_accounts(accounts_and_meta_to_store.accounts, infos.len());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
             if rvs.is_none() {
@@ -9716,7 +9716,7 @@ pub mod tests {
         let append = StorableAccountsWithHashes::new_with_hashes(&storable, hashes);
 
         // construct append vec with account to generate an index from
-        append_vec.accounts.append_accounts(&append, 0);
+        append_vec.accounts.append_accounts(append.accounts, 0);
         // append vecs set this at load
         append_vec
             .approx_store_count
@@ -10205,7 +10205,7 @@ pub mod tests {
                         StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
                     copied_storage
                         .accounts
-                        .append_accounts(&storable_accounts, 0);
+                        .append_accounts(storable_accounts.accounts, 0);
                     copied_storage
                 })
                 .collect::<Vec<_>>();
@@ -10249,7 +10249,7 @@ pub mod tests {
                     StorableAccountsWithHashes::new_with_hashes(&account_data, hashes);
                 copied_storage
                     .accounts
-                    .append_accounts(&storable_accounts, 0);
+                    .append_accounts(storable_accounts.accounts, 0);
                 copied_storage
             })
             .collect::<Vec<_>>();
@@ -10719,7 +10719,7 @@ pub mod tests {
             StorableAccountsWithHashes::new_with_hashes(&account_data, vec![&hash]);
         let stored_accounts_info = storage
             .accounts
-            .append_accounts(&storable_accounts, 0)
+            .append_accounts(storable_accounts.accounts, 0)
             .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
@@ -15170,10 +15170,11 @@ pub mod tests {
         let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
         let hashes = vec![AccountHash(Hash::default()); 1];
         storage.accounts.append_accounts(
-            &StorableAccountsWithHashes::new_with_hashes(
+            StorableAccountsWithHashes::new_with_hashes(
                 &(slot0, &[(&shared_key, &account)][..]),
                 hashes,
-            ),
+            )
+            .accounts,
             0,
         );
 
@@ -15246,10 +15247,11 @@ pub mod tests {
             let storage = accounts.create_and_insert_store(slot0, 4_000, "flush_slot_cache");
             let hashes = vec![AccountHash(Hash::default()); 2];
             storage.accounts.append_accounts(
-                &StorableAccountsWithHashes::new_with_hashes(
+                StorableAccountsWithHashes::new_with_hashes(
                     &(slot0, &[(&keys[0], &account), (&keys[1], &account_big)][..]),
                     hashes,
-                ),
+                )
+                .accounts,
                 0,
             );
 
