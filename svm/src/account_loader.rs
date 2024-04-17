@@ -8,7 +8,7 @@ use {
     log::warn,
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
-        loaded_programs::LoadedProgramsForTxBatch,
+        loaded_programs::{LoadedProgram, LoadedProgramsForTxBatch},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -31,7 +31,7 @@ use {
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
-    std::{collections::HashMap, num::NonZeroUsize},
+    std::num::NonZeroUsize,
 };
 
 // for the load instructions
@@ -114,7 +114,6 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     error_counters: &mut TransactionErrorMetrics,
     fee_structure: &FeeStructure,
     account_overrides: Option<&AccountOverrides>,
-    program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
 ) -> Vec<TransactionLoadResult> {
     let feature_set = callbacks.get_feature_set();
@@ -145,7 +144,6 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                     fee,
                     error_counters,
                     account_overrides,
-                    program_accounts,
                     loaded_programs,
                 ) {
                     Ok(loaded_transaction) => loaded_transaction,
@@ -182,7 +180,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     fee: u64,
     error_counters: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
-    program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
     loaded_programs: &LoadedProgramsForTxBatch,
 ) -> Result<LoadedTransaction> {
     let feature_set = callbacks.get_feature_set();
@@ -227,10 +224,13 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     .then_some(())
                     .and_then(|_| loaded_programs.find(key))
                 {
+                    callbacks
+                        .get_account_shared_data(key)
+                        .ok_or(TransactionError::AccountNotFound)?;
                     // Optimization to skip loading of accounts which are only used as
                     // programs in top-level instructions and not passed as instruction accounts.
-                    account_shared_data_from_program(key, program_accounts)
-                        .map(|program_account| (program.account_size, program_account, 0))?
+                    let program_account = account_shared_data_from_program(&program);
+                    (program.account_size, program_account, 0)
                 } else {
                     callbacks
                         .get_account_shared_data(key)
@@ -408,20 +408,14 @@ fn get_requested_loaded_accounts_data_size_limit(
     )
 }
 
-fn account_shared_data_from_program(
-    key: &Pubkey,
-    program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
-) -> Result<AccountSharedData> {
+fn account_shared_data_from_program(loaded_program: &LoadedProgram) -> AccountSharedData {
     // It's an executable program account. The program is already loaded in the cache.
     // So the account data is not needed. Return a dummy AccountSharedData with meta
     // information.
     let mut program_account = AccountSharedData::default();
-    let (program_owner, _count) = program_accounts
-        .get(key)
-        .ok_or(TransactionError::AccountNotFound)?;
-    program_account.set_owner(**program_owner);
+    program_account.set_owner(loaded_program.account_owner());
     program_account.set_executable(true);
-    Ok(program_account)
+    program_account
 }
 
 /// Accumulate loaded account data size into `accumulated_accounts_data_size`.
@@ -556,7 +550,6 @@ mod tests {
             error_counters,
             fee_structure,
             None,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )
     }
@@ -1045,7 +1038,6 @@ mod tests {
             &mut error_counters,
             &FeeStructure::default(),
             account_overrides,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )
     }
@@ -1422,26 +1414,6 @@ mod tests {
     }
 
     #[test]
-    fn test_account_shared_data_from_program() {
-        let key = Keypair::new().pubkey();
-        let other_key = Keypair::new().pubkey();
-
-        let mut accounts: HashMap<Pubkey, (&Pubkey, u64)> = HashMap::new();
-
-        let result = account_shared_data_from_program(&key, &accounts);
-        assert_eq!(result.err(), Some(TransactionError::AccountNotFound));
-
-        accounts.insert(key, (&other_key, 32));
-
-        let result = account_shared_data_from_program(&key, &accounts);
-        let mut expected = AccountSharedData::default();
-        expected.set_owner(other_key);
-        expected.set_executable(true);
-
-        assert_eq!(result.unwrap(), expected);
-    }
-
-    #[test]
     fn test_load_transaction_accounts_fail_to_validate_fee_payer() {
         let message = Message {
             account_keys: vec![Pubkey::new_from_array([0; 32])],
@@ -1470,7 +1442,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
 
@@ -1514,7 +1485,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -1580,7 +1550,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
 
@@ -1623,7 +1592,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
 
@@ -1666,7 +1634,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
 
@@ -1716,7 +1683,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -1784,7 +1750,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -1841,7 +1806,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -1903,7 +1867,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -1991,7 +1954,6 @@ mod tests {
             32,
             &mut error_counter,
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
         mock_bank
@@ -2063,7 +2025,6 @@ mod tests {
             &mut error_counters,
             &FeeStructure::default(),
             None,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         );
 
@@ -2147,7 +2108,6 @@ mod tests {
             &mut error_counter,
             &FeeStructure::default(),
             None,
-            &HashMap::new(),
             &loaded_programs,
         );
 
@@ -2221,7 +2181,6 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         );
 
@@ -2240,7 +2199,6 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         );
 
@@ -2259,7 +2217,6 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         );
 

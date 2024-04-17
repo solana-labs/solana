@@ -257,7 +257,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             error_counters,
             &self.fee_structure,
             account_overrides,
-            &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
         );
         load_time.stop();
