@@ -98,6 +98,7 @@ fn run_shred_sigverify<const K: usize>(
         .collect();
     let now = Instant::now();
     stats.num_iters += 1;
+    stats.num_batches += packets.len();
     stats.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
     stats.num_discards_pre += count_discards(&packets);
     stats.num_duplicates += thread_pool.install(|| {
@@ -218,6 +219,7 @@ impl<T> From<SendError<T>> for Error {
 struct ShredSigVerifyStats {
     since: Instant,
     num_iters: usize,
+    num_batches: usize,
     num_packets: usize,
     num_deduper_saturations: usize,
     num_discards_post: usize,
@@ -234,6 +236,7 @@ impl ShredSigVerifyStats {
         Self {
             since: now,
             num_iters: 0usize,
+            num_batches: 0usize,
             num_packets: 0usize,
             num_discards_pre: 0usize,
             num_deduper_saturations: 0usize,
@@ -251,6 +254,7 @@ impl ShredSigVerifyStats {
         datapoint_info!(
             "shred_sigverify",
             ("num_iters", self.num_iters, i64),
+            ("num_batches", self.num_batches, i64),
             ("num_packets", self.num_packets, i64),
             ("num_discards_pre", self.num_discards_pre, i64),
             ("num_deduper_saturations", self.num_deduper_saturations, i64),
