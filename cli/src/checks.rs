@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::cli::CliError,
     solana_rpc_client::rpc_client::RpcClient,
@@ -84,10 +82,19 @@ pub fn check_account_for_spend_and_fee_with_commitment(
     fee: u64,
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
+    let required_balance =
+        balance
+            .checked_add(fee)
+            .ok_or(CliError::InsufficientFundsForSpendAndFee(
+                lamports_to_sol(balance),
+                lamports_to_sol(fee),
+                *account_pubkey,
+            ))?;
+
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,
-        balance + fee,
+        required_balance,
         commitment,
     )
     .map_err(Into::<ClientError>::into)?
