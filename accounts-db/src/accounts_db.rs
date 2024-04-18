@@ -12219,49 +12219,6 @@ pub mod tests {
         assert_eq!(stats.num_executable_accounts, 1);
     }
 
-    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
-    #[ignore]
-    #[test]
-    fn test_calculate_accounts_hash_check_hash_mismatch() {
-        solana_logger::setup();
-        let db = AccountsDb::new_single_for_tests();
-
-        let key = solana_sdk::pubkey::new_rand();
-        let some_data_len = 0;
-        let some_slot: Slot = 0;
-        let account = AccountSharedData::new(1, some_data_len, &key);
-
-        let ancestors = vec![(some_slot, 0)].into_iter().collect();
-
-        // put wrong hash value in store so we get a mismatch
-        db.store_accounts_unfrozen(
-            (some_slot, &[(&key, &account)][..]),
-            &StoreTo::Storage(&db.find_storage_candidate(some_slot)),
-            None,
-            StoreReclaims::Default,
-            UpdateIndexThreadSelection::PoolWithThreshold,
-        );
-        db.add_root(some_slot);
-        let check_hash = true;
-        for data_source in [
-            CalcAccountsHashDataSource::IndexForTests,
-            CalcAccountsHashDataSource::Storages,
-        ] {
-            assert!(db
-                .calculate_accounts_hash(
-                    data_source,
-                    some_slot,
-                    &CalcAccountsHashConfig {
-                        use_bg_thread_pool: true, // is_startup used to be false
-                        check_hash,
-                        ancestors: Some(&ancestors),
-                        ..CalcAccountsHashConfig::default()
-                    },
-                )
-                .is_err());
-        }
-    }
-
     // something we can get a ref to
     lazy_static! {
         pub static ref EPOCH_SCHEDULE: EpochSchedule = EpochSchedule::default();
@@ -12279,49 +12236,6 @@ pub mod tests {
                 store_detailed_debug_info_on_failure: false,
             }
         }
-    }
-
-    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
-    #[ignore]
-    #[test]
-    fn test_calculate_accounts_hash_check_hash() {
-        solana_logger::setup();
-        let db = AccountsDb::new_single_for_tests();
-
-        let key = solana_sdk::pubkey::new_rand();
-        let some_data_len = 0;
-        let some_slot: Slot = 0;
-        let account = AccountSharedData::new(1, some_data_len, &key);
-
-        let ancestors = vec![(some_slot, 0)].into_iter().collect();
-
-        db.store_for_tests(some_slot, &[(&key, &account)]);
-        db.add_root(some_slot);
-        let check_hash = true;
-        assert_eq!(
-            db.calculate_accounts_hash(
-                CalcAccountsHashDataSource::Storages,
-                some_slot,
-                &CalcAccountsHashConfig {
-                    use_bg_thread_pool: true, // is_startup used to be false
-                    check_hash,
-                    ancestors: Some(&ancestors),
-                    ..CalcAccountsHashConfig::default()
-                },
-            )
-            .unwrap(),
-            db.calculate_accounts_hash(
-                CalcAccountsHashDataSource::IndexForTests,
-                some_slot,
-                &CalcAccountsHashConfig {
-                    use_bg_thread_pool: true, // is_startup used to be false
-                    check_hash,
-                    ancestors: Some(&ancestors),
-                    ..CalcAccountsHashConfig::default()
-                },
-            )
-            .unwrap(),
-        );
     }
 
     #[test]
