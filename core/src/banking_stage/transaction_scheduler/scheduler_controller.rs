@@ -371,19 +371,17 @@ impl SchedulerController {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
         const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
-        let (recv_timeout, should_buffer) = match decision {
-            BufferedPacketsDecision::Consume(_) => (
+        let recv_timeout = match decision {
+            BufferedPacketsDecision::Consume(_) => {
                 if self.container.is_empty() {
                     MAX_PACKET_RECEIVE_TIME
                 } else {
                     Duration::ZERO
-                },
-                true,
-            ),
-            BufferedPacketsDecision::Forward => (MAX_PACKET_RECEIVE_TIME, false),
-            BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {
-                (MAX_PACKET_RECEIVE_TIME, true)
+                }
             }
+            BufferedPacketsDecision::Forward
+            | BufferedPacketsDecision::ForwardAndHold
+            | BufferedPacketsDecision::Hold => MAX_PACKET_RECEIVE_TIME,
         };
 
         let (received_packet_results, receive_time_us) = measure_us!(self
@@ -402,21 +400,11 @@ impl SchedulerController {
                     saturating_add_assign!(count_metrics.num_received, num_received_packets);
                 });
 
-                if should_buffer {
-                    let (_, buffer_time_us) = measure_us!(
-                        self.buffer_packets(receive_packet_results.deserialized_packets)
-                    );
-                    self.timing_metrics.update(|timing_metrics| {
-                        saturating_add_assign!(timing_metrics.buffer_time_us, buffer_time_us);
-                    });
-                } else {
-                    self.count_metrics.update(|count_metrics| {
-                        saturating_add_assign!(
-                            count_metrics.num_dropped_on_receive,
-                            num_received_packets
-                        );
-                    });
-                }
+                let (_, buffer_time_us) =
+                    measure_us!(self.buffer_packets(receive_packet_results.deserialized_packets));
+                self.timing_metrics.update(|timing_metrics| {
+                    saturating_add_assign!(timing_metrics.buffer_time_us, buffer_time_us);
+                });
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return false,
