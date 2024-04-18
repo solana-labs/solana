@@ -58,7 +58,6 @@ use {
         compute_budget,
         feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
-        loader_instruction,
         message::Message,
         native_token::Sol,
         packet::PACKET_DATA_SIZE,
@@ -1283,7 +1282,6 @@ fn process_program_deploy(
             program_len,
             program_data_max_len,
             min_rent_exempt_program_data_balance,
-            &bpf_loader_upgradeable::id(),
             fee_payer_signer,
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
@@ -1516,7 +1514,6 @@ fn process_write_buffer(
         program_data.len(),
         buffer_data_max_len,
         min_rent_exempt_program_data_balance,
-        &bpf_loader_upgradeable::id(),
         fee_payer_signer,
         None,
         buffer_signer,
@@ -2271,7 +2268,6 @@ fn do_process_program_write_and_deploy(
     program_len: usize,
     program_data_max_len: usize,
     min_rent_exempt_program_data_balance: u64,
-    loader_id: &Pubkey,
     fee_payer_signer: &dyn Signer,
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
@@ -2291,15 +2287,10 @@ fn do_process_program_write_and_deploy(
             .value
     {
         let (ixs, balance_needed) = complete_partial_program_init(
-            loader_id,
             &fee_payer_signer.pubkey(),
             buffer_pubkey,
             &account,
-            if loader_id == &bpf_loader_upgradeable::id() {
-                UpgradeableLoaderState::size_of_buffer(program_len)
-            } else {
-                program_len
-            },
+            UpgradeableLoaderState::size_of_buffer(program_len),
             min_rent_exempt_program_data_balance,
             allow_excessive_balance,
         )?;
@@ -2307,7 +2298,7 @@ fn do_process_program_write_and_deploy(
             .data
             .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
         (ixs, balance_needed, buffer_program_data)
-    } else if loader_id == &bpf_loader_upgradeable::id() {
+    } else {
         (
             bpf_loader_upgradeable::create_buffer(
                 &fee_payer_signer.pubkey(),
@@ -2316,18 +2307,6 @@ fn do_process_program_write_and_deploy(
                 min_rent_exempt_program_data_balance,
                 program_len,
             )?,
-            min_rent_exempt_program_data_balance,
-            vec![0; program_len],
-        )
-    } else {
-        (
-            vec![system_instruction::create_account(
-                &fee_payer_signer.pubkey(),
-                buffer_pubkey,
-                min_rent_exempt_program_data_balance,
-                program_len as u64,
-                loader_id,
-            )],
             min_rent_exempt_program_data_balance,
             vec![0; program_len],
         )
@@ -2346,16 +2325,12 @@ fn do_process_program_write_and_deploy(
 
     // Create and add write messages
     let create_msg = |offset: u32, bytes: Vec<u8>| {
-        let instruction = if loader_id == &bpf_loader_upgradeable::id() {
-            bpf_loader_upgradeable::write(
-                buffer_pubkey,
-                &buffer_authority_signer.pubkey(),
-                offset,
-                bytes,
-            )
-        } else {
-            loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
-        };
+        let instruction = bpf_loader_upgradeable::write(
+            buffer_pubkey,
+            &buffer_authority_signer.pubkey(),
+            offset,
+            bytes,
+        );
 
         let instructions =
             vec![instruction].with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
@@ -2373,26 +2348,22 @@ fn do_process_program_write_and_deploy(
 
     // Create and add final message
     let final_message = if let Some(program_signers) = program_signers {
-        let message = if loader_id == &bpf_loader_upgradeable::id() {
-            let instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
-                &fee_payer_signer.pubkey(),
-                &program_signers[0].pubkey(),
-                buffer_pubkey,
-                &program_signers[1].pubkey(),
-                rpc_client.get_minimum_balance_for_rent_exemption(
-                    UpgradeableLoaderState::size_of_program(),
-                )?,
-                program_data_max_len,
-            )?
-            .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+        let instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &fee_payer_signer.pubkey(),
+            &program_signers[0].pubkey(),
+            buffer_pubkey,
+            &program_signers[1].pubkey(),
+            rpc_client
+                .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())?,
+            program_data_max_len,
+        )?
+        .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
 
-            Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
-        } else {
-            let instructions = vec![loader_instruction::finalize(buffer_pubkey, loader_id)]
-                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
-            Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
-        };
-        Some(message)
+        Some(Message::new_with_blockhash(
+            &instructions,
+            Some(&fee_payer_signer.pubkey()),
+            &blockhash,
+        ))
     } else {
         None
     };
@@ -2464,7 +2435,6 @@ fn do_process_program_upgrade(
                 .value
         {
             let (ixs, balance_needed) = complete_partial_program_init(
-                &bpf_loader_upgradeable::id(),
                 &fee_payer_signer.pubkey(),
                 &buffer_signer.pubkey(),
                 &account,
@@ -2603,7 +2573,6 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
 }
 
 fn complete_partial_program_init(
-    loader_id: &Pubkey,
     payer_pubkey: &Pubkey,
     elf_pubkey: &Pubkey,
     account: &Account,
@@ -2616,7 +2585,7 @@ fn complete_partial_program_init(
     if account.executable {
         return Err("Buffer account is already executable".into());
     }
-    if account.owner != *loader_id && !system_program::check_id(&account.owner) {
+    if account.owner != bpf_loader_upgradeable::id() && !system_program::check_id(&account.owner) {
         return Err("Buffer account passed is already in use by another program".into());
     }
     if !account.data.is_empty() && account.data.len() < account_data_len {
@@ -2631,7 +2600,10 @@ fn complete_partial_program_init(
             elf_pubkey,
             account_data_len as u64,
         ));
-        instructions.push(system_instruction::assign(elf_pubkey, loader_id));
+        instructions.push(system_instruction::assign(
+            elf_pubkey,
+            &bpf_loader_upgradeable::id(),
+        ));
         if account.lamports < minimum_balance {
             let balance = minimum_balance - account.lamports;
             instructions.push(system_instruction::transfer(
