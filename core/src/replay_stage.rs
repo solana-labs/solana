@@ -626,6 +626,7 @@ impl ReplayStage {
                 );
             let mut current_leader = None;
             let mut last_reset = Hash::default();
+            let mut last_reset_bank_descendants = Vec::new();
             let mut partition_info = PartitionInfo::new();
             let mut skipped_slots_info = SkippedSlotsInfo::default();
             let mut replay_timing = ReplayLoopTiming::default();
@@ -1017,7 +1018,17 @@ impl ReplayStage {
                 let mut reset_bank_time = Measure::start("reset_bank");
                 // Reset onto a fork
                 if let Some(reset_bank) = reset_bank {
-                    if last_reset != reset_bank.last_blockhash() {
+                    if last_reset == reset_bank.last_blockhash() {
+                        let reset_bank_descendants =
+                            Self::get_active_descendants(reset_bank.slot(), &progress, &blockstore);
+                        if reset_bank_descendants != last_reset_bank_descendants {
+                            last_reset_bank_descendants = reset_bank_descendants;
+                            poh_recorder
+                                .write()
+                                .unwrap()
+                                .update_start_bank_active_descendants(&last_reset_bank_descendants);
+                        }
+                    } else {
                         info!(
                             "vote bank: {:?} reset bank: {:?}",
                             vote_bank
@@ -1077,6 +1088,7 @@ impl ReplayStage {
                             &leader_schedule_cache,
                         );
                         last_reset = reset_bank.last_blockhash();
+                        last_reset_bank_descendants = vec![];
                         tpu_has_bank = false;
 
                         if let Some(last_voted_slot) = tower.last_voted_slot() {
@@ -1356,6 +1368,23 @@ impl ReplayStage {
                 .get(&heaviest_slot)
                 .map(|ancestors| ancestors.contains(&last_voted_slot))
                 .unwrap_or(true)
+    }
+
+    fn get_active_descendants(
+        slot: Slot,
+        progress: &ProgressMap,
+        blockstore: &Blockstore,
+    ) -> Vec<Slot> {
+        let Some(slot_meta) = blockstore.meta(slot).ok().flatten() else {
+            return vec![];
+        };
+
+        slot_meta
+            .next_slots
+            .iter()
+            .filter(|slot| !progress.is_dead(**slot).unwrap_or_default())
+            .copied()
+            .collect()
     }
 
     fn initialize_progress_and_fork_choice_with_locked_bank_forks(

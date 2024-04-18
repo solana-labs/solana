@@ -272,6 +272,7 @@ pub struct ValidatorConfig {
     pub ip_echo_server_threads: NonZeroUsize,
     pub replay_forks_threads: NonZeroUsize,
     pub replay_transactions_threads: NonZeroUsize,
+    pub delay_leader_block_for_pending_fork: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -342,6 +343,7 @@ impl Default for ValidatorConfig {
             ip_echo_server_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_transactions_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
+            delay_leader_block_for_pending_fork: false,
         }
     }
 }
@@ -942,6 +944,7 @@ impl Validator {
                 bank.clone(),
                 None,
                 bank.ticks_per_slot(),
+                config.delay_leader_block_for_pending_fork,
                 blockstore.clone(),
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,

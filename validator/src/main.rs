@@ -1482,6 +1482,8 @@ pub fn main() {
         ip_echo_server_threads,
         replay_forks_threads,
         replay_transactions_threads,
+        delay_leader_block_for_pending_fork: matches
+            .is_present("delay_leader_block_for_pending_fork"),
         ..ValidatorConfig::default()
     };
 

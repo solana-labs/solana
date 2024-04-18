@@ -1498,6 +1498,20 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Disables the banking trace"),
         )
         .arg(
+            Arg::with_name("delay_leader_block_for_pending_fork")
+                .hidden(hidden_unless_forced())
+                .long("delay-leader-block-for-pending-fork")
+                .takes_value(false)
+                .help(
+                    "Delay leader block creation while replaying a block which descends from the \
+                    current fork and has a lower slot than our next leader slot. If we don't \
+                    delay here, our new leader block will be on a different fork from the \
+                    block we are replaying and there is a high chance that the cluster will \
+                    confirm that block's fork rather than our leader block's fork because it \
+                    was created before we started creating ours.",
+                ),
+        )
+        .arg(
             Arg::with_name("block_verification_method")
                 .long("block-verification-method")
                 .hidden(hidden_unless_forced())

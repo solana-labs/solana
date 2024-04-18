@@ -71,6 +71,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         ip_echo_server_threads: config.ip_echo_server_threads,
         replay_forks_threads: config.replay_forks_threads,
         replay_transactions_threads: config.replay_transactions_threads,
+        delay_leader_block_for_pending_fork: config.delay_leader_block_for_pending_fork,
     }
 }
 
