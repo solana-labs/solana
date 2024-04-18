@@ -16,7 +16,7 @@ use {
 };
 
 /// Structure representing a node on the network
-#[derive(Clone, Debug, Eq, Hash, PartialEq, AbiExample, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, AbiExample, Deserialize, Serialize)]
 pub struct LegacyContactInfo {
     id: Pubkey,
     /// gossip address

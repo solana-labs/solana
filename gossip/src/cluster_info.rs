@@ -1444,7 +1444,7 @@ impl ClusterInfo {
     fn append_entrypoint_to_pulls(
         &self,
         thread_pool: &ThreadPool,
-        pulls: &mut HashMap<LegacyContactInfo, Vec<CrdsFilter>>,
+        pulls: &mut Vec<(LegacyContactInfo, Vec<CrdsFilter>)>,
     ) {
         const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
         let entrypoint = {
@@ -1476,10 +1476,14 @@ impl ClusterInfo {
                 .pull
                 .build_crds_filters(thread_pool, &self.gossip.crds, MAX_BLOOM_SIZE)
         } else {
-            pulls.values().flatten().cloned().collect()
+            pulls
+                .iter()
+                .flat_map(|(_, filters)| filters)
+                .cloned()
+                .collect()
         };
         self.stats.pull_from_entrypoint_count.add_relaxed(1);
-        pulls.insert(entrypoint, filters);
+        pulls.push((entrypoint, filters));
     }
 
     /// Splits an input feed of serializable data into chunks where the sum of
@@ -1562,7 +1566,10 @@ impl ClusterInfo {
                 .unwrap_or_default()
         };
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
-        let num_requests = pulls.values().map(Vec::len).sum::<usize>() as u64;
+        let num_requests = pulls
+            .iter()
+            .map(|(_, filters)| filters.len())
+            .sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
         let self_info = LegacyContactInfo::try_from(&self.my_contact_info())
             .map(CrdsData::LegacyContactInfo)
