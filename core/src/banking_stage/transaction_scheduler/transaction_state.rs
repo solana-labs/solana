@@ -37,12 +37,14 @@ pub(crate) enum TransactionState {
         packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
+        forwarded: bool,
     },
     /// The transaction is currently scheduled or being processed.
     Pending {
         packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
+        forwarded: bool,
     },
     /// Only used during transition.
     Transitioning,
@@ -56,11 +58,13 @@ impl TransactionState {
         priority: u64,
         cost: u64,
     ) -> Self {
+        let forwarded = packet.original_packet().meta().forwarded();
         Self::Unprocessed {
             transaction_ttl,
             packet,
             priority,
             cost,
+            forwarded,
         }
     }
 
@@ -84,6 +88,24 @@ impl TransactionState {
         }
     }
 
+    /// Return whether packet is already forwarded or not.
+    pub(crate) fn forwarded(&self) -> bool {
+        match self {
+            Self::Unprocessed { forwarded, .. } => *forwarded,
+            Self::Pending { forwarded, .. } => *forwarded,
+            Self::Transitioning => unreachable!(),
+        }
+    }
+
+    /// Return the packet of the transaction.
+    pub(crate) fn packet(&self) -> &Arc<ImmutableDeserializedPacket> {
+        match self {
+            Self::Unprocessed { packet, .. } => packet,
+            Self::Pending { packet, .. } => packet,
+            Self::Transitioning => unreachable!(),
+        }
+    }
+
     /// Intended to be called when a transaction is scheduled. This method will
     /// transition the transaction from `Unprocessed` to `Pending` and return the
     /// `SanitizedTransactionTTL` for processing.
@@ -98,11 +120,13 @@ impl TransactionState {
                 packet,
                 priority,
                 cost,
+                forwarded,
             } => {
                 *self = TransactionState::Pending {
                     packet,
                     priority,
                     cost,
+                    forwarded,
                 };
                 transaction_ttl
             }
@@ -126,12 +150,14 @@ impl TransactionState {
                 packet,
                 priority,
                 cost,
+                forwarded,
             } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
                     packet,
                     priority,
                     cost,
+                    forwarded,
                 }
             }
             Self::Transitioning => unreachable!(),

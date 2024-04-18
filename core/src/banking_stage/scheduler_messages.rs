@@ -48,7 +48,6 @@ pub struct ConsumeWork {
 /// Message: [Scheduler -> Worker]
 /// Transactions to be forwarded to the next leader(s)
 pub struct ForwardWork {
-    pub ids: Vec<TransactionId>,
     pub packets: Vec<Arc<ImmutableDeserializedPacket>>,
 }
 

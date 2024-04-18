@@ -16,11 +16,13 @@ use {
         consume_worker::ConsumeWorkerMetrics,
         consumer::Consumer,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         packet_deserializer::PacketDeserializer,
+        scheduler_messages::{FinishedForwardWork, ForwardWork},
         TOTAL_BUFFERED_PACKETS,
     },
-    crossbeam_channel::RecvTimeoutError,
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
     solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
@@ -66,6 +68,10 @@ pub(crate) struct SchedulerController {
     timing_metrics: SchedulerTimingMetrics,
     /// Metric report handles for the worker threads.
     worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
+    /// Channel to send forward workers batches of packets to forward.
+    forward_work_sender: Sender<ForwardWork>,
+    /// Channel to receive finished forwarded work (to re-insert IDs into the queue).
+    finished_forward_work_receiver: Receiver<FinishedForwardWork>,
 }
 
 impl SchedulerController {
@@ -75,6 +81,8 @@ impl SchedulerController {
         bank_forks: Arc<RwLock<BankForks>>,
         scheduler: PrioGraphScheduler,
         worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
+        forward_work_sender: Sender<ForwardWork>,
+        finished_forward_work_receiver: Receiver<FinishedForwardWork>,
     ) -> Self {
         Self {
             decision_maker,
@@ -87,6 +95,8 @@ impl SchedulerController {
             count_metrics: SchedulerCountMetrics::default(),
             timing_metrics: SchedulerTimingMetrics::default(),
             worker_metrics,
+            forward_work_sender,
+            finished_forward_work_receiver,
         }
     }
 
@@ -220,8 +230,48 @@ impl SchedulerController {
     }
 
     /// Forward packets to the next leader.
-    fn forward_packets(&mut self, _hold: bool) {
-        todo!()
+    fn forward_packets(&mut self, hold: bool) {
+        let bank = self.bank_forks.read().unwrap().working_bank();
+        let feature_set = &bank.feature_set;
+        let mut forwardable_packets =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+        let mut already_forwarded_ids = Vec::new();
+        while let Some(id) = self.container.pop() {
+            let Some(state) = self.container.get_transaction_state(&id.id) else {
+                continue;
+            };
+
+            if state.forwarded() {
+                already_forwarded_ids.push(id);
+                continue;
+            }
+
+            if forwardable_packets.try_add_packet(
+                &state.transaction_ttl().transaction,
+                state.packet().clone(),
+                feature_set,
+            ) {
+                already_forwarded_ids.push(id);
+                break;
+            }
+        }
+
+        // Push into worker queue.
+        for batch in forwardable_packets.take_iter_batches() {
+            let packets = batch.take_packets();
+            let forward_work = ForwardWork { packets };
+            self.forward_work_sender.send(forward_work).unwrap();
+        }
+
+        if hold {
+            for priority_id in already_forwarded_ids {
+                self.container.push_id_into_queue(priority_id);
+            }
+        } else {
+            for priority_id in already_forwarded_ids {
+                self.container.remove_by_id(&priority_id.id);
+            }
+        }
     }
 
     /// Clears the transaction state container.
@@ -309,6 +359,9 @@ impl SchedulerController {
                 receive_completed_time_us
             );
         });
+
+        // Receive completed forward work. Don't need to do anything with it.
+        while let Ok(_finished_forward_work) = self.finished_forward_work_receiver.try_recv() {}
 
         Ok(())
     }
@@ -633,12 +686,16 @@ mod tests {
             consume_work_receivers,
             finished_consume_work_sender,
         };
+        let (forward_work_sender, _forward_work_receiver) = unbounded();
+        let (_finished_forward_work_sender, finished_forward_work_receiver) = unbounded();
         let scheduler_controller = SchedulerController::new(
             decision_maker,
             packet_deserializer,
             bank_forks,
             PrioGraphScheduler::new(consume_work_senders, finished_consume_work_receiver),
             vec![], // no actual workers with metrics to report, this can be empty
+            forward_work_sender,
+            finished_forward_work_receiver,
         );
 
         (test_frame, scheduler_controller)

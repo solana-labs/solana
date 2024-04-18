@@ -83,6 +83,10 @@ impl ForwardBatch {
     pub fn is_empty(&self) -> bool {
         self.forwardable_packets.is_empty()
     }
+
+    pub fn take_packets(self) -> Vec<Arc<ImmutableDeserializedPacket>> {
+        self.forwardable_packets
+    }
 }
 
 /// To avoid forward queue being saturated by transactions for single hot account,
@@ -129,6 +133,10 @@ impl ForwardPacketBatchesByAccounts {
 
     pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch> {
         self.forward_batches.iter()
+    }
+
+    pub fn take_iter_batches(self) -> impl Iterator<Item = ForwardBatch> {
+        self.forward_batches.into_iter()
     }
 }
 

@@ -18,6 +18,7 @@ use {
     crate::{
         banking_stage::{
             consume_worker::ConsumeWorker,
+            forward_worker::ForwardWorker,
             packet_deserializer::PacketDeserializer,
             transaction_scheduler::{
                 prio_graph_scheduler::PrioGraphScheduler,
@@ -582,6 +583,34 @@ impl BankingStage {
             )
         }
 
+        // Spawn the forward worker threads.
+        let (forward_work_sender, forward_work_receiver) = unbounded();
+        let (finished_forward_work_sender, finished_forwrard_work_receiver) = unbounded();
+        for id in 0..num_workers {
+            let id = id + 2;
+            let forwarder = Forwarder::new(
+                poh_recorder.clone(),
+                bank_forks.clone(),
+                cluster_info.clone(),
+                connection_cache.clone(),
+                data_budget.clone(),
+            );
+            let forward_worker = ForwardWorker::new(
+                forward_work_receiver.clone(),
+                ForwardOption::ForwardTransaction, // non-votes through central scheduler
+                forwarder,
+                finished_forward_work_sender.clone(),
+            );
+            bank_thread_hdls.push(
+                Builder::new()
+                    .name(format!("solFwWorker{id:02}"))
+                    .spawn(move || {
+                        let _ = forward_worker.run();
+                    })
+                    .unwrap(),
+            );
+        }
+
         // Spawn the central scheduler thread
         bank_thread_hdls.push({
             let packet_deserializer =
@@ -593,6 +622,8 @@ impl BankingStage {
                 bank_forks,
                 scheduler,
                 worker_metrics,
+                forward_work_sender,
+                finished_forwrard_work_receiver,
             );
             Builder::new()
                 .name("solBnkTxSched".to_string())

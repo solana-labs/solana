@@ -65,6 +65,11 @@ impl TransactionStateContainer {
         self.priority_queue.pop_max()
     }
 
+    /// Get immutable transaction state by id.
+    pub(crate) fn get_transaction_state(&self, id: &TransactionId) -> Option<&TransactionState> {
+        self.id_to_transaction_state.get(id)
+    }
+
     /// Get mutable transaction state by id.
     pub(crate) fn get_mut_transaction_state(
         &mut self,
