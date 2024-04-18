@@ -65,10 +65,10 @@ impl<'storage> StoredAccountMeta<'storage> {
         }
     }
 
-    pub fn data_len(&self) -> u64 {
+    pub fn data_len(&self) -> usize {
         match self {
-            Self::AppendVec(av) => av.data_len(),
-            Self::Hot(hot) => hot.data().len() as u64,
+            Self::AppendVec(av) => av.data_len() as usize,
+            Self::Hot(hot) => hot.data().len(),
         }
     }
 

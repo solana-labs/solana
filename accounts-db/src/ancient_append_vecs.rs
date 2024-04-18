@@ -1125,7 +1125,7 @@ pub mod tests {
                         bytes: accounts
                             .stored_accounts
                             .iter()
-                            .map(|account| aligned_stored_size(account.data().len()))
+                            .map(|account| aligned_stored_size(account.data_len()))
                             .sum(),
                         slot,
                     })
@@ -1317,7 +1317,7 @@ pub mod tests {
                         bytes: accounts
                             .stored_accounts
                             .iter()
-                            .map(|account| aligned_stored_size(account.data().len()))
+                            .map(|account| aligned_stored_size(account.data_len()))
                             .sum(),
                         slot,
                     })
@@ -1364,7 +1364,7 @@ pub mod tests {
                             .iter()
                             .map(|(_slot, accounts)| accounts
                                 .iter()
-                                .map(|account| aligned_stored_size(account.data().len()) as u64)
+                                .map(|account| aligned_stored_size(account.data_len()) as u64)
                                 .sum::<u64>())
                             .sum::<u64>()
                     );
@@ -1665,8 +1665,9 @@ pub mod tests {
                 .stored_accounts
                 .first()
                 .unwrap();
+            let account_shared_data_with_2_refs = account_with_2_refs.to_account_shared_data();
             let pk_with_2_refs = account_with_2_refs.pubkey();
-            let mut account_with_1_ref = account_with_2_refs.to_account_shared_data();
+            let mut account_with_1_ref = account_shared_data_with_2_refs.clone();
             account_with_1_ref.checked_add_lamports(1).unwrap();
             append_single_account_with_default_hash(
                 &storage,
@@ -1683,7 +1684,7 @@ pub mod tests {
             append_single_account_with_default_hash(
                 &ignored_storage,
                 pk_with_2_refs,
-                &account_with_2_refs.to_account_shared_data(),
+                &account_shared_data_with_2_refs,
                 true,
                 Some(&db.accounts_index),
             );
@@ -1731,6 +1732,11 @@ pub mod tests {
                 .alive_accounts
                 .one_ref
                 .accounts;
+            let one_ref_accounts_account_shared_data = one_ref_accounts
+                .iter()
+                .map(|account| account.to_account_shared_data())
+                .collect::<Vec<_>>();
+
             assert_eq!(
                 one_ref_accounts
                     .iter()
@@ -1739,7 +1745,7 @@ pub mod tests {
                 vec![&pk_with_1_ref]
             );
             assert_eq!(
-                one_ref_accounts
+                one_ref_accounts_account_shared_data
                     .iter()
                     .map(|meta| meta.to_account_shared_data())
                     .collect::<Vec<_>>(),
@@ -1815,7 +1821,7 @@ pub mod tests {
                     .first()
                     .unwrap()
                     .to_account_shared_data(),
-                account_with_2_refs.to_account_shared_data()
+                account_shared_data_with_2_refs
             );
         }
     }
@@ -1843,8 +1849,9 @@ pub mod tests {
                 .stored_accounts
                 .first()
                 .unwrap();
+            let account_shared_data_with_2_refs = account_with_2_refs.to_account_shared_data();
             let pk_with_2_refs = account_with_2_refs.pubkey();
-            let mut account_with_1_ref = account_with_2_refs.to_account_shared_data();
+            let mut account_with_1_ref = account_shared_data_with_2_refs.clone();
             _ = account_with_1_ref.checked_add_lamports(1);
             append_single_account_with_default_hash(
                 &storage,
@@ -1906,6 +1913,10 @@ pub mod tests {
                 .alive_accounts
                 .one_ref
                 .accounts;
+            let one_ref_accounts_account_shared_data = one_ref_accounts
+                .iter()
+                .map(|account| account.to_account_shared_data())
+                .collect::<Vec<_>>();
             assert_eq!(
                 one_ref_accounts
                     .iter()
@@ -1914,7 +1925,7 @@ pub mod tests {
                 vec![&pk_with_1_ref]
             );
             assert_eq!(
-                one_ref_accounts
+                one_ref_accounts_account_shared_data
                     .iter()
                     .map(|meta| meta.to_account_shared_data())
                     .collect::<Vec<_>>(),
@@ -1958,7 +1969,7 @@ pub mod tests {
                     .first()
                     .unwrap()
                     .to_account_shared_data(),
-                account_with_2_refs.to_account_shared_data()
+                account_shared_data_with_2_refs
             );
         }
     }

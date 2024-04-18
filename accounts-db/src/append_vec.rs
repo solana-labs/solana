@@ -1263,7 +1263,7 @@ pub mod tests {
             // Reload accounts and observe crafted_data_len
             let accounts = av.accounts(0);
             let account = accounts.first().unwrap();
-            assert_eq!(account.data_len(), crafted_data_len);
+            assert_eq!(account.data_len() as u64, crafted_data_len);
 
             av.flush().unwrap();
             av.len()
