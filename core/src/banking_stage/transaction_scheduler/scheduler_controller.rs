@@ -178,15 +178,15 @@ impl SchedulerController {
                 });
             }
             BufferedPacketsDecision::Forward => {
-                let (_, clear_time_us) = measure_us!(self.clear_container());
+                let (_, forward_time_us) = measure_us!(self.forward_packets(false));
                 self.timing_metrics.update(|timing_metrics| {
-                    saturating_add_assign!(timing_metrics.clear_time_us, clear_time_us);
+                    saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
                 });
             }
             BufferedPacketsDecision::ForwardAndHold => {
-                let (_, clean_time_us) = measure_us!(self.clean_queue());
+                let (_, forward_time_us) = measure_us!(self.forward_packets(true));
                 self.timing_metrics.update(|timing_metrics| {
-                    saturating_add_assign!(timing_metrics.clean_time_us, clean_time_us);
+                    saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
                 });
             }
             BufferedPacketsDecision::Hold => {}
@@ -219,8 +219,14 @@ impl SchedulerController {
         }
     }
 
+    /// Forward packets to the next leader.
+    fn forward_packets(&self, _hold: bool) {
+        todo!()
+    }
+
     /// Clears the transaction state container.
     /// This only clears pending transactions, and does **not** clear in-flight transactions.
+    #[allow(dead_code)]
     fn clear_container(&mut self) {
         let mut num_dropped_on_clear: usize = 0;
         while let Some(id) = self.container.pop() {
@@ -236,6 +242,7 @@ impl SchedulerController {
     /// Clean unprocessable transactions from the queue. These will be transactions that are
     /// expired, already processed, or are no longer sanitizable.
     /// This only clears pending transactions, and does **not** clear in-flight transactions.
+    #[allow(dead_code)]
     fn clean_queue(&mut self) {
         // Clean up any transactions that have already been processed, are too old, or do not have
         // valid nonce accounts.
