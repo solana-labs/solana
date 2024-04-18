@@ -344,16 +344,10 @@ impl<'a> SnapshotMinimizer<'a> {
         let aligned_total: u64 = AccountsDb::page_align(total_bytes as u64);
         let mut shrink_in_progress = None;
         if aligned_total > 0 {
-            let mut accounts = Vec::with_capacity(keep_accounts.len());
-
-            for alive_account in keep_accounts {
-                accounts.push(alive_account);
-            }
-
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
             self.accounts_db()
-                .store_accounts_frozen((slot, &accounts[..]), new_storage);
+                .store_accounts_frozen((slot, &keep_accounts[..]), new_storage);
 
             new_storage.flush().unwrap();
         }
