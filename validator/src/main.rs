@@ -708,6 +708,35 @@ pub fn main() {
                 });
             return;
         }
+        ("rpc-send-transaction-tpu-peer", Some(subcommand_matches)) => {
+            if !subcommand_matches.is_present("tpu-peers") {
+                println!("rpc-send-transaction-tpu-peer requires at least one HOST:PORT");
+                exit(1);
+            }
+
+            let tpu_peers = subcommand_matches.values_of("tpu-peers").unwrap();
+
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .set_rpc_send_transaction_tpu_peers(tpu_peers
+                                                            .into_iter()
+                                                            .map(solana_net_utils::parse_host_port)
+                                                            .collect::<Result<Vec<SocketAddr>, String>>()
+                                                            .unwrap_or_else(|e| {
+                                                                eprintln!("failed to parse rpc send-transaction-service tpu peer address: {e}");
+                                                                exit(1);
+                                                            }))
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("setStakedNodesOverrides request failed: {err}");
+                    exit(1);
+                });
+            return;
+        }
         ("set-identity", Some(subcommand_matches)) => {
             let require_tower = subcommand_matches.is_present("require_tower");
 
@@ -1331,6 +1360,10 @@ pub fn main() {
 
     let full_api = matches.is_present("full_rpc_api");
 
+    let tpu_peers = Arc::new(RwLock::new(
+        rpc_send_transaction_tpu_peers.unwrap_or_default(),
+    ));
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -1439,7 +1472,7 @@ pub fn main() {
                 "rpc_send_transaction_retry_pool_max_size",
                 usize
             ),
-            tpu_peers: rpc_send_transaction_tpu_peers,
+            tpu_peers: tpu_peers.clone(),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
@@ -1764,6 +1797,7 @@ pub fn main() {
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
+            tpu_peers,
             rpc_to_plugin_manager_sender,
         },
     );

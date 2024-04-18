@@ -46,6 +46,7 @@ pub struct AdminRpcRequestMetadata {
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
+    pub tpu_peers: Arc<RwLock<Vec<SocketAddr>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
 }
@@ -204,6 +205,13 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "setStakedNodesOverrides")]
     fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()>;
+
+    #[rpc(meta, name = "setRpcSendTransactionTpuPeer")]
+    fn set_rpc_send_transaction_tpu_peers(
+        &self,
+        meta: Self::Metadata,
+        tpu_peers: Vec<SocketAddr>,
+    ) -> Result<()>;
 
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
@@ -490,6 +498,18 @@ impl AdminRpc for AdminRpcImpl {
         write_staked_nodes.extend(loaded_config);
         info!("Staked nodes overrides loaded from {}", path);
         debug!("overrides map: {:?}", write_staked_nodes);
+        Ok(())
+    }
+
+    fn set_rpc_send_transaction_tpu_peers(
+        &self,
+        meta: Self::Metadata,
+        tpu_peers: Vec<SocketAddr>,
+    ) -> Result<()> {
+        info!("Setting rpc send transaction tpu peers to {:?}", tpu_peers);
+        let mut meta_tpu_peers = meta.tpu_peers.write().unwrap();
+        meta_tpu_peers.clear();
+        meta_tpu_peers.extend(tpu_peers);
         Ok(())
     }
 

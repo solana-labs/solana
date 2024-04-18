@@ -1827,6 +1827,26 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("rpc-send-transaction-tpu-peer")
+                .about("Sets peer(s) to broadcast transactions to instead of the current leader.")
+                .arg(
+                    Arg::with_name("tpu-peers")
+                        .takes_value(true)
+                        .number_of_values(1)
+                        .multiple(true)
+                        .value_name("HOST:PORT")
+                        .validator(solana_net_utils::is_host_port)
+                        .help(
+                            "Provide a whitespace-separated list of tpu peers in the form HOST:PORT \
+                             to which transactions will be broadcast",
+                        ),
+                )
+                .after_help(
+                    "Note: the new tpu peers overrides only applies to the currently running \
+                     validator instance",
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("wait-for-restart-window")
                 .about("Monitor the validator for a good time to restart")
                 .arg(

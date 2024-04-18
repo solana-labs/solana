@@ -115,7 +115,7 @@ pub struct Config {
     pub batch_send_rate_ms: u64,
     /// When the retry pool exceeds this max size, new transactions are dropped after their first broadcast attempt
     pub retry_pool_max_size: usize,
-    pub tpu_peers: Option<Vec<SocketAddr>>,
+    pub tpu_peers: Arc<RwLock<Vec<SocketAddr>>>,
 }
 
 impl Default for Config {
@@ -128,7 +128,7 @@ impl Default for Config {
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
             retry_pool_max_size: MAX_TRANSACTION_RETRY_POOL_SIZE,
-            tpu_peers: None,
+            tpu_peers: Default::default(),
         }
     }
 }
@@ -568,11 +568,18 @@ impl SendTransactionService {
         stats: &SendTransactionServiceStats,
     ) {
         // Processing the transactions in batch
-        let mut addresses = config
+        let addresses = config
             .tpu_peers
-            .as_ref()
-            .map(|addrs| addrs.iter().map(|a| (a, 0)).collect::<Vec<_>>())
-            .unwrap_or_default();
+            .read()
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(|addr| (addr, 0))
+            .collect::<Vec<_>>();
+        let mut addresses = addresses
+            .iter()
+            .map(|(addr, slot)| (addr, *slot))
+            .collect::<Vec<(&SocketAddr, Slot)>>();
         let leader_addresses = Self::get_tpu_addresses_with_slots(
             tpu_address,
             leader_info,
@@ -710,11 +717,7 @@ impl SendTransactionService {
 
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
-                let mut addresses = config
-                    .tpu_peers
-                    .as_ref()
-                    .map(|addrs| addrs.iter().collect::<Vec<_>>())
-                    .unwrap_or_default();
+                let mut addresses = config.tpu_peers.read().unwrap().clone();
                 let mut leader_info_provider = leader_info_provider.lock().unwrap();
                 let leader_info = leader_info_provider.get_leader_info();
                 let leader_addresses = Self::get_tpu_addresses(
