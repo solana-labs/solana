@@ -101,13 +101,14 @@ mod tests {
         let (mut genesis_config, _) = create_genesis_config(500);
         genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let deposit_amount = bank0.get_minimum_balance_for_rent_exemption(0);
         let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
         let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
         bank0.squash();
 
         // Create an account on a non-root fork
         let key1 = Keypair::new();
-        bank_test_utils::deposit(&bank1, &key1.pubkey(), 5).unwrap();
+        bank_test_utils::deposit(&bank1, &key1.pubkey(), deposit_amount).unwrap();
 
         // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
         // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
@@ -120,12 +121,12 @@ mod tests {
         let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
 
         // Test new account
-        let key2 = Keypair::new();
-        bank_test_utils::deposit(&bank2, &key2.pubkey(), 10).unwrap();
-        assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
+        let key2 = Pubkey::new_unique();
+        bank_test_utils::deposit(&bank2, &key2, deposit_amount).unwrap();
+        assert_eq!(bank2.get_balance(&key2), deposit_amount);
 
-        let key3 = Keypair::new();
-        bank_test_utils::deposit(&bank2, &key3.pubkey(), 0).unwrap();
+        let key3 = Pubkey::new_unique();
+        bank_test_utils::deposit(&bank2, &key3, 0).unwrap();
 
         bank2.freeze();
         bank2.squash();
@@ -277,8 +278,8 @@ mod tests {
         .unwrap();
         dbank.status_cache = Arc::new(RwLock::new(status_cache));
         assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
-        assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
-        assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
+        assert_eq!(dbank.get_balance(&key2), deposit_amount);
+        assert_eq!(dbank.get_balance(&key3), 0);
         if let Some(incremental_snapshot_persistence) = incremental.clone() {
             assert_eq!(dbank.get_accounts_hash(), None,);
             assert_eq!(
