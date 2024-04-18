@@ -41,7 +41,6 @@ use {
         instruction::{CompiledInstruction, InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::SanitizedMessage,
-        native_loader,
         pubkey::Pubkey,
         rent_collector::RentCollector,
         saturating_add_assign,
@@ -226,9 +225,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             check_results,
             PROGRAM_OWNERS,
         );
-        let native_loader = native_loader::id();
         for builtin_program in self.builtin_program_ids.read().unwrap().iter() {
-            program_accounts_map.insert(*builtin_program, (&native_loader, 0));
+            program_accounts_map.insert(*builtin_program, 0);
         }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
@@ -354,16 +352,15 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
-    /// Returns a hash map of executable program accounts (program accounts that are not writable
-    /// in the given transactions), and their owners, for the transactions with a valid
-    /// blockhash or nonce.
-    fn filter_executable_program_accounts<'a, CB: TransactionProcessingCallback>(
+    /// Returns a map from executable program accounts (all accounts owned by any loader)
+    /// to their usage counters, for the transactions with a valid blockhash or nonce.
+    fn filter_executable_program_accounts<CB: TransactionProcessingCallback>(
         callbacks: &CB,
         txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
-        program_owners: &'a [Pubkey],
-    ) -> HashMap<Pubkey, (&'a Pubkey, u64)> {
-        let mut result: HashMap<Pubkey, (&'a Pubkey, u64)> = HashMap::new();
+        program_owners: &[Pubkey],
+    ) -> HashMap<Pubkey, u64> {
+        let mut result: HashMap<Pubkey, u64> = HashMap::new();
         check_results.iter_mut().zip(txs).for_each(|etx| {
             if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
                 if lamports_per_signature.is_some() {
@@ -372,16 +369,15 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         .iter()
                         .for_each(|key| match result.entry(*key) {
                             Entry::Occupied(mut entry) => {
-                                let (_, count) = entry.get_mut();
+                                let count = entry.get_mut();
                                 saturating_add_assign!(*count, 1);
                             }
                             Entry::Vacant(entry) => {
-                                if let Some(index) =
-                                    callbacks.account_matches_owners(key, program_owners)
+                                if callbacks
+                                    .account_matches_owners(key, program_owners)
+                                    .is_some()
                                 {
-                                    if let Some(owner) = program_owners.get(index) {
-                                        entry.insert((owner, 1));
-                                    }
+                                    entry.insert(1);
                                 }
                             }
                         });
@@ -520,13 +516,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     fn replenish_program_cache<CB: TransactionProcessingCallback>(
         &self,
         callback: &CB,
-        program_accounts_map: &HashMap<Pubkey, (&Pubkey, u64)>,
+        program_accounts_map: &HashMap<Pubkey, u64>,
         limit_to_load_programs: bool,
     ) -> LoadedProgramsForTxBatch {
         let mut missing_programs: Vec<(Pubkey, (LoadedProgramMatchCriteria, u64))> =
             program_accounts_map
                 .iter()
-                .map(|(pubkey, (_, count))| {
+                .map(|(pubkey, count)| {
                     (
                         *pubkey,
                         (callback.get_program_match_criteria(pubkey), *count),
@@ -1926,10 +1922,9 @@ mod tests {
         batch_processor.program_cache.write().unwrap().fork_graph =
             Some(Arc::new(RwLock::new(TestForkGraph {})));
         let key = Pubkey::new_unique();
-        let owner = Pubkey::new_unique();
 
-        let mut account_maps: HashMap<Pubkey, (&Pubkey, u64)> = HashMap::new();
-        account_maps.insert(key, (&owner, 4));
+        let mut account_maps: HashMap<Pubkey, u64> = HashMap::new();
+        account_maps.insert(key, 4);
 
         batch_processor.replenish_program_cache(&mock_bank, &account_maps, true);
     }
@@ -1941,7 +1936,6 @@ mod tests {
         batch_processor.program_cache.write().unwrap().fork_graph =
             Some(Arc::new(RwLock::new(TestForkGraph {})));
         let key = Pubkey::new_unique();
-        let owner = Pubkey::new_unique();
 
         let mut account_data = AccountSharedData::default();
         account_data.set_owner(bpf_loader::id());
@@ -1950,8 +1944,8 @@ mod tests {
             .borrow_mut()
             .insert(key, account_data);
 
-        let mut account_maps: HashMap<Pubkey, (&Pubkey, u64)> = HashMap::new();
-        account_maps.insert(key, (&owner, 4));
+        let mut account_maps: HashMap<Pubkey, u64> = HashMap::new();
+        account_maps.insert(key, 4);
 
         for limit_to_load_programs in [false, true] {
             let result = batch_processor.replenish_program_cache(
@@ -2057,8 +2051,8 @@ mod tests {
             (Err(TransactionError::BlockhashNotFound), None, None)
         );
         assert_eq!(result.len(), 2);
-        assert_eq!(result[&key1], (&owner1, 2));
-        assert_eq!(result[&key2], (&owner2, 1));
+        assert_eq!(result[&key1], 2);
+        assert_eq!(result[&key2], 1);
     }
 
     #[test]
@@ -2144,13 +2138,13 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &(&program1_pubkey, 2)
+            &2
         );
         assert_eq!(
             programs
                 .get(&account4_pubkey)
                 .expect("failed to find the program account"),
-            &(&program2_pubkey, 1)
+            &1
         );
     }
 
@@ -2239,7 +2233,7 @@ mod tests {
             programs
                 .get(&account3_pubkey)
                 .expect("failed to find the program account"),
-            &(&program1_pubkey, 1)
+            &1
         );
         assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
