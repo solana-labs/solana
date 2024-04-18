@@ -2228,8 +2228,6 @@ struct ScanState<'a> {
     accum: BinnedHashData,
     bin_calculator: &'a PubkeyBinCalculator24,
     bin_range: &'a Range<usize>,
-    config: &'a CalcAccountsHashConfig<'a>,
-    mismatch_found: Arc<AtomicU64>,
     range: usize,
     sort_time: Arc<AtomicU64>,
     pubkey_to_bin_index: usize,
@@ -2252,14 +2250,15 @@ impl<'a> AppendVecScan for ScanState<'a> {
         let pubkey = loaded_account.pubkey();
         assert!(self.bin_range.contains(&self.pubkey_to_bin_index)); // get rid of this once we have confidence
 
-        // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
+        // when we are scanning with bin ranges, we don't need to use exact bin numbers.
+        // Subtract to make first bin we care about at index 0.
         self.pubkey_to_bin_index -= self.bin_range.start;
 
         let balance = loaded_account.lamports();
-        let mut loaded_hash = loaded_account.loaded_hash();
+        let mut account_hash = loaded_account.loaded_hash();
 
-        let hash_is_missing = loaded_hash == AccountHash(Hash::default());
-        if self.config.check_hash || hash_is_missing {
+        let hash_is_missing = account_hash == AccountHash(Hash::default());
+        if hash_is_missing {
             let computed_hash = AccountsDb::hash_account_data(
                 loaded_account.lamports(),
                 loaded_account.owner(),
@@ -2268,18 +2267,10 @@ impl<'a> AppendVecScan for ScanState<'a> {
                 loaded_account.data(),
                 loaded_account.pubkey(),
             );
-            if hash_is_missing {
-                loaded_hash = computed_hash;
-            } else if self.config.check_hash && computed_hash != loaded_hash {
-                info!(
-                    "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
-                    computed_hash.0, loaded_hash.0, pubkey
-                );
-                self.mismatch_found.fetch_add(1, Ordering::Relaxed);
-            }
+            account_hash = computed_hash;
         }
         let source_item = CalculateHashIntermediate {
-            hash: loaded_hash,
+            hash: account_hash,
             lamports: balance,
             pubkey: *pubkey,
         };
@@ -7217,8 +7208,6 @@ impl AccountsDb {
             current_slot: Slot::default(),
             accum: BinnedHashData::default(),
             bin_calculator: &bin_calculator,
-            config,
-            mismatch_found: mismatch_found.clone(),
             range,
             bin_range,
             sort_time: sort_time.clone(),
