@@ -1,4 +1,8 @@
-use solana_sdk::{clock::Slot, transaction::SanitizedTransaction};
+use {
+    crate::banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
+    solana_sdk::{clock::Slot, transaction::SanitizedTransaction},
+    std::sync::Arc,
+};
 
 /// Simple wrapper type to tie a sanitized transaction to max age slot.
 pub(crate) struct SanitizedTransactionTTL {
@@ -30,18 +34,31 @@ pub(crate) enum TransactionState {
     /// The transaction is available for scheduling.
     Unprocessed {
         transaction_ttl: SanitizedTransactionTTL,
+        packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
     },
     /// The transaction is currently scheduled or being processed.
-    Pending { priority: u64, cost: u64 },
+    Pending {
+        packet: Arc<ImmutableDeserializedPacket>,
+        priority: u64,
+        cost: u64,
+    },
+    /// Only used during transition.
+    Transitioning,
 }
 
 impl TransactionState {
     /// Creates a new `TransactionState` in the `Unprocessed` state.
-    pub(crate) fn new(transaction_ttl: SanitizedTransactionTTL, priority: u64, cost: u64) -> Self {
+    pub(crate) fn new(
+        transaction_ttl: SanitizedTransactionTTL,
+        packet: Arc<ImmutableDeserializedPacket>,
+        priority: u64,
+        cost: u64,
+    ) -> Self {
         Self::Unprocessed {
             transaction_ttl,
+            packet,
             priority,
             cost,
         }
@@ -54,6 +71,7 @@ impl TransactionState {
         match self {
             Self::Unprocessed { priority, .. } => *priority,
             Self::Pending { priority, .. } => *priority,
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -62,6 +80,7 @@ impl TransactionState {
         match self {
             Self::Unprocessed { cost, .. } => *cost,
             Self::Pending { cost, .. } => *cost,
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -76,15 +95,21 @@ impl TransactionState {
         match self.take() {
             TransactionState::Unprocessed {
                 transaction_ttl,
+                packet,
                 priority,
                 cost,
             } => {
-                *self = TransactionState::Pending { priority, cost };
+                *self = TransactionState::Pending {
+                    packet,
+                    priority,
+                    cost,
+                };
                 transaction_ttl
             }
             TransactionState::Pending { .. } => {
                 panic!("transaction already pending");
             }
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -97,13 +122,19 @@ impl TransactionState {
     pub(crate) fn transition_to_unprocessed(&mut self, transaction_ttl: SanitizedTransactionTTL) {
         match self.take() {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
-            TransactionState::Pending { priority, cost } => {
+            TransactionState::Pending {
+                packet,
+                priority,
+                cost,
+            } => {
                 *self = Self::Unprocessed {
                     transaction_ttl,
+                    packet,
                     priority,
                     cost,
                 }
             }
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -117,19 +148,14 @@ impl TransactionState {
                 transaction_ttl, ..
             } => transaction_ttl,
             Self::Pending { .. } => panic!("transaction is pending"),
+            Self::Transitioning => unreachable!(),
         }
     }
 
     /// Internal helper to transitioning between states.
     /// Replaces `self` with a dummy state that will immediately be overwritten in transition.
     fn take(&mut self) -> Self {
-        core::mem::replace(
-            self,
-            Self::Pending {
-                priority: 0,
-                cost: 0,
-            },
-        )
+        core::mem::replace(self, Self::Transitioning)
     }
 }
 
@@ -138,7 +164,7 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
+            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
             signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
         },
     };
@@ -156,12 +182,20 @@ mod tests {
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
         let tx = Transaction::new(&[&from_keypair], message, Hash::default());
 
+        let packet = Arc::new(
+            ImmutableDeserializedPacket::new(Packet::from_data(None, tx.clone()).unwrap()).unwrap(),
+        );
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: SanitizedTransaction::from_transaction_for_tests(tx),
             max_age_slot: Slot::MAX,
         };
         const TEST_TRANSACTION_COST: u64 = 5000;
-        TransactionState::new(transaction_ttl, compute_unit_price, TEST_TRANSACTION_COST)
+        TransactionState::new(
+            transaction_ttl,
+            packet,
+            compute_unit_price,
+            TEST_TRANSACTION_COST,
+        )
     }
 
     #[test]

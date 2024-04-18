@@ -220,7 +220,7 @@ impl SchedulerController {
     }
 
     /// Forward packets to the next leader.
-    fn forward_packets(&self, _hold: bool) {
+    fn forward_packets(&mut self, _hold: bool) {
         todo!()
     }
 
@@ -373,6 +373,8 @@ impl SchedulerController {
     }
 
     fn buffer_packets(&mut self, packets: Vec<ImmutableDeserializedPacket>) {
+        // Convert to Arcs
+        let packets: Vec<_> = packets.into_iter().map(Arc::new).collect();
         // Sanitize packets, generate IDs, and insert into the container.
         let bank = self.bank_forks.read().unwrap().working_bank();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
@@ -385,30 +387,41 @@ impl SchedulerController {
         let mut error_counts = TransactionErrorMetrics::default();
         for chunk in packets.chunks(CHUNK_SIZE) {
             let mut post_sanitization_count: usize = 0;
-            let (transactions, fee_budget_limits_vec): (Vec<_>, Vec<_>) = chunk
+
+            let mut arc_packets = Vec::with_capacity(chunk.len());
+            let mut transactions = Vec::with_capacity(chunk.len());
+            let mut fee_budget_limits_vec = Vec::with_capacity(chunk.len());
+
+            chunk
                 .iter()
                 .filter_map(|packet| {
-                    packet.build_sanitized_transaction(
-                        feature_set,
-                        vote_only,
-                        bank.as_ref(),
-                        bank.get_reserved_account_keys(),
-                    )
+                    packet
+                        .build_sanitized_transaction(
+                            feature_set,
+                            vote_only,
+                            bank.as_ref(),
+                            bank.get_reserved_account_keys(),
+                        )
+                        .map(|tx| (packet.clone(), tx))
                 })
                 .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
-                .filter(|tx| {
+                .filter(|(_packet, tx)| {
                     SanitizedTransaction::validate_account_locks(
                         tx.message(),
                         transaction_account_lock_limit,
                     )
                     .is_ok()
                 })
-                .filter_map(|tx| {
+                .filter_map(|(packet, tx)| {
                     process_compute_budget_instructions(tx.message().program_instructions_iter())
-                        .map(|compute_budget| (tx, compute_budget.into()))
+                        .map(|compute_budget| (packet, tx, compute_budget.into()))
                         .ok()
                 })
-                .unzip();
+                .for_each(|(packet, tx, fee_budget_limits)| {
+                    arc_packets.push(packet);
+                    transactions.push(tx);
+                    fee_budget_limits_vec.push(fee_budget_limits);
+                });
 
             let check_results = bank.check_transactions(
                 &transactions,
@@ -421,8 +434,9 @@ impl SchedulerController {
             let mut post_transaction_check_count: usize = 0;
             let mut num_dropped_on_capacity: usize = 0;
             let mut num_buffered: usize = 0;
-            for ((transaction, fee_budget_limits), _) in transactions
+            for (((packet, transaction), fee_budget_limits), _) in arc_packets
                 .into_iter()
+                .zip(transactions)
                 .zip(fee_budget_limits_vec)
                 .zip(check_results)
                 .filter(|(_, check_result)| check_result.0.is_ok())
@@ -440,6 +454,7 @@ impl SchedulerController {
                 if self.container.insert_new_transaction(
                     transaction_id,
                     transaction_ttl,
+                    packet,
                     priority,
                     cost,
                 ) {

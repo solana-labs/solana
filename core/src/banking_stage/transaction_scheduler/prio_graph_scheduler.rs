@@ -488,14 +488,18 @@ impl Batches {
 mod tests {
     use {
         super::*,
-        crate::banking_stage::consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
+        crate::banking_stage::{
+            consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
+            immutable_deserialized_packet::ImmutableDeserializedPacket,
+        },
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, pubkey::Pubkey,
-            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
+            pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction,
+            transaction::Transaction,
         },
-        std::borrow::Borrow,
+        std::{borrow::Borrow, sync::Arc},
     };
 
     macro_rules! txid {
@@ -570,6 +574,12 @@ mod tests {
                 lamports,
                 compute_unit_price,
             );
+            let packet = Arc::new(
+                ImmutableDeserializedPacket::new(
+                    Packet::from_data(None, transaction.to_versioned_transaction()).unwrap(),
+                )
+                .unwrap(),
+            );
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
                 max_age_slot: Slot::MAX,
@@ -578,6 +588,7 @@ mod tests {
             container.insert_new_transaction(
                 id,
                 transaction_ttl,
+                packet,
                 compute_unit_price,
                 TEST_TRANSACTION_COST,
             );
