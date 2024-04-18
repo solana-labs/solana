@@ -7200,7 +7200,6 @@ impl AccountsDb {
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storages.storage_count();
         stats.num_slots = storages.slot_count();
-        let mismatch_found = Arc::new(AtomicU64::new(0));
         let range = bin_range.end - bin_range.start;
         let sort_time = Arc::new(AtomicU64::new(0));
 
@@ -7224,14 +7223,6 @@ impl AccountsDb {
         );
 
         stats.sort_time_total_us += sort_time.load(Ordering::Relaxed);
-
-        if config.check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
-            warn!(
-                "{} mismatched account hash(es) found",
-                mismatch_found.load(Ordering::Relaxed)
-            );
-            return Err(AccountsHashVerificationError::MismatchedAccountsHash);
-        }
 
         time.stop();
         stats.scan_time_total_us += time.as_us();
