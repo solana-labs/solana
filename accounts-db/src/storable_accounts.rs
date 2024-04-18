@@ -393,7 +393,7 @@ pub mod tests {
             rent_epoch,
         };
         let data = Vec::default();
-        let offset = 99;
+        let offset = 99 * std::mem::size_of::<u64>(); // offset needs to be 8 byte aligned
         let stored_size = 101;
         let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
@@ -448,7 +448,7 @@ pub mod tests {
                         ));
                     }
                     for entry in 0..entries {
-                        let offset = 99;
+                        let offset = 99 * std::mem::size_of::<u64>(); // offset needs to be 8 byte aligned
                         let stored_size = 101;
                         let raw = &raw[entry as usize];
                         raw2.push(StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
@@ -550,7 +550,7 @@ pub mod tests {
                 ));
             }
             for entry in 0..entries {
-                let offset = 99;
+                let offset = 99 * std::mem::size_of::<u64>(); // offset needs to be 8 byte aligned
                 let stored_size = 101;
                 raw2.push(StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
                     meta: &raw[entry as usize].2,

@@ -9778,7 +9778,7 @@ pub mod tests {
             executable: false,
             rent_epoch: 0,
         };
-        let offset = 3;
+        let offset = 3 * std::mem::size_of::<u64>();
         let hash = AccountHash(Hash::new(&[2; 32]));
         let stored_meta = StoredMeta {
             // global write version
@@ -9880,7 +9880,7 @@ pub mod tests {
             executable,
             rent_epoch,
         };
-        let offset = 99;
+        let offset = 99 * std::mem::size_of::<u64>(); // offset needs to be 8 byte aligned
         let stored_size = 101;
         let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
@@ -12131,7 +12131,7 @@ pub mod tests {
             rent_epoch,
             data: data.clone(),
         };
-        let offset = 99;
+        let offset = 99 * std::mem::size_of::<u64>(); // offset needs to be 8 byte aligned
         let stored_size = 101;
         let hash = AccountHash(Hash::new_unique());
         let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
