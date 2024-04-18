@@ -9,12 +9,6 @@ use {
 };
 
 pub type StoredMetaWriteVersion = u64;
-// A tuple that stores offset and size respectively
-#[derive(Debug, Clone)]
-pub struct StoredAccountInfo {
-    pub offset: usize,
-    pub size: usize,
-}
 
 lazy_static! {
     static ref DEFAULT_ACCOUNT_HASH: AccountHash = AccountHash(Hash::default());

@@ -13,7 +13,7 @@ pub mod readable;
 mod test_utils;
 
 use {
-    crate::{account_storage::meta::StoredAccountInfo, storable_accounts::StorableAccounts},
+    crate::{accounts_file::StoredAccountsInfo, storable_accounts::StorableAccounts},
     error::TieredStorageError,
     footer::{AccountBlockFormat, AccountMetaFormat},
     hot::{HotStorageWriter, HOT_FORMAT},
@@ -110,7 +110,7 @@ impl TieredStorage {
         accounts: &impl StorableAccounts<'a>,
         skip: usize,
         format: &TieredStorageFormat,
-    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
+    ) -> TieredStorageResult<StoredAccountsInfo> {
         let was_written = self.already_written.swap(true, Ordering::AcqRel);
 
         if was_written {
@@ -196,7 +196,7 @@ mod tests {
     /// to persist non-account blocks such as footer, index block, etc.
     fn write_zero_accounts(
         tiered_storage: &TieredStorage,
-        expected_result: TieredStorageResult<Vec<StoredAccountInfo>>,
+        expected_result: TieredStorageResult<StoredAccountsInfo>,
     ) {
         let slot_ignored = Slot::MAX;
         let account_refs = Vec::<(&Pubkey, &AccountSharedData)>::new();
@@ -239,7 +239,13 @@ mod tests {
             assert_eq!(tiered_storage.path(), tiered_storage_path);
             assert_eq!(tiered_storage.len(), 0);
 
-            write_zero_accounts(&tiered_storage, Ok(vec![]));
+            write_zero_accounts(
+                &tiered_storage,
+                Ok(StoredAccountsInfo {
+                    offsets: vec![],
+                    size: 0,
+                }),
+            );
         }
 
         let tiered_storage_readonly = TieredStorage::new_readonly(&tiered_storage_path).unwrap();
@@ -265,7 +271,13 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_write_accounts_twice");
 
         let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
-        write_zero_accounts(&tiered_storage, Ok(vec![]));
+        write_zero_accounts(
+            &tiered_storage,
+            Ok(StoredAccountsInfo {
+                offsets: vec![],
+                size: 0,
+            }),
+        );
         // Expect AttemptToUpdateReadOnly error as write_accounts can only
         // be invoked once.
         write_zero_accounts(
@@ -283,7 +295,13 @@ mod tests {
         let tiered_storage_path = temp_dir.path().join("test_remove_on_drop");
         {
             let tiered_storage = TieredStorage::new_writable(&tiered_storage_path);
-            write_zero_accounts(&tiered_storage, Ok(vec![]));
+            write_zero_accounts(
+                &tiered_storage,
+                Ok(StoredAccountsInfo {
+                    offsets: vec![],
+                    size: 0,
+                }),
+            );
         }
         // expect the file does not exists as it has been removed on drop
         assert!(!tiered_storage_path.try_exists().unwrap());
@@ -291,7 +309,13 @@ mod tests {
         {
             let tiered_storage =
                 ManuallyDrop::new(TieredStorage::new_writable(&tiered_storage_path));
-            write_zero_accounts(&tiered_storage, Ok(vec![]));
+            write_zero_accounts(
+                &tiered_storage,
+                Ok(StoredAccountsInfo {
+                    offsets: vec![],
+                    size: 0,
+                }),
+            );
         }
         // expect the file exists as we have ManuallyDrop this time.
         assert!(tiered_storage_path.try_exists().unwrap());

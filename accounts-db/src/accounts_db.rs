@@ -1138,10 +1138,11 @@ impl AccountStorageEntry {
         self.accounts.get_account_shared_data(offset)
     }
 
-    fn add_account(&self, num_bytes: usize) {
+    fn add_accounts(&self, num_accounts: usize, num_bytes: usize) {
         let mut count_and_status = self.count_and_status.lock_write();
-        *count_and_status = (count_and_status.0 + 1, count_and_status.1);
-        self.approx_store_count.fetch_add(1, Ordering::Relaxed);
+        *count_and_status = (count_and_status.0 + num_accounts, count_and_status.1);
+        self.approx_store_count
+            .fetch_add(num_accounts, Ordering::Relaxed);
         self.alive_bytes.fetch_add(num_bytes, Ordering::SeqCst);
     }
 
@@ -5976,12 +5977,12 @@ impl AccountsDb {
         let mut total_append_accounts_us = 0;
         while infos.len() < accounts_and_meta_to_store.len() {
             let mut append_accounts = Measure::start("append_accounts");
-            let rvs = storage
+            let stored_accounts_info = storage
                 .accounts
                 .append_accounts(accounts_and_meta_to_store, infos.len());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
-            if rvs.is_none() {
+            let Some(stored_accounts_info) = stored_accounts_info else {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
@@ -6005,18 +6006,21 @@ impl AccountsDb {
                     },
                 );
                 continue;
-            }
+            };
 
             let store_id = storage.append_vec_id();
-            for (i, stored_account_info) in rvs.unwrap().into_iter().enumerate() {
-                storage.add_account(stored_account_info.size);
-
+            for (i, offset) in stored_accounts_info.offsets.iter().enumerate() {
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(store_id, stored_account_info.offset),
+                    StorageLocation::AppendVec(store_id, *offset),
                     accounts_and_meta_to_store
                         .account_default_if_zero_lamport(i, |account| account.lamports()),
                 ));
             }
+            storage.add_accounts(
+                stored_accounts_info.offsets.len(),
+                stored_accounts_info.size,
+            );
+
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
         }
@@ -9614,6 +9618,12 @@ pub mod tests {
         }
     }
 
+    impl AccountStorageEntry {
+        fn add_account(&self, num_bytes: usize) {
+            self.add_accounts(1, num_bytes)
+        }
+    }
+
     impl CurrentAncientAccountsFile {
         /// note this requires that 'slot_and_accounts_file' is Some
         fn append_vec_id(&self) -> AccountsFileId {
@@ -10673,12 +10683,15 @@ pub mod tests {
             .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
-            storage.add_account(stored_accounts_info[0].size);
+            storage.add_account(stored_accounts_info.size);
         }
 
         if let Some(index) = add_to_index {
             let account_info = AccountInfo::new(
-                StorageLocation::AppendVec(storage.append_vec_id(), stored_accounts_info[0].offset),
+                StorageLocation::AppendVec(
+                    storage.append_vec_id(),
+                    stored_accounts_info.offsets[0],
+                ),
                 account.lamports(),
             );
             index.upsert(

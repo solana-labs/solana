@@ -174,12 +174,14 @@ impl TieredStorageFooter {
         Self::new_from_footer_block(&file)
     }
 
-    pub fn write_footer_block(&self, file: &mut TieredWritableFile) -> TieredStorageResult<()> {
-        // SAFETY: The footer does not contain any uninitialized bytes.
-        unsafe { file.write_type(self)? };
-        file.write_pod(&TieredStorageMagicNumber::default())?;
+    pub fn write_footer_block(&self, file: &mut TieredWritableFile) -> TieredStorageResult<usize> {
+        let mut bytes_written = 0;
 
-        Ok(())
+        // SAFETY: The footer does not contain any uninitialized bytes.
+        bytes_written += unsafe { file.write_type(self)? };
+        bytes_written += file.write_pod(&TieredStorageMagicNumber::default())?;
+
+        Ok(bytes_written)
     }
 
     pub fn new_from_footer_block(file: &TieredReadableFile) -> TieredStorageResult<Self> {

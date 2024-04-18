@@ -3,8 +3,8 @@
 use {
     crate::{
         account_info::AccountInfo,
-        account_storage::meta::{StoredAccountInfo, StoredAccountMeta},
-        accounts_file::MatchAccountOwnerError,
+        account_storage::meta::StoredAccountMeta,
+        accounts_file::{MatchAccountOwnerError, StoredAccountsInfo},
         append_vec::{IndexInfo, IndexInfoInner},
         tiered_storage::{
             byte_block,
@@ -743,17 +743,18 @@ impl HotStorageWriter {
         &mut self,
         accounts: &impl StorableAccounts<'a>,
         skip: usize,
-    ) -> TieredStorageResult<Vec<StoredAccountInfo>> {
+    ) -> TieredStorageResult<StoredAccountsInfo> {
         let mut footer = new_hot_footer();
         let mut index = vec![];
         let mut owners_table = OwnersTable::default();
         let mut cursor = 0;
         let mut address_range = AccountAddressRange::default();
 
-        // writing accounts blocks
         let len = accounts.len();
-        let total_input_accounts = len - skip;
-        let mut stored_infos = Vec::with_capacity(total_input_accounts);
+        let total_input_accounts = len.saturating_sub(skip);
+        let mut offsets = Vec::with_capacity(total_input_accounts);
+
+        // writing accounts blocks
         for i in skip..len {
             accounts.account_default_if_zero_lamport::<TieredStorageResult<()>>(i, |account| {
                 let index_entry = AccountIndexWriterEntry {
@@ -776,24 +777,15 @@ impl HotStorageWriter {
                     )
                 };
                 let owner_offset = owners_table.insert(owner);
-                let stored_size =
+                cursor +=
                     self.write_account(lamports, owner_offset, data, executable, rent_epoch)?;
-                cursor += stored_size;
 
-                stored_infos.push(StoredAccountInfo {
-                    // Here we pass the IndexOffset as the get_account() API
-                    // takes IndexOffset.  Given the account address is also
-                    // maintained outside the TieredStorage, a potential optimization
-                    // is to store AccountOffset instead, which can further save
-                    // one jump from the index block to the accounts block.
-                    offset: index.len(),
-                    // Here we only include the stored size that the account directly
-                    // contribute (i.e., account entry + index entry that include the
-                    // account meta, data, optional fields, its address, and AccountOffset).
-                    // Storage size from those shared blocks like footer and owners block
-                    // is not included.
-                    size: stored_size + footer.index_block_format.entry_size::<HotAccountOffset>(),
-                });
+                // Here we pass the IndexOffset as the get_account() API
+                // takes IndexOffset.  Given the account address is also
+                // maintained outside the TieredStorage, a potential optimization
+                // is to store AccountOffset instead, which can further save
+                // one jump from the index block to the accounts block.
+                offsets.push(index.len());
                 index.push(index_entry);
                 Ok(())
             })?;
@@ -819,14 +811,19 @@ impl HotStorageWriter {
         assert!(cursor % HOT_BLOCK_ALIGNMENT == 0);
         footer.owners_block_offset = cursor as u64;
         footer.owner_count = owners_table.len() as u32;
-        footer
+        cursor += footer
             .owners_block_format
             .write_owners_block(&mut self.storage, &owners_table)?;
+
+        // writing footer
         footer.min_account_address = address_range.min;
         footer.max_account_address = address_range.max;
-        footer.write_footer_block(&mut self.storage)?;
+        cursor += footer.write_footer_block(&mut self.storage)?;
 
-        Ok(stored_infos)
+        Ok(StoredAccountsInfo {
+            offsets,
+            size: cursor,
+        })
     }
 }
 
@@ -1546,7 +1543,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("test_write_account_and_index_blocks");
-        let stored_infos = {
+        let stored_accounts_info = {
             let mut writer = HotStorageWriter::new(&path).unwrap();
             writer.write_accounts(&storable_accounts, 0).unwrap()
         };
@@ -1578,13 +1575,13 @@ mod tests {
             Ok(None)
         );
 
-        for stored_info in stored_infos {
+        for offset in stored_accounts_info.offsets {
             let (stored_account_meta, _) = hot_storage
-                .get_stored_account_meta(IndexOffset(stored_info.offset as u32))
+                .get_stored_account_meta(IndexOffset(offset as u32))
                 .unwrap()
                 .unwrap();
 
-            storable_accounts.account_default_if_zero_lamport(stored_info.offset, |account| {
+            storable_accounts.account_default_if_zero_lamport(offset, |account| {
                 verify_test_account(
                     &stored_account_meta,
                     &account.to_account_shared_data(),

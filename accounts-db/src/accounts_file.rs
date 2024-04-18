@@ -1,7 +1,7 @@
 use {
     crate::{
         account_info::AccountInfo,
-        account_storage::meta::{StoredAccountInfo, StoredAccountMeta},
+        account_storage::meta::StoredAccountMeta,
         accounts_db::AccountsFileId,
         append_vec::{AppendVec, AppendVecError, IndexInfo},
         storable_accounts::StorableAccounts,
@@ -268,7 +268,7 @@ impl AccountsFile {
         &self,
         accounts: &impl StorableAccounts<'a>,
         skip: usize,
-    ) -> Option<Vec<StoredAccountInfo>> {
+    ) -> Option<StoredAccountsInfo> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
             // Note: The conversion here is needed as the AccountsDB currently
@@ -276,11 +276,11 @@ impl AccountsFile {
             // IndexOffset that is equivalent to AccountInfo::reduced_offset.
             Self::TieredStorage(ts) => ts
                 .write_accounts(accounts, skip, &HOT_FORMAT)
-                .map(|mut infos| {
-                    infos.iter_mut().for_each(|info| {
-                        info.offset = AccountInfo::reduced_offset_to_offset(info.offset as u32);
+                .map(|mut stored_accounts_info| {
+                    stored_accounts_info.offsets.iter_mut().for_each(|offset| {
+                        *offset = AccountInfo::reduced_offset_to_offset(*offset as u32);
                     });
-                    infos
+                    stored_accounts_info
                 })
                 .ok(),
         }
@@ -342,6 +342,15 @@ impl AccountsFileProvider {
             Self::HotStorage => AccountsFile::TieredStorage(TieredStorage::new_writable(path)),
         }
     }
+}
+
+/// Information after storing accounts
+#[derive(Debug)]
+pub struct StoredAccountsInfo {
+    /// offset in the storage where each account was stored
+    pub offsets: Vec<usize>,
+    /// total size of all the stored accounts
+    pub size: usize,
 }
 
 #[cfg(test)]

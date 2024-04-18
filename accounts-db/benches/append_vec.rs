@@ -4,7 +4,8 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_accounts_db::{
-        account_storage::meta::{StoredAccountInfo, StoredMeta},
+        account_storage::meta::StoredMeta,
+        accounts_file::StoredAccountsInfo,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
             AppendVec,
@@ -29,13 +30,12 @@ fn append_account(
     vec: &AppendVec,
     storage_meta: StoredMeta,
     account: &AccountSharedData,
-) -> Option<StoredAccountInfo> {
+) -> Option<StoredAccountsInfo> {
     let slot_ignored = Slot::MAX;
     let accounts = [(&storage_meta.pubkey, account)];
     let slice = &accounts[..];
     let storable_accounts = (slot_ignored, slice);
-    let res = vec.append_accounts(&storable_accounts, 0);
-    res.and_then(|res| res.first().cloned())
+    vec.append_accounts(&storable_accounts, 0)
 }
 
 #[bench]
@@ -54,7 +54,7 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            append_account(vec, meta, &account).map(|info| (sample, info.offset))
+            append_account(vec, meta, &account).map(|info| (sample, info.offsets[0]))
         })
         .collect()
 }
@@ -100,7 +100,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
         if let Some(info) = append_account(&vec1, meta, &account) {
-            indexes1.lock().unwrap().push((sample, info.offset))
+            indexes1.lock().unwrap().push((sample, info.offsets[0]))
         } else {
             break;
         }
@@ -140,7 +140,7 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
         let sample: usize = thread_rng().gen_range(0..256);
         let (meta, account) = create_test_account(sample);
         if let Some(info) = append_account(&vec, meta, &account) {
-            indexes.lock().unwrap().push((sample, info.offset))
+            indexes.lock().unwrap().push((sample, info.offsets[0]))
         }
     });
 }
