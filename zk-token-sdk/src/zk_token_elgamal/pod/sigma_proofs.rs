@@ -3,10 +3,12 @@
 #[cfg(not(target_os = "solana"))]
 use crate::sigma_proofs::{
     batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext2HandlesValidityProof as DecodedBatchedGroupedCiphertext2HandlesValidityProof,
+    batched_grouped_ciphertext_validity_proof::BatchedGroupedCiphertext3HandlesValidityProof as DecodedBatchedGroupedCiphertext3HandlesValidityProof,
     ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof as DecodedCiphertextCiphertextEqualityProof,
     ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof as DecodedCiphertextCommitmentEqualityProof,
     errors::*, fee_proof::FeeSigmaProof as DecodedFeeSigmaProof,
     grouped_ciphertext_validity_proof::GroupedCiphertext2HandlesValidityProof as DecodedGroupedCiphertext2HandlesValidityProof,
+    grouped_ciphertext_validity_proof::GroupedCiphertext3HandlesValidityProof as DecodedGroupedCiphertext3HandlesValidityProof,
     pubkey_proof::PubkeyValidityProof as DecodedPubkeyValidityProof,
     zero_balance_proof::ZeroBalanceProof as DecodedZeroBalanceProof,
 };
@@ -21,8 +23,14 @@ const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN: usize = 224;
 /// Byte length of a grouped ciphertext for 2 handles validity proof
 const GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = 160;
 
+/// Byte length of a grouped ciphertext for 3 handles validity proof
+const GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN: usize = 192;
+
 /// Byte length of a batched grouped ciphertext for 2 handles validity proof
 const BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN: usize = 160;
+
+/// Byte length of a batched grouped ciphertext for 3 handles validity proof
+const BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN: usize = 192;
 
 /// Byte length of a zero-balance proof
 const ZERO_BALANCE_PROOF_LEN: usize = 96;
@@ -102,6 +110,33 @@ impl TryFrom<GroupedCiphertext2HandlesValidityProof>
     }
 }
 
+/// The `GroupedCiphertext3HandlesValidityProof` type as a `Pod`.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct GroupedCiphertext3HandlesValidityProof(
+    pub [u8; GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN],
+);
+
+#[cfg(not(target_os = "solana"))]
+impl From<DecodedGroupedCiphertext3HandlesValidityProof>
+    for GroupedCiphertext3HandlesValidityProof
+{
+    fn from(decoded_proof: DecodedGroupedCiphertext3HandlesValidityProof) -> Self {
+        Self(decoded_proof.to_bytes())
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl TryFrom<GroupedCiphertext3HandlesValidityProof>
+    for DecodedGroupedCiphertext3HandlesValidityProof
+{
+    type Error = ValidityProofVerificationError;
+
+    fn try_from(pod_proof: GroupedCiphertext3HandlesValidityProof) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_proof.0)
+    }
+}
+
 /// The `BatchedGroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -126,6 +161,35 @@ impl TryFrom<BatchedGroupedCiphertext2HandlesValidityProof>
 
     fn try_from(
         pod_proof: BatchedGroupedCiphertext2HandlesValidityProof,
+    ) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_proof.0)
+    }
+}
+
+/// The `BatchedGroupedCiphertext3HandlesValidityProof` type as a `Pod`.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct BatchedGroupedCiphertext3HandlesValidityProof(
+    pub [u8; BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN],
+);
+
+#[cfg(not(target_os = "solana"))]
+impl From<DecodedBatchedGroupedCiphertext3HandlesValidityProof>
+    for BatchedGroupedCiphertext3HandlesValidityProof
+{
+    fn from(decoded_proof: DecodedBatchedGroupedCiphertext3HandlesValidityProof) -> Self {
+        Self(decoded_proof.to_bytes())
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl TryFrom<BatchedGroupedCiphertext3HandlesValidityProof>
+    for DecodedBatchedGroupedCiphertext3HandlesValidityProof
+{
+    type Error = ValidityProofVerificationError;
+
+    fn try_from(
+        pod_proof: BatchedGroupedCiphertext3HandlesValidityProof,
     ) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod_proof.0)
     }
@@ -206,8 +270,14 @@ unsafe impl Pod for CiphertextCiphertextEqualityProof {}
 unsafe impl Zeroable for GroupedCiphertext2HandlesValidityProof {}
 unsafe impl Pod for GroupedCiphertext2HandlesValidityProof {}
 
+unsafe impl Zeroable for GroupedCiphertext3HandlesValidityProof {}
+unsafe impl Pod for GroupedCiphertext3HandlesValidityProof {}
+
 unsafe impl Zeroable for BatchedGroupedCiphertext2HandlesValidityProof {}
 unsafe impl Pod for BatchedGroupedCiphertext2HandlesValidityProof {}
+
+unsafe impl Zeroable for BatchedGroupedCiphertext3HandlesValidityProof {}
+unsafe impl Pod for BatchedGroupedCiphertext3HandlesValidityProof {}
 
 unsafe impl Zeroable for ZeroBalanceProof {}
 unsafe impl Pod for ZeroBalanceProof {}

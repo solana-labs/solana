@@ -23,7 +23,7 @@ pub use {
     sigma_proofs::{
         BatchedGroupedCiphertext2HandlesValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, GroupedCiphertext2HandlesValidityProof,
-        PubkeyValidityProof, ZeroBalanceProof,
+        GroupedCiphertext3HandlesValidityProof, PubkeyValidityProof, ZeroBalanceProof,
     },
 };
 
