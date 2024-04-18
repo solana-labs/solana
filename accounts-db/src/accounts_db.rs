@@ -6554,91 +6554,77 @@ impl AccountsDb {
             .collect();
         collect.stop();
 
-        let mut scan = Measure::start("scan");
-        let mismatch_found = AtomicU64::new(0);
         // Pick a chunk size big enough to allow us to produce output vectors that are smaller than the overall size.
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
 
-        let get_hashes = || {
+        let get_account_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
                     let mut sum = 0u128;
-                    let result: Vec<Hash> = pubkeys
+                    let account_hashes: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
                             let index_entry = self.accounts_index.get_cloned(pubkey)?;
-                            self.accounts_index.get_account_info_with_and_then(
-                                &index_entry,
-                                config.ancestors,
-                                Some(max_slot),
-                                |(slot, account_info)| {
-                                    if account_info.is_zero_lamport() { return None; }
-                                    self.get_account_accessor(
-                                        slot,
-                                        pubkey,
-                                        &account_info.storage_location(),
-                                    )
-                                    .get_loaded_account()
-                                    .and_then(|loaded_account| {
-                                            let mut loaded_hash = loaded_account.loaded_hash();
-                                            let balance = loaded_account.lamports();
-                                            let hash_is_missing = loaded_hash == AccountHash(Hash::default());
-                                            if config.check_hash || hash_is_missing {
-                                                let computed_hash = Self::hash_account_data(
-                                                    loaded_account.lamports(),
-                                                    loaded_account.owner(),
-                                                    loaded_account.executable(),
-                                                    loaded_account.rent_epoch(),
-                                                    loaded_account.data(),
-                                                    loaded_account.pubkey(),
-                                                );
+                            self.accounts_index
+                                .get_account_info_with_and_then(
+                                    &index_entry,
+                                    config.ancestors,
+                                    Some(max_slot),
+                                    |(slot, account_info)| {
+                                        if account_info.is_zero_lamport() {
+                                            return None;
+                                        }
+                                        self.get_account_accessor(
+                                            slot,
+                                            pubkey,
+                                            &account_info.storage_location(),
+                                        )
+                                        .get_loaded_account()
+                                        .map(
+                                            |loaded_account| {
+                                                let mut loaded_hash = loaded_account.loaded_hash();
+                                                let balance = loaded_account.lamports();
+                                                let hash_is_missing =
+                                                    loaded_hash == AccountHash(Hash::default());
                                                 if hash_is_missing {
+                                                    let computed_hash = Self::hash_account_data(
+                                                        loaded_account.lamports(),
+                                                        loaded_account.owner(),
+                                                        loaded_account.executable(),
+                                                        loaded_account.rent_epoch(),
+                                                        loaded_account.data(),
+                                                        loaded_account.pubkey(),
+                                                    );
                                                     loaded_hash = computed_hash;
                                                 }
-                                                else if config.check_hash && computed_hash != loaded_hash {
-                                                    info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash.0, loaded_hash.0, pubkey);
-                                                    mismatch_found
-                                                        .fetch_add(1, Ordering::Relaxed);
-                                                    return None;
-                                                }
-                                            }
-
-                                            sum += balance as u128;
-                                            Some(loaded_hash.0)
-                                    })
-                                },
-                            )
-                            .flatten()
+                                                sum += balance as u128;
+                                                loaded_hash.0
+                                            },
+                                        )
+                                    },
+                                )
+                                .flatten()
                         })
                         .collect();
                     let mut total = total_lamports.lock().unwrap();
-                    *total =
-                        AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
-                    result
-                }).collect()
+                    *total = AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
+                    account_hashes
+                })
+                .collect()
         };
 
-        let hashes: Vec<Vec<Hash>> = if config.check_hash {
-            get_hashes()
-        } else {
-            self.thread_pool_clean.install(get_hashes)
-        };
-        if mismatch_found.load(Ordering::Relaxed) > 0 {
-            warn!(
-                "{} mismatched account hash(es) found",
-                mismatch_found.load(Ordering::Relaxed)
-            );
-            return Err(AccountsHashVerificationError::MismatchedAccountsHash);
-        }
-
+        let mut scan = Measure::start("scan");
+        let account_hashes: Vec<Vec<Hash>> = self.thread_pool_clean.install(get_account_hashes);
         scan.stop();
+
         let total_lamports = *total_lamports.lock().unwrap();
 
         let mut hash_time = Measure::start("hash");
-        let (accumulated_hash, hash_total) = AccountsHasher::calculate_hash(hashes);
+        let (accumulated_hash, hash_total) = AccountsHasher::calculate_hash(account_hashes);
         hash_time.stop();
+
         datapoint_info!(
             "calculate_accounts_hash_from_index",
             ("accounts_scan", scan.as_us(), i64),
