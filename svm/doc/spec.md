@@ -229,12 +229,12 @@ Steps of `load_and_execute_sanitized_transactions`
    5. Make two local variables that will be used as output parameters
       of `MessageProcessor::process_message`. One will contain the
       number of executed units (the number of compute unites consumed
-      in the transaction). Another is a container of `LoadedProgramsForTxBatch`.
+      in the transaction). Another is a container of `ProgramCacheForTxBatch`.
       The latter is initialized with the slot, and
       the clone of environments of `programs_loaded_for_tx_batch`
-         - `programs_loaded_for_tx_batch` contains a reference to all the `LoadedProgram`s
+         - `programs_loaded_for_tx_batch` contains a reference to all the `ProgramCacheEntry`s
             necessary for the transaction. It maintains an `Arc` to the programs in the global
-            `LoadedPrograms` data structure.
+            `ProgramCacheEntrys` data structure.
       6. Call `MessageProcessor::process_message` to execute the
       transaction. `MessageProcessor` is contained in
       solana-program-runtime crate. The result of processing message

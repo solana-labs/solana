@@ -4281,7 +4281,7 @@ fn test_cpi_deprecated_loader_realloc() {
 #[test]
 #[cfg(feature = "sbf_rust")]
 fn test_cpi_change_account_data_memory_allocation() {
-    use solana_program_runtime::{declare_process_instruction, loaded_programs::LoadedProgram};
+    use solana_program_runtime::{declare_process_instruction, loaded_programs::ProgramCacheEntry};
 
     solana_logger::setup();
 
@@ -4331,7 +4331,7 @@ fn test_cpi_change_account_data_memory_allocation() {
         &bank,
         builtin_program_id,
         "test_cpi_change_account_data_memory_allocation_builtin",
-        LoadedProgram::new_builtin(0, 42, MockBuiltin::vm),
+        ProgramCacheEntry::new_builtin(0, 42, MockBuiltin::vm),
     );
 
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();

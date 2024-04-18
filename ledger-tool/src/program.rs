@@ -12,7 +12,9 @@ use {
     solana_ledger::{blockstore_options::AccessType, use_snapshot_archives_at_startup},
     solana_program_runtime::{
         invoke_context::InvokeContext,
-        loaded_programs::{LoadProgramMetrics, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
+        loaded_programs::{
+            LoadProgramMetrics, ProgramCacheEntryType, DELAY_VISIBILITY_SLOT_OFFSET,
+        },
         with_mock_invoke_context,
     },
     solana_rbpf::{
@@ -344,7 +346,7 @@ fn load_program<'a>(
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {
-                LoadedProgramType::Loaded(program) => Ok(program),
+                ProgramCacheEntryType::Loaded(program) => Ok(program),
                 _ => unreachable!(),
             },
             Err(err) => Err(format!("Loading executable failed: {err:?}")),

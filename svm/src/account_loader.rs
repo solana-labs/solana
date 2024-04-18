@@ -8,7 +8,7 @@ use {
     log::warn,
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
-        loaded_programs::{LoadedProgram, LoadedProgramsForTxBatch},
+        loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -114,7 +114,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     error_counters: &mut TransactionErrorMetrics,
     fee_structure: &FeeStructure,
     account_overrides: Option<&AccountOverrides>,
-    loaded_programs: &LoadedProgramsForTxBatch,
+    loaded_programs: &ProgramCacheForTxBatch,
 ) -> Vec<TransactionLoadResult> {
     let feature_set = callbacks.get_feature_set();
     txs.iter()
@@ -180,7 +180,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     fee: u64,
     error_counters: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
-    loaded_programs: &LoadedProgramsForTxBatch,
+    loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<LoadedTransaction> {
     let feature_set = callbacks.get_feature_set();
 
@@ -408,7 +408,7 @@ fn get_requested_loaded_accounts_data_size_limit(
     )
 }
 
-fn account_shared_data_from_program(loaded_program: &LoadedProgram) -> AccountSharedData {
+fn account_shared_data_from_program(loaded_program: &ProgramCacheEntry) -> AccountSharedData {
     // It's an executable program account. The program is already loaded in the cache.
     // So the account data is not needed. Return a dummy AccountSharedData with meta
     // information.
@@ -461,7 +461,7 @@ mod tests {
         solana_program_runtime::{
             compute_budget::ComputeBudget,
             compute_budget_processor,
-            loaded_programs::{LoadedProgram, LoadedProgramsForTxBatch},
+            loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
         solana_sdk::{
@@ -550,7 +550,7 @@ mod tests {
             error_counters,
             fee_structure,
             None,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         )
     }
 
@@ -1038,7 +1038,7 @@ mod tests {
             &mut error_counters,
             &FeeStructure::default(),
             account_overrides,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         )
     }
 
@@ -1429,7 +1429,7 @@ mod tests {
         let sanitized_message = new_unchecked_sanitized_message(message);
         let mock_bank = TestCallbacks::default();
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1472,7 +1472,7 @@ mod tests {
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1536,8 +1536,8 @@ mod tests {
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let mut loaded_programs = LoadedProgramsForTxBatch::default();
-        loaded_programs.replenish(key2.pubkey(), Arc::new(LoadedProgram::default()));
+        let mut loaded_programs = ProgramCacheForTxBatch::default();
+        loaded_programs.replenish(key2.pubkey(), Arc::new(ProgramCacheEntry::default()));
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1579,7 +1579,7 @@ mod tests {
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1621,7 +1621,7 @@ mod tests {
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1670,7 +1670,7 @@ mod tests {
         account_data.set_lamports(200);
         mock_bank.accounts_map.insert(key2.pubkey(), account_data);
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1737,7 +1737,7 @@ mod tests {
         account_data.set_lamports(200);
         mock_bank.accounts_map.insert(key2.pubkey(), account_data);
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1793,7 +1793,7 @@ mod tests {
             .accounts_map
             .insert(key3.pubkey(), AccountSharedData::default());
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1854,7 +1854,7 @@ mod tests {
         mock_bank.accounts_map.insert(key3.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -1941,7 +1941,7 @@ mod tests {
         mock_bank.accounts_map.insert(key3.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -2025,7 +2025,7 @@ mod tests {
             &mut error_counters,
             &FeeStructure::default(),
             None,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         );
 
         let compute_budget = ComputeBudget::new(u64::from(
@@ -2091,7 +2091,7 @@ mod tests {
         mock_bank.accounts_map.insert(key3.pubkey(), account_data);
 
         let mut error_counter = TransactionErrorMetrics::default();
-        let loaded_programs = LoadedProgramsForTxBatch::default();
+        let loaded_programs = ProgramCacheForTxBatch::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
             sanitized_message,
@@ -2181,7 +2181,7 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         );
 
         assert_eq!(
@@ -2199,7 +2199,7 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         );
 
         assert_eq!(result, vec![(Err(TransactionError::AccountNotFound), None)]);
@@ -2217,7 +2217,7 @@ mod tests {
             &mut TransactionErrorMetrics::default(),
             &fee_structure,
             None,
-            &LoadedProgramsForTxBatch::default(),
+            &ProgramCacheForTxBatch::default(),
         );
 
         assert_eq!(

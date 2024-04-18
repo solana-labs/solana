@@ -39,7 +39,7 @@ use {
         compute_budget::ComputeBudget,
         compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
+        loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType, ProgramCacheForTxBatch},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -242,7 +242,7 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+        programs_modified_by_tx: Box::<ProgramCacheForTxBatch>::default(),
     }
 }
 
@@ -4709,13 +4709,13 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
             &bank,
             vote_id,
             "mock_program1",
-            LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),
+            ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm),
         );
         bank.transaction_processor.add_builtin(
             &bank,
             stake_id,
             "mock_program2",
-            LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),
+            ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm),
         );
         {
             let stakes = bank.stakes_cache.stakes();
@@ -6305,7 +6305,7 @@ fn test_fuzz_instructions() {
                 &bank,
                 key,
                 name.as_str(),
-                LoadedProgram::new_builtin(0, 0, MockBuiltin::vm),
+                ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm),
             );
             (key, name.as_bytes().to_vec())
         })
@@ -7106,7 +7106,7 @@ fn test_bank_load_program() {
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     let program = bank.load_program(&key1, false, bank.epoch()).unwrap();
-    assert_matches!(program.program, LoadedProgramType::Loaded(_));
+    assert_matches!(program.program, ProgramCacheEntryType::Loaded(_));
     assert_eq!(
         program.account_size,
         program_account.data().len() + programdata_account.data().len()
@@ -7220,7 +7220,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(slot_versions[0].effective_slot, 0);
         assert!(matches!(
             slot_versions[0].program,
-            LoadedProgramType::Closed,
+            ProgramCacheEntryType::Closed,
         ));
     }
 
@@ -7244,7 +7244,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(slot_versions[0].effective_slot, 0);
         assert!(matches!(
             slot_versions[0].program,
-            LoadedProgramType::Closed,
+            ProgramCacheEntryType::Closed,
         ));
     }
 
@@ -7346,13 +7346,13 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(slot_versions[0].effective_slot, 0);
         assert!(matches!(
             slot_versions[0].program,
-            LoadedProgramType::Closed,
+            ProgramCacheEntryType::Closed,
         ));
         assert_eq!(slot_versions[1].deployment_slot, 0);
         assert_eq!(slot_versions[1].effective_slot, 1);
         assert!(matches!(
             slot_versions[1].program,
-            LoadedProgramType::Loaded(_),
+            ProgramCacheEntryType::Loaded(_),
         ));
     }
 

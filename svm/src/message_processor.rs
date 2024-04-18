@@ -148,7 +148,7 @@ mod tests {
         solana_program_runtime::{
             compute_budget::ComputeBudget,
             declare_process_instruction,
-            loaded_programs::{LoadedProgram, LoadedProgramsForTxBatch},
+            loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
             sysvar_cache::SysvarCache,
         },
         solana_sdk::{
@@ -239,10 +239,10 @@ mod tests {
         ];
         let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
-        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_system_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
+            Arc::new(ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
@@ -271,7 +271,7 @@ mod tests {
             ]),
         ));
         let sysvar_cache = SysvarCache::default();
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -322,7 +322,7 @@ mod tests {
                 ),
             ]),
         ));
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -363,7 +363,7 @@ mod tests {
                 ),
             ]),
         ));
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -465,10 +465,10 @@ mod tests {
         ];
         let mut transaction_context = TransactionContext::new(accounts, Rent::default(), 1, 3);
         let program_indices = vec![vec![2]];
-        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
+            Arc::new(ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm)),
         );
         let account_metas = vec![
             AccountMeta::new(
@@ -495,7 +495,7 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let sysvar_cache = SysvarCache::default();
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -531,7 +531,7 @@ mod tests {
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -564,7 +564,7 @@ mod tests {
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,
@@ -653,12 +653,12 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         ));
         let sysvar_cache = SysvarCache::default();
-        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             mock_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
+            Arc::new(ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm)),
         );
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
             &sysvar_cache,

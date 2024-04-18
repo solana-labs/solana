@@ -99,8 +99,8 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
         invoke_context::BuiltinFunctionWithContext,
         loaded_programs::{
-            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramOwner, LoadedProgramType,
-            ProgramCache,
+            ProgramCache, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
+            ProgramCacheMatchCriteria,
         },
         timings::{ExecuteTimingType, ExecuteTimings},
     },
@@ -202,9 +202,7 @@ use {
     solana_accounts_db::accounts_db::{
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
-    solana_program_runtime::{
-        loaded_programs::LoadedProgramsForTxBatch, sysvar_cache::SysvarCache,
-    },
+    solana_program_runtime::{loaded_programs::ProgramCacheForTxBatch, sysvar_cache::SysvarCache},
 };
 
 /// params to `verify_accounts_hash`
@@ -5212,7 +5210,7 @@ impl Bank {
                         self,
                         builtin.program_id,
                         builtin.name,
-                        LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint),
+                        ProgramCacheEntry::new_builtin(0, builtin.name.len(), builtin.entrypoint),
                     );
                 }
             }
@@ -6302,7 +6300,7 @@ impl Bank {
             self,
             program_id,
             "mockup",
-            LoadedProgram::new_builtin(self.slot, 0, builtin_function),
+            ProgramCacheEntry::new_builtin(self.slot, 0, builtin_function),
         );
     }
 
@@ -6315,10 +6313,10 @@ impl Bank {
             self,
             program_id,
             name,
-            LoadedProgram::new_tombstone(
+            ProgramCacheEntry::new_tombstone(
                 self.slot,
-                LoadedProgramOwner::NativeLoader,
-                LoadedProgramType::Closed,
+                ProgramCacheEntryOwner::NativeLoader,
+                ProgramCacheEntryType::Closed,
             ),
         );
         debug!("Removed program {}", program_id);
@@ -6579,7 +6577,7 @@ impl Bank {
                         self,
                         builtin.program_id,
                         builtin.name,
-                        LoadedProgram::new_builtin(
+                        ProgramCacheEntry::new_builtin(
                             self.feature_set.activated_slot(&feature_id).unwrap_or(0),
                             builtin.name.len(),
                             builtin.entrypoint,
@@ -6754,7 +6752,7 @@ impl Bank {
         pubkey: &Pubkey,
         reload: bool,
         effective_epoch: Epoch,
-    ) -> Option<Arc<LoadedProgram>> {
+    ) -> Option<Arc<ProgramCacheEntry>> {
         self.transaction_processor
             .load_program_with_pubkey(self, pubkey, reload, effective_epoch)
     }
@@ -6793,15 +6791,15 @@ impl TransactionProcessingCallback for Bank {
         self.feature_set.clone()
     }
 
-    fn get_program_match_criteria(&self, program: &Pubkey) -> LoadedProgramMatchCriteria {
+    fn get_program_match_criteria(&self, program: &Pubkey) -> ProgramCacheMatchCriteria {
         if self.check_program_modification_slot {
             self.transaction_processor
                 .program_modification_slot(self, program)
-                .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
-                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                .map_or(ProgramCacheMatchCriteria::Tombstone, |slot| {
+                    ProgramCacheMatchCriteria::DeployedOnOrAfterSlot(slot)
                 })
         } else {
-            LoadedProgramMatchCriteria::NoCriteria
+            ProgramCacheMatchCriteria::NoCriteria
         }
     }
 
@@ -7039,8 +7037,8 @@ impl Bank {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 
-    pub fn new_program_cache_for_tx_batch_for_slot(&self, slot: Slot) -> LoadedProgramsForTxBatch {
-        LoadedProgramsForTxBatch::new_from_cache(
+    pub fn new_program_cache_for_tx_batch_for_slot(&self, slot: Slot) -> ProgramCacheForTxBatch {
+        ProgramCacheForTxBatch::new_from_cache(
             slot,
             self.epoch_schedule.get_epoch(slot),
             &self.transaction_processor.program_cache.read().unwrap(),

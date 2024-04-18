@@ -816,7 +816,7 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
-        solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch,
+        solana_program_runtime::loaded_programs::ProgramCacheForTxBatch,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             address_lookup_table::state::LookupTableMeta,
@@ -867,7 +867,7 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+            programs_modified_by_tx: Box::<ProgramCacheForTxBatch>::default(),
         }
     }
 

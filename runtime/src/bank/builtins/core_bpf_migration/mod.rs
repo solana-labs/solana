@@ -7,7 +7,7 @@ use {
     crate::bank::Bank,
     error::CoreBpfMigrationError,
     solana_program_runtime::{
-        invoke_context::InvokeContext, loaded_programs::LoadedProgramsForTxBatch,
+        invoke_context::InvokeContext, loaded_programs::ProgramCacheForTxBatch,
         sysvar_cache::SysvarCache,
     },
     solana_sdk::{
@@ -154,14 +154,14 @@ impl Bank {
             .get(programdata_data_offset..)
             .ok_or(InstructionError::InvalidAccountData)?;
 
-        // Set up the two `LoadedProgramsForTxBatch` instances, as if
+        // Set up the two `ProgramCacheForTxBatch` instances, as if
         // processing a new transaction batch.
-        let programs_loaded = LoadedProgramsForTxBatch::new_from_cache(
+        let programs_loaded = ProgramCacheForTxBatch::new_from_cache(
             self.slot,
             self.epoch,
             &self.transaction_processor.program_cache.read().unwrap(),
         );
-        let mut programs_modified = LoadedProgramsForTxBatch::new(
+        let mut programs_modified = ProgramCacheForTxBatch::new(
             self.slot,
             programs_loaded.environments.clone(),
             programs_loaded.upcoming_environments.clone(),
@@ -169,7 +169,7 @@ impl Bank {
         );
 
         // Configure a dummy `InvokeContext` from the runtime's current
-        // environment, as well as the two `LoadedProgramsForTxBatch`
+        // environment, as well as the two `ProgramCacheForTxBatch`
         // instances configured above, then invoke the loader.
         {
             let compute_budget = self.runtime_config.compute_budget.unwrap_or_default();
@@ -300,7 +300,7 @@ mod tests {
         super::*,
         crate::bank::tests::create_simple_test_bank,
         assert_matches::assert_matches,
-        solana_program_runtime::loaded_programs::{LoadedProgram, LoadedProgramType},
+        solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType},
         solana_sdk::{
             account_utils::StateMut,
             bpf_loader_upgradeable::{self, get_program_data_address},
@@ -454,7 +454,7 @@ mod tests {
             assert_eq!(target_entry.latest_access_slot.load(Relaxed), bank.slot());
 
             // The target program entry should now be a BPF program.
-            assert_matches!(target_entry.program, LoadedProgramType::Loaded(..));
+            assert_matches!(target_entry.program, ProgramCacheEntryType::Loaded(..));
         }
     }
 
@@ -481,7 +481,7 @@ mod tests {
                 &bank,
                 builtin_id,
                 builtin_name.as_str(),
-                LoadedProgram::default(),
+                ProgramCacheEntry::default(),
             );
             account
         };

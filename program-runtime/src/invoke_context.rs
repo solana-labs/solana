@@ -3,7 +3,8 @@ use {
         compute_budget::ComputeBudget,
         ic_msg,
         loaded_programs::{
-            LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
+            ProgramCacheEntry, ProgramCacheEntryType, ProgramCacheForTxBatch,
+            ProgramRuntimeEnvironments,
         },
         log_collector::LogCollector,
         stable_log,
@@ -165,8 +166,8 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
-    pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
-    pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+    pub programs_loaded_for_tx_batch: &'a ProgramCacheForTxBatch,
+    pub programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -182,8 +183,8 @@ impl<'a> InvokeContext<'a> {
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
-        programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+        programs_loaded_for_tx_batch: &'a ProgramCacheForTxBatch,
+        programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -206,7 +207,7 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
-    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
+    pub fn find_program_in_cache(&self, pubkey: &Pubkey) -> Option<Arc<ProgramCacheEntry>> {
         // First lookup the cache of the programs modified by the current transaction. If not found, lookup
         // the cache of the cache of the programs that are loaded for the transaction batch.
         self.programs_modified_by_tx
@@ -478,7 +479,7 @@ impl<'a> InvokeContext<'a> {
             .find(&builtin_id)
             .ok_or(InstructionError::UnsupportedProgramId)?;
         let function = match &entry.program {
-            LoadedProgramType::Builtin(program) => program
+            ProgramCacheEntryType::Builtin(program) => program
                 .get_function_registry()
                 .lookup_by_key(ENTRYPOINT_KEY)
                 .map(|(_name, function)| function),
@@ -645,7 +646,7 @@ macro_rules! with_mock_invoke_context {
             std::sync::Arc,
             $crate::{
                 compute_budget::ComputeBudget, invoke_context::InvokeContext,
-                loaded_programs::LoadedProgramsForTxBatch, log_collector::LogCollector,
+                loaded_programs::ProgramCacheForTxBatch, log_collector::LogCollector,
                 sysvar_cache::SysvarCache,
             },
         };
@@ -674,8 +675,8 @@ macro_rules! with_mock_invoke_context {
                 }
             }
         });
-        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
-        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
+        let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             &sysvar_cache,
@@ -741,10 +742,10 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
         false
     };
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+    let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
     programs_loaded_for_tx_batch.replenish(
         *loader_id,
-        Arc::new(LoadedProgram::new_builtin(0, 0, builtin_function)),
+        Arc::new(ProgramCacheEntry::new_builtin(0, 0, builtin_function)),
     );
     invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
     pre_adjustments(&mut invoke_context);
@@ -998,10 +999,10 @@ mod tests {
             })
             .collect::<Vec<_>>();
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             callee_program_id,
-            Arc::new(LoadedProgram::new_builtin(0, 1, MockBuiltin::vm)),
+            Arc::new(ProgramCacheEntry::new_builtin(0, 1, MockBuiltin::vm)),
         );
         invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
@@ -1147,10 +1148,10 @@ mod tests {
             },
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         programs_loaded_for_tx_batch.replenish(
             program_key,
-            Arc::new(LoadedProgram::new_builtin(0, 0, MockBuiltin::vm)),
+            Arc::new(ProgramCacheEntry::new_builtin(0, 0, MockBuiltin::vm)),
         );
         invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 

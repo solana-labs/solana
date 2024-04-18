@@ -1,6 +1,6 @@
 use {
     crate::bank::Bank,
-    solana_program_runtime::loaded_programs::LoadedProgramStats,
+    solana_program_runtime::loaded_programs::ProgramCacheStats,
     solana_sdk::clock::{Epoch, Slot},
     std::sync::atomic::{
         AtomicU64,
@@ -205,7 +205,7 @@ pub(crate) fn report_partitioned_reward_metrics(bank: &Bank, timings: RewardsSto
 }
 
 /// Logs the measurement values
-pub(crate) fn report_loaded_programs_stats(stats: &LoadedProgramStats, slot: Slot) {
+pub(crate) fn report_loaded_programs_stats(stats: &ProgramCacheStats, slot: Slot) {
     let hits = stats.hits.load(Ordering::Relaxed);
     let misses = stats.misses.load(Ordering::Relaxed);
     let evictions: u64 = stats.evictions.values().sum();

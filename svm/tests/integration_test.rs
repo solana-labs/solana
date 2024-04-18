@@ -10,7 +10,7 @@ use {
         compute_budget::ComputeBudget,
         invoke_context::InvokeContext,
         loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, ProgramCache, ProgramRuntimeEnvironments,
+            BlockRelation, ForkGraph, ProgramCache, ProgramCacheEntry, ProgramRuntimeEnvironments,
         },
         solana_rbpf::{
             program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
@@ -236,7 +236,7 @@ fn register_builtins(
         mock_bank,
         bpf_loader_upgradeable::id(),
         BPF_LOADER_NAME,
-        LoadedProgram::new_builtin(
+        ProgramCacheEntry::new_builtin(
             DEPLOYMENT_SLOT,
             BPF_LOADER_NAME.len(),
             solana_bpf_loader_program::Entrypoint::vm,
@@ -249,7 +249,7 @@ fn register_builtins(
         mock_bank,
         solana_system_program::id(),
         SYSTEM_PROGRAM_NAME,
-        LoadedProgram::new_builtin(
+        ProgramCacheEntry::new_builtin(
             DEPLOYMENT_SLOT,
             SYSTEM_PROGRAM_NAME.len(),
             solana_system_program::system_processor::Entrypoint::vm,

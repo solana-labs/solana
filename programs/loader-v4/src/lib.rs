@@ -5,7 +5,8 @@ use {
         ic_logger_msg,
         invoke_context::InvokeContext,
         loaded_programs::{
-            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryType,
+            DELAY_VISIBILITY_SLOT_OFFSET,
         },
         log_collector::LogCollector,
         stable_log,
@@ -417,7 +418,7 @@ pub fn process_instruction_deploy(
         program_id: buffer.get_key().to_string(),
         ..LoadProgramMetrics::default()
     };
-    let executor = LoadedProgram::new(
+    let executor = ProgramCacheEntry::new(
         &loader_v4::id(),
         environments.program_runtime_v2.clone(),
         deployment_slot,
@@ -602,13 +603,13 @@ pub fn process_instruction_inner(
             .ix_usage_counter
             .fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
-            LoadedProgramType::FailedVerification(_)
-            | LoadedProgramType::Closed
-            | LoadedProgramType::DelayVisibility => {
+            ProgramCacheEntryType::FailedVerification(_)
+            | ProgramCacheEntryType::Closed
+            | ProgramCacheEntryType::DelayVisibility => {
                 ic_logger_msg!(log_collector, "Program is not deployed");
                 Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
             }
-            LoadedProgramType::Loaded(executable) => execute(invoke_context, executable),
+            ProgramCacheEntryType::Loaded(executable) => execute(invoke_context, executable),
             _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
         }
     }
@@ -653,7 +654,7 @@ mod tests {
                 if let Some(programdata) =
                     account.data().get(LoaderV4State::program_data_offset()..)
                 {
-                    if let Ok(loaded_program) = LoadedProgram::new(
+                    if let Ok(loaded_program) = ProgramCacheEntry::new(
                         &loader_v4::id(),
                         invoke_context
                             .programs_modified_by_tx
