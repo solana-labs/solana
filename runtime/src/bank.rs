@@ -5996,7 +5996,6 @@ impl Bank {
     pub fn update_incremental_accounts_hash(&self, base_slot: Slot) -> IncrementalAccountsHash {
         let config = CalcAccountsHashConfig {
             use_bg_thread_pool: true,
-            check_hash: false,
             ancestors: None, // does not matter, will not be used
             epoch_schedule: &self.epoch_schedule,
             rent_collector: &self.rent_collector,
@@ -6013,7 +6012,7 @@ impl Bank {
                 self.slot(),
                 HashStats::default(),
             )
-            .unwrap() // unwrap here will never fail since check_hash = false
+            .unwrap() // unwrap here will never fail
             .0
     }
 

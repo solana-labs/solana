@@ -7033,7 +7033,6 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        let check_hash = false;
         let (accounts_hash, total_lamports) = self
             .calculate_accounts_hash_with_verify(
                 data_source,
@@ -7041,7 +7040,6 @@ impl AccountsDb {
                 slot,
                 CalcAccountsHashConfig {
                     use_bg_thread_pool: !is_startup,
-                    check_hash,
                     ancestors: Some(ancestors),
                     epoch_schedule,
                     rent_collector,
@@ -7049,7 +7047,7 @@ impl AccountsDb {
                 },
                 expected_capitalization,
             )
-            .unwrap(); // unwrap here will never fail since check_hash = false
+            .unwrap(); // unwrap here will never fail
         self.set_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
     }
@@ -7423,7 +7421,6 @@ impl AccountsDb {
     ) -> Result<(), AccountsHashVerificationError> {
         let calc_config = CalcAccountsHashConfig {
             use_bg_thread_pool: config.use_bg_thread_pool,
-            check_hash: false,
             ancestors: Some(config.ancestors),
             epoch_schedule: config.epoch_schedule,
             rent_collector: config.rent_collector,
@@ -9523,7 +9520,6 @@ pub mod tests {
             stats: &mut crate::accounts_hash::HashStats,
             bins: usize,
             bin_range: &Range<usize>,
-            check_hash: bool,
         ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
@@ -9533,10 +9529,7 @@ pub mod tests {
                 stats,
                 bins,
                 bin_range,
-                &CalcAccountsHashConfig {
-                    check_hash,
-                    ..CalcAccountsHashConfig::default()
-                },
+                &CalcAccountsHashConfig::default(),
             )
             .map(|references| {
                 references
@@ -9972,7 +9965,7 @@ pub mod tests {
         let accounts_db = AccountsDb::new_single_for_tests();
 
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds)
             .unwrap();
     }
     #[test]
@@ -9983,7 +9976,7 @@ pub mod tests {
 
         let accounts_db = AccountsDb::new_single_for_tests();
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds)
             .unwrap();
     }
 
@@ -9995,7 +9988,7 @@ pub mod tests {
 
         let accounts_db = AccountsDb::new_single_for_tests();
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds)
             .unwrap();
     }
 
@@ -10196,7 +10189,6 @@ pub mod tests {
                     start: 0,
                     end: bins,
                 },
-                true, // checking hash here
             )
             .unwrap();
     }
@@ -10224,7 +10216,6 @@ pub mod tests {
                     start: 0,
                     end: bins,
                 },
-                true, // checking hash here
             )
             .unwrap();
         assert_scan(result, vec![vec![raw_expected.clone()]], bins, 0, bins);
@@ -10240,7 +10231,6 @@ pub mod tests {
                     start: 0,
                     end: bins,
                 },
-                false,
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
@@ -10261,7 +10251,6 @@ pub mod tests {
                     start: 0,
                     end: bins,
                 },
-                false,
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
@@ -10282,7 +10271,6 @@ pub mod tests {
                     start: 0,
                     end: bins,
                 },
-                false,
             )
             .unwrap();
         let mut expected = vec![Vec::new(); bins];
@@ -10315,7 +10303,6 @@ pub mod tests {
                         start: 0,
                         end: bins,
                     },
-                    false,
                 )
                 .unwrap();
 
@@ -10341,7 +10328,6 @@ pub mod tests {
                         start: 0,
                         end: half_bins,
                     },
-                    false,
                 )
                 .unwrap();
             let mut expected = vec![Vec::new(); half_bins];
@@ -10360,7 +10346,6 @@ pub mod tests {
                         start: 1,
                         end: bins,
                     },
-                    false,
                 )
                 .unwrap();
 
@@ -10384,7 +10369,6 @@ pub mod tests {
                             start: bin,
                             end: bin + 1,
                         },
-                        false,
                     )
                     .unwrap();
                 let mut expected = vec![Vec::new(); 1];
@@ -10406,7 +10390,6 @@ pub mod tests {
                             start: bin,
                             end: bin + range,
                         },
-                        false,
                     )
                     .unwrap();
                 let mut expected = vec![];
@@ -10451,7 +10434,6 @@ pub mod tests {
                         start,
                         end: start + range,
                     },
-                    false,
                 )
                 .unwrap();
             assert_eq!(result.len(), 1); // 2 chunks, but 1 is empty so not included
@@ -12225,7 +12207,6 @@ pub mod tests {
         fn default() -> Self {
             Self {
                 use_bg_thread_pool: false,
-                check_hash: false,
                 ancestors: None,
                 epoch_schedule: &EPOCH_SCHEDULE,
                 rent_collector: &RENT_COLLECTOR,

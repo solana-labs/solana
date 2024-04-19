@@ -382,7 +382,6 @@ impl AccountsHashVerifier {
 
         let calculate_accounts_hash_config = CalcAccountsHashConfig {
             use_bg_thread_pool: true,
-            check_hash: false,
             ancestors: None,
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
@@ -399,7 +398,7 @@ impl AccountsHashVerifier {
                 slot,
                 timings,
             )
-            .unwrap()); // unwrap here will never fail since check_hash = false
+            .unwrap()); // unwrap here will never fail
 
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
@@ -461,7 +460,6 @@ impl AccountsHashVerifier {
 
         let calculate_accounts_hash_config = CalcAccountsHashConfig {
             use_bg_thread_pool: true,
-            check_hash: false,
             ancestors: None,
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
@@ -478,7 +476,7 @@ impl AccountsHashVerifier {
                     accounts_package.slot,
                     HashStats::default(),
                 )
-                .unwrap() // unwrap here will never fail since check_hash = false
+                .unwrap() // unwrap here will never fail
         );
 
         datapoint_info!(
