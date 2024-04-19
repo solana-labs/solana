@@ -128,11 +128,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("AnjsdWg7LXFbjDdy78wncCJs9PyTdWpKkFmHAwQU1mQ6");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("EDEhzg1Jk79Wrk4mwpRa7txjgRxcE6igXwd6egFDVhuz");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_system_program",
@@ -143,11 +143,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("5wDLHMasPmtrcpfRZX67RVkBXBbSTQ9S4C8EJomD3yAk");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("6T9s4PTcHnpq2AVAqoCbJd4FuHsdD99MjSUEbS7qb1tT");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_vote_program",
@@ -158,11 +158,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("5gp5YKtNEirX45igBvp39bN6nEwhkNMRS7m2c63D1xPM");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("2a3XnUr4Xfxd8hBST8wd4D3Qbiu339XKessYsDwabCED");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_stake_program",
@@ -173,11 +173,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("8Jve2vaMFhEgQ5JeB5HxekLx7hyjfRN2jLFawACqekNf");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("73ALcNtVqyM3q7XsvB2xkVECvggu4CcLX5J2XKmpjdBU");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_config_program",
@@ -188,11 +188,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("8gpakCv5Pk5PZGv9RUjzdkk2GVQPGx12cNRUDMQ3bP86");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("DveUYB5m9G3ce4zpV3fxg9pCNkvH1wDsyd8XberZ47JL");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_bpf_loader_deprecated_program",
@@ -203,11 +203,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("8yEdUm4SaP1yNq2MczEVdrM48SucvZCTDSqjcAKfYfL6");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("2EWMYGJPuGLW4TexLLEMeXP2BkB1PXEKBFb698yw6LhT");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_bpf_loader_program",
@@ -218,11 +218,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("oPQbVjgoQ7SaQmzZiiHW4xqHbh4BJqqrFhxEJZiMiwY");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("6bTmA9iefD57GDoQ9wUjG8SeYkSpRw3EkKzxZCbhkavq");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_bpf_loader_upgradeable_program",
@@ -233,11 +233,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("D39vUspVfhjPVD7EtMJZrA5j1TSMp4LXfb43nxumGdHT");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("KfX1oLpFC5CwmFeSgXrNcXaouKjFkPuSJ4UsKb3zKMX");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_compute_budget_program",
@@ -248,11 +248,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("5G9xu4TnRShZpEhWyjAW2FnRNCwF85g5XKzSbQy4XpCq");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("DQshE9LTac8eXjZTi8ApeuZJYH67UxTMUxaEGstC6mqJ");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_address_lookup_table_program",
@@ -263,11 +263,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("GfeFwUzKP9NmaP5u4VfnFgEvQoeQc2wPgnBFrUZhpib5");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("Ffe9gL8vXraBkiv3HqbLvBqY7i9V4qtZxjH83jYYDe1V");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_zk_token_proof_program",
@@ -278,11 +278,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("Cz5JthYp27KR3rwTCtVJhbRgwHCurbwcYX46D8setL22");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("EH45pKy1kzjifB93wEJi91js3S4HETdsteywR7ZCNPn5");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_loader_v4_program",
@@ -293,11 +293,11 @@ mod test_only {
         pub mod feature {
             solana_sdk::declare_id!("8ZYAiJVVEon55wqGt2wZi5oVjxwK4cBUUfwMwHFvkqpB");
         }
-        pub mod source_program {
+        pub mod source_buffer {
             solana_sdk::declare_id!("CWioXdq2ctv8Z4XdhmzJzgpU5i97ZHZZJVSJUmndV3mk");
         }
         pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_program_id: source_program::id(),
+            source_buffer_address: source_buffer::id(),
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Stateless,
             datapoint_name: "migrate_stateless_to_core_bpf_feature_gate_program",

@@ -30,9 +30,9 @@ pub enum CoreBpfMigrationError {
     /// Invalid program account
     #[error("Invalid program account: {0:?}")]
     InvalidProgramAccount(Pubkey),
-    /// Invalid program data account
-    #[error("Invalid program data account: {0:?}")]
-    InvalidProgramDataAccount(Pubkey),
+    /// Invalid buffer account
+    #[error("Invalid buffer account: {0:?}")]
+    InvalidBufferAccount(Pubkey),
     /// Arithmetic overflow
     #[error("Arithmetic overflow")]
     ArithmeticOverflow,
