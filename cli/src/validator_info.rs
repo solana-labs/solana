@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
@@ -336,7 +334,9 @@ pub fn process_set_validator_info(
         (validator_info::id(), false),
         (config.signers[0].pubkey(), true),
     ];
-    let data_len = ValidatorInfo::max_space() + ConfigKeys::serialized_size(keys.clone());
+    let data_len = ValidatorInfo::max_space()
+        .checked_add(ConfigKeys::serialized_size(keys.clone()))
+        .expect("ValidatorInfo and two keys fit into a u64");
     let lamports = rpc_client.get_minimum_balance_for_rent_exemption(data_len as usize)?;
 
     let signers = if balance == 0 {
