@@ -652,7 +652,9 @@ mod tests {
 
         let mut account_count = 0;
         snapshot_storages.into_iter().for_each(|storage| {
-            account_count += storage.accounts.account_iter().count();
+            storage.accounts.scan_pubkeys(|_| {
+                account_count += 1;
+            });
         });
 
         assert_eq!(

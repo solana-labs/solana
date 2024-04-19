@@ -10812,7 +10812,11 @@ pub mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let mark_alive = false;
         let storage = sample_storage_with_entries(&tf, slot_expected, &pubkey1, mark_alive);
-        let lamports = storage.accounts.account_iter().next().unwrap().lamports();
+        let lamports = storage
+            .accounts
+            .get_account_shared_data(0)
+            .unwrap()
+            .lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
             current_slot: 0,
@@ -17030,16 +17034,19 @@ pub mod tests {
                     "normal_slots: {num_normal_slots}, dead_accounts: {dead_accounts}"
                 );
                 for original in &originals {
-                    let original = original.accounts.account_iter().next().unwrap();
-
-                    let i = after_stored_accounts
-                        .iter()
-                        .enumerate()
-                        .find_map(|(i, stored_ancient)| {
-                            (stored_ancient.pubkey() == original.pubkey()).then_some({
-                                assert!(accounts_equal(stored_ancient, &original));
-                                i
-                            })
+                    let i = original
+                        .accounts
+                        .get_stored_account_meta_callback(0, |original| {
+                            after_stored_accounts
+                                .iter()
+                                .enumerate()
+                                .find_map(|(i, stored_ancient)| {
+                                    (stored_ancient.pubkey() == original.pubkey()).then_some({
+                                        assert!(accounts_equal(stored_ancient, &original));
+                                        i
+                                    })
+                                })
+                                .expect("did not find account")
                         })
                         .expect("did not find account");
                     after_stored_accounts.remove(i);

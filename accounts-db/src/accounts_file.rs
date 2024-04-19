@@ -228,7 +228,7 @@ impl AccountsFile {
     }
 
     /// iterate over all pubkeys
-    pub(crate) fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) {
+    pub fn scan_pubkeys(&self, callback: impl FnMut(&Pubkey)) {
         match self {
             Self::AppendVec(av) => av.scan_pubkeys(callback),
             Self::TieredStorage(ts) => {

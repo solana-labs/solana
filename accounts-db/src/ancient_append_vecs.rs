@@ -1163,14 +1163,7 @@ pub mod tests {
 
                 let account_template = storages
                     .first()
-                    .map(|storage| {
-                        storage
-                            .accounts
-                            .account_iter()
-                            .next()
-                            .unwrap()
-                            .to_account_shared_data()
-                    })
+                    .and_then(|storage| storage.accounts.get_account_shared_data(0))
                     .unwrap_or_default();
                 // add some accounts to each storage so we can make partial progress
                 let mut lamports = 1000;
@@ -1267,14 +1260,7 @@ pub mod tests {
 
                 let account_template = storages
                     .first()
-                    .map(|storage| {
-                        storage
-                            .accounts
-                            .account_iter()
-                            .next()
-                            .unwrap()
-                            .to_account_shared_data()
-                    })
+                    .and_then(|storage| storage.accounts.get_account_shared_data(0))
                     .unwrap_or_default();
                 // add some accounts to each storage so we can make partial progress
                 let mut data_size = 450;
