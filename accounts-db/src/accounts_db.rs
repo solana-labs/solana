@@ -824,11 +824,14 @@ impl<'a> LoadedAccountAccessor<'a> {
                             .get_account_shared_data(*offset)
                     .expect("If a storage entry was found in the storage map, it must not have been reset yet")
             }
-            _ => self.check_and_get_loaded_account().take_account(),
+            _ => self.check_and_get_loaded_account(|loaded_account| loaded_account.take_account()),
         }
     }
 
-    fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
+    fn check_and_get_loaded_account<T>(
+        &mut self,
+        callback: impl for<'local> FnMut(LoadedAccount<'local>) -> T,
+    ) -> T {
         // all of these following .expect() and .unwrap() are like serious logic errors,
         // ideal for representing this as rust type system....
 
@@ -839,7 +842,7 @@ impl<'a> LoadedAccountAccessor<'a> {
             LoadedAccountAccessor::Cached(Some(_cached_account)) => {
                 // Cached(Some(x)) variant always produces `Some` for get_loaded_account() since
                 // it just returns the inner `x` without additional fetches
-                self.get_loaded_account().unwrap()
+                self.get_loaded_account(callback).unwrap()
             }
             LoadedAccountAccessor::Stored(Some(_maybe_storage_entry)) => {
                 // If we do find the storage entry, we can guarantee that the storage entry is
@@ -847,19 +850,22 @@ impl<'a> LoadedAccountAccessor<'a> {
                 // was still in the storage map. This means even if the storage entry is removed
                 // from the storage map after we grabbed the storage entry, the recycler should not
                 // reset the storage entry until we drop the reference to the storage entry.
-                self.get_loaded_account()
+                self.get_loaded_account(callback)
                     .expect("If a storage entry was found in the storage map, it must not have been reset yet")
             }
         }
     }
 
-    fn get_loaded_account(&mut self) -> Option<LoadedAccount> {
+    fn get_loaded_account<T>(
+        &mut self,
+        mut callback: impl for<'local> FnMut(LoadedAccount<'local>) -> T,
+    ) -> Option<T> {
         match self {
             LoadedAccountAccessor::Cached(cached_account) => {
                 let cached_account: Cow<'a, CachedAccount> = cached_account.take().expect(
                     "Cache flushed/purged should be handled before trying to fetch account",
                 );
-                Some(LoadedAccount::Cached(cached_account))
+                Some(callback(LoadedAccount::Cached(cached_account)))
             }
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
                 // storage entry may not be present if slot was cleaned up in
@@ -869,8 +875,10 @@ impl<'a> LoadedAccountAccessor<'a> {
                     .as_ref()
                     .and_then(|(storage_entry, offset)| {
                         storage_entry
-                            .get_stored_account_meta(*offset)
-                            .map(LoadedAccount::Stored)
+                            .accounts
+                            .get_stored_account_meta_callback(*offset, |account| {
+                                callback(LoadedAccount::Stored(account))
+                            })
                     })
             }
         }
@@ -1129,10 +1137,6 @@ impl AccountStorageEntry {
 
     pub fn flush(&self) -> Result<(), AccountsFileError> {
         self.accounts.flush()
-    }
-
-    fn get_stored_account_meta(&self, offset: usize) -> Option<StoredAccountMeta> {
-        Some(self.accounts.get_stored_account_meta(offset)?.0)
     }
 
     fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
@@ -4723,8 +4727,9 @@ impl AccountsDb {
             |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
-                    .get_loaded_account()
-                    .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
+                    .get_loaded_account(|loaded_account| {
+                        (pubkey, loaded_account.take_account(), slot)
+                    });
                 scan_func(account_slot)
             },
             config,
@@ -4746,12 +4751,10 @@ impl AccountsDb {
             metric_name,
             ancestors,
             |pubkey, (account_info, slot)| {
-                if let Some(loaded_account) = self
-                    .get_account_accessor(slot, pubkey, &account_info.storage_location())
-                    .get_loaded_account()
-                {
-                    scan_func(pubkey, loaded_account, slot);
-                }
+                self.get_account_accessor(slot, pubkey, &account_info.storage_location())
+                    .get_loaded_account(|loaded_account| {
+                        scan_func(pubkey, loaded_account, slot);
+                    });
             },
             config,
         );
@@ -4786,8 +4789,9 @@ impl AccountsDb {
                 // For details, see the comment in retry_to_get_account_accessor()
                 if let Some(account_slot) = self
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
-                    .get_loaded_account()
-                    .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
+                    .get_loaded_account(|loaded_account| {
+                        (pubkey, loaded_account.take_account(), slot)
+                    })
                 {
                     scan_func(Some(account_slot))
                 }
@@ -4825,8 +4829,9 @@ impl AccountsDb {
             |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
-                    .get_loaded_account()
-                    .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
+                    .get_loaded_account(|loaded_account| {
+                        (pubkey, loaded_account.take_account(), slot)
+                    });
                 scan_func(account_slot)
             },
             config,
@@ -5411,8 +5416,8 @@ impl AccountsDb {
             max_root,
             load_hint,
         )?;
-        let loaded_account = account_accessor.check_and_get_loaded_account();
-        Some(loaded_account.loaded_hash())
+        account_accessor
+            .check_and_get_loaded_account(|loaded_account| Some(loaded_account.loaded_hash()))
     }
 
     fn get_account_accessor<'a>(
@@ -6573,28 +6578,25 @@ impl AccountsDb {
                                             pubkey,
                                             &account_info.storage_location(),
                                         )
-                                        .get_loaded_account()
-                                        .map(
-                                            |loaded_account| {
-                                                let mut loaded_hash = loaded_account.loaded_hash();
-                                                let balance = loaded_account.lamports();
-                                                let hash_is_missing =
-                                                    loaded_hash == AccountHash(Hash::default());
-                                                if hash_is_missing {
-                                                    let computed_hash = Self::hash_account_data(
-                                                        loaded_account.lamports(),
-                                                        loaded_account.owner(),
-                                                        loaded_account.executable(),
-                                                        loaded_account.rent_epoch(),
-                                                        loaded_account.data(),
-                                                        loaded_account.pubkey(),
-                                                    );
-                                                    loaded_hash = computed_hash;
-                                                }
-                                                sum += balance as u128;
-                                                loaded_hash.0
-                                            },
-                                        )
+                                        .get_loaded_account(|loaded_account| {
+                                            let mut loaded_hash = loaded_account.loaded_hash();
+                                            let balance = loaded_account.lamports();
+                                            let hash_is_missing =
+                                                loaded_hash == AccountHash(Hash::default());
+                                            if hash_is_missing {
+                                                let computed_hash = Self::hash_account_data(
+                                                    loaded_account.lamports(),
+                                                    loaded_account.owner(),
+                                                    loaded_account.executable(),
+                                                    loaded_account.rent_epoch(),
+                                                    loaded_account.data(),
+                                                    loaded_account.pubkey(),
+                                                );
+                                                loaded_hash = computed_hash;
+                                            }
+                                            sum += balance as u128;
+                                            loaded_hash.0
+                                        })
                                     },
                                 )
                                 .flatten()
@@ -9060,20 +9062,21 @@ impl AccountsDb {
                             let mut accessor = LoadedAccountAccessor::Stored(
                                 maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                             );
-                            let loaded_account = accessor.check_and_get_loaded_account();
-                            let data_len = loaded_account.data_len();
-                            accounts_data_len_from_duplicates += data_len;
-                            if let Some(lamports_to_top_off) = Self::stats_for_rent_payers(
-                                pubkey,
-                                loaded_account.lamports(),
-                                data_len,
-                                loaded_account.rent_epoch(),
-                                loaded_account.executable(),
-                                rent_collector,
-                            ) {
-                                removed_rent_paying += 1;
-                                removed_top_off += lamports_to_top_off;
-                            }
+                            accessor.check_and_get_loaded_account(|loaded_account| {
+                                let data_len = loaded_account.data_len();
+                                accounts_data_len_from_duplicates += data_len;
+                                if let Some(lamports_to_top_off) = Self::stats_for_rent_payers(
+                                    pubkey,
+                                    loaded_account.lamports(),
+                                    data_len,
+                                    loaded_account.rent_epoch(),
+                                    loaded_account.executable(),
+                                    rent_collector,
+                                ) {
+                                    removed_rent_paying += 1;
+                                    removed_top_off += lamports_to_top_off;
+                                }
+                            });
                         });
                     }
                 }
