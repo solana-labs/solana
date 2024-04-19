@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
@@ -46,7 +44,7 @@ pub fn wait_n_slots(rpc_client: &RpcClient, n: u64) -> u64 {
     loop {
         sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         let new_slot = rpc_client.get_slot().unwrap();
-        if new_slot - slot > n {
+        if new_slot.saturating_sub(slot) > n {
             return new_slot;
         }
     }
@@ -54,7 +52,7 @@ pub fn wait_n_slots(rpc_client: &RpcClient, n: u64) -> u64 {
 
 pub fn wait_for_next_epoch_plus_n_slots(rpc_client: &RpcClient, n: u64) -> (Epoch, u64) {
     let current_epoch = rpc_client.get_epoch_info().unwrap().epoch;
-    let next_epoch = current_epoch + 1;
+    let next_epoch = current_epoch.saturating_add(1);
     println!("waiting for epoch {next_epoch} plus {n} slots");
     loop {
         sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
