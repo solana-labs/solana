@@ -4891,7 +4891,7 @@ impl AccountsDb {
                 .storage
                 .get_slot_storage_entry_shrinking_in_progress_ok(slot)
             {
-                storage.accounts.account_iter().for_each(|account| {
+                storage.accounts.scan_accounts(|account| {
                     let loaded_account = LoadedAccount::Stored(account);
                     let data = (scan_account_storage_data
                         == ScanAccountStorageData::DataRefForStorage)
@@ -16573,11 +16573,10 @@ pub mod tests {
     ) -> Vec<(Pubkey, AccountSharedData)> {
         storages
             .flat_map(|storage| {
-                let vec = storage
-                    .accounts
-                    .account_iter()
-                    .map(|account| (*account.pubkey(), account.to_account_shared_data()))
-                    .collect::<Vec<_>>();
+                let mut vec = Vec::default();
+                storage.accounts.scan_accounts(|account| {
+                    vec.push((*account.pubkey(), account.to_account_shared_data()));
+                });
                 // make sure scan_pubkeys results match
                 // Note that we assume traversals are both in the same order, but this doesn't have to be true.
                 let mut compare = Vec::default();

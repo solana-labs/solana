@@ -630,6 +630,17 @@ impl HotStorageReader {
         Ok(result)
     }
 
+    /// Iterate over all accounts and call `callback` with each account.
+    pub(crate) fn scan_accounts(
+        &self,
+        mut callback: impl for<'a> FnMut(StoredAccountMeta<'a>),
+    ) -> TieredStorageResult<()> {
+        for i in 0..self.footer.account_entry_count {
+            self.get_stored_account_meta_callback(IndexOffset(i), &mut callback)?;
+        }
+        Ok(())
+    }
+
     /// iterate over all entries to put in index
     pub(crate) fn scan_index(
         &self,

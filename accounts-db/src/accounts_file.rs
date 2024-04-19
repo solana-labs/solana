@@ -204,6 +204,18 @@ impl AccountsFile {
         AccountsFileIter::new(self)
     }
 
+    /// Iterate over all accounts and call `callback` with each account.
+    pub(crate) fn scan_accounts(&self, callback: impl for<'a> FnMut(StoredAccountMeta<'a>)) {
+        match self {
+            Self::AppendVec(av) => av.scan_accounts(callback),
+            Self::TieredStorage(ts) => {
+                if let Some(reader) = ts.reader() {
+                    _ = reader.scan_accounts(callback);
+                }
+            }
+        }
+    }
+
     /// for each offset in `sorted_offsets`, return the account size
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
         match self {

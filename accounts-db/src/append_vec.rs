@@ -686,6 +686,19 @@ impl AppendVec {
         }
     }
 
+    /// Iterate over all accounts and call `callback` with each account.
+    #[allow(clippy::blocks_in_conditions)]
+    pub(crate) fn scan_accounts(&self, mut callback: impl for<'a> FnMut(StoredAccountMeta<'a>)) {
+        let mut offset = 0;
+        while self
+            .get_stored_account_meta_callback(offset, |account| {
+                offset += account.stored_size();
+                callback(account)
+            })
+            .is_some()
+        {}
+    }
+
     /// for each offset in `sorted_offsets`, get the size of the account. No other information is needed for the account.
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
         let mut result = Vec::with_capacity(sorted_offsets.len());
