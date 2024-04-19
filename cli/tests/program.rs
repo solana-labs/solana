@@ -37,7 +37,7 @@ use {
     std::{
         env,
         fs::File,
-        io::Read,
+        io::{Read, Seek, SeekFrom},
         path::{Path, PathBuf},
         str::FromStr,
     },
@@ -1301,7 +1301,7 @@ fn test_cli_program_write_buffer() {
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         allow_excessive_balance: false,
-        upgrade_authority_signer_index: 1,
+        upgrade_authority_signer_index: 0,
         is_final: true,
         max_len: None,
         skip_fee_check: false,
@@ -1310,9 +1310,22 @@ fn test_cli_program_write_buffer() {
     });
     config.output_format = OutputFormat::JsonCompact;
     let error = process_command(&config).unwrap_err();
+    let buffer_account_len = {
+        let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
+        let program_data_len = file.seek(SeekFrom::End(0)).unwrap() as usize;
+        UpgradeableLoaderState::size_of_buffer_metadata() + program_data_len
+    };
+    let min_buffer_account_len = {
+        let mut file = File::open(noop_large_path.to_str().unwrap()).unwrap();
+        let large_program_data_len = file.seek(SeekFrom::End(0)).unwrap() as usize;
+        UpgradeableLoaderState::size_of_buffer_metadata() + large_program_data_len
+    };
     assert_eq!(
         error.to_string(),
-        "Buffer account passed is not large enough, may have been for a different deploy?"
+        format!(
+            "Buffer account data size ({}) is smaller than the minimum size ({})",
+            buffer_account_len, min_buffer_account_len
+        ),
     );
 }
 

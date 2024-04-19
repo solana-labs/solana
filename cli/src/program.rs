@@ -1242,18 +1242,43 @@ fn process_program_deploy(
         true
     };
 
-    let (program_data, program_len) = if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(program_location)?;
-        let program_len = program_data.len();
-        (program_data, program_len)
-    } else if buffer_provided {
-        (
-            vec![],
-            fetch_buffer_len(&rpc_client, config, buffer_pubkey)?,
-        )
-    } else {
-        return Err("Program location required if buffer not supplied".into());
-    };
+    let (program_data, program_len, buffer_account) =
+        if let Some(program_location) = program_location {
+            let program_data = read_and_verify_elf(program_location)?;
+            let program_len = program_data.len();
+
+            // If a buffer was provided, check if it has already been created and set up properly
+            let buffer_account = if buffer_provided {
+                fetch_buffer_account(
+                    &rpc_client,
+                    config,
+                    Some(program_len),
+                    buffer_pubkey,
+                    upgrade_authority_signer.pubkey(),
+                )?
+            } else {
+                None
+            };
+
+            (program_data, program_len, buffer_account)
+        } else if buffer_provided {
+            let buffer_account = fetch_verified_buffer_account(
+                &rpc_client,
+                config,
+                buffer_pubkey,
+                upgrade_authority_signer.pubkey(),
+            )?;
+
+            let program_len = buffer_account
+                .data
+                .len()
+                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
+
+            (vec![], program_len, Some(buffer_account))
+        } else {
+            return Err("Program location required if buffer not supplied".into());
+        };
+
     let program_data_max_len = if let Some(len) = max_len {
         if program_len > len {
             return Err(
@@ -1286,6 +1311,7 @@ fn process_program_deploy(
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
+            buffer_account,
             upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
@@ -1304,6 +1330,7 @@ fn process_program_deploy(
             upgrade_authority_signer,
             &buffer_pubkey,
             buffer_signer,
+            buffer_account,
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
@@ -1330,54 +1357,80 @@ fn process_program_deploy(
     result
 }
 
-fn fetch_buffer_len(
+fn fetch_verified_buffer_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     buffer_pubkey: Pubkey,
-) -> Result<usize, Box<dyn std::error::Error>> {
-    // Check supplied buffer account
-    if let Some(account) = rpc_client
+    buffer_authority: Pubkey,
+) -> Result<Account, Box<dyn std::error::Error>> {
+    let Some(buffer_account) =
+        fetch_buffer_account(rpc_client, config, None, buffer_pubkey, buffer_authority)?
+    else {
+        return Err(format!("Buffer account {buffer_pubkey} not found").into());
+    };
+
+    let buffer_program_data =
+        &buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..];
+
+    verify_elf(buffer_program_data).map_err(|err| {
+        format!(
+            "Buffer account {buffer_pubkey} has invalid program data: {:?}",
+            err
+        )
+    })?;
+
+    Ok(buffer_account)
+}
+
+fn fetch_buffer_account(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    min_program_len: Option<usize>,
+    buffer_pubkey: Pubkey,
+    buffer_authority: Pubkey,
+) -> Result<Option<Account>, Box<dyn std::error::Error>> {
+    let Some(account) = rpc_client
         .get_account_with_commitment(&buffer_pubkey, config.commitment)?
         .value
-    {
-        if !bpf_loader_upgradeable::check_id(&account.owner) {
+    else {
+        return Ok(None);
+    };
+
+    if !bpf_loader_upgradeable::check_id(&account.owner) {
+        return Err(format!(
+            "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
+        )
+        .into());
+    }
+
+    if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state() {
+        if authority_address.is_none() {
+            return Err(format!("Buffer {buffer_pubkey} is immutable").into());
+        }
+        if authority_address != Some(buffer_authority) {
             return Err(format!(
-                "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
+                "Buffer's authority {:?} does not match authority provided {}",
+                authority_address, buffer_authority
             )
             .into());
         }
-
-        match account.state() {
-            Ok(UpgradeableLoaderState::Buffer { .. }) => {
-                // continue if buffer is initialized
-            }
-            Ok(UpgradeableLoaderState::Program { .. }) => {
-                return Err(format!("Cannot use program account {buffer_pubkey} as buffer").into());
-            }
-            Ok(UpgradeableLoaderState::ProgramData { .. }) => {
-                return Err(
-                    format!("Cannot use program data account {buffer_pubkey} as buffer",).into(),
-                )
-            }
-            Ok(UpgradeableLoaderState::Uninitialized) => {
-                return Err(format!("Buffer account {buffer_pubkey} is not initialized").into());
-            }
-            Err(_) => {
-                return Err(
-                    format!("Buffer account {buffer_pubkey} could not be deserialized").into(),
-                )
-            }
-        };
-
-        let program_len = account
-            .data
-            .len()
-            .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
-
-        Ok(program_len)
     } else {
-        Err(format!("Buffer account {buffer_pubkey} not found, was it already consumed?",).into())
+        return Err(format!("{buffer_pubkey} is not an upgradeable loader buffer account").into());
     }
+
+    if let Some(min_program_len) = min_program_len {
+        let min_buffer_data_len = UpgradeableLoaderState::size_of_buffer(min_program_len);
+        if account.data.len() < min_buffer_data_len {
+            return Err(format!(
+                "Buffer account data size ({}) is smaller than the minimum size ({})",
+                account.data.len(),
+                min_buffer_data_len
+            )
+            .into());
+        }
+    }
+
+    Ok(Some(account))
 }
 
 /// Upgrade existing program using upgradeable loader
@@ -1422,6 +1475,13 @@ fn process_program_upgrade(
             },
         )
     } else {
+        fetch_verified_buffer_account(
+            &rpc_client,
+            config,
+            buffer_pubkey,
+            upgrade_authority_signer.pubkey(),
+        )?;
+
         let fee = rpc_client.get_fee_for_message(&message)?;
         check_account_for_spend_and_fee_with_commitment(
             &rpc_client,
@@ -1461,6 +1521,9 @@ fn process_write_buffer(
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let buffer_authority = config.signers[buffer_authority_signer_index];
 
+    let program_data = read_and_verify_elf(program_location)?;
+    let program_len = program_data.len();
+
     // Create ephemeral keypair to use for Buffer account, if not provided
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
     let (buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
@@ -1474,30 +1537,14 @@ fn process_write_buffer(
         )
     };
 
-    if let Some(account) = rpc_client
-        .get_account_with_commitment(&buffer_pubkey, config.commitment)?
-        .value
-    {
-        if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state() {
-            if authority_address.is_none() {
-                return Err(format!("Buffer {buffer_pubkey} is immutable").into());
-            }
-            if authority_address != Some(buffer_authority.pubkey()) {
-                return Err(format!(
-                    "Buffer's authority {:?} does not match authority provided {}",
-                    authority_address,
-                    buffer_authority.pubkey()
-                )
-                .into());
-            }
-        } else {
-            return Err(
-                format!("{buffer_pubkey} is not an upgradeable loader buffer account").into(),
-            );
-        }
-    }
+    let buffer_account = fetch_buffer_account(
+        &rpc_client,
+        config,
+        Some(program_len),
+        buffer_pubkey,
+        buffer_authority.pubkey(),
+    )?;
 
-    let program_data = read_and_verify_elf(program_location)?;
     let buffer_data_max_len = if let Some(len) = max_len {
         len
     } else {
@@ -1518,6 +1565,7 @@ fn process_write_buffer(
         None,
         buffer_signer,
         &buffer_pubkey,
+        buffer_account,
         buffer_authority,
         true,
         skip_fee_check,
@@ -2272,6 +2320,7 @@ fn do_process_program_write_and_deploy(
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
+    buffer_account: Option<Account>,
     buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
@@ -2281,36 +2330,33 @@ fn do_process_program_write_and_deploy(
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
-        rpc_client
-            .get_account_with_commitment(buffer_pubkey, config.commitment)?
-            .value
-    {
-        let (ixs, balance_needed) = complete_partial_program_init(
-            &fee_payer_signer.pubkey(),
-            buffer_pubkey,
-            &account,
-            UpgradeableLoaderState::size_of_buffer(program_len),
-            min_rent_exempt_program_data_balance,
-            allow_excessive_balance,
-        )?;
-        let buffer_program_data = account
-            .data
-            .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
-        (ixs, balance_needed, buffer_program_data)
-    } else {
-        (
-            bpf_loader_upgradeable::create_buffer(
+    let (initial_instructions, balance_needed, buffer_program_data) =
+        if let Some(mut account) = buffer_account {
+            let (ixs, balance_needed) = complete_partial_program_init(
                 &fee_payer_signer.pubkey(),
                 buffer_pubkey,
-                &buffer_authority_signer.pubkey(),
+                &account,
+                UpgradeableLoaderState::size_of_buffer(program_len),
                 min_rent_exempt_program_data_balance,
-                program_len,
-            )?,
-            min_rent_exempt_program_data_balance,
-            vec![0; program_len],
-        )
-    };
+                allow_excessive_balance,
+            )?;
+            let buffer_program_data = account
+                .data
+                .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+            (ixs, balance_needed, buffer_program_data)
+        } else {
+            (
+                bpf_loader_upgradeable::create_buffer(
+                    &fee_payer_signer.pubkey(),
+                    buffer_pubkey,
+                    &buffer_authority_signer.pubkey(),
+                    min_rent_exempt_program_data_balance,
+                    program_len,
+                )?,
+                min_rent_exempt_program_data_balance,
+                vec![0; program_len],
+            )
+        };
 
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new_with_blockhash(
@@ -2419,6 +2465,7 @@ fn do_process_program_upgrade(
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
+    buffer_account: Option<Account>,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
@@ -2429,36 +2476,33 @@ fn do_process_program_upgrade(
         buffer_signer
     {
         // Check Buffer account to see if partial initialization has occurred
-        let (initial_instructions, balance_needed, buffer_program_data) = if let Some(mut account) =
-            rpc_client
-                .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
-                .value
-        {
-            let (ixs, balance_needed) = complete_partial_program_init(
-                &fee_payer_signer.pubkey(),
-                &buffer_signer.pubkey(),
-                &account,
-                UpgradeableLoaderState::size_of_buffer(program_len),
-                min_rent_exempt_program_data_balance,
-                true,
-            )?;
-            let buffer_program_data = account
-                .data
-                .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
-            (ixs, balance_needed, buffer_program_data)
-        } else {
-            (
-                bpf_loader_upgradeable::create_buffer(
+        let (initial_instructions, balance_needed, buffer_program_data) =
+            if let Some(mut account) = buffer_account {
+                let (ixs, balance_needed) = complete_partial_program_init(
                     &fee_payer_signer.pubkey(),
-                    buffer_pubkey,
-                    &upgrade_authority.pubkey(),
+                    &buffer_signer.pubkey(),
+                    &account,
+                    UpgradeableLoaderState::size_of_buffer(program_len),
                     min_rent_exempt_program_data_balance,
-                    program_len,
-                )?,
-                min_rent_exempt_program_data_balance,
-                vec![0; program_len],
-            )
-        };
+                    true,
+                )?;
+                let buffer_program_data = account
+                    .data
+                    .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+                (ixs, balance_needed, buffer_program_data)
+            } else {
+                (
+                    bpf_loader_upgradeable::create_buffer(
+                        &fee_payer_signer.pubkey(),
+                        buffer_pubkey,
+                        &upgrade_authority.pubkey(),
+                        min_rent_exempt_program_data_balance,
+                        program_len,
+                    )?,
+                    min_rent_exempt_program_data_balance,
+                    vec![0; program_len],
+                )
+            };
 
         let initial_message = if !initial_instructions.is_empty() {
             Some(Message::new_with_blockhash(
@@ -2553,6 +2597,12 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {err}"))?;
 
+    verify_elf(&program_data)?;
+
+    Ok(program_data)
+}
+
+fn verify_elf(program_data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     // Verify the program
     let program_runtime_environment = create_program_runtime_environment_v1(
         &FeatureSet::all_enabled(),
@@ -2562,14 +2612,12 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     )
     .unwrap();
     let executable =
-        Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
+        Executable::<InvokeContext>::from_elf(program_data, Arc::new(program_runtime_environment))
             .map_err(|err| format!("ELF error: {err}"))?;
 
     executable
         .verify::<RequisiteVerifier>()
-        .map_err(|err| format!("ELF error: {err}"))?;
-
-    Ok(program_data)
+        .map_err(|err| format!("ELF error: {err}").into())
 }
 
 fn complete_partial_program_init(
