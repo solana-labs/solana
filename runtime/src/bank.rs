@@ -1587,10 +1587,11 @@ impl Bank {
         // from Stakes<Delegation> by reading the full account state from
         // accounts-db. Note that it is crucial that these accounts are loaded
         // at the right slot and match precisely with serialized Delegations.
+        //
         // Note that we are disabling the read cache while we populate the stakes cache.
         // The stakes accounts will not be expected to be loaded again.
         // If we populate the read cache with these loads, then we'll just soon have to evict these.
-        let stakes = Stakes::new(&fields.stakes, |pubkey| {
+        let (stakes, stakes_time) = measure!(Stakes::new(&fields.stakes, |pubkey| {
             let (account, _slot) = bank_rc
                 .accounts
                 .load_with_fixed_root_do_not_populate_read_cache(&ancestors, pubkey)?;
@@ -1599,7 +1600,8 @@ impl Bank {
         .expect(
             "Stakes cache is inconsistent with accounts-db. This can indicate \
             a corrupted snapshot or bugs in cached accounts or accounts-db.",
-        );
+        ));
+        info!("Loading Stakes took: {stakes_time}");
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
             skipped_rewrites: Mutex::default(),
