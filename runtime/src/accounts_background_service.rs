@@ -360,8 +360,7 @@ impl SnapshotRequestHandler {
                         rent_collector: snapshot_root_bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
                     },
-                )
-                .unwrap();
+                );
             assert_eq!(previous_accounts_hash, this_accounts_hash);
             assert_eq!(capitalization, snapshot_root_bank.capitalization());
             this_accounts_hash

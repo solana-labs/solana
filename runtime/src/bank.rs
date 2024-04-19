@@ -6012,7 +6012,6 @@ impl Bank {
                 self.slot(),
                 HashStats::default(),
             )
-            .unwrap() // unwrap here will never fail
             .0
     }
 

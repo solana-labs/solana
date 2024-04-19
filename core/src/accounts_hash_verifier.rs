@@ -389,16 +389,13 @@ impl AccountsHashVerifier {
         };
 
         let slot = accounts_package.slot;
-        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
-            .accounts
-            .accounts_db
-            .update_accounts_hash(
+        let ((accounts_hash, lamports), measure_hash_us) =
+            measure_us!(accounts_package.accounts.accounts_db.update_accounts_hash(
                 &calculate_accounts_hash_config,
                 &sorted_storages,
                 slot,
                 timings,
-            )
-            .unwrap()); // unwrap here will never fail
+            ));
 
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
@@ -466,18 +463,15 @@ impl AccountsHashVerifier {
             store_detailed_debug_info_on_failure: false,
         };
 
-        let (incremental_accounts_hash, measure_hash_us) = measure_us!(
-            accounts_package
-                .accounts
-                .accounts_db
-                .update_incremental_accounts_hash(
-                    &calculate_accounts_hash_config,
-                    &sorted_storages,
-                    accounts_package.slot,
-                    HashStats::default(),
-                )
-                .unwrap() // unwrap here will never fail
-        );
+        let (incremental_accounts_hash, measure_hash_us) = measure_us!(accounts_package
+            .accounts
+            .accounts_db
+            .update_incremental_accounts_hash(
+                &calculate_accounts_hash_config,
+                &sorted_storages,
+                accounts_package.slot,
+                HashStats::default(),
+            ));
 
         datapoint_info!(
             "accounts_hash_verifier",

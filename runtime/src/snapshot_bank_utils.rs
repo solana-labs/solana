@@ -2334,8 +2334,7 @@ mod tests {
                 },
                 &SortedStorages::new(&other_incremental_snapshot_storages),
                 HashStats::default(),
-            )
-            .unwrap();
+            );
         assert_eq!(other_incremental_accounts_hash, incremental_accounts_hash);
     }
 
