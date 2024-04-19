@@ -271,14 +271,18 @@ impl MetricsAgent {
         let now = Instant::now();
         let secs_since_last_write = now.duration_since(last_write_time).as_secs();
 
-        writer.write(Self::combine_points(
+        let combined_points = Self::combine_points(
             max_points,
             max_points_per_sec,
             secs_since_last_write,
             points_buffered,
             points,
             counters,
-        ));
+        );
+
+        if !combined_points.is_empty() {
+            writer.write(combined_points);
+        }
 
         now
     }
