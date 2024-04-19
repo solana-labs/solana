@@ -454,12 +454,13 @@ impl AncientSlotPubkeys {
             // Any overflow accounts will get written into a new append vec AT 'slot', so they don't need to be unrefed
             let accounts = to_store.get(StorageSelector::Primary);
             if Some(current_ancient.slot()) != self.inner.as_ref().map(|ap| ap.slot) {
-                let pubkeys = current_ancient
+                let mut pubkeys = HashSet::new();
+                current_ancient
                     .accounts_file()
                     .accounts
-                    .account_iter()
-                    .map(|account| *account.pubkey())
-                    .collect::<HashSet<_>>();
+                    .scan_pubkeys(|pubkey| {
+                        pubkeys.insert(*pubkey);
+                    });
                 self.inner = Some(AncientSlotPubkeysInner {
                     pubkeys,
                     slot: current_ancient.slot(),
