@@ -55,7 +55,7 @@ mod test {
         super::*,
         solana_ledger::{
             shred::{Shred, ShredFlags},
-            sigverify_shreds::verify_shred_cpu,
+            sigverify_shreds::{verify_shred_cpu, LruCache},
         },
         solana_sdk::{
             packet::PacketFlags,
@@ -64,11 +64,13 @@ mod test {
         std::{
             collections::HashMap,
             net::{IpAddr, Ipv4Addr},
+            sync::RwLock,
         },
     };
 
     fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
         solana_logger::setup();
+        let cache = RwLock::new(LruCache::new(/*capacity:*/ 128));
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -93,14 +95,14 @@ mod test {
         packet.meta_mut().flags |= PacketFlags::REPAIR;
 
         let leader_slots = HashMap::from([(slot, keypair.pubkey())]);
-        assert!(verify_shred_cpu(&packet, &leader_slots));
+        assert!(verify_shred_cpu(&packet, &leader_slots, &cache));
 
         let wrong_keypair = Keypair::new();
         let leader_slots = HashMap::from([(slot, wrong_keypair.pubkey())]);
-        assert!(!verify_shred_cpu(&packet, &leader_slots));
+        assert!(!verify_shred_cpu(&packet, &leader_slots, &cache));
 
         let leader_slots = HashMap::new();
-        assert!(!verify_shred_cpu(&packet, &leader_slots));
+        assert!(!verify_shred_cpu(&packet, &leader_slots, &cache));
     }
 
     #[test]

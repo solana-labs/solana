@@ -3,7 +3,9 @@ use {
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
+        leader_schedule_cache::LeaderScheduleCache,
+        shred,
+        sigverify_shreds::{verify_shreds_gpu, LruCache},
     },
     solana_perf::{self, deduper::Deduper, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_rayon_threadlimit::get_thread_count,
@@ -16,6 +18,9 @@ use {
         time::{Duration, Instant},
     },
 };
+
+// 34MB where each cache entry is 136 bytes.
+const SIGVERIFY_LRU_CACHE_CAPACITY: usize = 1 << 18;
 
 const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
 const DEDUPER_NUM_BITS: u64 = 637_534_199; // 76MB
@@ -38,6 +43,7 @@ pub fn spawn_shred_sigverify(
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
+    let cache = RwLock::new(LruCache::new(SIGVERIFY_LRU_CACHE_CAPACITY));
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|i| format!("solSvrfyShred{i:02}"))
@@ -62,6 +68,7 @@ pub fn spawn_shred_sigverify(
                 &shred_fetch_receiver,
                 &retransmit_sender,
                 &verified_sender,
+                &cache,
                 &mut stats,
             ) {
                 Ok(()) => (),
@@ -89,6 +96,7 @@ fn run_shred_sigverify<const K: usize>(
     shred_fetch_receiver: &Receiver<PacketBatch>,
     retransmit_sender: &Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: &Sender<Vec<PacketBatch>>,
+    cache: &RwLock<LruCache>,
     stats: &mut ShredSigVerifyStats,
 ) -> Result<(), Error> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
@@ -122,6 +130,7 @@ fn run_shred_sigverify<const K: usize>(
         leader_schedule_cache,
         recycler_cache,
         &mut packets,
+        cache,
     );
     stats.num_discards_post += count_discards(&packets);
     // Exclude repair packets from retransmit.
@@ -146,6 +155,7 @@ fn verify_packets(
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
     packets: &mut [PacketBatch],
+    cache: &RwLock<LruCache>,
 ) {
     let working_bank = bank_forks.read().unwrap().working_bank();
     let leader_slots: HashMap<Slot, Pubkey> =
@@ -154,7 +164,7 @@ fn verify_packets(
             .filter_map(|(slot, pubkey)| Some((slot, pubkey?)))
             .chain(std::iter::once((Slot::MAX, Pubkey::default())))
             .collect();
-    let out = verify_shreds_gpu(thread_pool, packets, &leader_slots, recycler_cache);
+    let out = verify_shreds_gpu(thread_pool, packets, &leader_slots, recycler_cache, cache);
     solana_perf::sigverify::mark_disabled(packets, &out);
 }
 
@@ -323,6 +333,7 @@ mod tests {
         batches[0][1].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0][1].meta_mut().size = shred.payload().len();
 
+        let cache = RwLock::new(LruCache::new(/*capacity:*/ 128));
         let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
         verify_packets(
             &thread_pool,
@@ -331,6 +342,7 @@ mod tests {
             &leader_schedule_cache,
             &RecyclerCache::warmed(),
             &mut batches,
+            &cache,
         );
         assert!(!batches[0][0].meta().discard());
         assert!(batches[0][1].meta().discard());
