@@ -8058,11 +8058,11 @@ impl AccountsDb {
                     .into_par_iter()
                     .map(|store| {
                         let slot = store.slot();
-                        store
-                            .accounts
-                            .account_iter()
-                            .map(|account| (slot, *account.pubkey()))
-                            .collect::<Vec<(Slot, Pubkey)>>()
+                        let mut pubkeys = Vec::with_capacity(store.count());
+                        store.accounts.scan_pubkeys(|pubkey| {
+                            pubkeys.push((slot, *pubkey));
+                        });
+                        pubkeys
                     })
                     .flatten()
                     .collect::<HashSet<_>>()
