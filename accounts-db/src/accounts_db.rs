@@ -8555,8 +8555,7 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         storage_info: &StorageSizeAndCountMap,
     ) -> SlotIndexGenerationInfo {
-        let mut accounts = storage.accounts.account_iter();
-        if accounts.next().is_none() {
+        if storage.accounts.get_account_sizes(&[0]).is_empty() {
             return SlotIndexGenerationInfo::default();
         }
         let secondary = !self.account_indexes.is_empty();
@@ -16939,11 +16938,14 @@ pub mod tests {
                         if count_marked_dead >= dead_accounts {
                             break;
                         }
-                        let original = original.accounts.account_iter().next().unwrap();
+                        let original_pubkey = original
+                            .accounts
+                            .get_stored_account_meta_callback(0, |account| *account.pubkey())
+                            .unwrap();
                         let slot = ancient_slot + 1 + (count_marked_dead as Slot);
                         _ = db.purge_keys_exact(
                             [(
-                                *original.pubkey(),
+                                original_pubkey,
                                 vec![slot].into_iter().collect::<HashSet<_>>(),
                             )]
                             .iter(),

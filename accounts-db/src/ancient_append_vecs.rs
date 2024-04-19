@@ -3160,77 +3160,80 @@ pub mod tests {
         let data_size = None;
         let (_db, storages, _slots, _infos) = get_sample_storages(num_slots, data_size);
 
-        let account = storages[0].accounts.get_stored_account_meta(0).unwrap().0;
-        let slot = 1;
-        let capacity = 0;
-        for i in 0..4usize {
-            let mut alive_accounts =
-                ShrinkCollectAliveSeparatedByRefs::with_capacity(capacity, slot);
-            let lamports = 1;
+        storages[0]
+            .accounts
+            .get_stored_account_meta_callback(0, |account| {
+                let slot = 1;
+                let capacity = 0;
+                for i in 0..4usize {
+                    let mut alive_accounts =
+                        ShrinkCollectAliveSeparatedByRefs::with_capacity(capacity, slot);
+                    let lamports = 1;
 
-            match i {
-                0 => {
-                    // empty slot list (ignored anyway) because ref_count = 1
-                    let slot_list = vec![];
-                    alive_accounts.add(1, &account, &slot_list);
-                    assert!(!alive_accounts.one_ref.accounts.is_empty());
-                    assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
-                    assert!(alive_accounts
-                        .many_refs_this_is_newest_alive
-                        .accounts
-                        .is_empty());
+                    match i {
+                        0 => {
+                            // empty slot list (ignored anyway) because ref_count = 1
+                            let slot_list = vec![];
+                            alive_accounts.add(1, &account, &slot_list);
+                            assert!(!alive_accounts.one_ref.accounts.is_empty());
+                            assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
+                            assert!(alive_accounts
+                                .many_refs_this_is_newest_alive
+                                .accounts
+                                .is_empty());
+                        }
+                        1 => {
+                            // non-empty slot list (but ignored) because slot_list = 1
+                            let slot_list =
+                                vec![(slot, AccountInfo::new(StorageLocation::Cached, lamports))];
+                            alive_accounts.add(2, &account, &slot_list);
+                            assert!(alive_accounts.one_ref.accounts.is_empty());
+                            assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
+                            assert!(!alive_accounts
+                                .many_refs_this_is_newest_alive
+                                .accounts
+                                .is_empty());
+                        }
+                        2 => {
+                            // multiple slot list, ref_count=2, this is NOT newest alive, so many_refs_old_alive
+                            let slot_list = vec![
+                                (slot, AccountInfo::new(StorageLocation::Cached, lamports)),
+                                (
+                                    slot + 1,
+                                    AccountInfo::new(StorageLocation::Cached, lamports),
+                                ),
+                            ];
+                            alive_accounts.add(2, &account, &slot_list);
+                            assert!(alive_accounts.one_ref.accounts.is_empty());
+                            assert!(!alive_accounts.many_refs_old_alive.accounts.is_empty());
+                            assert!(alive_accounts
+                                .many_refs_this_is_newest_alive
+                                .accounts
+                                .is_empty());
+                        }
+                        3 => {
+                            // multiple slot list, ref_count=2, this is newest
+                            let slot_list = vec![
+                                (slot, AccountInfo::new(StorageLocation::Cached, lamports)),
+                                (
+                                    slot - 1,
+                                    AccountInfo::new(StorageLocation::Cached, lamports),
+                                ),
+                            ];
+                            alive_accounts.add(2, &account, &slot_list);
+                            assert!(alive_accounts.one_ref.accounts.is_empty());
+                            assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
+                            assert!(!alive_accounts
+                                .many_refs_this_is_newest_alive
+                                .accounts
+                                .is_empty());
+                        }
+                        _ => {
+                            panic!("unexpected");
+                        }
+                    }
                 }
-                1 => {
-                    // non-empty slot list (but ignored) because slot_list = 1
-                    let slot_list =
-                        vec![(slot, AccountInfo::new(StorageLocation::Cached, lamports))];
-                    alive_accounts.add(2, &account, &slot_list);
-                    assert!(alive_accounts.one_ref.accounts.is_empty());
-                    assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
-                    assert!(!alive_accounts
-                        .many_refs_this_is_newest_alive
-                        .accounts
-                        .is_empty());
-                }
-                2 => {
-                    // multiple slot list, ref_count=2, this is NOT newest alive, so many_refs_old_alive
-                    let slot_list = vec![
-                        (slot, AccountInfo::new(StorageLocation::Cached, lamports)),
-                        (
-                            slot + 1,
-                            AccountInfo::new(StorageLocation::Cached, lamports),
-                        ),
-                    ];
-                    alive_accounts.add(2, &account, &slot_list);
-                    assert!(alive_accounts.one_ref.accounts.is_empty());
-                    assert!(!alive_accounts.many_refs_old_alive.accounts.is_empty());
-                    assert!(alive_accounts
-                        .many_refs_this_is_newest_alive
-                        .accounts
-                        .is_empty());
-                }
-                3 => {
-                    // multiple slot list, ref_count=2, this is newest
-                    let slot_list = vec![
-                        (slot, AccountInfo::new(StorageLocation::Cached, lamports)),
-                        (
-                            slot - 1,
-                            AccountInfo::new(StorageLocation::Cached, lamports),
-                        ),
-                    ];
-                    alive_accounts.add(2, &account, &slot_list);
-                    assert!(alive_accounts.one_ref.accounts.is_empty());
-                    assert!(alive_accounts.many_refs_old_alive.accounts.is_empty());
-                    assert!(!alive_accounts
-                        .many_refs_this_is_newest_alive
-                        .accounts
-                        .is_empty());
-                }
-                _ => {
-                    panic!("unexpected");
-                }
-            }
-        }
+            });
     }
 
     #[test]
