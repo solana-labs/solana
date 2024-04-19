@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
@@ -1247,7 +1245,7 @@ pub fn process_show_vote_account(
             votes.push(vote.into());
         }
         for (epoch, credits, prev_credits) in vote_state.epoch_credits().iter().copied() {
-            let credits_earned = credits - prev_credits;
+            let credits_earned = credits.saturating_sub(prev_credits);
             let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
             epoch_voting_history.push(CliEpochVotingHistory {
                 epoch,
