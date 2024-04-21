@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         checks::{check_account_for_balance_with_commitment, get_fee_for_messages},
@@ -118,7 +116,7 @@ where
             build_message,
         )?;
         if from_pubkey == fee_pubkey {
-            if from_balance == 0 || from_balance < spend + fee {
+            if from_balance == 0 || from_balance < spend.saturating_add(fee) {
                 return Err(CliError::InsufficientFundsForSpendAndFee(
                     lamports_to_sol(spend),
                     lamports_to_sol(fee),
