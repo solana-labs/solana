@@ -1194,16 +1194,10 @@ impl ConnectionTable {
         if has_connection_capacity {
             let exit = Arc::new(AtomicBool::new(false));
             let last_update = Arc::new(AtomicU64::new(last_update));
-            let stream_counter = if peer_type.is_staked() {
-                connection_entry
-                    .first()
-                    .map(|entry| entry.stream_counter.clone())
-                    .unwrap_or(Arc::new(ConnectionStreamCounter::new()))
-            } else {
-                // Unstaked connections are tracked using peer IP address. It's possible that different clients
-                // use the same IP due to NAT. So counting all the streams from a given IP could be too restrictive.
-                Arc::new(ConnectionStreamCounter::new())
-            };
+            let stream_counter = connection_entry
+                .first()
+                .map(|entry| entry.stream_counter.clone())
+                .unwrap_or(Arc::new(ConnectionStreamCounter::new()));
             connection_entry.push(ConnectionEntry::new(
                 exit.clone(),
                 peer_type,
