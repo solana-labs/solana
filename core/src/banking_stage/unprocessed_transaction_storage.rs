@@ -34,7 +34,7 @@ use {
 // multi-iterator change, there's no point in getting larger batches of
 // non-conflicting transactions.
 pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 64;
-/// Maximum numer of votes a single receive call will accept
+/// Maximum number of votes a single receive call will accept
 const MAX_NUM_VOTES_RECEIVE: usize = 10_000;
 
 #[derive(Debug)]

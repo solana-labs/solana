@@ -2402,7 +2402,7 @@ mod tests {
             Shred::new_from_data(slot, index, 1, &[], ShredFlags::empty(), 0, 0, 0)
         }
         let repair = ShredRepairType::Orphan(9);
-        // Ensure new options are addded to this test
+        // Ensure new options are added to this test
         match repair {
             ShredRepairType::Orphan(_)
             | ShredRepairType::HighestShred(_, _)
