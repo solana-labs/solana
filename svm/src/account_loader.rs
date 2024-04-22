@@ -50,7 +50,7 @@ pub struct LoadedTransaction {
 
 /// Check whether the payer_account is capable of paying the fee. The
 /// side effect is to subtract the fee amount from the payer_account
-/// balance of lamports. If the payer_acount is not able to pay the
+/// balance of lamports. If the payer_account is not able to pay the
 /// fee, the error_counters is incremented, and a specific error is
 /// returned.
 pub fn validate_fee_payer(

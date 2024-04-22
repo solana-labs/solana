@@ -37,7 +37,7 @@ const AE_KEY_LEN: usize = 16;
 /// Byte length of an authenticated encryption nonce component
 const NONCE_LEN: usize = 12;
 
-/// Byte lenth of an authenticated encryption ciphertext component
+/// Byte length of an authenticated encryption ciphertext component
 const CIPHERTEXT_LEN: usize = 24;
 
 /// Byte length of a complete authenticated encryption ciphertext component that includes the
