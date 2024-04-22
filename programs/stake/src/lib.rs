@@ -23,8 +23,8 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 }
 
 /// The minimum stake amount that can be delegated, in lamports.
-/// NOTE: This is also used to calculate the minimum balance of a stake account, which is the
-/// rent exempt reserve _plus_ the minimum stake delegation.
+/// NOTE: This is also used to calculate the minimum balance of a delegated stake account,
+/// which is the rent exempt reserve _plus_ the minimum stake delegation.
 #[inline(always)]
 pub fn get_minimum_delegation(feature_set: &FeatureSet) -> u64 {
     if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
