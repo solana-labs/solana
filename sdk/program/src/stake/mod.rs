@@ -9,9 +9,6 @@ pub mod stake_flags;
 pub mod state;
 pub mod tools;
 
-mod deprecated;
-pub use deprecated::*;
-
 pub mod program {
     crate::declare_id!("Stake11111111111111111111111111111111111111");
 }
