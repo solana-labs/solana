@@ -837,8 +837,7 @@ impl ProgramTest {
         let mut builtin_programs = Vec::new();
         std::mem::swap(&mut self.builtin_programs, &mut builtin_programs);
         for (program_id, name, builtin) in builtin_programs.into_iter() {
-            bank.get_transaction_processor()
-                .add_builtin(&bank, program_id, name, builtin);
+            bank.add_builtin(program_id, name, builtin);
         }
 
         for (address, account) in self.accounts.iter() {

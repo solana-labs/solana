@@ -133,10 +133,10 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     epoch_schedule: EpochSchedule,
 
     /// Transaction fee structure
-    fee_structure: FeeStructure,
+    pub fee_structure: FeeStructure,
 
     /// Optional config parameters that can override runtime behavior
-    runtime_config: Arc<RuntimeConfig>,
+    pub runtime_config: Arc<RuntimeConfig>,
 
     /// SysvarCache is a collection of system variables that are
     /// accessible from on chain programs. It is passed to SVM from
@@ -187,7 +187,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         slot: Slot,
         epoch: Epoch,
         epoch_schedule: EpochSchedule,
-        fee_structure: FeeStructure,
         runtime_config: Arc<RuntimeConfig>,
         program_cache: Arc<RwLock<ProgramCache<FG>>>,
         builtin_program_ids: HashSet<Pubkey>,
@@ -196,11 +195,24 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             slot,
             epoch,
             epoch_schedule,
-            fee_structure,
+            fee_structure: FeeStructure::default(),
             runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache,
             builtin_program_ids: RwLock::new(builtin_program_ids),
+        }
+    }
+
+    pub fn new_from(&self, slot: Slot, epoch: Epoch) -> Self {
+        Self {
+            slot,
+            epoch,
+            epoch_schedule: self.epoch_schedule.clone(),
+            fee_structure: self.fee_structure.clone(),
+            runtime_config: self.runtime_config.clone(),
+            sysvar_cache: RwLock::<SysvarCache>::default(),
+            program_cache: self.program_cache.clone(),
+            builtin_program_ids: RwLock::new(self.builtin_program_ids.read().unwrap().clone()),
         }
     }
 

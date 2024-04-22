@@ -740,7 +740,7 @@ impl Consumer {
         let fee_payer = message.fee_payer();
         let budget_limits =
             process_compute_budget_instructions(message.program_instructions_iter())?.into();
-        let fee = bank.fee_structure.calculate_fee(
+        let fee = bank.fee_structure().calculate_fee(
             message,
             bank.get_lamports_per_signature(),
             &budget_limits,

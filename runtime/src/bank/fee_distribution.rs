@@ -86,7 +86,7 @@ impl Bank {
         fee_budget_limits: &FeeBudgetLimits,
     ) -> u64 {
         let (reward, _burn) = if self.feature_set.is_active(&reward_full_priority_fee::id()) {
-            let fee_details = self.fee_structure.calculate_fee_details(
+            let fee_details = self.fee_structure().calculate_fee_details(
                 transaction.message(),
                 fee_budget_limits,
                 self.feature_set
@@ -94,7 +94,7 @@ impl Bank {
             );
             self.calculate_reward_and_burn_fee_details(&CollectorFeeDetails::from(fee_details))
         } else {
-            let fee = self.fee_structure.calculate_fee(
+            let fee = self.fee_structure().calculate_fee(
                 transaction.message(),
                 5_000, // this just needs to be non-zero
                 fee_budget_limits,

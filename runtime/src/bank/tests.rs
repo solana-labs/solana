@@ -2648,7 +2648,7 @@ fn test_bank_tx_compute_unit_fee() {
             .fee_rate_governor
             .create_fee_calculator()
             .lamports_per_signature,
-        &bank.fee_structure,
+        bank.fee_structure(),
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -2773,7 +2773,7 @@ fn test_bank_blockhash_fee_structure() {
     let cheap_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
         cheap_lamports_per_signature,
-        &bank.fee_structure,
+        bank.fee_structure(),
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2789,7 +2789,7 @@ fn test_bank_blockhash_fee_structure() {
     let expensive_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
         expensive_lamports_per_signature,
-        &bank.fee_structure,
+        bank.fee_structure(),
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2835,7 +2835,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let cheap_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
         cheap_lamports_per_signature,
-        &bank.fee_structure,
+        bank.fee_structure(),
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2851,7 +2851,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let expensive_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
         expensive_lamports_per_signature,
-        &bank.fee_structure,
+        bank.fee_structure(),
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -2965,7 +2965,7 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                             .fee_rate_governor
                             .create_fee_calculator()
                             .lamports_per_signature,
-                        &bank.fee_structure,
+                        bank.fee_structure(),
                     ) * 2
                 )
                 .0
