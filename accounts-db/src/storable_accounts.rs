@@ -169,11 +169,7 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'a> StorableAccounts<'a>
-    for (Slot, &'b [(&'a Pubkey, &'a T)])
-where
-    AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
-{
+impl<'a: 'b, 'b> StorableAccounts<'a> for (Slot, &'b [(&'a Pubkey, &'a AccountSharedData)]) {
     fn account<Ret>(
         &self,
         index: usize,
@@ -192,29 +188,6 @@ where
         self.1.len()
     }
 }
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a> for (Slot, &'a [&'a (Pubkey, T)])
-where
-    AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
-{
-    fn account<Ret>(
-        &self,
-        index: usize,
-        mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
-    ) -> Ret {
-        callback((&self.1[index].0, &self.1[index].1).into())
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // per-index slot is not unique per slot when per-account slot is not included in the source data
-        self.target_slot()
-    }
-    fn target_slot(&self) -> Slot {
-        self.0
-    }
-    fn len(&self) -> usize {
-        self.1.len()
-    }
-}
-
 impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>]) {
     fn account<Ret>(
         &self,
@@ -234,7 +207,6 @@ impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>]) {
         self.1.len()
     }
 }
-
 /// holds slices of accounts being moved FROM a common source slot to 'target_slot'
 pub struct StorableAccountsBySlot<'a> {
     target_slot: Slot,
@@ -358,6 +330,30 @@ pub mod tests {
             hash::Hash,
         },
     };
+
+    /// this is no longer used. It is very tricky to get these right. There are already tests for this. It is likely worth it to leave this here for a while until everything has settled.
+    impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a> for (Slot, &'a [&'a (Pubkey, T)])
+    where
+        AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
+    {
+        fn account<Ret>(
+            &self,
+            index: usize,
+            mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
+        ) -> Ret {
+            callback((&self.1[index].0, &self.1[index].1).into())
+        }
+        fn slot(&self, _index: usize) -> Slot {
+            // per-index slot is not unique per slot when per-account slot is not included in the source data
+            self.target_slot()
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+    }
 
     fn compare<'a>(a: &impl StorableAccounts<'a>, b: &impl StorableAccounts<'a>) {
         assert_eq!(a.target_slot(), b.target_slot());

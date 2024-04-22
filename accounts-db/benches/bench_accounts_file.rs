@@ -42,7 +42,10 @@ fn bench_write_accounts_file(c: &mut Criterion) {
         })
         .take(accounts_count)
         .collect();
-        let accounts_refs: Vec<_> = accounts.iter().collect();
+        let accounts_refs: Vec<_> = accounts
+            .iter()
+            .map(|(pubkey, account)| (pubkey, account))
+            .collect();
         let storable_accounts = (Slot::MAX, accounts_refs.as_slice());
 
         group.bench_function(BenchmarkId::new("append_vec", accounts_count), |b| {

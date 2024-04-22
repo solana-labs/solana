@@ -80,7 +80,7 @@ use {
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
-        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
+        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
         accounts_partition::{self, Partition, PartitionIndex},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -88,7 +88,7 @@ use {
         epoch_accounts_hash::EpochAccountsHash,
         sorted_storages::SortedStorages,
         stake_rewards::StakeReward,
-        storable_accounts::{AccountForStorage, StorableAccounts},
+        storable_accounts::StorableAccounts,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_cost_model::cost_tracker::CostTracker,
@@ -5062,13 +5062,7 @@ impl Bank {
 
     /// fn store the single `account` with `pubkey`.
     /// Uses `store_accounts`, which works on a vector of accounts.
-    pub fn store_account<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
-        &self,
-        pubkey: &'a Pubkey,
-        account: &'a T,
-    ) where
-        AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
-    {
+    pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
         self.store_accounts((self.slot(), &[(pubkey, account)][..]))
     }
 
