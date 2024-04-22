@@ -6658,7 +6658,7 @@ impl AccountsDb {
     }
 
     /// iterate over a single storage, calling scanner on each item
-    fn scan_single_account_storage<S>(storage: &Arc<AccountStorageEntry>, scanner: &mut S)
+    fn scan_single_account_storage<S>(storage: &AccountStorageEntry, scanner: &mut S)
     where
         S: AppendVecScan,
     {
@@ -7753,7 +7753,7 @@ impl AccountsDb {
         alive_bytes + PAGE_SIZE > total_bytes
     }
 
-    fn is_shrinking_productive(slot: Slot, store: &Arc<AccountStorageEntry>) -> bool {
+    fn is_shrinking_productive(slot: Slot, store: &AccountStorageEntry) -> bool {
         let alive_count = store.count();
         let stored_count = store.approx_stored_count();
         let alive_bytes = store.alive_bytes() as u64;
@@ -7776,7 +7776,7 @@ impl AccountsDb {
 
     fn is_candidate_for_shrink(
         &self,
-        store: &Arc<AccountStorageEntry>,
+        store: &AccountStorageEntry,
         allow_shrink_ancient: bool,
     ) -> bool {
         // appended ancient append vecs should not be shrunk by the normal shrink codepath.
@@ -8554,7 +8554,7 @@ impl AccountsDb {
 
     fn generate_index_for_slot(
         &self,
-        storage: &Arc<AccountStorageEntry>,
+        storage: &AccountStorageEntry,
         slot: Slot,
         store_id: AccountsFileId,
         rent_collector: &RentCollector,
@@ -10677,7 +10677,7 @@ pub mod tests {
     }
 
     fn append_sample_data_to_storage(
-        storage: &Arc<AccountStorageEntry>,
+        storage: &AccountStorageEntry,
         pubkey: &Pubkey,
         mark_alive: bool,
         account_data_size: Option<u64>,
@@ -14026,7 +14026,7 @@ pub mod tests {
             if let ScanStorageResult::Stored(slot_account) = accounts_db.scan_account_storage(
                 *slot as Slot,
                 |_| Some(0),
-                |slot_account: &Arc<RwLock<Pubkey>>, loaded_account: &LoadedAccount, _data| {
+                |slot_account: &RwLock<Pubkey>, loaded_account: &LoadedAccount, _data| {
                     *slot_account.write().unwrap() = *loaded_account.pubkey();
                 },
                 ScanAccountStorageData::NoData,
@@ -17402,18 +17402,18 @@ pub mod tests {
         assert_eq!(current_ancient.slot(), slot1_ancient);
     }
 
-    fn adjust_alive_bytes(storage: &Arc<AccountStorageEntry>, alive_bytes: usize) {
+    fn adjust_alive_bytes(storage: &AccountStorageEntry, alive_bytes: usize) {
         storage.alive_bytes.store(alive_bytes, Ordering::Release);
     }
 
     /// cause 'ancient' to appear to contain 'len' bytes
-    fn adjust_append_vec_len_for_tests(ancient: &Arc<AccountStorageEntry>, len: usize) {
+    fn adjust_append_vec_len_for_tests(ancient: &AccountStorageEntry, len: usize) {
         assert!(is_ancient(&ancient.accounts));
         ancient.accounts.set_current_len_for_tests(len);
         adjust_alive_bytes(ancient, len);
     }
 
-    fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>, mark_alive: bool) {
+    fn make_ancient_append_vec_full(ancient: &AccountStorageEntry, mark_alive: bool) {
         for _ in 0..100 {
             append_sample_data_to_storage(ancient, &Pubkey::default(), mark_alive, None);
         }
