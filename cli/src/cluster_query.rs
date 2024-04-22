@@ -57,7 +57,7 @@ use {
         signature::Signature,
         slot_history,
         stake::{self, state::StakeStateV2},
-        system_instruction,
+        system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         sysvar::{
             self,
             slot_history::SlotHistory,
@@ -2181,6 +2181,9 @@ pub fn process_calculate_rent(
     data_length: usize,
     use_lamports_unit: bool,
 ) -> ProcessResult {
+    if data_length > MAX_PERMITTED_DATA_LENGTH.try_into().unwrap() {
+        eprintln!("Warning: Maximum account size is {MAX_PERMITTED_DATA_LENGTH} bytes, {data_length} provided");
+    }
     let rent_account = rpc_client.get_account(&sysvar::rent::id())?;
     let rent: Rent = rent_account.deserialize_data()?;
     let rent_exempt_minimum_lamports = rent.minimum_balance(data_length);
