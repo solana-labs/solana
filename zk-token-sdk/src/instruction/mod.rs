@@ -22,6 +22,8 @@ pub use {
     batched_grouped_ciphertext_validity::{
         BatchedGroupedCiphertext2HandlesValidityProofContext,
         BatchedGroupedCiphertext2HandlesValidityProofData,
+        BatchedGroupedCiphertext3HandlesValidityProofContext,
+        BatchedGroupedCiphertext3HandlesValidityProofData,
     },
     batched_range_proof::{
         batched_range_proof_u128::BatchedRangeProofU128Data,
@@ -38,6 +40,7 @@ pub use {
     fee_sigma::{FeeSigmaProofContext, FeeSigmaProofData},
     grouped_ciphertext_validity::{
         GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
+        GroupedCiphertext3HandlesValidityProofContext, GroupedCiphertext3HandlesValidityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     range_proof::{RangeProofContext, RangeProofU64Data},
@@ -68,6 +71,8 @@ pub enum ProofType {
     GroupedCiphertext2HandlesValidity,
     BatchedGroupedCiphertext2HandlesValidity,
     FeeSigma,
+    GroupedCiphertext3HandlesValidity,
+    BatchedGroupedCiphertext3HandlesValidity,
 }
 
 pub trait ZkProofData<T: Pod> {
