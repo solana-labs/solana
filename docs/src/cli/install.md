@@ -20,7 +20,7 @@ on your preferred workflow:
 - Open your favorite Terminal application
 
 - Install the Solana release
-  [LATEST_SOLANA_RELEASE_VERSION](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION)
+  [LATEST_SOLANA_RELEASE_VERSION](https://github.com/anza-xyz/agave/releases/tag/LATEST_SOLANA_RELEASE_VERSION)
   on your machine by running:
 
 ```bash
@@ -38,7 +38,7 @@ downloading LATEST_SOLANA_RELEASE_VERSION installer
 Configuration: /home/solana/.config/solana/install/config.yml
 Active release directory: /home/solana/.local/share/solana/install/active_release
 * Release version: LATEST_SOLANA_RELEASE_VERSION
-* Release URL: https://github.com/solana-labs/solana/releases/download/LATEST_SOLANA_RELEASE_VERSION/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+* Release URL: https://github.com/anza-xyz/agave/releases/download/LATEST_SOLANA_RELEASE_VERSION/solana-release-x86_64-unknown-linux-gnu.tar.bz2
 Update successful
 ```
 
@@ -108,7 +108,7 @@ manually download and install the binaries.
 ### Linux
 
 Download the binaries by navigating to
-[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+[https://github.com/anza-xyz/agave/releases/latest](https://github.com/anza-xyz/agave/releases/latest),
 download **solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the
 archive:
 
@@ -121,7 +121,7 @@ export PATH=$PWD/bin:$PATH
 ### MacOS
 
 Download the binaries by navigating to
-[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+[https://github.com/anza-xyz/agave/releases/latest](https://github.com/anza-xyz/agave/releases/latest),
 download **solana-release-x86_64-apple-darwin.tar.bz2**, then extract the
 archive:
 
@@ -134,7 +134,7 @@ export PATH=$PWD/bin:$PATH
 ### Windows
 
 - Download the binaries by navigating to
-  [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+  [https://github.com/anza-xyz/agave/releases/latest](https://github.com/anza-xyz/agave/releases/latest),
   download **solana-release-x86_64-pc-windows-msvc.tar.bz2**, then extract the
   archive using WinZip or similar.
 
@@ -242,7 +242,7 @@ above.
 
 After installing the prerequisites, proceed with building Solana from source,
 navigate to
-[Solana's GitHub releases page](https://github.com/solana-labs/solana/releases/latest),
+[Solana's GitHub releases page](https://github.com/anza-xyz/agave/releases/latest),
 and download the **Source Code** archive. Extract the code and build the
 binaries with:
 
