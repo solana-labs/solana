@@ -11,6 +11,7 @@ use {
     solana_accounts_db::{
         accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats},
         accounts_partition,
+        storable_accounts::StorableAccountsBySlot,
     },
     solana_measure::measure,
     solana_sdk::{
@@ -346,8 +347,11 @@ impl<'a> SnapshotMinimizer<'a> {
         if aligned_total > 0 {
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
+
+            let accounts = [(slot, &keep_accounts[..])];
+            let storable_accounts = StorableAccountsBySlot::new(slot, &accounts);
             self.accounts_db()
-                .store_accounts_frozen((slot, &keep_accounts[..]), new_storage);
+                .store_accounts_frozen(storable_accounts, new_storage);
 
             new_storage.flush().unwrap();
         }

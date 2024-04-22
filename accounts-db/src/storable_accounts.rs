@@ -259,28 +259,6 @@ impl<'a> StorableAccounts<'a> for StorableAccountsBySlot<'a> {
     }
 }
 
-/// this tuple contains a single different source slot that applies to all accounts
-/// accounts are StoredAccountMeta
-impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>], Slot) {
-    fn account<Ret>(
-        &self,
-        index: usize,
-        mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
-    ) -> Ret {
-        callback(self.1[index].into())
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // same other slot for all accounts
-        self.2
-    }
-    fn target_slot(&self) -> Slot {
-        self.0
-    }
-    fn len(&self) -> usize {
-        self.1.len()
-    }
-}
-
 #[cfg(test)]
 pub mod tests {
     use {
@@ -311,6 +289,29 @@ pub mod tests {
         fn slot(&self, _index: usize) -> Slot {
             // per-index slot is not unique per slot when per-account slot is not included in the source data
             self.target_slot()
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+    }
+
+    /// this is no longer used. It is very tricky to get these right. There are already tests for this. It is likely worth it to leave this here for a while until everything has settled.
+    /// this tuple contains a single different source slot that applies to all accounts
+    /// accounts are StoredAccountMeta
+    impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a StoredAccountMeta<'a>], Slot) {
+        fn account<Ret>(
+            &self,
+            index: usize,
+            mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
+        ) -> Ret {
+            callback(self.1[index].into())
+        }
+        fn slot(&self, _index: usize) -> Slot {
+            // same other slot for all accounts
+            self.2
         }
         fn target_slot(&self) -> Slot {
             self.0

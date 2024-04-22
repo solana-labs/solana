@@ -64,7 +64,7 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         sorted_storages::SortedStorages,
-        storable_accounts::StorableAccounts,
+        storable_accounts::{StorableAccounts, StorableAccountsBySlot},
         u64_align, utils,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
@@ -394,10 +394,10 @@ impl CurrentAncientAccountsFile {
         let accounts = accounts_to_store.get(storage_selector);
 
         let previous_available = self.accounts_file().accounts.remaining_bytes();
-        let timing = db.store_accounts_frozen(
-            (self.slot(), accounts, accounts_to_store.slot()),
-            self.accounts_file(),
-        );
+
+        let accounts = [(accounts_to_store.slot(), accounts)];
+        let storable_accounts = StorableAccountsBySlot::new(self.slot(), &accounts);
+        let timing = db.store_accounts_frozen(storable_accounts, self.accounts_file());
         let bytes_written =
             previous_available.saturating_sub(self.accounts_file().accounts.remaining_bytes());
         assert_eq!(
@@ -3995,10 +3995,10 @@ impl AccountsDb {
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
-            stats_sub.store_accounts_timing = self.store_accounts_frozen(
-                (slot, &shrink_collect.alive_accounts.alive_accounts()[..]),
-                shrink_in_progress.new_storage(),
-            );
+            let accounts = [(slot, &shrink_collect.alive_accounts.alive_accounts()[..])];
+            let storable_accounts = StorableAccountsBySlot::new(slot, &accounts);
+            stats_sub.store_accounts_timing =
+                self.store_accounts_frozen(storable_accounts, shrink_in_progress.new_storage());
 
             rewrite_elapsed.stop();
             stats_sub.rewrite_elapsed_us = Saturating(rewrite_elapsed.as_us());
