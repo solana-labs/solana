@@ -6,7 +6,7 @@ use {
     rand::{seq::SliceRandom, Rng},
     solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_ledger::shred::{Shred, ShredFlags},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, genesis_config::ClusterType, pubkey::Pubkey},
     solana_turbine::{
         cluster_nodes::{make_test_cluster, new_cluster_nodes, ClusterNodes},
         retransmit_stage::RetransmitStage,
@@ -21,7 +21,8 @@ fn make_cluster_nodes<R: Rng>(
     unstaked_ratio: Option<(u32, u32)>,
 ) -> (Vec<ContactInfo>, ClusterNodes<RetransmitStage>) {
     let (nodes, stakes, cluster_info) = make_test_cluster(rng, 5_000, unstaked_ratio);
-    let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
+    let cluster_nodes =
+        new_cluster_nodes::<RetransmitStage>(&cluster_info, ClusterType::Development, &stakes);
     (nodes, cluster_nodes)
 }
 
