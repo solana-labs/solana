@@ -349,7 +349,9 @@ impl<'a> SnapshotMinimizer<'a> {
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
 
             let accounts = [(slot, &keep_accounts[..])];
-            let storable_accounts = StorableAccountsBySlot::new(slot, &accounts);
+            let storable_accounts =
+                StorableAccountsBySlot::new(slot, &accounts, self.accounts_db());
+
             self.accounts_db()
                 .store_accounts_frozen(storable_accounts, new_storage);
 

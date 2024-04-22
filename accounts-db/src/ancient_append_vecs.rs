@@ -5,10 +5,11 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        account_storage::{meta::StoredAccountMeta, ShrinkInProgress},
+        account_storage::ShrinkInProgress,
         accounts_db::{
-            AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
-            ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
+            AccountFromStorage, AccountStorageEntry, AccountsDb, AliveAccounts,
+            GetUniqueAccountsResult, ShrinkCollect, ShrinkCollectAliveSeparatedByRefs,
+            ShrinkStatsSub,
         },
         accounts_file::AccountsFile,
         accounts_index::AccountsIndexScanResult,
@@ -561,7 +562,7 @@ impl AccountsDb {
     fn get_unique_accounts_from_storage_for_combining_ancient_slots<'a>(
         &self,
         ancient_slots: &'a [SlotInfo],
-    ) -> Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)> {
+    ) -> Vec<(&'a SlotInfo, GetUniqueAccountsResult)> {
         let mut accounts_to_combine = Vec::with_capacity(ancient_slots.len());
 
         for info in ancient_slots {
@@ -614,7 +615,7 @@ impl AccountsDb {
     /// 'accounts_per_storage' should be sorted by slot
     fn calc_accounts_to_combine<'a>(
         &self,
-        accounts_per_storage: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)>,
+        accounts_per_storage: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult)>,
     ) -> AccountsToCombine<'a> {
         let mut accounts_keep_slots = HashMap::default();
         let len = accounts_per_storage.len();
@@ -703,7 +704,7 @@ impl AccountsDb {
             bytes: bytes_total,
             accounts: accounts_to_write,
         } = packed;
-        let accounts_to_write = StorableAccountsBySlot::new(target_slot, accounts_to_write);
+        let accounts_to_write = StorableAccountsBySlot::new(target_slot, accounts_to_write, self);
 
         self.shrink_ancient_stats
             .bytes_ancient_created
@@ -767,7 +768,7 @@ struct AccountsToCombine<'a> {
 /// intended contents of a packed ancient storage
 struct PackedAncientStorage<'a> {
     /// accounts to move into this storage, along with the slot the accounts are currently stored in
-    accounts: Vec<(Slot, &'a [&'a StoredAccountMeta<'a>])>,
+    accounts: Vec<(Slot, &'a [&'a AccountFromStorage])>,
     /// total bytes required to hold 'accounts'
     bytes: u64,
 }
@@ -874,7 +875,7 @@ pub enum StorageSelector {
 /// We need 1-2 of these slices constructed based on available bytes and individual account sizes.
 /// The slice arithmetic across both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
-    accounts: &'a [&'a StoredAccountMeta<'a>],
+    accounts: &'a [&'a AccountFromStorage],
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
@@ -890,7 +891,7 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        accounts: &'a [&'a StoredAccountMeta<'a>],
+        accounts: &'a [&'a AccountFromStorage],
         alive_total_bytes: usize,
         slot: Slot,
     ) -> Self {
@@ -939,7 +940,7 @@ impl<'a> AccountsToStore<'a> {
     }
 
     /// get the accounts to store in the given 'storage'
-    pub fn get(&self, storage: StorageSelector) -> &[&'a StoredAccountMeta<'a>] {
+    pub fn get(&self, storage: StorageSelector) -> &[&'a AccountFromStorage] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
@@ -992,14 +993,15 @@ pub mod tests {
                 tests::{
                     append_single_account_with_default_hash, compare_all_accounts,
                     create_db_with_storages_and_index, create_storages_and_update_index,
-                    get_all_accounts, remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
+                    get_account_from_account_from_storage, get_all_accounts,
+                    remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
                 },
                 ShrinkCollectRefs,
             },
             accounts_hash::AccountHash,
             accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
-            storable_accounts::StorableAccountsBySlot,
+            storable_accounts::{tests::build_accounts_from_storage, StorableAccountsBySlot},
         },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -1044,22 +1046,31 @@ pub mod tests {
     }
 
     fn unique_to_accounts<'a>(
-        one: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
+        one: impl Iterator<Item = &'a GetUniqueAccountsResult>,
+        db: &AccountsDb,
+        slot: Slot,
     ) -> Vec<(Pubkey, AccountSharedData)> {
         one.flat_map(|result| {
-            result
-                .stored_accounts
-                .iter()
-                .map(|result| (*result.pubkey(), result.to_account_shared_data()))
+            result.stored_accounts.iter().map(|result| {
+                (
+                    *result.pubkey(),
+                    get_account_from_account_from_storage(result, db, slot),
+                )
+            })
         })
         .collect()
     }
 
     pub(crate) fn compare_all_vec_accounts<'a>(
-        one: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
-        two: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
+        one: impl Iterator<Item = &'a GetUniqueAccountsResult>,
+        two: impl Iterator<Item = &'a GetUniqueAccountsResult>,
+        db: &AccountsDb,
+        slot: Slot,
     ) {
-        compare_all_accounts(&unique_to_accounts(one), &unique_to_accounts(two));
+        compare_all_accounts(
+            &unique_to_accounts(one, db, slot),
+            &unique_to_accounts(two, db, slot),
+        );
     }
 
     #[test]
@@ -1084,7 +1095,9 @@ pub mod tests {
             .accounts(0)
             .pop()
             .unwrap()];
-        let accounts = accounts.iter().collect::<Vec<_>>();
+        let accounts_stored_meta = accounts.iter().collect::<Vec<_>>();
+        let accounts_byval = build_accounts_from_storage(accounts_stored_meta.iter().copied());
+        let accounts = accounts_byval.iter().collect::<Vec<_>>();
         let packed_contents = vec![PackedAncientStorage {
             bytes: 0,
             accounts: vec![(slots.start, &accounts[..])],
@@ -1191,19 +1204,20 @@ pub mod tests {
 
                 let original_results = storages
                     .iter()
-                    .map(|store| db.get_unique_accounts_from_storage(store))
+                    .map(|store| (store.slot(), db.get_unique_accounts_from_storage(store)))
                     .collect::<Vec<_>>();
+                let original_results_all_accounts = vec_unique_to_accounts(&original_results, &db);
 
-                let slots_vec = slots.collect::<Vec<_>>();
+                let slots_vec = slots.clone().collect::<Vec<_>>();
                 let accounts_to_combine = original_results
                     .iter()
                     .zip(slots_vec.iter().cloned())
-                    .map(|(accounts, slot)| AliveAccounts {
+                    .map(|((_slot, accounts), slot)| AliveAccounts {
                         accounts: accounts.stored_accounts.iter().collect::<Vec<_>>(),
                         bytes: accounts
                             .stored_accounts
                             .iter()
-                            .map(|account| aligned_stored_size(account.data().len()))
+                            .map(|account| aligned_stored_size(account.data_len()))
                             .sum(),
                         slot,
                     })
@@ -1216,20 +1230,26 @@ pub mod tests {
                 let storages_needed = result.len();
                 assert_eq!(storages_needed, expected_storages, "num_slots: {num_slots}, expected_storages: {expected_storages}, storages_needed: {storages_needed}, ideal_size: {ideal_size}");
                 compare_all_accounts(
-                    &packed_to_compare(&result)[..],
-                    &unique_to_compare(&original_results)[..],
+                    &packed_to_compare(&result, &db)[..],
+                    &original_results_all_accounts,
                 );
             }
         }
     }
 
-    fn packed_to_compare(packed: &[PackedAncientStorage]) -> Vec<(Pubkey, AccountSharedData)> {
+    fn packed_to_compare(
+        packed: &[PackedAncientStorage],
+        db: &AccountsDb,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         packed
             .iter()
             .flat_map(|packed| {
-                packed.accounts.iter().flat_map(|(_slot, stored_metas)| {
+                packed.accounts.iter().flat_map(|(slot, stored_metas)| {
                     stored_metas.iter().map(|stored_meta| {
-                        (*stored_meta.pubkey(), stored_meta.to_account_shared_data())
+                        (
+                            *stored_meta.pubkey(),
+                            get_account_from_account_from_storage(stored_meta, db, *slot),
+                        )
                     })
                 })
             })
@@ -1291,14 +1311,15 @@ pub mod tests {
 
                 let original_results = storages
                     .iter()
-                    .map(|store| db.get_unique_accounts_from_storage(store))
+                    .map(|store| (store.slot(), db.get_unique_accounts_from_storage(store)))
                     .collect::<Vec<_>>();
+                let original_results_all_accounts = vec_unique_to_accounts(&original_results, &db);
 
-                let slots_vec = slots.collect::<Vec<_>>();
+                let slots_vec = slots.clone().collect::<Vec<_>>();
                 let accounts_to_combine = original_results
                     .iter()
                     .zip(slots_vec.iter().cloned())
-                    .map(|(accounts, slot)| AliveAccounts {
+                    .map(|((_slot, accounts), slot)| AliveAccounts {
                         accounts: accounts.stored_accounts.iter().collect::<Vec<_>>(),
                         bytes: accounts
                             .stored_accounts
@@ -1357,22 +1378,11 @@ pub mod tests {
                 });
 
                 compare_all_accounts(
-                    &packed_to_compare(&result)[..],
-                    &unique_to_compare(&original_results)[..],
+                    &packed_to_compare(&result, &db)[..],
+                    &original_results_all_accounts,
                 );
             }
         }
-    }
-
-    fn unique_to_compare(unique: &[GetUniqueAccountsResult]) -> Vec<(Pubkey, AccountSharedData)> {
-        unique
-            .iter()
-            .flat_map(|unique| {
-                unique.stored_accounts.iter().map(|stored_meta| {
-                    (*stored_meta.pubkey(), stored_meta.to_account_shared_data())
-                })
-            })
-            .collect::<Vec<_>>()
     }
 
     #[derive(EnumIter, Debug, PartialEq, Eq)]
@@ -1651,7 +1661,8 @@ pub mod tests {
                 .stored_accounts
                 .first()
                 .unwrap();
-            let account_shared_data_with_2_refs = account_with_2_refs.to_account_shared_data();
+            let account_shared_data_with_2_refs =
+                get_account_from_account_from_storage(account_with_2_refs, &db, slot1);
             let pk_with_2_refs = account_with_2_refs.pubkey();
             let mut account_with_1_ref = account_shared_data_with_2_refs.clone();
             account_with_1_ref.checked_add_lamports(1).unwrap();
@@ -1720,7 +1731,7 @@ pub mod tests {
                 .accounts;
             let one_ref_accounts_account_shared_data = one_ref_accounts
                 .iter()
-                .map(|account| account.to_account_shared_data())
+                .map(|account| get_account_from_account_from_storage(account, &db, slot1))
                 .collect::<Vec<_>>();
 
             assert_eq!(
@@ -1835,7 +1846,8 @@ pub mod tests {
                 .stored_accounts
                 .first()
                 .unwrap();
-            let account_shared_data_with_2_refs = account_with_2_refs.to_account_shared_data();
+            let account_shared_data_with_2_refs =
+                get_account_from_account_from_storage(account_with_2_refs, &db, slot1);
             let pk_with_2_refs = account_with_2_refs.pubkey();
             let mut account_with_1_ref = account_shared_data_with_2_refs.clone();
             _ = account_with_1_ref.checked_add_lamports(1);
@@ -1901,7 +1913,7 @@ pub mod tests {
                 .accounts;
             let one_ref_accounts_account_shared_data = one_ref_accounts
                 .iter()
-                .map(|account| account.to_account_shared_data())
+                .map(|account| get_account_from_account_from_storage(account, &db, slot1))
                 .collect::<Vec<_>>();
             assert_eq!(
                 one_ref_accounts
@@ -1976,16 +1988,22 @@ pub mod tests {
                 let results =
                     db.get_unique_accounts_from_storage_for_combining_ancient_slots(&infos);
 
-                let all_accounts = get_all_accounts(&db, slots);
+                let all_accounts = get_all_accounts(&db, slots.clone());
                 assert_eq!(all_accounts.len(), num_slots);
 
                 compare_all_vec_accounts(
                     original_results.iter(),
                     results.iter().map(|(_, accounts)| accounts),
+                    &db,
+                    slots.start,
                 );
                 compare_all_accounts(
                     &all_accounts,
-                    &unique_to_accounts(results.iter().map(|(_, accounts)| accounts)),
+                    &unique_to_accounts(
+                        results.iter().map(|(_, accounts)| accounts),
+                        &db,
+                        slots.start,
+                    ),
                 );
 
                 let map = |info: &SlotInfo| {
@@ -2033,7 +2051,7 @@ pub mod tests {
             executable: false,
             rent_epoch: 0,
         };
-        let offset = 3;
+        let offset = 3 * std::mem::size_of::<u64>();
         let hash = AccountHash(Hash::new(&[2; 32]));
         let stored_meta = StoredMeta {
             // global write version
@@ -2051,19 +2069,21 @@ pub mod tests {
             stored_size: account_size,
             hash: &hash,
         });
-        let map = vec![&account];
+        let map = [&account];
+        let map_accounts_from_storage = build_accounts_from_storage(map.iter().copied());
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
         ] {
             let slot = 1;
             let alive_total_bytes = account_size;
+            let temp = map_accounts_from_storage.iter().collect::<Vec<_>>();
             let accounts_to_store =
-                AccountsToStore::new(available_bytes as u64, &map, alive_total_bytes, slot);
+                AccountsToStore::new(available_bytes as u64, &temp, alive_total_bytes, slot);
             let accounts = accounts_to_store.get(selector);
             assert_eq!(
-                accounts.iter().collect::<Vec<_>>(),
-                map.iter().collect::<Vec<_>>(),
+                accounts.to_vec(),
+                map_accounts_from_storage.iter().collect::<Vec<_>>(),
                 "mismatch"
             );
             let accounts = accounts_to_store.get(get_opposite(&selector));
@@ -2118,6 +2138,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             capacity: after_capacity,
+            ..
         } = db.get_unique_accounts_from_storage(&after_store);
         assert_eq!(created_accounts.capacity, after_capacity);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
@@ -2730,6 +2751,40 @@ pub mod tests {
         PackedStorages,
     }
 
+    pub fn build_accounts_from_storage_with_slot(
+        accounts: &[(Slot, &[&StoredAccountMeta])],
+    ) -> Vec<(Slot, Vec<AccountFromStorage>)> {
+        accounts
+            .iter()
+            .map(|(slot, accounts)| {
+                (
+                    *slot,
+                    accounts
+                        .iter()
+                        .map(|account| AccountFromStorage::new(account))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect()
+    }
+    pub fn build_refs_accounts_from_storage_with_slot(
+        accounts: &[(Slot, Vec<AccountFromStorage>)],
+    ) -> Vec<(Slot, Vec<&AccountFromStorage>)> {
+        accounts
+            .iter()
+            .map(|(slot, accounts)| (*slot, accounts.iter().collect()))
+            .collect::<Vec<_>>()
+    }
+
+    pub fn build_refs_accounts_from_storage_with_slot2<'a>(
+        accounts: &'a [(Slot, Vec<&'a AccountFromStorage>)],
+    ) -> Vec<(Slot, &'a [&'a AccountFromStorage])> {
+        accounts
+            .iter()
+            .map(|(slot, accounts)| (*slot, &accounts[..]))
+            .collect::<Vec<_>>()
+    }
+
     #[test]
     fn test_write_ancient_accounts() {
         for data_size in [None, Some(10_000_000)] {
@@ -2754,13 +2809,20 @@ pub mod tests {
                             .iter()
                             .map(|(slot, accounts)| (*slot, accounts.iter().collect::<Vec<_>>()))
                             .collect::<Vec<_>>();
-                        let accounts = accounts_vecs2
+                        let accounts_stored_account_meta = accounts_vecs2
                             .iter()
                             .map(|(slot, accounts)| (*slot, &accounts[..]))
                             .collect::<Vec<_>>();
+                        let accounts_byval =
+                            build_accounts_from_storage_with_slot(&accounts_stored_account_meta);
+                        let accounts_byval2 =
+                            build_refs_accounts_from_storage_with_slot(&accounts_byval);
+                        let accounts =
+                            build_refs_accounts_from_storage_with_slot2(&accounts_byval2);
 
                         let target_slot = slots.clone().nth(combine_into).unwrap_or(slots.start);
-                        let accounts_to_write = StorableAccountsBySlot::new(target_slot, &accounts);
+                        let accounts_to_write =
+                            StorableAccountsBySlot::new(target_slot, &accounts, &db);
 
                         let bytes = storages
                             .iter()
@@ -2974,8 +3036,9 @@ pub mod tests {
                     .collect::<Vec<_>>();
                 let original_results = original_stores
                     .iter()
-                    .map(|store| db.get_unique_accounts_from_storage(store))
+                    .map(|store| (store.slot(), db.get_unique_accounts_from_storage(store)))
                     .collect::<Vec<_>>();
+                let original_results_all_accounts = vec_unique_to_accounts(&original_results, &db);
 
                 let tuning = PackedAncientStorageTuning {
                     percent_of_alive_shrunk_data: 0,
@@ -3018,25 +3081,30 @@ pub mod tests {
                     .collect::<Vec<_>>();
                 let results = stores
                     .iter()
-                    .map(|store| db.get_unique_accounts_from_storage(store))
+                    .map(|store| (store.slot(), db.get_unique_accounts_from_storage(store)))
                     .collect::<Vec<_>>();
                 let all_accounts = get_all_accounts(&db, slot1..(slot1 + num_slots as Slot));
-                compare_all_accounts(&vec_unique_to_accounts(&original_results), &all_accounts);
+                compare_all_accounts(&original_results_all_accounts, &all_accounts);
                 compare_all_accounts(
-                    &vec_unique_to_accounts(&results),
+                    &vec_unique_to_accounts(&results, &db),
                     &get_all_accounts(&db, slot1..(slot1 + num_slots as Slot)),
                 );
             }
         }
     }
 
-    fn vec_unique_to_accounts(one: &[GetUniqueAccountsResult]) -> Vec<(Pubkey, AccountSharedData)> {
+    fn vec_unique_to_accounts(
+        one: &[(Slot, GetUniqueAccountsResult)],
+        db: &AccountsDb,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         one.iter()
-            .flat_map(|result| {
-                result
-                    .stored_accounts
-                    .iter()
-                    .map(|result| (*result.pubkey(), result.to_account_shared_data()))
+            .flat_map(|(slot, result)| {
+                result.stored_accounts.iter().map(|result| {
+                    (
+                        *result.pubkey(),
+                        get_account_from_account_from_storage(result, db, *slot),
+                    )
+                })
             })
             .collect()
     }
@@ -3162,7 +3230,8 @@ pub mod tests {
 
         storages[0]
             .accounts
-            .get_stored_account_meta_callback(0, |account| {
+            .get_stored_account_meta_callback(0, |stored_account_meta| {
+                let account = AccountFromStorage::new(&stored_account_meta);
                 let slot = 1;
                 let capacity = 0;
                 for i in 0..4usize {
