@@ -134,41 +134,6 @@ pub trait StorableAccounts<'a>: Sync {
     }
 }
 
-/// accounts that are moving from 'old_slot' to 'target_slot'
-/// since all accounts are from the same old slot, we don't need to create a slice with per-account slot
-/// but, we need slot(_) to return 'old_slot' for all accounts
-/// Created a struct instead of a tuple to make the code easier to read.
-pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
-    pub accounts: &'a [(&'a Pubkey, &'a T)],
-    /// accounts will be written to this slot
-    pub target_slot: Slot,
-    /// slot where accounts are currently stored
-    pub old_slot: Slot,
-}
-
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a> for StorableAccountsMovingSlots<'a, T>
-where
-    AccountForStorage<'a>: From<(&'a Pubkey, &'a T)>,
-{
-    fn account<Ret>(
-        &self,
-        index: usize,
-        mut callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
-    ) -> Ret {
-        callback((self.accounts[index].0, self.accounts[index].1).into())
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // per-index slot is not unique per slot, but it is different than 'target_slot'
-        self.old_slot
-    }
-    fn target_slot(&self) -> Slot {
-        self.target_slot
-    }
-    fn len(&self) -> usize {
-        self.accounts.len()
-    }
-}
-
 impl<'a: 'b, 'b> StorableAccounts<'a> for (Slot, &'b [(&'a Pubkey, &'a AccountSharedData)]) {
     fn account<Ret>(
         &self,
@@ -474,16 +439,10 @@ pub mod tests {
                     let source_slot = starting_slot % max_slots;
                     let test3 = (target_slot, &three[..], source_slot);
                     let old_slot = starting_slot;
-                    let test_moving_slots = StorableAccountsMovingSlots {
-                        accounts: &two[..],
-                        target_slot,
-                        old_slot,
-                    };
                     let for_slice = [(old_slot, &three[..])];
                     let test_moving_slots2 = StorableAccountsBySlot::new(target_slot, &for_slice);
                     compare(&test2, &test3);
                     compare(&test2, &test4);
-                    compare(&test2, &test_moving_slots);
                     compare(&test2, &test_moving_slots2);
                     for (i, raw) in raw.iter().enumerate() {
                         test3.account(i, |account| {
@@ -493,7 +452,6 @@ pub mod tests {
                         assert_eq!(raw.2, test3.slot(i));
                         assert_eq!(target_slot, test4.slot(i));
                         assert_eq!(target_slot, test2.slot(i));
-                        assert_eq!(old_slot, test_moving_slots.slot(i));
                         assert_eq!(old_slot, test_moving_slots2.slot(i));
                     }
                     assert_eq!(target_slot, test3.target_slot());
@@ -501,7 +459,6 @@ pub mod tests {
                     assert_eq!(target_slot, test_moving_slots2.target_slot());
                     assert!(!test2.contains_multiple_slots());
                     assert!(!test4.contains_multiple_slots());
-                    assert!(!test_moving_slots.contains_multiple_slots());
                     assert_eq!(test3.contains_multiple_slots(), entries > 1);
                 }
             }
