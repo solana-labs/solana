@@ -1,6 +1,6 @@
-mod encryption;
-mod with_fee;
-mod without_fee;
+pub mod encryption;
+pub mod with_fee;
+pub mod without_fee;
 
 #[cfg(not(target_os = "solana"))]
 use {
