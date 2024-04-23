@@ -364,30 +364,6 @@ pub mod tests {
         }
     }
 
-    /// this is no longer used. It is very tricky to get these right. There are already tests for this. It is likely worth it to leave this here for a while until everything has settled.
-    /// this tuple contains a single different source slot that applies to all accounts
-    /// accounts are AccountFromStorage
-    impl<'a> StorableAccounts<'a> for (Slot, &'a [&'a AccountFromStorage], Slot, &AccountsDb) {
-        fn account<Ret>(
-            &self,
-            index: usize,
-            callback: impl for<'local> FnMut(AccountForStorage<'local>) -> Ret,
-        ) -> Ret {
-            let data = self.1[index];
-            callback_that_loads_account(self.3, self.2, data.index_info.offset(), callback)
-        }
-        fn slot(&self, _index: usize) -> Slot {
-            // same other slot for all accounts
-            self.2
-        }
-        fn target_slot(&self) -> Slot {
-            self.0
-        }
-        fn len(&self) -> usize {
-            self.1.len()
-        }
-    }
-
     fn compare<'a>(a: &impl StorableAccounts<'a>, b: &impl StorableAccounts<'a>) {
         assert_eq!(a.target_slot(), b.target_slot());
         assert_eq!(a.len(), b.len());
@@ -437,12 +413,9 @@ pub mod tests {
 
         let account_from_storage = AccountFromStorage::new(&stored_account);
 
-        let test3 = (
-            slot,
-            &vec![&account_from_storage, &account_from_storage][..],
-            slot,
-            &db,
-        );
+        let accounts = [&account_from_storage, &account_from_storage];
+        let accounts2 = [(slot, &accounts[..])];
+        let test3 = StorableAccountsBySlot::new(slot, &accounts2[..], &db);
         assert!(!test3.contains_multiple_slots());
     }
 
@@ -549,12 +522,8 @@ pub mod tests {
                     let three_accounts_from_storage =
                         three_accounts_from_storage_byval.iter().collect::<Vec<_>>();
 
-                    let test3 = (
-                        target_slot,
-                        &three_accounts_from_storage[..],
-                        source_slot,
-                        &db,
-                    );
+                    let accounts_with_slots = vec![(source_slot, &three_accounts_from_storage[..])];
+                    let test3 = StorableAccountsBySlot::new(target_slot, &accounts_with_slots, &db);
                     let old_slot = starting_slot;
                     let for_slice = [(old_slot, &three_accounts_from_storage[..])];
                     let test_moving_slots2 =
