@@ -14,12 +14,12 @@ source ci/env.sh
   while read -r line; do
     read -r id image _ <<<"$line"
 
-    if [[ $image =~ "solanalabs/rust" ]]; then
+    if [[ $image =~ "anzaxyz/ci" ]]; then
       if docker kill "$id" >/dev/null; then
         echo "kill $id $image"
       fi
-      continue
     fi
+
   done < <(docker ps | tail -n +2)
 )
 
