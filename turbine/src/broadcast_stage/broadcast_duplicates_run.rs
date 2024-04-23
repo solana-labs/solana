@@ -237,9 +237,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     sigs,
                 );
 
-                assert_eq!(original_last_data_shred.len(), 1);
-                assert_eq!(partition_last_data_shred.len(), 1);
-                self.next_shred_index += 1;
+                assert_eq!(
+                    original_last_data_shred.len(),
+                    partition_last_data_shred.len()
+                );
+                self.next_shred_index += u32::try_from(original_last_data_shred.len()).unwrap();
                 (original_last_data_shred, partition_last_data_shred)
             });
 
