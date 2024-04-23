@@ -777,6 +777,10 @@ pub mod enable_gossip_duplicate_proof_ingestion {
     solana_sdk::declare_id!("FNKCMBzYUdjhHyPdsKG2LSmdzH8TCHXn3ytj8RNBS4nG");
 }
 
+pub mod chained_merkle_conflict_duplicate_proofs {
+    solana_sdk::declare_id!("mustrekeyVfuxJKNRGkyTDokLwWxx6kD2ZLsqQHaDD8");
+}
+
 pub mod enable_chained_merkle_shreds {
     solana_sdk::declare_id!("7uZBkJXJ1HkuP6R3MJfZs7mLwymBcDbKdqbF51ZWLier");
 }
@@ -976,6 +980,7 @@ lazy_static! {
         (enable_gossip_duplicate_proof_ingestion::id(), "enable gossip duplicate proof ingestion #32963"),
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
         (deprecate_unused_legacy_vote_plumbing::id(), "Deprecate unused legacy vote tx plumbing"),
+        (chained_merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for chained merkle root conflicts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
