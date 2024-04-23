@@ -5072,7 +5072,7 @@ fn test_boot_from_local_state() {
 // 0
 //   \--- 2
 //
-// 1. > DUPLICATE_THRESHOLD of the nodes vote on some version of the the duplicate block 3,
+// 1. > DUPLICATE_THRESHOLD of the nodes vote on some version of the duplicate block 3,
 // but don't immediately duplicate confirm so they remove 3 from fork choice and reset PoH back to 1.
 // 2. All the votes on 3 don't land because there are no further blocks building off 3.
 // 3. Some < SWITCHING_THRESHOLD of nodes vote on 2, making it the heaviest fork because no votes on 3 landed
