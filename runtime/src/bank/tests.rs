@@ -9078,6 +9078,42 @@ fn test_stake_vote_account_validity() {
     );
 }
 
+#[test]
+fn test_epoch_schedule_from_genesis_config() {
+    let validator_vote_keypairs0 = ValidatorVoteKeypairs::new_rand();
+    let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
+    let validator_keypairs = vec![&validator_vote_keypairs0, &validator_vote_keypairs1];
+    let GenesisConfigInfo {
+        mut genesis_config, ..
+    } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![LAMPORTS_PER_SOL; 2],
+    );
+
+    genesis_config.epoch_schedule = EpochSchedule::custom(8192, 100, true);
+
+    let bank = Arc::new(Bank::new_with_paths(
+        &genesis_config,
+        Arc::<RuntimeConfig>::default(),
+        Vec::new(),
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        AccountShrinkThreshold::default(),
+        false,
+        Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+        None,
+        Arc::default(),
+    ));
+
+    assert_eq!(
+        &bank.transaction_processor.epoch_schedule,
+        &genesis_config.epoch_schedule
+    );
+}
+
 fn check_stake_vote_account_validity<F>(check_owner_change: bool, load_vote_and_stake_accounts: F)
 where
     F: Fn(&Bank) -> LoadVoteAndStakeAccountsResult,

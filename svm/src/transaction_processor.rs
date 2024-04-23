@@ -130,7 +130,7 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     epoch: Epoch,
 
     /// initialized from genesis
-    epoch_schedule: EpochSchedule,
+    pub epoch_schedule: EpochSchedule,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,

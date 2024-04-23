@@ -2985,6 +2985,7 @@ impl Bank {
         self.slots_per_year = genesis_config.slots_per_year();
 
         self.epoch_schedule = genesis_config.epoch_schedule.clone();
+        self.transaction_processor.epoch_schedule = genesis_config.epoch_schedule.clone();
 
         self.inflation = Arc::new(RwLock::new(genesis_config.inflation));
 
