@@ -44,7 +44,7 @@ pub fn wait_n_slots(rpc_client: &RpcClient, n: u64) -> u64 {
     loop {
         sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         let new_slot = rpc_client.get_slot().unwrap();
-        if new_slot.saturating_sub(slot) > n {
+        if new_slot.saturating_sub(slot) >= n {
             return new_slot;
         }
     }
