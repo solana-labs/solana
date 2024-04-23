@@ -2815,7 +2815,7 @@ fn send_deploy_messages(
                         solana_client::tpu_client::TpuClientConfig::default(),
                         cache,
                     );
-                    let tpu_client = use_rpc.then(|| rpc_client
+                    let tpu_client = (!use_rpc).then(|| rpc_client
                         .runtime()
                         .block_on(tpu_client_fut)
                         .expect("Should return a valid tpu client")
