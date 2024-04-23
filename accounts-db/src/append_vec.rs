@@ -543,10 +543,10 @@ impl AppendVec {
     }
 
     /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<'a, Ret>(
-        &'a self,
+    pub fn get_stored_account_meta_callback<Ret>(
+        &self,
         offset: usize,
-        mut callback: impl FnMut(StoredAccountMeta<'a>) -> Ret,
+        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
     ) -> Option<Ret> {
         self.get_stored_account_meta(offset)
             .map(|(account, _offset)| callback(account))
@@ -688,7 +688,10 @@ impl AppendVec {
 
     /// Iterate over all accounts and call `callback` with each account.
     #[allow(clippy::blocks_in_conditions)]
-    pub(crate) fn scan_accounts(&self, mut callback: impl for<'a> FnMut(StoredAccountMeta<'a>)) {
+    pub(crate) fn scan_accounts(
+        &self,
+        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>),
+    ) {
         let mut offset = 0;
         while self
             .get_stored_account_meta_callback(offset, |account| {

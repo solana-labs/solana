@@ -135,10 +135,10 @@ impl AccountsFile {
     }
 
     /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<'a, Ret>(
-        &'a self,
+    pub fn get_stored_account_meta_callback<Ret>(
+        &self,
         offset: usize,
-        callback: impl FnMut(StoredAccountMeta<'a>) -> Ret,
+        callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
     ) -> Option<Ret> {
         match self {
             Self::AppendVec(av) => av.get_stored_account_meta_callback(offset, callback),
@@ -205,7 +205,10 @@ impl AccountsFile {
     }
 
     /// Iterate over all accounts and call `callback` with each account.
-    pub(crate) fn scan_accounts(&self, callback: impl for<'a> FnMut(StoredAccountMeta<'a>)) {
+    pub(crate) fn scan_accounts(
+        &self,
+        callback: impl for<'local> FnMut(StoredAccountMeta<'local>),
+    ) {
         match self {
             Self::AppendVec(av) => av.scan_accounts(callback),
             Self::TieredStorage(ts) => {

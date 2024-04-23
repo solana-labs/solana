@@ -525,10 +525,10 @@ impl HotStorageReader {
     }
 
     /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<'a, Ret>(
-        &'a self,
+    pub fn get_stored_account_meta_callback<Ret>(
+        &self,
         index_offset: IndexOffset,
-        mut callback: impl FnMut(StoredAccountMeta<'a>) -> Ret,
+        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
     ) -> TieredStorageResult<Option<Ret>> {
         let account = self.get_stored_account_meta(index_offset)?;
         Ok(account.map(|(account, _offset)| callback(account)))
@@ -633,7 +633,7 @@ impl HotStorageReader {
     /// Iterate over all accounts and call `callback` with each account.
     pub(crate) fn scan_accounts(
         &self,
-        mut callback: impl for<'a> FnMut(StoredAccountMeta<'a>),
+        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>),
     ) -> TieredStorageResult<()> {
         for i in 0..self.footer.account_entry_count {
             self.get_stored_account_meta_callback(IndexOffset(i), &mut callback)?;
