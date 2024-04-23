@@ -125,7 +125,6 @@ members = [
 
 exclude = ["programs/sbf", "svm/tests/example-programs"]
 
-# This prevents a Travis CI error when building for Windows.
 resolver = "2"
 
 [workspace.package]

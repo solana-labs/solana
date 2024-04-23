@@ -127,17 +127,6 @@ for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.
     if [[ -n $TAG ]]; then
       ci/upload-github-release-asset.sh "$file"
     fi
-  elif [[ -n $TRAVIS ]]; then
-    # .travis.yml uploads everything in the travis-s3-upload/ directory to release.solana.com
-    mkdir -p travis-s3-upload/"$CHANNEL_OR_TAG"
-    cp -v "$file" travis-s3-upload/"$CHANNEL_OR_TAG"/
-
-    if [[ -n $TAG ]]; then
-      # .travis.yaml uploads everything in the travis-release-upload/ directory to
-      # the associated Github Release
-      mkdir -p travis-release-upload/
-      cp -v "$file" travis-release-upload/
-    fi
   elif [[ -n $GITHUB_ACTIONS ]]; then
     mkdir -p github-action-s3-upload/"$CHANNEL_OR_TAG"
     cp -v "$file" github-action-s3-upload/"$CHANNEL_OR_TAG"/

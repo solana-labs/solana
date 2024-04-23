@@ -261,7 +261,7 @@ pull_or_push_steps() {
     all_test_steps
   fi
 
-  # docs changes run on Travis or Github actions...
+  # docs changes run on Github actions...
 }
 
 

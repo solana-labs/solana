@@ -31,9 +31,6 @@ source ../ci/rust-version.sh stable
 
 : "${rust_stable:=}" # Pacify shellcheck
 
-# pre-build with output enabled to appease Travis CI's hang check
-cargo build -p solana-cli
-
 usage=$(cargo -q run -p solana-cli -- -C ~/.foo --help | sed -e 's|'"$HOME"'|~|g' -e 's/[[:space:]]\+$//')
 
 section() {
