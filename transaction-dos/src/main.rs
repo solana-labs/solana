@@ -249,6 +249,7 @@ fn run_transactions_dos(
             max_len: None,
             compute_unit_price: None,
             max_sign_attempts: 5,
+            use_rpc: false,
             skip_fee_check: true, // skip_fee_check
         });
 
