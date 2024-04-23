@@ -13,7 +13,8 @@ use {
 
 const MAX_UNSTAKED_STREAMS_PERCENT: u64 = 20;
 pub const STREAM_THROTTLING_INTERVAL_MS: u64 = 100;
-pub const STREAM_STOP_CODE_THROTTLING: u32 = 15;
+pub const STREAM_THROTTLING_INTERVAL: Duration =
+    Duration::from_millis(STREAM_THROTTLING_INTERVAL_MS);
 const STREAM_LOAD_EMA_INTERVAL_MS: u64 = 5;
 const STREAM_LOAD_EMA_INTERVAL_COUNT: u64 = 10;
 const EMA_WINDOW_MS: u64 = STREAM_LOAD_EMA_INTERVAL_MS * STREAM_LOAD_EMA_INTERVAL_COUNT;
@@ -208,19 +209,24 @@ impl ConnectionStreamCounter {
         }
     }
 
-    pub(crate) fn reset_throttling_params_if_needed(&self) {
-        const THROTTLING_INTERVAL: Duration = Duration::from_millis(STREAM_THROTTLING_INTERVAL_MS);
-        if tokio::time::Instant::now().duration_since(*self.last_throttling_instant.read().unwrap())
-            > THROTTLING_INTERVAL
+    /// Reset the counter and last throttling instant and
+    /// return last_throttling_instant regardless it is reset or not.
+    pub(crate) fn reset_throttling_params_if_needed(&self) -> tokio::time::Instant {
+        let last_throttling_instant = *self.last_throttling_instant.read().unwrap();
+        if tokio::time::Instant::now().duration_since(last_throttling_instant)
+            > STREAM_THROTTLING_INTERVAL
         {
             let mut last_throttling_instant = self.last_throttling_instant.write().unwrap();
             // Recheck as some other thread might have done throttling since this thread tried to acquire the write lock.
             if tokio::time::Instant::now().duration_since(*last_throttling_instant)
-                > THROTTLING_INTERVAL
+                > STREAM_THROTTLING_INTERVAL
             {
                 *last_throttling_instant = tokio::time::Instant::now();
                 self.stream_count.store(0, Ordering::Relaxed);
             }
+            *last_throttling_instant
+        } else {
+            last_throttling_instant
         }
     }
 }
