@@ -13,11 +13,6 @@
 #[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
-    curve25519_dalek::traits::MultiscalarMul,
-    rand::rngs::OsRng,
-    subtle::{Choice, ConditionallySelectable},
-};
-use {
     crate::{
         encryption::pedersen::{G, H},
         range_proof::{
@@ -28,20 +23,27 @@ use {
         transcript::TranscriptProtocol,
     },
     core::iter,
+    curve25519_dalek::traits::MultiscalarMul,
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
         traits::{IsIdentity, VartimeMultiscalarMul},
     },
     merlin::Transcript,
+    rand::rngs::OsRng,
+    subtle::{Choice, ConditionallySelectable},
 };
 
 pub mod errors;
+#[cfg(not(target_os = "solana"))]
 pub mod generators;
+#[cfg(not(target_os = "solana"))]
 pub mod inner_product;
+#[cfg(not(target_os = "solana"))]
 pub mod util;
 
 #[allow(non_snake_case)]
+#[cfg(not(target_os = "solana"))]
 #[derive(Clone)]
 pub struct RangeProof {
     pub A: CompressedRistretto,       // 32 bytes
@@ -55,6 +57,7 @@ pub struct RangeProof {
 }
 
 #[allow(non_snake_case)]
+#[cfg(not(target_os = "solana"))]
 impl RangeProof {
     /// Create an aggregated range proof.
     ///
@@ -410,6 +413,7 @@ impl RangeProof {
 /// \\[
 /// \delta(y,z) = (z - z^{2}) \langle \mathbf{1}, {\mathbf{y}}^{n \cdot m} \rangle - \sum_{j=0}^{m-1} z^{j+3} \cdot \langle \mathbf{1}, {\mathbf{2}}^{n \cdot m} \rangle
 /// \\]
+#[cfg(not(target_os = "solana"))]
 fn delta(bit_lengths: &[usize], y: &Scalar, z: &Scalar) -> Scalar {
     let nm: usize = bit_lengths.iter().sum();
     let sum_y = util::sum_of_powers(y, nm);

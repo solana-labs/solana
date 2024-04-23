@@ -5,13 +5,21 @@
 //!
 //! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
-pub mod batched_grouped_ciphertext_validity_proof;
-pub mod ciphertext_ciphertext_equality_proof;
-pub mod ciphertext_commitment_equality_proof;
 pub mod errors;
+
+#[cfg(not(target_os = "solana"))]
+pub mod batched_grouped_ciphertext_validity_proof;
+#[cfg(not(target_os = "solana"))]
+pub mod ciphertext_ciphertext_equality_proof;
+#[cfg(not(target_os = "solana"))]
+pub mod ciphertext_commitment_equality_proof;
+#[cfg(not(target_os = "solana"))]
 pub mod fee_proof;
+#[cfg(not(target_os = "solana"))]
 pub mod grouped_ciphertext_validity_proof;
+#[cfg(not(target_os = "solana"))]
 pub mod pubkey_proof;
+#[cfg(not(target_os = "solana"))]
 pub mod zero_balance_proof;
 
 #[cfg(not(target_os = "solana"))]

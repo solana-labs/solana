@@ -1,6 +1,7 @@
 //! Errors related to proving and verifying range proofs.
 use {crate::errors::TranscriptError, thiserror::Error};
 
+#[cfg(not(target_os = "solana"))]
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum RangeProofGenerationError {
     #[error("maximum generator length exceeded")]
@@ -37,6 +38,7 @@ pub enum RangeProofVerificationError {
     VectorLengthMismatch,
 }
 
+#[cfg(not(target_os = "solana"))]
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum RangeProofGeneratorError {
     #[error("maximum generator length exceeded")]

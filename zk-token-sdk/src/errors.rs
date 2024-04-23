@@ -1,10 +1,10 @@
 //! Errors related to proving and verifying proofs.
 #[cfg(not(target_os = "solana"))]
-use crate::{
-    range_proof::errors::{RangeProofGenerationError, RangeProofVerificationError},
-    sigma_proofs::errors::*,
+use crate::range_proof::errors::RangeProofGenerationError;
+use {
+    crate::{range_proof::errors::RangeProofVerificationError, sigma_proofs::errors::*},
+    thiserror::Error,
 };
-use thiserror::Error;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum AuthenticatedEncryptionError {
@@ -55,7 +55,6 @@ pub enum ProofGenerationError {
     ProofLength,
 }
 
-#[cfg(not(target_os = "solana"))]
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ProofVerificationError {
     #[error("range proof verification failed")]
@@ -81,7 +80,6 @@ pub enum SigmaProofType {
     PubkeyValidityProof,
 }
 
-#[cfg(not(target_os = "solana"))]
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum TranscriptError {
     #[error("point is the identity")]

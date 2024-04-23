@@ -22,9 +22,7 @@
 pub(crate) mod macros;
 #[cfg(not(target_os = "solana"))]
 pub mod encryption;
-#[cfg(not(target_os = "solana"))]
 mod range_proof;
-#[cfg(not(target_os = "solana"))]
 mod sigma_proofs;
 #[cfg(not(target_os = "solana"))]
 mod transcript;
