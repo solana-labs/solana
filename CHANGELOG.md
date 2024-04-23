@@ -34,7 +34,7 @@ Release channels have their own copy of this changelog:
   * New program deployments default to the exact size of a program, instead of
     double the size. Program accounts must be extended with `solana program extend`
     before an upgrade if they need to accommodate larger programs.
-  * CLI: Can specify `--with-compute-unit-price` and `--max-sign-attempts` during program deployment
+  * CLI: Can specify `--with-compute-unit-price`, `--max-sign-attempts`, and `--use-rpc` during program deployment
 * Upgrade Notes
   * `solana-program` and `solana-sdk` default to support for Borsh v1, with
 limited backward compatibility for v0.10 and v0.9. Please upgrade to Borsh v1.

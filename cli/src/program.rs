@@ -99,6 +99,7 @@ pub enum ProgramCliCommand {
         skip_fee_check: bool,
         compute_unit_price: Option<u64>,
         max_sign_attempts: usize,
+        use_rpc: bool,
     },
     Upgrade {
         fee_payer_signer_index: SignerIndex,
@@ -119,6 +120,7 @@ pub enum ProgramCliCommand {
         skip_fee_check: bool,
         compute_unit_price: Option<u64>,
         max_sign_attempts: usize,
+        use_rpc: bool,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -262,6 +264,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                     whichever comes first.",
                                 ),
                         )
+                        .arg(Arg::with_name("use_rpc").long("use-rpc").help(
+                            "Send transactions to the configured RPC instead of validator TPUs",
+                        ))
                         .arg(compute_unit_price_arg()),
                 )
                 .subcommand(
@@ -355,6 +360,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                     whichever comes first.",
                                 ),
                         )
+                        .arg(Arg::with_name("use_rpc").long("use-rpc").help(
+                            "Send transactions to the configured RPC instead of validator TPUs",
+                        ))
                         .arg(compute_unit_price_arg()),
                 )
                 .subcommand(
@@ -667,6 +675,7 @@ pub fn parse_program_subcommand(
                     skip_fee_check,
                     compute_unit_price,
                     max_sign_attempts,
+                    use_rpc: matches.is_present("use_rpc"),
                 }),
                 signers: signer_info.signers,
             }
@@ -755,6 +764,7 @@ pub fn parse_program_subcommand(
                     skip_fee_check,
                     compute_unit_price,
                     max_sign_attempts,
+                    use_rpc: matches.is_present("use_rpc"),
                 }),
                 signers: signer_info.signers,
             }
@@ -949,6 +959,7 @@ pub fn process_program_subcommand(
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
+            use_rpc,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -965,6 +976,7 @@ pub fn process_program_subcommand(
             *skip_fee_check,
             *compute_unit_price,
             *max_sign_attempts,
+            *use_rpc,
         ),
         ProgramCliCommand::Upgrade {
             fee_payer_signer_index,
@@ -995,6 +1007,7 @@ pub fn process_program_subcommand(
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
+            use_rpc,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -1007,6 +1020,7 @@ pub fn process_program_subcommand(
             *skip_fee_check,
             *compute_unit_price,
             *max_sign_attempts,
+            *use_rpc,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -1125,6 +1139,7 @@ fn process_program_deploy(
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
+    use_rpc: bool,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
@@ -1266,6 +1281,7 @@ fn process_program_deploy(
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
+            use_rpc,
         )
     } else {
         do_process_program_upgrade(
@@ -1282,6 +1298,7 @@ fn process_program_deploy(
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
+            use_rpc,
         )
     };
     if result.is_ok() && is_final {
@@ -1428,6 +1445,7 @@ fn process_write_buffer(
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
+    use_rpc: bool,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let buffer_authority = config.signers[buffer_authority_signer_index];
@@ -1495,6 +1513,7 @@ fn process_write_buffer(
         skip_fee_check,
         compute_unit_price,
         max_sign_attempts,
+        use_rpc,
     );
     if result.is_err() && buffer_signer_index.is_none() && buffer_signer.is_some() {
         report_ephemeral_mnemonic(words, mnemonic);
@@ -2222,6 +2241,7 @@ fn do_process_program_write_and_deploy(
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
+    use_rpc: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -2361,6 +2381,7 @@ fn do_process_program_write_and_deploy(
         Some(buffer_authority_signer),
         program_signers,
         max_sign_attempts,
+        use_rpc,
     )?;
 
     if let Some(program_signers) = program_signers {
@@ -2391,6 +2412,7 @@ fn do_process_program_upgrade(
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
+    use_rpc: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -2509,6 +2531,7 @@ fn do_process_program_upgrade(
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
         max_sign_attempts,
+        use_rpc,
     )?;
 
     let program_id = CliProgramId {
@@ -2703,6 +2726,7 @@ fn send_deploy_messages(
     write_signer: Option<&dyn Signer>,
     final_signers: Option<&[&dyn Signer]>,
     max_sign_attempts: usize,
+    use_rpc: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
@@ -2779,14 +2803,15 @@ fn send_deploy_messages(
                         solana_client::tpu_client::TpuClientConfig::default(),
                         cache,
                     );
-                    let tpu_client = rpc_client
+                    let tpu_client = use_rpc.then(|| rpc_client
                         .runtime()
                         .block_on(tpu_client_fut)
-                        .expect("Should return a valid tpu client");
+                        .expect("Should return a valid tpu client")
+                    );
 
                     send_and_confirm_transactions_in_parallel_blocking(
                         rpc_client.clone(),
-                        Some(tpu_client),
+                        tpu_client,
                         &write_messages,
                         &[fee_payer_signer, write_signer],
                         SendAndConfirmConfig {
@@ -2939,6 +2964,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2969,6 +2995,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3001,6 +3028,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3035,6 +3063,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3068,6 +3097,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3104,6 +3134,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3136,6 +3167,7 @@ mod tests {
                     allow_excessive_balance: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3166,6 +3198,37 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 1,
+                    use_rpc: false,
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "deploy",
+            "/Users/test/program.so",
+            "--use-rpc",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Deploy {
+                    program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    program_signer_index: None,
+                    program_pubkey: None,
+                    upgrade_authority_signer_index: 0,
+                    is_final: false,
+                    max_len: None,
+                    allow_excessive_balance: false,
+                    skip_fee_check: false,
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
+                    use_rpc: true,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3202,6 +3265,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3229,6 +3293,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3259,6 +3324,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3292,6 +3358,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3330,6 +3397,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3361,6 +3429,7 @@ mod tests {
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 10,
+                    use_rpc: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3893,6 +3962,7 @@ mod tests {
                 skip_fee_check: false,
                 compute_unit_price: None,
                 max_sign_attempts: 5,
+                use_rpc: false,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,
