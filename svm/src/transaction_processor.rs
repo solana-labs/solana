@@ -8,6 +8,7 @@ use {
         runtime_config::RuntimeConfig,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_processing_callback::TransactionProcessingCallback,
         transaction_results::{
             DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
         },
@@ -34,15 +35,12 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Epoch, Slot},
         epoch_schedule::EpochSchedule,
-        feature_set::FeatureSet,
         fee::FeeStructure,
-        hash::Hash,
         inner_instruction::{InnerInstruction, InnerInstructionsList},
         instruction::{CompiledInstruction, InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         message::SanitizedMessage,
         pubkey::Pubkey,
-        rent_collector::RentCollector,
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
@@ -82,34 +80,6 @@ impl ExecutionRecordingConfig {
             enable_cpi_recording: option,
         }
     }
-}
-
-pub trait TransactionProcessingCallback {
-    fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize>;
-
-    fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData>;
-
-    fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64);
-
-    fn get_rent_collector(&self) -> &RentCollector;
-
-    fn get_feature_set(&self) -> Arc<FeatureSet>;
-
-    fn check_account_access(
-        &self,
-        _message: &SanitizedMessage,
-        _account_index: usize,
-        _account: &AccountSharedData,
-        _error_counters: &mut TransactionErrorMetrics,
-    ) -> transaction::Result<()> {
-        Ok(())
-    }
-
-    fn get_program_match_criteria(&self, _program: &Pubkey) -> ProgramCacheMatchCriteria {
-        ProgramCacheMatchCriteria::NoCriteria
-    }
-
-    fn add_builtin_account(&self, _name: &str, _program_id: &Pubkey) {}
 }
 
 #[derive(Debug)]
@@ -1032,8 +1002,11 @@ mod tests {
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
             bpf_loader,
+            feature_set::FeatureSet,
             fee_calculator::FeeCalculator,
+            hash::Hash,
             message::{LegacyMessage, Message, MessageHeader},
+            rent_collector::RentCollector,
             rent_debits::RentDebits,
             reserved_account_keys::ReservedAccountKeys,
             signature::{Keypair, Signature},

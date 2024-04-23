@@ -2,7 +2,7 @@ use {
     crate::{
         account_overrides::AccountOverrides, account_rent_state::RentState,
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_processor::TransactionProcessingCallback,
+        transaction_processing_callback::TransactionProcessingCallback,
     },
     itertools::Itertools,
     log::warn,
@@ -455,7 +455,7 @@ mod tests {
         super::*,
         crate::{
             transaction_account_state_info::TransactionAccountStateInfo,
-            transaction_processor::TransactionProcessingCallback,
+            transaction_processing_callback::TransactionProcessingCallback,
         },
         nonce::state::Versions as NonceVersions,
         solana_program_runtime::{
