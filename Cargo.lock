@@ -7690,6 +7690,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-zk-sdk"
+version = "2.0.0"
+
+[[package]]
 name = "solana-zk-token-proof-program"
 version = "2.0.0"
 dependencies = [

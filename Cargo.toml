@@ -120,6 +120,7 @@ members = [
     "watchtower",
     "wen-restart",
     "zk-keygen",
+    "zk-sdk",
     "zk-token-sdk",
 ]
 
@@ -389,6 +390,7 @@ solana-vote = { path = "vote", version = "=2.0.0" }
 solana-vote-program = { path = "programs/vote", version = "=2.0.0" }
 solana-wen-restart = { path = "wen-restart", version = "=2.0.0" }
 solana-zk-keygen = { path = "zk-keygen", version = "=2.0.0" }
+solana-zk-sdk = { path = "zk-sdk", version = "=2.0.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=2.0.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=2.0.0" }
 solana_rbpf = "=0.8.0"
@@ -474,6 +476,7 @@ crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd2
 # There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both
 # comments and the overrides in sync.
 solana-program = { path = "sdk/program" }
+solana-zk-sdk = { path = "zk-sdk" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
 #
 # === zeroize versioning issues ===

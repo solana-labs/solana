@@ -1,0 +1,17 @@
+[package]
+name = "solana-zk-sdk"
+description = "Solana ZK SDK"
+documentation = "https://docs.rs/solana-zk-sdk"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+
+[dev-dependencies]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
