@@ -392,7 +392,6 @@ impl ErasureMeta {
         self.first_coding_index..self.first_coding_index + num_coding
     }
 
-    #[allow(dead_code)]
     pub(crate) fn first_received_coding_shred_index(&self) -> Option<u32> {
         u32::try_from(self.first_received_coding_index).ok()
     }
