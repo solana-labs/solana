@@ -271,7 +271,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 ),
                         )
                         .arg(Arg::with_name("use_rpc").long("use-rpc").help(
-                            "Send transactions to the configured RPC instead of validator TPUs",
+                            "Send write transactions to the configured RPC instead of validator TPUs",
                         ))
                         .arg(compute_unit_price_arg()),
                 )
