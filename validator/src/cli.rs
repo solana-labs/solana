@@ -2753,6 +2753,12 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
                 .help("Override the runtime's account lock limit per transaction"),
+        )
+        .arg(
+            Arg::with_name("enable_bigtable_ledger_upload")
+                .long("enable-bigtable-ledger-upload")
+                .takes_value(false)
+                .help("Enable ledger upload to BigTable"),
         );
 }
 
