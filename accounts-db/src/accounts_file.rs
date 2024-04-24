@@ -115,25 +115,6 @@ impl AccountsFile {
         format!("{slot}.{id}")
     }
 
-    /// Return (account metadata, next_index) pair for the account at the
-    /// specified `offset` if any.  Otherwise return None.   Also return the
-    /// index of the next entry.
-    pub fn get_stored_account_meta(&self, offset: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
-        match self {
-            Self::AppendVec(av) => av.get_stored_account_meta(offset),
-            // Note: The conversion here is needed as the AccountsDB currently
-            // assumes all offsets are multiple of 8 while TieredStorage uses
-            // IndexOffset that is equivalent to AccountInfo::reduced_offset.
-            Self::TieredStorage(ts) => ts
-                .reader()?
-                .get_stored_account_meta(IndexOffset(AccountInfo::get_reduced_offset(offset)))
-                .ok()?
-                .map(|(metas, index_offset)| {
-                    (metas, AccountInfo::reduced_offset_to_offset(index_offset.0))
-                }),
-        }
-    }
-
     /// calls `callback` with the account located at the specified index offset.
     pub fn get_stored_account_meta_callback<Ret>(
         &self,
@@ -197,11 +178,6 @@ impl AccountsFile {
             Self::AppendVec(av) => av.path(),
             Self::TieredStorage(ts) => ts.path(),
         }
-    }
-
-    /// Return iterator for account metadata
-    pub fn account_iter(&self) -> AccountsFileIter {
-        AccountsFileIter::new(self)
     }
 
     /// Iterate over all accounts and call `callback` with each account.
@@ -309,33 +285,6 @@ impl AccountsFile {
                 .reader()
                 .expect("must be a reader when archiving")
                 .data_for_archive(),
-        }
-    }
-}
-
-pub struct AccountsFileIter<'a> {
-    file_entry: &'a AccountsFile,
-    offset: usize,
-}
-
-impl<'a> AccountsFileIter<'a> {
-    pub fn new(file_entry: &'a AccountsFile) -> Self {
-        Self {
-            file_entry,
-            offset: 0,
-        }
-    }
-}
-
-impl<'a> Iterator for AccountsFileIter<'a> {
-    type Item = StoredAccountMeta<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((account, next_offset)) = self.file_entry.get_stored_account_meta(self.offset) {
-            self.offset = next_offset;
-            Some(account)
-        } else {
-            None
         }
     }
 }

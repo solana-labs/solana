@@ -45,9 +45,11 @@ fn main() {
     info!("store: len: {} capacity: {}", store.len(), store.capacity());
     let mut num_accounts: usize = 0;
     let mut stored_accounts_len: usize = 0;
-    for account in store.account_iter() {
-        if is_account_zeroed(&account) {
-            break;
+    let mut quit = false;
+    store.scan_accounts(|account| {
+        if is_account_zeroed(&account) || quit {
+            quit = true;
+            return;
         }
         info!(
             "  account: {:?} lamports: {} data: {} hash: {:?}",
@@ -58,7 +60,7 @@ fn main() {
         );
         num_accounts = num_accounts.saturating_add(1);
         stored_accounts_len = stored_accounts_len.saturating_add(account.stored_size());
-    }
+    });
     info!(
         "num_accounts: {} stored_accounts_len: {}",
         num_accounts, stored_accounts_len

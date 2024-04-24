@@ -80,33 +80,6 @@ pub enum AppendVecError {
     OffsetOutOfBounds(usize, usize),
 }
 
-pub struct AppendVecAccountsIter<'append_vec> {
-    append_vec: &'append_vec AppendVec,
-    offset: usize,
-}
-
-impl<'append_vec> AppendVecAccountsIter<'append_vec> {
-    pub fn new(append_vec: &'append_vec AppendVec) -> Self {
-        Self {
-            append_vec,
-            offset: 0,
-        }
-    }
-}
-
-impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
-    type Item = StoredAccountMeta<'append_vec>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((account, next_offset)) = self.append_vec.get_stored_account_meta(self.offset) {
-            self.offset = next_offset;
-            Some(account)
-        } else {
-            None
-        }
-    }
-}
-
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
@@ -688,10 +661,7 @@ impl AppendVec {
 
     /// Iterate over all accounts and call `callback` with each account.
     #[allow(clippy::blocks_in_conditions)]
-    pub(crate) fn scan_accounts(
-        &self,
-        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>),
-    ) {
+    pub fn scan_accounts(&self, mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>)) {
         let mut offset = 0;
         while self
             .get_stored_account_meta_callback(offset, |account| {
@@ -745,11 +715,6 @@ impl AppendVec {
             callback(&stored_meta.pubkey);
             offset = next.next_account_offset;
         }
-    }
-
-    /// Return iterator for account metadata
-    pub fn account_iter(&self) -> AppendVecAccountsIter {
-        AppendVecAccountsIter::new(self)
     }
 
     /// Return a vector of account metadata for each account, starting from `offset`.
