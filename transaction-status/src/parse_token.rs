@@ -512,13 +512,11 @@ pub fn parse_token(
                     account_keys,
                 )
             }
-            TokenInstruction::TransferFeeExtension(transfer_fee_instruction) => {
-                parse_transfer_fee_instruction(
-                    transfer_fee_instruction,
-                    &instruction.accounts,
-                    account_keys,
-                )
-            }
+            TokenInstruction::TransferFeeExtension => parse_transfer_fee_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            ),
             TokenInstruction::ConfidentialTransferExtension => {
                 parse_confidential_transfer_instruction(
                     &instruction.data[1..],

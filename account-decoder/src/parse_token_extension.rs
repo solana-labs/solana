@@ -1,6 +1,6 @@
 use {
     crate::parse_token::UiAccountState,
-    solana_sdk::clock::UnixTimestamp,
+    solana_sdk::{clock::UnixTimestamp, program_pack::Pack},
     spl_token_2022::{
         extension::{self, BaseState, BaseStateWithExtensions, ExtensionType, StateWithExtensions},
         solana_program::pubkey::Pubkey,
@@ -40,7 +40,7 @@ pub enum UiExtension {
     UnparseableExtension,
 }
 
-pub fn parse_extension<S: BaseState>(
+pub fn parse_extension<S: BaseState + Pack>(
     extension_type: &ExtensionType,
     account: &StateWithExtensions<S>,
 ) -> UiExtension {

@@ -4807,7 +4807,8 @@ pub mod tests {
         spl_token_2022::{
             extension::{
                 immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
-                mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
+                mint_close_authority::MintCloseAuthority, BaseStateWithExtensionsMut,
+                ExtensionType, StateWithExtensionsMut,
             },
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},

@@ -293,7 +293,8 @@ mod test {
         spl_pod::optional_keys::OptionalNonZeroPubkey,
         spl_token_2022::extension::{
             immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
-            mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
+            mint_close_authority::MintCloseAuthority, BaseStateWithExtensionsMut, ExtensionType,
+            StateWithExtensionsMut,
         },
     };
 
