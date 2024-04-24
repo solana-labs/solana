@@ -778,7 +778,7 @@ pub mod enable_gossip_duplicate_proof_ingestion {
 }
 
 pub mod chained_merkle_conflict_duplicate_proofs {
-    solana_sdk::declare_id!("mustrekeyVfuxJKNRGkyTDokLwWxx6kD2ZLsqQHaDD8");
+    solana_sdk::declare_id!("chaie9S2zVfuxJKNRGkyTDokLwWxx6kD2ZLsqQHaDD8");
 }
 
 pub mod enable_chained_merkle_shreds {
