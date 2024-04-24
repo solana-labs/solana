@@ -85,11 +85,7 @@ pub(crate) fn configure_server(
         (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS.saturating_mul(2)) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
-    config.receive_window(
-        (PACKET_DATA_SIZE as u32)
-            .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
-            .into(),
-    );
+    config.receive_window((PACKET_DATA_SIZE as u32).into());
     let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
     config.max_idle_timeout(Some(timeout));
 
