@@ -425,7 +425,7 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> Result<(Slot, usize)
 mod tests {
     use {
         super::*, crate::snapshot_utils::SNAPSHOT_VERSION_FILENAME,
-        solana_accounts_db::append_vec::AppendVec,
+        solana_accounts_db::accounts_file::AccountsFile,
     };
 
     #[test]
@@ -450,8 +450,9 @@ mod tests {
         let expected_slot = 12345;
         let expected_id = 9987;
         let (slot, id) =
-            get_slot_and_append_vec_id(&AppendVec::file_name(expected_slot, expected_id)).unwrap();
+            get_slot_and_append_vec_id(&AccountsFile::file_name(expected_slot, expected_id))
+                .unwrap();
         assert_eq!(expected_slot, slot);
-        assert_eq!(expected_id, id);
+        assert_eq!(expected_id as usize, id);
     }
 }

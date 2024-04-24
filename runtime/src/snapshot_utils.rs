@@ -21,7 +21,6 @@ use {
         account_storage::AccountStorageMap,
         accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
         accounts_file::{AccountsFile, AccountsFileError},
-        append_vec::AppendVec,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         utils::{move_and_async_delete_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
@@ -1240,7 +1239,7 @@ pub fn hard_link_storages_to_snapshot(
         )?;
         // The appendvec could be recycled, so its filename may not be consistent to the slot and id.
         // Use the storage slot and id to compose a consistent file name for the hard-link file.
-        let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
+        let hardlink_filename = AccountsFile::file_name(storage.slot(), storage.append_vec_id());
         let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
         fs::hard_link(storage_path, &hard_link_path).map_err(|err| {
             HardLinkStoragesToSnapshotError::HardLinkStorage(

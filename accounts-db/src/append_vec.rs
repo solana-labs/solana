@@ -22,7 +22,6 @@ use {
     memmap2::MmapMut,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
         stake_history::Epoch,
@@ -378,10 +377,6 @@ impl AppendVec {
 
     pub fn capacity(&self) -> u64 {
         self.file_size
-    }
-
-    pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
-        format!("{slot}.{id}")
     }
 
     pub fn new_from_file(path: impl Into<PathBuf>, current_len: usize) -> Result<(Self, usize)> {
@@ -853,6 +848,7 @@ pub mod tests {
         rand::{thread_rng, Rng},
         solana_sdk::{
             account::{Account, AccountSharedData, WritableAccount},
+            clock::Slot,
             timing::duration_as_ms,
         },
         std::{mem::ManuallyDrop, time::Instant},
