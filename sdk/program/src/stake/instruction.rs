@@ -21,6 +21,7 @@ use {
 /// Reasons the stake might have had an error
 #[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
+    // 0
     #[error("not enough credits to redeem")]
     NoCreditsToRedeem,
 
@@ -36,6 +37,7 @@ pub enum StakeError {
     #[error("split amount is more than is staked")]
     InsufficientStake,
 
+    // 5
     #[error("stake account with transient stake cannot be merged")]
     MergeTransientStake,
 
@@ -51,6 +53,7 @@ pub enum StakeError {
     #[error("insufficient voting activity in the reference vote account")]
     InsufficientReferenceVotes,
 
+    // 10
     #[error("stake account is not delegated to the provided vote account")]
     VoteAddressMismatch,
 
@@ -68,6 +71,7 @@ pub enum StakeError {
     #[error("stake redelegation to the same vote account is not permitted")]
     RedelegateToSameVoteAccount,
 
+    // 15
     #[error("redelegated stake must be fully activated before deactivation")]
     RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
 
