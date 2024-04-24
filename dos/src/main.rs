@@ -53,9 +53,8 @@ use {
     solana_core::repair::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
-        contact_info::Protocol,
+        contact_info::{ContactInfo, Protocol},
         gossip_service::{discover, get_client},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,
@@ -821,7 +820,6 @@ pub mod test {
         super::*,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
-        solana_gossip::contact_info::LegacyContactInfo,
         solana_local_cluster::{
             cluster::Cluster,
             local_cluster::{ClusterConfig, LocalCluster},
@@ -936,11 +934,7 @@ pub mod test {
         assert_eq!(cluster.validators.len(), num_nodes);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster
-            .get_contact_info(&nodes[0])
-            .map(LegacyContactInfo::try_from)
-            .unwrap()
-            .unwrap();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
         // send random transactions to TPU
@@ -973,11 +967,7 @@ pub mod test {
         assert_eq!(cluster.validators.len(), num_nodes);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster
-            .get_contact_info(&nodes[0])
-            .map(LegacyContactInfo::try_from)
-            .unwrap()
-            .unwrap();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
         let client = Arc::new(cluster.build_tpu_quic_client().unwrap_or_else(|err| {
@@ -1107,11 +1097,7 @@ pub mod test {
         cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster
-            .get_contact_info(&nodes[0])
-            .map(LegacyContactInfo::try_from)
-            .unwrap()
-            .unwrap();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
         let client = Arc::new(cluster.build_tpu_quic_client().unwrap_or_else(|err| {

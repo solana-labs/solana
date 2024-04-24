@@ -8,10 +8,9 @@ use {
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::Protocol,
+        contact_info::{ContactInfo, Protocol},
         crds_value,
         gossip_service::GossipService,
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,

@@ -170,7 +170,7 @@ pub struct ClusterInfo {
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     keypair: RwLock<Arc<Keypair>>,
     /// Network entrypoints
-    entrypoints: RwLock<Vec<LegacyContactInfo>>,
+    entrypoints: RwLock<Vec<ContactInfo>>,
     outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
     ping_cache: Mutex<PingCache>,
@@ -507,13 +507,6 @@ impl ClusterInfo {
     }
 
     // TODO kill insert_info, only used by tests
-    pub fn insert_legacy_info(&self, contact_info: LegacyContactInfo) {
-        let value =
-            CrdsValue::new_signed(CrdsData::LegacyContactInfo(contact_info), &self.keypair());
-        let mut gossip_crds = self.gossip.crds.write().unwrap();
-        let _ = gossip_crds.insert(value, timestamp(), GossipRoute::LocalMessage);
-    }
-
     pub fn insert_info(&self, node: ContactInfo) {
         let entries: Vec<_> = [
             LegacyContactInfo::try_from(&node)
@@ -530,11 +523,11 @@ impl ClusterInfo {
         }
     }
 
-    pub fn set_entrypoint(&self, entrypoint: LegacyContactInfo) {
+    pub fn set_entrypoint(&self, entrypoint: ContactInfo) {
         self.set_entrypoints(vec![entrypoint]);
     }
 
-    pub fn set_entrypoints(&self, entrypoints: Vec<LegacyContactInfo>) {
+    pub fn set_entrypoints(&self, entrypoints: Vec<ContactInfo>) {
         *self.entrypoints.write().unwrap() = entrypoints;
     }
 
@@ -695,7 +688,7 @@ impl ClusterInfo {
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
     where
-        F: FnOnce(&LegacyContactInfo) -> Y,
+        F: FnOnce(&ContactInfo) -> Y,
     {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds.get(*id).map(map)
@@ -704,7 +697,7 @@ impl ClusterInfo {
     pub fn lookup_contact_info_by_gossip_addr(
         &self,
         gossip_addr: &SocketAddr,
-    ) -> Option<LegacyContactInfo> {
+    ) -> Option<ContactInfo> {
         let gossip_crds = self.gossip.crds.read().unwrap();
         let mut nodes = gossip_crds.get_nodes_contact_info();
         nodes
@@ -1312,7 +1305,7 @@ impl ClusterInfo {
     }
 
     /// all validators that have a valid rpc port regardless of `shred_version`.
-    pub fn all_rpc_peers(&self) -> Vec<LegacyContactInfo> {
+    pub fn all_rpc_peers(&self) -> Vec<ContactInfo> {
         let self_pubkey = self.id();
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
@@ -1325,7 +1318,7 @@ impl ClusterInfo {
     }
 
     // All nodes in gossip (including spy nodes) and the last time we heard about them
-    pub fn all_peers(&self) -> Vec<(LegacyContactInfo, u64)> {
+    pub fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get_nodes()
@@ -1333,7 +1326,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    pub fn gossip_peers(&self) -> Vec<LegacyContactInfo> {
+    pub fn gossip_peers(&self) -> Vec<ContactInfo> {
         let me = self.id();
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
@@ -1345,7 +1338,7 @@ impl ClusterInfo {
     }
 
     /// all validators that have a valid tvu port regardless of `shred_version`.
-    pub fn all_tvu_peers(&self) -> Vec<LegacyContactInfo> {
+    pub fn all_tvu_peers(&self) -> Vec<ContactInfo> {
         let self_pubkey = self.id();
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .get_nodes_contact_info()
@@ -1358,7 +1351,7 @@ impl ClusterInfo {
     }
 
     /// all validators that have a valid tvu port and are on the same `shred_version`.
-    pub fn tvu_peers(&self) -> Vec<LegacyContactInfo> {
+    pub fn tvu_peers(&self) -> Vec<ContactInfo> {
         let self_pubkey = self.id();
         let self_shred_version = self.my_shred_version();
         self.time_gossip_read_lock("tvu_peers", &self.stats.tvu_peers)
@@ -1373,7 +1366,7 @@ impl ClusterInfo {
     }
 
     /// all tvu peers with valid gossip addrs that likely have the slot being requested
-    pub fn repair_peers(&self, slot: Slot) -> Vec<LegacyContactInfo> {
+    pub fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
         let _st = ScopedTimer::from(&self.stats.repair_peers);
         let self_pubkey = self.id();
         let self_shred_version = self.my_shred_version();
@@ -1394,7 +1387,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    fn is_spy_node(node: &LegacyContactInfo, socket_addr_space: &SocketAddrSpace) -> bool {
+    fn is_spy_node(node: &ContactInfo, socket_addr_space: &SocketAddrSpace) -> bool {
         ![
             node.tpu(contact_info::Protocol::UDP),
             node.gossip(),
@@ -1408,7 +1401,7 @@ impl ClusterInfo {
     }
 
     /// compute broadcast table
-    pub fn tpu_peers(&self) -> Vec<LegacyContactInfo> {
+    pub fn tpu_peers(&self) -> Vec<ContactInfo> {
         let self_pubkey = self.id();
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
@@ -1444,7 +1437,7 @@ impl ClusterInfo {
     fn append_entrypoint_to_pulls(
         &self,
         thread_pool: &ThreadPool,
-        pulls: &mut Vec<(LegacyContactInfo, Vec<CrdsFilter>)>,
+        pulls: &mut Vec<(ContactInfo, Vec<CrdsFilter>)>,
     ) {
         const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
         let entrypoint = {
@@ -1571,6 +1564,8 @@ impl ClusterInfo {
             .map(|(_, filters)| filters.len())
             .sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
+        // TODO: Use new ContactInfo once the cluster has upgraded to:
+        // https://github.com/anza-xyz/agave/pull/803
         let self_info = LegacyContactInfo::try_from(&self.my_contact_info())
             .map(CrdsData::LegacyContactInfo)
             .expect("Operator must spin up node with valid contact-info");
@@ -1625,7 +1620,7 @@ impl ClusterInfo {
             push_messages
                 .into_iter()
                 .filter_map(|(pubkey, messages)| {
-                    let peer: &LegacyContactInfo = gossip_crds.get(pubkey)?;
+                    let peer: &ContactInfo = gossip_crds.get(pubkey)?;
                     Some((peer.gossip().ok()?, messages))
                 })
                 .collect()
@@ -1781,7 +1776,7 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .iter()
-            .map(LegacyContactInfo::pubkey)
+            .map(ContactInfo::pubkey)
             .copied()
             .chain(std::iter::once(self.id()))
             .collect();
@@ -2350,7 +2345,7 @@ impl ClusterInfo {
                     .into_par_iter()
                     .with_min_len(256)
                     .filter_map(|(from, prunes)| {
-                        let peer: &LegacyContactInfo = gossip_crds.get(from)?;
+                        let peer: &ContactInfo = gossip_crds.get(from)?;
                         let mut prune_data = PruneData {
                             pubkey: self_pubkey,
                             prunes,
@@ -3221,7 +3216,7 @@ mod tests {
         //check that a gossip nodes always show up as spies
         let (node, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(
-            &LegacyContactInfo::try_from(&node).unwrap(),
+            &node,
             &SocketAddrSpace::Unspecified
         ));
         let (node, _, _) = ClusterInfo::gossip_node(
@@ -3230,7 +3225,7 @@ mod tests {
             0,
         );
         assert!(ClusterInfo::is_spy_node(
-            &LegacyContactInfo::try_from(&node).unwrap(),
+            &node,
             &SocketAddrSpace::Unspecified
         ));
     }
@@ -3389,8 +3384,8 @@ mod tests {
     }
 
     fn test_crds_values(pubkey: Pubkey) -> Vec<CrdsValue> {
-        let entrypoint = LegacyContactInfo::new_localhost(&pubkey, timestamp());
-        let entrypoint_crdsvalue = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(entrypoint));
+        let entrypoint = ContactInfo::new_localhost(&pubkey, timestamp());
+        let entrypoint_crdsvalue = CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint));
         vec![entrypoint_crdsvalue]
     }
 
@@ -3584,7 +3579,7 @@ mod tests {
         let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
         let cluster_info = ClusterInfo::new(d, keypair, SocketAddrSpace::Unspecified);
         let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let label = CrdsValueLabel::LegacyContactInfo(*d.pubkey());
+        let label = CrdsValueLabel::ContactInfo(*d.pubkey());
         cluster_info.insert_info(d);
         let gossip_crds = cluster_info.gossip.crds.read().unwrap();
         assert!(gossip_crds.get::<&CrdsValue>(&label).is_some());
@@ -4014,11 +4009,11 @@ mod tests {
         // Test with different shred versions.
         let mut rng = rand::thread_rng();
         let node_pubkey = Pubkey::new_unique();
-        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        let mut node = ContactInfo::new_rand(&mut rng, Some(node_pubkey));
         node.set_shred_version(42);
         let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
         let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
             CrdsValue::new_unsigned(CrdsData::EpochSlots(0, epoch_slots)),
         ];
         {
@@ -4058,7 +4053,7 @@ mod tests {
             SocketAddrSpace::Unspecified,
         );
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
-        let entrypoint = LegacyContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint.clone());
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert!(pings.is_empty());
@@ -4075,7 +4070,7 @@ mod tests {
         }
         // now add this message back to the table and make sure after the next pull, the entrypoint is unset
         let entrypoint_crdsvalue =
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(entrypoint.clone()));
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(cluster_info);
         let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
         let timeouts = cluster_info.gossip.make_timeouts(
@@ -4092,8 +4087,7 @@ mod tests {
 
     #[test]
     fn test_split_messages_small() {
-        let value =
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
+        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         test_split_messages(value);
     }
 
@@ -4195,6 +4189,8 @@ mod tests {
     }
 
     fn check_pull_request_size(filter: CrdsFilter) {
+        // TODO: Use new ContactInfo once the cluster has upgraded to:
+        // https://github.com/anza-xyz/agave/pull/803
         let value =
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
         let protocol = Protocol::PullRequest(filter, value);
@@ -4253,7 +4249,7 @@ mod tests {
         entrypoint
             .set_gossip(socketaddr!("127.0.0.2:1234"))
             .unwrap();
-        cluster_info.set_entrypoint(LegacyContactInfo::try_from(&entrypoint).unwrap());
+        cluster_info.set_entrypoint(entrypoint.clone());
 
         let mut stakes = HashMap::new();
 
@@ -4364,6 +4360,8 @@ mod tests {
     fn max_bloom_size() -> usize {
         let filter_size = serialized_size(&CrdsFilter::default())
             .expect("unable to serialize default filter") as usize;
+        // TODO: Use new ContactInfo once the cluster has upgraded to:
+        // https://github.com/anza-xyz/agave/pull/803
         let protocol = Protocol::PullRequest(
             CrdsFilter::default(),
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default())),
@@ -4438,12 +4436,12 @@ mod tests {
         // Simulating starting up with two entrypoints, no known id, only a gossip
         // address
         let entrypoint1_gossip_addr = socketaddr!("127.0.0.2:1234");
-        let mut entrypoint1 = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
+        let mut entrypoint1 = ContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint1.set_gossip(entrypoint1_gossip_addr).unwrap();
         assert_eq!(entrypoint1.shred_version(), 0);
 
         let entrypoint2_gossip_addr = socketaddr!("127.0.0.2:5678");
-        let mut entrypoint2 = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
+        let mut entrypoint2 = ContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint2.set_gossip(entrypoint2_gossip_addr).unwrap();
         assert_eq!(entrypoint2.shred_version(), 0);
         cluster_info.set_entrypoints(vec![entrypoint1, entrypoint2]);
@@ -4457,8 +4455,6 @@ mod tests {
             .unwrap();
         gossiped_entrypoint1_info.set_shred_version(0);
         cluster_info.insert_info(gossiped_entrypoint1_info.clone());
-        let gossiped_entrypoint1_info =
-            LegacyContactInfo::try_from(&gossiped_entrypoint1_info).unwrap();
         assert!(!cluster_info
             .entrypoints
             .read()
@@ -4488,8 +4484,6 @@ mod tests {
             .unwrap();
         gossiped_entrypoint2_info.set_shred_version(1);
         cluster_info.insert_info(gossiped_entrypoint2_info.clone());
-        let gossiped_entrypoint2_info =
-            LegacyContactInfo::try_from(&gossiped_entrypoint2_info).unwrap();
         assert!(!cluster_info
             .entrypoints
             .read()
@@ -4530,7 +4524,7 @@ mod tests {
         // Simulating starting up with default entrypoint, no known id, only a gossip
         // address
         let entrypoint_gossip_addr = socketaddr!("127.0.0.2:1234");
-        let mut entrypoint = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
+        let mut entrypoint = ContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint.set_gossip(entrypoint_gossip_addr).unwrap();
         assert_eq!(entrypoint.shred_version(), 0);
         cluster_info.set_entrypoint(entrypoint);
@@ -4549,7 +4543,7 @@ mod tests {
         assert_eq!(cluster_info.entrypoints.read().unwrap().len(), 1);
         assert_eq!(
             cluster_info.entrypoints.read().unwrap()[0],
-            LegacyContactInfo::try_from(&gossiped_entrypoint_info).unwrap(),
+            gossiped_entrypoint_info,
         );
         assert!(entrypoints_processed);
         assert_eq!(cluster_info.my_shred_version(), 2); // <--- No change to shred version
@@ -4565,7 +4559,7 @@ mod tests {
             SocketAddrSpace::Unspecified,
         ));
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
-        let entrypoint = LegacyContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint);
 
         let mut rng = rand::thread_rng();
@@ -4576,10 +4570,10 @@ mod tests {
         let data: Vec<_> = repeat_with(|| {
             let keypair = Keypair::new();
             peers.push(keypair.pubkey());
-            let mut rand_ci = LegacyContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
+            let mut rand_ci = ContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
             rand_ci.set_shred_version(shred_version);
             rand_ci.set_wallclock(timestamp());
-            CrdsValue::new_signed(CrdsData::LegacyContactInfo(rand_ci), &keypair)
+            CrdsValue::new_signed(CrdsData::ContactInfo(rand_ci), &keypair)
         })
         .take(NO_ENTRIES)
         .collect();
@@ -4687,12 +4681,12 @@ mod tests {
         // Test with different shred versions.
         let mut rng = rand::thread_rng();
         let node_pubkey = Pubkey::new_unique();
-        let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        let mut node = ContactInfo::new_rand(&mut rng, Some(node_pubkey));
         node.set_shred_version(42);
         let mut slots = RestartLastVotedForkSlots::new_rand(&mut rng, Some(node_pubkey));
         slots.shred_version = 42;
         let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
             CrdsValue::new_unsigned(CrdsData::RestartLastVotedForkSlots(slots)),
         ];
         {
@@ -4756,13 +4750,13 @@ mod tests {
         // Test with different shred versions.
         let mut rng = rand::thread_rng();
         let pubkey2 = Pubkey::new_unique();
-        let mut new_node = LegacyContactInfo::new_rand(&mut rng, Some(pubkey2));
+        let mut new_node = ContactInfo::new_rand(&mut rng, Some(pubkey2));
         new_node.set_shred_version(42);
         let slot2 = 54;
         let hash2 = Hash::new_unique();
         let stake2 = 23_000_000;
         let entries = vec![
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(new_node)),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(new_node)),
             CrdsValue::new_unsigned(CrdsData::RestartHeaviestFork(RestartHeaviestFork {
                 from: pubkey2,
                 wallclock: timestamp(),

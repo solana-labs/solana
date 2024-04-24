@@ -47,9 +47,9 @@ use {
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
         },
+        contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         gossip_service::GossipService,
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::{
         bank_forks_utils,
@@ -2531,7 +2531,7 @@ mod tests {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_entry::entry,
-        solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
+        solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
             blockstore, create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path_auto_delete,
@@ -2571,7 +2571,7 @@ mod tests {
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair])),
-            vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
+            vec![leader_node.info],
             &config,
             true, // should_check_duplicate_instance
             None, // rpc_to_plugin_manager_receiver
@@ -2656,7 +2656,7 @@ mod tests {
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
-                    vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
+                    vec![leader_node.info.clone()],
                     &config,
                     true, // should_check_duplicate_instance.
                     None, // rpc_to_plugin_manager_receiver

@@ -6,7 +6,7 @@ use {
     rayon::iter::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::{LegacyContactInfo as ContactInfo, Protocol},
+        contact_info::{ContactInfo, Protocol},
         crds::Cursor,
         gossip_service::GossipService,
     },
@@ -164,7 +164,7 @@ fn gossip_ring() {
             let yv = &listen[y].0;
             let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.set_wallclock(timestamp());
-            listen[x].0.insert_legacy_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -182,7 +182,7 @@ fn gossip_ring_large() {
             let yv = &listen[y].0;
             let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.set_wallclock(timestamp());
-            listen[x].0.insert_legacy_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -199,7 +199,7 @@ fn gossip_star() {
             let mut yd = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             yd.set_wallclock(timestamp());
             let xv = &listen[x].0;
-            xv.insert_legacy_info(yd);
+            xv.insert_info(yd);
             trace!("star leader {}", &xv.id());
         }
     });
@@ -219,7 +219,7 @@ fn gossip_rstar() {
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
             let yv = &listen[y].0;
-            yv.insert_legacy_info(xd.clone());
+            yv.insert_info(xd.clone());
             trace!("rstar insert {} into {}", xd.pubkey(), yv.id());
         }
     });

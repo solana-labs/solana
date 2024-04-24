@@ -19,7 +19,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
+        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },

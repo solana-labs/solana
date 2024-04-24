@@ -17,7 +17,7 @@ use {
     },
     solana_gossip::{
         cluster_info::Node,
-        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
+        contact_info::{ContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
     solana_ledger::{create_new_tmp_ledger, shred::Shred},
@@ -481,11 +481,10 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(|node| {
-                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
-            })
-            .unwrap();
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(
+            self.connection_cache.protocol(),
+            &self.entry_point_info,
+        );
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
         // Must have enough tokens to fund vote account and set delegate
@@ -535,7 +534,7 @@ impl LocalCluster {
             &ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair.clone()])),
-            vec![LegacyContactInfo::try_from(&self.entry_point_info).unwrap()],
+            vec![self.entry_point_info.clone()],
             &config,
             true, // should_check_duplicate_instance
             None, // rpc_to_plugin_manager_receiver
@@ -578,11 +577,10 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(|node| {
-                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
-            })
-            .unwrap();
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(
+            self.connection_cache.protocol(),
+            &self.entry_point_info,
+        );
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
@@ -669,11 +667,7 @@ impl LocalCluster {
         info!("{} making sure no new roots on any nodes", test_name);
         cluster_tests::check_no_new_roots(
             num_slots_to_wait,
-            &alive_node_contact_infos
-                .into_iter()
-                .map(LegacyContactInfo::try_from)
-                .collect::<std::result::Result<Vec<_>, _>>()
-                .unwrap(),
+            &alive_node_contact_infos,
             &self.connection_cache,
             test_name,
         );
@@ -903,11 +897,10 @@ impl Cluster for LocalCluster {
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
-            let (rpc, tpu) = LegacyContactInfo::try_from(&f.info.contact_info)
-                .map(|node| {
-                    cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
-                })
-                .unwrap();
+            let (rpc, tpu) = cluster_tests::get_client_facing_addr(
+                self.connection_cache.protocol(),
+                &f.info.contact_info,
+            );
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
     }
@@ -1011,10 +1004,7 @@ impl Cluster for LocalCluster {
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![validator_info.voting_keypair.clone()])),
-            entry_point_infos
-                .into_iter()
-                .map(|entry_point_info| LegacyContactInfo::try_from(&entry_point_info).unwrap())
-                .collect(),
+            entry_point_infos,
             &safe_clone_config(&cluster_validator_info.config),
             true, // should_check_duplicate_instance
             None, // rpc_to_plugin_manager_receiver

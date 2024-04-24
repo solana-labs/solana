@@ -4,7 +4,7 @@ extern crate test;
 
 use {
     rand::{seq::SliceRandom, Rng},
-    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
+    solana_gossip::contact_info::ContactInfo,
     solana_ledger::shred::{Shred, ShredFlags},
     solana_sdk::{clock::Slot, genesis_config::ClusterType, pubkey::Pubkey},
     solana_turbine::{

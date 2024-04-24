@@ -8,13 +8,13 @@ use {
     crate::{
         cluster_info::Ping,
         cluster_info_metrics::GossipStats,
+        contact_info::ContactInfo,
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, CrdsTimeouts, ProcessPullStats},
         crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
     itertools::Itertools,
@@ -431,7 +431,7 @@ mod test {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone())),
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
                 0,
                 GossipRoute::LocalMessage,
             )

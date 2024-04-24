@@ -17,7 +17,7 @@ use {
     solana_entry::entry::{self, Entry, EntrySlice},
     solana_gossip::{
         cluster_info::{self, ClusterInfo},
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::ContactInfo,
         crds::Cursor,
         crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel},
         gossip_error::GossipError,
@@ -43,7 +43,6 @@ use {
     solana_vote::vote_transaction::VoteTransaction,
     solana_vote_program::vote_transaction,
     std::{
-        borrow::Borrow,
         collections::{HashMap, HashSet, VecDeque},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
         path::{Path, PathBuf},
@@ -56,11 +55,10 @@ use {
     },
 };
 
-pub fn get_client_facing_addr<T: Borrow<LegacyContactInfo>>(
+pub fn get_client_facing_addr(
     protocol: Protocol,
-    contact_info: T,
+    contact_info: &ContactInfo,
 ) -> (SocketAddr, SocketAddr) {
-    let contact_info = contact_info.borrow();
     let rpc = contact_info.rpc().unwrap();
     let mut tpu = contact_info.tpu(protocol).unwrap();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
@@ -125,9 +123,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     node: &ContactInfo,
     connection_cache: Arc<ConnectionCache>,
 ) {
-    let (rpc, tpu) = LegacyContactInfo::try_from(node)
-        .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
-        .unwrap();
+    let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), node);
     let client = ThinClient::new(rpc, tpu, connection_cache);
     for (pk, b) in expected_balances {
         let bal = client
@@ -138,7 +134,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
 }
 
 pub fn send_many_transactions(
-    node: &LegacyContactInfo,
+    node: &ContactInfo,
     funding_keypair: &Keypair,
     connection_cache: &Arc<ConnectionCache>,
     max_tokens_per_transfer: u64,
@@ -242,9 +238,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     )
     .unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    let (rpc, tpu) = LegacyContactInfo::try_from(entry_point_info)
-        .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
-        .unwrap();
+    let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), entry_point_info);
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
 
     // sleep long enough to make sure we are in epoch 3
@@ -359,9 +353,7 @@ pub fn check_min_slot_is_rooted(
     let loop_start = Instant::now();
     let loop_timeout = Duration::from_secs(180);
     for ingress_node in contact_infos.iter() {
-        let (rpc, tpu) = LegacyContactInfo::try_from(ingress_node)
-            .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
-            .unwrap();
+        let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         loop {
             let root_slot = client
@@ -402,9 +394,7 @@ pub fn check_for_new_roots(
         assert!(loop_start.elapsed() < loop_timeout);
 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
-            let (rpc, tpu) = LegacyContactInfo::try_from(ingress_node)
-                .map(|node| get_client_facing_addr(connection_cache.protocol(), node))
-                .unwrap();
+            let (rpc, tpu) = get_client_facing_addr(connection_cache.protocol(), ingress_node);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let root_slot = client
                 .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -427,7 +417,7 @@ pub fn check_for_new_roots(
 
 pub fn check_no_new_roots(
     num_slots_to_wait: usize,
-    contact_infos: &[LegacyContactInfo],
+    contact_infos: &[&ContactInfo],
     connection_cache: &Arc<ConnectionCache>,
     test_name: &str,
 ) {
@@ -495,7 +485,7 @@ pub fn check_no_new_roots(
 
 fn poll_all_nodes_for_signature(
     entry_point_info: &ContactInfo,
-    cluster_nodes: &[LegacyContactInfo],
+    cluster_nodes: &[ContactInfo],
     connection_cache: &Arc<ConnectionCache>,
     sig: &Signature,
     confs: usize,

@@ -38,7 +38,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{Node, NodeConfig},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        contact_info::ContactInfo,
     },
     solana_ledger::{
         blockstore_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
