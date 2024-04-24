@@ -115,9 +115,10 @@ pub struct SnapshotRequest {
 impl Debug for SnapshotRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SnapshotRequest")
-            .field("request type", &self.request_kind)
+            .field("request kind", &self.request_kind)
             .field("bank slot", &self.snapshot_root_bank.slot())
-            .finish()
+            .field("block height", &self.snapshot_root_bank.block_height())
+            .finish_non_exhaustive()
     }
 }
 
@@ -274,7 +275,7 @@ impl SnapshotRequestHandler {
                     .map(|(snapshot_request, _)| {
                         self.snapshot_request_sender
                             .try_send(snapshot_request)
-                            .expect("re-enqueue snapshot request")
+                            .expect("re-enqueue snapshot request");
                     })
                     .count();
 
@@ -756,7 +757,7 @@ fn new_accounts_package_kind(
     let block_height = snapshot_request.snapshot_root_bank.block_height();
     match snapshot_request.request_kind {
         SnapshotRequestKind::EpochAccountsHash => AccountsPackageKind::EpochAccountsHash,
-        _ => {
+        SnapshotRequestKind::Snapshot => {
             if snapshot_utils::should_take_full_snapshot(
                 block_height,
                 snapshot_config.full_snapshot_archive_interval_slots,
@@ -840,7 +841,7 @@ where
             let mut iter = self.slice.windows(2);
             while let Some([l, r]) = iter.next() {
                 if (self.predicate)(l, r) {
-                    len += 1
+                    len += 1;
                 } else {
                     break;
                 }
