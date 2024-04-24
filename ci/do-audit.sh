@@ -33,6 +33,9 @@ cargo_audit_ignores=(
 
   # mio
   --ignore RUSTSEC-2024-0019
+
+  # rustls -- complete_io
+  --ignore RUSTSEC-2024-0336
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
