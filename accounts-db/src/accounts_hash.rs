@@ -1142,7 +1142,7 @@ impl<'a> AccountsHasher<'a> {
             capacity: max_inclusive_num_pubkeys * std::mem::size_of::<Hash>(),
         };
 
-        let mut overall_sum = 0;
+        let mut overall_sum: u64 = 0;
 
         while let Some(pointer) = working_set.pop() {
             let key = &sorted_data_by_pubkey[pointer.slot_group_index][pointer.offset].pubkey;
@@ -1157,9 +1157,9 @@ impl<'a> AccountsHasher<'a> {
 
             // add lamports and get hash
             if item.lamports != 0 {
-                overall_sum = Self::checked_cast_for_capitalization(
-                    item.lamports as u128 + overall_sum as u128,
-                );
+                overall_sum = overall_sum
+                    .checked_add(item.lamports)
+                    .expect("summing lamports cannot overflow");
                 hashes.write(&item.hash.0);
             } else {
                 // if lamports == 0, check if they should be included
@@ -2376,7 +2376,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "overflow is detected while summing capitalization")]
+    #[should_panic(expected = "summing lamports cannot overflow")]
     fn test_accountsdb_lamport_overflow() {
         solana_logger::setup();
 
@@ -2410,7 +2410,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "overflow is detected while summing capitalization")]
+    #[should_panic(expected = "summing lamports cannot overflow")]
     fn test_accountsdb_lamport_overflow2() {
         solana_logger::setup();
 
