@@ -3792,35 +3792,49 @@ impl AccountsDb {
         &self,
         store: &Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult {
-        let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
         let capacity = store.capacity();
-        store.accounts.account_iter().for_each(|account| {
-            stored_accounts.insert(*account.pubkey(), account);
+        let mut stored_accounts = Vec::with_capacity(store.count());
+        store.accounts.scan_index(|info| {
+            // file_id is unused and can be anything. We will always be loading whatever storage is in the slot.
+            let file_id = 0;
+            stored_accounts.push(AccountFromStorage {
+                index_info: AccountInfo::new(
+                    StorageLocation::AppendVec(file_id, info.index_info.offset),
+                    info.index_info.lamports,
+                ),
+                pubkey: info.index_info.pubkey,
+                data_len: info.index_info.data_len,
+            });
         });
 
         // sort by pubkey to keep account index lookups close
-        let mut stored_accounts = stored_accounts.drain().map(|(_k, v)| v).collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.pubkey().cmp(b.pubkey()));
-
-        let stored_accounts = stored_accounts
-            .into_iter()
-            .map(|account| {
-                // file_id is unused and can be anything. We will always be loading whatever storage is in the slot.
-                let file_id = 0;
-                AccountFromStorage {
-                    index_info: AccountInfo::new(
-                        StorageLocation::AppendVec(file_id, account.offset()),
-                        account.lamports(),
-                    ),
-                    pubkey: *account.pubkey(),
-                    data_len: account.data_len() as u64,
-                }
-            })
-            .collect::<Vec<_>>();
+        Self::sort_and_remove_dups(&mut stored_accounts);
 
         GetUniqueAccountsResult {
             stored_accounts,
             capacity,
+        }
+    }
+
+    /// sort `accounts` by pubkey.
+    /// Remove earlier entries with the same pubkey as later entries.
+    fn sort_and_remove_dups(accounts: &mut Vec<AccountFromStorage>) {
+        // stable sort because we want the most recent only
+        accounts.sort_by(|a, b| a.pubkey().cmp(b.pubkey()));
+        if accounts.len() > 1 {
+            let mut i = 0;
+            // iterate 0..1 less than end
+            while i < accounts.len() - 1 {
+                let current = accounts[i];
+                let next = accounts[i + 1];
+                if current.pubkey() == next.pubkey() {
+                    // remove the first duplicate
+                    accounts.remove(i);
+                    // do not advance i, we just removed an element at i
+                    continue;
+                }
+                i += 1;
+            }
         }
     }
 
@@ -9712,6 +9726,87 @@ pub mod tests {
     define_accounts_db_test!(test_generate_index_duplicates_within_slot_reverse, |db| {
         run_generate_index_duplicates_within_slot_test(db, true);
     });
+
+    fn generate_sample_account_from_storage(i: u8) -> AccountFromStorage {
+        // offset has to be 8 byte aligned
+        let offset = (i as usize) * std::mem::size_of::<u64>();
+        AccountFromStorage {
+            index_info: AccountInfo::new(StorageLocation::AppendVec(i as u32, offset), i as u64),
+            data_len: i as u64,
+            pubkey: Pubkey::new_from_array([i; 32]),
+        }
+    }
+
+    /// Reserve ancient storage size is not supported for TiredStorage
+    #[test]
+    fn test_sort_and_remove_dups() {
+        // empty
+        let mut test1 = vec![];
+        let expected = test1.clone();
+        AccountsDb::sort_and_remove_dups(&mut test1);
+        assert_eq!(test1, expected);
+        assert_eq!(test1, expected);
+        // just 0
+        let mut test1 = vec![generate_sample_account_from_storage(0)];
+        let expected = test1.clone();
+        AccountsDb::sort_and_remove_dups(&mut test1);
+        assert_eq!(test1, expected);
+        assert_eq!(test1, expected);
+        // 0, 1
+        let mut test1 = vec![
+            generate_sample_account_from_storage(0),
+            generate_sample_account_from_storage(1),
+        ];
+        let expected = test1.clone();
+        AccountsDb::sort_and_remove_dups(&mut test1);
+        assert_eq!(test1, expected);
+        assert_eq!(test1, expected);
+        // 1, 0. sort should reverse
+        let mut test2 = vec![
+            generate_sample_account_from_storage(1),
+            generate_sample_account_from_storage(0),
+        ];
+        AccountsDb::sort_and_remove_dups(&mut test2);
+        assert_eq!(test2, expected);
+        assert_eq!(test2, expected);
+
+        for insert_other_good in 0..2 {
+            // 0 twice so it gets removed
+            let mut test1 = vec![
+                generate_sample_account_from_storage(0),
+                generate_sample_account_from_storage(0),
+            ];
+            let mut expected = test1.clone();
+            expected.truncate(1); // get rid of 1st duplicate
+            test1.first_mut().unwrap().data_len = 2342342; // this one should be ignored, so modify the data_len so it will fail the compare below if it is used
+            if insert_other_good < 2 {
+                // insert another good one before or after the 2 bad ones
+                test1.insert(insert_other_good, generate_sample_account_from_storage(1));
+                // other good one should always be last since it is sorted after
+                expected.push(generate_sample_account_from_storage(1));
+            }
+            AccountsDb::sort_and_remove_dups(&mut test1);
+            assert_eq!(test1, expected);
+            assert_eq!(test1, expected);
+        }
+
+        let mut test1 = [1, 0, 1, 0, 1u8]
+            .into_iter()
+            .map(generate_sample_account_from_storage)
+            .collect::<Vec<_>>();
+        test1.iter_mut().take(3).for_each(|entry| {
+            entry.data_len = 2342342; // this one should be ignored, so modify the data_len so it will fail the compare below if it is used
+            entry.index_info = AccountInfo::new(StorageLocation::Cached, 23434);
+        });
+
+        let expected = [0, 1u8]
+            .into_iter()
+            .map(generate_sample_account_from_storage)
+            .collect::<Vec<_>>();
+        AccountsDb::sort_and_remove_dups(&mut test1);
+        assert_eq!(test1, expected);
+        assert_eq!(test1, expected);
+    }
 
     /// Reserve ancient storage size is not supported for TiredStorage
     #[test]

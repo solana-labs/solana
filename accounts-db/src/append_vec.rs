@@ -14,6 +14,7 @@ use {
             ALIGN_BOUNDARY_OFFSET,
         },
         accounts_hash::AccountHash,
+        accounts_index::ZeroLamport,
         storable_accounts::StorableAccounts,
         u64_align,
     },
@@ -664,6 +665,10 @@ impl AppendVec {
                 // eof
                 break;
             };
+            if account_meta.lamports == 0 && stored_meta.pubkey == Pubkey::default() {
+                // we passed the last useful account
+                return;
+            }
             let next = Self::next_account_offset(offset, stored_meta);
             if next.offset_to_end_of_data > self.len() {
                 // data doesn't fit, so don't include this account
@@ -696,9 +701,15 @@ impl AppendVec {
         while self
             .get_stored_account_meta_callback(offset, |account| {
                 offset += account.stored_size();
-                callback(account)
+                if account.is_zero_lamport() && account.pubkey() == &Pubkey::default() {
+                    // we passed the last useful account
+                    return false;
+                }
+
+                callback(account);
+                true
             })
-            .is_some()
+            .unwrap_or_default()
         {}
     }
 
