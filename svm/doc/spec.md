@@ -116,13 +116,7 @@ In addition, `TransactionBatchProcessor` needs an instance of
 `SysvarCache` and a set of pubkeys of builtin program IDs.
 
 The main entry point to the SVM is the method
-`load_and_execute_sanitized_transactions`. In addition
-`TransactionBatchProcessor` provides utility methods
-    - `load_program_with_pubkey`, used in Bank to load program with a
-      specific pubkey from loaded programs cache, and update the program's
-      access slot as a side-effect;
-    - `program_modification_slot`, used in Bank to find the slot in
-      which the program was most recently modified.
+`load_and_execute_sanitized_transactions`.
 
 The method `load_and_execute_sanitized_transactions` takes the
 following arguments
@@ -195,7 +189,14 @@ Steps of `load_and_execute_sanitized_transactions`
 1. Steps of preparation for execution
    - filter executable program accounts and build program accounts map (explain)
    - add builtin programs to program accounts map
-   - replenish program cache using the program accounts map (explain)
+   - replenish program cache using the program accounts map
+        - Gather all required programs to load from the cache.
+        - Lock the global program cache and initialize the local program cache.
+        - Perform loading tasks to load all required programs from the cache,
+          loading, verifying, and compiling (where necessary) each program.
+        - A helper module - `program_loader` - provides utilities for loading
+          programs from on-chain, namely `load_program_with_pubkey`.
+        - Return the replenished local program cache.
 
 2. Load accounts (call to `load_accounts` function)
    - For each `SanitizedTransaction` and `TransactionCheckResult`, we:
