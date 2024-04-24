@@ -32,7 +32,7 @@ use {
         account::{AccountSharedData, ReadableAccount, PROGRAM_OWNERS},
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Epoch, Slot},
         epoch_schedule::EpochSchedule,
         fee::FeeStructure,
@@ -42,7 +42,7 @@ use {
         message::SanitizedMessage,
         pubkey::Pubkey,
         saturating_add_assign,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
     std::{
@@ -772,44 +772,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
-    /// Find the slot in which the program was most recently modified.
-    /// Returns slot 0 for programs deployed with v1/v2 loaders, since programs deployed
-    /// with those loaders do not retain deployment slot information.
-    /// Returns an error if the program's account state can not be found or parsed.
-    pub fn program_modification_slot<CB: TransactionProcessingCallback>(
-        &self,
-        callbacks: &CB,
-        pubkey: &Pubkey,
-    ) -> transaction::Result<Slot> {
-        let program = callbacks
-            .get_account_shared_data(pubkey)
-            .ok_or(TransactionError::ProgramAccountNotFound)?;
-        if bpf_loader_upgradeable::check_id(program.owner()) {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = program.state()
-            {
-                let programdata = callbacks
-                    .get_account_shared_data(&programdata_address)
-                    .ok_or(TransactionError::ProgramAccountNotFound)?;
-                if let Ok(UpgradeableLoaderState::ProgramData {
-                    slot,
-                    upgrade_authority_address: _,
-                }) = programdata.state()
-                {
-                    return Ok(slot);
-                }
-            }
-            Err(TransactionError::ProgramAccountNotFound)
-        } else if loader_v4::check_id(program.owner()) {
-            let state = solana_loader_v4_program::get_state(program.data())
-                .map_err(|_| TransactionError::ProgramAccountNotFound)?;
-            Ok(state.slot)
-        } else {
-            Ok(0)
-        }
-    }
-
     fn load_program_from_bytes(
         load_program_metrics: &mut LoadProgramMetrics,
         programdata: &[u8],
@@ -1001,7 +963,7 @@ mod tests {
         },
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
-            bpf_loader,
+            bpf_loader, bpf_loader_upgradeable,
             feature_set::FeatureSet,
             fee_calculator::FeeCalculator,
             hash::Hash,
@@ -1614,111 +1576,6 @@ mod tests {
 
         let slot = batch_processor.epoch_schedule.get_first_slot_in_epoch(20);
         assert_eq!(result.unwrap().effective_slot, slot);
-    }
-
-    #[test]
-    fn test_program_modification_slot_account_not_found() {
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        let mock_bank = MockBankCallback::default();
-        let key = Pubkey::new_unique();
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key);
-        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-        let mut account_data = AccountSharedData::default();
-        account_data.set_owner(bpf_loader_upgradeable::id());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key, account_data.clone());
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key);
-        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-        let state = UpgradeableLoaderState::Program {
-            programdata_address: Pubkey::new_unique(),
-        };
-        account_data.set_data(bincode::serialize(&state).unwrap());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key, account_data.clone());
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key);
-        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-        account_data.set_owner(loader_v4::id());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key, account_data.clone());
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key);
-        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-    }
-
-    #[test]
-    fn test_program_modification_slot_success() {
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        let mock_bank = MockBankCallback::default();
-        let key1 = Pubkey::new_unique();
-        let key2 = Pubkey::new_unique();
-        let mut account_data = AccountSharedData::default();
-        account_data.set_owner(bpf_loader_upgradeable::id());
-
-        let state = UpgradeableLoaderState::Program {
-            programdata_address: key2,
-        };
-        account_data.set_data(bincode::serialize(&state).unwrap());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key1, account_data);
-
-        let state = UpgradeableLoaderState::ProgramData {
-            slot: 77,
-            upgrade_authority_address: None,
-        };
-        let mut account_data = AccountSharedData::default();
-        account_data.set_data(bincode::serialize(&state).unwrap());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key2, account_data);
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key1);
-        assert_eq!(result.unwrap(), 77);
-
-        let mut account_data = AccountSharedData::default();
-        account_data.set_owner(loader_v4::id());
-        let state = LoaderV4State {
-            slot: 58,
-            authority_address: Pubkey::new_unique(),
-            status: LoaderV4Status::Deployed,
-        };
-
-        let encoded = unsafe {
-            std::mem::transmute::<&LoaderV4State, &[u8; LoaderV4State::program_data_offset()]>(
-                &state,
-            )
-        };
-        account_data.set_data(encoded.to_vec());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key1, account_data.clone());
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key1);
-        assert_eq!(result.unwrap(), 58);
-
-        account_data.set_owner(Pubkey::new_unique());
-        mock_bank
-            .account_shared_data
-            .borrow_mut()
-            .insert(key2, account_data);
-
-        let result = batch_processor.program_modification_slot(&mock_bank, &key2);
-        assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
