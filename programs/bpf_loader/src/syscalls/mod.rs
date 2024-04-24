@@ -1573,14 +1573,24 @@ declare_builtin_function!(
             }
         };
 
+        let simplify_alt_bn128_syscall_error_codes = invoke_context
+            .feature_set
+            .is_active(&feature_set::simplify_alt_bn128_syscall_error_codes::id());
+
         let result_point = match calculation(input) {
             Ok(result_point) => result_point,
             Err(e) => {
-                return Ok(e.into());
+                return if simplify_alt_bn128_syscall_error_codes {
+                    Ok(1)
+                } else {
+                    Ok(e.into())
+                };
             }
         };
 
-        if result_point.len() != output {
+        // This can never happen and should be removed when the
+        // simplify_alt_bn128_syscall_error_codes feature gets activated
+        if result_point.len() != output && !simplify_alt_bn128_syscall_error_codes {
             return Ok(AltBn128Error::SliceOutOfBounds.into());
         }
 
@@ -1720,10 +1730,19 @@ declare_builtin_function!(
                 )
             })
             .collect::<Result<Vec<_>, Error>>()?;
+
+        let simplify_alt_bn128_syscall_error_codes = invoke_context
+            .feature_set
+            .is_active(&feature_set::simplify_alt_bn128_syscall_error_codes::id());
+
         let hash = match poseidon::hashv(parameters, endianness, inputs.as_slice()) {
             Ok(hash) => hash,
             Err(e) => {
-                return Ok(e.into());
+                return if simplify_alt_bn128_syscall_error_codes {
+                    Ok(1)
+                } else {
+                    Ok(e.into())
+                };
             }
         };
         hash_result.copy_from_slice(&hash.to_bytes());
@@ -1807,12 +1826,20 @@ declare_builtin_function!(
             invoke_context.get_check_aligned(),
         )?;
 
+        let simplify_alt_bn128_syscall_error_codes = invoke_context
+            .feature_set
+            .is_active(&feature_set::simplify_alt_bn128_syscall_error_codes::id());
+
         match op {
             ALT_BN128_G1_COMPRESS => {
                 let result_point = match alt_bn128_g1_compress(input) {
                     Ok(result_point) => result_point,
                     Err(e) => {
-                        return Ok(e.into());
+                        return if simplify_alt_bn128_syscall_error_codes {
+                            Ok(1)
+                        } else {
+                            Ok(e.into())
+                        };
                     }
                 };
                 call_result.copy_from_slice(&result_point);
@@ -1822,7 +1849,11 @@ declare_builtin_function!(
                 let result_point = match alt_bn128_g1_decompress(input) {
                     Ok(result_point) => result_point,
                     Err(e) => {
-                        return Ok(e.into());
+                        return if simplify_alt_bn128_syscall_error_codes {
+                            Ok(1)
+                        } else {
+                            Ok(e.into())
+                        };
                     }
                 };
                 call_result.copy_from_slice(&result_point);
@@ -1832,7 +1863,11 @@ declare_builtin_function!(
                 let result_point = match alt_bn128_g2_compress(input) {
                     Ok(result_point) => result_point,
                     Err(e) => {
-                        return Ok(e.into());
+                        return if simplify_alt_bn128_syscall_error_codes {
+                            Ok(1)
+                        } else {
+                            Ok(e.into())
+                        };
                     }
                 };
                 call_result.copy_from_slice(&result_point);
@@ -1842,7 +1877,11 @@ declare_builtin_function!(
                 let result_point = match alt_bn128_g2_decompress(input) {
                     Ok(result_point) => result_point,
                     Err(e) => {
-                        return Ok(e.into());
+                        return if simplify_alt_bn128_syscall_error_codes {
+                            Ok(1)
+                        } else {
+                            Ok(e.into())
+                        };
                     }
                 };
                 call_result.copy_from_slice(&result_point);
