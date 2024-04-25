@@ -62,6 +62,7 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 pub(crate) fn configure_server(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
+    max_concurrent_connections: usize,
 ) -> Result<(ServerConfig, String), QuicServerError> {
     let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
     let cert_chain_pem_parts = vec![Pem {
@@ -77,6 +78,7 @@ pub(crate) fn configure_server(
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
+    server_config.concurrent_connections(max_concurrent_connections as u32);
     server_config.use_retry(true);
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
@@ -118,11 +120,12 @@ pub enum QuicServerError {
 pub struct EndpointKeyUpdater {
     endpoint: Endpoint,
     gossip_host: IpAddr,
+    max_concurrent_connections: usize,
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
     fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        let (config, _) = configure_server(key, self.gossip_host)?;
+        let (config, _) = configure_server(key, self.gossip_host, self.max_concurrent_connections)?;
         self.endpoint.set_server_config(Some(config));
         Ok(())
     }
@@ -472,7 +475,7 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<SpawnServerResult, QuicServerError> {
     let runtime = rt();
-    let (endpoint, _stats, task) = {
+    let result = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
             name,
@@ -493,17 +496,20 @@ pub fn spawn_server(
     let handle = thread::Builder::new()
         .name("solQuicServer".into())
         .spawn(move || {
-            if let Err(e) = runtime.block_on(task) {
+            if let Err(e) = runtime.block_on(result.thread) {
                 warn!("error from runtime.block_on: {:?}", e);
             }
         })
         .unwrap();
+
     let updater = EndpointKeyUpdater {
-        endpoint: endpoint.clone(),
+        endpoint: result.endpoint.clone(),
         gossip_host,
+        max_concurrent_connections: result.max_concurrent_connections,
     };
+
     Ok(SpawnServerResult {
-        endpoint,
+        endpoint: result.endpoint,
         thread: handle,
         key_updater: Arc::new(updater),
     })
