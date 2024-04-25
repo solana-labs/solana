@@ -102,6 +102,34 @@ impl From<ProgramCacheEntryOwner> for Pubkey {
     }
 }
 
+/*
+    The possible ProgramCacheEntryType transitions:
+
+    DelayVisibility is special in that it is never stored in the cache.
+    It is only returned by ProgramCacheForTxBatch::find() when a Loaded entry
+    is encountered which is not effective yet.
+
+    Builtin re/deployment:
+    - Empty => Builtin in TransactionBatchProcessor::add_builtin
+    - Builtin => Builtin in TransactionBatchProcessor::add_builtin
+
+    Un/re/deployment (with delay and cooldown):
+    - Empty / Closed => Loaded in UpgradeableLoaderInstruction::DeployWithMaxDataLen
+    - Loaded / FailedVerification => Loaded in UpgradeableLoaderInstruction::Upgrade
+    - Loaded / FailedVerification => Closed in UpgradeableLoaderInstruction::Close
+
+    Eviction and unloading (in the same slot):
+    - Unloaded => Loaded in ProgramCache::assign_program
+    - Loaded => Unloaded in ProgramCache::unload_program_entry
+
+    At epoch boundary (when feature set and environment changes):
+    - Loaded => FailedVerification in Bank::_new_from_parent
+    - FailedVerification => Loaded in Bank::_new_from_parent
+
+    Through pruning (when on orphan fork or overshadowed on the rooted fork):
+    - Closed / Unloaded / Loaded / Builtin => Empty in ProgramCache::prune
+*/
+
 /// Actual payload of [ProgramCacheEntry].
 #[derive(Default)]
 pub enum ProgramCacheEntryType {
