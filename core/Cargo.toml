@@ -31,6 +31,7 @@ lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
 prio-graph = { workspace = true }
+qualifier_attr = { workspace = true }
 quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
@@ -94,6 +95,7 @@ solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
+solana-unified-scheduler-pool = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 systemstat = { workspace = true }
 test-case = { workspace = true }

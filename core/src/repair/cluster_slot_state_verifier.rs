@@ -1,3 +1,5 @@
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
         consensus::{
@@ -12,10 +14,13 @@ use {
     std::collections::{BTreeMap, BTreeSet, HashMap},
 };
 
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
 pub(crate) type PurgeRepairSlotCounter = BTreeMap<Slot, usize>;
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 pub(crate) type EpochSlotsFrozenSlots = BTreeMap<Slot, Hash>;
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 pub(crate) type DuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 
 #[derive(PartialEq, Eq, Clone, Debug)]

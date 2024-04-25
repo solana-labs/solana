@@ -13,6 +13,8 @@
 //! and commits any side-effects (i.e. on-chain state changes) into the associated `Bank` via
 //! `solana-ledger`'s helper function called `execute_batch()`.
 
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     assert_matches::assert_matches,
     crossbeam_channel::{self, never, select, Receiver, RecvError, SendError, Sender},
@@ -92,6 +94,7 @@ where
 {
     // Some internal impl and test code want an actual concrete type, NOT the
     // `dyn InstalledSchedulerPool`. So don't merge this into `Self::new_dyn()`.
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn new(
         handler_count: Option<usize>,
         log_messages_bytes_limit: Option<usize>,
@@ -161,6 +164,11 @@ where
         } else {
             S::spawn(self.self_arc(), context)
         }
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn pooled_scheduler_count(&self) -> usize {
+        self.scheduler_inners.lock().expect("not poisoned").len()
     }
 
     pub fn default_handler_count() -> usize {
