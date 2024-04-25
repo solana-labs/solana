@@ -115,7 +115,9 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
-    let (config, _cert) = configure_server(keypair, gossip_host)?;
+    let concurrent_connections = max_staked_connections + max_unstaked_connections;
+    let max_concurrent_connections = concurrent_connections + concurrent_connections / 4;
+    let (config, _cert) = configure_server(keypair, gossip_host, max_concurrent_connections)?;
 
     let endpoint = Endpoint::new(
         EndpointConfig::default(),
