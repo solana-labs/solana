@@ -10762,59 +10762,52 @@ pub mod tests {
         }
     }
 
-    #[test_case(AccountsFileProvider::AppendVec)]
-    #[test_case(AccountsFileProvider::HotStorage)]
-    fn test_accountsdb_scan_account_storage_no_bank_one_slot(
-        accounts_file_provider: AccountsFileProvider,
-    ) {
-        solana_logger::setup();
+    define_accounts_db_test!(
+        test_accountsdb_scan_account_storage_no_bank_one_slot,
+        |db| {
+            solana_logger::setup();
+            let accounts_file_provider = db.accounts_file_provider;
 
-        let expected = 1;
-        let tf = crate::append_vec::test_utils::get_append_vec_path(
-            "test_accountsdb_scan_account_storage_no_bank_one_slot",
-        );
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let mut data = AccountStorageEntry::new(
-            &paths[0],
-            slot_expected,
-            0,
-            size as u64,
-            accounts_file_provider,
-        );
-        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
-        data.accounts = av;
+            let expected = 1;
+            let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+            let slot_expected: Slot = 0;
+            let data = AccountStorageEntry::new(
+                &paths[0],
+                slot_expected,
+                0,
+                1024 * 1024,
+                accounts_file_provider,
+            );
+            let storage = Arc::new(data);
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
+            let mark_alive = false;
+            append_single_account_with_default_hash(&storage, &pubkey, &acc, mark_alive, None);
 
-        let storage = Arc::new(data);
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, mark_alive, None);
+            let calls = Arc::new(AtomicU64::new(0));
 
-        let calls = Arc::new(AtomicU64::new(0));
+            let mut test_scan = TestScan {
+                calls: calls.clone(),
+                pubkey,
+                slot_expected,
+                accum: Vec::default(),
+                current_slot: 0,
+                value_to_use_for_lamports: expected,
+            };
 
-        let mut test_scan = TestScan {
-            calls: calls.clone(),
-            pubkey,
-            slot_expected,
-            accum: Vec::default(),
-            current_slot: 0,
-            value_to_use_for_lamports: expected,
-        };
-
-        AccountsDb::scan_single_account_storage(&storage, &mut test_scan);
-        let accum = test_scan.scanning_complete();
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert_eq!(
-            accum
-                .iter()
-                .flatten()
-                .map(|a| a.lamports)
-                .collect::<Vec<_>>(),
-            vec![expected]
-        );
-    }
+            AccountsDb::scan_single_account_storage(&storage, &mut test_scan);
+            let accum = test_scan.scanning_complete();
+            assert_eq!(calls.load(Ordering::Relaxed), 1);
+            assert_eq!(
+                accum
+                    .iter()
+                    .flatten()
+                    .map(|a| a.lamports)
+                    .collect::<Vec<_>>(),
+                vec![expected]
+            );
+        }
+    );
 
     fn append_sample_data_to_storage(
         storage: &AccountStorageEntry,
