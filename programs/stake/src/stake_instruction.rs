@@ -4215,7 +4215,7 @@ mod tests {
         ] {
             // Set the source's starting balance to something large to ensure its post-split
             // balance meets all the requirements
-            let source_balance = u64::MAX;
+            let source_balance = rent_exempt_reserve + split_amount;
             let source_meta = Meta {
                 rent_exempt_reserve,
                 ..Meta::auto(&source_address)
@@ -4362,7 +4362,7 @@ mod tests {
         ] {
             // Set the source's starting balance to something large to ensure its post-split
             // balance meets all the requirements
-            let source_balance = u64::MAX;
+            let source_balance = rent_exempt_reserve + minimum_delegation + split_amount;
             let source_meta = Meta {
                 rent_exempt_reserve,
                 ..Meta::auto(&source_address)
@@ -6910,11 +6910,13 @@ mod tests {
     #[test_case(feature_set_all_enabled(); "all_enabled")]
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(StakeStateV2::size_of());
         let rent_address = rent::id();
         let rent_account = create_account_shared_data_for_test(&rent);
 
         let good_stake_address = Pubkey::new_unique();
-        let good_stake_account = AccountSharedData::new(u64::MAX, StakeStateV2::size_of(), &id());
+        let good_stake_account =
+            AccountSharedData::new(rent_exempt_reserve, StakeStateV2::size_of(), &id());
         let good_instruction = instruction::initialize(
             &good_stake_address,
             &Authorized::auto(&good_stake_address),
