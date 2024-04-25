@@ -271,18 +271,14 @@ impl MetricsAgent {
         let now = Instant::now();
         let secs_since_last_write = now.duration_since(last_write_time).as_secs();
 
-        let combined_points = Self::combine_points(
+        writer.write(Self::combine_points(
             max_points,
             max_points_per_sec,
             secs_since_last_write,
             points_buffered,
             points,
             counters,
-        );
-
-        if !combined_points.is_empty() {
-            writer.write(combined_points);
-        }
+        ));
 
         now
     }
@@ -351,7 +347,15 @@ impl MetricsAgent {
             }
         }
 
-        let _ = write(last_write_time, &mut points, &mut counters);
+        debug_assert!(
+            points.is_empty() && counters.is_empty(),
+            "Controlling `MetricsAgent` is expected to call `flush()` from the `Drop` \n\
+             implementation, before exiting.  So both `points` and `counters` must be empty at \n\
+             this point.\n\
+             `points`: {points:?}\n\
+             `counters`: {counters:?}",
+        );
+
         trace!("run: exit");
     }
 
@@ -727,6 +731,9 @@ mod test {
             agent.submit(DataPoint::new("point 1"), Level::Info);
         }
 
+        // The datapoints we expect to see are:
+        // 1. `point 1` from the above.
+        // 2. `metrics` stats submitted as a result of the `Flush` sent by `agent` being destroyed.
         assert_eq!(writer.points_written(), 2);
     }
 
