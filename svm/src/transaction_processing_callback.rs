@@ -1,9 +1,8 @@
 use {
-    crate::transaction_error_metrics::TransactionErrorMetrics,
     solana_program_runtime::loaded_programs::ProgramCacheMatchCriteria,
     solana_sdk::{
-        account::AccountSharedData, feature_set::FeatureSet, hash::Hash, message::SanitizedMessage,
-        pubkey::Pubkey, rent_collector::RentCollector, transaction,
+        account::AccountSharedData, feature_set::FeatureSet, hash::Hash, pubkey::Pubkey,
+        rent_collector::RentCollector,
     },
     std::sync::Arc,
 };
@@ -19,16 +18,6 @@ pub trait TransactionProcessingCallback {
     fn get_rent_collector(&self) -> &RentCollector;
 
     fn get_feature_set(&self) -> Arc<FeatureSet>;
-
-    fn check_account_access(
-        &self,
-        _message: &SanitizedMessage,
-        _account_index: usize,
-        _account: &AccountSharedData,
-        _error_counters: &mut TransactionErrorMetrics,
-    ) -> transaction::Result<()> {
-        Ok(())
-    }
 
     fn get_program_match_criteria(&self, _program: &Pubkey) -> ProgramCacheMatchCriteria {
         ProgramCacheMatchCriteria::NoCriteria
