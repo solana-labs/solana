@@ -2861,6 +2861,8 @@ pub struct CliGossipNode {
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_set: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tpu_quic_port: Option<u16>,
 }
 
 impl CliGossipNode {
@@ -2875,6 +2877,7 @@ impl CliGossipNode {
             pubsub_host: info.pubsub.map(|addr| addr.to_string()),
             version: info.version,
             feature_set: info.feature_set,
+            tpu_quic_port: info.tpu_quic.map(|addr| addr.port()),
         }
     }
 }
@@ -2900,13 +2903,14 @@ impl fmt::Display for CliGossipNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:15} | {:44} | {:6} | {:5} | {:21} | {:8}| {}",
+            "{:15} | {:44} | {:6} | {:5} | {:8} | {:21} | {:8}| {}",
             unwrap_to_string_or_none(self.ip_address.as_ref()),
             self.identity_label
                 .as_ref()
                 .unwrap_or(&self.identity_pubkey),
             unwrap_to_string_or_none(self.gossip_port.as_ref()),
             unwrap_to_string_or_none(self.tpu_port.as_ref()),
+            unwrap_to_string_or_none(self.tpu_quic_port.as_ref()),
             unwrap_to_string_or_none(self.rpc_host.as_ref()),
             unwrap_to_string_or_default(self.version.as_ref(), "unknown"),
             unwrap_to_string_or_default(self.feature_set.as_ref(), "unknown"),
@@ -2925,9 +2929,9 @@ impl fmt::Display for CliGossipNodes {
         writeln!(
             f,
             "IP Address      | Identity                                     \
-             | Gossip | TPU   | RPC Address           | Version | Feature Set\n\
+             | Gossip | TPU   | TPU-QUIC | RPC Address           | Version | Feature Set\n\
              ----------------+----------------------------------------------+\
-             --------+-------+-----------------------+---------+----------------",
+             --------+-------+----------+-----------------------+---------+----------------",
         )?;
         for node in self.0.iter() {
             writeln!(f, "{node}")?;
