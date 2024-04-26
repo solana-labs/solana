@@ -26,13 +26,17 @@ use {
         utils::{move_and_async_delete_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
     },
     solana_measure::{measure, measure::Measure},
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        hash::Hash,
+    },
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt, fs,
         io::{BufReader, BufWriter, Error as IoError, Read, Result as IoResult, Seek, Write},
         num::NonZeroUsize,
+        ops::RangeInclusive,
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
@@ -332,6 +336,9 @@ pub enum SnapshotError {
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
 
+    #[error("snapshot epoch stakes are invalid: {0}")]
+    VerifyEpochStakes(#[from] VerifyEpochStakesError),
+
     #[error("bank_snapshot_info new_from_dir failed: {0}")]
     NewFromDir(#[from] SnapshotNewFromDirError),
 
@@ -406,6 +413,16 @@ pub enum VerifySlotDeltasError {
 
     #[error("slot history is bad and cannot be used to verify slot deltas")]
     BadSlotHistory,
+}
+
+/// Errors that can happen in `verify_epoch_stakes()`
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum VerifyEpochStakesError {
+    #[error("epoch {0} is greater than the max {1}")]
+    EpochGreaterThanMax(Epoch, Epoch),
+
+    #[error("stakes not found for epoch {0} (required epochs: {1:?})")]
+    StakesNotFound(Epoch, RangeInclusive<Epoch>),
 }
 
 /// Errors that can happen in `add_bank_snapshot()`
