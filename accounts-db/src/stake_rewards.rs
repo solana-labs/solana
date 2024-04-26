@@ -74,19 +74,20 @@ impl StakeReward {
             validator_stake_lamports,
         );
 
+        let reward_lamports: i64 = rng.gen_range(1..200);
         let validator_stake_account = stake_state::create_account(
             &validator_staking_keypair.pubkey(),
             &validator_voting_keypair.pubkey(),
             &validator_vote_account,
             &rent,
-            validator_stake_lamports,
+            validator_stake_lamports + reward_lamports as u64,
         );
 
         Self {
             stake_pubkey: Pubkey::new_unique(),
             stake_reward_info: RewardInfo {
                 reward_type: solana_sdk::reward_type::RewardType::Staking,
-                lamports: rng.gen_range(1..200),
+                lamports: reward_lamports,
                 post_balance: 0,  /* unused atm */
                 commission: None, /* unused atm */
             },
