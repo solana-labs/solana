@@ -11,7 +11,7 @@ use {
     },
 };
 
-pub struct LastVotedForkSlotsAggregate {
+pub(crate) struct LastVotedForkSlotsAggregate {
     root_slot: Slot,
     repair_threshold: f64,
     // TODO(wen): using local root's EpochStakes, need to fix if crossing Epoch boundary.
