@@ -261,16 +261,18 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     // send all the transaction messages
     for (counter, (index, message)) in messages_with_index.iter().enumerate() {
         let mut transaction = Transaction::new_unsigned(message.clone());
-        let blockhashdata = *context.blockhash_data_rw.read().await;
-
-        // we have already checked if all transactions are signable.
-        transaction
-            .try_sign(signers, blockhashdata.blockhash)
-            .expect("Transaction should be signable");
-        let serialized_transaction = serialize(&transaction).expect("Transaction should serialize");
-        let signature = transaction.signatures[0];
         futures.push(async move {
             tokio::time::sleep(SEND_INTERVAL.saturating_mul(counter as u32)).await;
+            let blockhashdata = *context.blockhash_data_rw.read().await;
+
+            // we have already checked if all transactions are signable.
+            transaction
+                .try_sign(signers, blockhashdata.blockhash)
+                .expect("Transaction should be signable");
+            let serialized_transaction =
+                serialize(&transaction).expect("Transaction should serialize");
+            let signature = transaction.signatures[0];
+
             // send to confirm the transaction
             context.unconfirmed_transaction_map.insert(
                 signature,
