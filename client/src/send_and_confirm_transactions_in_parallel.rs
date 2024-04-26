@@ -338,14 +338,6 @@ async fn confirm_transactions_till_block_height_and_resend_unexpired_transaction
             );
         }
 
-        if let Some(progress_bar) = progress_bar {
-            let progress = progress_from_context_and_block_height(context, max_valid_block_height);
-            progress.set_message_for_confirmed_transactions(
-                progress_bar,
-                "Checking transaction status...",
-            );
-        }
-
         // wait till all transactions are confirmed or we have surpassed max processing age for the last sent transaction
         while !unconfirmed_transaction_map.is_empty()
             && current_block_height.load(Ordering::Relaxed) <= max_valid_block_height
