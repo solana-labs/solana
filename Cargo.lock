@@ -5413,6 +5413,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "seqlock",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "smallvec",
  "solana-accounts-db",

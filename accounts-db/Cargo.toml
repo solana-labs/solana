@@ -63,6 +63,7 @@ ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
 rand_chacha = { workspace = true }
+serde_bytes = { workspace = true }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
@@ -87,4 +88,8 @@ harness = false
 
 [[bench]]
 name = "bench_hashing"
+harness = false
+
+[[bench]]
+name = "bench_serde"
 harness = false
