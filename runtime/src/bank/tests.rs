@@ -13186,3 +13186,52 @@ fn test_program_modification_slot_success() {
     let result = bank.program_modification_slot(&key2);
     assert_eq!(result.unwrap(), 0);
 }
+
+#[test]
+fn test_blockhash_last_valid_block_height() {
+    let genesis_config = GenesisConfig::default();
+    let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+    // valid until MAX_PROCESSING_AGE
+    let last_blockhash = bank.last_blockhash();
+    for i in 1..=MAX_PROCESSING_AGE as u64 {
+        goto_end_of_slot(bank.clone());
+        bank = Arc::new(new_from_parent(bank));
+        assert_eq!(i, bank.block_height);
+
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&last_blockhash)
+            .unwrap();
+        assert_eq!(
+            last_valid_block_height,
+            bank.block_height + MAX_PROCESSING_AGE as u64 - i
+        );
+        assert!(bank.is_blockhash_valid(&last_blockhash));
+    }
+
+    // Make sure it stays in the queue until `MAX_RECENT_BLOCKHASHES`
+    for i in MAX_PROCESSING_AGE + 1..=MAX_RECENT_BLOCKHASHES {
+        goto_end_of_slot(bank.clone());
+        bank = Arc::new(new_from_parent(bank));
+        assert_eq!(bank.block_height, i as u64);
+
+        // the blockhash is outside of the processing age, but still present in the queue,
+        // so the call to get the block height still works even though it's in the past
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&last_blockhash)
+            .unwrap();
+        assert_eq!(last_valid_block_height, MAX_PROCESSING_AGE as u64);
+
+        // But it isn't valid for processing
+        assert!(!bank.is_blockhash_valid(&last_blockhash));
+    }
+
+    // one past MAX_RECENT_BLOCKHASHES is no longer present at all
+    goto_end_of_slot(bank.clone());
+    bank = Arc::new(new_from_parent(bank));
+    assert_eq!(
+        bank.get_blockhash_last_valid_block_height(&last_blockhash),
+        None
+    );
+    assert!(!bank.is_blockhash_valid(&last_blockhash));
+}
