@@ -353,7 +353,7 @@ impl ValidatorConfig {
         Self {
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
-            block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
+            block_production_method: BlockProductionMethod::default(),
             replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_transactions_threads: NonZeroUsize::new(get_max_thread_count())
                 .expect("thread count is non-zero"),

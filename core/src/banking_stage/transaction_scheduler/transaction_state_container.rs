@@ -3,10 +3,13 @@ use {
         transaction_priority_id::TransactionPriorityId,
         transaction_state::{SanitizedTransactionTTL, TransactionState},
     },
-    crate::banking_stage::scheduler_messages::TransactionId,
+    crate::banking_stage::{
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
+        scheduler_messages::TransactionId,
+    },
     itertools::MinMaxResult,
     min_max_heap::MinMaxHeap,
-    std::collections::HashMap,
+    std::{collections::HashMap, sync::Arc},
 };
 
 /// This structure will hold `TransactionState` for the entirety of a
@@ -87,13 +90,14 @@ impl TransactionStateContainer {
         &mut self,
         transaction_id: TransactionId,
         transaction_ttl: SanitizedTransactionTTL,
+        packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
     ) -> bool {
         let priority_id = TransactionPriorityId::new(priority, transaction_id);
         self.id_to_transaction_state.insert(
             transaction_id,
-            TransactionState::new(transaction_ttl, priority, cost),
+            TransactionState::new(transaction_ttl, packet, priority, cost),
         );
         self.push_id_into_queue(priority_id)
     }
@@ -153,6 +157,7 @@ mod tests {
             compute_budget::ComputeBudgetInstruction,
             hash::Hash,
             message::Message,
+            packet::Packet,
             signature::Keypair,
             signer::Signer,
             slot_history::Slot,
@@ -162,7 +167,14 @@ mod tests {
     };
 
     /// Returns (transaction_ttl, priority, cost)
-    fn test_transaction(priority: u64) -> (SanitizedTransactionTTL, u64, u64) {
+    fn test_transaction(
+        priority: u64,
+    ) -> (
+        SanitizedTransactionTTL,
+        Arc<ImmutableDeserializedPacket>,
+        u64,
+        u64,
+    ) {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(
@@ -178,21 +190,28 @@ mod tests {
             message,
             Hash::default(),
         ));
+        let packet = Arc::new(
+            ImmutableDeserializedPacket::new(
+                Packet::from_data(None, tx.to_versioned_transaction()).unwrap(),
+            )
+            .unwrap(),
+        );
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: tx,
             max_age_slot: Slot::MAX,
         };
         const TEST_TRANSACTION_COST: u64 = 5000;
-        (transaction_ttl, priority, TEST_TRANSACTION_COST)
+        (transaction_ttl, packet, priority, TEST_TRANSACTION_COST)
     }
 
     fn push_to_container(container: &mut TransactionStateContainer, num: usize) {
         for id in 0..num as u64 {
             let priority = id;
-            let (transaction_ttl, priority, cost) = test_transaction(priority);
+            let (transaction_ttl, packet, priority, cost) = test_transaction(priority);
             container.insert_new_transaction(
                 TransactionId::new(id),
                 transaction_ttl,
+                packet,
                 priority,
                 cost,
             );

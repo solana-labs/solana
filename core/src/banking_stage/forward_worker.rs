@@ -86,7 +86,6 @@ mod tests {
         super::*,
         crate::banking_stage::{
             immutable_deserialized_packet::ImmutableDeserializedPacket,
-            scheduler_messages::TransactionId,
             tests::{create_slow_genesis_config, new_test_cluster_info, simulate_poh},
         },
         crossbeam_channel::unbounded,
@@ -200,9 +199,6 @@ mod tests {
             system_transaction::transfer(mint_keypair, &pubkey2, 2, genesis_config.hash()),
         ];
 
-        let id1 = TransactionId::new(1);
-        let id2 = TransactionId::new(0);
-
         let packets = to_packet_batches(&txs, 2);
         assert_eq!(packets.len(), 1);
         let packets = packets[0]
@@ -211,14 +207,8 @@ mod tests {
             .map(|p| ImmutableDeserializedPacket::new(p).unwrap())
             .map(Arc::new)
             .collect();
-        forward_sender
-            .send(ForwardWork {
-                packets,
-                ids: vec![id1, id2],
-            })
-            .unwrap();
+        forward_sender.send(ForwardWork { packets }).unwrap();
         let forwarded = forwarded_receiver.recv().unwrap();
-        assert_eq!(forwarded.work.ids, vec![id1, id2]);
         assert!(forwarded.successful);
 
         drop(test_frame);
