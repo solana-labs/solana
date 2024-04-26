@@ -21,8 +21,11 @@
 
 #[cfg(not(target_os = "solana"))]
 pub mod encryption;
-
 pub mod errors;
+#[cfg(not(target_os = "solana"))]
+mod sigma_proofs;
+#[cfg(not(target_os = "solana"))]
+mod transcript;
 
 /// Byte length of a compressed Ristretto point or scalar in Curve255519
 const UNIT_LEN: usize = 32;

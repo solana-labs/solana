@@ -30,3 +30,9 @@ pub enum ElGamalError {
     #[error("failed to deserialize secret key")]
     SecretKeyDeserialization,
 }
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum TranscriptError {
+    #[error("point is the identity")]
+    ValidationError,
+}
