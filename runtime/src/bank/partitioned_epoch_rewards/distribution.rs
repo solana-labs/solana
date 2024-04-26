@@ -31,7 +31,7 @@ enum DistributionError {
     UnableToSetState,
 }
 
-struct DistributionStorageResults {
+struct DistributionResults {
     lamports_distributed: u64,
     lamports_burned: u64,
     updated_stake_rewards: StakeRewards,
@@ -95,7 +95,7 @@ impl Bank {
             .collect();
 
         let (
-            DistributionStorageResults {
+            DistributionResults {
                 lamports_distributed,
                 lamports_burned,
                 updated_stake_rewards,
@@ -118,7 +118,7 @@ impl Bank {
             total_stake_accounts_count: all_stake_rewards.len(),
             partition_index,
             store_stake_accounts_us,
-            store_stake_accounts_count: this_partition_stake_rewards.len(),
+            store_stake_accounts_count: updated_stake_rewards.len(),
             distributed_rewards: lamports_distributed,
             burned_rewards: lamports_burned,
         };
@@ -180,7 +180,7 @@ impl Bank {
     }
 
     /// Store stake rewards in partition
-    /// Returns DistributionStorageResults containing the sum of all the rewards
+    /// Returns DistributionResults containing the sum of all the rewards
     /// stored, the sum of all rewards burned, and the updated StakeRewards.
     /// Because stake accounts are checked in calculation, and further state
     /// mutation prevents by stake-program restrictions, there should never be
@@ -191,10 +191,10 @@ impl Bank {
     fn store_stake_accounts_in_partition(
         &self,
         stake_rewards: PartitionedStakeRewards,
-    ) -> DistributionStorageResults {
+    ) -> DistributionResults {
         let mut lamports_distributed = 0;
         let mut lamports_burned = 0;
-        let mut updated_stake_rewards = vec![];
+        let mut updated_stake_rewards = Vec::with_capacity(stake_rewards.len());
         let stakes_cache = self.stakes_cache.stakes();
         let stakes_cache_accounts = stakes_cache.stake_delegations();
         for partitioned_stake_reward in stake_rewards.into_iter() {
@@ -217,7 +217,7 @@ impl Bank {
         }
         drop(stakes_cache);
         self.store_accounts((self.slot(), &updated_stake_rewards[..]));
-        DistributionStorageResults {
+        DistributionResults {
             lamports_distributed,
             lamports_burned,
             updated_stake_rewards,
@@ -419,7 +419,7 @@ mod tests {
                 .iter()
                 .map(|stake_reward| PartitionedStakeReward::maybe_from(stake_reward).unwrap())
                 .collect();
-            let DistributionStorageResults {
+            let DistributionResults {
                 lamports_distributed,
                 updated_stake_rewards,
                 ..
@@ -648,7 +648,7 @@ mod tests {
             .map(|stake_reward| stake_reward.stake_reward_info.lamports)
             .sum::<i64>() as u64;
 
-        let DistributionStorageResults {
+        let DistributionResults {
             lamports_distributed,
             ..
         } = bank.store_stake_accounts_in_partition(converted_rewards);
@@ -664,7 +664,7 @@ mod tests {
 
         let expected_total = 0;
 
-        let DistributionStorageResults {
+        let DistributionResults {
             lamports_distributed,
             ..
         } = bank.store_stake_accounts_in_partition(stake_rewards);
