@@ -1140,14 +1140,8 @@ declare_builtin_function!(
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
 
-        let restrict_msm_length = invoke_context
-            .feature_set
-            .is_active(&feature_set::curve25519_restrict_msm_length::id());
-        #[allow(clippy::collapsible_if)]
-        if restrict_msm_length {
-            if points_len > 512 {
-                return Err(Box::new(SyscallError::InvalidLength));
-            }
+        if points_len > 512 {
+            return Err(Box::new(SyscallError::InvalidLength));
         }
 
         match curve_id {
