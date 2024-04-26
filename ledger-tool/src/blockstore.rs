@@ -891,26 +891,24 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
                 AccessType::PrimaryForMaintenance,
             );
 
-            let end_slot = match end_slot {
-                Some(end_slot) => end_slot,
-                None => {
-                    let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
-                    let slots: Vec<_> = slot_meta_iterator.map(|(slot, _)| slot).collect();
-                    if slots.is_empty() {
-                        return Err(LedgerToolError::BadArgument(format!(
-                            "blockstore is empty beyond purge start slot {start_slot}"
-                        )));
-                    }
-                    *slots.last().unwrap()
-                }
+            let Some(highest_slot) = blockstore.highest_slot()? else {
+                return Err(LedgerToolError::BadArgument(
+                    "blockstore is empty".to_string(),
+                ));
             };
 
+            let end_slot = if let Some(slot) = end_slot {
+                std::cmp::min(slot, highest_slot)
+            } else {
+                highest_slot
+            };
             if end_slot < start_slot {
                 return Err(LedgerToolError::BadArgument(format!(
                     "starting slot {start_slot} should be less than or equal to \
                     ending slot {end_slot}"
                 )));
             }
+
             info!(
                 "Purging data from slots {} to {} ({} slots) (do compaction: {}) \
                 (dead slot only: {})",
