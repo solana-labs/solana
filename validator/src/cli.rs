@@ -2455,6 +2455,13 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
+            Arg::with_name("enable_bigtable_ledger_upload")
+                .long("enable-bigtable-ledger-upload")
+                .takes_value(false)
+                .hidden(hidden_unless_forced())
+                .help("Upload new confirmed blocks into a BigTable instance"),
+        )
+        .arg(
             Arg::with_name("rpc_bigtable_instance")
                 .long("rpc-bigtable-instance")
                 .value_name("INSTANCE_NAME")

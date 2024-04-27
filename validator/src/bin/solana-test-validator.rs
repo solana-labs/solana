@@ -423,9 +423,11 @@ fn main() {
         None
     };
 
-    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage") {
+    let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
+        || matches.is_present("enable_bigtable_ledger_upload")
+    {
         Some(RpcBigtableConfig {
-            enable_bigtable_ledger_upload: false,
+            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance", String),
             bigtable_app_profile_id: value_t_or_exit!(
                 matches,
