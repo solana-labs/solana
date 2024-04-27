@@ -292,14 +292,22 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         execution_time.stop();
 
-        const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
-        self.program_cache
-            .write()
-            .unwrap()
-            .evict_using_2s_random_selection(
-                Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
-                self.slot,
-            );
+        // Skip eviction when there's no chance this particular tx batch has increased the size of
+        // ProgramCache entries. Note that loaded_missing is deliberately defined, so that there's
+        // still at least one other batch, which will evict the program cache, even after the
+        // occurrences of cooperative loading.
+        if programs_loaded_for_tx_batch.borrow().loaded_missing
+            || programs_loaded_for_tx_batch.borrow().merged_modified
+        {
+            const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
+            self.program_cache
+                .write()
+                .unwrap()
+                .evict_using_2s_random_selection(
+                    Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE),
+                    self.slot,
+                );
+        }
 
         debug!(
             "load: {}us execute: {}us txs_len={}",
@@ -395,6 +403,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 }
                 // Submit our last completed loading task.
                 if let Some((key, program)) = program_to_store.take() {
+                    loaded_programs_for_txs.as_mut().unwrap().loaded_missing = true;
                     if program_cache.finish_cooperative_loading_task(self.slot, key, program)
                         && limit_to_load_programs
                     {
