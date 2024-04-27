@@ -4,10 +4,10 @@ use std::{cell::RefCell, rc::Rc};
 const LOG_MESSAGES_BYTES_LIMIT: usize = 10 * 1000;
 
 pub struct LogCollector {
-    messages: Vec<String>,
-    bytes_written: usize,
-    bytes_limit: Option<usize>,
-    limit_warning: bool,
+    pub messages: Vec<String>,
+    pub bytes_written: usize,
+    pub bytes_limit: Option<usize>,
+    pub limit_warning: bool,
 }
 
 impl Default for LogCollector {
