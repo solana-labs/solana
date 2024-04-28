@@ -39,7 +39,7 @@ members = [
     "genesis-utils",
     "geyser-plugin-interface",
     "geyser-plugin-manager",
-    "gossip",
+    "gossip", "gossip-emu",
     "install",
     "keygen",
     "ledger",
@@ -128,7 +128,7 @@ resolver = "2"
 [workspace.package]
 version = "1.18.12"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
+repository = "https://github.com/asc11cat/solana"
 homepage = "https://solanalabs.com/"
 license = "Apache-2.0"
 edition = "2021"

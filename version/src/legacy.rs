@@ -52,6 +52,7 @@ impl Default for LegacyVersion2 {
             feature_set,
         }
     }
+    
 }
 
 impl fmt::Display for LegacyVersion2 {

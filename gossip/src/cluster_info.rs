@@ -19,6 +19,7 @@
 )]
 #[allow(deprecated)]
 pub use solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE};
+use solana_version::{LegacyVersion2, Version as SolanaVersion};
 use {
     crate::{
         cluster_info_metrics::{
@@ -1772,6 +1773,7 @@ impl ClusterInfo {
         sender: PacketBatchSender,
         gossip_validators: Option<HashSet<Pubkey>>,
         exit: Arc<AtomicBool>,
+        solana_version_override: Option<LegacyVersion2>,
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(std::cmp::min(get_thread_count(), 8))
@@ -1786,12 +1788,20 @@ impl ClusterInfo {
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
                 let recycler = PacketBatchRecycler::default();
+
+                let version = if let Some(solana_version_override) = solana_version_override {
+                    Version::new_with_version(self.id(), solana_version_override)
+                } else {
+                    Version::new(self.id())
+                };
+
                 let crds_data = vec![
-                    CrdsData::Version(Version::new(self.id())),
+                    CrdsData::Version(version),
                     CrdsData::NodeInstance(
                         self.instance.read().unwrap().with_wallclock(timestamp()),
                     ),
                 ];
+
                 for value in crds_data {
                     let value = CrdsValue::new_signed(value, &self.keypair());
                     self.push_message(value);
@@ -2701,17 +2711,44 @@ impl ClusterInfo {
         node
     }
 
+    pub fn gossip_contact_info_extended(
+        id: Pubkey,
+        gossip: SocketAddr,
+        shred_version: u16,
+        solana_version: SolanaVersion,
+    ) -> ContactInfo {
+        let mut node = ContactInfo::new_versioned(
+            id,
+            /*wallclock:*/ timestamp(),
+            shred_version,
+            solana_version,
+        );
+
+        let _ = node.set_gossip(gossip);
+        node
+    }
+
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(
         id: Pubkey,
         gossip_addr: &SocketAddr,
         shred_version: u16,
+        solana_version: Option<SolanaVersion>,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
-        let contact_info =
-            Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port), shred_version);
+
+        let contact_info = if let Some(version) = solana_version {
+            Self::gossip_contact_info_extended(
+                id,
+                SocketAddr::new(gossip_addr.ip(), port),
+                shred_version,
+                version,
+            )
+        } else {
+            Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port), shred_version)
+        };
 
         (contact_info, gossip_socket, Some(ip_echo))
     }
@@ -3178,6 +3215,7 @@ mod tests {
             solana_sdk::pubkey::new_rand(),
             &"1.1.1.1:0".parse().unwrap(),
             0,
+            None,
         );
         assert!(ClusterInfo::is_spy_node(
             &LegacyContactInfo::try_from(&node).unwrap(),

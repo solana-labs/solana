@@ -1,0 +1,20 @@
+[package]
+name = "gossip-emu"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+solana-sdk = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-gossip = { workspace = true }
+solana-streamer = { workspace = true }
+solana-version = { workspace = true }
+memoffset = "0.7"
+log = "0.4"
+env_logger = "0.9"

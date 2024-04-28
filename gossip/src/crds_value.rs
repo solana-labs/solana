@@ -408,6 +408,14 @@ impl Version {
         }
     }
 
+    pub fn new_with_version(from: Pubkey, version: solana_version::LegacyVersion2) -> Self {
+        Self {
+            from,
+            wallclock: timestamp(),
+            version,
+        }
+    }
+
     /// New random Version for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         Self {

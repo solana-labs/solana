@@ -1,0 +1,4869 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gossip-emu'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gossip-emu",
+                    "--package=gossip-emu"
+                ],
+                "filter": {
+                    "name": "gossip-emu",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-account-decoder'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-account-decoder"
+                ],
+                "filter": {
+                    "name": "solana-account-decoder",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_config_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-config-program"
+                ],
+                "filter": {
+                    "name": "solana_config_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_program_runtime'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-program-runtime"
+                ],
+                "filter": {
+                    "name": "solana_program_runtime",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-frozen-abi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-frozen-abi"
+                ],
+                "filter": {
+                    "name": "solana-frozen-abi",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_logger'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-logger"
+                ],
+                "filter": {
+                    "name": "solana_logger",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-measure'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-measure"
+                ],
+                "filter": {
+                    "name": "solana-measure",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-sdk'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "solana-sdk",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'serialize_instructions'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=serialize_instructions",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "serialize_instructions",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'accounts'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=accounts",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "accounts",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'slot_history'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=slot_history",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "slot_history",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'short_vec'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=short_vec",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "short_vec",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'slot_hashes'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=slot_hashes",
+                    "--package=solana-sdk"
+                ],
+                "filter": {
+                    "name": "slot_hashes",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-program"
+                ],
+                "filter": {
+                    "name": "solana-program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_metrics'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-metrics"
+                ],
+                "filter": {
+                    "name": "solana_metrics",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'metrics'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=metrics",
+                    "--package=solana-metrics"
+                ],
+                "filter": {
+                    "name": "metrics",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-accounts-bench'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-accounts-bench",
+                    "--package=solana-accounts-bench"
+                ],
+                "filter": {
+                    "name": "solana-accounts-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-accounts-bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-accounts-bench",
+                    "--package=solana-accounts-bench"
+                ],
+                "filter": {
+                    "name": "solana-accounts-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_accounts_db'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-accounts-db"
+                ],
+                "filter": {
+                    "name": "solana_accounts_db",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'append_vec'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=append_vec",
+                    "--package=solana-accounts-db"
+                ],
+                "filter": {
+                    "name": "append_vec",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'accounts_index'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=accounts_index",
+                    "--package=solana-accounts-db"
+                ],
+                "filter": {
+                    "name": "accounts_index",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_bucket_map'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-bucket-map"
+                ],
+                "filter": {
+                    "name": "solana_bucket_map",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'bucket_map'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=bucket_map",
+                    "--package=solana-bucket-map"
+                ],
+                "filter": {
+                    "name": "bucket_map",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'bucket_map'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=bucket_map",
+                    "--package=solana-bucket-map"
+                ],
+                "filter": {
+                    "name": "bucket_map",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-rayon-threadlimit'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-rayon-threadlimit"
+                ],
+                "filter": {
+                    "name": "solana-rayon-threadlimit",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_stake_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-stake-program"
+                ],
+                "filter": {
+                    "name": "solana_stake_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_vote_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-vote-program"
+                ],
+                "filter": {
+                    "name": "solana_vote_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'process_vote'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=process_vote",
+                    "--package=solana-vote-program"
+                ],
+                "filter": {
+                    "name": "process_vote",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_system_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-system-program"
+                ],
+                "filter": {
+                    "name": "solana_system_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_version'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-version"
+                ],
+                "filter": {
+                    "name": "solana_version",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-accounts-cluster-bench'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-accounts-cluster-bench",
+                    "--package=solana-accounts-cluster-bench"
+                ],
+                "filter": {
+                    "name": "solana-accounts-cluster-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-accounts-cluster-bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-accounts-cluster-bench",
+                    "--package=solana-accounts-cluster-bench"
+                ],
+                "filter": {
+                    "name": "solana-accounts-cluster-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_clap_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-clap-utils"
+                ],
+                "filter": {
+                    "name": "solana_clap_utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-remote-wallet'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-remote-wallet"
+                ],
+                "filter": {
+                    "name": "solana-remote-wallet",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-ledger-udev'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-ledger-udev",
+                    "--package=solana-remote-wallet"
+                ],
+                "filter": {
+                    "name": "solana-ledger-udev",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-ledger-udev'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-ledger-udev",
+                    "--package=solana-remote-wallet"
+                ],
+                "filter": {
+                    "name": "solana-ledger-udev",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-cli-config'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-cli-config"
+                ],
+                "filter": {
+                    "name": "solana-cli-config",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-client"
+                ],
+                "filter": {
+                    "name": "solana-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-connection-cache'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-connection-cache"
+                ],
+                "filter": {
+                    "name": "solana-connection-cache",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_net_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-net-utils"
+                ],
+                "filter": {
+                    "name": "solana_net_utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-ip-address'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-ip-address",
+                    "--package=solana-net-utils"
+                ],
+                "filter": {
+                    "name": "solana-ip-address",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-ip-address'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-ip-address",
+                    "--package=solana-net-utils"
+                ],
+                "filter": {
+                    "name": "solana-ip-address",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-ip-address-server'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-ip-address-server",
+                    "--package=solana-net-utils"
+                ],
+                "filter": {
+                    "name": "solana-ip-address-server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-ip-address-server'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-ip-address-server",
+                    "--package=solana-net-utils"
+                ],
+                "filter": {
+                    "name": "solana-ip-address-server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-pubsub-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-pubsub-client"
+                ],
+                "filter": {
+                    "name": "solana-pubsub-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-rpc-client-api'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-rpc-client-api"
+                ],
+                "filter": {
+                    "name": "solana-rpc-client-api",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-transaction-status'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-transaction-status"
+                ],
+                "filter": {
+                    "name": "solana-transaction-status",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'extract_memos'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=extract_memos",
+                    "--package=solana-transaction-status"
+                ],
+                "filter": {
+                    "name": "extract_memos",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-quic-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-quic-client"
+                ],
+                "filter": {
+                    "name": "solana-quic-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'quic_client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=quic_client",
+                    "--package=solana-quic-client"
+                ],
+                "filter": {
+                    "name": "quic_client",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_streamer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-streamer"
+                ],
+                "filter": {
+                    "name": "solana_streamer",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'recvmmsg'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=recvmmsg",
+                    "--package=solana-streamer"
+                ],
+                "filter": {
+                    "name": "recvmmsg",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_perf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "solana_perf",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'sigverify'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=sigverify",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "sigverify",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'discard'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=discard",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "discard",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'dedup'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=dedup",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "dedup",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'reset'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=reset",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "reset",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'recycler'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=recycler",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "recycler",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'shrink'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=shrink",
+                    "--package=solana-perf"
+                ],
+                "filter": {
+                    "name": "shrink",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-rpc-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-rpc-client"
+                ],
+                "filter": {
+                    "name": "solana-rpc-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-rpc-client-nonce-utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-rpc-client-nonce-utils"
+                ],
+                "filter": {
+                    "name": "solana-rpc-client-nonce-utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-thin-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-thin-client"
+                ],
+                "filter": {
+                    "name": "solana-thin-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-tpu-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-tpu-client"
+                ],
+                "filter": {
+                    "name": "solana-tpu-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-udp-client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-udp-client"
+                ],
+                "filter": {
+                    "name": "solana-udp-client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_faucet'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-faucet"
+                ],
+                "filter": {
+                    "name": "solana_faucet",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-faucet'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-faucet",
+                    "--package=solana-faucet"
+                ],
+                "filter": {
+                    "name": "solana-faucet",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-faucet'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-faucet",
+                    "--package=solana-faucet"
+                ],
+                "filter": {
+                    "name": "solana-faucet",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'local-faucet'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=local-faucet",
+                    "--package=solana-faucet"
+                ],
+                "filter": {
+                    "name": "local-faucet",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-gossip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "solana-gossip",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-gossip'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-gossip",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "solana-gossip",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-gossip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-gossip",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "solana-gossip",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'gossip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=gossip",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "gossip",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'crds_gossip'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=crds_gossip",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "crds_gossip",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'crds'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=crds",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "crds",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'crds_gossip_pull'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=crds_gossip_pull",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "crds_gossip_pull",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'crds_shards'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=crds_shards",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "crds_shards",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'weighted_shuffle'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=weighted_shuffle",
+                    "--package=solana-gossip"
+                ],
+                "filter": {
+                    "name": "weighted_shuffle",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_bloom'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-bloom"
+                ],
+                "filter": {
+                    "name": "solana_bloom",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'bloom'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=bloom",
+                    "--package=solana-bloom"
+                ],
+                "filter": {
+                    "name": "bloom",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_entry'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-entry"
+                ],
+                "filter": {
+                    "name": "solana_entry",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'entry_sigverify'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=entry_sigverify",
+                    "--package=solana-entry"
+                ],
+                "filter": {
+                    "name": "entry_sigverify",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_merkle_tree'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-merkle-tree"
+                ],
+                "filter": {
+                    "name": "solana_merkle_tree",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_ledger'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "solana_ledger",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'blockstore'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=blockstore",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "blockstore",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'shred'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=shred",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "shred",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'sigverify_shreds'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=sigverify_shreds",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "sigverify_shreds",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'blockstore'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=blockstore",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "blockstore",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'protobuf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=protobuf",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "protobuf",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'blockstore_processor'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=blockstore_processor",
+                    "--package=solana-ledger"
+                ],
+                "filter": {
+                    "name": "blockstore_processor",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_bpf_loader_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-bpf-loader-program"
+                ],
+                "filter": {
+                    "name": "solana_bpf_loader_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'serialization'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=serialization",
+                    "--package=solana-bpf-loader-program"
+                ],
+                "filter": {
+                    "name": "serialization",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-zk-token-sdk'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-zk-token-sdk"
+                ],
+                "filter": {
+                    "name": "solana-zk-token-sdk",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_cost_model'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-cost-model"
+                ],
+                "filter": {
+                    "name": "solana_cost_model",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_address_lookup_table_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-address-lookup-table-program"
+                ],
+                "filter": {
+                    "name": "solana_address_lookup_table_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_compute_budget_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-compute-budget-program"
+                ],
+                "filter": {
+                    "name": "solana_compute_budget_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_loader_v4_program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-loader-v4-program"
+                ],
+                "filter": {
+                    "name": "solana_loader_v4_program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_runtime'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "solana_runtime",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'accounts'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=accounts",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "accounts",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'stake'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=stake",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "stake",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'prioritization_fee_cache'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=prioritization_fee_cache",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "prioritization_fee_cache",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'accounts'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=accounts",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "accounts",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'status_cache'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=status_cache",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "status_cache",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'bank'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=bank",
+                    "--package=solana-runtime"
+                ],
+                "filter": {
+                    "name": "bank",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_vote'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-vote"
+                ],
+                "filter": {
+                    "name": "solana_vote",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-zk-token-proof-program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-zk-token-proof-program"
+                ],
+                "filter": {
+                    "name": "solana-zk-token-proof-program",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'verify_proofs'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=verify_proofs",
+                    "--package=solana-zk-token-proof-program"
+                ],
+                "filter": {
+                    "name": "verify_proofs",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_storage_bigtable'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-storage-bigtable"
+                ],
+                "filter": {
+                    "name": "solana_storage_bigtable",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_storage_proto'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-storage-proto"
+                ],
+                "filter": {
+                    "name": "solana_storage_proto",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-core'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "solana-core",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'fork-selection'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=fork-selection",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "fork-selection",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'snapshots'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=snapshots",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "snapshots",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'epoch_accounts_hash'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=epoch_accounts_hash",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "epoch_accounts_hash",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'banking_stage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=banking_stage",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "banking_stage",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'gen_keys'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=gen_keys",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "gen_keys",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'sigverify_stage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=sigverify_stage",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "sigverify_stage",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'banking_trace'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=banking_trace",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "banking_trace",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'shredder'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=shredder",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "shredder",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'consumer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=consumer",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "consumer",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'consensus'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=consensus",
+                    "--package=solana-core"
+                ],
+                "filter": {
+                    "name": "consensus",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-geyser-plugin-manager'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-geyser-plugin-manager"
+                ],
+                "filter": {
+                    "name": "solana-geyser-plugin-manager",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-geyser-plugin-interface'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-geyser-plugin-interface"
+                ],
+                "filter": {
+                    "name": "solana-geyser-plugin-interface",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_rpc'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-rpc"
+                ],
+                "filter": {
+                    "name": "solana_rpc",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_poh'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-poh"
+                ],
+                "filter": {
+                    "name": "solana_poh",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'poh'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=poh",
+                    "--package=solana-poh"
+                ],
+                "filter": {
+                    "name": "poh",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'poh_verify'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=poh_verify",
+                    "--package=solana-poh"
+                ],
+                "filter": {
+                    "name": "poh_verify",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-send-transaction-service'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-send-transaction-service"
+                ],
+                "filter": {
+                    "name": "solana-send-transaction-service",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-turbine'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-turbine"
+                ],
+                "filter": {
+                    "name": "solana-turbine",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'cluster_info'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=cluster_info",
+                    "--package=solana-turbine"
+                ],
+                "filter": {
+                    "name": "cluster_info",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'cluster_nodes'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=cluster_nodes",
+                    "--package=solana-turbine"
+                ],
+                "filter": {
+                    "name": "cluster_nodes",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'retransmit_stage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=retransmit_stage",
+                    "--package=solana-turbine"
+                ],
+                "filter": {
+                    "name": "retransmit_stage",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-unified-scheduler-pool'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-unified-scheduler-pool"
+                ],
+                "filter": {
+                    "name": "solana-unified-scheduler-pool",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-unified-scheduler-logic'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-unified-scheduler-logic"
+                ],
+                "filter": {
+                    "name": "solana-unified-scheduler-logic",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_wen_restart'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-wen-restart"
+                ],
+                "filter": {
+                    "name": "solana_wen_restart",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-local-cluster'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-local-cluster"
+                ],
+                "filter": {
+                    "name": "solana-local-cluster",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'local_cluster'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=local_cluster",
+                    "--package=solana-local-cluster"
+                ],
+                "filter": {
+                    "name": "local_cluster",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_download_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-download-utils"
+                ],
+                "filter": {
+                    "name": "solana_download_utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-test-validator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-test-validator"
+                ],
+                "filter": {
+                    "name": "solana-test-validator",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-cli-output'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-cli-output"
+                ],
+                "filter": {
+                    "name": "solana-cli-output",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-program-test'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "solana-program-test",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'warp'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=warp",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "warp",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'fuzz'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=fuzz",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "fuzz",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'return_data'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=return_data",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "return_data",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'sysvar'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=sysvar",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "sysvar",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'realloc'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=realloc",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "realloc",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'builtins'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=builtins",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "builtins",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'lamports'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=lamports",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "lamports",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'setup'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=setup",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "setup",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'cpi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=cpi",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "cpi",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'compute_units'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=compute_units",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "compute_units",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'spl'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=spl",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "spl",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'sysvar_last_restart_slot'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=sysvar_last_restart_slot",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "sysvar_last_restart_slot",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'stake'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=stake",
+                    "--package=solana-program-test"
+                ],
+                "filter": {
+                    "name": "stake",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_banks_client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-banks-client"
+                ],
+                "filter": {
+                    "name": "solana_banks_client",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_banks_interface'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-banks-interface"
+                ],
+                "filter": {
+                    "name": "solana_banks_interface",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_banks_server'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-banks-server"
+                ],
+                "filter": {
+                    "name": "solana_banks_server",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-store-tool'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-store-tool",
+                    "--package=solana-store-tool"
+                ],
+                "filter": {
+                    "name": "solana-store-tool",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-store-tool'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-store-tool",
+                    "--package=solana-store-tool"
+                ],
+                "filter": {
+                    "name": "solana-store-tool",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-banking-bench'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-banking-bench",
+                    "--package=solana-banking-bench"
+                ],
+                "filter": {
+                    "name": "solana-banking-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-banking-bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-banking-bench",
+                    "--package=solana-banking-bench"
+                ],
+                "filter": {
+                    "name": "solana-banking-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-bench-streamer'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-bench-streamer",
+                    "--package=solana-bench-streamer"
+                ],
+                "filter": {
+                    "name": "solana-bench-streamer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-bench-streamer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-bench-streamer",
+                    "--package=solana-bench-streamer"
+                ],
+                "filter": {
+                    "name": "solana-bench-streamer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-bench-tps'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-bench-tps"
+                ],
+                "filter": {
+                    "name": "solana-bench-tps",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-bench-tps'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-bench-tps",
+                    "--package=solana-bench-tps"
+                ],
+                "filter": {
+                    "name": "solana-bench-tps",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-bench-tps'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-bench-tps",
+                    "--package=solana-bench-tps"
+                ],
+                "filter": {
+                    "name": "solana-bench-tps",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'bench_tps'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=bench_tps",
+                    "--package=solana-bench-tps"
+                ],
+                "filter": {
+                    "name": "bench_tps",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_genesis'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-genesis"
+                ],
+                "filter": {
+                    "name": "solana_genesis",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-genesis'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-genesis",
+                    "--package=solana-genesis"
+                ],
+                "filter": {
+                    "name": "solana-genesis",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-genesis'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-genesis",
+                    "--package=solana-genesis"
+                ],
+                "filter": {
+                    "name": "solana-genesis",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-cargo-registry'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-cargo-registry",
+                    "--package=solana-cargo-registry"
+                ],
+                "filter": {
+                    "name": "solana-cargo-registry",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-cargo-registry'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-cargo-registry",
+                    "--package=solana-cargo-registry"
+                ],
+                "filter": {
+                    "name": "solana-cargo-registry",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-cli'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "solana-cli",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "solana",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "solana",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'nonce'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=nonce",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "nonce",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'transfer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=transfer",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "transfer",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'vote'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=vote",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "vote",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'address_lookup_table'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=address_lookup_table",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "address_lookup_table",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'program'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=program",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "program",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'stake'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=stake",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "stake",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'request_airdrop'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=request_airdrop",
+                    "--package=solana-cli"
+                ],
+                "filter": {
+                    "name": "request_airdrop",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_clap_v3_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-clap-v3-utils"
+                ],
+                "filter": {
+                    "name": "solana_clap_v3_utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'client'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=client",
+                    "--package=solana-client-test"
+                ],
+                "filter": {
+                    "name": "client",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'send_and_confirm_transactions_in_parallel'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=send_and_confirm_transactions_in_parallel",
+                    "--package=solana-client-test"
+                ],
+                "filter": {
+                    "name": "send_and_confirm_transactions_in_parallel",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-dos'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-dos"
+                ],
+                "filter": {
+                    "name": "solana-dos",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-dos'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-dos",
+                    "--package=solana-dos"
+                ],
+                "filter": {
+                    "name": "solana-dos",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-dos'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-dos",
+                    "--package=solana-dos"
+                ],
+                "filter": {
+                    "name": "solana-dos",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_genesis_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-genesis-utils"
+                ],
+                "filter": {
+                    "name": "solana_genesis_utils",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gossip-emu'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gossip-emu",
+                    "--package=gossip-emu"
+                ],
+                "filter": {
+                    "name": "gossip-emu",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gossip-emu'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gossip-emu",
+                    "--package=gossip-emu"
+                ],
+                "filter": {
+                    "name": "gossip-emu",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-install'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-install"
+                ],
+                "filter": {
+                    "name": "solana-install",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-install'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-install",
+                    "--package=solana-install"
+                ],
+                "filter": {
+                    "name": "solana-install",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-install'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-install",
+                    "--package=solana-install"
+                ],
+                "filter": {
+                    "name": "solana-install",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-install-init'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-install-init",
+                    "--package=solana-install"
+                ],
+                "filter": {
+                    "name": "solana-install-init",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-install-init'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-install-init",
+                    "--package=solana-install"
+                ],
+                "filter": {
+                    "name": "solana-install-init",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-keygen'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-keygen",
+                    "--package=solana-keygen"
+                ],
+                "filter": {
+                    "name": "solana-keygen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-keygen'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-keygen",
+                    "--package=solana-keygen"
+                ],
+                "filter": {
+                    "name": "solana-keygen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-ledger-tool'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-ledger-tool",
+                    "--package=solana-ledger-tool"
+                ],
+                "filter": {
+                    "name": "solana-ledger-tool",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-ledger-tool'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-ledger-tool",
+                    "--package=solana-ledger-tool"
+                ],
+                "filter": {
+                    "name": "solana-ledger-tool",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'basic'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=basic",
+                    "--package=solana-ledger-tool"
+                ],
+                "filter": {
+                    "name": "basic",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-log-analyzer'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-log-analyzer",
+                    "--package=solana-log-analyzer"
+                ],
+                "filter": {
+                    "name": "solana-log-analyzer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-log-analyzer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-log-analyzer",
+                    "--package=solana-log-analyzer"
+                ],
+                "filter": {
+                    "name": "solana-log-analyzer",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-memory-management'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-memory-management"
+                ],
+                "filter": {
+                    "name": "solana-memory-management",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-merkle-root-bench'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-merkle-root-bench",
+                    "--package=solana-merkle-root-bench"
+                ],
+                "filter": {
+                    "name": "solana-merkle-root-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-merkle-root-bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-merkle-root-bench",
+                    "--package=solana-merkle-root-bench"
+                ],
+                "filter": {
+                    "name": "solana-merkle-root-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-net-shaper'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-net-shaper",
+                    "--package=solana-net-shaper"
+                ],
+                "filter": {
+                    "name": "solana-net-shaper",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-net-shaper'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-net-shaper",
+                    "--package=solana-net-shaper"
+                ],
+                "filter": {
+                    "name": "solana-net-shaper",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_notifier'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-notifier"
+                ],
+                "filter": {
+                    "name": "solana_notifier",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-poh-bench'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-poh-bench",
+                    "--package=solana-poh-bench"
+                ],
+                "filter": {
+                    "name": "solana-poh-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-poh-bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-poh-bench",
+                    "--package=solana-poh-bench"
+                ],
+                "filter": {
+                    "name": "solana-poh-bench",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'create_lookup_table_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=create_lookup_table_ix",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "create_lookup_table_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'freeze_lookup_table_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=freeze_lookup_table_ix",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "freeze_lookup_table_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'common'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=common",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "common",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'extend_lookup_table_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=extend_lookup_table_ix",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "extend_lookup_table_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'deactivate_lookup_table_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=deactivate_lookup_table_ix",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "deactivate_lookup_table_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'close_lookup_table_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=close_lookup_table_ix",
+                    "--package=solana-address-lookup-table-program-tests"
+                ],
+                "filter": {
+                    "name": "close_lookup_table_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'common'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=common",
+                    "--package=solana-bpf-loader-program-tests"
+                ],
+                "filter": {
+                    "name": "common",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'extend_program_ix'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=extend_program_ix",
+                    "--package=solana-bpf-loader-program-tests"
+                ],
+                "filter": {
+                    "name": "extend_program_ix",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gen-syscall-list'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gen-syscall-list",
+                    "--package=gen-syscall-list"
+                ],
+                "filter": {
+                    "name": "gen-syscall-list",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gen-syscall-list'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gen-syscall-list",
+                    "--package=gen-syscall-list"
+                ],
+                "filter": {
+                    "name": "gen-syscall-list",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'process_transaction'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=process_transaction",
+                    "--package=solana-ed25519-program-tests"
+                ],
+                "filter": {
+                    "name": "process_transaction",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'process_transaction'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=process_transaction",
+                    "--package=solana-zk-token-proof-program-tests"
+                ],
+                "filter": {
+                    "name": "process_transaction",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rbpf-cli'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rbpf-cli",
+                    "--package=rbpf-cli"
+                ],
+                "filter": {
+                    "name": "rbpf-cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'rbpf-cli'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=rbpf-cli",
+                    "--package=rbpf-cli"
+                ],
+                "filter": {
+                    "name": "rbpf-cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'rpc'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=rpc",
+                    "--package=solana-rpc-test"
+                ],
+                "filter": {
+                    "name": "rpc",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'nonblocking'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=nonblocking",
+                    "--package=solana-rpc-test"
+                ],
+                "filter": {
+                    "name": "nonblocking",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana_runtime_transaction'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-runtime-transaction"
+                ],
+                "filter": {
+                    "name": "solana_runtime_transaction",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'cargo-build-bpf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=cargo-build-bpf",
+                    "--package=solana-cargo-build-bpf"
+                ],
+                "filter": {
+                    "name": "cargo-build-bpf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'cargo-build-bpf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=cargo-build-bpf",
+                    "--package=solana-cargo-build-bpf"
+                ],
+                "filter": {
+                    "name": "cargo-build-bpf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'cargo-build-sbf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=cargo-build-sbf",
+                    "--package=solana-cargo-build-sbf"
+                ],
+                "filter": {
+                    "name": "cargo-build-sbf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'cargo-build-sbf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=cargo-build-sbf",
+                    "--package=solana-cargo-build-sbf"
+                ],
+                "filter": {
+                    "name": "cargo-build-sbf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'crates'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=crates",
+                    "--package=solana-cargo-build-sbf"
+                ],
+                "filter": {
+                    "name": "crates",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'cargo-test-bpf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=cargo-test-bpf",
+                    "--package=solana-cargo-test-bpf"
+                ],
+                "filter": {
+                    "name": "cargo-test-bpf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'cargo-test-bpf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=cargo-test-bpf",
+                    "--package=solana-cargo-test-bpf"
+                ],
+                "filter": {
+                    "name": "cargo-test-bpf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'cargo-test-sbf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=cargo-test-sbf",
+                    "--package=solana-cargo-test-sbf"
+                ],
+                "filter": {
+                    "name": "cargo-test-sbf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'cargo-test-sbf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=cargo-test-sbf",
+                    "--package=solana-cargo-test-sbf"
+                ],
+                "filter": {
+                    "name": "cargo-test-sbf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gen-headers'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gen-headers",
+                    "--package=gen-headers"
+                ],
+                "filter": {
+                    "name": "gen-headers",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gen-headers'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gen-headers",
+                    "--package=gen-headers"
+                ],
+                "filter": {
+                    "name": "gen-headers",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-stake-accounts'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-stake-accounts",
+                    "--package=solana-stake-accounts"
+                ],
+                "filter": {
+                    "name": "solana-stake-accounts",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-stake-accounts'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-stake-accounts",
+                    "--package=solana-stake-accounts"
+                ],
+                "filter": {
+                    "name": "solana-stake-accounts",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'proto'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=proto",
+                    "--package=proto"
+                ],
+                "filter": {
+                    "name": "proto",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'proto'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=proto",
+                    "--package=proto"
+                ],
+                "filter": {
+                    "name": "proto",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-tokens'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-tokens"
+                ],
+                "filter": {
+                    "name": "solana-tokens",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-tokens'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-tokens",
+                    "--package=solana-tokens"
+                ],
+                "filter": {
+                    "name": "solana-tokens",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-tokens'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-tokens",
+                    "--package=solana-tokens"
+                ],
+                "filter": {
+                    "name": "solana-tokens",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'commands'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=commands",
+                    "--package=solana-tokens"
+                ],
+                "filter": {
+                    "name": "commands",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-transaction-dos'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-transaction-dos",
+                    "--package=solana-transaction-dos"
+                ],
+                "filter": {
+                    "name": "solana-transaction-dos",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-transaction-dos'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-transaction-dos",
+                    "--package=solana-transaction-dos"
+                ],
+                "filter": {
+                    "name": "solana-transaction-dos",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-upload-perf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-upload-perf",
+                    "--package=solana-upload-perf"
+                ],
+                "filter": {
+                    "name": "solana-upload-perf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-upload-perf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-upload-perf",
+                    "--package=solana-upload-perf"
+                ],
+                "filter": {
+                    "name": "solana-upload-perf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'solana-validator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=solana-validator"
+                ],
+                "filter": {
+                    "name": "solana-validator",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-validator'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-validator",
+                    "--package=solana-validator"
+                ],
+                "filter": {
+                    "name": "solana-validator",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-validator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-validator",
+                    "--package=solana-validator"
+                ],
+                "filter": {
+                    "name": "solana-validator",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-test-validator'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-test-validator",
+                    "--package=solana-validator"
+                ],
+                "filter": {
+                    "name": "solana-test-validator",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-test-validator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-test-validator",
+                    "--package=solana-validator"
+                ],
+                "filter": {
+                    "name": "solana-test-validator",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-watchtower'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-watchtower",
+                    "--package=solana-watchtower"
+                ],
+                "filter": {
+                    "name": "solana-watchtower",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-watchtower'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-watchtower",
+                    "--package=solana-watchtower"
+                ],
+                "filter": {
+                    "name": "solana-watchtower",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'solana-zk-keygen'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=solana-zk-keygen",
+                    "--package=solana-zk-keygen"
+                ],
+                "filter": {
+                    "name": "solana-zk-keygen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'solana-zk-keygen'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=solana-zk-keygen",
+                    "--package=solana-zk-keygen"
+                ],
+                "filter": {
+                    "name": "solana-zk-keygen",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -10,6 +10,7 @@ use {
         serde_varint, short_vec,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_version::Version,
     static_assertions::const_assert_eq,
     std::{
         collections::HashSet,
@@ -195,6 +196,29 @@ impl ContactInfo {
         }
     }
 
+    pub fn new_versioned(
+        pubkey: Pubkey,
+        wallclock: u64,
+        shred_version: u16,
+        version: solana_version::Version,
+    ) -> Self {
+        Self {
+            pubkey,
+            wallclock,
+            outset: {
+                let now = SystemTime::now();
+                let elapsed = now.duration_since(UNIX_EPOCH).unwrap();
+                u64::try_from(elapsed.as_micros()).unwrap()
+            },
+            shred_version,
+            version: version,
+            addrs: Vec::<IpAddr>::default(),
+            sockets: Vec::<SocketEntry>::default(),
+            extensions: Vec::<Extension>::default(),
+            cache: [SOCKET_ADDR_UNSPECIFIED; SOCKET_CACHE_SIZE],
+        }
+    }
+
     #[inline]
     pub fn pubkey(&self) -> &Pubkey {
         &self.pubkey
@@ -220,6 +244,10 @@ impl ContactInfo {
 
     pub fn set_shred_version(&mut self, shred_version: u16) {
         self.shred_version = shred_version
+    }
+
+    pub fn set_version(&mut self, version: Version) {
+        self.version = version;
     }
 
     get_socket!(gossip, SOCKET_TAG_GOSSIP);

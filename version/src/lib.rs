@@ -13,7 +13,7 @@ extern crate solana_frozen_abi_macro;
 mod legacy;
 
 #[derive(Debug, Eq, PartialEq)]
-enum ClientId {
+pub enum ClientId {
     SolanaLabs,
     JitoLabs,
     Firedancer,
@@ -36,6 +36,17 @@ pub struct Version {
 }
 
 impl Version {
+    pub fn new(major: u16, minor: u16, patch: u16, commit: u32, feature_set: u32) -> Self {
+        Version {
+            major,
+            minor,
+            patch,
+            commit,
+            feature_set,
+            client: u16::try_from(ClientId::SolanaLabs).unwrap(),
+        }
+    }
+
     pub fn as_semver_version(&self) -> semver::Version {
         semver::Version::new(self.major as u64, self.minor as u64, self.patch as u64)
     }
@@ -43,9 +54,19 @@ impl Version {
     fn client(&self) -> ClientId {
         ClientId::from(self.client)
     }
+
+    pub fn to_legacy_version_2(&self) -> LegacyVersion2 {
+        LegacyVersion2 {
+            major: self.major,
+            minor: self.minor,
+            patch: self.patch,
+            commit: Some(self.commit),
+            feature_set: self.feature_set,
+        }
+    }
 }
 
-fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
+pub fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
     u32::from_str_radix(sha1?.get(..8)?, /*radix:*/ 16).ok()
 }
 

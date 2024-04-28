@@ -15,6 +15,7 @@ use {
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
     },
+    solana_version::{LegacyVersion2, Version},
     std::{
         collections::HashSet,
         net::{SocketAddr, TcpListener, UdpSocket},
@@ -77,7 +78,77 @@ impl GossipService {
         let t_gossip =
             cluster_info
                 .clone()
-                .gossip(bank_forks, response_sender, gossip_validators, exit);
+                .gossip(bank_forks, response_sender, gossip_validators, exit, None);
+        let t_responder = streamer::responder(
+            "Gossip",
+            gossip_socket,
+            response_receiver,
+            socket_addr_space,
+            stats_reporter_sender,
+        );
+        let thread_hdls = vec![
+            t_receiver,
+            t_responder,
+            t_socket_consume,
+            t_listen,
+            t_gossip,
+        ];
+        Self { thread_hdls }
+    }
+
+    pub fn new_beacon(
+        cluster_info: &Arc<ClusterInfo>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
+        gossip_socket: UdpSocket,
+        gossip_validators: Option<HashSet<Pubkey>>,
+        should_check_duplicate_instance: bool,
+        stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
+        legacy_solana_version: LegacyVersion2,
+        exit: Arc<AtomicBool>,
+    ) -> Self {
+        let (request_sender, request_receiver) = unbounded();
+        let gossip_socket = Arc::new(gossip_socket);
+        trace!(
+            "GossipService: id: {}, listening on: {:?}",
+            &cluster_info.id(),
+            gossip_socket.local_addr().unwrap()
+        );
+        let socket_addr_space = *cluster_info.socket_addr_space();
+        let t_receiver = streamer::receiver(
+            gossip_socket.clone(),
+            exit.clone(),
+            request_sender,
+            Recycler::default(),
+            Arc::new(StreamerReceiveStats::new("gossip_receiver")),
+            Duration::from_millis(1), // coalesce
+            false,
+            None,
+            false,
+        );
+
+        let (consume_sender, listen_receiver) = unbounded();
+        let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
+            request_receiver,
+            consume_sender,
+            exit.clone(),
+        );
+
+        let (response_sender, response_receiver) = unbounded();
+        let t_listen = cluster_info.clone().listen(
+            bank_forks.clone(),
+            listen_receiver,
+            response_sender.clone(),
+            should_check_duplicate_instance,
+            exit.clone(),
+        );
+        let t_gossip = cluster_info.clone().gossip(
+            bank_forks,
+            response_sender,
+            gossip_validators,
+            exit,
+            Some(legacy_solana_version),
+        );
+
         let t_responder = streamer::responder(
             "Gossip",
             gossip_socket,
@@ -310,7 +381,7 @@ pub fn make_gossip_node(
     socket_addr_space: SocketAddrSpace,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
-        ClusterInfo::gossip_node(keypair.pubkey(), gossip_addr, shred_version)
+        ClusterInfo::gossip_node(keypair.pubkey(), gossip_addr, shred_version, None)
     } else {
         ClusterInfo::spy_node(keypair.pubkey(), shred_version)
     };
@@ -326,6 +397,47 @@ pub fn make_gossip_node(
         None,
         should_check_duplicate_instance,
         None,
+        exit,
+    );
+    (gossip_service, ip_echo, cluster_info)
+}
+
+pub fn make_beacon_node(
+    keypair: Keypair,
+    entrypoint: Option<&SocketAddr>,
+    exit: Arc<AtomicBool>,
+    gossip_addr: Option<&SocketAddr>,
+    shred_version: u16,
+    should_check_duplicate_instance: bool,
+    socket_addr_space: SocketAddrSpace,
+    solana_version: Version,
+) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
+    let (mut node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
+        ClusterInfo::gossip_node(
+            keypair.pubkey(),
+            gossip_addr,
+            shred_version,
+            Some(solana_version.clone()),
+        )
+    } else {
+        ClusterInfo::spy_node(keypair.pubkey(), shred_version)
+    };
+    let cluster_info = ClusterInfo::new(node, Arc::new(keypair), socket_addr_space);
+    if let Some(entrypoint) = entrypoint {
+        cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
+    }
+    let cluster_info = Arc::new(cluster_info);
+
+    let legacy_version = solana_version.to_legacy_version_2();
+
+    let gossip_service = GossipService::new_beacon(
+        &cluster_info,
+        None,
+        gossip_socket,
+        None,
+        should_check_duplicate_instance,
+        None,
+        legacy_version,
         exit,
     );
     (gossip_service, ip_echo, cluster_info)
