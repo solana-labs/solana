@@ -31,6 +31,8 @@ use {
 fn get_devnet_entrypoint_keys() -> HashSet<Pubkey> {
     let mut keys = HashSet::new();
     keys.insert(Pubkey::from_str("9zi76mvDyzPPWx7Dg32hTGVhvCDVzv9X7H13QPG5nGfq").unwrap());
+    keys.insert(Pubkey::from_str("dv3qDFk1DTF36Z62bNvrCXe9sKATA6xvVy6A798xxAS").unwrap());
+    keys.insert(Pubkey::from_str("dv2eQHeP4RFrJZ6UeiZWoc3XTtmtZCUKxxCApCDcRNV").unwrap());
     keys
 }
 
@@ -42,7 +44,7 @@ fn get_mainnet_entrypoint_keys() -> HashSet<Pubkey> {
     keys
 }
 fn get_devnet_entrypoint_socket_addr() -> SocketAddr {
-    return SocketAddr::from(([186, 233, 187, 23], 8002));
+    return SocketAddr::from(([35, 197, 53, 105], 8001));
 }
 
 fn get_mainnet_entrypoint_socket_addr() -> SocketAddr {
@@ -59,7 +61,7 @@ fn main() {
 
     let exit = Arc::new(AtomicBool::new(false));
 
-    let is_mainnet = true;
+    let is_mainnet = false;
 
     let entrypoint_addr = if is_mainnet {
         get_mainnet_entrypoint_socket_addr()
