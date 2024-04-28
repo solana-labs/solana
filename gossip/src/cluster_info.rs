@@ -1874,6 +1874,113 @@ impl ClusterInfo {
             .unwrap()
     }
 
+    pub fn beacon_gossip(
+        self: Arc<Self>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
+        sender: PacketBatchSender,
+        gossip_validators: Option<HashSet<Pubkey>>,
+        exit: Arc<AtomicBool>,
+        solana_version_override: Option<LegacyVersion2>,
+    ) -> JoinHandle<()> {
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(std::cmp::min(get_thread_count(), 8))
+            .thread_name(|i| format!("solRunGossip{i:02}"))
+            .build()
+            .unwrap();
+        Builder::new()
+            .name("solGossip".to_string())
+            .spawn(move || {
+                let mut last_push = 0;
+                let mut last_contact_info_trace = timestamp();
+                let mut last_contact_info_save = timestamp();
+                let mut entrypoints_processed = false;
+                let recycler = PacketBatchRecycler::default();
+
+                let version = if let Some(solana_version_override) = solana_version_override {
+                    Version::new_with_version(self.id(), solana_version_override)
+                } else {
+                    Version::new(self.id())
+                };
+
+                let crds_data = vec![
+                    CrdsData::Version(version),
+                    CrdsData::NodeInstance(
+                        self.instance.read().unwrap().with_wallclock(timestamp()),
+                    ),
+                ];
+
+                for value in crds_data {
+                    let value = CrdsValue::new_signed(value, &self.keypair());
+                    self.push_message(value);
+                }
+                let generate_pull_requests = false;
+                loop {
+                    let start = timestamp();
+                    if self.contact_debug_interval != 0
+                        && start - last_contact_info_trace > self.contact_debug_interval
+                    {
+                        // Log contact info
+                        info!(
+                            "\n{}\n\n{}",
+                            self.contact_info_trace(),
+                            self.rpc_info_trace()
+                        );
+                        last_contact_info_trace = start;
+                    }
+
+                    if self.contact_save_interval != 0
+                        && start - last_contact_info_save > self.contact_save_interval
+                    {
+                        self.save_contact_info();
+                        last_contact_info_save = start;
+                    }
+
+                    let (stakes, _feature_set) = match bank_forks {
+                        Some(ref bank_forks) => {
+                            let root_bank = bank_forks.read().unwrap().root_bank();
+                            (
+                                root_bank.staked_nodes(),
+                                Some(root_bank.feature_set.clone()),
+                            )
+                        }
+                        None => (Arc::default(), None),
+                    };
+                    let _ = self.run_gossip(
+                        &thread_pool,
+                        gossip_validators.as_ref(),
+                        &recycler,
+                        &stakes,
+                        &sender,
+                        generate_pull_requests,
+                    );
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    self.handle_purge(&thread_pool, bank_forks.as_deref(), &stakes);
+                    entrypoints_processed = entrypoints_processed || self.process_entrypoints();
+                    //TODO: possibly tune this parameter
+                    //we saw a deadlock passing an self.read().unwrap().timeout into sleep
+                    if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
+                        self.push_self();
+                        self.refresh_push_active_set(
+                            &recycler,
+                            &stakes,
+                            gossip_validators.as_ref(),
+                            &sender,
+                        );
+                        last_push = timestamp();
+                    }
+                    let elapsed = timestamp() - start;
+                    if GOSSIP_SLEEP_MILLIS > elapsed {
+                        let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
+                        sleep(Duration::from_millis(time_left));
+                    }
+                    // generate_pull_requests = !generate_pull_requests;
+                }
+            })
+            .unwrap()
+    }
+
     fn handle_batch_prune_messages(&self, messages: Vec<PruneData>, stakes: &HashMap<Pubkey, u64>) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
