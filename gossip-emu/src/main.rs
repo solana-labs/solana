@@ -14,9 +14,11 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_version::Version,
-    std::env,
     std::{
+        collections::HashSet,
+        env,
         net::SocketAddr,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -31,7 +33,6 @@ fn main() {
     env_logger::init();
 
     let keypair = Keypair::new();
-    let cloned_keypair = keypair.insecure_clone();
 
     println!("pubkey: {:?}", keypair.pubkey());
 
@@ -41,6 +42,12 @@ fn main() {
     let entrypoint = Some(&entrypoint_addr);
     let gossip_addr_addr = SocketAddr::from(([186, 233, 187, 23], 8002));
     let gossip_addr = Some(&gossip_addr_addr);
+
+    let entrypoint_pubkey = Pubkey::from_str("9zi76mvDyzPPWx7Dg32hTGVhvCDVzv9X7H13QPG5nGfq")
+        .expect("failed to parse entrypoint public key");
+
+    let mut gossip_member_whitelist = HashSet::new();
+    gossip_member_whitelist.insert(entrypoint_pubkey);
 
     let shred_version = 45127;
     let should_check_duplicate_instance = true;
@@ -52,11 +59,11 @@ fn main() {
             .unwrap(),
     );
 
-    let static_feature_set = 3746964731u32;
+    let static_feature_set = 3469865029u32;
     let commit = solana_version::compute_commit(Some("d0b1f2c7c0ac90543ed6935f65b7cfc4673f74da"))
         .unwrap_or_default();
 
-    let solana_version = Version::new(1, 33, 7, commit, static_feature_set);
+    let solana_version = Version::new(1, 18, 11, commit, static_feature_set);
 
     println!("solana_version: {:?}", solana_version.as_semver_version());
 
@@ -69,6 +76,7 @@ fn main() {
         should_check_duplicate_instance,
         socket_addr_space,
         solana_version,
+        Some(gossip_member_whitelist),
     );
 
     loop {

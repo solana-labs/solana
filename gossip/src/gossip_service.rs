@@ -141,7 +141,7 @@ impl GossipService {
             should_check_duplicate_instance,
             exit.clone(),
         );
-        let t_gossip = cluster_info.clone().beacon_gossip(
+        let t_gossip = cluster_info.clone().gossip(
             bank_forks,
             response_sender,
             gossip_validators,
@@ -411,6 +411,7 @@ pub fn make_beacon_node(
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
     solana_version: Version,
+    whitelisted_gossip_members: Option<HashSet<Pubkey>>,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let (mut node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(
@@ -434,7 +435,7 @@ pub fn make_beacon_node(
         &cluster_info,
         None,
         gossip_socket,
-        None,
+        whitelisted_gossip_members,
         should_check_duplicate_instance,
         None,
         legacy_version,
