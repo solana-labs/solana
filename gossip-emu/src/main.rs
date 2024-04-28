@@ -28,6 +28,27 @@ use {
     },
 };
 
+fn get_devnet_entrypoint_keys() -> HashSet<Pubkey> {
+    let mut keys = HashSet::new();
+    keys.insert(Pubkey::from_str("9zi76mvDyzPPWx7Dg32hTGVhvCDVzv9X7H13QPG5nGfq").unwrap());
+    keys
+}
+
+fn get_mainnet_entrypoint_keys() -> HashSet<Pubkey> {
+    let mut keys = HashSet::new();
+    keys.insert(Pubkey::from_str("7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2").unwrap());
+    keys.insert(Pubkey::from_str("XLMPQY5KgC945dUiN2jAKfd7gpMmDqEVkPayPsCbVdM").unwrap());
+    keys.insert(Pubkey::from_str("GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ").unwrap());
+    keys
+}
+fn get_devnet_entrypoint_socket_addr() -> SocketAddr {
+    return SocketAddr::from(([186, 233, 187, 23], 8002));
+}
+
+fn get_mainnet_entrypoint_socket_addr() -> SocketAddr {
+    return SocketAddr::from(([145, 40, 67, 83], 8001));
+}
+
 fn main() {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
@@ -38,18 +59,25 @@ fn main() {
 
     let exit = Arc::new(AtomicBool::new(false));
 
-    let entrypoint_addr = SocketAddr::from(([35, 197, 53, 105], 8001));
+    let is_mainnet = true;
+
+    let entrypoint_addr = if is_mainnet {
+        get_mainnet_entrypoint_socket_addr()
+    } else {
+        get_devnet_entrypoint_socket_addr()
+    };
     let entrypoint = Some(&entrypoint_addr);
+
+    let gossip_member_whitelist = if is_mainnet {
+        get_mainnet_entrypoint_keys()
+    } else {
+        get_devnet_entrypoint_keys()
+    };
+
     let gossip_addr_addr = SocketAddr::from(([186, 233, 187, 23], 8002));
     let gossip_addr = Some(&gossip_addr_addr);
 
-    let entrypoint_pubkey = Pubkey::from_str("9zi76mvDyzPPWx7Dg32hTGVhvCDVzv9X7H13QPG5nGfq")
-        .expect("failed to parse entrypoint public key");
-
-    let mut gossip_member_whitelist = HashSet::new();
-    gossip_member_whitelist.insert(entrypoint_pubkey);
-
-    let shred_version = 45127;
+    let shred_version = if is_mainnet { 50093 } else { 45127 };
     let should_check_duplicate_instance = true;
     let socket_addr_space = SocketAddrSpace::Global;
 
