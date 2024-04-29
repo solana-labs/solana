@@ -118,7 +118,7 @@ fn node_emu() {
         should_check_duplicate_instance,
         socket_addr_space,
         solana_version,
-        Some(gossip_member_whitelist),
+        None,
     );
 
     loop {
