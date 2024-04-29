@@ -377,9 +377,38 @@ mod tests {
 
         const MIN_PUBKEY: Pubkey = Pubkey::new_from_array([0x00u8; 32]);
         const MAX_PUBKEY: Pubkey = Pubkey::new_from_array([0xFFu8; 32]);
-        let mut min_pubkey_ref = &MAX_PUBKEY;
-        let mut max_pubkey_ref = &MIN_PUBKEY;
+        let mut min_pubkey = MAX_PUBKEY;
+        let mut max_pubkey = MIN_PUBKEY;
 
+        reader
+            .scan_accounts(|stored_account_meta| {
+                if let Some(account) = expected_accounts_map.get(stored_account_meta.pubkey()) {
+                    verify_test_account_with_footer(
+                        &stored_account_meta,
+                        account,
+                        stored_account_meta.pubkey(),
+                        footer,
+                    );
+                    verified_accounts.insert(*stored_account_meta.pubkey());
+                    if min_pubkey > *stored_account_meta.pubkey() {
+                        min_pubkey = *stored_account_meta.pubkey();
+                    }
+                    if max_pubkey < *stored_account_meta.pubkey() {
+                        max_pubkey = *stored_account_meta.pubkey();
+                    }
+                }
+            })
+            .unwrap();
+
+        assert_eq!(footer.min_account_address, min_pubkey);
+        assert_eq!(footer.max_account_address, max_pubkey);
+        assert!(!verified_accounts.is_empty());
+        assert_eq!(verified_accounts.len(), expected_accounts_map.len());
+
+        // try again with get_stored_account_meta
+        verified_accounts = HashSet::new();
+        min_pubkey = MAX_PUBKEY;
+        max_pubkey = MIN_PUBKEY;
         while let Some((stored_account_meta, next)) =
             reader.get_stored_account_meta(index_offset).unwrap()
         {
@@ -390,18 +419,18 @@ mod tests {
                     stored_account_meta.pubkey(),
                     footer,
                 );
-                verified_accounts.insert(stored_account_meta.pubkey());
-                if *min_pubkey_ref > *stored_account_meta.pubkey() {
-                    min_pubkey_ref = stored_account_meta.pubkey();
+                verified_accounts.insert(*stored_account_meta.pubkey());
+                if min_pubkey > *stored_account_meta.pubkey() {
+                    min_pubkey = *stored_account_meta.pubkey();
                 }
-                if *max_pubkey_ref < *stored_account_meta.pubkey() {
-                    max_pubkey_ref = stored_account_meta.pubkey();
+                if max_pubkey < *stored_account_meta.pubkey() {
+                    max_pubkey = *stored_account_meta.pubkey();
                 }
             }
             index_offset = next;
         }
-        assert_eq!(footer.min_account_address, *min_pubkey_ref);
-        assert_eq!(footer.max_account_address, *max_pubkey_ref);
+        assert_eq!(footer.min_account_address, min_pubkey);
+        assert_eq!(footer.max_account_address, max_pubkey);
         assert!(!verified_accounts.is_empty());
         assert_eq!(verified_accounts.len(), expected_accounts_map.len())
     }
