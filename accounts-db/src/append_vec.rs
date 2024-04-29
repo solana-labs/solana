@@ -400,24 +400,28 @@ impl AppendVec {
     }
 
     fn sanitize_layout_and_length(&self) -> (bool, usize) {
-        let mut offset = 0;
-
         // This discards allocated accounts immediately after check at each loop iteration.
         //
         // This code should not reuse AppendVec.accounts() method as the current form or
         // extend it to be reused here because it would allow attackers to accumulate
         // some measurable amount of memory needlessly.
         let mut num_accounts = 0;
-        while let Some((account, next_offset)) = self.get_stored_account_meta(offset) {
-            if !account.sanitize() {
-                return (false, num_accounts);
+        let mut matches = true;
+        let mut last_offset = 0;
+        self.scan_accounts(|account| {
+            if !matches || !account.sanitize() {
+                matches = false;
+                return;
             }
-            offset = next_offset;
+            last_offset = account.offset() + account.stored_size();
             num_accounts += 1;
+        });
+        if !matches {
+            return (false, num_accounts);
         }
         let aligned_current_len = u64_align!(self.current_len.load(Ordering::Acquire));
 
-        (offset == aligned_current_len, num_accounts)
+        (last_offset == aligned_current_len, num_accounts)
     }
 
     /// Get a reference to the data at `offset` of `size` bytes if that slice
