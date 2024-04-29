@@ -1461,28 +1461,29 @@ mod tests {
         let hot_storage = HotStorageReader::new(file).unwrap();
 
         for i in 0..NUM_ACCOUNTS {
-            let (stored_account_meta, next) = hot_storage
-                .get_stored_account_meta(IndexOffset(i as u32))
+            hot_storage
+                .get_stored_account_meta_callback(IndexOffset(i as u32), |stored_account_meta| {
+                    assert_eq!(
+                        stored_account_meta.lamports(),
+                        test_info.metas[i].lamports()
+                    );
+                    assert_eq!(stored_account_meta.data().len(), test_info.datas[i].len());
+                    assert_eq!(stored_account_meta.data(), test_info.datas[i]);
+                    assert_eq!(
+                        *stored_account_meta.owner(),
+                        test_info.owners[test_info.metas[i].owner_offset().0 as usize]
+                    );
+                    assert_eq!(*stored_account_meta.pubkey(), test_info.addresses[i]);
+                })
                 .unwrap()
                 .unwrap();
-            assert_eq!(
-                stored_account_meta.lamports(),
-                test_info.metas[i].lamports()
-            );
-            assert_eq!(stored_account_meta.data().len(), test_info.datas[i].len());
-            assert_eq!(stored_account_meta.data(), test_info.datas[i]);
-            assert_eq!(
-                *stored_account_meta.owner(),
-                test_info.owners[test_info.metas[i].owner_offset().0 as usize]
-            );
-            assert_eq!(*stored_account_meta.pubkey(), test_info.addresses[i]);
-
-            assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
         assert_matches!(
-            hot_storage.get_stored_account_meta(IndexOffset(NUM_ACCOUNTS as u32)),
+            hot_storage.get_stored_account_meta_callback(IndexOffset(NUM_ACCOUNTS as u32), |_| {
+                panic!("unexpected");
+            }),
             Ok(None)
         );
     }
@@ -1564,41 +1565,44 @@ mod tests {
 
         let num_accounts = account_data_sizes.len();
         for i in 0..num_accounts {
-            let (stored_account_meta, next) = hot_storage
-                .get_stored_account_meta(IndexOffset(i as u32))
+            hot_storage
+                .get_stored_account_meta_callback(IndexOffset(i as u32), |stored_account_meta| {
+                    storable_accounts.account_default_if_zero_lamport(i, |account| {
+                        verify_test_account(
+                            &stored_account_meta,
+                            &account.to_account_shared_data(),
+                            account.pubkey(),
+                        );
+                    });
+                })
                 .unwrap()
                 .unwrap();
-
-            storable_accounts.account_default_if_zero_lamport(i, |account| {
-                verify_test_account(
-                    &stored_account_meta,
-                    &account.to_account_shared_data(),
-                    account.pubkey(),
-                );
-            });
-
-            assert_eq!(i + 1, next.0 as usize);
         }
         // Make sure it returns None on NUM_ACCOUNTS to allow termination on
         // while loop in actual accounts-db read case.
         assert_matches!(
-            hot_storage.get_stored_account_meta(IndexOffset(num_accounts as u32)),
+            hot_storage.get_stored_account_meta_callback(IndexOffset(num_accounts as u32), |_| {
+                panic!("unexpected");
+            }),
             Ok(None)
         );
 
         for offset in stored_accounts_info.offsets {
-            let (stored_account_meta, _) = hot_storage
-                .get_stored_account_meta(IndexOffset(offset as u32))
+            hot_storage
+                .get_stored_account_meta_callback(
+                    IndexOffset(offset as u32),
+                    |stored_account_meta| {
+                        storable_accounts.account_default_if_zero_lamport(offset, |account| {
+                            verify_test_account(
+                                &stored_account_meta,
+                                &account.to_account_shared_data(),
+                                account.pubkey(),
+                            );
+                        });
+                    },
+                )
                 .unwrap()
                 .unwrap();
-
-            storable_accounts.account_default_if_zero_lamport(offset, |account| {
-                verify_test_account(
-                    &stored_account_meta,
-                    &account.to_account_shared_data(),
-                    account.pubkey(),
-                );
-            });
         }
 
         // verify get_accounts
