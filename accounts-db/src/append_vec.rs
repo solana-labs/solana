@@ -42,6 +42,8 @@ use {
 };
 
 pub mod test_utils;
+#[cfg(test)]
+use solana_sdk::account::accounts_equal;
 
 /// size of the fixed sized fields in an append vec
 /// we need to add data len and align it to get the actual stored size
@@ -579,27 +581,34 @@ impl AppendVec {
         &self,
         offset: usize,
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
-        let r1 = self.get_stored_account_meta(offset);
-        let r2 = self.get_account_shared_data(offset);
-        let r3 = self.get_account_meta(offset);
         let sizes = self.get_account_sizes(&[offset]);
-        if r1.is_some() {
+        let result = self.get_stored_account_meta_callback(offset, |r_callback| {
+            let r1 = self.get_stored_account_meta(offset).unwrap();
+            let r2 = self.get_account_shared_data(offset);
+            let r3 = self.get_account_meta(offset);
+            assert!(accounts_equal(&r_callback, &r1.0));
             // r3 can return Some when r1 and r2 do not
             assert!(r3.is_some());
-            assert_eq!(sizes, vec![r1.as_ref().unwrap().0.stored_size()]);
-        } else {
+            assert_eq!(sizes, vec![r1.0.stored_size()]);
+            if let Some(r2) = r2.as_ref() {
+                let meta = r3.unwrap();
+                assert_eq!(meta.executable, r2.executable());
+                assert_eq!(meta.owner, *r2.owner());
+                assert_eq!(meta.lamports, r2.lamports());
+                assert_eq!(meta.rent_epoch, r2.rent_epoch());
+            }
+            let (stored_account, _) = r1;
+            let meta = stored_account.meta().clone();
+            Some((meta, stored_account.to_account_shared_data()))
+        });
+        if result.is_none() {
+            assert!(self.get_stored_account_meta(offset).is_none());
+            assert!(self.get_account_shared_data(offset).is_none());
+            // note that sometimes `get_account_meta` can return Some(..) // assert!(self.get_account_meta(offset).is_none());
+            // it has different rules for checking len and returning None
             assert!(sizes.is_empty());
         }
-        if let Some(r2) = r2.as_ref() {
-            let meta = r3.unwrap();
-            assert_eq!(meta.executable, r2.executable());
-            assert_eq!(meta.owner, *r2.owner());
-            assert_eq!(meta.lamports, r2.lamports());
-            assert_eq!(meta.rent_epoch, r2.rent_epoch());
-        }
-        let (stored_account, _) = r1?;
-        let meta = stored_account.meta().clone();
-        Some((meta, stored_account.to_account_shared_data()))
+        result.flatten()
     }
 
     /// Returns the path to the file where the data is stored
