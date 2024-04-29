@@ -34,9 +34,9 @@ pub struct ValidityProofVerificationError(#[from] pub(crate) SigmaProofVerificat
 impl_from_transcript_error!(ValidityProofVerificationError);
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-#[error("zero-balance proof verification failed: {0}")]
-pub struct ZeroBalanceProofVerificationError(#[from] pub(crate) SigmaProofVerificationError);
-impl_from_transcript_error!(ZeroBalanceProofVerificationError);
+#[error("zero-ciphertext proof verification failed: {0}")]
+pub struct ZeroCiphertextProofVerificationError(#[from] pub(crate) SigmaProofVerificationError);
+impl_from_transcript_error!(ZeroCiphertextProofVerificationError);
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 #[error("fee sigma proof verification failed: {0}")]

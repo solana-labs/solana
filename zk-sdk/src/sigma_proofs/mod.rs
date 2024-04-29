@@ -15,7 +15,7 @@ pub mod ciphertext_commitment_equality;
 pub mod fee;
 pub mod grouped_ciphertext_validity;
 pub mod pubkey;
-pub mod zero_balance;
+pub mod zero_ciphertext;
 
 use {
     crate::{sigma_proofs::errors::SigmaProofVerificationError, RISTRETTO_POINT_LEN, SCALAR_LEN},
