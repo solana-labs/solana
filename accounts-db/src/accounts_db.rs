@@ -9341,8 +9341,10 @@ impl AccountsDb {
         let total_count = store.count();
         assert_eq!(store.status(), AccountStorageStatus::Available);
         assert_eq!(total_count, count);
-        let (expected_store_count, actual_store_count): (usize, usize) =
-            (store.approx_stored_count(), store.all_accounts().len());
+        let (expected_store_count, actual_store_count): (usize, usize) = (
+            store.approx_stored_count(),
+            self.all_account_count_in_accounts_file(slot),
+        );
         assert_eq!(expected_store_count, actual_store_count);
     }
 
@@ -9426,7 +9428,8 @@ impl AccountsDb {
     pub fn all_account_count_in_accounts_file(&self, slot: Slot) -> usize {
         let store = self.storage.get_slot_storage_entry(slot);
         if let Some(store) = store {
-            let count = store.all_accounts().len();
+            let mut count = 0;
+            store.accounts.scan_accounts(|_| count += 1);
             let stored_count = store.approx_stored_count();
             assert_eq!(stored_count, count);
             count
