@@ -128,10 +128,6 @@ impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
         self.meta
     }
 
-    pub fn set_meta(&mut self, meta: &'append_vec StoredMeta) {
-        self.meta = meta;
-    }
-
     pub(crate) fn sanitize(&self) -> bool {
         self.sanitize_executable() && self.sanitize_lamports()
     }

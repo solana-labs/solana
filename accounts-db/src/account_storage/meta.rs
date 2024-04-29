@@ -84,15 +84,6 @@ impl<'storage> StoredAccountMeta<'storage> {
         }
     }
 
-    pub fn set_meta(&mut self, meta: &'storage StoredMeta) {
-        match self {
-            Self::AppendVec(av) => av.set_meta(meta),
-            // Hot account does not support this API as it does not
-            // use the same in-memory layout as StoredMeta.
-            Self::Hot(_) => unreachable!(),
-        }
-    }
-
     pub(crate) fn sanitize(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.sanitize(),
