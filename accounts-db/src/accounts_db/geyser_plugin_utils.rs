@@ -1,8 +1,5 @@
 use {
-    crate::{
-        account_storage::meta::{StoredAccountMeta, StoredMeta},
-        accounts_db::AccountsDb,
-    },
+    crate::{account_storage::meta::StoredAccountMeta, accounts_db::AccountsDb},
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{
@@ -146,18 +143,7 @@ impl AccountsDb {
     ) {
         let notifier = self.accounts_update_notifier.as_ref().unwrap();
         let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
-        let local_write_version = 0;
-        for mut account in accounts_to_stream {
-            // We do not need to rely on the specific write_version read from the append vec.
-            // So, overwrite the write_version with something that works.
-            // 'accounts_to_stream' is already a hashmap, so there is already only entry per pubkey.
-            // write_version is only used to order multiple entries with the same pubkey, so it doesn't matter what value it gets here.
-            // Passing 0 for everyone's write_version is sufficiently correct.
-            let meta = StoredMeta {
-                write_version_obsolete: local_write_version,
-                ..*account.meta()
-            };
-            account.set_meta(&meta);
+        for account in accounts_to_stream {
             let mut measure_pure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
             notifier.notify_account_restore_from_snapshot(slot, &account);
             measure_pure_notify.stop();
