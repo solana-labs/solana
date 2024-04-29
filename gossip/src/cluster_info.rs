@@ -272,7 +272,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 #[frozen_abi(digest = "ogEqvffeEkPpojAaSiUbCv2HdJcdXDQ1ykgYyvKvLo2")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum Protocol {
+pub enum Protocol {
     /// Gossip protocol messages
     PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
@@ -1515,23 +1515,26 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         let mut pings = Vec::new();
-        let mut pulls = {
-            let _st = ScopedTimer::from(&self.stats.new_pull_requests);
-            self.gossip
-                .new_pull_request(
-                    thread_pool,
-                    self.keypair().deref(),
-                    self.my_shred_version(),
-                    now,
-                    gossip_validators,
-                    stakes,
-                    MAX_BLOOM_SIZE,
-                    &self.ping_cache,
-                    &mut pings,
-                    &self.socket_addr_space,
-                )
-                .unwrap_or_default()
-        };
+
+        let mut pulls: HashMap<LegacyContactInfo, Vec<CrdsFilter>> = HashMap::new();
+        /*         let mut pulls = {
+                   let _st = ScopedTimer::from(&self.stats.new_pull_requests);
+                   self.gossip
+                       .new_pull_request(
+                           thread_pool,
+                           self.keypair().deref(),
+                           self.my_shred_version(),
+                           now,
+                           gossip_validators,
+                           stakes,
+                           MAX_BLOOM_SIZE,
+                           &self.ping_cache,
+                           &mut pings,
+                           &self.socket_addr_space,
+                       )
+                       .unwrap_or_default()
+               };
+        */
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
         let num_requests = pulls.values().map(Vec::len).sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
@@ -1634,7 +1637,7 @@ impl ClusterInfo {
                 .into_iter()
                 .map(|(addr, ping)| (addr, Protocol::PingMessage(ping)));
             out.extend(pull_requests);
-            out.extend(pings);
+            // out.extend(pings);
         }
         out
     }
@@ -1913,7 +1916,7 @@ impl ClusterInfo {
                     let value = CrdsValue::new_signed(value, &self.keypair());
                     self.push_message(value);
                 }
-                let generate_pull_requests = false;
+                let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
                     if self.contact_debug_interval != 0
@@ -1975,7 +1978,7 @@ impl ClusterInfo {
                         let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                         sleep(Duration::from_millis(time_left));
                     }
-                    // generate_pull_requests = !generate_pull_requests;
+                    generate_pull_requests = !generate_pull_requests;
                 }
             })
             .unwrap()
@@ -2546,6 +2549,7 @@ impl ClusterInfo {
         let mut prune_messages = vec![];
         let mut ping_messages = vec![];
         let mut pong_messages = vec![];
+
         for (from_addr, packet) in packets {
             match packet {
                 Protocol::PullRequest(filter, caller) => {
@@ -2571,6 +2575,7 @@ impl ClusterInfo {
             }
             push_messages.retain(|(_, data)| !data.is_empty());
         }
+
         self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
         self.handle_batch_prune_messages(prune_messages, stakes);
         self.handle_batch_push_messages(
@@ -3004,7 +3009,7 @@ impl Node {
         }
     }
 
-    fn get_gossip_port(
+    pub fn get_gossip_port(
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,

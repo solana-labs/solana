@@ -141,7 +141,7 @@ impl GossipService {
             should_check_duplicate_instance,
             exit.clone(),
         );
-        let t_gossip = cluster_info.clone().gossip(
+        let t_gossip = cluster_info.clone().beacon_gossip(
             bank_forks,
             response_sender,
             gossip_validators,

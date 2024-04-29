@@ -15,6 +15,9 @@ solana-net-utils = { workspace = true }
 solana-gossip = { workspace = true }
 solana-streamer = { workspace = true }
 solana-version = { workspace = true }
+solana-client = { workspace = true }
 memoffset = "0.7"
 log = "0.4"
 env_logger = "0.9"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
