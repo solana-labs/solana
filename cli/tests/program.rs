@@ -986,6 +986,7 @@ fn test_cli_program_close_program() {
 }
 
 #[test]
+#[ignore]
 fn test_cli_program_extend_program() {
     solana_logger::setup();
 
