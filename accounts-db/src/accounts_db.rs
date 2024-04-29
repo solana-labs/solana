@@ -3085,7 +3085,7 @@ impl AccountsDb {
                 return;
             }
             if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
-                storage.all_accounts().iter().for_each(|account| {
+                storage.accounts.scan_accounts(|account| {
                     let pk = account.pubkey();
                     match pubkey_refcount.entry(*pk) {
                         dashmap::mapref::entry::Entry::Occupied(mut occupied_entry) => {
