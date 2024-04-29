@@ -19,7 +19,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        contact_info::{ContactInfo, LegacyContactInfo, Protocol},
+        contact_info::{ContactInfo, Protocol},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
@@ -217,15 +217,15 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "3VzVe3kMrG6ijkVPyCGeJVA9hQjWcFEZbAQPc5Zizrjm")]
+#[frozen_abi(digest = "5cmSdmXMgkpUH5ZCmYYjxUVQfULe9iJqCqqfrADfsEmK")]
 pub enum RepairProtocol {
-    LegacyWindowIndex(LegacyContactInfo, Slot, u64),
-    LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
-    LegacyOrphan(LegacyContactInfo, Slot),
-    LegacyWindowIndexWithNonce(LegacyContactInfo, Slot, u64, Nonce),
-    LegacyHighestWindowIndexWithNonce(LegacyContactInfo, Slot, u64, Nonce),
-    LegacyOrphanWithNonce(LegacyContactInfo, Slot, Nonce),
-    LegacyAncestorHashes(LegacyContactInfo, Slot, Nonce),
+    LegacyWindowIndex,
+    LegacyHighestWindowIndex,
+    LegacyOrphan,
+    LegacyWindowIndexWithNonce,
+    LegacyHighestWindowIndexWithNonce,
+    LegacyOrphanWithNonce,
+    LegacyAncestorHashes,
     Pong(ping_pong::Pong),
     WindowIndex {
         header: RepairRequestHeader,
@@ -267,32 +267,32 @@ pub(crate) enum RepairResponse {
 }
 
 impl RepairProtocol {
-    fn sender(&self) -> &Pubkey {
+    fn sender(&self) -> Option<&Pubkey> {
         match self {
-            Self::LegacyWindowIndex(ci, _, _) => ci.pubkey(),
-            Self::LegacyHighestWindowIndex(ci, _, _) => ci.pubkey(),
-            Self::LegacyOrphan(ci, _) => ci.pubkey(),
-            Self::LegacyWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
-            Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
-            Self::LegacyOrphanWithNonce(ci, _, _) => ci.pubkey(),
-            Self::LegacyAncestorHashes(ci, _, _) => ci.pubkey(),
-            Self::Pong(pong) => pong.from(),
-            Self::WindowIndex { header, .. } => &header.sender,
-            Self::HighestWindowIndex { header, .. } => &header.sender,
-            Self::Orphan { header, .. } => &header.sender,
-            Self::AncestorHashes { header, .. } => &header.sender,
+            Self::LegacyWindowIndex
+            | Self::LegacyHighestWindowIndex
+            | Self::LegacyOrphan
+            | Self::LegacyWindowIndexWithNonce
+            | Self::LegacyHighestWindowIndexWithNonce
+            | Self::LegacyOrphanWithNonce
+            | Self::LegacyAncestorHashes => None,
+            Self::Pong(pong) => Some(pong.from()),
+            Self::WindowIndex { header, .. } => Some(&header.sender),
+            Self::HighestWindowIndex { header, .. } => Some(&header.sender),
+            Self::Orphan { header, .. } => Some(&header.sender),
+            Self::AncestorHashes { header, .. } => Some(&header.sender),
         }
     }
 
     fn supports_signature(&self) -> bool {
         match self {
-            Self::LegacyWindowIndex(_, _, _)
-            | Self::LegacyHighestWindowIndex(_, _, _)
-            | Self::LegacyOrphan(_, _)
-            | Self::LegacyWindowIndexWithNonce(_, _, _, _)
-            | Self::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | Self::LegacyOrphanWithNonce(_, _, _)
-            | Self::LegacyAncestorHashes(_, _, _) => false,
+            Self::LegacyWindowIndex
+            | Self::LegacyHighestWindowIndex
+            | Self::LegacyOrphan
+            | Self::LegacyWindowIndexWithNonce
+            | Self::LegacyHighestWindowIndexWithNonce
+            | Self::LegacyOrphanWithNonce
+            | Self::LegacyAncestorHashes => false,
             Self::Pong(_)
             | Self::WindowIndex { .. }
             | Self::HighestWindowIndex { .. }
@@ -308,13 +308,13 @@ impl RepairProtocol {
             | RepairProtocol::AncestorHashes { .. } => 1,
             RepairProtocol::Orphan { .. } => MAX_ORPHAN_REPAIR_RESPONSES,
             RepairProtocol::Pong(_) => 0, // no response
-            RepairProtocol::LegacyWindowIndex(_, _, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 0, // unsupported
+            RepairProtocol::LegacyWindowIndex
+            | RepairProtocol::LegacyHighestWindowIndex
+            | RepairProtocol::LegacyOrphan
+            | RepairProtocol::LegacyWindowIndexWithNonce
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce
+            | RepairProtocol::LegacyOrphanWithNonce
+            | RepairProtocol::LegacyAncestorHashes => 0, // unsupported
         }
     }
 
@@ -482,13 +482,13 @@ impl ServeRepair {
                     ping_cache.add(pong, *from_addr, Instant::now());
                     (None, "Pong")
                 }
-                RepairProtocol::LegacyWindowIndex(_, _, _)
-                | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-                | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-                | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-                | RepairProtocol::LegacyOrphan(_, _)
-                | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-                | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+                RepairProtocol::LegacyWindowIndex
+                | RepairProtocol::LegacyWindowIndexWithNonce
+                | RepairProtocol::LegacyHighestWindowIndex
+                | RepairProtocol::LegacyHighestWindowIndexWithNonce
+                | RepairProtocol::LegacyOrphan
+                | RepairProtocol::LegacyOrphanWithNonce
+                | RepairProtocol::LegacyAncestorHashes => {
                     error!("Unexpected legacy request: {request:?}");
                     debug_assert!(
                         false,
@@ -526,23 +526,26 @@ impl ServeRepair {
         }
         Self::verify_signed_packet(my_id, &remote_request.bytes, &request)?;
         if let Some(remote_pubkey) = remote_request.remote_pubkey {
-            if &remote_pubkey != request.sender() {
+            if Some(&remote_pubkey) != request.sender() {
                 error!(
-                    "remote pubkey {remote_pubkey} != request sender {}",
+                    "remote pubkey {remote_pubkey} != request sender {:?}",
                     request.sender()
                 );
             }
         }
-        if request.sender() == my_id {
+        if request.sender() == Some(my_id) {
             error!("self repair: from_addr={from_addr} my_id={my_id} request={request:?}");
             return Err(Error::from(RepairVerifyError::SelfRepair));
         }
         let stake = *epoch_staked_nodes
             .as_ref()
-            .and_then(|stakes| stakes.get(request.sender()))
+            .and_then(|stakes| stakes.get(request.sender()?))
             .unwrap_or(&0);
 
-        let whitelisted = whitelist.contains(request.sender());
+        let whitelisted = request
+            .sender()
+            .map(|pubkey| whitelist.contains(pubkey))
+            .unwrap_or_default();
 
         Ok(RepairRequestWithMeta {
             request,
@@ -846,13 +849,13 @@ impl ServeRepair {
 
     fn verify_signed_packet(my_id: &Pubkey, bytes: &[u8], request: &RepairProtocol) -> Result<()> {
         match request {
-            RepairProtocol::LegacyWindowIndex(_, _, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-            | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+            RepairProtocol::LegacyWindowIndex
+            | RepairProtocol::LegacyHighestWindowIndex
+            | RepairProtocol::LegacyOrphan
+            | RepairProtocol::LegacyWindowIndexWithNonce
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce
+            | RepairProtocol::LegacyOrphanWithNonce
+            | RepairProtocol::LegacyAncestorHashes => {
                 return Err(Error::from(RepairVerifyError::Unsigned));
             }
             RepairProtocol::Pong(pong) => {
@@ -885,7 +888,9 @@ impl ServeRepair {
                     );
                     return Err(Error::from(RepairVerifyError::Malformed));
                 };
-                let from_id = request.sender();
+                let Some(from_id) = request.sender() else {
+                    return Err(Error::from(RepairVerifyError::SigVerify));
+                };
                 let signed_data = [leading_buf, trailing_buf].concat();
                 if !header.signature.verify(from_id.as_ref(), &signed_data) {
                     return Err(Error::from(RepairVerifyError::SigVerify));
@@ -903,8 +908,10 @@ impl ServeRepair {
     ) -> (bool, Option<Packet>) {
         let mut rng = rand::thread_rng();
         let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
-        let (check, ping) =
-            ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf);
+        let (check, ping) = request
+            .sender()
+            .map(|&sender| ping_cache.check(Instant::now(), (sender, *from_addr), &mut pingf))
+            .unwrap_or_default();
         let ping_pkt = if let Some(ping) = ping {
             match request {
                 RepairProtocol::WindowIndex { .. }
@@ -918,13 +925,13 @@ impl ServeRepair {
                     Packet::from_data(Some(from_addr), ping).ok()
                 }
                 RepairProtocol::Pong(_) => None,
-                RepairProtocol::LegacyWindowIndex(_, _, _)
-                | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-                | RepairProtocol::LegacyOrphan(_, _)
-                | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-                | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-                | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-                | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+                RepairProtocol::LegacyWindowIndex
+                | RepairProtocol::LegacyHighestWindowIndex
+                | RepairProtocol::LegacyOrphan
+                | RepairProtocol::LegacyWindowIndexWithNonce
+                | RepairProtocol::LegacyHighestWindowIndexWithNonce
+                | RepairProtocol::LegacyOrphanWithNonce
+                | RepairProtocol::LegacyAncestorHashes => {
                     error!("Unexpected legacy request: {request:?}");
                     debug_assert!(
                         false,
@@ -1546,7 +1553,10 @@ mod tests {
         assert_eq!(num_well_formed, 0);
         assert_eq!(stats.err_malformed, 1);
 
-        let request = RepairProtocol::LegacyOrphan(LegacyContactInfo::default(), 123);
+        let request = RepairProtocol::Orphan {
+            header: repair_request_header_for_tests(),
+            slot: 262_547_696,
+        };
         let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = vec![make_remote_request(&pkt)];
         let mut stats = ServeRepairStats::default();
