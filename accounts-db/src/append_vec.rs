@@ -1247,17 +1247,18 @@ pub mod tests {
 
             av.append_account_test(&create_test_account(10)).unwrap();
 
-            let accounts = av.accounts(0);
-            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() else {
-                panic!("StoredAccountMeta can only be AppendVec in this test.");
-            };
-            account.set_data_len_unsafe(crafted_data_len);
-            assert_eq!(account.data_len(), crafted_data_len);
+            av.get_stored_account_meta_callback(0, |account| {
+                let StoredAccountMeta::AppendVec(account) = account else {
+                    panic!("StoredAccountMeta can only be AppendVec in this test.");
+                };
+                account.set_data_len_unsafe(crafted_data_len);
+                assert_eq!(account.data_len(), crafted_data_len);
 
-            // Reload accounts and observe crafted_data_len
-            let accounts = av.accounts(0);
-            let account = accounts.first().unwrap();
-            assert_eq!(account.data_len() as u64, crafted_data_len);
+                // Reload accounts and observe crafted_data_len
+                av.get_stored_account_meta_callback(0, |account| {
+                    assert_eq!(account.data_len() as u64, crafted_data_len);
+                });
+            });
 
             av.flush().unwrap();
             av.len()
@@ -1277,17 +1278,21 @@ pub mod tests {
             let too_large_data_len = u64::max_value();
             av.append_account_test(&create_test_account(10)).unwrap();
 
-            let accounts = av.accounts(0);
-            let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap() else {
-                panic!("StoredAccountMeta can only be AppendVec in this test.");
-            };
-            account.set_data_len_unsafe(too_large_data_len);
-            assert_eq!(account.data_len(), too_large_data_len);
+            av.get_stored_account_meta_callback(0, |account| {
+                let StoredAccountMeta::AppendVec(account) = account else {
+                    panic!("StoredAccountMeta can only be AppendVec in this test.");
+                };
+                account.set_data_len_unsafe(too_large_data_len);
+                assert_eq!(account.data_len(), too_large_data_len);
+            })
+            .unwrap();
 
             // Reload accounts and observe no account with bad offset
-            let accounts = av.accounts(0);
-            assert_matches!(accounts.first(), None);
-
+            assert!(av
+                .get_stored_account_meta_callback(0, |_| {
+                    panic!("unexpected");
+                })
+                .is_none());
             av.flush().unwrap();
             av.len()
         };

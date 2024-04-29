@@ -1088,16 +1088,14 @@ pub mod tests {
     fn test_write_packed_storages_too_few_slots() {
         let (db, storages, slots, _infos) = get_sample_storages(1, None);
         let accounts_to_combine = AccountsToCombine::default();
-        let accounts = [storages
+        let account = storages
             .first()
             .unwrap()
             .accounts
-            .accounts(0)
-            .pop()
-            .unwrap()];
-        let accounts_stored_meta = accounts.iter().collect::<Vec<_>>();
-        let accounts_byval = build_accounts_from_storage(accounts_stored_meta.iter().copied());
-        let accounts = accounts_byval.iter().collect::<Vec<_>>();
+            .get_stored_account_meta_callback(0, |account| AccountFromStorage::new(&account))
+            .unwrap();
+        let accounts = [&account];
+
         let packed_contents = vec![PackedAncientStorage {
             bytes: 0,
             accounts: vec![(slots.start, &accounts[..])],
@@ -1807,19 +1805,23 @@ pub mod tests {
             );
             // assert that we wrote the 2_ref account to the newly shrunk append vec
             let shrink_in_progress = shrinks_in_progress.first().unwrap().1;
-            let accounts_shrunk_same_slot = shrink_in_progress.new_storage().accounts.accounts(0);
-            assert_eq!(accounts_shrunk_same_slot.len(), 1);
-            assert_eq!(
-                accounts_shrunk_same_slot.first().unwrap().pubkey(),
-                pk_with_2_refs
-            );
-            assert_eq!(
-                accounts_shrunk_same_slot
-                    .first()
-                    .unwrap()
-                    .to_account_shared_data(),
-                account_shared_data_with_2_refs
-            );
+            let mut count = 0;
+            shrink_in_progress
+                .new_storage()
+                .accounts
+                .scan_accounts(|_| {
+                    count += 1;
+                });
+            assert_eq!(count, 1);
+            let account = shrink_in_progress
+                .new_storage()
+                .accounts
+                .get_stored_account_meta_callback(0, |account| {
+                    assert_eq!(account.pubkey(), pk_with_2_refs);
+                    account.to_account_shared_data()
+                })
+                .unwrap();
+            assert_eq!(account, account_shared_data_with_2_refs);
         }
     }
 
@@ -1956,19 +1958,19 @@ pub mod tests {
             assert!(write_ancient_accounts.shrinks_in_progress.is_empty());
             // assert that we wrote the 2_ref account (and the 1 ref account) to the newly shrunk append vec
             let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
-            let accounts_shrunk_same_slot = storage.accounts.accounts(0);
-            assert_eq!(accounts_shrunk_same_slot.len(), 2);
-            assert_eq!(
-                accounts_shrunk_same_slot.first().unwrap().pubkey(),
-                pk_with_2_refs
-            );
-            assert_eq!(
-                accounts_shrunk_same_slot
-                    .first()
-                    .unwrap()
-                    .to_account_shared_data(),
-                account_shared_data_with_2_refs
-            );
+            let accounts_shrunk_same_slot = storage
+                .accounts
+                .get_stored_account_meta_callback(0, |account| {
+                    (*account.pubkey(), account.to_account_shared_data())
+                })
+                .unwrap();
+            let mut count = 0;
+            storage.accounts.scan_accounts(|_| {
+                count += 1;
+            });
+            assert_eq!(count, 2);
+            assert_eq!(accounts_shrunk_same_slot.0, *pk_with_2_refs);
+            assert_eq!(accounts_shrunk_same_slot.1, account_shared_data_with_2_refs);
         }
     }
 
@@ -2751,22 +2753,6 @@ pub mod tests {
         PackedStorages,
     }
 
-    pub fn build_accounts_from_storage_with_slot(
-        accounts: &[(Slot, &[&StoredAccountMeta])],
-    ) -> Vec<(Slot, Vec<AccountFromStorage>)> {
-        accounts
-            .iter()
-            .map(|(slot, accounts)| {
-                (
-                    *slot,
-                    accounts
-                        .iter()
-                        .map(|account| AccountFromStorage::new(account))
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect()
-    }
     pub fn build_refs_accounts_from_storage_with_slot(
         accounts: &[(Slot, Vec<AccountFromStorage>)],
     ) -> Vec<(Slot, Vec<&AccountFromStorage>)> {
@@ -2800,21 +2786,18 @@ pub mod tests {
 
                         let initial_accounts = get_all_accounts(&db, slots.clone());
 
-                        let accounts_vecs = storages
+                        let accounts_byval = storages
                             .iter()
-                            .map(|storage| (storage.slot(), storage.accounts.accounts(0)))
+                            .map(|storage| {
+                                let mut accounts = Vec::default();
+                                storage.accounts.scan_accounts(|account| {
+                                    accounts.push(AccountFromStorage::new(&account));
+                                });
+                                (storage.slot(), accounts)
+                            })
                             .collect::<Vec<_>>();
+
                         // reshape the data
-                        let accounts_vecs2 = accounts_vecs
-                            .iter()
-                            .map(|(slot, accounts)| (*slot, accounts.iter().collect::<Vec<_>>()))
-                            .collect::<Vec<_>>();
-                        let accounts_stored_account_meta = accounts_vecs2
-                            .iter()
-                            .map(|(slot, accounts)| (*slot, &accounts[..]))
-                            .collect::<Vec<_>>();
-                        let accounts_byval =
-                            build_accounts_from_storage_with_slot(&accounts_stored_account_meta);
                         let accounts_byval2 =
                             build_refs_accounts_from_storage_with_slot(&accounts_byval);
                         let accounts =
@@ -2880,15 +2863,17 @@ pub mod tests {
                                 storages[combine_into].append_vec_id()
                             );
                             // make sure the single new append vec contains all the same accounts
-                            let accounts_in_new_storage =
-                                one.first().unwrap().1.new_storage().accounts.accounts(0);
-                            compare_all_accounts(
-                                &initial_accounts,
-                                &accounts_in_new_storage
-                                    .into_iter()
-                                    .map(|meta| (*meta.pubkey(), meta.to_account_shared_data()))
-                                    .collect::<Vec<_>>()[..],
-                            );
+                            let mut two = Vec::default();
+                            one.first()
+                                .unwrap()
+                                .1
+                                .new_storage()
+                                .accounts
+                                .scan_accounts(|meta| {
+                                    two.push((*meta.pubkey(), meta.to_account_shared_data()));
+                                });
+
+                            compare_all_accounts(&initial_accounts, &two[..]);
                         }
                         let all_accounts = get_all_accounts(&db, target_slot..(target_slot + 1));
 
