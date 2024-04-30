@@ -104,6 +104,51 @@ impl OutputFormat {
     }
 }
 
+#[derive(Serialize)]
+pub struct CliPrioritizationFeeStats {
+    pub fees: Vec<CliPrioritizationFee>,
+    pub min: u64,
+    pub max: u64,
+    pub average: u64,
+    pub num_slots: u64,
+}
+
+impl QuietDisplay for CliPrioritizationFeeStats {}
+impl VerboseDisplay for CliPrioritizationFeeStats {
+    fn write_str(&self, f: &mut dyn std::fmt::Write) -> fmt::Result {
+        writeln!(f, "{:<11} prioritization_fee", "slot")?;
+        for fee in &self.fees {
+            write!(f, "{}", fee)?;
+        }
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for CliPrioritizationFeeStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "Fees in recent {} slots: Min: {} Max: {} Average: {}",
+            self.num_slots, self.min, self.max, self.average
+        )
+    }
+}
+
+#[derive(Serialize)]
+pub struct CliPrioritizationFee {
+    pub slot: Slot,
+    pub prioritization_fee: u64,
+}
+
+impl QuietDisplay for CliPrioritizationFee {}
+impl VerboseDisplay for CliPrioritizationFee {}
+
+impl fmt::Display for CliPrioritizationFee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{:<11} {}", self.slot, self.prioritization_fee)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CliAccount {
     #[serde(flatten)]

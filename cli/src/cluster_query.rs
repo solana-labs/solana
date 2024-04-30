@@ -103,6 +103,28 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("recent-prioritization-fees")
+                .about("Get recent prioritization fees")
+                .arg(
+                    Arg::with_name("accounts")
+                        .value_name("ACCOUNTS")
+                        .takes_value(true)
+                        .multiple(true)
+                        .index(1)
+                        .help(
+                            "A list of accounts which if provided the fee response will represent\
+                            the fee to land a transaction with those accounts as writable",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("limit_num_slots")
+                        .long("limit-num-slots")
+                        .value_name("SLOTS")
+                        .takes_value(true)
+                        .help("Limit the number of slots to the last <N> slots"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
                 .arg(pubkey!(
@@ -571,6 +593,19 @@ pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     Ok(CliCommandInfo::without_signers(CliCommand::GetBlock {
         slot,
     }))
+}
+
+pub fn parse_get_recent_prioritization_fees(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let accounts = values_of(matches, "accounts").unwrap_or(vec![]);
+    let limit_num_slots = value_of(matches, "limit_num_slots");
+    Ok(CliCommandInfo::without_signers(
+        CliCommand::GetRecentPrioritizationFees {
+            accounts,
+            limit_num_slots,
+        },
+    ))
 }
 
 pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -1042,6 +1077,41 @@ pub fn process_leader_schedule(
         epoch,
         leader_schedule_entries,
     }))
+}
+
+pub fn process_get_recent_priority_fees(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    accounts: &[Pubkey],
+    limit_num_slots: Option<Slot>,
+) -> ProcessResult {
+    let fees = rpc_client.get_recent_prioritization_fees(accounts)?;
+    let mut min = u64::MAX;
+    let mut max = 0;
+    let mut total = 0;
+    let num_slots = limit_num_slots
+        .unwrap_or(fees.len() as u64)
+        .min(fees.len() as u64)
+        .max(1) as usize;
+    let mut cli_fees = Vec::with_capacity(fees.len());
+    for fee in fees.iter().skip(fees.len().saturating_sub(num_slots)) {
+        min = min.min(fee.prioritization_fee);
+        max = max.max(fee.prioritization_fee);
+        total += fee.prioritization_fee;
+        cli_fees.push(CliPrioritizationFee {
+            slot: fee.slot,
+            prioritization_fee: fee.prioritization_fee,
+        });
+    }
+    Ok(config
+        .output_format
+        .formatted_string(&CliPrioritizationFeeStats {
+            fees: cli_fees,
+            min,
+            max,
+            average: total / num_slots as u64,
+            num_slots: num_slots as u64,
+        }))
 }
 
 pub fn process_get_block(
