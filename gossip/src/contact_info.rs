@@ -208,6 +208,11 @@ impl ContactInfo {
         self.shred_version
     }
 
+    #[inline]
+    pub(crate) fn version(&self) -> &solana_version::Version {
+        &self.version
+    }
+
     pub fn set_pubkey(&mut self, pubkey: Pubkey) {
         self.pubkey = pubkey
     }

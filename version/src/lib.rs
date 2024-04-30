@@ -50,6 +50,19 @@ fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
     u32::from_str_radix(sha1?.get(..8)?, /*radix:*/ 16).ok()
 }
 
+impl From<LegacyVersion2> for Version {
+    fn from(version: LegacyVersion2) -> Self {
+        Self {
+            major: version.major,
+            minor: version.minor,
+            patch: version.patch,
+            commit: version.commit.unwrap_or_default(),
+            feature_set: version.feature_set,
+            client: Version::default().client,
+        }
+    }
+}
+
 impl Default for Version {
     fn default() -> Self {
         let feature_set = u32::from_le_bytes(
