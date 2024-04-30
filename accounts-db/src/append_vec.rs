@@ -1121,6 +1121,17 @@ pub mod tests {
         );
     }
 
+    impl AppendVec {
+        /// return how many accounts in the storage
+        fn accounts_count(&self) -> usize {
+            let mut count = 0;
+            self.scan_accounts(|_| {
+                count += 1;
+            });
+            count
+        }
+    }
+
     #[test]
     fn test_append_vec_append_many() {
         let path = get_append_vec_path("test_append_many");
@@ -1130,7 +1141,10 @@ pub mod tests {
         let now = Instant::now();
         let mut sizes = vec![];
         for sample in 0..size {
-            let account = create_test_account(sample);
+            let mut account = create_test_account(sample);
+            if account.1.lamports() == 0 {
+                account.1.set_lamports(1); // non-zero, so this is not a default default account
+            }
             sizes.push(aligned_stored_size(account.1.data().len()));
             let pos = av.append_account_test(&account).unwrap();
             assert_eq!(av.get_account_test(pos).unwrap(), account);
@@ -1142,7 +1156,10 @@ pub mod tests {
         let now = Instant::now();
         for _ in 0..size {
             let sample = thread_rng().gen_range(0..indexes.len());
-            let account = create_test_account(sample);
+            let mut account = create_test_account(sample);
+            if account.1.lamports() == 0 {
+                account.1.set_lamports(1); // non-zero
+            }
             assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }
         trace!("random read time: {} ms", duration_as_ms(&now.elapsed()),);
@@ -1152,8 +1169,12 @@ pub mod tests {
         assert_eq!(indexes[0], 0);
         let mut accounts = av.accounts(indexes[0]);
         assert_eq!(accounts.len(), size);
+        assert_eq!(av.accounts_count(), size);
         for (sample, v) in accounts.iter_mut().enumerate() {
-            let account = create_test_account(sample);
+            let mut account = create_test_account(sample);
+            if account.1.lamports() == 0 {
+                account.1.set_lamports(1); // non-zero
+            }
             let recovered = v.to_account_shared_data();
             assert_eq!(recovered, account.1)
         }
