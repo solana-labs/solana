@@ -21,7 +21,11 @@ use {
 
 pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 pub const DEFAULT_TPU_USE_QUIC: bool = true;
-pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
+
+/// The default connection count is set to 1 -- it should
+/// be sufficient for most use cases. Validators can use
+/// --tpu-connection-pool-size to override this default value.
+pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 1;
 
 pub type Result<T> = std::result::Result<T, TpuSenderError>;
 
