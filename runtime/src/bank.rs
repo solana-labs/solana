@@ -5609,8 +5609,7 @@ impl Bank {
         );
     }
 
-    /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
-    /// snapshot.
+    /// Recalculate the accounts hash from the account stores. Used to verify a snapshot.
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
@@ -5627,32 +5626,36 @@ impl Bank {
             .verify_accounts_hash_in_bg
             .wait_for_complete();
 
-        if config.require_rooted_bank
-            && !accounts
-                .accounts_db
-                .accounts_index
-                .is_alive_root(self.slot())
-        {
+        let slot = self.slot();
+        if config.require_rooted_bank && !accounts.accounts_db.accounts_index.is_alive_root(slot) {
             if let Some(parent) = self.parent() {
-                info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
+                info!(
+                    "slot {slot} is not a root, so verify accounts hash on parent bank at slot {}",
+                    parent.slot(),
+                );
                 return parent.verify_accounts_hash(base, config);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
-                panic!("cannot verify bank hash when bank is not a root");
+                panic!("cannot verify accounts hash because slot {slot} is not a root");
             }
         }
-        let slot = self.slot();
-        let ancestors = &self.ancestors;
         let cap = self.capitalization();
-        let epoch_schedule = self.epoch_schedule();
-        let rent_collector = self.rent_collector();
+        let verify_config = VerifyAccountsHashAndLamportsConfig {
+            ancestors: &self.ancestors,
+            epoch_schedule: self.epoch_schedule(),
+            rent_collector: self.rent_collector(),
+            test_hash_calculation: config.test_hash_calculation,
+            ignore_mismatch: config.ignore_mismatch,
+            store_detailed_debug_info: config.store_hash_raw_data_for_debug,
+            use_bg_thread_pool: config.run_in_background,
+        };
         if config.run_in_background {
-            let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
-            let epoch_schedule = epoch_schedule.clone();
-            let rent_collector = rent_collector.clone();
             let accounts_ = Arc::clone(&accounts);
+            let ancestors = self.ancestors.clone();
+            let epoch_schedule = self.epoch_schedule().clone();
+            let rent_collector = self.rent_collector().clone();
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
                 Builder::new()
                     .name("solBgHashVerify".into())
@@ -5664,12 +5667,9 @@ impl Bank {
                             base,
                             VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
-                                test_hash_calculation: config.test_hash_calculation,
                                 epoch_schedule: &epoch_schedule,
                                 rent_collector: &rent_collector,
-                                ignore_mismatch: config.ignore_mismatch,
-                                store_detailed_debug_info: config.store_hash_raw_data_for_debug,
-                                use_bg_thread_pool: true,
+                                ..verify_config
                             },
                         );
                         accounts_
@@ -5683,20 +5683,7 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
-            let result = accounts.verify_accounts_hash_and_lamports(
-                slot,
-                cap,
-                base,
-                VerifyAccountsHashAndLamportsConfig {
-                    ancestors,
-                    test_hash_calculation: config.test_hash_calculation,
-                    epoch_schedule,
-                    rent_collector,
-                    ignore_mismatch: config.ignore_mismatch,
-                    store_detailed_debug_info: config.store_hash_raw_data_for_debug,
-                    use_bg_thread_pool: false, // fg is waiting for this to run, so we can use the fg thread pool
-                },
-            );
+            let result = accounts.verify_accounts_hash_and_lamports(slot, cap, base, verify_config);
             self.set_initial_accounts_hash_verification_completed();
             result
         }
