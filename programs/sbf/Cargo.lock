@@ -5080,10 +5080,8 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "2.0.0"
 dependencies = [
- "block-buffer 0.10.4",
  "bs58",
  "bv",
- "either",
  "generic-array 0.14.7",
  "im",
  "log",
@@ -5094,7 +5092,6 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.8",
  "solana-frozen-abi-macro",
- "subtle",
  "thiserror",
 ]
 

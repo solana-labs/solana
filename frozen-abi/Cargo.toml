@@ -21,12 +21,9 @@ solana-frozen-abi-macro = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-block-buffer = { workspace = true }
-either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
-subtle = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 bitflags = { workspace = true }
