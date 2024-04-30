@@ -1204,10 +1204,6 @@ impl AccountStorageEntry {
         }
     }
 
-    pub fn all_accounts(&self) -> Vec<StoredAccountMeta> {
-        self.accounts.accounts(0)
-    }
-
     fn remove_accounts(
         &self,
         num_bytes: usize,
@@ -12697,7 +12693,7 @@ pub mod tests {
         accounts.store_for_tests(current_slot, &[(&pubkey3, &zero_lamport_account)]);
 
         let snapshot_stores = accounts.get_snapshot_storages(..=current_slot).0;
-        let total_accounts: usize = snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
+        let total_accounts: usize = snapshot_stores.iter().map(|s| s.accounts_count()).sum();
         assert!(!snapshot_stores.is_empty());
         assert!(total_accounts > 0);
 
@@ -12711,7 +12707,7 @@ pub mod tests {
         accounts.print_accounts_stats("Post-D clean");
 
         let total_accounts_post_clean: usize =
-            snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
+            snapshot_stores.iter().map(|s| s.accounts_count()).sum();
         assert_eq!(total_accounts, total_accounts_post_clean);
 
         // should clean all 3 pubkeys

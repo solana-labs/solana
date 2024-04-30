@@ -36,6 +36,8 @@ pub fn get_append_vec_path(path: &str) -> TempFile {
     TempFile { path: buf }
 }
 
+/// return a test account.
+/// Note that `sample`=0 returns a fully default account with a default pubkey.
 pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
     let data_len = sample % 256;
     let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());

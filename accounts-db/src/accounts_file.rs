@@ -230,24 +230,6 @@ impl AccountsFile {
         }
     }
 
-    /// Return a vector of account metadata for each account, starting from `offset`.
-    pub fn accounts(&self, offset: usize) -> Vec<StoredAccountMeta> {
-        match self {
-            Self::AppendVec(av) => av.accounts(offset),
-            // Note: The conversion here is needed as the AccountsDB currently
-            // assumes all offsets are multiple of 8 while TieredStorage uses
-            // IndexOffset that is equivalent to AccountInfo::reduced_offset.
-            Self::TieredStorage(ts) => ts
-                .reader()
-                .and_then(|reader| {
-                    reader
-                        .accounts(IndexOffset(AccountInfo::get_reduced_offset(offset)))
-                        .ok()
-                })
-                .unwrap_or_default(),
-        }
-    }
-
     /// Copy each account metadata, account and hash to the internal buffer.
     /// If there is no room to write the first entry, None is returned.
     /// Otherwise, returns the starting offset of each account metadata.

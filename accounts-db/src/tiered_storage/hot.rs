@@ -586,24 +586,6 @@ impl HotStorageReader {
         )))
     }
 
-    /// Return a vector of account metadata for each account, starting from
-    /// `index_offset`
-    pub fn accounts(
-        &self,
-        mut index_offset: IndexOffset,
-    ) -> TieredStorageResult<Vec<StoredAccountMeta>> {
-        let mut accounts = Vec::with_capacity(
-            self.footer
-                .account_entry_count
-                .saturating_sub(index_offset.0) as usize,
-        );
-        while let Some((account, next)) = self.get_stored_account_meta(index_offset)? {
-            accounts.push(account);
-            index_offset = next;
-        }
-        Ok(accounts)
-    }
-
     /// iterate over all pubkeys
     pub fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) -> TieredStorageResult<()> {
         for i in 0..self.footer.account_entry_count {
@@ -1605,10 +1587,7 @@ mod tests {
                 .unwrap();
         }
 
-        // verify get_accounts
-        let accounts = hot_storage.accounts(IndexOffset(0)).unwrap();
-
-        // first, we verify everything
+        // verify everything
         let mut i = 0;
         hot_storage
             .scan_accounts(|stored_meta| {
@@ -1619,17 +1598,10 @@ mod tests {
                         account.pubkey(),
                     );
                 });
-                verify_test_account(&stored_meta, &accounts[i], stored_meta.pubkey());
                 i += 1;
             })
             .unwrap();
 
-        // second, we verify various initial position
-        let total_stored_accounts = accounts.len();
-        for i in 0..total_stored_accounts {
-            let partial_accounts = hot_storage.accounts(IndexOffset(i as u32)).unwrap();
-            assert_eq!(&partial_accounts, &accounts[i..]);
-        }
         let footer = hot_storage.footer();
 
         let expected_size = footer.owners_block_offset as usize
