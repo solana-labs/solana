@@ -1,5 +1,6 @@
+pub use solana_client::connection_cache::Protocol;
 use {
-    crate::crds_value::MAX_WALLCLOCK,
+    crate::{crds_value::MAX_WALLCLOCK, legacy_contact_info::LegacyContactInfo},
     assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sdk::{
@@ -17,9 +18,6 @@ use {
         time::{SystemTime, UNIX_EPOCH},
     },
     thiserror::Error,
-};
-pub use {
-    crate::legacy_contact_info::LegacyContactInfo, solana_client::connection_cache::Protocol,
 };
 
 pub const SOCKET_ADDR_UNSPECIFIED: SocketAddr =

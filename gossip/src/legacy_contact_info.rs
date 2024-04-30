@@ -17,7 +17,7 @@ use {
 
 /// Structure representing a node on the network
 #[derive(Clone, Debug, Eq, PartialEq, AbiExample, Deserialize, Serialize)]
-pub struct LegacyContactInfo {
+pub(crate) struct LegacyContactInfo {
     id: Pubkey,
     /// gossip address
     gossip: SocketAddr,
@@ -104,6 +104,7 @@ macro_rules! socketaddr_any {
     };
 }
 
+#[cfg(test)]
 impl Default for LegacyContactInfo {
     fn default() -> Self {
         LegacyContactInfo {
@@ -126,17 +127,17 @@ impl Default for LegacyContactInfo {
 
 impl LegacyContactInfo {
     #[inline]
-    pub fn pubkey(&self) -> &Pubkey {
+    pub(crate) fn pubkey(&self) -> &Pubkey {
         &self.id
     }
 
     #[inline]
-    pub fn wallclock(&self) -> u64 {
+    pub(crate) fn wallclock(&self) -> u64 {
         self.wallclock
     }
 
     #[inline]
-    pub fn shred_version(&self) -> u16 {
+    pub(crate) fn shred_version(&self) -> u16 {
         self.shred_version
     }
 

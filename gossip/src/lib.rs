@@ -20,7 +20,7 @@ pub mod epoch_slots;
 pub mod gossip_error;
 pub mod gossip_service;
 #[macro_use]
-pub mod legacy_contact_info;
+mod legacy_contact_info;
 pub mod ping_pong;
 mod push_active_set;
 mod received_cache;
