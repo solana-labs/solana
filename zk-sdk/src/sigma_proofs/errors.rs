@@ -39,9 +39,9 @@ pub struct ZeroCiphertextProofVerificationError(#[from] pub(crate) SigmaProofVer
 impl_from_transcript_error!(ZeroCiphertextProofVerificationError);
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-#[error("fee sigma proof verification failed: {0}")]
-pub struct FeeSigmaProofVerificationError(#[from] pub(crate) SigmaProofVerificationError);
-impl_from_transcript_error!(FeeSigmaProofVerificationError);
+#[error("percentage-with-cap proof verification failed: {0}")]
+pub struct PercentageWithCapProofVerificationError(#[from] pub(crate) SigmaProofVerificationError);
+impl_from_transcript_error!(PercentageWithCapProofVerificationError);
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 #[error("public key validity proof verification failed: {0}")]
