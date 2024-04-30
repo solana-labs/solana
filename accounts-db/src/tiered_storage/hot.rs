@@ -1609,15 +1609,20 @@ mod tests {
         let accounts = hot_storage.accounts(IndexOffset(0)).unwrap();
 
         // first, we verify everything
-        for (i, stored_meta) in accounts.iter().enumerate() {
-            storable_accounts.account_default_if_zero_lamport(i, |account| {
-                verify_test_account(
-                    stored_meta,
-                    &account.to_account_shared_data(),
-                    account.pubkey(),
-                );
-            });
-        }
+        let mut i = 0;
+        hot_storage
+            .scan_accounts(|stored_meta| {
+                storable_accounts.account_default_if_zero_lamport(i, |account| {
+                    verify_test_account(
+                        &stored_meta,
+                        &account.to_account_shared_data(),
+                        account.pubkey(),
+                    );
+                });
+                verify_test_account(&stored_meta, &accounts[i], stored_meta.pubkey());
+                i += 1;
+            })
+            .unwrap();
 
         // second, we verify various initial position
         let total_stored_accounts = accounts.len();
