@@ -1,6 +1,6 @@
 use {
     crate::{
-        quic::{configure_server, QuicServerError, StreamStats, MAX_UNSTAKED_CONNECTIONS},
+        quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
@@ -748,7 +748,7 @@ fn max_streams_for_connection_in_100ms(
     } else {
         Percentage::from(MAX_UNSTAKED_STREAMS_PERCENT)
             .apply_to(max_streams_per_interval)
-            .saturating_div(MAX_UNSTAKED_CONNECTIONS as u64)
+            .saturating_div(max_unstaked_connections as u64)
     };
 
     let min_staked_streams_per_100ms = if max_unstaked_connections == 0 {
