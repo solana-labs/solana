@@ -986,7 +986,6 @@ fn test_cli_program_close_program() {
 }
 
 #[test]
-#[ignore]
 fn test_cli_program_extend_program() {
     solana_logger::setup();
 
@@ -1052,7 +1051,7 @@ fn test_cli_program_extend_program() {
         skip_fee_check: false,
         compute_unit_price: None,
         max_sign_attempts: 5,
-        no_extend: false,
+        no_extend: true,
         use_rpc: false,
     });
     config.output_format = OutputFormat::JsonCompact;
@@ -1103,7 +1102,7 @@ fn test_cli_program_extend_program() {
         skip_fee_check: false,
         compute_unit_price: None,
         max_sign_attempts: 5,
-        no_extend: false,
+        no_extend: true,
         use_rpc: false,
     });
     process_command(&config).unwrap_err();
@@ -1139,7 +1138,7 @@ fn test_cli_program_extend_program() {
         skip_fee_check: false,
         compute_unit_price: None,
         max_sign_attempts: 5,
-        no_extend: false,
+        no_extend: true,
         use_rpc: false,
     });
     process_command(&config).unwrap();
