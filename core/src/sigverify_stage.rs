@@ -6,25 +6,15 @@
 //! if perf-libs are available
 
 use {
-    crate::sigverify,
-    core::time::Duration,
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError},
-    itertools::Itertools,
-    solana_measure::measure::Measure,
-    solana_perf::{
+    crate::sigverify, core::time::Duration, crossbeam_channel::{Receiver, RecvTimeoutError, SendError}, itertools::Itertools, solana_client::rpc_client::SerializableTransaction, solana_measure::measure::Measure, solana_perf::{
         deduper::{self, Deduper},
         packet::{Packet, PacketBatch},
         sigverify::{
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
         },
-    },
-    solana_sdk::timing,
-    solana_streamer::streamer::{self, StreamerError},
-    std::{
-        thread::{self, Builder, JoinHandle},
-        time::Instant,
-    },
-    thiserror::Error,
+    }, solana_sdk::timing, solana_streamer::streamer::{self, StreamerError}, std::{
+        net::IpAddr, thread::{self, Builder, JoinHandle}, time::Instant
+    }, thiserror::Error
 };
 
 // Try to target 50ms, rough timings from mainnet machines
@@ -304,6 +294,23 @@ impl SigVerifyStage {
             timing::timestamp(),
             num_packets,
         );
+
+        for batch in &batches {
+            for packet in batch {
+                let x = packet.meta().addr;
+                let y = IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
+                if x == y {
+                    match packet.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
+                        Ok(tx) => {
+                            info!("SV: packet from {} w/ signature {:?}", x, tx.get_signature());
+                        }
+                        Err(e) => {
+                            info!("SV: packet from {} w/ error {:?}", x, e);
+                        }
+                    }
+                }
+            }
+        }
 
         let mut discard_random_time = Measure::start("sigverify_discard_random_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(

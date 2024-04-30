@@ -158,8 +158,23 @@ impl Forwarder {
             return (Ok(()), 0, 0, None);
         };
 
+        let y = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         self.update_data_budget();
         let packet_vec: Vec<_> = forwardable_packets
+            .filter(|p| {
+                let x = p.meta().addr;
+                if x == y {
+                    match p.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
+                        Ok(tx) => {
+                            info!("BS-Fwd: packet from {} w/ signature {:?} to {:?}", x, solana_client::rpc_client::SerializableTransaction::get_signature(&tx), leader_pubkey);
+                        }
+                        Err(e) => {
+                            info!("BS-Fwd: packet from {} w/ error {:?}", x, e);
+                        }
+                    }
+                }
+                true
+            })
             .filter(|p| !p.meta().forwarded())
             .filter(|p| p.meta().is_from_staked_node())
             .filter(|p| self.data_budget.take(p.meta().size))
