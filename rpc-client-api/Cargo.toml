@@ -19,10 +19,10 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-inline-spl = { workspace = true }
 solana-sdk = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
-spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]

@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        filter::filter_allows,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
         rpc_pubsub_service::PubSubConfig,
@@ -416,7 +417,7 @@ fn filter_program_results(
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
         filters
             .iter()
-            .all(|filter_type| filter_type.allows(account))
+            .all(|filter_type| filter_allows(filter_type, account))
     });
     let accounts = if is_known_spl_token_id(&params.pubkey)
         && params.encoding == UiAccountEncoding::JsonParsed

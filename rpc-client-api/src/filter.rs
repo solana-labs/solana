@@ -1,8 +1,8 @@
 #![allow(deprecated)]
 use {
     crate::version_req::VersionReq,
+    solana_inline_spl::{token::GenericTokenAccount, token_2022::Account},
     solana_sdk::account::{AccountSharedData, ReadableAccount},
-    spl_token_2022::{generic_token_account::GenericTokenAccount, state::Account},
     std::borrow::Cow,
     thiserror::Error,
 };
@@ -79,6 +79,7 @@ impl RpcFilterType {
         }
     }
 
+    #[deprecated = "Use solana_rpc::filter::filter_allows instead"]
     pub fn allows(&self, account: &AccountSharedData) -> bool {
         match self {
             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,

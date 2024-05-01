@@ -1,7 +1,8 @@
 //! The `rpc` module implements the Solana RPC interface.
 use {
     crate::{
-        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        filter::filter_allows, max_slots::MaxSlots,
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
@@ -2039,7 +2040,7 @@ impl JsonRpcRequestProcessor {
         let filter_closure = |account: &AccountSharedData| {
             filters
                 .iter()
-                .all(|filter_type| filter_type.allows(account))
+                .all(|filter_type| filter_allows(filter_type, account))
         };
         if self
             .config
@@ -2116,7 +2117,7 @@ impl JsonRpcRequestProcessor {
                         account.owner() == program_id
                             && filters
                                 .iter()
-                                .all(|filter_type| filter_type.allows(account))
+                                .all(|filter_type| filter_allows(filter_type, account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
@@ -2166,7 +2167,7 @@ impl JsonRpcRequestProcessor {
                         account.owner() == program_id
                             && filters
                                 .iter()
-                                .all(|filter_type| filter_type.allows(account))
+                                .all(|filter_type| filter_allows(filter_type, account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
