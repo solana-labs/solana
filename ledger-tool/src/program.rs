@@ -325,7 +325,7 @@ fn load_program<'a>(
     };
     let account_size = contents.len();
     let program_runtime_environment = create_program_runtime_environment_v1(
-        &invoke_context.feature_set,
+        invoke_context.get_feature_set(),
         invoke_context.get_compute_budget(),
         false, /* deployment */
         true,  /* debugging_features */

@@ -107,7 +107,7 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
         account_metadata: &SerializedAccountMetadata,
     ) -> Result<CallerAccount<'a, 'b>, Error> {
         let direct_mapping = invoke_context
-            .feature_set
+            .get_feature_set()
             .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
         if direct_mapping {
@@ -244,7 +244,7 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
         account_metadata: &SerializedAccountMetadata,
     ) -> Result<CallerAccount<'a, 'b>, Error> {
         let direct_mapping = invoke_context
-            .feature_set
+            .get_feature_set()
             .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
         if direct_mapping {
@@ -452,7 +452,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
 
         let ix_data_len = ix.data.len() as u64;
         if invoke_context
-            .feature_set
+            .get_feature_set()
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
         {
             consume_compute_meter(
@@ -666,7 +666,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
 
         let ix_data_len = ix_c.data_len;
         if invoke_context
-            .feature_set
+            .get_feature_set()
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
         {
             consume_compute_meter(
@@ -866,7 +866,7 @@ where
         .accounts_metadata;
 
     let direct_mapping = invoke_context
-        .feature_set
+        .get_feature_set()
         .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
@@ -961,7 +961,7 @@ fn check_instruction_size(
     invoke_context: &mut InvokeContext,
 ) -> Result<(), Error> {
     if invoke_context
-        .feature_set
+        .get_feature_set()
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
         let data_len = data_len as u64;
@@ -998,11 +998,11 @@ fn check_account_infos(
     invoke_context: &mut InvokeContext,
 ) -> Result<(), Error> {
     if invoke_context
-        .feature_set
+        .get_feature_set()
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
         let max_cpi_account_infos = if invoke_context
-            .feature_set
+            .get_feature_set()
             .is_active(&feature_set::increase_tx_account_lock_limit::id())
         {
             MAX_CPI_ACCOUNT_INFOS
@@ -1041,14 +1041,14 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                 || (invoke_context
-                    .feature_set
+                    .get_feature_set()
                     .is_active(&enable_bpf_loader_set_authority_checked_ix::id())
                     && bpf_loader_upgradeable::is_set_authority_checked_instruction(
                         instruction_data,
                     ))
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
         || is_precompile(program_id, |feature_id: &Pubkey| {
-            invoke_context.feature_set.is_active(feature_id)
+            invoke_context.get_feature_set().is_active(feature_id)
         })
     {
         return Err(Box::new(SyscallError::ProgramNotSupported(*program_id)));
@@ -1122,7 +1122,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
     //
     // Synchronize the callee's account changes so the caller can see them.
     let direct_mapping = invoke_context
-        .feature_set
+        .get_feature_set()
         .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
     if direct_mapping {
@@ -1629,8 +1629,9 @@ mod tests {
                 .map(|a| (a.0, a.1))
                 .collect::<Vec<TransactionAccount>>();
             with_mock_invoke_context!($invoke_context, $transaction_context, transaction_accounts);
-            let feature_set = Arc::make_mut(&mut $invoke_context.feature_set);
+            let mut feature_set = $invoke_context.get_feature_set().clone();
             feature_set.deactivate(&bpf_account_data_direct_mapping::id());
+            $invoke_context.mock_set_feature_set(Arc::new(feature_set));
             $invoke_context
                 .transaction_context
                 .get_next_instruction_context()

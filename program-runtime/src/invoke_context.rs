@@ -144,6 +144,28 @@ impl BpfAllocator {
     }
 }
 
+pub struct EnvironmentConfig<'a> {
+    pub blockhash: Hash,
+    pub feature_set: Arc<FeatureSet>,
+    pub lamports_per_signature: u64,
+    sysvar_cache: &'a SysvarCache,
+}
+impl<'a> EnvironmentConfig<'a> {
+    pub fn new(
+        blockhash: Hash,
+        feature_set: Arc<FeatureSet>,
+        lamports_per_signature: u64,
+        sysvar_cache: &'a SysvarCache,
+    ) -> Self {
+        Self {
+            blockhash,
+            feature_set,
+            lamports_per_signature,
+            sysvar_cache,
+        }
+    }
+}
+
 pub struct SyscallContext {
     pub allocator: BpfAllocator,
     pub accounts_metadata: Vec<SerializedAccountMetadata>,
@@ -159,19 +181,19 @@ pub struct SerializedAccountMetadata {
     pub vm_owner_addr: u64,
 }
 
+/// Main pipeline from runtime to program execution.
 pub struct InvokeContext<'a> {
+    /// Information about the currently executing transaction.
     pub transaction_context: &'a mut TransactionContext,
-    sysvar_cache: &'a SysvarCache,
+    /// Runtime configurations used to provision the invocation environment.
+    pub environment_config: EnvironmentConfig<'a>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
     pub programs_loaded_for_tx_batch: &'a ProgramCacheForTxBatch,
     pub programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
-    pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    pub blockhash: Hash,
-    pub lamports_per_signature: u64,
     pub syscall_context: Vec<Option<SyscallContext>>,
     traces: Vec<Vec<[u64; 12]>>,
 }
@@ -180,28 +202,22 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         transaction_context: &'a mut TransactionContext,
-        sysvar_cache: &'a SysvarCache,
+        environment_config: EnvironmentConfig<'a>,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         programs_loaded_for_tx_batch: &'a ProgramCacheForTxBatch,
         programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
-        feature_set: Arc<FeatureSet>,
-        blockhash: Hash,
-        lamports_per_signature: u64,
     ) -> Self {
         Self {
             transaction_context,
-            sysvar_cache,
+            environment_config,
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             programs_loaded_for_tx_batch,
             programs_modified_by_tx,
-            feature_set,
             timings: ExecuteDetailsTimings::default(),
-            blockhash,
-            lamports_per_signature,
             syscall_context: Vec::new(),
             traces: Vec::new(),
         }
@@ -219,7 +235,7 @@ impl<'a> InvokeContext<'a> {
         &self,
         effective_slot: Slot,
     ) -> Result<&ProgramRuntimeEnvironments, InstructionError> {
-        let epoch_schedule = self.sysvar_cache.get_epoch_schedule()?;
+        let epoch_schedule = self.environment_config.sysvar_cache.get_epoch_schedule()?;
         let epoch = epoch_schedule.get_epoch(effective_slot);
         Ok(self
             .programs_loaded_for_tx_batch
@@ -578,9 +594,21 @@ impl<'a> InvokeContext<'a> {
         &self.current_compute_budget
     }
 
+    /// Get the current feature set.
+    pub fn get_feature_set(&self) -> &FeatureSet {
+        &self.environment_config.feature_set
+    }
+
+    /// Set feature set.
+    ///
+    /// Only use for tests and benchmarks.
+    pub fn mock_set_feature_set(&mut self, feature_set: Arc<FeatureSet>) {
+        self.environment_config.feature_set = feature_set;
+    }
+
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
-        self.sysvar_cache
+        self.environment_config.sysvar_cache
     }
 
     // Should alignment be enforced during user pointer translation
@@ -645,8 +673,10 @@ macro_rules! with_mock_invoke_context {
             },
             std::sync::Arc,
             $crate::{
-                compute_budget::ComputeBudget, invoke_context::InvokeContext,
-                loaded_programs::ProgramCacheForTxBatch, log_collector::LogCollector,
+                compute_budget::ComputeBudget,
+                invoke_context::{EnvironmentConfig, InvokeContext},
+                loaded_programs::ProgramCacheForTxBatch,
+                log_collector::LogCollector,
                 sysvar_cache::SysvarCache,
             },
         };
@@ -675,18 +705,21 @@ macro_rules! with_mock_invoke_context {
                 }
             }
         });
+        let environment_config = EnvironmentConfig::new(
+            Hash::default(),
+            Arc::new(FeatureSet::all_enabled()),
+            0,
+            &sysvar_cache,
+        );
         let programs_loaded_for_tx_batch = ProgramCacheForTxBatch::default();
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
-            &sysvar_cache,
+            environment_config,
             Some(LogCollector::new_ref()),
             compute_budget,
             &programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            Arc::new(FeatureSet::all_enabled()),
-            Hash::default(),
-            0,
         );
     };
 }

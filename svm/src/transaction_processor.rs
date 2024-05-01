@@ -19,7 +19,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        invoke_context::InvokeContext,
+        invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
             ProgramCacheMatchCriteria,
@@ -534,14 +534,16 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
-            sysvar_cache,
+            EnvironmentConfig::new(
+                blockhash,
+                callback.get_feature_set(),
+                lamports_per_signature,
+                sysvar_cache,
+            ),
             log_collector.clone(),
             compute_budget,
             programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
-            callback.get_feature_set(),
-            blockhash,
-            lamports_per_signature,
         );
 
         let mut process_message_time = Measure::start("process_message_time");

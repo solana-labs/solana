@@ -957,7 +957,7 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
             if !invoke_context
-                .feature_set
+                .get_feature_set()
                 .is_active(&enable_bpf_loader_set_authority_checked_ix::id())
             {
                 return Err(InstructionError::InvalidInstructionData);
@@ -1352,7 +1352,7 @@ fn execute<'a, 'b: 'a>(
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     let use_jit = executable.get_compiled_program().is_some();
     let direct_mapping = invoke_context
-        .feature_set
+        .get_feature_set()
         .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
@@ -1505,7 +1505,7 @@ pub mod test_utils {
     pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
         let mut load_program_metrics = LoadProgramMetrics::default();
         let program_runtime_environment = create_program_runtime_environment_v1(
-            &invoke_context.feature_set,
+            invoke_context.get_feature_set(),
             invoke_context.get_compute_budget(),
             false, /* deployment */
             false, /* debugging_features */

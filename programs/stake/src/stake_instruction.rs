@@ -145,7 +145,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &clock,
                 &stake_history,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         StakeInstruction::Split(lamports) => {
@@ -310,7 +310,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             set_lockup(&mut me, &lockup, &signers, &clock)
         }
         StakeInstruction::GetMinimumDelegation => {
-            let feature_set = invoke_context.feature_set.as_ref();
+            let feature_set = invoke_context.get_feature_set();
             let minimum_delegation = crate::get_minimum_delegation(feature_set);
             let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
             invoke_context
@@ -335,7 +335,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         StakeInstruction::Redelegate => {
             let mut me = get_stake_account()?;
             if invoke_context
-                .feature_set
+                .get_feature_set()
                 .is_active(&feature_set::stake_redelegate_instruction::id())
             {
                 instruction_context.check_number_of_instruction_accounts(3)?;
@@ -460,7 +460,7 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
-                invoke_context.feature_set = Arc::clone(&feature_set);
+                invoke_context.mock_set_feature_set(Arc::clone(&feature_set));
             },
             |_invoke_context| {},
         )
@@ -6889,11 +6889,11 @@ mod tests {
             Ok(()),
             Entrypoint::vm,
             |invoke_context| {
-                invoke_context.feature_set = Arc::clone(&feature_set);
+                invoke_context.mock_set_feature_set(Arc::clone(&feature_set));
             },
             |invoke_context| {
                 let expected_minimum_delegation =
-                    crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
+                    crate::get_minimum_delegation(invoke_context.get_feature_set()).to_le_bytes();
                 let actual_minimum_delegation =
                     invoke_context.transaction_context.get_return_data().1;
                 assert_eq!(expected_minimum_delegation, actual_minimum_delegation);

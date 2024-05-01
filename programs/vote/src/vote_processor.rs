@@ -46,7 +46,7 @@ fn process_authorize_with_seed_instruction(
         authorization_type,
         &expected_authority_keys,
         &clock,
-        &invoke_context.feature_set,
+        invoke_context.get_feature_set(),
     )
 }
 
@@ -80,7 +80,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &vote_init,
                 &signers,
                 &clock,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
@@ -92,7 +92,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 vote_authorize,
                 &signers,
                 &clock,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::AuthorizeWithSeed(args) => {
@@ -136,7 +136,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &mut me,
                 node_pubkey,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::UpdateCommission(commission) => {
@@ -148,7 +148,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
                 sysvar_cache.get_epoch_schedule()?.as_ref(),
                 sysvar_cache.get_clock()?.as_ref(),
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
@@ -162,7 +162,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &clock,
                 &vote,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
@@ -176,7 +176,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &clock,
                 vote_state_update,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::CompactUpdateVoteState(vote_state_update)
@@ -190,13 +190,13 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &clock,
                 vote_state_update,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::TowerSync(tower_sync)
         | VoteInstruction::TowerSyncSwitch(tower_sync, _) => {
             if !invoke_context
-                .feature_set
+                .get_feature_set()
                 .is_active(&feature_set::enable_tower_sync_ix::id())
             {
                 return Err(InstructionError::InvalidInstructionData);
@@ -210,7 +210,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &clock,
                 tower_sync,
                 &signers,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::Withdraw(lamports) => {
@@ -228,7 +228,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
                 &rent_sysvar,
                 &clock_sysvar,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -247,7 +247,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 vote_authorize,
                 &signers,
                 &clock,
-                &invoke_context.feature_set,
+                invoke_context.get_feature_set(),
             )
         }
     }
@@ -337,7 +337,7 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |invoke_context| {
-                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
+                invoke_context.mock_set_feature_set(std::sync::Arc::new(FeatureSet::default()));
             },
             |_invoke_context| {},
         )

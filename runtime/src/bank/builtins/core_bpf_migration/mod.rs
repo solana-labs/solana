@@ -8,7 +8,8 @@ use {
     error::CoreBpfMigrationError,
     num_traits::{CheckedAdd, CheckedSub},
     solana_program_runtime::{
-        invoke_context::InvokeContext, loaded_programs::ProgramCacheForTxBatch,
+        invoke_context::{EnvironmentConfig, InvokeContext},
+        loaded_programs::ProgramCacheForTxBatch,
         sysvar_cache::SysvarCache,
     },
     solana_sdk::{
@@ -174,14 +175,11 @@ impl Bank {
 
             let mut dummy_invoke_context = InvokeContext::new(
                 &mut dummy_transaction_context,
-                &sysvar_cache,
+                EnvironmentConfig::new(Hash::default(), self.feature_set.clone(), 0, &sysvar_cache),
                 None,
                 compute_budget,
                 &programs_loaded,
                 &mut programs_modified,
-                self.feature_set.clone(),
-                Hash::default(),
-                0,
             );
 
             solana_bpf_loader_program::direct_deploy_program(
