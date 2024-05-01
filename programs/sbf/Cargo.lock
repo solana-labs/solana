@@ -763,11 +763,11 @@ dependencies = [
 
 [[package]]
 name = "borsh"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0901fc8eb0aca4c83be0106d6f2db17d86a08dfc2c25f0e84464bf381158add6"
+checksum = "dbe5b10e214954177fb1dc9fbd20a1a2608fe99e6c832033bdc7cea287a20d77"
 dependencies = [
- "borsh-derive 1.4.0",
+ "borsh-derive 1.5.0",
  "cfg_aliases",
 ]
 
@@ -799,9 +799,9 @@ dependencies = [
 
 [[package]]
 name = "borsh-derive"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51670c3aa053938b0ee3bd67c3817e471e626151131b934038e83c5bf8de48f5"
+checksum = "d7a8646f94ab393e43e8b35a2558b1624bed28b97ee09c5d15456e3c9463f46d"
 dependencies = [
  "once_cell",
  "proc-macro-crate 3.1.0",
@@ -4703,7 +4703,7 @@ dependencies = [
 name = "solana-banks-client"
 version = "2.0.0"
 dependencies = [
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "futures 0.3.30",
  "solana-banks-interface",
  "solana-program",
@@ -5399,7 +5399,7 @@ dependencies = [
  "blake3",
  "borsh 0.10.3",
  "borsh 0.9.3",
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "bs58",
  "bv",
  "bytemuck",
@@ -6181,7 +6181,7 @@ dependencies = [
  "base64 0.22.0",
  "bincode",
  "bitflags 2.4.2",
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "bs58",
  "bytemuck",
  "byteorder 1.5.0",
@@ -6464,7 +6464,7 @@ dependencies = [
  "Inflector",
  "base64 0.22.0",
  "bincode",
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "bs58",
  "lazy_static",
  "log",
@@ -6707,7 +6707,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2e688554bac5838217ffd1fab7845c573ff106b6336bf7d290db7c98d5a8efd"
 dependencies = [
  "assert_matches",
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "num-derive 0.4.2",
  "num-traits",
  "solana-program",
@@ -6766,7 +6766,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "046ce669f48cf2eca1ec518916d8725596bfb655beb1c74374cf71dc6cb773c9"
 dependencies = [
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "bytemuck",
  "solana-program",
  "solana-zk-token-sdk",
@@ -6870,7 +6870,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30179c47e93625680dabb620c6e7931bd12d62af390f447bc7beb4a3a9b5feee"
 dependencies = [
- "borsh 1.4.0",
+ "borsh 1.5.0",
  "solana-program",
  "spl-discriminator",
  "spl-pod",
