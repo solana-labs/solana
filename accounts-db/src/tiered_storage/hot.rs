@@ -530,15 +530,6 @@ impl HotStorageReader {
         index_offset: IndexOffset,
         mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
     ) -> TieredStorageResult<Option<Ret>> {
-        let account = self.get_stored_account_meta(index_offset)?;
-        Ok(account.map(|(account, _offset)| callback(account)))
-    }
-
-    /// Returns the account located at the specified index offset.
-    pub fn get_stored_account_meta(
-        &self,
-        index_offset: IndexOffset,
-    ) -> TieredStorageResult<Option<(StoredAccountMeta<'_>, IndexOffset)>> {
         if index_offset.0 >= self.footer.account_entry_count {
             return Ok(None);
         }
@@ -550,16 +541,13 @@ impl HotStorageReader {
         let owner = self.get_owner_address(meta.owner_offset())?;
         let account_block = self.get_account_block(account_offset, index_offset)?;
 
-        Ok(Some((
-            StoredAccountMeta::Hot(HotAccount {
-                meta,
-                address,
-                owner,
-                index: index_offset,
-                account_block,
-            }),
-            IndexOffset(index_offset.0.saturating_add(1)),
-        )))
+        Ok(Some(callback(StoredAccountMeta::Hot(HotAccount {
+            meta,
+            address,
+            owner,
+            index: index_offset,
+            account_block,
+        }))))
     }
 
     /// Returns the account located at the specified index offset.

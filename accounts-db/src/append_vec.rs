@@ -491,36 +491,28 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
-    /// Return stored account metadata for the account at `offset` if its data doesn't overrun
-    /// the internal buffer. Otherwise return None. Also return the offset of the first byte
-    /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_stored_account_meta(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
+    /// calls `callback` with the stored account metadata for the account at `offset` if its data doesn't overrun
+    /// the internal buffer. Otherwise return None.
+    pub fn get_stored_account_meta_callback<Ret>(
+        &self,
+        offset: usize,
+        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
+    ) -> Option<Ret> {
         let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&AccountHash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
-        Some((
-            StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+        Some(callback(StoredAccountMeta::AppendVec(
+            AppendVecStoredAccountMeta {
                 meta,
                 account_meta,
                 data,
                 offset,
                 stored_size,
                 hash,
-            }),
-            next,
-        ))
-    }
-
-    /// calls `callback` with the account located at the specified index offset.
-    pub fn get_stored_account_meta_callback<Ret>(
-        &self,
-        offset: usize,
-        mut callback: impl for<'local> FnMut(StoredAccountMeta<'local>) -> Ret,
-    ) -> Option<Ret> {
-        self.get_stored_account_meta(offset)
-            .map(|(account, _offset)| callback(account))
+            },
+        )))
     }
 
     /// return an `AccountSharedData` for an account at `offset`.
@@ -579,13 +571,12 @@ impl AppendVec {
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
         let sizes = self.get_account_sizes(&[offset]);
         let result = self.get_stored_account_meta_callback(offset, |r_callback| {
-            let r1 = self.get_stored_account_meta(offset).unwrap();
             let r2 = self.get_account_shared_data(offset);
             let r3 = self.get_account_meta(offset);
-            assert!(accounts_equal(&r_callback, &r1.0));
-            // r3 can return Some when r1 and r2 do not
+            assert!(accounts_equal(&r_callback, r2.as_ref().unwrap()));
+            // r3 can return Some when r_callback and r2 do not
             assert!(r3.is_some());
-            assert_eq!(sizes, vec![r1.0.stored_size()]);
+            assert_eq!(sizes, vec![r_callback.stored_size()]);
             if let Some(r2) = r2.as_ref() {
                 let meta = r3.unwrap();
                 assert_eq!(meta.executable, r2.executable());
@@ -593,12 +584,13 @@ impl AppendVec {
                 assert_eq!(meta.lamports, r2.lamports());
                 assert_eq!(meta.rent_epoch, r2.rent_epoch());
             }
-            let (stored_account, _) = r1;
-            let meta = stored_account.meta().clone();
-            Some((meta, stored_account.to_account_shared_data()))
+            let meta = r_callback.meta().clone();
+            Some((meta, r_callback.to_account_shared_data()))
         });
         if result.is_none() {
-            assert!(self.get_stored_account_meta(offset).is_none());
+            assert!(self
+                .get_stored_account_meta_callback(offset, |_| {})
+                .is_none());
             assert!(self.get_account_shared_data(offset).is_none());
             // note that sometimes `get_account_meta` can return Some(..) // assert!(self.get_account_meta(offset).is_none());
             // it has different rules for checking len and returning None
