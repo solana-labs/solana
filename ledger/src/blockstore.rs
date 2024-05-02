@@ -3512,9 +3512,8 @@ impl Blockstore {
 
         let (all_ranges_start_index, _) = *completed_ranges.first().unwrap();
         let (_, all_ranges_end_index) = *completed_ranges.last().unwrap();
-        let keys: Vec<(Slot, u64)> = (all_ranges_start_index..=all_ranges_end_index)
-            .map(|index| (slot, u64::from(index)))
-            .collect();
+        let keys =
+            (all_ranges_start_index..=all_ranges_end_index).map(|index| (slot, u64::from(index)));
 
         let data_shreds: Result<Vec<Option<Vec<u8>>>> = self
             .data_shred_cf
@@ -3601,8 +3600,11 @@ impl Blockstore {
     /// Returns a mapping from each elements of `slots` to a list of the
     /// element's children slots.
     pub fn get_slots_since(&self, slots: &[Slot]) -> Result<HashMap<Slot, Vec<Slot>>> {
-        let slot_metas: Result<Vec<Option<SlotMeta>>> =
-            self.meta_cf.multi_get(slots.to_vec()).into_iter().collect();
+        let slot_metas: Result<Vec<Option<SlotMeta>>> = self
+            .meta_cf
+            .multi_get(slots.iter().copied())
+            .into_iter()
+            .collect();
         let slot_metas = slot_metas?;
 
         let result: HashMap<Slot, Vec<Slot>> = slots
@@ -5375,7 +5377,7 @@ pub mod tests {
         for (i, key) in keys.iter_mut().enumerate().take(TEST_PUT_ENTRY_COUNT) {
             *key = u64::try_from(i).unwrap();
         }
-        let values = blockstore.meta_cf.multi_get(keys);
+        let values = blockstore.meta_cf.multi_get(keys.into_iter());
         for (i, value) in values.iter().enumerate().take(TEST_PUT_ENTRY_COUNT) {
             let k = u64::try_from(i).unwrap();
             assert_eq!(
