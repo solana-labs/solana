@@ -48,9 +48,12 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     ///
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn new<T: Into<Scalar>>(
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (amount_lo, amount_hi): (T, T),
-        (opening_lo, opening_hi): (&PedersenOpening, &PedersenOpening),
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        amount_lo: T,
+        amount_hi: T,
+        opening_lo: &PedersenOpening,
+        opening_hi: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
@@ -61,7 +64,8 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         let batched_opening = opening_lo + &(opening_hi * &t);
 
         BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
+            destination_pubkey,
+            auditor_pubkey,
             batched_message,
             &batched_opening,
             transcript,
@@ -73,12 +77,17 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     /// The function does *not* hash the public keys, commitment, or decryption handles into the
     /// transcript. For security, the caller (the main protocol) should hash these public
     /// components prior to invoking this constructor.
+    #[allow(clippy::too_many_arguments)]
     pub fn verify(
         self,
-        (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        (commitment_lo, commitment_hi): (&PedersenCommitment, &PedersenCommitment),
-        (destination_handle_lo, destination_handle_hi): (&DecryptHandle, &DecryptHandle),
-        (auditor_handle_lo, auditor_handle_hi): (&DecryptHandle, &DecryptHandle),
+        destination_pubkey: &ElGamalPubkey,
+        auditor_pubkey: &ElGamalPubkey,
+        commitment_lo: &PedersenCommitment,
+        commitment_hi: &PedersenCommitment,
+        destination_handle_lo: &DecryptHandle,
+        destination_handle_hi: &DecryptHandle,
+        auditor_handle_lo: &DecryptHandle,
+        auditor_handle_hi: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofVerificationError> {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
@@ -93,8 +102,10 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
 
         validity_proof.verify(
             &batched_commitment,
-            (destination_pubkey, auditor_pubkey),
-            (&destination_batched_handle, &auditor_batched_handle),
+            destination_pubkey,
+            auditor_pubkey,
+            &destination_batched_handle,
+            &auditor_batched_handle,
             transcript,
         )
     }
@@ -139,18 +150,25 @@ mod test {
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            (destination_pubkey, auditor_pubkey),
-            (amount_lo, amount_hi),
-            (&open_lo, &open_hi),
+            destination_pubkey,
+            auditor_pubkey,
+            amount_lo,
+            amount_hi,
+            &open_lo,
+            &open_hi,
             &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                (destination_pubkey, auditor_pubkey),
-                (&commitment_lo, &commitment_hi),
-                (&destination_handle_lo, &destination_handle_hi),
-                (&auditor_handle_lo, &auditor_handle_hi),
+                destination_pubkey,
+                auditor_pubkey,
+                &commitment_lo,
+                &commitment_hi,
+                &destination_handle_lo,
+                &destination_handle_hi,
+                &auditor_handle_lo,
+                &auditor_handle_hi,
                 &mut verifier_transcript,
             )
             .is_ok());
