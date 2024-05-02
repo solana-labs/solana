@@ -6,8 +6,8 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         transaction::{SanitizedTransaction, Transaction},
+        vote::instruction::VoteInstruction,
     },
-    solana_vote_program::vote_instruction::VoteInstruction,
 };
 
 pub type ParsedVote = (Pubkey, VoteTransaction, Option<Hash>, Signature);
@@ -17,7 +17,7 @@ pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<Par
     // Check first instruction for a vote
     let message = tx.message();
     let (program_id, first_instruction) = message.program_instructions_iter().next()?;
-    if !solana_vote_program::check_id(program_id) {
+    if !solana_sdk::vote::program::check_id(program_id) {
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
@@ -34,7 +34,7 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     let first_instruction = message.instructions.first()?;
     let program_id_index = usize::from(first_instruction.program_id_index);
     let program_id = message.account_keys.get(program_id_index)?;
-    if !solana_vote_program::check_id(program_id) {
+    if !solana_sdk::vote::program::check_id(program_id) {
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
@@ -82,13 +82,45 @@ mod test {
     use {
         super::*,
         solana_sdk::{
+            clock::Slot,
             hash::hash,
             signature::{Keypair, Signer},
-        },
-        solana_vote_program::{
-            vote_instruction, vote_state::Vote, vote_transaction::new_vote_transaction,
+            vote::{instruction as vote_instruction, state::Vote},
         },
     };
+
+    // Reimplemented locally from Vote program.
+    fn new_vote_transaction(
+        slots: Vec<Slot>,
+        bank_hash: Hash,
+        blockhash: Hash,
+        node_keypair: &Keypair,
+        vote_keypair: &Keypair,
+        authorized_voter_keypair: &Keypair,
+        switch_proof_hash: Option<Hash>,
+    ) -> Transaction {
+        let votes = Vote::new(slots, bank_hash);
+        let vote_ix = if let Some(switch_proof_hash) = switch_proof_hash {
+            vote_instruction::vote_switch(
+                &vote_keypair.pubkey(),
+                &authorized_voter_keypair.pubkey(),
+                votes,
+                switch_proof_hash,
+            )
+        } else {
+            vote_instruction::vote(
+                &vote_keypair.pubkey(),
+                &authorized_voter_keypair.pubkey(),
+                votes,
+            )
+        };
+
+        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+
+        vote_tx.partial_sign(&[node_keypair], blockhash);
+        vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
+        vote_tx
+    }
 
     fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
         let node_keypair = Keypair::new();

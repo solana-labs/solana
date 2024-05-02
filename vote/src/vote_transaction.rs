@@ -1,9 +1,7 @@
-use {
-    solana_sdk::{
-        clock::{Slot, UnixTimestamp},
-        hash::Hash,
-    },
-    solana_vote_program::vote_state::{TowerSync, Vote, VoteStateUpdate},
+use solana_sdk::{
+    clock::{Slot, UnixTimestamp},
+    hash::Hash,
+    vote::state::{TowerSync, Vote, VoteStateUpdate},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]

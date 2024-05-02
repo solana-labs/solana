@@ -5,8 +5,8 @@ use {
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
+        vote::state::VoteState,
     },
-    solana_vote_program::vote_state::VoteState,
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -241,7 +241,7 @@ impl TryFrom<AccountSharedData> for VoteAccount {
 impl TryFrom<AccountSharedData> for VoteAccountInner {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        if !solana_vote_program::check_id(account.owner()) {
+        if !solana_sdk::vote::program::check_id(account.owner()) {
             return Err(Error::InvalidOwner(*account.owner()));
         }
         Ok(Self {
@@ -325,8 +325,11 @@ mod tests {
         super::*,
         bincode::Options,
         rand::Rng,
-        solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock},
-        solana_vote_program::vote_state::{VoteInit, VoteStateVersions},
+        solana_sdk::{
+            pubkey::Pubkey,
+            sysvar::clock::Clock,
+            vote::state::{VoteInit, VoteStateVersions},
+        },
         std::iter::repeat_with,
     };
 
@@ -351,7 +354,7 @@ mod tests {
         let account = AccountSharedData::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),
-            &solana_vote_program::id(), // owner
+            &solana_sdk::vote::program::id(), // owner
         )
         .unwrap();
         (account, vote_state)
