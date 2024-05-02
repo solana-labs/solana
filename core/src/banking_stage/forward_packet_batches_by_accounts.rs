@@ -3,7 +3,7 @@ use {
     solana_cost_model::{
         block_cost_limits,
         cost_model::CostModel,
-        cost_tracker::{CostTracker, CostTrackerError},
+        cost_tracker::{CostTracker, CostTrackerError, UpdatedCosts},
     },
     solana_perf::packet::Packet,
     solana_sdk::{feature_set::FeatureSet, transaction::SanitizedTransaction},
@@ -61,7 +61,7 @@ impl ForwardBatch {
         sanitized_transaction: &SanitizedTransaction,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
-    ) -> Result<u64, CostTrackerError> {
+    ) -> Result<UpdatedCosts, CostTrackerError> {
         let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
         let res = self.cost_tracker.try_add(&tx_cost);
         if res.is_ok() {

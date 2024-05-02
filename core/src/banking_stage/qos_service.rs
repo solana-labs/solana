@@ -5,7 +5,9 @@
 
 use {
     super::{committer::CommitTransactionDetails, BatchedTransactionDetails},
-    solana_cost_model::{cost_model::CostModel, transaction_cost::TransactionCost},
+    solana_cost_model::{
+        cost_model::CostModel, cost_tracker::UpdatedCosts, transaction_cost::TransactionCost,
+    },
     solana_measure::measure::Measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -104,8 +106,8 @@ impl QosService {
                 match cost {
                     Ok(cost) => {
                         match cost_tracker.try_add(&cost) {
-                            Ok(current_block_cost) => {
-                                debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
+                            Ok(UpdatedCosts{updated_block_cost, updated_costliest_account_cost}) => {
+                                debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}, updated costliest account cost {}", bank.slot(), tx, cost, updated_block_cost, updated_costliest_account_cost);
                                 self.metrics.stats.selected_txs_count.fetch_add(1, Ordering::Relaxed);
                                 num_included += 1;
                                 Ok(cost)

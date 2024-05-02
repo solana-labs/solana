@@ -48,6 +48,15 @@ impl From<CostTrackerError> for TransactionError {
     }
 }
 
+/// Relevant block costs that were updated after successful `try_add()`
+#[derive(Debug, Default)]
+pub struct UpdatedCosts {
+    pub updated_block_cost: u64,
+    // for all write-locked accounts `try_add()` successfully updated, the highest account cost
+    // can be useful info.
+    pub updated_costliest_account_cost: u64,
+}
+
 #[derive(AbiExample, Debug)]
 pub struct CostTracker {
     account_cost_limit: u64,
@@ -122,10 +131,13 @@ impl CostTracker {
             .saturating_sub(in_flight_transaction_count);
     }
 
-    pub fn try_add(&mut self, tx_cost: &TransactionCost) -> Result<u64, CostTrackerError> {
+    pub fn try_add(&mut self, tx_cost: &TransactionCost) -> Result<UpdatedCosts, CostTrackerError> {
         self.would_fit(tx_cost)?;
-        self.add_transaction_cost(tx_cost);
-        Ok(self.block_cost)
+        let updated_costliest_account_cost = self.add_transaction_cost(tx_cost);
+        Ok(UpdatedCosts {
+            updated_block_cost: self.block_cost,
+            updated_costliest_account_cost,
+        })
     }
 
     pub fn update_execution_cost(
@@ -257,8 +269,8 @@ impl CostTracker {
         Ok(())
     }
 
-    fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
-        self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
+    // Returns the highest account cost for all write-lock accounts `TransactionCost` updated
+    fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) -> u64 {
         saturating_add_assign!(self.account_data_size, tx_cost.account_data_size());
         saturating_add_assign!(self.transaction_count, 1);
         saturating_add_assign!(
@@ -273,6 +285,7 @@ impl CostTracker {
             self.ed25519_instruction_signature_count,
             tx_cost.num_ed25519_instruction_signatures()
         );
+        self.add_transaction_execution_cost(tx_cost, tx_cost.sum())
     }
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
@@ -294,18 +307,27 @@ impl CostTracker {
     }
 
     /// Apply additional actual execution units to cost_tracker
-    fn add_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
+    /// Return the costliest account cost that were updated by `TransactionCost`
+    fn add_transaction_execution_cost(
+        &mut self,
+        tx_cost: &TransactionCost,
+        adjustment: u64,
+    ) -> u64 {
+        let mut costliest_account_cost = 0;
         for account_key in tx_cost.writable_accounts().iter() {
             let account_cost = self
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
             *account_cost = account_cost.saturating_add(adjustment);
+            costliest_account_cost = costliest_account_cost.max(*account_cost);
         }
         self.block_cost = self.block_cost.saturating_add(adjustment);
         if tx_cost.is_simple_vote() {
             self.vote_cost = self.vote_cost.saturating_add(adjustment);
         }
+
+        costliest_account_cost
     }
 
     /// Subtract extra execution units from cost_tracker
