@@ -635,8 +635,8 @@ pub enum AccountsIndexScanResult {
 pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub account_maps: LockMapType<T, U>,
     pub bin_calculator: PubkeyBinCalculator24,
-    program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
-    spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
+    program_id_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
+    spl_token_mint_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     pub roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
@@ -683,10 +683,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         Self {
             account_maps,
             bin_calculator,
-            program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
+            program_id_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
                 "program_id_index_stats",
             ),
-            spl_token_mint_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
+            spl_token_mint_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
                 "spl_token_mint_index_stats",
             ),
             spl_token_owner_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
@@ -2050,17 +2050,17 @@ pub mod tests {
         }
     }
 
-    fn create_dashmap_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
+    fn create_spl_token_mint_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
             let index = AccountsIndex::<bool, bool>::default_for_tests();
-            let _type_check = SecondaryIndexTypes::DashMap(&index.spl_token_mint_index);
+            let _type_check = SecondaryIndexTypes::RwLock(&index.spl_token_mint_index);
         }
 
         (0, PUBKEY_BYTES, spl_token_mint_index_enabled())
     }
 
-    fn create_rwlock_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
+    fn create_spl_token_owner_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
             let index = AccountsIndex::<bool, bool>::default_for_tests();
@@ -3436,8 +3436,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_purge_exact_dashmap_secondary_index() {
-        let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
+    fn test_purge_exact_spl_token_mint_secondary_index() {
+        let (key_start, key_end, secondary_indexes) = create_spl_token_mint_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         run_test_purge_exact_secondary_index(
             &index,
@@ -3449,8 +3449,9 @@ pub mod tests {
     }
 
     #[test]
-    fn test_purge_exact_rwlock_secondary_index() {
-        let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
+    fn test_purge_exact_spl_token_owner_secondary_index() {
+        let (key_start, key_end, secondary_indexes) =
+            create_spl_token_owner_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         run_test_purge_exact_secondary_index(
             &index,
@@ -3654,8 +3655,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_dashmap_secondary_index() {
-        let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
+    fn test_spl_token_mint_secondary_index() {
+        let (key_start, key_end, secondary_indexes) = create_spl_token_mint_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         for token_id in SPL_TOKENS {
             run_test_spl_token_secondary_indexes(
@@ -3670,8 +3671,9 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rwlock_secondary_index() {
-        let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
+    fn test_spl_token_owner_secondary_index() {
+        let (key_start, key_end, secondary_indexes) =
+            create_spl_token_owner_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         for token_id in SPL_TOKENS {
             run_test_spl_token_secondary_indexes(
@@ -3775,8 +3777,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_dashmap_secondary_index_same_slot_and_forks() {
-        let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
+    fn test_spl_token_mint_secondary_index_same_slot_and_forks() {
+        let (key_start, key_end, account_index) = create_spl_token_mint_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         for token_id in SPL_TOKENS {
             run_test_secondary_indexes_same_slot_and_forks(
@@ -3792,7 +3794,7 @@ pub mod tests {
 
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
-        let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
+        let (key_start, key_end, account_index) = create_spl_token_owner_secondary_index_state();
         let index = AccountsIndex::<bool, bool>::default_for_tests();
         for token_id in SPL_TOKENS {
             run_test_secondary_indexes_same_slot_and_forks(
