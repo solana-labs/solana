@@ -122,7 +122,7 @@ dependencies = [
  "semver 1.0.22",
  "serde",
  "serde_yaml 0.8.26",
- "serde_yaml 0.9.32",
+ "serde_yaml 0.9.34+deprecated",
  "solana-clap-utils",
  "solana-config-program",
  "solana-logger",
@@ -214,7 +214,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "serde_yaml 0.9.32",
+ "serde_yaml 0.9.34+deprecated",
  "signal-hook",
  "solana-account-decoder",
  "solana-accounts-db",
@@ -5033,9 +5033,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.32"
+version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd075d994154d4a774f95b51fb96bdc2832b0ea48425c92546073816cda1f2f"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
  "indexmap 2.2.5",
  "itoa",
@@ -5545,7 +5545,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "serde_yaml 0.9.32",
+ "serde_yaml 0.9.34+deprecated",
  "serial_test",
  "solana-clap-utils",
  "solana-cli-config",
@@ -5788,7 +5788,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "serde_derive",
- "serde_yaml 0.9.32",
+ "serde_yaml 0.9.34+deprecated",
  "solana-clap-utils",
  "solana-sdk",
  "url 2.5.0",
@@ -6175,7 +6175,7 @@ dependencies = [
  "itertools",
  "serde",
  "serde_json",
- "serde_yaml 0.9.32",
+ "serde_yaml 0.9.34+deprecated",
  "solana-accounts-db",
  "solana-clap-utils",
  "solana-cli-config",
@@ -8845,9 +8845,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab4c90930b95a82d00dc9e9ac071b4991924390d46cbd0dfe566148667605e4b"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"
