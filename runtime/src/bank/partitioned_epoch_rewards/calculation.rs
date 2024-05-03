@@ -5,9 +5,13 @@ use {
         EpochRewardCalculateParamInfo, PartitionedRewardsCalculation, StakeRewardCalculation,
         StakeRewardCalculationPartitioned, VoteRewardsAccounts,
     },
-    crate::bank::{
-        PrevEpochInflationRewards, RewardCalcTracer, RewardCalculationEvent, RewardsMetrics,
-        VoteAccount, VoteReward, VoteRewards,
+    crate::{
+        bank::{
+            PrevEpochInflationRewards, RewardCalcTracer, RewardCalculationEvent, RewardsMetrics,
+            VoteAccount, VoteReward, VoteRewards,
+        },
+        stake_account::StakeAccount,
+        stakes::Stakes,
     },
     dashmap::DashMap,
     log::{debug, info},
@@ -23,7 +27,7 @@ use {
         pubkey::Pubkey,
         reward_info::RewardInfo,
         reward_type::RewardType,
-        stake::state::StakeStateV2,
+        stake::state::{Delegation, StakeStateV2},
     },
     solana_stake_program::points::PointValue,
     std::sync::atomic::{AtomicU64, Ordering::Relaxed},
@@ -293,6 +297,29 @@ impl Bank {
         })
     }
 
+    /// calculate and return some reward calc info to avoid recalculation across functions
+    fn get_epoch_reward_calculate_param_info<'a>(
+        &'a self,
+        stakes: &'a Stakes<StakeAccount<Delegation>>,
+    ) -> EpochRewardCalculateParamInfo<'a> {
+        // Use `stakes` for stake-related info
+        let stake_history = stakes.history().clone();
+        let stake_delegations = self.filter_stake_delegations(stakes);
+
+        // Use `EpochStakes` for vote accounts
+        let leader_schedule_epoch = self.epoch_schedule().get_leader_schedule_epoch(self.slot());
+        let cached_vote_accounts = self.epoch_stakes(leader_schedule_epoch)
+            .expect("calculation should always run after Bank::update_epoch_stakes(leader_schedule_epoch)")
+            .stakes()
+            .vote_accounts();
+
+        EpochRewardCalculateParamInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        }
+    }
+
     /// Calculates epoch rewards for stake/vote accounts
     /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
     fn calculate_stake_vote_rewards(
@@ -492,7 +519,11 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::{null_tracer, tests::create_genesis_config, VoteReward},
+            bank::{
+                null_tracer,
+                tests::{create_genesis_config, new_bank_from_parent_with_bank_forks},
+                VoteReward,
+            },
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
@@ -502,6 +533,7 @@ mod tests {
         rayon::ThreadPoolBuilder,
         solana_sdk::{
             account::{accounts_equal, ReadableAccount, WritableAccount},
+            epoch_schedule::EpochSchedule,
             native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
             reward_type::RewardType,
             signature::Signer,
@@ -512,17 +544,22 @@ mod tests {
         std::sync::RwLockReadGuard,
     };
 
+    const SLOTS_PER_EPOCH: u64 = 32;
+
     /// Helper function to create a bank that pays some rewards
     fn create_reward_bank(expected_num_delegations: usize) -> (Bank, Vec<Pubkey>, Vec<Pubkey>) {
         let validator_keypairs = (0..expected_num_delegations)
             .map(|_| ValidatorVoteKeypairs::new_rand())
             .collect::<Vec<_>>();
 
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
             vec![2_000_000_000; expected_num_delegations],
         );
+        genesis_config.epoch_schedule = EpochSchedule::new(SLOTS_PER_EPOCH);
 
         let bank = Bank::new_for_tests(&genesis_config);
 
@@ -625,6 +662,15 @@ mod tests {
         let expected_num_delegations = 100;
         let bank = create_reward_bank(expected_num_delegations).0;
 
+        // Advance to next epoch boundary to update EpochStakes
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let bank = new_bank_from_parent_with_bank_forks(
+            &bank_forks,
+            bank,
+            &Pubkey::default(),
+            SLOTS_PER_EPOCH,
+        );
+
         // Calculate rewards
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let mut rewards_metrics = RewardsMetrics::default();
@@ -666,6 +712,15 @@ mod tests {
 
         let expected_num_delegations = 100;
         let (bank, _, _) = create_reward_bank(expected_num_delegations);
+
+        // Advance to next epoch boundary to update EpochStakes
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let bank = new_bank_from_parent_with_bank_forks(
+            &bank_forks,
+            bank,
+            &Pubkey::default(),
+            SLOTS_PER_EPOCH,
+        );
 
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let rewards_metrics = RewardsMetrics::default();
@@ -716,6 +771,15 @@ mod tests {
 
         let expected_num_delegations = 1;
         let (bank, voters, stakers) = create_reward_bank(expected_num_delegations);
+
+        // Advance to next epoch boundary to update EpochStakes
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let bank = new_bank_from_parent_with_bank_forks(
+            &bank_forks,
+            bank,
+            &Pubkey::default(),
+            SLOTS_PER_EPOCH,
+        );
 
         let vote_pubkey = voters.first().unwrap();
         let mut vote_account = bank
