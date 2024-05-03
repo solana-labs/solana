@@ -3,7 +3,8 @@ use {
     solana_cost_model::{
         block_cost_limits,
         cost_model::CostModel,
-        cost_tracker::{CostTracker, CostTrackerError, UpdatedCosts},
+        cost_tracker::{CostTracker, UpdatedCosts},
+        transaction_cost::TransactionCost,
     },
     solana_perf::packet::Packet,
     solana_sdk::{feature_set::FeatureSet, transaction::SanitizedTransaction},
@@ -23,53 +24,14 @@ const DEFAULT_NUMBER_OF_BATCHES: u32 = 100;
 
 /// `ForwardBatch` represents one forwardable batch of transactions with a
 /// limited number of total compute units
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ForwardBatch {
-    cost_tracker: CostTracker,
     // `forwardable_packets` keeps forwardable packets in a vector in its
     // original fee prioritized order
     forwardable_packets: Vec<Arc<ImmutableDeserializedPacket>>,
 }
 
-impl Default for ForwardBatch {
-    /// default ForwardBatch has cost_tracker with default limits
-    fn default() -> Self {
-        Self::new(1)
-    }
-}
-
 impl ForwardBatch {
-    /// `ForwardBatch` keeps forwardable packets in a vector in its original fee prioritized order,
-    /// Number of packets are limited by `cost_tracker` with customized `limit_ratio` to lower
-    /// (when `limit_ratio` > 1) `cost_tracker`'s default limits.
-    /// Lower limits yield smaller batch for forwarding.
-    fn new(limit_ratio: u32) -> Self {
-        let mut cost_tracker = CostTracker::default();
-        cost_tracker.set_limits(
-            block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS.saturating_div(limit_ratio as u64),
-            block_cost_limits::MAX_BLOCK_UNITS.saturating_div(limit_ratio as u64),
-            block_cost_limits::MAX_VOTE_UNITS.saturating_div(limit_ratio as u64),
-        );
-        Self {
-            cost_tracker,
-            forwardable_packets: Vec::default(),
-        }
-    }
-
-    fn try_add(
-        &mut self,
-        sanitized_transaction: &SanitizedTransaction,
-        immutable_packet: Arc<ImmutableDeserializedPacket>,
-        feature_set: &FeatureSet,
-    ) -> Result<UpdatedCosts, CostTrackerError> {
-        let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
-        let res = self.cost_tracker.try_add(&tx_cost);
-        if res.is_ok() {
-            self.forwardable_packets.push(immutable_packet);
-        }
-        res
-    }
-
     pub fn get_forwardable_packets(&self) -> impl Iterator<Item = &Packet> {
         self.forwardable_packets
             .iter()
@@ -95,6 +57,14 @@ pub struct ForwardPacketBatchesByAccounts {
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.
     forward_batches: Vec<ForwardBatch>,
+
+    // Single cost tracker that imposes the total cu limits for forwarding.
+    cost_tracker: CostTracker,
+
+    // Compute Unit limits for each batch
+    batch_vote_limit: u64,
+    batch_block_limit: u64,
+    batch_account_limit: u64,
 }
 
 impl ForwardPacketBatchesByAccounts {
@@ -104,31 +74,77 @@ impl ForwardPacketBatchesByAccounts {
 
     pub fn new(limit_ratio: u32, number_of_batches: u32) -> Self {
         let forward_batches = (0..number_of_batches)
-            .map(|_| ForwardBatch::new(limit_ratio))
+            .map(|_| ForwardBatch::default())
             .collect();
-        Self { forward_batches }
+
+        let batch_vote_limit = block_cost_limits::MAX_VOTE_UNITS.saturating_div(limit_ratio as u64);
+        let batch_block_limit =
+            block_cost_limits::MAX_BLOCK_UNITS.saturating_div(limit_ratio as u64);
+        let batch_account_limit =
+            block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS.saturating_div(limit_ratio as u64);
+
+        let mut cost_tracker = CostTracker::default();
+        cost_tracker.set_limits(
+            batch_account_limit.saturating_mul(number_of_batches as u64),
+            batch_block_limit.saturating_mul(number_of_batches as u64),
+            batch_vote_limit.saturating_mul(number_of_batches as u64),
+        );
+        Self {
+            forward_batches,
+            cost_tracker,
+            batch_vote_limit,
+            batch_block_limit,
+            batch_account_limit,
+        }
     }
 
-    /// packets are filled into first available 'batch' that have space to fit it.
     pub fn try_add_packet(
         &mut self,
         sanitized_transaction: &SanitizedTransaction,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> bool {
-        for forward_batch in self.forward_batches.iter_mut() {
-            if forward_batch
-                .try_add(sanitized_transaction, immutable_packet.clone(), feature_set)
-                .is_ok()
-            {
-                return true;
+        let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
+
+        if let Ok(updated_costs) = self.cost_tracker.try_add(&tx_cost) {
+            let batch_index = self.get_batch_index_by_updated_costs(&tx_cost, &updated_costs);
+
+            if let Some(forward_batch) = self.forward_batches.get_mut(batch_index) {
+                forward_batch.forwardable_packets.push(immutable_packet);
+            } else {
+                // A successfully added tx_cost means it does not exceed block limit, nor vote
+                // limit, nor account limit. batch_index calculated as quotient from division
+                // will not be out of bounds.
+                unreachable!("batch_index out of bounds");
             }
+            true
+        } else {
+            false
         }
-        false
     }
 
     pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch> {
         self.forward_batches.iter()
+    }
+
+    // Successfully added packet should be placed into the batch where no block/vote/account limits
+    // would be exceeded. Eg, if by block limit, it can be put into batch #1; by vote limit, it can
+    // be put into batch #2; and by account limit, it can be put into batch #3; then it should be
+    // put into batch #3 to satisfy all batch limits.
+    fn get_batch_index_by_updated_costs(
+        &self,
+        tx_cost: &TransactionCost,
+        updated_costs: &UpdatedCosts,
+    ) -> usize {
+        let batch_index_by_block_limit = updated_costs.updated_block_cost
+            / match tx_cost {
+                TransactionCost::SimpleVote { .. } => self.batch_vote_limit,
+                TransactionCost::Transaction(_) => self.batch_block_limit,
+            };
+        let batch_index_by_account_limit =
+            updated_costs.updated_costliest_account_cost / self.batch_account_limit;
+
+        batch_index_by_block_limit.max(batch_index_by_account_limit) as usize
     }
 }
 
@@ -137,6 +153,7 @@ mod tests {
     use {
         super::*,
         crate::banking_stage::unprocessed_packet_batches::DeserializedPacket,
+        solana_cost_model::transaction_cost::UsageCostDetails,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, feature_set::FeatureSet, message::Message,
             pubkey::Pubkey, system_instruction, transaction::Transaction,
@@ -172,35 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_add_to_forward_batch() {
-        let (tx, packet, limit_ratio) =
-            build_test_transaction_and_packet(0u64, &Pubkey::new_unique());
-        let mut forward_batch = ForwardBatch::new(limit_ratio);
-
-        // Assert first packet will be added to forwarding buffer
-        assert!(forward_batch
-            .try_add(
-                &tx,
-                packet.immutable_section().clone(),
-                &FeatureSet::all_enabled(),
-            )
-            .is_ok());
-        assert_eq!(1, forward_batch.forwardable_packets.len());
-
-        // Assert second copy of same packet will hit write account limit, therefore
-        // not be added to forwarding buffer
-        assert!(forward_batch
-            .try_add(
-                &tx,
-                packet.immutable_section().clone(),
-                &FeatureSet::all_enabled(),
-            )
-            .is_err());
-        assert_eq!(1, forward_batch.forwardable_packets.len());
-    }
-
-    #[test]
-    fn test_try_add_packeti_to_multiple_batches() {
+    fn test_try_add_packet_to_multiple_batches() {
         // setup two transactions, one has high priority that writes to hot account, the
         // other write to non-contentious account with no priority
         let hot_account = solana_sdk::pubkey::new_rand();
@@ -331,6 +320,124 @@ mod tests {
 
             let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(2, batches.next().unwrap().len());
+        }
+    }
+
+    #[test]
+    fn test_get_batch_index_by_updated_costs() {
+        let test_cost = 99;
+
+        // check against vote limit only
+        {
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            forward_packet_batches_by_accounts.batch_vote_limit = test_cost + 1;
+
+            let transaction_cost = TransactionCost::SimpleVote {
+                writable_accounts: vec![],
+            };
+            assert_eq!(
+                0,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: test_cost,
+                        updated_costliest_account_cost: 0
+                    }
+                )
+            );
+            assert_eq!(
+                1,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: test_cost + 1,
+                        updated_costliest_account_cost: 0
+                    }
+                )
+            );
+        }
+
+        // check against block limit only
+        {
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            forward_packet_batches_by_accounts.batch_block_limit = test_cost + 1;
+
+            let transaction_cost = TransactionCost::Transaction(UsageCostDetails::default());
+            assert_eq!(
+                0,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: test_cost,
+                        updated_costliest_account_cost: 0
+                    }
+                )
+            );
+            assert_eq!(
+                1,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: test_cost + 1,
+                        updated_costliest_account_cost: 0
+                    }
+                )
+            );
+        }
+
+        // check against account limit only
+        {
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            forward_packet_batches_by_accounts.batch_account_limit = test_cost + 1;
+
+            let transaction_cost = TransactionCost::Transaction(UsageCostDetails::default());
+            assert_eq!(
+                0,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: 0,
+                        updated_costliest_account_cost: test_cost
+                    }
+                )
+            );
+            assert_eq!(
+                1,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: 0,
+                        updated_costliest_account_cost: test_cost + 1
+                    }
+                )
+            );
+        }
+
+        // by block limit, it can be put into batch #1;
+        // by vote limit, it can be put into batch #2;
+        // by account limit, it can be put into batch #3;
+        // it should be put into batch #3 to satisfy all batch limits.
+        {
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            forward_packet_batches_by_accounts.batch_block_limit = test_cost + 1;
+            forward_packet_batches_by_accounts.batch_vote_limit = test_cost / 2 + 1;
+            forward_packet_batches_by_accounts.batch_account_limit = test_cost / 3 + 1;
+
+            let transaction_cost = TransactionCost::Transaction(UsageCostDetails::default());
+            assert_eq!(
+                2,
+                forward_packet_batches_by_accounts.get_batch_index_by_updated_costs(
+                    &transaction_cost,
+                    &UpdatedCosts {
+                        updated_block_cost: test_cost,
+                        updated_costliest_account_cost: test_cost
+                    }
+                )
+            );
         }
     }
 }
