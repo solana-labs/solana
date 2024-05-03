@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         cli::{
@@ -17,7 +15,10 @@ use {
     solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::{client_error::Error as ClientError, request::MAX_MULTIPLE_ACCOUNTS},
+    solana_rpc_client_api::{
+        client_error::Error as ClientError, request::MAX_MULTIPLE_ACCOUNTS,
+        response::RpcVoteAccountInfo,
+    },
     solana_sdk::{
         account::Account,
         clock::Slot,
@@ -147,7 +148,11 @@ impl fmt::Display for CliFeatures {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
                     CliFeatureStatus::Pending => {
                         let current_epoch = self.epoch_schedule.get_epoch(self.current_slot);
-                        style(format!("pending until epoch {}", current_epoch + 1)).yellow()
+                        style(format!(
+                            "pending until epoch {}",
+                            current_epoch.saturating_add(1)
+                        ))
+                        .yellow()
                     }
                     CliFeatureStatus::Active(activation_slot) => {
                         let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
@@ -650,27 +655,36 @@ fn cluster_info_stats(rpc_client: &RpcClient) -> Result<ClusterInfoStats, Client
     let vote_stakes = vote_accounts
         .current
         .into_iter()
-        .map(|vote_account| {
-            total_active_stake += vote_account.activated_stake;
-            (vote_account.node_pubkey, vote_account.activated_stake)
-        })
+        .map(
+            |RpcVoteAccountInfo {
+                 node_pubkey,
+                 activated_stake,
+                 ..
+             }| {
+                total_active_stake = total_active_stake.saturating_add(activated_stake);
+                (node_pubkey.clone(), activated_stake)
+            },
+        )
         .collect::<HashMap<_, _>>();
 
     let mut cluster_info_stats: HashMap<(u32, CliVersion), StatsEntry> = HashMap::new();
-    let mut total_rpc_nodes = 0;
+    let mut total_rpc_nodes: u64 = 0;
     for (node_id, feature_set, is_rpc, version) in cluster_info_list {
         let feature_set = feature_set.unwrap_or(0);
-        let stats_entry = cluster_info_stats
+        let StatsEntry {
+            stake_lamports,
+            rpc_nodes_count,
+        } = cluster_info_stats
             .entry((feature_set, version))
             .or_default();
 
         if let Some(vote_stake) = vote_stakes.get(&node_id) {
-            stats_entry.stake_lamports += *vote_stake;
+            *stake_lamports = stake_lamports.saturating_add(*vote_stake);
         }
 
         if is_rpc {
-            stats_entry.rpc_nodes_count += 1;
-            total_rpc_nodes += 1;
+            *rpc_nodes_count = rpc_nodes_count.saturating_add(1);
+            total_rpc_nodes = total_rpc_nodes.saturating_add(1);
         }
     }
 
