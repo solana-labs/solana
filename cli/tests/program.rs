@@ -1034,7 +1034,7 @@ fn test_cli_program_extend_program() {
     };
     process_command(&config).unwrap();
 
-    // Deploy the upgradeable program
+    // Deploy an upgradeable program
     let program_keypair = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
@@ -1105,7 +1105,16 @@ fn test_cli_program_extend_program() {
         auto_extend: false,
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    let err = process_command(&config)
+        .expect_err("Program upgrade must fail, as the buffer is 1 byte too short");
+    assert_eq!(
+        "Deploying program failed: \
+         RPC response error -32002: \
+         Transaction simulation failed: \
+         Error processing Instruction 0: \
+         account data too small for instruction [3 log messages]",
+        format!("{err}"),
+    );
 
     // Wait one slot to avoid "Program was deployed in this block already" error
     wait_n_slots(&rpc_client, 1);
