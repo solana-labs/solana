@@ -418,7 +418,7 @@ impl AccountsHashVerifier {
             _ = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash_from_storages(
+                .calculate_accounts_hash(
                     &calculate_accounts_hash_config,
                     &sorted_storages,
                     HashStats::default(),

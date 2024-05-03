@@ -351,7 +351,7 @@ impl SnapshotRequestHandler {
             let (this_accounts_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
-                .calculate_accounts_hash(
+                .calculate_accounts_hash_from(
                     CalcAccountsHashDataSource::Storages,
                     snapshot_root_bank.slot(),
                     &CalcAccountsHashConfig {

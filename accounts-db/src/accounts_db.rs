@@ -6712,7 +6712,7 @@ impl AccountsDb {
         debug_verify: bool,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        self.update_accounts_hash_with_verify(
+        self.update_accounts_hash_with_verify_from(
             CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
             slot,
@@ -7026,7 +7026,7 @@ impl AccountsDb {
         stats.num_dirty_slots = num_dirty_slots;
     }
 
-    pub fn calculate_accounts_hash(
+    pub fn calculate_accounts_hash_from(
         &self,
         data_source: CalcAccountsHashDataSource,
         slot: Slot,
@@ -7059,7 +7059,7 @@ impl AccountsDb {
                 };
                 timings.calc_storage_size_quartiles(&combined_maps);
 
-                self.calculate_accounts_hash_from_storages(config, &storages, timings)
+                self.calculate_accounts_hash(config, &storages, timings)
             }
             CalcAccountsHashDataSource::IndexForTests => {
                 self.calculate_accounts_hash_from_index(slot, config)
@@ -7067,7 +7067,7 @@ impl AccountsDb {
         }
     }
 
-    fn calculate_accounts_hash_with_verify(
+    fn calculate_accounts_hash_with_verify_from(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -7076,7 +7076,7 @@ impl AccountsDb {
         expected_capitalization: Option<u64>,
     ) -> (AccountsHash, u64) {
         let (accounts_hash, total_lamports) =
-            self.calculate_accounts_hash(data_source, slot, &config);
+            self.calculate_accounts_hash_from(data_source, slot, &config);
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let data_source_other = match data_source {
@@ -7084,7 +7084,7 @@ impl AccountsDb {
                 CalcAccountsHashDataSource::Storages => CalcAccountsHashDataSource::IndexForTests,
             };
             let (accounts_hash_other, total_lamports_other) =
-                self.calculate_accounts_hash(data_source_other, slot, &config);
+                self.calculate_accounts_hash_from(data_source_other, slot, &config);
 
             let success = accounts_hash == accounts_hash_other
                 && total_lamports == total_lamports_other
@@ -7096,7 +7096,7 @@ impl AccountsDb {
 
     /// run the accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash_with_verify(
+    pub fn update_accounts_hash_with_verify_from(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -7107,7 +7107,7 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        let (accounts_hash, total_lamports) = self.calculate_accounts_hash_with_verify(
+        let (accounts_hash, total_lamports) = self.calculate_accounts_hash_with_verify_from(
             data_source,
             debug_verify,
             slot,
@@ -7132,7 +7132,7 @@ impl AccountsDb {
         slot: Slot,
         stats: HashStats,
     ) -> (AccountsHash, /*capitalization*/ u64) {
-        let accounts_hash = self.calculate_accounts_hash_from_storages(config, storages, stats);
+        let accounts_hash = self.calculate_accounts_hash(config, storages, stats);
         let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
         if let Some(old_accounts_hash) = old_accounts_hash {
             warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
@@ -7336,15 +7336,17 @@ impl AccountsDb {
         CacheHashData::new(accounts_hash_cache_path, deletion_policy)
     }
 
-    // modeled after calculate_accounts_delta_hash
-    // intended to be faster than calculate_accounts_hash
-    pub fn calculate_accounts_hash_from_storages(
+    /// Calculate the full accounts hash
+    ///
+    /// This is intended to be used by startup verification, and also AccountsHashVerifier.
+    /// Uses account storage files as the data source for the calculation.
+    pub fn calculate_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
         stats: HashStats,
     ) -> (AccountsHash, u64) {
-        let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
+        let (accounts_hash, capitalization) = self.calculate_accounts_hash_from_storages(
             config,
             storages,
             stats,
@@ -7370,7 +7372,7 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         stats: HashStats,
     ) -> (IncrementalAccountsHash, /* capitalization */ u64) {
-        let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
+        let (accounts_hash, capitalization) = self.calculate_accounts_hash_from_storages(
             config,
             storages,
             stats,
@@ -7382,7 +7384,9 @@ impl AccountsDb {
         (incremental_accounts_hash, capitalization)
     }
 
-    fn _calculate_accounts_hash_from_storages(
+    /// The shared code for calculating accounts hash from storages.
+    /// Used for both full accounts hash and incremental accounts hash calculation.
+    fn calculate_accounts_hash_from_storages(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
@@ -7523,7 +7527,7 @@ impl AccountsDb {
             }
         } else {
             let (calculated_accounts_hash, calculated_lamports) = self
-                .calculate_accounts_hash_with_verify(
+                .calculate_accounts_hash_with_verify_from(
                     CalcAccountsHashDataSource::Storages,
                     config.test_hash_calculation,
                     slot,
@@ -10567,7 +10571,7 @@ pub mod tests {
         |db| {
             let (storages, _size, _slot_expected) = sample_storage();
 
-            let result = db.calculate_accounts_hash_from_storages(
+            let result = db.calculate_accounts_hash(
                 &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -10589,7 +10593,7 @@ pub mod tests {
                 |item| &item.hash.0,
             );
             let sum = raw_expected.iter().map(|item| item.lamports).sum();
-            let result = db.calculate_accounts_hash_from_storages(
+            let result = db.calculate_accounts_hash(
                 &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -17638,7 +17642,7 @@ pub mod tests {
             accounts_db.clean_accounts(Some(slot - 1), false, None, &EpochSchedule::default());
             let (storages, _) = accounts_db.get_snapshot_storages(..=slot);
             let storages = SortedStorages::new(&storages);
-            accounts_db.calculate_accounts_hash_from_storages(
+            accounts_db.calculate_accounts_hash(
                 &CalcAccountsHashConfig::default(),
                 &storages,
                 HashStats::default(),
