@@ -867,7 +867,7 @@ impl Tower {
             SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
         };
 
-        let rollback_due_to_to_to_duplicate_ancestor = |latest_duplicate_ancestor| {
+        let rollback_due_to_duplicate_ancestor = |latest_duplicate_ancestor| {
             SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor)
         };
 
@@ -895,7 +895,7 @@ impl Tower {
                 &(switch_slot, switch_hash),
                 &(last_voted_slot, last_voted_hash),
             ) {
-                return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
+                return rollback_due_to_duplicate_ancestor(latest_duplicate_ancestor);
             } else if progress
                 .get_hash(last_voted_slot)
                 .map(|current_slot_hash| current_slot_hash != last_voted_hash)
