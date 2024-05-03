@@ -66,6 +66,8 @@ pub enum Error {
     Blockstore(#[from] solana_ledger::blockstore::BlockstoreError),
     #[error(transparent)]
     ClusterInfo(#[from] solana_gossip::cluster_info::ClusterInfoError),
+    #[error("Duplicate slot broadcast: {0}")]
+    DuplicateSlotBroadcast(Slot),
     #[error("Invalid Merkle root, slot: {slot}, index: {index}")]
     InvalidMerkleRoot { slot: Slot, index: u64 },
     #[error(transparent)]
