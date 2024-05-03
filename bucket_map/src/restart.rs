@@ -221,7 +221,7 @@ impl Restart {
                     paths.remove(&id)
                 });
                 RestartableBucket {
-                    restart: restart.map(Arc::clone),
+                    restart: restart.cloned(),
                     index,
                     path,
                 }
