@@ -2824,12 +2824,12 @@ impl AccountsDb {
     }
 
     #[must_use]
-    pub fn purge_keys_exact<'a, C: 'a>(
+    pub fn purge_keys_exact<'a, C>(
         &'a self,
         pubkey_to_slot_set: impl Iterator<Item = &'a (Pubkey, C)>,
     ) -> (Vec<(Slot, AccountInfo)>, PubkeysRemovedFromAccountsIndex)
     where
-        C: Contains<'a, Slot>,
+        C: Contains<'a, Slot> + 'a,
     {
         let mut reclaims = Vec::new();
         let mut dead_keys = Vec::new();

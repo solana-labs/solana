@@ -8279,7 +8279,7 @@ enum AcceptableScanResults {
     Both,
 }
 
-fn test_store_scan_consistency<F: 'static>(
+fn test_store_scan_consistency<F>(
     update_f: F,
     drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
     acceptable_scan_results: AcceptableScanResults,
@@ -8291,7 +8291,8 @@ fn test_store_scan_consistency<F: 'static>(
             Arc<HashSet<Pubkey>>,
             Pubkey,
             u64,
-        ) + std::marker::Send,
+        ) + std::marker::Send
+        + 'static,
 {
     solana_logger::setup();
     // Set up initial bank

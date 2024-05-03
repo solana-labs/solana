@@ -1457,7 +1457,7 @@ impl Database {
     }
 
     #[inline]
-    pub fn cf_handle<C: ColumnName>(&self) -> &ColumnFamily
+    pub fn cf_handle<C>(&self) -> &ColumnFamily
     where
         C: Column + ColumnName,
     {
