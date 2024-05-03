@@ -976,7 +976,7 @@ mod tests {
                 });
 
                 // this was wiped out by the last call to batch_insert..., so recreate it.
-                hashed = hashed_raw.clone();
+                hashed.clone_from(&hashed_raw);
                 let mut duplicates = Vec::default();
                 if reuse_type == 0 {
                     Bucket::<u64>::batch_insert_non_duplicates_reusing_file(

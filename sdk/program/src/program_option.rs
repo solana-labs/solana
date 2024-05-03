@@ -874,7 +874,7 @@ impl<T: Clone> Clone for COption<T> {
     fn clone_from(&mut self, source: &Self) {
         match (self, source) {
             (COption::Some(to), COption::Some(from)) => to.clone_from(from),
-            (to, from) => *to = from.clone(),
+            (to, from) => to.clone_from(from),
         }
     }
 }

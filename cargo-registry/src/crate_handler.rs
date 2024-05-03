@@ -339,7 +339,7 @@ impl UnpackedCrate {
         Program::from(self).deploy(client, signer)?;
 
         let mut entry: IndexEntry = self.meta.clone().into();
-        entry.cksum = self.cksum.clone();
+        entry.cksum.clone_from(&self.cksum);
         index.insert_entry(entry)?;
 
         info!("Successfully deployed the program");

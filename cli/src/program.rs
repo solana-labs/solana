@@ -2830,8 +2830,9 @@ fn send_deploy_messages(
                         // changing the instruction data for a compute budget
                         // instruction.
                         assert_eq!(msg.program_id(ix_index), Some(&compute_budget::id()));
-                        msg.instructions[ix_index].data =
-                            message.instructions[ix_index].data.clone();
+                        msg.instructions[ix_index]
+                            .data
+                            .clone_from(&message.instructions[ix_index].data);
                     }
                 }
             }

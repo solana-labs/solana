@@ -1340,7 +1340,7 @@ pub fn process_show_block_production(
         let pubkey = format_labeled_address(pubkey, &config.address_labels);
         for slot_index in leader_slots.iter() {
             if *slot_index >= start_slot_index && *slot_index <= end_slot_index {
-                leader_per_slot_index[*slot_index - start_slot_index] = pubkey.clone();
+                leader_per_slot_index[*slot_index - start_slot_index].clone_from(&pubkey);
             }
         }
     }

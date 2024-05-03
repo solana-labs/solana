@@ -65,7 +65,7 @@ fn full_battery_tests(
     let json_rpc_url = test_validator.rpc_url();
 
     let mut config_payer = CliConfig::recent_for_tests();
-    config_payer.json_rpc_url = json_rpc_url.clone();
+    config_payer.json_rpc_url.clone_from(&json_rpc_url);
     let payer = Keypair::new();
     config_payer.signers = vec![&payer];
 
@@ -146,7 +146,7 @@ fn full_battery_tests(
     };
 
     // New nonce
-    config_payer.signers = authorized_signers.clone();
+    config_payer.signers.clone_from(&authorized_signers);
     config_payer.command = CliCommand::NewNonce {
         nonce_account,
         nonce_authority: index,

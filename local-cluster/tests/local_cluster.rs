@@ -2135,7 +2135,10 @@ fn test_hard_fork_invalidates_tower() {
         Some(&hard_forks),
     );
 
-    validator_a_info.config.new_hard_forks = hard_fork_slots.clone();
+    validator_a_info
+        .config
+        .new_hard_forks
+        .clone_from(&hard_fork_slots);
     validator_a_info.config.wait_for_supermajority = Some(hard_fork_slot);
     validator_a_info.config.expected_shred_version = Some(expected_shred_version);
 
@@ -4775,8 +4778,10 @@ fn test_duplicate_with_pruned_ancestor() {
     // Make sure we don't send duplicate votes
     majority_validator_info.config.wait_to_vote_slot = Some(fork_slot + fork_length);
     // Fix the leader schedule so we can produce blocks
-    majority_validator_info.config.fixed_leader_schedule =
-        minority_validator_info.config.fixed_leader_schedule.clone();
+    majority_validator_info
+        .config
+        .fixed_leader_schedule
+        .clone_from(&minority_validator_info.config.fixed_leader_schedule);
     cluster.restart_node(
         &majority_pubkey,
         majority_validator_info,

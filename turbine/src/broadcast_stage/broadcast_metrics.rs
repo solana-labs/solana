@@ -199,7 +199,7 @@ mod test {
     impl BroadcastStats for TestStats {
         fn update(&mut self, new_stats: &TestStats) {
             self.count += new_stats.count;
-            self.sender = new_stats.sender.clone();
+            self.sender.clone_from(&new_stats.sender);
         }
         fn report_stats(&mut self, slot: Slot, slot_start: Instant, _was_interrupted: bool) {
             self.sender
