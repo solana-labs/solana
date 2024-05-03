@@ -45,6 +45,30 @@ use {
     test_case::test_case,
 };
 
+#[track_caller]
+fn expect_command_failure(config: &CliConfig, should_fail_because: &str, error_expected: &str) {
+    let error_actual = process_command(config).expect_err(should_fail_because);
+    let error_actual = error_actual.to_string();
+    assert!(
+        error_expected == error_actual,
+        "Command failed as expected, but with an unexpected error.\n\
+         Expected: {error_expected}\n\
+         Actual:   {error_actual}",
+    );
+}
+
+#[track_caller]
+fn expect_account_absent(rpc_client: &RpcClient, pubkey: Pubkey, absent_because: &str) {
+    let error_actual = rpc_client.get_account(&pubkey).expect_err(absent_because);
+    let error_actual = error_actual.to_string();
+    assert!(
+        format!("AccountNotFound: pubkey={pubkey}") == error_actual,
+        "Failed to retrieve an account details.\n\
+         Expected account to be absent, but got a different error:\n\
+         {error_actual}",
+    );
+}
+
 #[test]
 fn test_cli_program_deploy_non_upgradeable() {
     solana_logger::setup();
@@ -176,14 +200,13 @@ fn test_cli_program_deploy_non_upgradeable() {
         program_data[..]
     );
 
-    // Attempt to redeploy to the same address
-    let err = process_command(&config).unwrap_err();
-    assert_eq!(
-        format!(
+    expect_command_failure(
+        &config,
+        "Program can not be deployed at the same address twice",
+        &format!(
             "Program {} is no longer upgradeable",
             custom_address_keypair.pubkey()
         ),
-        format!("{err}")
     );
 
     // Attempt to deploy to account with excess balance
@@ -191,7 +214,8 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.signers = vec![&custom_address_keypair];
     config.command = CliCommand::Airdrop {
         pubkey: None,
-        lamports: 2 * minimum_balance_for_programdata, // Anything over minimum_balance_for_programdata should trigger err
+        // Anything over minimum_balance_for_programdata should trigger an error.
+        lamports: 2 * minimum_balance_for_programdata,
     };
     process_command(&config).unwrap();
     config.signers = vec![&keypair, &custom_address_keypair];
@@ -212,13 +236,13 @@ fn test_cli_program_deploy_non_upgradeable() {
         auto_extend: true,
         use_rpc: false,
     });
-    let err = process_command(&config).unwrap_err();
-    assert_eq!(
-        format!(
+    expect_command_failure(
+        &config,
+        "The CLI blocks deployments into accounts that hold more than the necessary amount of SOL",
+        &format!(
             "Account {} is not an upgradeable program or already in use",
             custom_address_keypair.pubkey()
         ),
-        format!("{err}")
     );
 
     // Use forcing parameter to deploy to account with excess balance
@@ -239,7 +263,15 @@ fn test_cli_program_deploy_non_upgradeable() {
         auto_extend: true,
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "The program is non-upgradable, so even if we skip the CLI account balance check, the \
+         upgrade still fails",
+        &format!(
+            "Account {} is not an upgradeable program or already in use",
+            custom_address_keypair.pubkey()
+        ),
+    );
 }
 
 #[test]
@@ -335,7 +367,11 @@ fn test_cli_program_deploy_no_authority() {
         auto_extend: true,
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "Can not upgrade a program if it was deployed without the authority signature",
+        &format!("Program {program_id} is no longer upgradeable"),
+    );
 }
 
 #[test]
@@ -663,7 +699,11 @@ fn test_cli_program_deploy_with_authority() {
         auto_extend: true,
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "Upgrade without an authority is not allowed",
+        &format!("Program {program_pubkey} is no longer upgradeable"),
+    );
 
     // deploy with finality
     config.signers = vec![&keypair, &new_upgrade_authority];
@@ -808,7 +848,7 @@ fn test_cli_program_upgrade_auto_extend() {
     process_command(&config).unwrap();
 
     // Attempt to upgrade the program with a larger program, but with the
-    // --no-extend flag.
+    // --no-auto-extend flag.
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_large_path.to_str().unwrap().to_string()),
@@ -824,13 +864,21 @@ fn test_cli_program_upgrade_auto_extend() {
         skip_fee_check: false,
         compute_unit_price: None,
         max_sign_attempts: 5,
-        auto_extend: false, // --no-auto-extend flag is present (true)
+        auto_extend: false, // --no-auto-extend flag is present
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "Can not upgrade a program when ELF does not fit into the allocated data account",
+        "Deploying program failed: \
+         RPC response error -32002: \
+         Transaction simulation failed: \
+         Error processing Instruction 0: \
+         account data too small for instruction [3 log messages]",
+    );
 
     // Attempt to upgrade the program with a larger program, this time without
-    // the --no-extend flag. This should automatically extend the program data.
+    // the --no-auto-extend flag. This should automatically extend the program data.
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
         program_location: Some(noop_large_path.to_str().unwrap().to_string()),
@@ -846,7 +894,7 @@ fn test_cli_program_upgrade_auto_extend() {
         skip_fee_check: false,
         compute_unit_price: None,
         max_sign_attempts: 5,
-        auto_extend: true, // --no-auto-extend flag is not present (false)
+        auto_extend: true, // --no-auto-extend flag is absent
         use_rpc: false,
     });
     let response = process_command(&config);
@@ -965,9 +1013,10 @@ fn test_cli_program_close_program() {
         use_lamports_unit: false,
         bypass_warning: false,
     });
-    assert_eq!(
-        process_command(&config).unwrap_err().to_string(),
-        CLOSE_PROGRAM_WARNING.to_string()
+    expect_command_failure(
+        &config,
+        "CLI requires the --bypass-warning flag in order to close a program",
+        CLOSE_PROGRAM_WARNING,
     );
 
     // Close with --bypass-warning flag
@@ -980,7 +1029,11 @@ fn test_cli_program_close_program() {
     });
     process_command(&config).unwrap();
 
-    rpc_client.get_account(&programdata_pubkey).unwrap_err();
+    expect_account_absent(
+        &rpc_client,
+        programdata_pubkey,
+        "Program data account is deleted when the program is closed",
+    );
     let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
     assert_eq!(programdata_lamports, recipient_account.lamports);
 }
@@ -1105,15 +1158,14 @@ fn test_cli_program_extend_program() {
         auto_extend: false,
         use_rpc: false,
     });
-    let err = process_command(&config)
-        .expect_err("Program upgrade must fail, as the buffer is 1 byte too short");
-    assert_eq!(
+    expect_command_failure(
+        &config,
+        "Program upgrade must fail, as the buffer is 1 byte too short",
         "Deploying program failed: \
          RPC response error -32002: \
          Transaction simulation failed: \
          Error processing Instruction 0: \
          account data too small for instruction [3 log messages]",
-        format!("{err}"),
     );
 
     // Wait one slot to avoid "Program was deployed in this block already" error
@@ -1424,7 +1476,11 @@ fn test_cli_program_write_buffer() {
         bypass_warning: false,
     });
     process_command(&config).unwrap();
-    rpc_client.get_account(&buffer_pubkey).unwrap_err();
+    expect_account_absent(
+        &rpc_client,
+        buffer_pubkey,
+        "Buffer account is deleted when the buffer is closed",
+    );
     let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
     assert_eq!(minimum_balance_for_buffer, recipient_account.lamports);
 
@@ -1465,7 +1521,11 @@ fn test_cli_program_write_buffer() {
         bypass_warning: false,
     });
     process_command(&config).unwrap();
-    rpc_client.get_account(&new_buffer_pubkey).unwrap_err();
+    expect_account_absent(
+        &rpc_client,
+        new_buffer_pubkey,
+        "Buffer account is deleted when the buffer is closed",
+    );
     let recipient_account = rpc_client.get_account(&keypair.pubkey()).unwrap();
     assert_eq!(
         pre_lamports + minimum_balance_for_buffer,
@@ -1507,7 +1567,6 @@ fn test_cli_program_write_buffer() {
         use_rpc: false,
     });
     config.output_format = OutputFormat::JsonCompact;
-    let error = process_command(&config).unwrap_err();
     let buffer_account_len = {
         let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
         let program_data_len = file.seek(SeekFrom::End(0)).unwrap() as usize;
@@ -1518,9 +1577,10 @@ fn test_cli_program_write_buffer() {
         let large_program_data_len = file.seek(SeekFrom::End(0)).unwrap() as usize;
         UpgradeableLoaderState::size_of_buffer_metadata() + large_program_data_len
     };
-    assert_eq!(
-        error.to_string(),
-        format!(
+    expect_command_failure(
+        &config,
+        "It should not be possible to deploy a program into an account that is too small",
+        &format!(
             "Buffer account data size ({}) is smaller than the minimum size ({})",
             buffer_account_len, min_buffer_account_len
         ),
@@ -1638,7 +1698,15 @@ fn test_cli_program_set_buffer_authority() {
         use_rpc: false,
     });
     config.output_format = OutputFormat::JsonCompact;
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "Deployment with an old authority should fail",
+        &format!(
+            "Buffer's authority Some({}) does not match authority provided {}",
+            new_buffer_authority.pubkey(),
+            keypair.pubkey(),
+        ),
+    );
 
     // Set buffer authority to the buffer identity (it's a common way for program devs to do so)
     config.signers = vec![&keypair, &new_buffer_authority];
@@ -1773,7 +1841,15 @@ fn test_cli_program_mismatch_buffer_authority() {
         auto_extend: true,
         use_rpc: false,
     });
-    process_command(&config).unwrap_err();
+    expect_command_failure(
+        &config,
+        "Deployment with an invalid authority should fail",
+        &format!(
+            "Buffer's authority Some({}) does not match authority provided {}",
+            buffer_authority.pubkey(),
+            upgrade_authority.pubkey(),
+        ),
+    );
 
     // Attempt to deploy matched authority
     config.signers = vec![&keypair, &buffer_authority];
@@ -1933,8 +2009,11 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
     });
     config.output_format = OutputFormat::JsonCompact;
-    let error = process_command(&config).unwrap_err();
-    assert_eq!(error.to_string(), "presigner error");
+    expect_command_failure(
+        &config,
+        "Signature becomes invalid if the buffer is modified",
+        "presigner error",
+    );
 
     // Offline sign-only with online signer as fee payer (correct signature for program upgrade)
     config.signers = vec![&offline_signer];
