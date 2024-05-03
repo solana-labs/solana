@@ -459,7 +459,7 @@ mod tests {
     fn sync_update<'a>(
         prioritization_fee_cache: &PrioritizationFeeCache,
         bank: Arc<Bank>,
-        txs: impl Iterator<Item = &'a SanitizedTransaction> + ExactSizeIterator,
+        txs: impl ExactSizeIterator<Item = &'a SanitizedTransaction>,
     ) {
         let expected_update_count = prioritization_fee_cache
             .metrics
