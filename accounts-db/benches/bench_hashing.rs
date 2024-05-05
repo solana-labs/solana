@@ -34,7 +34,7 @@ fn bench_hash_account(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("hash_account");
     for data_size in DATA_SIZES {
-        let num_bytes = META_SIZE.checked_add(data_size).unwrap();
+        let num_bytes = META_SIZE.checked_add(data_size).expect("Overflow in calculating num_bytes");
         group.throughput(Throughput::Bytes(num_bytes as u64));
         let account = AccountSharedData::new(lamports, data_size, &owner);
         group.bench_function(BenchmarkId::new("data_size", data_size), |b| {
