@@ -5377,7 +5377,7 @@ pub mod tests {
         for (i, key) in keys.iter_mut().enumerate().take(TEST_PUT_ENTRY_COUNT) {
             *key = u64::try_from(i).unwrap();
         }
-        let values = blockstore.meta_cf.multi_get(keys.into_iter());
+        let values = blockstore.meta_cf.multi_get(keys);
         for (i, value) in values.iter().enumerate().take(TEST_PUT_ENTRY_COUNT) {
             let k = u64::try_from(i).unwrap();
             assert_eq!(
