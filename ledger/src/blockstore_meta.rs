@@ -122,7 +122,7 @@ pub struct ShredIndex {
 /// Erasure coding information
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
-    set_index: u64,
+    fec_set_index: u64,
     /// First coding index in the FEC set
     first_coding_index: u64,
     /// Index of the first received coding shred in the FEC set
@@ -349,7 +349,7 @@ impl ErasureMeta {
                 let first_coding_index = u64::from(shred.first_coding_index()?);
                 let first_received_coding_index = u64::from(shred.index());
                 let erasure_meta = ErasureMeta {
-                    set_index: u64::from(shred.fec_set_index()),
+                    fec_set_index: u64::from(shred.fec_set_index()),
                     config,
                     first_coding_index,
                     first_received_coding_index,
@@ -384,7 +384,7 @@ impl ErasureMeta {
 
     pub(crate) fn data_shreds_indices(&self) -> Range<u64> {
         let num_data = self.config.num_data as u64;
-        self.set_index..self.set_index + num_data
+        self.fec_set_index..self.fec_set_index + num_data
     }
 
     pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
@@ -398,7 +398,7 @@ impl ErasureMeta {
 
     pub(crate) fn next_fec_set_index(&self) -> Option<u32> {
         let num_data = u64::try_from(self.config.num_data).ok()?;
-        self.set_index
+        self.fec_set_index
             .checked_add(num_data)
             .map(u32::try_from)?
             .ok()
@@ -563,14 +563,14 @@ mod test {
     fn test_erasure_meta_status() {
         use ErasureMetaStatus::*;
 
-        let set_index = 0;
+        let fec_set_index = 0;
         let erasure_config = ErasureConfig {
             num_data: 8,
             num_coding: 16,
         };
         let e_meta = ErasureMeta {
-            set_index,
-            first_coding_index: set_index,
+            fec_set_index,
+            first_coding_index: fec_set_index,
             config: erasure_config,
             first_received_coding_index: 0,
         };
@@ -749,7 +749,7 @@ mod test {
             config: erasure_config,
         };
         let mut new_erasure_meta = ErasureMeta {
-            set_index,
+            fec_set_index: set_index,
             first_coding_index: set_index,
             first_received_coding_index: 0,
             config: erasure_config,
