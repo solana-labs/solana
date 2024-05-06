@@ -9446,6 +9446,15 @@ impl AccountsDb {
             0
         }
     }
+
+    pub fn verify_accounts_hash_and_lamports_for_tests(
+        &self,
+        slot: Slot,
+        total_lamports: u64,
+        config: VerifyAccountsHashAndLamportsConfig,
+    ) -> Result<(), AccountsHashVerificationError> {
+        self.verify_accounts_hash_and_lamports(slot, total_lamports, None, config)
+    }
 }
 
 // These functions/fields are only usable from a dev context (i.e. tests and benches)
@@ -12349,14 +12358,14 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
+            db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config.clone()),
             Ok(_)
         );
 
         db.accounts_hashes.lock().unwrap().remove(&some_slot);
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
+            db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config.clone()),
             Err(AccountsHashVerificationError::MissingAccountsHash)
         );
 
@@ -12366,7 +12375,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
+            db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config),
             Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }
@@ -12414,12 +12423,12 @@ pub mod tests {
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 2, None, config.clone()),
+                db.verify_accounts_hash_and_lamports_for_tests(some_slot, 2, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 10, None, config),
+                db.verify_accounts_hash_and_lamports_for_tests(some_slot, 10, config),
                 Err(AccountsHashVerificationError::MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12445,7 +12454,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 0, None, config),
+            db.verify_accounts_hash_and_lamports_for_tests(some_slot, 0, config),
             Ok(_)
         );
     }
@@ -12483,7 +12492,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
+            db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config),
             Err(AccountsHashVerificationError::MismatchedAccountsHash)
         );
     }

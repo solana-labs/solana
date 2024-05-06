@@ -546,7 +546,7 @@ mod serde_snapshot_tests {
         );
 
         accounts
-            .verify_accounts_hash_and_lamports(4, 1222, None, config)
+            .verify_accounts_hash_and_lamports_for_tests(4, 1222, config)
             .unwrap();
     }
 
@@ -834,12 +834,12 @@ mod serde_snapshot_tests {
 
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config.clone())
+                .verify_accounts_hash_and_lamports_for_tests(current_slot, 22300, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config)
+                .verify_accounts_hash_and_lamports_for_tests(current_slot, 22300, config)
                 .unwrap();
 
             // repeating should be no-op
