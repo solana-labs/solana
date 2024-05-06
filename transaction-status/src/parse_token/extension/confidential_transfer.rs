@@ -318,7 +318,7 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 "multisigOwner",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "disableNonConfidentialTransferConfidentialCredits".to_string(),
+                instruction_type: "disableConfidentialTransferNonConfidentialCredits".to_string(),
                 info: value,
             })
         }
