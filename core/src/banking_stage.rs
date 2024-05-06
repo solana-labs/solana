@@ -53,6 +53,7 @@ use {
 // Below modules are pub to allow use by banking_stage bench
 pub mod committer;
 pub mod consumer;
+pub mod forwarder;
 pub mod leader_slot_metrics;
 pub mod qos_service;
 pub mod unprocessed_packet_batches;
@@ -62,7 +63,6 @@ mod consume_worker;
 mod decision_maker;
 mod forward_packet_batches_by_accounts;
 mod forward_worker;
-mod forwarder;
 mod immutable_deserialized_packet;
 mod latest_unprocessed_votes;
 mod leader_slot_timing_metrics;
