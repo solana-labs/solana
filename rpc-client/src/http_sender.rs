@@ -27,7 +27,7 @@ use {
 };
 
 pub struct HttpSender {
-    client: Arc<reqwest::Client>,
+    client: Arc<reqwest_middleware::ClientWithMiddleware>,
     url: String,
     request_id: AtomicU64,
     stats: RwLock<RpcTransportStats>,
@@ -62,6 +62,21 @@ impl HttpSender {
     ///
     /// Most flexible way to create a sender. Pass a created `reqwest::Client`.
     pub fn new_with_client<U: ToString>(url: U, client: reqwest::Client) -> Self {
+        Self {
+            client: Arc::new(reqwest_middleware::ClientBuilder::new(client).build()),
+            url: url.to_string(),
+            request_id: AtomicU64::new(0),
+            stats: RwLock::new(RpcTransportStats::default()),
+        }
+    }
+
+    /// Create an HTTP RPC sender.
+    ///
+    /// Most flexible way to create a sender with middleware. Pass a created `reqwest_middleware::ClientWithMiddleware`.
+    pub fn new_with_client_with_middleware<U: ToString>(
+        url: U,
+        client: reqwest_middleware::ClientWithMiddleware,
+    ) -> Self {
         Self {
             client: Arc::new(client),
             url: url.to_string(),
