@@ -58,11 +58,7 @@ use {
         slot_history,
         stake::{self, state::StakeStateV2},
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
-        sysvar::{
-            self,
-            slot_history::SlotHistory,
-            stake_history::{self},
-        },
+        sysvar::{self, slot_history::SlotHistory, stake_history},
         transaction::Transaction,
     },
     solana_transaction_status::{
@@ -70,7 +66,7 @@ use {
     },
     solana_vote_program::vote_state::VoteState,
     std::{
-        collections::{BTreeMap, HashMap, VecDeque},
+        collections::{BTreeMap, HashMap, HashSet, VecDeque},
         fmt,
         rc::Rc,
         str::FromStr,
@@ -369,9 +365,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(pubkey!(
                     Arg::with_name("vote_account_pubkeys")
                         .index(1)
-                        .value_name("VOTE_ACCOUNT_PUBKEYS")
+                        .value_name("VALIDATOR_ACCOUNT_PUBKEYS")
                         .multiple(true),
-                    "Only show stake accounts delegated to the provided vote account."
+                    "Only show stake accounts delegated to the provided pubkeys. \
+                    Accepts both vote and identity pubkeys."
                 ))
                 .arg(pubkey!(
                     Arg::with_name("withdraw_authority")
@@ -1817,8 +1814,40 @@ pub fn process_show_stakes(
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
 
-    let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message("Fetching stake accounts...");
+    // Both vote and identity pubkeys are supported to identify validator stakes.
+    // For identity pubkeys, fetch corresponding vote pubkey.
+    let vote_account_pubkeys = match vote_account_pubkeys {
+        Some(pubkeys) => {
+            let vote_account_progress_bar = new_spinner_progress_bar();
+            vote_account_progress_bar.set_message("Searching for matching vote accounts...");
+
+            let vote_accounts = rpc_client.get_vote_accounts()?;
+
+            let mut pubkeys: HashSet<String> =
+                pubkeys.iter().map(|pubkey| pubkey.to_string()).collect();
+
+            let vote_account_pubkeys: HashSet<String> = vote_accounts
+                .current
+                .into_iter()
+                .chain(vote_accounts.delinquent)
+                .filter_map(|vote_acc| {
+                    (pubkeys.remove(&vote_acc.node_pubkey) || pubkeys.remove(&vote_acc.vote_pubkey))
+                        .then_some(vote_acc.vote_pubkey)
+                })
+                .collect();
+
+            if !pubkeys.is_empty() {
+                return Err(CliError::RpcRequestError(format!(
+                    "Failed to retrieve matching vote account for {:?}.",
+                    pubkeys
+                ))
+                .into());
+            }
+            vote_account_progress_bar.finish_and_clear();
+            vote_account_pubkeys
+        }
+        None => HashSet::new(),
+    };
 
     let mut program_accounts_config = RpcProgramAccountsConfig {
         account_config: RpcAccountInfoConfig {
@@ -1828,19 +1857,22 @@ pub fn process_show_stakes(
         ..RpcProgramAccountsConfig::default()
     };
 
-    if let Some(vote_account_pubkeys) = vote_account_pubkeys {
-        // Use server-side filtering if only one vote account is provided
-        if vote_account_pubkeys.len() == 1 {
-            program_accounts_config.filters = Some(vec![
-                // Filter by `StakeStateV2::Stake(_, _)`
-                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
-                // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
-                    124,
-                    vote_account_pubkeys[0].as_ref(),
-                )),
-            ]);
-        }
+    let stake_account_progress_bar = new_spinner_progress_bar();
+    stake_account_progress_bar.set_message("Fetching stake accounts...");
+
+    // Use server-side filtering if only one vote account is provided
+    if vote_account_pubkeys.len() == 1 {
+        program_accounts_config.filters = Some(vec![
+            // Filter by `StakeStateV2::Stake(_, _)`
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
+            // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                124,
+                Pubkey::from_str(vote_account_pubkeys.iter().next().unwrap())
+                    .unwrap()
+                    .as_ref(),
+            )),
+        ]);
     }
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
@@ -1849,7 +1881,6 @@ pub fn process_show_stakes(
             44,
             withdraw_authority_pubkey.as_ref(),
         ));
-
         let filters = program_accounts_config.filters.get_or_insert(vec![]);
         filters.push(withdrawer_filter);
     }
@@ -1861,20 +1892,19 @@ pub fn process_show_stakes(
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
     })?;
-    progress_bar.finish_and_clear();
-
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
     let new_rate_activation_epoch =
         get_feature_activation_epoch(rpc_client, &feature_set::reduce_stake_warmup_cooldown::id())?;
+    stake_account_progress_bar.finish_and_clear();
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
             match stake_state {
                 StakeStateV2::Initialized(_) => {
-                    if vote_account_pubkeys.is_none() {
+                    if vote_account_pubkeys.is_empty() {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
                             stake_state: build_stake_state(
@@ -1890,10 +1920,8 @@ pub fn process_show_stakes(
                     }
                 }
                 StakeStateV2::Stake(_, stake, _) => {
-                    if vote_account_pubkeys.is_none()
-                        || vote_account_pubkeys
-                            .unwrap()
-                            .contains(&stake.delegation.voter_pubkey)
+                    if vote_account_pubkeys.is_empty()
+                        || vote_account_pubkeys.contains(&stake.delegation.voter_pubkey.to_string())
                     {
                         stake_accounts.push(CliKeyedStakeState {
                             stake_pubkey: stake_pubkey.to_string(),
@@ -1913,9 +1941,13 @@ pub fn process_show_stakes(
             }
         }
     }
-    Ok(config
-        .output_format
-        .formatted_string(&CliStakeVec::new(stake_accounts)))
+    if stake_accounts.is_empty() {
+        Ok("No stake accounts found".into())
+    } else {
+        Ok(config
+            .output_format
+            .formatted_string(&CliStakeVec::new(stake_accounts)))
+    }
 }
 
 pub fn process_wait_for_max_stake(
