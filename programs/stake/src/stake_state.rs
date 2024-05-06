@@ -1969,7 +1969,7 @@ mod tests {
         }];
         // give 2 epochs of cooldown
         let epochs = 7;
-        // make boostrap stake smaller than warmup so warmup/cooldownn
+        // make bootstrap stake smaller than warmup so warmup/cooldownn
         //  increment is always smaller than 1
         let bootstrap = (warmup_cooldown_rate(0, None) * 100.0 / 2.0) as u64;
         let stake_history =
