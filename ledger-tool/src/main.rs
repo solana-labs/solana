@@ -1534,7 +1534,6 @@ fn main() {
         | ("copy", Some(_))
         | ("dead-slots", Some(_))
         | ("duplicate-slots", Some(_))
-        | ("json", Some(_))
         | ("latest-optimistic-slots", Some(_))
         | ("list-roots", Some(_))
         | ("parse_full_frozen", Some(_))
