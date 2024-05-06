@@ -7526,15 +7526,11 @@ impl AccountsDb {
                 }
             }
         } else {
-            let (calculated_accounts_hash, calculated_lamports) = self
-                .calculate_accounts_hash_with_verify_from(
-                    CalcAccountsHashDataSource::Storages,
-                    config.test_hash_calculation,
-                    slot,
-                    calc_config,
-                    None,
-                );
-
+            let (storages, slots) = self.get_snapshot_storages(..=slot);
+            let sorted_storages =
+                SortedStorages::new_with_slots(storages.iter().zip(slots), None, None);
+            let (calculated_accounts_hash, calculated_lamports) =
+                self.calculate_accounts_hash(&calc_config, &sorted_storages, HashStats::default());
             if calculated_lamports != total_lamports {
                 warn!(
                     "Mismatched total lamports: {} calculated: {}",
@@ -7545,7 +7541,6 @@ impl AccountsDb {
                     total_lamports,
                 ));
             }
-
             let (found_accounts_hash, _) = self
                 .get_accounts_hash(slot)
                 .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
