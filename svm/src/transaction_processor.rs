@@ -387,11 +387,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 .collect();
 
         let mut loaded_programs_for_txs = None;
-        let mut program_to_store = None;
         loop {
-            let (program_to_load, task_cookie, task_waiter) = {
+            let (program_to_store, task_cookie, task_waiter) = {
                 // Lock the global cache.
-                let mut program_cache = self.program_cache.write().unwrap();
+                let program_cache = self.program_cache.read().unwrap();
                 // Initialize our local cache.
                 let is_first_round = loaded_programs_for_txs.is_none();
                 if is_first_round {
@@ -401,49 +400,51 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         &program_cache,
                     ));
                 }
-                // Submit our last completed loading task.
-                if let Some((key, program)) = program_to_store.take() {
-                    loaded_programs_for_txs.as_mut().unwrap().loaded_missing = true;
-                    if program_cache.finish_cooperative_loading_task(self.slot, key, program)
-                        && limit_to_load_programs
-                    {
-                        // This branch is taken when there is an error in assigning a program to a
-                        // cache slot. It is not possible to mock this error for SVM unit
-                        // tests purposes.
-                        let mut ret = ProgramCacheForTxBatch::new_from_cache(
-                            self.slot,
-                            self.epoch,
-                            &program_cache,
-                        );
-                        ret.hit_max_limit = true;
-                        return ret;
-                    }
-                }
                 // Figure out which program needs to be loaded next.
                 let program_to_load = program_cache.extract(
                     &mut missing_programs,
                     loaded_programs_for_txs.as_mut().unwrap(),
                     is_first_round,
                 );
+
+                let program_to_store = program_to_load.map(|(key, count)| {
+                    // Load, verify and compile one program.
+                    let program = load_program_with_pubkey(
+                        callback,
+                        &program_cache,
+                        &key,
+                        self.slot,
+                        self.epoch,
+                        &self.epoch_schedule,
+                        false,
+                    )
+                    .expect("called load_program_with_pubkey() with nonexistent account");
+                    program.tx_usage_counter.store(count, Ordering::Relaxed);
+                    (key, program)
+                });
+
                 let task_waiter = Arc::clone(&program_cache.loading_task_waiter);
-                (program_to_load, task_waiter.cookie(), task_waiter)
+                (program_to_store, task_waiter.cookie(), task_waiter)
                 // Unlock the global cache again.
             };
 
-            if let Some((key, count)) = program_to_load {
-                // Load, verify and compile one program.
-                let program = load_program_with_pubkey(
-                    callback,
-                    &self.program_cache.read().unwrap(),
-                    &key,
-                    self.slot,
-                    self.epoch,
-                    &self.epoch_schedule,
-                    false,
-                )
-                .expect("called load_program_with_pubkey() with nonexistent account");
-                program.tx_usage_counter.store(count, Ordering::Relaxed);
-                program_to_store = Some((key, program));
+            if let Some((key, program)) = program_to_store {
+                let mut program_cache = self.program_cache.write().unwrap();
+                // Submit our last completed loading task.
+                if program_cache.finish_cooperative_loading_task(self.slot, key, program)
+                    && limit_to_load_programs
+                {
+                    // This branch is taken when there is an error in assigning a program to a
+                    // cache slot. It is not possible to mock this error for SVM unit
+                    // tests purposes.
+                    let mut ret = ProgramCacheForTxBatch::new_from_cache(
+                        self.slot,
+                        self.epoch,
+                        &program_cache,
+                    );
+                    ret.hit_max_limit = true;
+                    return ret;
+                }
             } else if missing_programs.is_empty() {
                 break;
             } else {
