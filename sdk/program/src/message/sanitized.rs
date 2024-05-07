@@ -169,7 +169,7 @@ impl SanitizedMessage {
     pub fn fee_payer(&self) -> &Pubkey {
         self.account_keys()
             .get(0)
-            .expect("sanitized message always has non-program fee payer at index 0")
+            .expect("sanitized messages always have a fee payer at index 0")
     }
 
     /// The hash of a recent block, used for timing out a transaction

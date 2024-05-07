@@ -726,16 +726,12 @@ impl Accounts {
 
             let message = tx.message();
             let loaded_transaction = tx_load_result.as_mut().unwrap();
-            let mut fee_payer_index = None;
             for (i, (address, account)) in (0..message.account_keys().len())
                 .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|(i, _)| message.is_non_loader_key(*i))
             {
-                if fee_payer_index.is_none() {
-                    fee_payer_index = Some(i);
-                }
-                let is_fee_payer = Some(i) == fee_payer_index;
                 if message.is_writable(i) {
+                    let is_fee_payer = i == 0;
                     let is_nonce_account = prepare_if_nonce_account(
                         address,
                         account,

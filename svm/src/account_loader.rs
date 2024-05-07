@@ -5,7 +5,6 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
     },
     itertools::Itertools,
-    log::warn,
     solana_program_runtime::{
         compute_budget_processor::process_compute_budget_instructions,
         loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
@@ -281,11 +280,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     error_counters,
                 )?;
 
-                if !validated_fee_payer && message.is_non_loader_key(i) {
-                    if i != 0 {
-                        warn!("Payer index should be 0! {:?}", message);
-                    }
-
+                if i == 0 {
                     validate_fee_payer(
                         key,
                         &mut account,
