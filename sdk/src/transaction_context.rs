@@ -869,13 +869,10 @@ impl<'a> BorrowedAccount<'a> {
         self.can_data_be_changed()?;
         self.touch()?;
         self.update_accounts_resize_delta(data.len())?;
-        // Calling make_data_mut() here guarantees that set_data_from_slice()
-        // copies in places, extending the account capacity if necessary but
-        // never reducing it. This is required as the account migh be directly
-        // mapped into a MemoryRegion, and therefore reducing capacity would
-        // leave a hole in the vm address space. After CPI or upon program
-        // termination, the runtime will zero the extra capacity.
-        self.make_data_mut();
+        // Note that we intentionally don't call self.make_data_mut() here.  make_data_mut() will
+        // allocate + memcpy the current data if self.account is shared. We don't need the memcpy
+        // here tho because account.set_data_from_slice(data) is going to replace the content
+        // anyway.
         self.account.set_data_from_slice(data);
 
         Ok(())

@@ -1308,8 +1308,9 @@ fn update_caller_account(
             // never points to an invalid address.
             //
             // Note that the capacity can be smaller than the original length only if the account is
-            // reallocated using the AccountSharedData API directly (deprecated). BorrowedAccount
-            // and CoW don't trigger this, see BorrowedAccount::make_data_mut.
+            // reallocated using the AccountSharedData API directly (deprecated) or using
+            // BorrowedAccount::set_data_from_slice(), which implements an optimization to avoid an
+            // extra allocation.
             let min_capacity = caller_account.original_data_len;
             if callee_account.capacity() < min_capacity {
                 callee_account

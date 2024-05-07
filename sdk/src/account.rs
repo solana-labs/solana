@@ -543,7 +543,13 @@ impl AccountSharedData {
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        self.data_mut().reserve(additional)
+        if let Some(data) = Arc::get_mut(&mut self.data) {
+            data.reserve(additional)
+        } else {
+            let mut data = Vec::with_capacity(self.data.len().saturating_add(additional));
+            data.extend_from_slice(&self.data);
+            self.data = Arc::new(data);
+        }
     }
 
     pub fn capacity(&self) -> usize {
