@@ -55,6 +55,7 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, get_program_data_address, UpgradeableLoaderState},
+        commitment_config::CommitmentConfig,
         compute_budget,
         feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
@@ -63,7 +64,7 @@ use {
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-        system_instruction::{self, SystemError},
+        system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
         system_program,
         transaction::{Transaction, TransactionError},
     },
@@ -2542,32 +2543,14 @@ fn do_process_program_upgrade(
             };
 
         if auto_extend {
-            // Attempt to look up the existing program's size, and automatically
-            // add an extend instruction if the program data account is too small.
-            let program_data_address = get_program_data_address(program_id);
-            if let Some(program_data_account) = rpc_client
-                .get_account_with_commitment(&program_data_address, config.commitment)?
-                .value
-            {
-                let program_len = UpgradeableLoaderState::size_of_programdata(program_len);
-                let account_data_len = program_data_account.data.len();
-                if program_len > account_data_len {
-                    let additional_bytes = program_len.saturating_sub(account_data_len);
-                    let additional_bytes: u32 = additional_bytes.try_into().map_err(|_| {
-                        format!(
-                            "Cannot auto-extend Program Data Account space due to size limit \
-                        please extend it manually with command `solana program extend {} \
-                        <BYTES>`. Additional bytes required: {}",
-                            program_id, additional_bytes
-                        )
-                    })?;
-                    initial_instructions.push(bpf_loader_upgradeable::extend_program(
-                        program_id,
-                        Some(&fee_payer_signer.pubkey()),
-                        additional_bytes,
-                    ));
-                }
-            }
+            extend_program_data_if_needed(
+                &mut initial_instructions,
+                &rpc_client,
+                config.commitment,
+                &fee_payer_signer.pubkey(),
+                program_id,
+                program_len,
+            )?;
         }
 
         let initial_message = if !initial_instructions.is_empty() {
@@ -2655,6 +2638,56 @@ fn do_process_program_upgrade(
         signature: final_tx_sig.as_ref().map(ToString::to_string),
     };
     Ok(config.output_format.formatted_string(&program_id))
+}
+
+// Attempts to look up the program data account, and adds an extend program data instruction if the
+// program data account is too small.
+fn extend_program_data_if_needed(
+    initial_instructions: &mut Vec<Instruction>,
+    rpc_client: &RpcClient,
+    commitment: CommitmentConfig,
+    fee_payer: &Pubkey,
+    program_id: &Pubkey,
+    program_len: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let program_data_address = get_program_data_address(program_id);
+
+    let Some(program_data_account) = rpc_client
+        .get_account_with_commitment(&program_data_address, commitment)?
+        .value
+    else {
+        // Program data has not been allocated yet.
+        return Ok(());
+    };
+
+    let required_len = UpgradeableLoaderState::size_of_programdata(program_len);
+    let max_permitted_data_length = usize::try_from(MAX_PERMITTED_DATA_LENGTH).unwrap();
+    if required_len > max_permitted_data_length {
+        let max_program_len = max_permitted_data_length
+            .saturating_sub(UpgradeableLoaderState::size_of_programdata(0));
+        return Err(format!(
+            "New program ({program_id}) data account is too big: {required_len}.\n\
+             Maximum program size: {max_program_len}.",
+        )
+        .into());
+    }
+
+    let current_len = program_data_account.data.len();
+    let additional_bytes = required_len.saturating_sub(current_len);
+    if additional_bytes == 0 {
+        // Current allocation is sufficient.
+        return Ok(());
+    }
+
+    let additional_bytes =
+        u32::try_from(additional_bytes).expect("`u32` is big enough to hold an account size");
+    initial_instructions.push(bpf_loader_upgradeable::extend_program(
+        program_id,
+        Some(fee_payer),
+        additional_bytes,
+    ));
+
+    Ok(())
 }
 
 fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
