@@ -25,7 +25,7 @@ use {
         partitioned_rewards::TestPartitionedEpochRewards,
         utils::{create_all_accounts_run_and_snapshot_dirs, create_and_canonicalize_directories},
     },
-    solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
+    solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of, values_of},
     solana_core::{
         banking_trace::DISABLED_BAKING_TRACE_DIR,
         consensus::tower_storage,
@@ -1233,11 +1233,28 @@ pub fn main() {
         })
         .unzip();
 
+    let read_cache_limit_bytes = values_of::<usize>(&matches, "accounts_db_read_cache_limit_mb")
+        .map(|limits| {
+            match limits.len() {
+                // we were given explicit low and high watermark values, so use them
+                2 => (limits[0] * MB, limits[1] * MB),
+                // we were given a single value, so use it for both low and high watermarks
+                1 => (limits[0] * MB, limits[0] * MB),
+                _ => {
+                    // clap will enforce either one or two values is given
+                    unreachable!(
+                        "invalid number of values given to accounts-db-read-cache-limit-mb"
+                    )
+                }
+            }
+        });
+
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_path.clone()),
         accounts_hash_cache_path: Some(accounts_hash_cache_path),
         shrink_paths: account_shrink_run_paths,
+        read_cache_limit_bytes,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),

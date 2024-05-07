@@ -497,6 +497,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     base_working_path: None,
     accounts_hash_cache_path: None,
     shrink_paths: None,
+    read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -510,6 +511,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     base_working_path: None,
     accounts_hash_cache_path: None,
     shrink_paths: None,
+    read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
@@ -593,6 +595,9 @@ pub struct AccountsDbConfig {
     pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub shrink_paths: Option<Vec<PathBuf>>,
+    /// The low and high watermark sizes for the read cache, in bytes.
+    /// If None, defaults will be used.
+    pub read_cache_limit_bytes: Option<(usize, usize)>,
     pub write_cache_limit_bytes: Option<u64>,
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
@@ -2336,6 +2341,14 @@ pub struct PubkeyHashAccount {
 impl AccountsDb {
     pub const DEFAULT_ACCOUNTS_HASH_CACHE_DIR: &'static str = "accounts_hash_cache";
 
+    // read only cache does not update lru on read of an entry unless it has been at least this many ms since the last lru update
+    const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE: u32 = 100;
+
+    // The default high and low watermark sizes for the accounts read cache.
+    // If the cache size exceeds MAX_SIZE_HI, it'll evict entries until the size is <= MAX_SIZE_LO.
+    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO: usize = 400_000_000;
+    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI: usize = 400_000_000;
+
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
     }
@@ -2346,12 +2359,6 @@ impl AccountsDb {
         accounts_hash_cache_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
-        // The high and low watermark sizes for the accounts read cache.  If the cache size exceeds
-        // MAX_SIZE_HI, it'll evict entries until the size is <= MAX_SIZE_LO.
-        const MAX_READ_ONLY_CACHE_DATA_SIZE_LO: usize = 400_000_000;
-        const MAX_READ_ONLY_CACHE_DATA_SIZE_HI: usize = 400_000_000;
-        // read only cache does not update lru on read of an entry unless it has been at least this many ms since the last lru update
-        const READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE: u32 = 100;
 
         let (base_working_path, base_working_temp_dir) =
             if let Some(base_working_path) = base_working_path {
@@ -2389,9 +2396,9 @@ impl AccountsDb {
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
             read_only_accounts_cache: ReadOnlyAccountsCache::new(
-                MAX_READ_ONLY_CACHE_DATA_SIZE_LO,
-                MAX_READ_ONLY_CACHE_DATA_SIZE_HI,
-                READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE,
+                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO,
+                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI,
+                Self::READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE,
             ),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAccountsFileId::new(0),
@@ -2528,6 +2535,14 @@ impl AccountsDb {
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
             PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
 
+        let read_cache_size = accounts_db_config
+            .as_ref()
+            .and_then(|config| config.read_cache_limit_bytes)
+            .unwrap_or((
+                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO,
+                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI,
+            ));
+
         let paths_is_empty = paths.is_empty();
         let mut new = Self {
             paths,
@@ -2538,6 +2553,11 @@ impl AccountsDb {
             shrink_ratio,
             accounts_update_notifier,
             create_ancient_storage,
+            read_only_accounts_cache: ReadOnlyAccountsCache::new(
+                read_cache_size.0,
+                read_cache_size.1,
+                Self::READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE,
+            ),
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
