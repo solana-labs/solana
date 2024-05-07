@@ -47,6 +47,8 @@ struct ReadOnlyCacheStats {
     load_us: AtomicU64,
     store_us: AtomicU64,
     evict_us: AtomicU64,
+    evictor_wakeup_count_all: AtomicU64,
+    evictor_wakeup_count_productive: AtomicU64,
 }
 
 impl ReadOnlyCacheStats {
@@ -57,17 +59,33 @@ impl ReadOnlyCacheStats {
         self.load_us.store(0, Ordering::Relaxed);
         self.store_us.store(0, Ordering::Relaxed);
         self.evict_us.store(0, Ordering::Relaxed);
+        self.evictor_wakeup_count_all.store(0, Ordering::Relaxed);
+        self.evictor_wakeup_count_productive
+            .store(0, Ordering::Relaxed);
     }
 
-    fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64) {
+    fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
         let evicts = self.evicts.swap(0, Ordering::Relaxed);
         let load_us = self.load_us.swap(0, Ordering::Relaxed);
         let store_us = self.store_us.swap(0, Ordering::Relaxed);
         let evict_us = self.evict_us.swap(0, Ordering::Relaxed);
+        let evictor_wakeup_count_all = self.evictor_wakeup_count_all.swap(0, Ordering::Relaxed);
+        let evictor_wakeup_count_productive = self
+            .evictor_wakeup_count_productive
+            .swap(0, Ordering::Relaxed);
 
-        (hits, misses, evicts, load_us, store_us, evict_us)
+        (
+            hits,
+            misses,
+            evicts,
+            load_us,
+            store_us,
+            evict_us,
+            evictor_wakeup_count_all,
+            evictor_wakeup_count_productive,
+        )
     }
 }
 
@@ -268,7 +286,7 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
         self.stats.get_and_reset_stats()
     }
 
@@ -305,6 +323,9 @@ impl ReadOnlyAccountsCache {
                         trace!("AccountsReadCacheEvictor is shutting down... {err}");
                         break;
                     };
+                    stats
+                        .evictor_wakeup_count_all
+                        .fetch_add(1, Ordering::Relaxed);
 
                     // If a message was sent to the channel *while we were already evicting*, then
                     // when we loop around we'll find a message that we should evict again.
@@ -313,6 +334,9 @@ impl ReadOnlyAccountsCache {
                     if data_size.load(Ordering::Relaxed) <= max_data_size_hi {
                         continue;
                     }
+                    stats
+                        .evictor_wakeup_count_productive
+                        .fetch_add(1, Ordering::Relaxed);
 
                     let (num_evicts, evict_us) =
                         measure_us!(Self::evict(max_data_size_lo, &data_size, &cache, &queue));

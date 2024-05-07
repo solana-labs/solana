@@ -8281,6 +8281,8 @@ impl AccountsDb {
                 read_only_cache_load_us,
                 read_only_cache_store_us,
                 read_only_cache_evict_us,
+                read_only_cache_evictor_wakeup_count_all,
+                read_only_cache_evictor_wakeup_count_productive,
             ) = self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
@@ -8360,6 +8362,16 @@ impl AccountsDb {
                 (
                     "read_only_accounts_cache_evict_us",
                     read_only_cache_evict_us,
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_evictor_wakeup_count_all",
+                    read_only_cache_evictor_wakeup_count_all,
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_evictor_wakeup_count_productive",
+                    read_only_cache_evictor_wakeup_count_productive,
                     i64
                 ),
                 (
