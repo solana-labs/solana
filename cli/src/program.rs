@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         checks::*,
@@ -72,6 +70,7 @@ use {
         fs::File,
         io::{Read, Write},
         mem::size_of,
+        num::Saturating,
         path::PathBuf,
         rc::Rc,
         str::FromStr,
@@ -1858,8 +1857,10 @@ fn get_programs(
                     .map(|pubkey| pubkey.to_string())
                     .unwrap_or_else(|| "none".to_string()),
                 last_deploy_slot: slot,
-                data_len: programdata_account.data.len()
-                    - UpgradeableLoaderState::size_of_programdata_metadata(),
+                data_len: programdata_account
+                    .data
+                    .len()
+                    .saturating_sub(UpgradeableLoaderState::size_of_programdata_metadata()),
                 lamports: programdata_account.lamports,
                 use_lamports_unit,
             });
@@ -1938,8 +1939,9 @@ fn process_show(
                                         .map(|pubkey| pubkey.to_string())
                                         .unwrap_or_else(|| "none".to_string()),
                                     last_deploy_slot: slot,
-                                    data_len: programdata_account.data.len()
-                                        - UpgradeableLoaderState::size_of_programdata_metadata(),
+                                    data_len: programdata_account.data.len().saturating_sub(
+                                        UpgradeableLoaderState::size_of_programdata_metadata(),
+                                    ),
                                     lamports: programdata_account.lamports,
                                     use_lamports_unit,
                                 }))
@@ -1959,8 +1961,10 @@ fn process_show(
                             authority: authority_address
                                 .map(|pubkey| pubkey.to_string())
                                 .unwrap_or_else(|| "none".to_string()),
-                            data_len: account.data.len()
-                                - UpgradeableLoaderState::size_of_buffer_metadata(),
+                            data_len: account
+                                .data
+                                .len()
+                                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata()),
                             lamports: account.lamports,
                             use_lamports_unit,
                         }))
@@ -2420,9 +2424,9 @@ fn do_process_program_write_and_deploy(
 
     let mut write_messages = vec![];
     let chunk_size = calculate_max_chunk_size(&create_msg);
-    for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-        let offset = i * chunk_size;
-        if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+    for (chunk, i) in program_data.chunks(chunk_size).zip(0usize..) {
+        let offset = i.saturating_mul(chunk_size);
+        if chunk != &buffer_program_data[offset..offset.saturating_add(chunk.len())] {
             write_messages.push(create_msg(offset as u32, chunk.to_vec()));
         }
     }
@@ -2580,9 +2584,9 @@ fn do_process_program_upgrade(
         // Create and add write messages
         let mut write_messages = vec![];
         let chunk_size = calculate_max_chunk_size(&create_msg);
-        for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-            let offset = i * chunk_size;
-            if chunk != &buffer_program_data[offset..offset + chunk.len()] {
+        for (chunk, i) in program_data.chunks(chunk_size).zip(0usize..) {
+            let offset = i.saturating_mul(chunk_size);
+            if chunk != &buffer_program_data[offset..offset.saturating_add(chunk.len())] {
                 write_messages.push(create_msg(offset as u32, chunk.to_vec()));
             }
         }
@@ -2753,7 +2757,7 @@ fn complete_partial_program_init(
             &bpf_loader_upgradeable::id(),
         ));
         if account.lamports < minimum_balance {
-            let balance = minimum_balance - account.lamports;
+            let balance = minimum_balance.saturating_sub(account.lamports);
             instructions.push(system_instruction::transfer(
                 payer_pubkey,
                 elf_pubkey,
@@ -2783,15 +2787,15 @@ fn check_payer(
     write_messages: &[Message],
     final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut fee = 0;
+    let mut fee = Saturating(0);
     if let Some(message) = initial_message {
         fee += rpc_client.get_fee_for_message(message)?;
     }
-    if !write_messages.is_empty() {
-        // Assume all write messages cost the same
-        if let Some(message) = write_messages.first() {
-            fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
-        }
+    // Assume all write messages cost the same
+    if let Some(message) = write_messages.first() {
+        fee += rpc_client
+            .get_fee_for_message(message)?
+            .saturating_mul(write_messages.len() as u64);
     }
     if let Some(message) = final_message {
         fee += rpc_client.get_fee_for_message(message)?;
@@ -2800,7 +2804,7 @@ fn check_payer(
         rpc_client,
         &fee_payer_pubkey,
         balance_needed,
-        fee,
+        fee.0,
         config.commitment,
     )?;
     Ok(())
