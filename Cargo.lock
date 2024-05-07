@@ -6695,7 +6695,6 @@ dependencies = [
  "solana-sdk-macro",
  "static_assertions",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -7113,6 +7112,7 @@ dependencies = [
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.7",
+ "getrandom 0.1.16",
  "hex",
  "hmac 0.12.1",
  "itertools",

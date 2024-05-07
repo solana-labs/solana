@@ -5441,7 +5441,6 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-sdk-macro",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -6203,6 +6202,7 @@ dependencies = [
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.7",
+ "getrandom 0.1.14",
  "hmac 0.12.1",
  "itertools",
  "js-sys",

@@ -60,7 +60,6 @@ libsecp256k1 = { workspace = true }
 light-poseidon = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
-tiny-bip39 = { workspace = true }
 wasm-bindgen = { workspace = true }
 zeroize = { workspace = true, features = ["default", "zeroize_derive"] }
 
