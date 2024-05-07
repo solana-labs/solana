@@ -39,8 +39,20 @@ struct ReadOnlyAccountCacheEntry {
     last_update_time: AtomicU32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ReadOnlyCacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub evicts: u64,
+    pub load_us: u64,
+    pub store_us: u64,
+    pub evict_us: u64,
+    pub evictor_wakeup_count_all: u64,
+    pub evictor_wakeup_count_productive: u64,
+}
+
 #[derive(Default, Debug)]
-struct ReadOnlyCacheStats {
+struct AtomicReadOnlyCacheStats {
     hits: AtomicU64,
     misses: AtomicU64,
     evicts: AtomicU64,
@@ -49,44 +61,6 @@ struct ReadOnlyCacheStats {
     evict_us: AtomicU64,
     evictor_wakeup_count_all: AtomicU64,
     evictor_wakeup_count_productive: AtomicU64,
-}
-
-impl ReadOnlyCacheStats {
-    fn reset(&self) {
-        self.hits.store(0, Ordering::Relaxed);
-        self.misses.store(0, Ordering::Relaxed);
-        self.evicts.store(0, Ordering::Relaxed);
-        self.load_us.store(0, Ordering::Relaxed);
-        self.store_us.store(0, Ordering::Relaxed);
-        self.evict_us.store(0, Ordering::Relaxed);
-        self.evictor_wakeup_count_all.store(0, Ordering::Relaxed);
-        self.evictor_wakeup_count_productive
-            .store(0, Ordering::Relaxed);
-    }
-
-    fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
-        let hits = self.hits.swap(0, Ordering::Relaxed);
-        let misses = self.misses.swap(0, Ordering::Relaxed);
-        let evicts = self.evicts.swap(0, Ordering::Relaxed);
-        let load_us = self.load_us.swap(0, Ordering::Relaxed);
-        let store_us = self.store_us.swap(0, Ordering::Relaxed);
-        let evict_us = self.evict_us.swap(0, Ordering::Relaxed);
-        let evictor_wakeup_count_all = self.evictor_wakeup_count_all.swap(0, Ordering::Relaxed);
-        let evictor_wakeup_count_productive = self
-            .evictor_wakeup_count_productive
-            .swap(0, Ordering::Relaxed);
-
-        (
-            hits,
-            misses,
-            evicts,
-            load_us,
-            store_us,
-            evict_us,
-            evictor_wakeup_count_all,
-            evictor_wakeup_count_productive,
-        )
-    }
 }
 
 #[derive(Debug)]
@@ -105,7 +79,7 @@ pub(crate) struct ReadOnlyAccountsCache {
     ms_to_skip_lru_update: u32,
 
     // Performance statistics
-    stats: Arc<ReadOnlyCacheStats>,
+    stats: Arc<AtomicReadOnlyCacheStats>,
     highest_slot_stored: AtomicU64,
 
     /// Channel to send eviction requests
@@ -128,7 +102,7 @@ impl ReadOnlyAccountsCache {
         let cache = Arc::new(DashMap::default());
         let queue = Arc::new(Mutex::<IndexList<ReadOnlyCacheKey>>::default());
         let data_size = Arc::new(AtomicUsize::default());
-        let stats = Arc::new(ReadOnlyCacheStats::default());
+        let stats = Arc::new(AtomicReadOnlyCacheStats::default());
         let (evict_sender, evict_receiver) = crossbeam_channel::bounded::<()>(1);
         let evictor = Self::spawn_evictor(
             evict_receiver,
@@ -152,15 +126,6 @@ impl ReadOnlyAccountsCache {
             evict_sender,
             _evictor: evictor,
         }
-    }
-
-    /// reset the read only accounts cache
-    /// useful for benches/tests
-    pub(crate) fn reset_for_tests(&self) {
-        self.cache.clear();
-        self.queue.lock().unwrap().clear();
-        self.data_size.store(0, Ordering::Relaxed);
-        self.stats.reset();
     }
 
     /// true if pubkey is in cache at slot
@@ -286,8 +251,32 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
-        self.stats.get_and_reset_stats()
+    pub(crate) fn get_and_reset_stats(&self) -> ReadOnlyCacheStats {
+        let hits = self.stats.hits.swap(0, Ordering::Relaxed);
+        let misses = self.stats.misses.swap(0, Ordering::Relaxed);
+        let evicts = self.stats.evicts.swap(0, Ordering::Relaxed);
+        let load_us = self.stats.load_us.swap(0, Ordering::Relaxed);
+        let store_us = self.stats.store_us.swap(0, Ordering::Relaxed);
+        let evict_us = self.stats.evict_us.swap(0, Ordering::Relaxed);
+        let evictor_wakeup_count_all = self
+            .stats
+            .evictor_wakeup_count_all
+            .swap(0, Ordering::Relaxed);
+        let evictor_wakeup_count_productive = self
+            .stats
+            .evictor_wakeup_count_productive
+            .swap(0, Ordering::Relaxed);
+
+        ReadOnlyCacheStats {
+            hits,
+            misses,
+            evicts,
+            load_us,
+            store_us,
+            evict_us,
+            evictor_wakeup_count_all,
+            evictor_wakeup_count_productive,
+        }
     }
 
     /// Sends a message to the evictor to trigger evictions
@@ -309,7 +298,7 @@ impl ReadOnlyAccountsCache {
         data_size: Arc<AtomicUsize>,
         cache: Arc<DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>>,
         queue: Arc<Mutex<IndexList<ReadOnlyCacheKey>>>,
-        stats: Arc<ReadOnlyCacheStats>,
+        stats: Arc<AtomicReadOnlyCacheStats>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("solAcctReadCache".to_string())

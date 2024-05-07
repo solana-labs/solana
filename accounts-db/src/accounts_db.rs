@@ -5402,12 +5402,6 @@ impl AccountsDb {
         )
     }
 
-    /// remove all entries from the read only accounts cache
-    /// useful for benches/tests
-    pub fn flush_read_only_cache_for_tests(&self) {
-        self.read_only_accounts_cache.reset_for_tests();
-    }
-
     /// if 'load_into_read_cache_only', then return value is meaningless.
     ///   The goal is to get the account into the read-only cache.
     fn do_load_with_populate_read_cache(
@@ -8274,16 +8268,7 @@ impl AccountsDb {
 
     fn report_store_timings(&self) {
         if self.stats.last_store_report.should_update(1000) {
-            let (
-                read_only_cache_hits,
-                read_only_cache_misses,
-                read_only_cache_evicts,
-                read_only_cache_load_us,
-                read_only_cache_store_us,
-                read_only_cache_evict_us,
-                read_only_cache_evictor_wakeup_count_all,
-                read_only_cache_evictor_wakeup_count_productive,
-            ) = self.read_only_accounts_cache.get_and_reset_stats();
+            let read_cache_stats = self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
                 (
@@ -8338,40 +8323,40 @@ impl AccountsDb {
                     self.read_only_accounts_cache.data_size(),
                     i64
                 ),
-                ("read_only_accounts_cache_hits", read_only_cache_hits, i64),
+                ("read_only_accounts_cache_hits", read_cache_stats.hits, i64),
                 (
                     "read_only_accounts_cache_misses",
-                    read_only_cache_misses,
+                    read_cache_stats.misses,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_evicts",
-                    read_only_cache_evicts,
+                    read_cache_stats.evicts,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_load_us",
-                    read_only_cache_load_us,
+                    read_cache_stats.load_us,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_store_us",
-                    read_only_cache_store_us,
+                    read_cache_stats.store_us,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_evict_us",
-                    read_only_cache_evict_us,
+                    read_cache_stats.evict_us,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_evictor_wakeup_count_all",
-                    read_only_cache_evictor_wakeup_count_all,
+                    read_cache_stats.evictor_wakeup_count_all,
                     i64
                 ),
                 (
                     "read_only_accounts_cache_evictor_wakeup_count_productive",
-                    read_only_cache_evictor_wakeup_count_productive,
+                    read_cache_stats.evictor_wakeup_count_productive,
                     i64
                 ),
                 (
