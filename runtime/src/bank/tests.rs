@@ -2376,7 +2376,7 @@ fn test_insufficient_funds() {
     // transaction_count returns the count of all committed transactions since
     // bank_transaction_count_fix was activated, regardless of success
     assert_eq!(bank.transaction_count(), 2);
-    assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
+    assert_eq!(bank.non_vote_transaction_count_since_restart(), 2);
 
     let mint_pubkey = mint_keypair.pubkey();
     assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
