@@ -195,6 +195,8 @@ impl PrioGraphScheduler {
                     |thread_set| {
                         Self::select_thread(
                             thread_set,
+                            &batches.total_cus,
+                            self.in_flight_tracker.cus_in_flight_per_thread(),
                             &batches.transactions,
                             self.in_flight_tracker.num_in_flight_per_thread(),
                         )
@@ -420,6 +422,8 @@ impl PrioGraphScheduler {
     /// on `ThreadAwareAccountLocks::try_lock_accounts`.
     fn select_thread(
         thread_set: ThreadSet,
+        batch_cus_per_thread: &[u64],
+        in_flight_cus_per_thread: &[u64],
         batches_per_thread: &[Vec<SanitizedTransaction>],
         in_flight_per_thread: &[usize],
     ) -> ThreadId {
@@ -428,11 +432,12 @@ impl PrioGraphScheduler {
             .map(|thread_id| {
                 (
                     thread_id,
+                    batch_cus_per_thread[thread_id] + in_flight_cus_per_thread[thread_id],
                     batches_per_thread[thread_id].len() + in_flight_per_thread[thread_id],
                 )
             })
-            .min_by(|a, b| a.1.cmp(&b.1))
-            .map(|(thread_id, _)| thread_id)
+            .min_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)))
+            .map(|(thread_id, _, _)| thread_id)
             .unwrap()
     }
 
