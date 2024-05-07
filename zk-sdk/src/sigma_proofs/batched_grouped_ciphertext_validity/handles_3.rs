@@ -57,7 +57,7 @@ impl BatchedGroupedCiphertext3HandlesValidityProof {
         opening_hi: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
+        transcript.batched_grouped_ciphertext_validity_proof_domain_separator(3);
 
         let t = transcript.challenge_scalar(b"t");
 
@@ -97,7 +97,7 @@ impl BatchedGroupedCiphertext3HandlesValidityProof {
         auditor_handle_hi: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofVerificationError> {
-        transcript.batched_grouped_ciphertext_validity_proof_domain_separator();
+        transcript.batched_grouped_ciphertext_validity_proof_domain_separator(3);
 
         let t = transcript.challenge_scalar(b"t");
 

@@ -75,7 +75,7 @@ impl InnerProductProof {
             return Err(RangeProofGenerationError::InvalidBitSize);
         }
 
-        transcript.innerproduct_domain_separator(n as u64);
+        transcript.inner_product_proof_domain_separator(n as u64);
 
         let lg_n = n.next_power_of_two().trailing_zeros() as usize;
         let mut L_vec = Vec::with_capacity(lg_n);
@@ -233,7 +233,7 @@ impl InnerProductProof {
             return Err(RangeProofVerificationError::InvalidBitSize);
         }
 
-        transcript.innerproduct_domain_separator(n as u64);
+        transcript.inner_product_proof_domain_separator(n as u64);
 
         // 1. Recompute x_k,...,x_1 based on the proof transcript
 

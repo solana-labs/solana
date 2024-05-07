@@ -84,7 +84,7 @@ impl GroupedCiphertext3HandlesValidityProof {
         opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.grouped_ciphertext_validity_proof_domain_separator();
+        transcript.grouped_ciphertext_validity_proof_domain_separator(3);
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();
@@ -150,7 +150,7 @@ impl GroupedCiphertext3HandlesValidityProof {
         auditor_handle: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofVerificationError> {
-        transcript.grouped_ciphertext_validity_proof_domain_separator();
+        transcript.grouped_ciphertext_validity_proof_domain_separator(3);
 
         // include `Y_0`, `Y_1`, `Y_2` to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;

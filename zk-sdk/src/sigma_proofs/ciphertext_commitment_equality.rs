@@ -78,7 +78,7 @@ impl CiphertextCommitmentEqualityProof {
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.equality_proof_domain_separator();
+        transcript.ciphertext_commitment_equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_keypair.pubkey().get_point();
@@ -139,7 +139,7 @@ impl CiphertextCommitmentEqualityProof {
         destination_commitment: &PedersenCommitment,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofVerificationError> {
-        transcript.equality_proof_domain_separator();
+        transcript.ciphertext_commitment_equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
         let P_source = source_pubkey.get_point();

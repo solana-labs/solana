@@ -66,7 +66,7 @@ impl ZeroCiphertextProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
-        transcript.zero_balance_proof_domain_separator();
+        transcript.zero_ciphertext_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.pubkey().get_point();
@@ -105,7 +105,7 @@ impl ZeroCiphertextProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroCiphertextProofVerificationError> {
-        transcript.zero_balance_proof_domain_separator();
+        transcript.zero_ciphertext_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();

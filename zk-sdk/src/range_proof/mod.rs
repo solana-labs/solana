@@ -101,6 +101,8 @@ impl RangeProof {
         let bp_gens = RangeProofGens::new(nm)
             .map_err(|_| RangeProofGenerationError::MaximumGeneratorLengthExceeded)?;
 
+        transcript.range_proof_domain_separator(nm as u64);
+
         // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
         let mut A = a_blinding * &(*H);
@@ -275,6 +277,8 @@ impl RangeProof {
         if !nm.is_power_of_two() {
             return Err(RangeProofVerificationError::InvalidBitSize);
         }
+
+        transcript.range_proof_domain_separator(nm as u64);
 
         // append proof data to transcript and derive appropriate challenge scalars
         transcript.validate_and_append_point(b"A", &self.A)?;

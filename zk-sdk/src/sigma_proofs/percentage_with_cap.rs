@@ -124,6 +124,7 @@ impl PercentageWithCapProof {
         max_value: u64,
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.percentage_with_cap_proof_domain_separator();
         let mut transcript_percentage_above_max = transcript.clone();
         let mut transcript_percentage_below_max = transcript.clone();
 
@@ -343,6 +344,8 @@ impl PercentageWithCapProof {
         max_value: u64,
         transcript: &mut Transcript,
     ) -> Result<(), PercentageWithCapProofVerificationError> {
+        transcript.percentage_with_cap_proof_domain_separator();
+
         // extract the relevant scalar and Ristretto points from the input
         let m = Scalar::from(max_value);
 
