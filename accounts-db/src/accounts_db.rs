@@ -7488,6 +7488,7 @@ impl AccountsDb {
     /// and then calculate the incremental accounts hash for `(base slot, slot]`.
     pub fn verify_accounts_hash_and_lamports(
         &self,
+        snapshot_storages_and_slots: (&[Arc<AccountStorageEntry>], &[Slot]),
         slot: Slot,
         total_lamports: u64,
         base: Option<(Slot, /*capitalization*/ u64)>,
@@ -7503,11 +7504,21 @@ impl AccountsDb {
         let hash_mismatch_is_error = !config.ignore_mismatch;
 
         if let Some((base_slot, base_capitalization)) = base {
-            self.verify_accounts_hash_and_lamports(base_slot, base_capitalization, None, config)?;
-            let (storages, slots) =
-                self.get_snapshot_storages(base_slot.checked_add(1).unwrap()..=slot);
-            let sorted_storages =
-                SortedStorages::new_with_slots(storages.iter().zip(slots), None, None);
+            self.verify_accounts_hash_and_lamports(
+                snapshot_storages_and_slots,
+                base_slot,
+                base_capitalization,
+                None,
+                config,
+            )?;
+
+            let storages_and_slots = snapshot_storages_and_slots
+                .0
+                .iter()
+                .zip(snapshot_storages_and_slots.1.iter())
+                .filter(|storage_and_slot| *storage_and_slot.1 > base_slot)
+                .map(|(storage, slot)| (storage, *slot));
+            let sorted_storages = SortedStorages::new_with_slots(storages_and_slots, None, None);
             let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
                 &calc_config,
                 &sorted_storages,
@@ -7526,9 +7537,13 @@ impl AccountsDb {
                 }
             }
         } else {
-            let (storages, slots) = self.get_snapshot_storages(..=slot);
-            let sorted_storages =
-                SortedStorages::new_with_slots(storages.iter().zip(slots), None, None);
+            let storages_and_slots = snapshot_storages_and_slots
+                .0
+                .iter()
+                .zip(snapshot_storages_and_slots.1.iter())
+                .filter(|storage_and_slot| *storage_and_slot.1 <= slot)
+                .map(|(storage, slot)| (storage, *slot));
+            let sorted_storages = SortedStorages::new_with_slots(storages_and_slots, None, None);
             let (calculated_accounts_hash, calculated_lamports) =
                 self.calculate_accounts_hash(&calc_config, &sorted_storages, HashStats::default());
             if calculated_lamports != total_lamports {
@@ -9448,7 +9463,18 @@ impl AccountsDb {
         total_lamports: u64,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
-        self.verify_accounts_hash_and_lamports(slot, total_lamports, None, config)
+        let snapshot_storages = self.get_snapshot_storages(..);
+        let snapshot_storages_and_slots = (
+            snapshot_storages.0.as_slice(),
+            snapshot_storages.1.as_slice(),
+        );
+        self.verify_accounts_hash_and_lamports(
+            snapshot_storages_and_slots,
+            slot,
+            total_lamports,
+            None,
+            config,
+        )
     }
 }
 
@@ -12400,7 +12426,7 @@ pub mod tests {
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
                 assert_matches!(
-                    db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
+                    db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config.clone()),
                     Ok(_)
                 );
                 continue;

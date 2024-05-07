@@ -185,7 +185,7 @@ use {
         collections::{HashMap, HashSet},
         convert::TryFrom,
         fmt, mem,
-        ops::{AddAssign, RangeInclusive},
+        ops::{AddAssign, RangeFull, RangeInclusive},
         path::PathBuf,
         slice,
         sync::{
@@ -5622,7 +5622,15 @@ impl Bank {
                 panic!("cannot verify accounts hash because slot {slot} is not a root");
             }
         }
-        let cap = self.capitalization();
+        // The snapshot storages must be captured *before* starting the background verification.
+        // Otherwise, it is possible that a delayed call to `get_snapshot_storages()` will *not*
+        // get the correct storages required to calculate and verify the accounts hashes.
+        let snapshot_storages = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_snapshot_storages(RangeFull);
+        let capitalization = self.capitalization();
         let verify_config = VerifyAccountsHashAndLamportsConfig {
             ancestors: &self.ancestors,
             epoch_schedule: self.epoch_schedule(),
@@ -5643,9 +5651,14 @@ impl Bank {
                     .name("solBgHashVerify".into())
                     .spawn(move || {
                         info!("Initial background accounts hash verification has started");
+                        let snapshot_storages_and_slots = (
+                            snapshot_storages.0.as_slice(),
+                            snapshot_storages.1.as_slice(),
+                        );
                         let result = accounts_.verify_accounts_hash_and_lamports(
+                            snapshot_storages_and_slots,
                             slot,
-                            cap,
+                            capitalization,
                             base,
                             VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
@@ -5665,7 +5678,17 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
-            let result = accounts.verify_accounts_hash_and_lamports(slot, cap, base, verify_config);
+            let snapshot_storages_and_slots = (
+                snapshot_storages.0.as_slice(),
+                snapshot_storages.1.as_slice(),
+            );
+            let result = accounts.verify_accounts_hash_and_lamports(
+                snapshot_storages_and_slots,
+                slot,
+                capitalization,
+                base,
+                verify_config,
+            );
             self.set_initial_accounts_hash_verification_completed();
             result
         }

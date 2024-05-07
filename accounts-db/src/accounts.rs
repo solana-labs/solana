@@ -1,8 +1,8 @@
 use {
     crate::{
         accounts_db::{
-            AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount, ScanAccountStorageData,
-            ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
+            AccountStorageEntry, AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount,
+            ScanAccountStorageData, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{IndexKey, ScanConfig, ScanError, ScanResult},
         ancestors::Ancestors,
@@ -297,15 +297,19 @@ impl Accounts {
     #[must_use]
     pub fn verify_accounts_hash_and_lamports(
         &self,
+        snapshot_storages_and_slots: (&[Arc<AccountStorageEntry>], &[Slot]),
         slot: Slot,
         total_lamports: u64,
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> bool {
-        if let Err(err) =
-            self.accounts_db
-                .verify_accounts_hash_and_lamports(slot, total_lamports, base, config)
-        {
+        if let Err(err) = self.accounts_db.verify_accounts_hash_and_lamports(
+            snapshot_storages_and_slots,
+            slot,
+            total_lamports,
+            base,
+            config,
+        ) {
             warn!("verify_accounts_hash failed: {err:?}, slot: {slot}");
             false
         } else {
