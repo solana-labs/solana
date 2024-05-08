@@ -58,12 +58,10 @@ use {
         feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
         message::Message,
-        native_token::Sol,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-        system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
-        system_program,
+        system_instruction::{SystemError, MAX_PERMITTED_DATA_LENGTH},
         transaction::{Transaction, TransactionError},
     },
     std::{
@@ -95,7 +93,6 @@ pub enum ProgramCliCommand {
         upgrade_authority_signer_index: SignerIndex,
         is_final: bool,
         max_len: Option<usize>,
-        allow_excessive_balance: bool,
         skip_fee_check: bool,
         compute_unit_price: Option<u64>,
         max_sign_attempts: usize,
@@ -245,10 +242,11 @@ impl ProgramSubCommands for App<'_, '_> {
                         .arg(
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
+                                .hidden(hidden_unless_forced())
                                 .takes_value(false)
                                 .help(
                                     "Use the designated program id even if the account already \
-                                     holds a large balance of SOL",
+                                     holds a large balance of SOL (Obsolete)",
                                 ),
                         )
                         .arg(
@@ -687,7 +685,6 @@ pub fn parse_program_subcommand(
                         .unwrap(),
                     is_final: matches.is_present("final"),
                     max_len,
-                    allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
                     compute_unit_price,
                     max_sign_attempts,
@@ -976,7 +973,6 @@ pub fn process_program_subcommand(
             upgrade_authority_signer_index,
             is_final,
             max_len,
-            allow_excessive_balance,
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
@@ -994,7 +990,6 @@ pub fn process_program_subcommand(
             *upgrade_authority_signer_index,
             *is_final,
             *max_len,
-            *allow_excessive_balance,
             *skip_fee_check,
             *compute_unit_price,
             *max_sign_attempts,
@@ -1173,7 +1168,6 @@ fn process_program_deploy(
     upgrade_authority_signer_index: SignerIndex,
     is_final: bool,
     max_len: Option<usize>,
-    allow_excessive_balance: bool,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
@@ -1270,14 +1264,14 @@ fn process_program_deploy(
         true
     };
 
-    let (program_data, program_len, buffer_account) =
+    let (program_data, program_len, buffer_program_data) =
         if let Some(program_location) = program_location {
             let program_data = read_and_verify_elf(program_location)?;
             let program_len = program_data.len();
 
             // If a buffer was provided, check if it has already been created and set up properly
-            let buffer_account = if buffer_provided {
-                fetch_buffer_account(
+            let buffer_program_data = if buffer_provided {
+                fetch_buffer_program_data(
                     &rpc_client,
                     config,
                     Some(program_len),
@@ -1288,21 +1282,16 @@ fn process_program_deploy(
                 None
             };
 
-            (program_data, program_len, buffer_account)
+            (program_data, program_len, buffer_program_data)
         } else if buffer_provided {
-            let buffer_account = fetch_verified_buffer_account(
+            let buffer_program_data = fetch_verified_buffer_program_data(
                 &rpc_client,
                 config,
                 buffer_pubkey,
                 upgrade_authority_signer.pubkey(),
             )?;
 
-            let program_len = buffer_account
-                .data
-                .len()
-                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
-
-            (vec![], program_len, Some(buffer_account))
+            (vec![], buffer_program_data.len(), Some(buffer_program_data))
         } else {
             return Err("Program location required if buffer not supplied".into());
         };
@@ -1339,9 +1328,8 @@ fn process_program_deploy(
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
-            buffer_account,
+            buffer_program_data,
             upgrade_authority_signer,
-            allow_excessive_balance,
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
@@ -1359,7 +1347,7 @@ fn process_program_deploy(
             upgrade_authority_signer,
             &buffer_pubkey,
             buffer_signer,
-            buffer_account,
+            buffer_program_data,
             skip_fee_check,
             compute_unit_price,
             max_sign_attempts,
@@ -1388,39 +1376,36 @@ fn process_program_deploy(
     result
 }
 
-fn fetch_verified_buffer_account(
+fn fetch_verified_buffer_program_data(
     rpc_client: &RpcClient,
     config: &CliConfig,
     buffer_pubkey: Pubkey,
     buffer_authority: Pubkey,
-) -> Result<Account, Box<dyn std::error::Error>> {
-    let Some(buffer_account) =
-        fetch_buffer_account(rpc_client, config, None, buffer_pubkey, buffer_authority)?
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let Some(buffer_program_data) =
+        fetch_buffer_program_data(rpc_client, config, None, buffer_pubkey, buffer_authority)?
     else {
         return Err(format!("Buffer account {buffer_pubkey} not found").into());
     };
 
-    let buffer_program_data =
-        &buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..];
-
-    verify_elf(buffer_program_data).map_err(|err| {
+    verify_elf(&buffer_program_data).map_err(|err| {
         format!(
             "Buffer account {buffer_pubkey} has invalid program data: {:?}",
             err
         )
     })?;
 
-    Ok(buffer_account)
+    Ok(buffer_program_data)
 }
 
-fn fetch_buffer_account(
+fn fetch_buffer_program_data(
     rpc_client: &RpcClient,
     config: &CliConfig,
     min_program_len: Option<usize>,
     buffer_pubkey: Pubkey,
     buffer_authority: Pubkey,
-) -> Result<Option<Account>, Box<dyn std::error::Error>> {
-    let Some(account) = rpc_client
+) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+    let Some(mut account) = rpc_client
         .get_account_with_commitment(&buffer_pubkey, config.commitment)?
         .value
     else {
@@ -1461,7 +1446,11 @@ fn fetch_buffer_account(
         }
     }
 
-    Ok(Some(account))
+    let buffer_program_data = account
+        .data
+        .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
+
+    Ok(Some(buffer_program_data))
 }
 
 /// Upgrade existing program using upgradeable loader
@@ -1506,7 +1495,7 @@ fn process_program_upgrade(
             },
         )
     } else {
-        fetch_verified_buffer_account(
+        fetch_verified_buffer_program_data(
             &rpc_client,
             config,
             buffer_pubkey,
@@ -1569,7 +1558,7 @@ fn process_write_buffer(
         )
     };
 
-    let buffer_account = fetch_buffer_account(
+    let buffer_program_data = fetch_buffer_program_data(
         &rpc_client,
         config,
         Some(program_len),
@@ -1597,9 +1586,8 @@ fn process_write_buffer(
         None,
         buffer_signer,
         &buffer_pubkey,
-        buffer_account,
+        buffer_program_data,
         buffer_authority,
-        true,
         skip_fee_check,
         compute_unit_price,
         max_sign_attempts,
@@ -2358,9 +2346,8 @@ fn do_process_program_write_and_deploy(
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
-    buffer_account: Option<Account>,
+    buffer_program_data: Option<Vec<u8>>,
     buffer_authority_signer: &dyn Signer,
-    allow_excessive_balance: bool,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
@@ -2368,21 +2355,9 @@ fn do_process_program_write_and_deploy(
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
-    // Initialize buffer account or complete if already partially initialized
     let (initial_instructions, balance_needed, buffer_program_data) =
-        if let Some(mut account) = buffer_account {
-            let (ixs, balance_needed) = complete_partial_program_init(
-                &fee_payer_signer.pubkey(),
-                buffer_pubkey,
-                &account,
-                UpgradeableLoaderState::size_of_buffer(program_len),
-                min_rent_exempt_program_data_balance,
-                allow_excessive_balance,
-            )?;
-            let buffer_program_data = account
-                .data
-                .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
-            (ixs, balance_needed, buffer_program_data)
+        if let Some(buffer_program_data) = buffer_program_data {
+            (vec![], 0, buffer_program_data)
         } else {
             (
                 bpf_loader_upgradeable::create_buffer(
@@ -2505,7 +2480,7 @@ fn do_process_program_upgrade(
     upgrade_authority: &dyn Signer,
     buffer_pubkey: &Pubkey,
     buffer_signer: Option<&dyn Signer>,
-    buffer_account: Option<Account>,
+    buffer_program_data: Option<Vec<u8>>,
     skip_fee_check: bool,
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
@@ -2517,26 +2492,14 @@ fn do_process_program_upgrade(
     let (initial_message, write_messages, balance_needed) = if let Some(buffer_signer) =
         buffer_signer
     {
-        // Check Buffer account to see if partial initialization has occurred
         let (mut initial_instructions, balance_needed, buffer_program_data) =
-            if let Some(mut account) = buffer_account {
-                let (ixs, balance_needed) = complete_partial_program_init(
-                    &fee_payer_signer.pubkey(),
-                    &buffer_signer.pubkey(),
-                    &account,
-                    UpgradeableLoaderState::size_of_buffer(program_len),
-                    min_rent_exempt_program_data_balance,
-                    true,
-                )?;
-                let buffer_program_data = account
-                    .data
-                    .split_off(UpgradeableLoaderState::size_of_buffer_metadata());
-                (ixs, balance_needed, buffer_program_data)
+            if let Some(buffer_program_data) = buffer_program_data {
+                (vec![], 0, buffer_program_data)
             } else {
                 (
                     bpf_loader_upgradeable::create_buffer(
                         &fee_payer_signer.pubkey(),
-                        buffer_pubkey,
+                        &buffer_signer.pubkey(),
                         &upgrade_authority.pubkey(),
                         min_rent_exempt_program_data_balance,
                         program_len,
@@ -2722,60 +2685,6 @@ fn verify_elf(program_data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     executable
         .verify::<RequisiteVerifier>()
         .map_err(|err| format!("ELF error: {err}").into())
-}
-
-fn complete_partial_program_init(
-    payer_pubkey: &Pubkey,
-    elf_pubkey: &Pubkey,
-    account: &Account,
-    account_data_len: usize,
-    minimum_balance: u64,
-    allow_excessive_balance: bool,
-) -> Result<(Vec<Instruction>, u64), Box<dyn std::error::Error>> {
-    let mut instructions: Vec<Instruction> = vec![];
-    let mut balance_needed = 0;
-    if account.executable {
-        return Err("Buffer account is already executable".into());
-    }
-    if account.owner != bpf_loader_upgradeable::id() && !system_program::check_id(&account.owner) {
-        return Err("Buffer account passed is already in use by another program".into());
-    }
-    if !account.data.is_empty() && account.data.len() < account_data_len {
-        return Err(
-            "Buffer account passed is not large enough, may have been for a different deploy?"
-                .into(),
-        );
-    }
-
-    if account.data.is_empty() && system_program::check_id(&account.owner) {
-        instructions.push(system_instruction::allocate(
-            elf_pubkey,
-            account_data_len as u64,
-        ));
-        instructions.push(system_instruction::assign(
-            elf_pubkey,
-            &bpf_loader_upgradeable::id(),
-        ));
-        if account.lamports < minimum_balance {
-            let balance = minimum_balance.saturating_sub(account.lamports);
-            instructions.push(system_instruction::transfer(
-                payer_pubkey,
-                elf_pubkey,
-                balance,
-            ));
-            balance_needed = balance;
-        } else if account.lamports > minimum_balance
-            && system_program::check_id(&account.owner)
-            && !allow_excessive_balance
-        {
-            return Err(format!(
-                "Buffer account has a balance: {:?}; it may already be in use",
-                Sol(account.lamports)
-            )
-            .into());
-        }
-    }
-    Ok((instructions, balance_needed))
 }
 
 fn check_payer(
@@ -3037,7 +2946,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3069,7 +2977,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: Some(42),
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3103,7 +3010,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3139,7 +3045,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3174,7 +3079,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3212,7 +3116,6 @@ mod tests {
                     upgrade_authority_signer_index: 1,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -3247,7 +3150,6 @@ mod tests {
                     is_final: true,
                     max_len: None,
                     skip_fee_check: false,
-                    allow_excessive_balance: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     auto_extend: true,
@@ -3278,7 +3180,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 1,
@@ -3309,7 +3210,6 @@ mod tests {
                     upgrade_authority_signer_index: 0,
                     is_final: false,
                     max_len: None,
-                    allow_excessive_balance: false,
                     skip_fee_check: false,
                     compute_unit_price: None,
                     max_sign_attempts: 5,
@@ -4053,7 +3953,6 @@ mod tests {
                 upgrade_authority_signer_index: 0,
                 is_final: false,
                 max_len: None,
-                allow_excessive_balance: false,
                 skip_fee_check: false,
                 compute_unit_price: None,
                 max_sign_attempts: 5,
