@@ -2474,7 +2474,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         cache.assign_program(program_id, entry.clone());
         cache.unload_program_entry(&program_id, &entry);
-        assert!(cache.stats.evictions.get(&program_id).is_some());
+        assert!(cache.stats.evictions.contains_key(&program_id));
     }
 
     #[test]

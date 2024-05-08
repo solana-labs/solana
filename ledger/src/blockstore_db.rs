@@ -526,7 +526,7 @@ impl Rocks {
             .chain(std::iter::once(DEFAULT_COLUMN_NAME.to_string()))
             .collect();
         detected_cfs.iter().for_each(|cf_name| {
-            if known_cfs.get(cf_name.as_str()).is_none() {
+            if !known_cfs.contains(cf_name.as_str()) {
                 info!("Detected unknown column {cf_name}, opening column with basic options");
                 // This version of the software was unaware of the column, so
                 // it is fair to assume that we will not attempt to read or

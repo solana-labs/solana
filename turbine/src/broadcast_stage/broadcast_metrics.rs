@@ -294,7 +294,7 @@ mod test {
             }),
         );
 
-        assert!(slot_broadcast_stats.0.get(&0).is_none());
+        assert!(!slot_broadcast_stats.0.contains_key(&0));
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod test {
                 t.join().unwrap();
             }
 
-            assert!(slot_broadcast_stats.lock().unwrap().0.get(&slot).is_none());
+            assert!(!slot_broadcast_stats.lock().unwrap().0.contains_key(&slot));
             let (returned_count, returned_slot, _returned_instant) = receiver.recv().unwrap();
             assert_eq!(returned_count, num_threads);
             assert_eq!(returned_slot, slot);

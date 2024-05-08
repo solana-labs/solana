@@ -810,8 +810,8 @@ mod tests {
         let bank0 = bank_forks[0].clone();
         let child_bank = Bank::new_from_parent(bank0, &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
-        assert!(bank_forks.frozen_banks().get(&0).is_some());
-        assert!(bank_forks.frozen_banks().get(&1).is_none());
+        assert!(bank_forks.frozen_banks().contains_key(&0));
+        assert!(!bank_forks.frozen_banks().contains_key(&1));
     }
 
     #[test]

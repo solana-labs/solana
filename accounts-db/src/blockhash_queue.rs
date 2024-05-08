@@ -60,7 +60,7 @@ impl BlockhashQueue {
     /// Check if the age of the hash is within the queue's max age
     #[deprecated(since = "2.0.0", note = "Please use `is_hash_valid_for_age` instead")]
     pub fn is_hash_valid(&self, hash: &Hash) -> bool {
-        self.ages.get(hash).is_some()
+        self.ages.contains_key(hash)
     }
 
     /// Check if the age of the hash is within the specified age

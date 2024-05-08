@@ -492,7 +492,7 @@ mod tests {
                 expected.increase_confirmation_stake(1, 50);
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             } else {
-                assert!(commitment.get(&a).is_none());
+                assert!(!commitment.contains_key(&a));
             }
         }
         assert_eq!(rooted_stake.len(), 2);

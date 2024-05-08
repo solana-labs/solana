@@ -1497,7 +1497,7 @@ mod test {
             .unwrap()
             .repair_pubkey_and_addr
             .is_none());
-        assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
+        assert!(duplicate_slot_repair_statuses.contains_key(&dead_slot));
 
         // Give the slot a repair address
         duplicate_slot_repair_statuses
@@ -1519,7 +1519,7 @@ mod test {
             &identity_keypair,
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
-        assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
+        assert!(duplicate_slot_repair_statuses.contains_key(&dead_slot));
 
         // Insert rest of shreds. Slot is full, should get filtered from
         // `duplicate_slot_repair_statuses`

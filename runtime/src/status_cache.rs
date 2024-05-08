@@ -133,7 +133,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(stored_forks) = keymap.get(key_slice) {
             let res = stored_forks
                 .iter()
-                .find(|(f, _)| ancestors.contains_key(f) || self.roots.get(f).is_some())
+                .find(|(f, _)| ancestors.contains_key(f) || self.roots.contains(f))
                 .cloned();
             if res.is_some() {
                 return res;
@@ -442,7 +442,7 @@ mod tests {
             status_cache.add_root(i as u64);
         }
         assert_eq!(status_cache.slot_deltas.len(), 1);
-        assert!(status_cache.slot_deltas.get(&1).is_some());
+        assert!(status_cache.slot_deltas.contains_key(&1));
         let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
@@ -486,8 +486,8 @@ mod tests {
 
         // Check that the slot delta for slot 0 is gone, but slot 1 still
         // exists
-        assert!(status_cache.slot_deltas.get(&0).is_none());
-        assert!(status_cache.slot_deltas.get(&1).is_some());
+        assert!(!status_cache.slot_deltas.contains_key(&0));
+        assert!(status_cache.slot_deltas.contains_key(&1));
 
         // Clear slot 1 related data
         status_cache.clear_slot_entries(1);

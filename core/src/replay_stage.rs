@@ -4242,7 +4242,7 @@ impl ReplayStage {
                 .get(&parent_slot)
                 .expect("missing parent in bank forks");
             for child_slot in children {
-                if forks.get(child_slot).is_some() || new_banks.get(&child_slot).is_some() {
+                if forks.get(child_slot).is_some() || new_banks.contains_key(&child_slot) {
                     trace!("child already active or frozen {}", child_slot);
                     continue;
                 }

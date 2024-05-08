@@ -416,7 +416,7 @@ impl HeaviestSubtreeForkChoice {
 
     pub fn add_root_parent(&mut self, root_parent: SlotHashKey) {
         assert!(root_parent.0 < self.tree_root.0);
-        assert!(self.fork_infos.get(&root_parent).is_none());
+        assert!(!self.fork_infos.contains_key(&root_parent));
         let root_info = self
             .fork_infos
             .get_mut(&self.tree_root)

@@ -1252,13 +1252,12 @@ mod tests {
         );
 
         // Check that read-only lock with zero references is deleted
-        assert!(accounts
+        assert!(!accounts
             .account_locks
             .lock()
             .unwrap()
             .readonly_locks
-            .get(&keypair1.pubkey())
-            .is_none());
+            .contains_key(&keypair1.pubkey()));
     }
 
     #[test]
@@ -1495,13 +1494,12 @@ mod tests {
             2
         );
         // verify that keypair2 (for tx1) is not write-locked
-        assert!(accounts
+        assert!(!accounts
             .account_locks
             .lock()
             .unwrap()
             .write_locks
-            .get(&keypair2.pubkey())
-            .is_none());
+            .contains(&keypair2.pubkey()));
 
         accounts.unlock_accounts(txs.iter().zip(&results));
 
