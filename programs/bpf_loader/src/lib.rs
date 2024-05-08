@@ -1557,7 +1557,6 @@ mod tests {
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
-        solana_rbpf::vm::ContextObject,
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
@@ -1573,19 +1572,6 @@ mod tests {
         },
         std::{fs::File, io::Read, ops::Range, sync::atomic::AtomicU64},
     };
-
-    struct TestContextObject {
-        remaining: u64,
-    }
-    impl ContextObject for TestContextObject {
-        fn trace(&mut self, _state: [u64; 12]) {}
-        fn consume(&mut self, amount: u64) {
-            self.remaining = self.remaining.saturating_sub(amount);
-        }
-        fn get_remaining(&self) -> u64 {
-            self.remaining
-        }
-    }
 
     fn process_instruction(
         loader_id: &Pubkey,
