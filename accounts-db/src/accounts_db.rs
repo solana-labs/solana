@@ -142,9 +142,9 @@ const SHRINK_COLLECT_CHUNK_SIZE: usize = 50;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
-    #[default]
     Append,
     /// ancient storages are created by 1-shot write to pack multiple accounts together more efficiently with new formats
+    #[default]
     Pack,
 }
 
@@ -2386,7 +2386,7 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
-            create_ancient_storage: CreateAncientStorage::Pack,
+            create_ancient_storage: CreateAncientStorage::default(),
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             active_stats: ActiveStats::default(),
             skip_initial_hash_calc: false,
@@ -2520,7 +2520,7 @@ impl AccountsDb {
         let create_ancient_storage = accounts_db_config
             .as_ref()
             .map(|config| config.create_ancient_storage)
-            .unwrap_or(CreateAncientStorage::Append);
+            .unwrap_or_default();
 
         let test_partitioned_epoch_rewards = accounts_db_config
             .as_ref()
@@ -4420,7 +4420,9 @@ impl AccountsDb {
             .slots_considered
             .fetch_add(1, Ordering::Relaxed);
 
-        if is_ancient(accounts) {
+        // if an append vec is at least 80% of the ideal capacity of an ancient append vec, that's close enough.
+        // If we packed, then we end up allocating exact size ancient append vecs. Those will likely never be exactly the ideal ancient capacity.
+        if accounts.capacity() * 100 / get_ancient_append_vec_capacity() > 80 {
             self.shrink_ancient_stats
                 .ancient_scanned
                 .fetch_add(1, Ordering::Relaxed);
