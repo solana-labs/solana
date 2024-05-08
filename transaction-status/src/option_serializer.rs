@@ -34,6 +34,121 @@ impl<T> OptionSerializer<T> {
             OptionSerializer::Skip => OptionSerializer::Skip,
         }
     }
+
+    pub fn as_mut(&mut self) -> OptionSerializer<&mut T> {
+        match *self {
+            OptionSerializer::Some(ref mut x) => OptionSerializer::Some(x),
+            _ => OptionSerializer::None,
+        }
+    }
+
+    pub fn is_some(&self) -> bool {
+        matches!(*self, OptionSerializer::Some(_))
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(*self, OptionSerializer::None)
+    }
+
+    pub fn is_skip(&self) -> bool {
+        matches!(*self, OptionSerializer::Skip)
+    }
+
+    pub fn expect(self, msg: &str) -> T {
+        match self {
+            OptionSerializer::Some(val) => val,
+            _ => panic!("{}", msg),
+        }
+    }
+
+    pub fn unwrap(self) -> T {
+        match self {
+            OptionSerializer::Some(val) => val,
+            OptionSerializer::None => {
+                panic!("called `OptionSerializer::unwrap()` on a `None` value")
+            }
+            OptionSerializer::Skip => {
+                panic!("called `OptionSerializer::unwrap()` on a `Skip` value")
+            }
+        }
+    }
+
+    pub fn unwrap_or(self, default: T) -> T {
+        match self {
+            OptionSerializer::Some(val) => val,
+            _ => default,
+        }
+    }
+
+    pub fn unwrap_or_else<F>(self, f: F) -> T
+    where
+        F: FnOnce() -> T,
+    {
+        match self {
+            OptionSerializer::Some(val) => val,
+            _ => f(),
+        }
+    }
+
+    pub fn map<U, F>(self, f: F) -> Option<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            OptionSerializer::Some(x) => Some(f(x)),
+            _ => None,
+        }
+    }
+
+    pub fn map_or<U, F>(self, default: U, f: F) -> U
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            OptionSerializer::Some(t) => f(t),
+            _ => default,
+        }
+    }
+
+    pub fn map_or_else<U, D, F>(self, default: D, f: F) -> U
+    where
+        D: FnOnce() -> U,
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            OptionSerializer::Some(t) => f(t),
+            _ => default(),
+        }
+    }
+
+    pub fn filter<P>(self, predicate: P) -> Self
+    where
+        P: FnOnce(&T) -> bool,
+    {
+        if let OptionSerializer::Some(x) = self {
+            if predicate(&x) {
+                return OptionSerializer::Some(x);
+            }
+        }
+        OptionSerializer::None
+    }
+
+    pub fn ok_or<E>(self, err: E) -> Result<T, E> {
+        match self {
+            OptionSerializer::Some(v) => Ok(v),
+            _ => Err(err),
+        }
+    }
+
+    pub fn ok_or_else<E, F>(self, err: F) -> Result<T, E>
+    where
+        F: FnOnce() -> E,
+    {
+        match self {
+            OptionSerializer::Some(v) => Ok(v),
+            _ => Err(err()),
+        }
+    }
 }
 
 impl<T> From<Option<T>> for OptionSerializer<T> {
