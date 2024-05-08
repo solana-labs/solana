@@ -2,11 +2,14 @@ use {
     solana_sdk::{
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction},
-        message::{Message, MessageHeader},
+        message::{
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            AddressLoader, AddressLoaderError, Message, MessageHeader, VersionedMessage,
+        },
         pubkey::Pubkey,
         reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
-        transaction::{SanitizedTransaction, Transaction},
+        transaction::{SanitizedTransaction, SanitizedVersionedTransaction, VersionedTransaction},
     },
     std::collections::HashMap,
 };
@@ -27,6 +30,22 @@ struct InnerInstruction {
     program_id: Pubkey,
     accounts: Vec<Pubkey>,
     data: Vec<u8>,
+}
+
+#[derive(Clone)]
+struct MockLoader {}
+
+// This implementation is only necessary if one is using account table lookups.
+impl AddressLoader for MockLoader {
+    fn load_addresses(
+        self,
+        _lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses, AddressLoaderError> {
+        Ok(LoadedAddresses {
+            writable: vec![],
+            readonly: vec![],
+        })
+    }
 }
 
 impl SanitizedTransactionBuilder {
@@ -79,21 +98,18 @@ impl SanitizedTransactionBuilder {
         &mut self,
         block_hash: Hash,
         fee_payer: (Pubkey, Signature),
+        v0_message: bool,
     ) -> SanitizedTransaction {
-        let mut message = Message {
-            account_keys: vec![],
-            header: MessageHeader {
-                // The fee payer always requires a signature so +1
-                num_required_signatures: self.num_required_signatures.saturating_add(1),
-                num_readonly_signed_accounts: self.num_readonly_signed_accounts,
-                // The program id is always a readonly unsigned account
-                num_readonly_unsigned_accounts: self
-                    .num_readonly_unsigned_accounts
-                    .saturating_add(1),
-            },
-            instructions: vec![],
-            recent_blockhash: block_hash,
+        let mut account_keys = Vec::new();
+        let header = MessageHeader {
+            // The fee payer always requires a signature so +1
+            num_required_signatures: self.num_required_signatures.saturating_add(1),
+            num_readonly_signed_accounts: self.num_readonly_signed_accounts,
+            // The program id is always a readonly unsigned account
+            num_readonly_unsigned_accounts: self.num_readonly_unsigned_accounts.saturating_add(1),
         };
+
+        let mut compiled_instructions = Vec::new();
 
         let mut signatures = Vec::with_capacity(
             self.signed_mutable_accounts
@@ -105,12 +121,12 @@ impl SanitizedTransactionBuilder {
         );
         let mut positions: HashMap<Pubkey, usize> = HashMap::new();
 
-        message.account_keys.push(fee_payer.0);
+        account_keys.push(fee_payer.0);
         signatures.push(fee_payer.1);
 
         let mut positions_lambda = |key: &Pubkey| {
-            positions.insert(*key, message.account_keys.len());
-            message.account_keys.push(*key);
+            positions.insert(*key, account_keys.len());
+            account_keys.push(*key);
         };
 
         self.signed_mutable_accounts
@@ -141,25 +157,53 @@ impl SanitizedTransactionBuilder {
                 .map(|key| positions[key] as u8)
                 .collect::<Vec<u8>>();
             let instruction = CompiledInstruction {
-                program_id_index: push_and_return_index(item.program_id, &mut message.account_keys),
+                program_id_index: push_and_return_index(item.program_id, &mut account_keys),
                 accounts,
                 data: item.data,
             };
 
-            message.instructions.push(instruction);
+            compiled_instructions.push(instruction);
         }
 
-        let transaction = Transaction {
+        let message = if v0_message {
+            let message = v0::Message {
+                header,
+                account_keys,
+                recent_blockhash: block_hash,
+                instructions: compiled_instructions,
+                address_table_lookups: vec![],
+            };
+
+            VersionedMessage::V0(message)
+        } else {
+            let message = Message {
+                header,
+                account_keys,
+                recent_blockhash: block_hash,
+                instructions: compiled_instructions,
+            };
+
+            VersionedMessage::Legacy(message)
+        };
+
+        let transaction = VersionedTransaction {
             signatures,
             message,
         };
 
-        let res = SanitizedTransaction::try_from_legacy_transaction(
-            transaction,
+        let sanitized_versioned_transaction =
+            SanitizedVersionedTransaction::try_new(transaction).unwrap();
+
+        let loader = MockLoader {};
+        let sanitized_transaction = SanitizedTransaction::try_new(
+            sanitized_versioned_transaction,
+            Hash::new_unique(),
+            false,
+            loader,
             &ReservedAccountKeys::new_all_activated().active,
         );
 
-        res.unwrap()
+        sanitized_transaction.unwrap()
     }
 
     fn clean_up(&mut self) -> Vec<InnerInstruction> {
