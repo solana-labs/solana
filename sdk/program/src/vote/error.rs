@@ -69,6 +69,9 @@ pub enum VoteError {
 
     #[error("Cannot update commission at this point in the epoch")]
     CommissionUpdateTooLate,
+
+    #[error("Assertion failed")]
+    AssertionFailed,
 }
 
 impl<E> DecodeError<E> for VoteError {

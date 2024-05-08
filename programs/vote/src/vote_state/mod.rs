@@ -300,7 +300,9 @@ fn check_and_filter_proposed_vote_state(
                 if slot_hashes_index == slot_hashes.len() {
                     // The vote slot does not exist in the SlotHashes history because it's too old,
                     // i.e. older than the oldest slot in the history.
-                    assert!(proposed_vote_slot < earliest_slot_hash_in_history);
+                    if proposed_vote_slot >= earliest_slot_hash_in_history {
+                        return Err(VoteError::AssertionFailed);
+                    }
                     if !vote_state.contains_slot(proposed_vote_slot) && root_to_check.is_none() {
                         // If the vote slot is both:
                         // 1) Too old
@@ -317,7 +319,9 @@ fn check_and_filter_proposed_vote_state(
                         // 2. We know from the assert earlier in the function that
                         // `proposed_vote_slot < earliest_slot_hash_in_history`,
                         // so from 1. we know that `new_proposed_root < earliest_slot_hash_in_history`.
-                        assert!(new_proposed_root < earliest_slot_hash_in_history);
+                        if new_proposed_root >= earliest_slot_hash_in_history {
+                            return Err(VoteError::AssertionFailed);
+                        }
                         root_to_check = None;
                     } else {
                         proposed_lockouts_index = proposed_lockouts_index.checked_add(1).expect(
