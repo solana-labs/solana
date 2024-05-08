@@ -45,6 +45,10 @@ impl ForwardBatch {
     pub fn is_empty(&self) -> bool {
         self.forwardable_packets.is_empty()
     }
+
+    pub fn reset(&mut self) {
+        self.forwardable_packets.clear();
+    }
 }
 
 /// To avoid forward queue being saturated by transactions for single hot account,
@@ -127,6 +131,14 @@ impl ForwardPacketBatchesByAccounts {
         self.forward_batches.iter()
     }
 
+    pub fn reset(&mut self) {
+        for forward_batch in self.forward_batches.iter_mut() {
+            forward_batch.reset();
+        }
+
+        self.cost_tracker.reset();
+    }
+
     // Successfully added packet should be placed into the batch where no block/vote/account limits
     // would be exceeded. Eg, if by block limit, it can be put into batch #1; by vote limit, it can
     // be put into batch #2; and by account limit, it can be put into batch #3; then it should be
@@ -136,11 +148,15 @@ impl ForwardPacketBatchesByAccounts {
         tx_cost: &TransactionCost,
         updated_costs: &UpdatedCosts,
     ) -> usize {
-        let batch_index_by_block_limit = updated_costs.updated_block_cost
-            / match tx_cost {
+        let Some(batch_index_by_block_limit) =
+            updated_costs.updated_block_cost.checked_div(match tx_cost {
                 TransactionCost::SimpleVote { .. } => self.batch_vote_limit,
                 TransactionCost::Transaction(_) => self.batch_block_limit,
-            };
+            })
+        else {
+            unreachable!("batch vote limit or block limit must not be zero")
+        };
+
         let batch_index_by_account_limit =
             updated_costs.updated_costliest_account_cost / self.batch_account_limit;
 

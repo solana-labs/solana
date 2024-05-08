@@ -626,7 +626,7 @@ impl BankingStage {
         committer: Committer,
         transaction_recorder: TransactionRecorder,
         log_messages_bytes_limit: Option<usize>,
-        forwarder: Forwarder,
+        mut forwarder: Forwarder,
         unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) -> JoinHandle<()> {
         let mut packet_receiver = PacketReceiver::new(id, packet_receiver, bank_forks);
@@ -643,7 +643,7 @@ impl BankingStage {
                 Self::process_loop(
                     &mut packet_receiver,
                     &decision_maker,
-                    &forwarder,
+                    &mut forwarder,
                     &consumer,
                     id,
                     unprocessed_transaction_storage,
@@ -655,7 +655,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         decision_maker: &DecisionMaker,
-        forwarder: &Forwarder,
+        forwarder: &mut Forwarder,
         consumer: &Consumer,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &BankingStageStats,
@@ -724,7 +724,7 @@ impl BankingStage {
     fn process_loop(
         packet_receiver: &mut PacketReceiver,
         decision_maker: &DecisionMaker,
-        forwarder: &Forwarder,
+        forwarder: &mut Forwarder,
         consumer: &Consumer,
         id: u32,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,

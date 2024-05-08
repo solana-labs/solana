@@ -102,6 +102,18 @@ impl Default for CostTracker {
 }
 
 impl CostTracker {
+    pub fn reset(&mut self) {
+        self.cost_by_writable_accounts.clear();
+        self.block_cost = 0;
+        self.vote_cost = 0;
+        self.transaction_count = 0;
+        self.account_data_size = 0;
+        self.transaction_signature_count = 0;
+        self.secp256k1_instruction_signature_count = 0;
+        self.ed25519_instruction_signature_count = 0;
+        self.in_flight_transaction_count = 0;
+    }
+
     /// allows to adjust limits initiated during construction
     pub fn set_limits(
         &mut self,

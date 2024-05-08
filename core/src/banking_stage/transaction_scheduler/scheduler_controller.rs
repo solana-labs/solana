@@ -16,7 +16,6 @@ use {
         consume_worker::ConsumeWorkerMetrics,
         consumer::Consumer,
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
-        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         forwarder::Forwarder,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         packet_deserializer::PacketDeserializer,
@@ -234,8 +233,6 @@ impl SchedulerController {
         let start = Instant::now();
         let bank = self.bank_forks.read().unwrap().working_bank();
         let feature_set = &bank.feature_set;
-        let mut forwardable_packets =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Pop from the container in chunks, filter using bank checks, then attempt to forward.
         // This doubles as a way to clean the queue as well as forwarding transactions.
@@ -284,7 +281,7 @@ impl SchedulerController {
 
                 // If not already forwarded and can be forwarded, add to forwardable packets.
                 if state.should_forward()
-                    && forwardable_packets.try_add_packet(
+                    && self.forwarder.try_add_packet(
                         sanitized_transaction,
                         immutable_packet,
                         feature_set,
@@ -302,12 +299,9 @@ impl SchedulerController {
         }
 
         // Forward each batch of transactions
-        for batch in forwardable_packets.iter_batches() {
-            let _ = self.forwarder.forward_packets(
-                &ForwardOption::ForwardTransaction,
-                batch.get_forwardable_packets(),
-            );
-        }
+        self.forwarder
+            .forward_batched_packets(&ForwardOption::ForwardTransaction);
+        self.forwarder.clear_batches();
 
         // If we hit the time limit. Drop everything that was not checked/processed.
         // If we cannot run these simple checks in time, then we cannot run them during

@@ -6,6 +6,7 @@ use {
         ForwardOption,
     },
     crate::{
+        banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
         next_leader::{next_leader, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
     },
@@ -15,7 +16,10 @@ use {
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{pubkey::Pubkey, transport::TransportError},
+    solana_sdk::{
+        feature_set::FeatureSet, pubkey::Pubkey, transaction::SanitizedTransaction,
+        transport::TransportError,
+    },
     solana_streamer::sendmmsg::batch_send,
     std::{
         iter::repeat,
@@ -31,6 +35,7 @@ pub struct Forwarder {
     cluster_info: Arc<ClusterInfo>,
     connection_cache: Arc<ConnectionCache>,
     data_budget: Arc<DataBudget>,
+    forward_packet_batches_by_accounts: ForwardPacketBatchesByAccounts,
 }
 
 impl Forwarder {
@@ -48,11 +53,43 @@ impl Forwarder {
             cluster_info,
             connection_cache,
             data_budget,
+            forward_packet_batches_by_accounts:
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits(),
         }
     }
 
+    pub fn clear_batches(&mut self) {
+        self.forward_packet_batches_by_accounts.reset();
+    }
+
+    pub fn try_add_packet(
+        &mut self,
+        sanitized_transaction: &SanitizedTransaction,
+        immutable_packet: Arc<ImmutableDeserializedPacket>,
+        feature_set: &FeatureSet,
+    ) -> bool {
+        self.forward_packet_batches_by_accounts.try_add_packet(
+            sanitized_transaction,
+            immutable_packet,
+            feature_set,
+        )
+    }
+
+    pub fn forward_batched_packets(&self, forward_option: &ForwardOption) {
+        self.forward_packet_batches_by_accounts
+            .iter_batches()
+            .filter(|&batch| !batch.is_empty())
+            .for_each(|forwardable_batch| {
+                let _ = self
+                    .forward_packets(forward_option, forwardable_batch.get_forwardable_packets());
+            });
+    }
+
+    /// This function is exclusively used by multi-iterator banking threads to handle forwarding
+    /// logic per thread. Central scheduler Controller uses try_add_packet() ... forward_batched_packets()
+    /// to handle forwarding slight differently.
     pub fn handle_forwarding(
-        &self,
+        &mut self,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         hold: bool,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -65,15 +102,12 @@ impl Forwarder {
         // load all accounts from address loader;
         let current_bank = self.bank_forks.read().unwrap().working_bank();
 
-        let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
-
         // sanitize and filter packets that are no longer valid (could be too old, a duplicate of something
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = unprocessed_transaction_storage
             .filter_forwardable_packets_and_add_batches(
                 current_bank,
-                &mut forward_packet_batches_by_accounts,
+                &mut self.forward_packet_batches_by_accounts,
             );
         slot_metrics_tracker.increment_transactions_from_packets_us(
             filter_forwarding_result.total_packet_conversion_us,
@@ -93,7 +127,7 @@ impl Forwarder {
             Ordering::Relaxed,
         );
 
-        forward_packet_batches_by_accounts
+        self.forward_packet_batches_by_accounts
             .iter_batches()
             .filter(|&batch| !batch.is_empty())
             .for_each(|forward_batch| {
@@ -129,6 +163,7 @@ impl Forwarder {
                     );
                 }
             });
+        self.clear_batches();
 
         if !hold {
             slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
@@ -367,7 +402,7 @@ mod tests {
             ("budget-available", DataBudget::default(), 1),
         ];
         for (name, data_budget, expected_num_forwarded) in test_cases {
-            let forwarder = Forwarder::new(
+            let mut forwarder = Forwarder::new(
                 poh_recorder.clone(),
                 bank_forks.clone(),
                 cluster_info.clone(),
@@ -451,7 +486,7 @@ mod tests {
             ("fwd-no-hold", false, vec![], 0),
         ];
 
-        let forwarder = Forwarder::new(
+        let mut forwarder = Forwarder::new(
             poh_recorder,
             bank_forks,
             cluster_info,

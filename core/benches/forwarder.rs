@@ -128,7 +128,7 @@ fn bench_forwarder_handle_forwading_contentious_transaction(bencher: &mut Benche
     let BenchSetup {
         exit,
         poh_service,
-        forwarder,
+        mut forwarder,
         mut unprocessed_packet_batches,
         mut tracker,
         stats,
@@ -165,7 +165,7 @@ fn bench_forwarder_handle_forwading_parallel_transactions(bencher: &mut Bencher)
     let BenchSetup {
         exit,
         poh_service,
-        forwarder,
+        mut forwarder,
         mut unprocessed_packet_batches,
         mut tracker,
         stats,
