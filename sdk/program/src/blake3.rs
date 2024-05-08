@@ -15,6 +15,7 @@ pub const HASH_BYTES: usize = 32;
 const MAX_BASE58_LEN: usize = 44;
 
 /// A blake3 hash.
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Serialize,
     Deserialize,
@@ -29,7 +30,6 @@ const MAX_BASE58_LEN: usize = 44;
     Ord,
     PartialOrd,
     Hash,
-    AbiExample,
 )]
 #[borsh(crate = "borsh")]
 #[repr(transparent)]

@@ -31,8 +31,12 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn")]
-#[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn"),
+    derive(AbiEnumVisitor, AbiExample)
+)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum VersionedMessage {
     Legacy(LegacyMessage),
     V0(v0::Message),

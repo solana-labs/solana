@@ -646,7 +646,8 @@ pub use solana_sdk_macro::program_pubkey as pubkey;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
+#[cfg_attr(feature = "frozen-abi", macro_use)]
+#[cfg(feature = "frozen-abi")]
 extern crate solana_frozen_abi_macro;
 
 /// Convenience macro for doing integer division where the operation's safety

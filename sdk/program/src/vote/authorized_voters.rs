@@ -6,7 +6,8 @@ use {
     std::collections::BTreeMap,
 };
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct AuthorizedVoters {
     authorized_voters: BTreeMap<Epoch, Pubkey>,

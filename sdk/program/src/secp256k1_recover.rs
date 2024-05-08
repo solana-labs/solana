@@ -65,18 +65,9 @@ pub const SECP256K1_SIGNATURE_LENGTH: usize = 64;
 pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
 
 #[repr(transparent)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    BorshSchema,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-    AbiExample,
+    BorshSerialize, BorshDeserialize, BorshSchema, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash,
 )]
 #[borsh(crate = "borsh")]
 pub struct Secp256k1Pubkey(pub [u8; SECP256K1_PUBLIC_KEY_LENGTH]);

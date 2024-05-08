@@ -77,7 +77,8 @@ macro_rules! impl_borsh_stake_state {
         }
     };
 }
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 #[deprecated(
     since = "1.17.0",
@@ -133,7 +134,8 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeStateV2 {
     #[default]
@@ -232,12 +234,14 @@ impl StakeStateV2 {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub enum StakeAuthorize {
     Staker,
     Withdrawer,
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Default,
     Debug,
@@ -247,7 +251,6 @@ pub enum StakeAuthorize {
     Eq,
     Clone,
     Copy,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,
@@ -332,6 +335,7 @@ impl borsh0_10::ser::BorshSerialize for Lockup {
     }
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Default,
     Debug,
@@ -341,7 +345,6 @@ impl borsh0_10::ser::BorshSerialize for Lockup {
     Eq,
     Clone,
     Copy,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,
@@ -465,6 +468,7 @@ impl borsh0_10::ser::BorshSerialize for Authorized {
     }
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Default,
     Debug,
@@ -474,7 +478,6 @@ impl borsh0_10::ser::BorshSerialize for Authorized {
     Eq,
     Clone,
     Copy,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,
@@ -582,6 +585,7 @@ impl borsh0_10::ser::BorshSerialize for Meta {
     }
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Debug,
     Serialize,
@@ -589,7 +593,6 @@ impl borsh0_10::ser::BorshSerialize for Meta {
     PartialEq,
     Clone,
     Copy,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,
@@ -896,6 +899,7 @@ impl borsh0_10::ser::BorshSerialize for Delegation {
     }
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Debug,
     Default,
@@ -904,7 +908,6 @@ impl borsh0_10::ser::BorshSerialize for Delegation {
     PartialEq,
     Clone,
     Copy,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,

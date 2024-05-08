@@ -13,6 +13,7 @@ use {
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash
 const MAX_BASE58_LEN: usize = 44;
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Serialize,
     Deserialize,
@@ -27,7 +28,6 @@ const MAX_BASE58_LEN: usize = 44;
     Ord,
     PartialOrd,
     Hash,
-    AbiExample,
 )]
 #[borsh(crate = "borsh")]
 #[repr(transparent)]

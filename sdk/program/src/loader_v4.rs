@@ -15,7 +15,8 @@ crate::declare_id!("LoaderV411111111111111111111111111111111111");
 pub const DEPLOYMENT_COOLDOWN_IN_SLOTS: u64 = 750;
 
 #[repr(u64)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LoaderV4Status {
     /// Program is in maintenance
     Retracted,
@@ -27,7 +28,8 @@ pub enum LoaderV4Status {
 
 /// LoaderV4 account states
 #[repr(C)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct LoaderV4State {
     /// Slot in which the program was last deployed, retracted or initialized.
     pub slot: u64,

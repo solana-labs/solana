@@ -9,7 +9,8 @@
 use {crate::hash::Hash, solana_sdk_macro::CloneZeroed, std::ops::AddAssign};
 
 #[repr(C, align(16))]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, AbiExample, CloneZeroed)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, CloneZeroed)]
 pub struct EpochRewards {
     /// The starting block height of the rewards distribution in the current
     /// epoch

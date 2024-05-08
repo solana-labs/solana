@@ -1,10 +1,10 @@
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 
 /// Additional flags for stake state.
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Serialize,
     Deserialize,
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,

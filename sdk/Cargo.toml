@@ -93,6 +93,7 @@ assert_matches = { workspace = true }
 curve25519-dalek = { workspace = true }
 hex = { workspace = true }
 solana-logger = { workspace = true }
+solana-program = { workspace = true, features = ["frozen-abi"] }
 solana-sdk = { path = ".", features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }

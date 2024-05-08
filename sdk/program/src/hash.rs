@@ -28,6 +28,7 @@ const MAX_BASE58_LEN: usize = 44;
 /// [`blake3`]: crate::blake3
 /// [`Message::hash`]: crate::message::Message::hash
 #[wasm_bindgen]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
     Serialize,
     Deserialize,
@@ -42,7 +43,6 @@ const MAX_BASE58_LEN: usize = 44;
     Ord,
     PartialOrd,
     Hash,
-    AbiExample,
     Pod,
     Zeroable,
 )]

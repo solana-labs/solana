@@ -50,8 +50,12 @@ pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 16;
 // Previous max per slot
 pub const VOTE_CREDITS_MAXIMUM_PER_SLOT_OLD: u8 = 8;
 
-#[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     /// A stack of votes starting with the oldest vote
     pub slots: Vec<Slot>,
@@ -75,7 +79,8 @@ impl Vote {
     }
 }
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Lockout {
     slot: Slot,
@@ -123,7 +128,8 @@ impl Lockout {
     }
 }
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct LandedVote {
     // Latency is the difference in slot number between the slot that was voted on (lockout.slot) and the slot in
@@ -158,8 +164,12 @@ impl From<Lockout> for LandedVote {
     }
 }
 
-#[frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5")]
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct VoteStateUpdate {
     /// The proposed tower
     pub lockouts: VecDeque<Lockout>,
@@ -207,8 +217,12 @@ impl VoteStateUpdate {
     }
 }
 
-#[frozen_abi(digest = "5VUusSTenF9vZ9eHiCprVe9ABJUHCubeDNCCDxykybZY")]
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "5VUusSTenF9vZ9eHiCprVe9ABJUHCubeDNCCDxykybZY"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TowerSync {
     /// The proposed tower
     pub lockouts: VecDeque<Lockout>,
@@ -296,7 +310,8 @@ pub struct VoteAuthorizeCheckedWithSeedArgs {
     pub current_authority_derived_key_seed: String,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct BlockTimestamp {
     pub slot: Slot,
@@ -306,7 +321,8 @@ pub struct BlockTimestamp {
 // this is how many epochs a voter can be remembered for slashing
 const MAX_ITEMS: usize = 32;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct CircBuf<I> {
     buf: [I; MAX_ITEMS],
     /// next pointer
@@ -369,8 +385,12 @@ where
     }
 }
 
-#[frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ")]
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ"),
+    derive(AbiExample)
+)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct VoteState {
     /// the node that votes in this account
@@ -881,7 +901,8 @@ pub mod serde_compact_vote_state_update {
         serde::{Deserialize, Deserializer, Serialize, Serializer},
     };
 
-    #[derive(Deserialize, Serialize, AbiExample)]
+    #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+    #[derive(Deserialize, Serialize)]
     struct LockoutOffset {
         #[serde(with = "serde_varint")]
         offset: Slot,
@@ -977,7 +998,8 @@ pub mod serde_tower_sync {
         serde::{Deserialize, Deserializer, Serialize, Serializer},
     };
 
-    #[derive(Deserialize, Serialize, AbiExample)]
+    #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+    #[derive(Deserialize, Serialize)]
     struct LockoutOffset {
         #[serde(with = "serde_varint")]
         offset: Slot,

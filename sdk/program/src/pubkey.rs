@@ -69,8 +69,8 @@ impl From<u64> for PubkeyError {
 /// [`Keypair`]: https://docs.rs/solana-sdk/latest/solana_sdk/signer/keypair/struct.Keypair.html
 #[wasm_bindgen]
 #[repr(transparent)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(
-    AbiExample,
     BorshDeserialize,
     BorshSchema,
     BorshSerialize,

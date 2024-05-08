@@ -15,7 +15,7 @@ use {
 /// bytes. Each byte follows the same pattern until the 3rd byte. The 3rd
 /// byte, if needed, uses all 8 bits to store the last byte of the original
 /// value.
-#[derive(AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 pub struct ShortU16(pub u16);
 
 impl Serialize for ShortU16 {
