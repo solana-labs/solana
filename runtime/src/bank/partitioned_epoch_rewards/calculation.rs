@@ -3,7 +3,7 @@ use {
         epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
         CalculateRewardsAndDistributeVoteRewardsResult, CalculateValidatorRewardsResult,
         EpochRewardCalculateParamInfo, PartitionedRewardsCalculation, StakeRewardCalculation,
-        StakeRewardCalculationPartitioned, VoteRewardsAccounts,
+        StakeRewardCalculationPartitioned, StakeRewards, VoteRewardsAccounts,
     },
     crate::{
         bank::{
@@ -28,6 +28,7 @@ use {
         reward_info::RewardInfo,
         reward_type::RewardType,
         stake::state::{Delegation, StakeStateV2},
+        sysvar::epoch_rewards::EpochRewards,
     },
     solana_stake_program::points::PointValue,
     std::sync::atomic::{AtomicU64, Ordering::Relaxed},
@@ -62,7 +63,7 @@ impl Bank {
 
         let num_partitions = stake_rewards_by_partition.len() as u64;
 
-        self.set_epoch_reward_status_active(stake_rewards_by_partition);
+        self.set_epoch_reward_status_active(self.block_height(), stake_rewards_by_partition);
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_start), total capital will increase by (total_rewards - distributed_rewards)
@@ -512,6 +513,72 @@ impl Bank {
 
         (points > 0).then_some(PointValue { rewards, points })
     }
+
+    /// If rewards are active, recalculates partitioned stake rewards and stores
+    /// a new Bank::epoch_reward_status. This method assumes that vote rewards
+    /// have already been calculated and delivered, and *only* recalculates
+    /// stake rewards
+    pub(in crate::bank) fn recalculate_partitioned_rewards(
+        &mut self,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        thread_pool: &ThreadPool,
+    ) {
+        let epoch_rewards_sysvar = self.get_epoch_rewards_sysvar();
+        if epoch_rewards_sysvar.active {
+            let stake_rewards_by_partition = self.recalculate_stake_rewards(
+                &epoch_rewards_sysvar,
+                reward_calc_tracer,
+                thread_pool,
+            );
+            let start_block_height = epoch_rewards_sysvar
+                .distribution_starting_block_height
+                .saturating_sub(self.get_reward_calculation_num_blocks());
+            self.set_epoch_reward_status_active(start_block_height, stake_rewards_by_partition);
+        }
+    }
+
+    /// Returns a vector of partitioned stake rewards. StakeRewards are
+    /// recalculated from an active EpochRewards sysvar, vote accounts from
+    /// EpochStakes, and stake accounts from StakesCache.
+    fn recalculate_stake_rewards(
+        &self,
+        epoch_rewards_sysvar: &EpochRewards,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        thread_pool: &ThreadPool,
+    ) -> Vec<StakeRewards> {
+        assert!(epoch_rewards_sysvar.active);
+        // If rewards are active, the rewarded epoch is always the immediately
+        // preceding epoch.
+        let rewarded_epoch = self.epoch().saturating_sub(1);
+
+        let point_value = PointValue {
+            rewards: epoch_rewards_sysvar.total_rewards,
+            points: epoch_rewards_sysvar.total_points,
+        };
+
+        let stakes = self.stakes_cache.stakes();
+        let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
+
+        // On recalculation, only the `StakeRewardCalculation::stake_rewards`
+        // field is relevant. It is assumed that vote-account rewards have
+        // already been calculated and delivered, while
+        // `StakeRewardCalculation::total_rewards` only reflects rewards that
+        // have not yet been distributed.
+        let (_, StakeRewardCalculation { stake_rewards, .. }) = self.calculate_stake_vote_rewards(
+            &reward_calculate_param,
+            rewarded_epoch,
+            point_value,
+            thread_pool,
+            reward_calc_tracer,
+            &mut RewardsMetrics::default(), // This is required, but not reporting anything at the moment
+        );
+        drop(stakes);
+        hash_rewards_into_partitions(
+            stake_rewards,
+            &epoch_rewards_sysvar.parent_blockhash,
+            epoch_rewards_sysvar.num_partitions as usize,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -521,16 +588,25 @@ mod tests {
         crate::{
             bank::{
                 null_tracer,
+                partitioned_epoch_rewards::{EpochRewardStatus, StartBlockHeightAndRewards},
                 tests::{create_genesis_config, new_bank_from_parent_with_bank_forks},
                 VoteReward,
             },
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
+            runtime_config::RuntimeConfig,
             stake_account::StakeAccount,
             stakes::Stakes,
         },
         rayon::ThreadPoolBuilder,
+        solana_accounts_db::{
+            accounts_db::{
+                AccountShrinkThreshold, AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            },
+            accounts_index::AccountSecondaryIndexes,
+            partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
+        },
         solana_sdk::{
             account::{accounts_equal, ReadableAccount, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -541,13 +617,34 @@ mod tests {
             vote::state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
         solana_vote_program::vote_state,
-        std::sync::RwLockReadGuard,
+        std::sync::{Arc, RwLockReadGuard},
     };
 
     const SLOTS_PER_EPOCH: u64 = 32;
 
-    /// Helper function to create a bank that pays some rewards
-    fn create_reward_bank(expected_num_delegations: usize) -> (Bank, Vec<Pubkey>, Vec<Pubkey>) {
+    struct RewardBank {
+        bank: Arc<Bank>,
+        voters: Vec<Pubkey>,
+        stakers: Vec<Pubkey>,
+    }
+
+    /// Helper functions to create a bank that pays some rewards
+    fn create_default_reward_bank(
+        expected_num_delegations: usize,
+        advance_num_slots: u64,
+    ) -> RewardBank {
+        create_reward_bank(
+            expected_num_delegations,
+            PartitionedEpochRewardsConfig::default().stake_account_stores_per_block,
+            advance_num_slots,
+        )
+    }
+
+    fn create_reward_bank(
+        expected_num_delegations: usize,
+        stake_account_stores_per_block: u64,
+        advance_num_slots: u64,
+    ) -> RewardBank {
         let validator_keypairs = (0..expected_num_delegations)
             .map(|_| ValidatorVoteKeypairs::new_rand())
             .collect::<Vec<_>>();
@@ -561,7 +658,27 @@ mod tests {
         );
         genesis_config.epoch_schedule = EpochSchedule::new(SLOTS_PER_EPOCH);
 
-        let bank = Bank::new_for_tests(&genesis_config);
+        let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
+        accounts_db_config.test_partitioned_epoch_rewards =
+            TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
+                reward_calculation_num_blocks: 1,
+                stake_account_stores_per_block,
+            };
+
+        let bank = Bank::new_with_paths(
+            &genesis_config,
+            Arc::new(RuntimeConfig::default()),
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            Some(accounts_db_config),
+            None,
+            Some(Pubkey::new_unique()),
+            Arc::default(),
+        );
 
         // Fill bank_forks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root
@@ -585,17 +702,28 @@ mod tests {
             }
             bank.store_account_and_update_capitalization(&vote_id, &vote_account);
         }
-        (
+
+        // Advance some num slots; usually to the next epoch boundary to update
+        // EpochStakes
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let bank = new_bank_from_parent_with_bank_forks(
+            &bank_forks,
             bank,
-            validator_keypairs
+            &Pubkey::default(),
+            advance_num_slots,
+        );
+
+        RewardBank {
+            bank,
+            voters: validator_keypairs
                 .iter()
                 .map(|k| k.vote_keypair.pubkey())
                 .collect(),
-            validator_keypairs
+            stakers: validator_keypairs
                 .iter()
                 .map(|k| k.stake_keypair.pubkey())
                 .collect(),
-        )
+        }
     }
 
     #[test]
@@ -660,16 +788,7 @@ mod tests {
         solana_logger::setup();
 
         let expected_num_delegations = 100;
-        let bank = create_reward_bank(expected_num_delegations).0;
-
-        // Advance to next epoch boundary to update EpochStakes
-        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
-        let bank = new_bank_from_parent_with_bank_forks(
-            &bank_forks,
-            bank,
-            &Pubkey::default(),
-            SLOTS_PER_EPOCH,
-        );
+        let bank = create_default_reward_bank(expected_num_delegations, SLOTS_PER_EPOCH).bank;
 
         // Calculate rewards
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
@@ -711,16 +830,8 @@ mod tests {
         solana_logger::setup();
 
         let expected_num_delegations = 100;
-        let (bank, _, _) = create_reward_bank(expected_num_delegations);
-
-        // Advance to next epoch boundary to update EpochStakes
-        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
-        let bank = new_bank_from_parent_with_bank_forks(
-            &bank_forks,
-            bank,
-            &Pubkey::default(),
-            SLOTS_PER_EPOCH,
-        );
+        let RewardBank { bank, .. } =
+            create_default_reward_bank(expected_num_delegations, SLOTS_PER_EPOCH);
 
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let rewards_metrics = RewardsMetrics::default();
@@ -770,16 +881,11 @@ mod tests {
         solana_logger::setup();
 
         let expected_num_delegations = 1;
-        let (bank, voters, stakers) = create_reward_bank(expected_num_delegations);
-
-        // Advance to next epoch boundary to update EpochStakes
-        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
-        let bank = new_bank_from_parent_with_bank_forks(
-            &bank_forks,
+        let RewardBank {
             bank,
-            &Pubkey::default(),
-            SLOTS_PER_EPOCH,
-        );
+            voters,
+            stakers,
+        } = create_default_reward_bank(expected_num_delegations, SLOTS_PER_EPOCH);
 
         let vote_pubkey = voters.first().unwrap();
         let mut vote_account = bank
@@ -860,5 +966,208 @@ mod tests {
             stake_reward_calculation.stake_rewards[0].stake_reward_info,
             expected_reward_info,
         );
+    }
+
+    fn compare_stake_rewards(
+        expected_stake_rewards: &[StakeRewards],
+        received_stake_rewards: &[StakeRewards],
+    ) {
+        for (i, partition) in received_stake_rewards.iter().enumerate() {
+            let expected_partition = &expected_stake_rewards[i];
+            assert_eq!(partition.len(), expected_partition.len());
+            for reward in partition {
+                assert!(expected_partition.iter().any(|x| x == reward));
+            }
+        }
+    }
+
+    #[test]
+    fn test_recalculate_stake_rewards() {
+        let expected_num_delegations = 4;
+        let num_rewards_per_block = 2;
+        // Distribute 4 rewards over 2 blocks
+        let RewardBank { bank, .. } = create_reward_bank(
+            expected_num_delegations,
+            num_rewards_per_block,
+            SLOTS_PER_EPOCH,
+        );
+        let rewarded_epoch = bank.epoch();
+
+        let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        let mut rewards_metrics = RewardsMetrics::default();
+        let PartitionedRewardsCalculation {
+            stake_rewards_by_partition:
+                StakeRewardCalculationPartitioned {
+                    stake_rewards_by_partition: expected_stake_rewards,
+                    ..
+                },
+            ..
+        } = bank.calculate_rewards_for_partitioning(
+            rewarded_epoch,
+            null_tracer(),
+            &thread_pool,
+            &mut rewards_metrics,
+        );
+
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        let recalculated_rewards =
+            bank.recalculate_stake_rewards(&epoch_rewards_sysvar, null_tracer(), &thread_pool);
+        assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
+        compare_stake_rewards(&expected_stake_rewards, &recalculated_rewards);
+
+        // Advance to first distribution block, ie. child block of the epoch
+        // boundary; slot is advanced 2 to demonstrate that distribution works
+        // on block-height, not slot
+        let new_slot = bank.slot() + 2;
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), new_slot));
+
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        let recalculated_rewards =
+            bank.recalculate_stake_rewards(&epoch_rewards_sysvar, null_tracer(), &thread_pool);
+        assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
+        // First partition has already been distributed, so recalculation
+        // returns 0 rewards
+        assert_eq!(recalculated_rewards[0].len(), 0);
+        let starting_index = (bank.block_height() + 1
+            - epoch_rewards_sysvar.distribution_starting_block_height)
+            as usize;
+        compare_stake_rewards(
+            &expected_stake_rewards[starting_index..],
+            &recalculated_rewards[starting_index..],
+        );
+
+        // Advance to last distribution slot
+        let new_slot = bank.slot() + 1;
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), new_slot));
+
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        assert!(!epoch_rewards_sysvar.active);
+        // Recalculation would panic, tested separately
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_recalculate_stake_rewards_distribution_complete() {
+        let expected_num_delegations = 2;
+        let num_rewards_per_block = 2;
+        // Distribute 2 rewards over 1 block
+        let RewardBank { bank, .. } = create_reward_bank(
+            expected_num_delegations,
+            num_rewards_per_block,
+            SLOTS_PER_EPOCH,
+        );
+        let rewarded_epoch = bank.epoch();
+
+        let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        let mut rewards_metrics = RewardsMetrics::default();
+        let PartitionedRewardsCalculation {
+            stake_rewards_by_partition:
+                StakeRewardCalculationPartitioned {
+                    stake_rewards_by_partition: expected_stake_rewards,
+                    ..
+                },
+            ..
+        } = bank.calculate_rewards_for_partitioning(
+            rewarded_epoch,
+            null_tracer(),
+            &thread_pool,
+            &mut rewards_metrics,
+        );
+
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        let recalculated_rewards =
+            bank.recalculate_stake_rewards(&epoch_rewards_sysvar, null_tracer(), &thread_pool);
+        assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
+        compare_stake_rewards(&expected_stake_rewards, &recalculated_rewards);
+
+        // Advance to first distribution slot
+        let new_slot = bank.slot() + 1;
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::default(), new_slot));
+
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        assert!(!epoch_rewards_sysvar.active);
+        // Should panic
+        let _recalculated_rewards =
+            bank.recalculate_stake_rewards(&epoch_rewards_sysvar, null_tracer(), &thread_pool);
+    }
+
+    #[test]
+    fn test_recalculate_partitioned_rewards() {
+        let expected_num_delegations = 4;
+        let num_rewards_per_block = 2;
+        // Distribute 4 rewards over 2 blocks
+        let RewardBank { bank, .. } = create_reward_bank(
+            expected_num_delegations,
+            num_rewards_per_block,
+            SLOTS_PER_EPOCH - 1,
+        );
+        let rewarded_epoch = bank.epoch();
+
+        // Advance to next epoch boundary to update EpochStakes Kludgy because
+        // mutable Bank methods require the bank not be Arc-wrapped.
+        let new_slot = bank.slot() + 1;
+        let mut bank = Bank::new_from_parent(bank, &Pubkey::default(), new_slot);
+        let expected_starting_block_height = bank.block_height();
+
+        let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        let mut rewards_metrics = RewardsMetrics::default();
+        let PartitionedRewardsCalculation {
+            stake_rewards_by_partition:
+                StakeRewardCalculationPartitioned {
+                    stake_rewards_by_partition: expected_stake_rewards,
+                    ..
+                },
+            ..
+        } = bank.calculate_rewards_for_partitioning(
+            rewarded_epoch,
+            null_tracer(),
+            &thread_pool,
+            &mut rewards_metrics,
+        );
+
+        bank.recalculate_partitioned_rewards(null_tracer(), &thread_pool);
+        let EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            start_block_height,
+            stake_rewards_by_partition: ref recalculated_rewards,
+        }) = bank.epoch_reward_status
+        else {
+            panic!("{:?} not active", bank.epoch_reward_status);
+        };
+        assert_eq!(expected_starting_block_height, start_block_height);
+        assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
+        compare_stake_rewards(&expected_stake_rewards, recalculated_rewards);
+
+        // Advance to first distribution slot
+        let mut bank =
+            Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), SLOTS_PER_EPOCH + 1);
+
+        bank.recalculate_partitioned_rewards(null_tracer(), &thread_pool);
+        let EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            start_block_height,
+            stake_rewards_by_partition: ref recalculated_rewards,
+        }) = bank.epoch_reward_status
+        else {
+            panic!("{:?} not active", bank.epoch_reward_status);
+        };
+        assert_eq!(expected_starting_block_height, start_block_height);
+        assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
+        // First partition has already been distributed, so recalculation
+        // returns 0 rewards
+        assert_eq!(recalculated_rewards[0].len(), 0);
+        let epoch_rewards_sysvar = bank.get_epoch_rewards_sysvar();
+        let starting_index = (bank.block_height() + 1
+            - epoch_rewards_sysvar.distribution_starting_block_height)
+            as usize;
+        compare_stake_rewards(
+            &expected_stake_rewards[starting_index..],
+            &recalculated_rewards[starting_index..],
+        );
+
+        // Advance to last distribution slot
+        let mut bank =
+            Bank::new_from_parent(Arc::new(bank), &Pubkey::default(), SLOTS_PER_EPOCH + 2);
+
+        bank.recalculate_partitioned_rewards(null_tracer(), &thread_pool);
+        assert_eq!(bank.epoch_reward_status, EpochRewardStatus::Inactive);
     }
 }

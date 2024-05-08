@@ -109,7 +109,7 @@ mod tests {
         let stake_rewards_bucket =
             hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
 
-        bank.set_epoch_reward_status_active(stake_rewards_bucket.clone());
+        bank.set_epoch_reward_status_active(bank.block_height(), stake_rewards_bucket.clone());
 
         // This call should panic, i.e. 15 is out of the num_credit_blocks
         let _range = &stake_rewards_bucket[15];

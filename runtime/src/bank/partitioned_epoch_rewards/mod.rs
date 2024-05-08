@@ -152,10 +152,11 @@ impl Bank {
 
     pub(crate) fn set_epoch_reward_status_active(
         &mut self,
+        start_block_height: u64,
         stake_rewards_by_partition: Vec<StakeRewards>,
     ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            start_block_height: self.block_height,
+            start_block_height,
             stake_rewards_by_partition: Arc::new(stake_rewards_by_partition),
         });
     }
@@ -292,7 +293,7 @@ mod tests {
             .map(|_| StakeReward::new_random())
             .collect::<Vec<_>>();
 
-        bank.set_epoch_reward_status_active(vec![stake_rewards]);
+        bank.set_epoch_reward_status_active(bank.block_height(), vec![stake_rewards]);
         assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
 
         bank.force_reward_interval_end_for_tests();
