@@ -25,6 +25,7 @@ use {
 /// SBF VM.
 const MAX_INSTRUCTION_ACCOUNTS: u8 = NON_DUP_MARKER;
 
+#[allow(dead_code)]
 enum SerializeAccount<'a> {
     Account(IndexOfAccount, BorrowedAccount<'a>),
     Duplicate(IndexOfAccount),
