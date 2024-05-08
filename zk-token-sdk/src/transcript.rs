@@ -4,6 +4,7 @@ use {
     merlin::Transcript,
 };
 
+#[allow(dead_code)]
 pub trait TranscriptProtocol {
     /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
     /// ciphertext using a decryption key
