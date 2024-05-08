@@ -222,7 +222,6 @@ pub(crate) mod tests {
             message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce::{self, state::DurableNonce},
             nonce_account,
-            nonce_info::{NonceFull, NoncePartial},
             pubkey::Pubkey,
             rent_debits::RentDebits,
             reserved_account_keys::ReservedAccountKeys,
@@ -233,6 +232,7 @@ pub(crate) mod tests {
                 VersionedTransaction,
             },
         },
+        solana_svm::nonce_info::{NonceFull, NoncePartial},
         solana_transaction_status::{
             token_balances::TransactionTokenBalancesSet, TransactionStatusMeta,
             TransactionTokenBalance,

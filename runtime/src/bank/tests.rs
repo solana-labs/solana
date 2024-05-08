@@ -75,7 +75,6 @@ use {
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
         nonce::{self, state::DurableNonce},
-        nonce_info::NonceFull,
         packet::PACKET_DATA_SIZE,
         poh_config::PohConfig,
         program::MAX_RETURN_DATA,
@@ -102,7 +101,7 @@ use {
         transaction_context::TransactionAccount,
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
-    solana_svm::transaction_results::DurableNonceFee,
+    solana_svm::{nonce_info::NonceFull, transaction_results::DurableNonceFee},
     solana_vote_program::{
         vote_instruction,
         vote_state::{

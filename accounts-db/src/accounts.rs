@@ -20,14 +20,15 @@ use {
             state::{DurableNonce, Versions as NonceVersions},
             State as NonceState,
         },
-        nonce_info::{NonceFull, NonceInfo},
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
     solana_svm::{
-        account_loader::TransactionLoadResult, transaction_results::TransactionExecutionResult,
+        account_loader::TransactionLoadResult,
+        nonce_info::{NonceFull, NonceInfo},
+        transaction_results::TransactionExecutionResult,
     },
     std::{
         cmp::Reverse,

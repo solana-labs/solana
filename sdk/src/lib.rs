@@ -83,7 +83,6 @@ pub mod log;
 pub mod native_loader;
 pub mod net;
 pub mod nonce_account;
-pub mod nonce_info;
 pub mod offchain_message;
 pub mod packet;
 pub mod poh_config;

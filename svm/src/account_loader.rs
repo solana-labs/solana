@@ -1,6 +1,8 @@
 use {
     crate::{
-        account_overrides::AccountOverrides, account_rent_state::RentState,
+        account_overrides::AccountOverrides,
+        account_rent_state::RentState,
+        nonce_info::{NonceFull, NoncePartial},
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
     },
@@ -19,7 +21,6 @@ use {
         message::SanitizedMessage,
         native_loader,
         nonce::State as NonceState,
-        nonce_info::{NonceFull, NoncePartial},
         pubkey::Pubkey,
         rent::RentDue,
         rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
@@ -449,6 +450,7 @@ mod tests {
     use {
         super::*,
         crate::{
+            nonce_info::{NonceFull, NoncePartial},
             transaction_account_state_info::TransactionAccountStateInfo,
             transaction_processing_callback::TransactionProcessingCallback,
         },
@@ -475,7 +477,6 @@ mod tests {
             native_loader,
             native_token::sol_to_lamports,
             nonce,
-            nonce_info::{NonceFull, NoncePartial},
             pubkey::Pubkey,
             rent::Rent,
             rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
