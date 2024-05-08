@@ -54,7 +54,7 @@ type PartitionedStakeRewards = Vec<PartitionedStakeReward>;
 #[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
-    pub(crate) start_block_height: u64,
+    pub(crate) distribution_starting_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
     pub(crate) stake_rewards_by_partition: Arc<Vec<StakeRewards>>,
 }
@@ -152,11 +152,11 @@ impl Bank {
 
     pub(crate) fn set_epoch_reward_status_active(
         &mut self,
-        start_block_height: u64,
+        distribution_starting_block_height: u64,
         stake_rewards_by_partition: Vec<StakeRewards>,
     ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            start_block_height,
+            distribution_starting_block_height,
             stake_rewards_by_partition: Arc::new(stake_rewards_by_partition),
         });
     }
@@ -293,7 +293,7 @@ mod tests {
             .map(|_| StakeReward::new_random())
             .collect::<Vec<_>>();
 
-        bank.set_epoch_reward_status_active(bank.block_height(), vec![stake_rewards]);
+        bank.set_epoch_reward_status_active(bank.block_height() + 1, vec![stake_rewards]);
         assert!(bank.get_reward_interval() == RewardInterval::InsideInterval);
 
         bank.force_reward_interval_end_for_tests();

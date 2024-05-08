@@ -45,29 +45,33 @@ impl Bank {
         };
 
         let height = self.block_height();
-        let start_block_height = status.start_block_height;
-        let credit_start = start_block_height + self.get_reward_calculation_num_blocks();
-        let credit_end_exclusive = credit_start + status.stake_rewards_by_partition.len() as u64;
+        let distribution_starting_block_height = status.distribution_starting_block_height;
+        let distribution_end_exclusive =
+            distribution_starting_block_height + status.stake_rewards_by_partition.len() as u64;
         assert!(
             self.epoch_schedule.get_slots_in_epoch(self.epoch)
-                > credit_end_exclusive.saturating_sub(credit_start)
+                > distribution_end_exclusive.saturating_sub(distribution_starting_block_height)
         );
 
-        if height >= credit_start && height < credit_end_exclusive {
-            let partition_index = height - credit_start;
+        if height >= distribution_starting_block_height && height < distribution_end_exclusive {
+            let partition_index = height - distribution_starting_block_height;
             self.distribute_epoch_rewards_in_partition(
                 &status.stake_rewards_by_partition,
                 partition_index,
             );
         }
 
-        if height.saturating_add(1) >= credit_end_exclusive {
+        if height.saturating_add(1) >= distribution_end_exclusive {
             datapoint_info!(
                 "epoch-rewards-status-update",
                 ("slot", self.slot(), i64),
                 ("block_height", height, i64),
                 ("active", 0, i64),
-                ("start_block_height", start_block_height, i64),
+                (
+                    "distribution_starting_block_height",
+                    distribution_starting_block_height,
+                    i64
+                ),
             );
 
             assert!(matches!(
@@ -267,7 +271,7 @@ mod tests {
 
         let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 2);
 
-        bank.set_epoch_reward_status_active(bank.block_height(), stake_rewards);
+        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards);
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -290,7 +294,7 @@ mod tests {
             bank.epoch_schedule().slots_per_epoch as usize + 1,
         );
 
-        bank.set_epoch_reward_status_active(bank.block_height(), stake_rewards);
+        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards);
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -300,7 +304,7 @@ mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
         let mut bank = Bank::new_for_tests(&genesis_config);
 
-        bank.set_epoch_reward_status_active(bank.block_height(), vec![]);
+        bank.set_epoch_reward_status_active(bank.block_height() + 1, vec![]);
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -406,7 +410,7 @@ mod tests {
 
         let stake_rewards_bucket =
             hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
-        bank.set_epoch_reward_status_active(bank.block_height(), stake_rewards_bucket.clone());
+        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards_bucket.clone());
 
         // Test partitioned stores
         let mut total_rewards = 0;
