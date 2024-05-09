@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+ahash = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
@@ -31,6 +32,7 @@ crate-type = ["lib"]
 name = "solana_cost_model"
 
 [dev-dependencies]
+itertools = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
@@ -41,3 +43,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[[bench]]
+name = "cost_tracker"

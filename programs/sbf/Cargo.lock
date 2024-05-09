@@ -5013,6 +5013,7 @@ dependencies = [
 name = "solana-cost-model"
 version = "2.0.0"
 dependencies = [
+ "ahash 0.8.10",
  "lazy_static",
  "log",
  "rustc_version",
