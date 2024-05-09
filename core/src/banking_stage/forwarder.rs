@@ -61,9 +61,9 @@ impl Forwarder {
     ) {
         let forward_option = unprocessed_transaction_storage.forward_option();
 
-        // get current root bank from bank_forks, use it to sanitize transaction and
+        // get current working bank from bank_forks, use it to sanitize transaction and
         // load all accounts from address loader;
-        let current_bank = self.bank_forks.read().unwrap().root_bank();
+        let current_bank = self.bank_forks.read().unwrap().working_bank();
 
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
