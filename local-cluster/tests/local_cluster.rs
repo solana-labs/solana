@@ -198,7 +198,6 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
@@ -275,31 +274,6 @@ fn test_local_cluster_signature_subscribe() {
     drop(cluster);
     sig_subscribe_client.shutdown().unwrap();
     assert!(got_received_notification);
-}
-
-#[test]
-#[allow(unused_attributes)]
-#[ignore]
-fn test_spend_and_verify_all_nodes_env_num_nodes() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let num_nodes: usize = std::env::var("NUM_NODES")
-        .expect("please set environment variable NUM_NODES")
-        .parse()
-        .expect("could not parse NUM_NODES as a number");
-    let local = LocalCluster::new_with_equal_stakes(
-        num_nodes,
-        DEFAULT_CLUSTER_LAMPORTS,
-        DEFAULT_NODE_STAKE,
-        SocketAddrSpace::Unspecified,
-    );
-    cluster_tests::spend_and_verify_all_nodes(
-        &local.entry_point_info,
-        &local.funding_keypair,
-        num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
-        &local.connection_cache,
-    );
 }
 
 #[test]
