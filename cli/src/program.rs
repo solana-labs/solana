@@ -1317,7 +1317,7 @@ fn process_program_deploy(
                 "Initial deployments require a keypair be provided for the program id".into(),
             );
         }
-        do_process_program_write_and_deploy(
+        do_process_program_deploy(
             rpc_client.clone(),
             config,
             &program_data,
@@ -1325,7 +1325,7 @@ fn process_program_deploy(
             program_data_max_len,
             min_rent_exempt_program_data_balance,
             fee_payer_signer,
-            Some(&[program_signer.unwrap(), upgrade_authority_signer]),
+            &[program_signer.unwrap(), upgrade_authority_signer],
             buffer_signer,
             &buffer_pubkey,
             buffer_program_data,
@@ -1575,15 +1575,13 @@ fn process_write_buffer(
         UpgradeableLoaderState::size_of_programdata(buffer_data_max_len),
     )?;
 
-    let result = do_process_program_write_and_deploy(
+    let result = do_process_write_buffer(
         rpc_client,
         config,
         &program_data,
         program_data.len(),
-        buffer_data_max_len,
         min_rent_exempt_program_data_balance,
         fee_payer_signer,
-        None,
         buffer_signer,
         &buffer_pubkey,
         buffer_program_data,
@@ -2335,7 +2333,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn do_process_program_write_and_deploy(
+fn do_process_program_deploy(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     program_data: &[u8], // can be empty, hence we have program_len
@@ -2343,7 +2341,7 @@ fn do_process_program_write_and_deploy(
     program_data_max_len: usize,
     min_rent_exempt_program_data_balance: u64,
     fee_payer_signer: &dyn Signer,
-    program_signers: Option<&[&dyn Signer]>,
+    program_signers: &[&dyn Signer],
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
     buffer_program_data: Option<Vec<u8>>,
@@ -2407,7 +2405,7 @@ fn do_process_program_write_and_deploy(
     }
 
     // Create and add final message
-    let final_message = if let Some(program_signers) = program_signers {
+    let final_message = {
         let instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
             &fee_payer_signer.pubkey(),
             &program_signers[0].pubkey(),
@@ -2424,8 +2422,6 @@ fn do_process_program_write_and_deploy(
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
         ))
-    } else {
-        None
     };
 
     if !skip_fee_check {
@@ -2449,23 +2445,118 @@ fn do_process_program_write_and_deploy(
         fee_payer_signer,
         buffer_signer,
         Some(buffer_authority_signer),
-        program_signers,
+        Some(program_signers),
         max_sign_attempts,
         use_rpc,
     )?;
 
-    if let Some(program_signers) = program_signers {
-        let program_id = CliProgramId {
-            program_id: program_signers[0].pubkey().to_string(),
-            signature: final_tx_sig.as_ref().map(ToString::to_string),
+    let program_id = CliProgramId {
+        program_id: program_signers[0].pubkey().to_string(),
+        signature: final_tx_sig.as_ref().map(ToString::to_string),
+    };
+    Ok(config.output_format.formatted_string(&program_id))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn do_process_write_buffer(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    program_data: &[u8], // can be empty, hence we have program_len
+    program_len: usize,
+    min_rent_exempt_program_data_balance: u64,
+    fee_payer_signer: &dyn Signer,
+    buffer_signer: Option<&dyn Signer>,
+    buffer_pubkey: &Pubkey,
+    buffer_program_data: Option<Vec<u8>>,
+    buffer_authority_signer: &dyn Signer,
+    skip_fee_check: bool,
+    compute_unit_price: Option<u64>,
+    max_sign_attempts: usize,
+    use_rpc: bool,
+) -> ProcessResult {
+    let blockhash = rpc_client.get_latest_blockhash()?;
+
+    let (initial_instructions, balance_needed, buffer_program_data) =
+        if let Some(buffer_program_data) = buffer_program_data {
+            (vec![], 0, buffer_program_data)
+        } else {
+            (
+                bpf_loader_upgradeable::create_buffer(
+                    &fee_payer_signer.pubkey(),
+                    buffer_pubkey,
+                    &buffer_authority_signer.pubkey(),
+                    min_rent_exempt_program_data_balance,
+                    program_len,
+                )?,
+                min_rent_exempt_program_data_balance,
+                vec![0; program_len],
+            )
         };
-        Ok(config.output_format.formatted_string(&program_id))
+
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new_with_blockhash(
+            &initial_instructions
+                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
+            Some(&fee_payer_signer.pubkey()),
+            &blockhash,
+        ))
     } else {
-        let buffer = CliProgramBuffer {
-            buffer: buffer_pubkey.to_string(),
-        };
-        Ok(config.output_format.formatted_string(&buffer))
+        None
+    };
+
+    // Create and add write messages
+    let create_msg = |offset: u32, bytes: Vec<u8>| {
+        let instruction = bpf_loader_upgradeable::write(
+            buffer_pubkey,
+            &buffer_authority_signer.pubkey(),
+            offset,
+            bytes,
+        );
+
+        let instructions =
+            vec![instruction].with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+        Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
+    };
+
+    let mut write_messages = vec![];
+    let chunk_size = calculate_max_chunk_size(&create_msg);
+    for (chunk, i) in program_data.chunks(chunk_size).zip(0usize..) {
+        let offset = i.saturating_mul(chunk_size);
+        if chunk != &buffer_program_data[offset..offset.saturating_add(chunk.len())] {
+            write_messages.push(create_msg(offset as u32, chunk.to_vec()));
+        }
     }
+
+    if !skip_fee_check {
+        check_payer(
+            &rpc_client,
+            config,
+            fee_payer_signer.pubkey(),
+            balance_needed,
+            &initial_message,
+            &write_messages,
+            &None,
+        )?;
+    }
+
+    let _final_tx_sig = send_deploy_messages(
+        rpc_client,
+        config,
+        initial_message,
+        write_messages,
+        None,
+        fee_payer_signer,
+        buffer_signer,
+        Some(buffer_authority_signer),
+        None,
+        max_sign_attempts,
+        use_rpc,
+    )?;
+
+    let buffer = CliProgramBuffer {
+        buffer: buffer_pubkey.to_string(),
+    };
+    Ok(config.output_format.formatted_string(&buffer))
 }
 
 #[allow(clippy::too_many_arguments)]
