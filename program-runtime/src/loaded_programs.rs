@@ -818,11 +818,33 @@ impl<FG: ForkGraph> ProgramCache<FG> {
             &entry.program,
             ProgramCacheEntryType::DelayVisibility
         ));
+        // This function always returns `true` during normal operation.
+        // Only during the recompilation phase this can return `false`
+        // for entries with `upcoming_environments`.
+        fn is_current_env(
+            environments: &ProgramRuntimeEnvironments,
+            env_opt: Option<&ProgramRuntimeEnvironment>,
+        ) -> bool {
+            env_opt
+                .map(|env| {
+                    Arc::ptr_eq(env, &environments.program_runtime_v1)
+                        || Arc::ptr_eq(env, &environments.program_runtime_v2)
+                })
+                .unwrap_or(true)
+        }
         let slot_versions = &mut self.entries.entry(key).or_default();
         match slot_versions.binary_search_by(|at| {
             at.effective_slot
                 .cmp(&entry.effective_slot)
                 .then(at.deployment_slot.cmp(&entry.deployment_slot))
+                .then(
+                    // This `.then()` has no effect during normal operation.
+                    // Only during the recompilation phase this does allow entries
+                    // which only differ in their environment to be interleaved in `slot_versions`.
+                    is_current_env(&self.environments, at.program.get_environment()).cmp(
+                        &is_current_env(&self.environments, entry.program.get_environment()),
+                    ),
+                )
         }) {
             Ok(index) => {
                 let existing = slot_versions.get_mut(index).unwrap();
@@ -1727,34 +1749,34 @@ mod tests {
     #[test_matrix(
         (
             ProgramCacheEntryType::Closed,
-            ProgramCacheEntryType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::FailedVerification(get_mock_env()),
             new_loaded_entry(get_mock_env()),
         ),
         (
-            ProgramCacheEntryType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::FailedVerification(get_mock_env()),
             ProgramCacheEntryType::Closed,
-            ProgramCacheEntryType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::Unloaded(get_mock_env()),
             new_loaded_entry(get_mock_env()),
             ProgramCacheEntryType::Builtin(BuiltinProgram::new_mock()),
         )
     )]
     #[test_matrix(
         (
-            ProgramCacheEntryType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::Unloaded(get_mock_env()),
         ),
         (
-            ProgramCacheEntryType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::FailedVerification(get_mock_env()),
             ProgramCacheEntryType::Closed,
-            ProgramCacheEntryType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::Unloaded(get_mock_env()),
             ProgramCacheEntryType::Builtin(BuiltinProgram::new_mock()),
         )
     )]
     #[test_matrix(
         (ProgramCacheEntryType::Builtin(BuiltinProgram::new_mock()),),
         (
-            ProgramCacheEntryType::FailedVerification(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::FailedVerification(get_mock_env()),
             ProgramCacheEntryType::Closed,
-            ProgramCacheEntryType::Unloaded(Arc::new(BuiltinProgram::new_mock())),
+            ProgramCacheEntryType::Unloaded(get_mock_env()),
             new_loaded_entry(get_mock_env()),
         )
     )]

@@ -127,7 +127,7 @@ pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph
     pubkey: &Pubkey,
     slot: Slot,
     effective_epoch: Epoch,
-    epoch_schedule: &EpochSchedule,
+    _epoch_schedule: &EpochSchedule,
     reload: bool,
 ) -> Option<Arc<ProgramCacheEntry>> {
     let environments = program_cache.get_environments_for_epoch(effective_epoch);
@@ -136,7 +136,7 @@ pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph
         ..LoadProgramMetrics::default()
     };
 
-    let mut loaded_program = match load_program_accounts(callbacks, pubkey)? {
+    let loaded_program = match load_program_accounts(callbacks, pubkey)? {
         ProgramAccountLoadResult::InvalidAccountData(owner) => Ok(
             ProgramCacheEntry::new_tombstone(slot, owner, ProgramCacheEntryType::Closed),
         ),
@@ -217,21 +217,6 @@ pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph
 
     let mut timings = ExecuteDetailsTimings::default();
     load_program_metrics.submit_datapoint(&mut timings);
-    if !Arc::ptr_eq(
-        &environments.program_runtime_v1,
-        &program_cache.environments.program_runtime_v1,
-    ) || !Arc::ptr_eq(
-        &environments.program_runtime_v2,
-        &program_cache.environments.program_runtime_v2,
-    ) {
-        // There can be two entries per program when the environment changes.
-        // One for the old environment before the epoch boundary and one for the new environment after the epoch boundary.
-        // These two entries have the same deployment slot, so they must differ in their effective slot instead.
-        // This is done by setting the effective slot of the entry for the new environment to the epoch boundary.
-        loaded_program.effective_slot = loaded_program
-            .effective_slot
-            .max(epoch_schedule.get_first_slot_in_epoch(effective_epoch));
-    }
     loaded_program.update_access_slot(slot);
     Some(Arc::new(loaded_program))
 }
@@ -842,18 +827,19 @@ mod tests {
     }
 
     #[test]
-    fn test_load_program_effective_slot() {
+    fn test_load_program_environment() {
         let key = Pubkey::new_unique();
         let mock_bank = MockBankCallback::default();
         let mut account_data = AccountSharedData::default();
-        account_data.set_owner(loader_v4::id());
+        account_data.set_owner(bpf_loader::id());
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
-        batch_processor
-            .program_cache
-            .write()
-            .unwrap()
-            .upcoming_environments = Some(ProgramRuntimeEnvironments::default());
+        let upcoming_environments = ProgramRuntimeEnvironments::default();
+        let current_environments = {
+            let mut program_cache = batch_processor.program_cache.write().unwrap();
+            program_cache.upcoming_environments = Some(upcoming_environments.clone());
+            program_cache.environments.clone()
+        };
         mock_bank
             .account_shared_data
             .borrow_mut()
@@ -861,17 +847,31 @@ mod tests {
 
         let program_cache = batch_processor.program_cache.read().unwrap();
 
-        let result = load_program_with_pubkey(
-            &mock_bank,
-            &program_cache,
-            &key,
-            200,
-            20,
-            &batch_processor.epoch_schedule,
-            false,
-        );
-
-        let slot = batch_processor.epoch_schedule.get_first_slot_in_epoch(20);
-        assert_eq!(result.unwrap().effective_slot, slot);
+        for is_upcoming_env in [false, true] {
+            let result = load_program_with_pubkey(
+                &mock_bank,
+                &program_cache,
+                &key,
+                200,
+                is_upcoming_env as u64,
+                &batch_processor.epoch_schedule,
+                false,
+            )
+            .unwrap();
+            assert_ne!(
+                is_upcoming_env,
+                Arc::ptr_eq(
+                    result.program.get_environment().unwrap(),
+                    &current_environments.program_runtime_v1,
+                )
+            );
+            assert_eq!(
+                is_upcoming_env,
+                Arc::ptr_eq(
+                    result.program.get_environment().unwrap(),
+                    &upcoming_environments.program_runtime_v1,
+                )
+            );
+        }
     }
 }

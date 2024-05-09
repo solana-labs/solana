@@ -12029,16 +12029,16 @@ fn test_feature_activation_loaded_programs_recompilation_phase() {
     goto_end_of_slot(bank.clone());
     let bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     {
-        let program_cache = bank.transaction_processor.program_cache.read().unwrap();
+        let program_cache = bank.transaction_processor.program_cache.write().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert_eq!(slot_versions.len(), 2);
         assert!(Arc::ptr_eq(
             slot_versions[0].program.get_environment().unwrap(),
-            &current_env
+            &upcoming_env
         ));
         assert!(Arc::ptr_eq(
             slot_versions[1].program.get_environment().unwrap(),
-            &upcoming_env
+            &current_env
         ));
     }
 
@@ -12108,6 +12108,21 @@ fn test_feature_activation_loaded_programs_epoch_transition() {
     let bank = new_bank_from_parent_with_bank_forks(&bank_forks, bank, &Pubkey::default(), 33);
 
     // Load the program with the new environment.
+    let transaction = Transaction::new(&signers, message.clone(), bank.last_blockhash());
+    assert!(bank.process_transaction(&transaction).is_ok());
+
+    {
+        // Prune for rerooting and thus finishing the recompilation phase.
+        let mut program_cache = bank.transaction_processor.program_cache.write().unwrap();
+        program_cache.prune(bank.slot(), bank.epoch());
+
+        // Unload all (which is only the entry with the new environment)
+        program_cache.sort_and_unload(percentage::Percentage::from(0));
+    }
+
+    // Reload the unloaded program with the new environment.
+    goto_end_of_slot(bank.clone());
+    let bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
     assert!(bank.process_transaction(&transaction).is_ok());
 }
