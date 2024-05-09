@@ -39,7 +39,7 @@ pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         bank::{
-            builtins::{BuiltinPrototype, BUILTINS},
+            builtins::{BuiltinPrototype, BUILTINS, STATELESS_BUILTINS},
             metrics::*,
             partitioned_epoch_rewards::{EpochRewardStatus, StakeRewards, VoteRewardsAccounts},
         },
@@ -5170,7 +5170,17 @@ impl Bank {
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
             {
-                if builtin.enable_feature_id.is_none() {
+                // The builtin should be added if it has no enable feature ID
+                // and it has not been migrated to Core BPF.
+                //
+                // If a program was previously migrated to Core BPF, accountsDB
+                // from snapshot should contain the BPF program accounts.
+                let builtin_is_bpf = |program_id: &Pubkey| {
+                    self.get_account(program_id)
+                        .map(|a| a.owner() == &bpf_loader_upgradeable::id())
+                        .unwrap_or(false)
+                };
+                if builtin.enable_feature_id.is_none() && !builtin_is_bpf(&builtin.program_id) {
                     self.transaction_processor.add_builtin(
                         self,
                         builtin.program_id,
@@ -6538,14 +6548,58 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         for builtin in BUILTINS.iter() {
+            // The `builtin_is_bpf` flag is used to handle the case where a
+            // builtin is scheduled to be enabled by one feature gate and
+            // later migrated to Core BPF by another.
+            //
+            // There should never be a case where a builtin is set to be
+            // migrated to Core BPF and is also set to be enabled on feature
+            // activation on the same feature gate. However, the
+            // `builtin_is_bpf` flag will handle this case as well, electing
+            // to first attempt the migration to Core BPF.
+            //
+            // The migration to Core BPF will fail gracefully because the
+            // program account will not exist. The builtin will subsequently
+            // be enabled, but it will never be migrated to Core BPF.
+            //
+            // Using the same feature gate for both enabling and migrating a
+            // builtin to Core BPF should be strictly avoided.
+            let mut builtin_is_bpf = false;
+            if let Some(core_bpf_migration_config) = &builtin.core_bpf_migration_config {
+                // If the builtin is set to be migrated to Core BPF on feature
+                // activation, perform the migration and do not add the program
+                // to the bank's builtins. The migration will remove it from
+                // the builtins list and the cache.
+                if new_feature_activations.contains(&core_bpf_migration_config.feature_id) {
+                    if let Err(e) = self
+                        .migrate_builtin_to_core_bpf(&builtin.program_id, core_bpf_migration_config)
+                    {
+                        warn!(
+                            "Failed to migrate builtin {} to Core BPF: {}",
+                            builtin.name, e
+                        );
+                    } else {
+                        builtin_is_bpf = true;
+                    }
+                } else {
+                    // If the builtin has already been migrated to Core BPF, do not
+                    // add it to the bank's builtins.
+                    builtin_is_bpf = self
+                        .get_account(&builtin.program_id)
+                        .map(|a| a.owner() == &bpf_loader_upgradeable::id())
+                        .unwrap_or(false);
+                }
+            };
+
             if let Some(feature_id) = builtin.enable_feature_id {
-                let should_apply_action_for_feature_transition =
-                    if only_apply_transitions_for_new_features {
+                let should_enable_builtin_on_feature_transition = !builtin_is_bpf
+                    && if only_apply_transitions_for_new_features {
                         new_feature_activations.contains(&feature_id)
                     } else {
                         self.feature_set.is_active(&feature_id)
                     };
-                if should_apply_action_for_feature_transition {
+
+                if should_enable_builtin_on_feature_transition {
                     self.transaction_processor.add_builtin(
                         self,
                         builtin.program_id,
@@ -6559,6 +6613,26 @@ impl Bank {
                 }
             }
         }
+
+        // Migrate any necessary stateless builtins to core BPF.
+        // Stateless builtins do not have an `enable_feature_id` since they
+        // do not exist on-chain.
+        for stateless_builtin in STATELESS_BUILTINS.iter() {
+            if let Some(core_bpf_migration_config) = &stateless_builtin.core_bpf_migration_config {
+                if new_feature_activations.contains(&core_bpf_migration_config.feature_id) {
+                    if let Err(e) = self.migrate_builtin_to_core_bpf(
+                        &stateless_builtin.program_id,
+                        core_bpf_migration_config,
+                    ) {
+                        warn!(
+                            "Failed to migrate stateless builtin {} to Core BPF: {}",
+                            stateless_builtin.name, e
+                        );
+                    }
+                }
+            }
+        }
+
         for precompile in get_precompiles() {
             let should_add_precompile = precompile
                 .feature
