@@ -12,6 +12,7 @@ edition = { workspace = true }
 [dependencies]
 base64 = { workspace = true }
 bytemuck = { workspace = true }
+merlin = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 solana-program = { workspace = true }
@@ -26,7 +27,6 @@ bincode = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
-merlin = { workspace = true }
 rand = { version = "0.7" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

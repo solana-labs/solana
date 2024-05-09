@@ -9,14 +9,22 @@
 
 pub mod errors;
 
+#[cfg(not(target_os = "solana"))]
 pub mod batched_grouped_ciphertext_validity;
+#[cfg(not(target_os = "solana"))]
 pub mod ciphertext_ciphertext_equality;
+#[cfg(not(target_os = "solana"))]
 pub mod ciphertext_commitment_equality;
+#[cfg(not(target_os = "solana"))]
 pub mod grouped_ciphertext_validity;
+#[cfg(not(target_os = "solana"))]
 pub mod percentage_with_cap;
+#[cfg(not(target_os = "solana"))]
 pub mod pubkey;
+#[cfg(not(target_os = "solana"))]
 pub mod zero_ciphertext;
 
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{sigma_proofs::errors::SigmaProofVerificationError, RISTRETTO_POINT_LEN, SCALAR_LEN},
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},

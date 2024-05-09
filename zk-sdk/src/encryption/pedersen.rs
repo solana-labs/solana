@@ -1,9 +1,7 @@
 //! Pedersen commitment implementation using the Ristretto prime-order group.
 
-#[cfg(not(target_os = "solana"))]
-use rand::rngs::OsRng;
 use {
-    crate::{RISTRETTO_POINT_LEN, SCALAR_LEN},
+    crate::encryption::{PEDERSEN_COMMITMENT_LEN, PEDERSEN_OPENING_LEN},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
@@ -11,18 +9,13 @@ use {
         scalar::Scalar,
         traits::MultiscalarMul,
     },
+    rand::rngs::OsRng,
     serde::{Deserialize, Serialize},
     sha3::Sha3_512,
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
-
-/// Byte length of a Pedersen opening.
-const PEDERSEN_OPENING_LEN: usize = SCALAR_LEN;
-
-/// Byte length of a Pedersen commitment.
-pub(crate) const PEDERSEN_COMMITMENT_LEN: usize = RISTRETTO_POINT_LEN;
 
 lazy_static::lazy_static! {
     /// Pedersen base point for encoding messages to be committed.
@@ -39,7 +32,6 @@ impl Pedersen {
     /// message and the corresponding opening.
     ///
     /// This function is randomized. It internally samples a Pedersen opening using `OsRng`.
-    #[cfg(not(target_os = "solana"))]
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: Into<Scalar>>(amount: T) -> (PedersenCommitment, PedersenOpening) {
         let opening = PedersenOpening::new_rand();
@@ -84,7 +76,6 @@ impl PedersenOpening {
         &self.0
     }
 
-    #[cfg(not(target_os = "solana"))]
     pub fn new_rand() -> Self {
         PedersenOpening(Scalar::random(&mut OsRng))
     }

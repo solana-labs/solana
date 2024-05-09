@@ -14,8 +14,6 @@
 //! information on a discrete log solution depending on the execution time of the implementation.
 //!
 
-#![cfg(not(target_os = "solana"))]
-
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 use {

@@ -20,13 +20,10 @@
 #![allow(clippy::arithmetic_side_effects, clippy::op_ref)]
 
 pub mod elgamal_program;
-#[cfg(not(target_os = "solana"))]
 pub mod encryption;
 pub mod errors;
 mod range_proof;
-#[cfg(not(target_os = "solana"))]
 mod sigma_proofs;
-#[cfg(not(target_os = "solana"))]
 mod transcript;
 
 /// Byte length of a compressed Ristretto point or scalar in Curve255519
