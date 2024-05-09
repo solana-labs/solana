@@ -1025,8 +1025,6 @@ pub fn bank_to_full_snapshot_archive(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
-    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
-    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> snapshot_utils::Result<FullSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -1056,8 +1054,10 @@ pub fn bank_to_full_snapshot_archive(
         snapshot_storages,
         archive_format,
         snapshot_version,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
+        // Since bank_to_snapshot_archive() is not called as part of normal validator operation,
+        // do *not* purge any snapshot archives; leave that up to the node operator.
+        NonZeroUsize::MAX,
+        NonZeroUsize::MAX,
     )
 }
 
@@ -1076,8 +1076,6 @@ pub fn bank_to_incremental_snapshot_archive(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
-    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
-    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> snapshot_utils::Result<IncrementalSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -1116,8 +1114,10 @@ pub fn bank_to_incremental_snapshot_archive(
         snapshot_storages,
         archive_format,
         snapshot_version,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
+        // Since bank_to_snapshot_archive() is not called as part of normal validator operation,
+        // do *not* purge any snapshot archives; leave that up to the node operator.
+        NonZeroUsize::MAX,
+        NonZeroUsize::MAX,
     )
 }
 
@@ -1382,8 +1382,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1498,8 +1496,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1591,8 +1587,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1634,8 +1628,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1717,8 +1709,6 @@ mod tests {
             &full_snapshot_archives_dir,
             &incremental_snapshot_archives_dir,
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1760,8 +1750,6 @@ mod tests {
             &full_snapshot_archives_dir,
             &incremental_snapshot_archives_dir,
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1862,8 +1850,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -1904,8 +1890,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
@@ -1971,8 +1955,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -2039,8 +2021,6 @@ mod tests {
             &all_snapshots_dir,
             &all_snapshots_dir,
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -2062,8 +2042,6 @@ mod tests {
             &all_snapshots_dir,
             &all_snapshots_dir,
             snapshot_archive_format,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -2278,8 +2256,6 @@ mod tests {
             &full_snapshot_archives_dir,
             &incremental_snapshot_archives_dir,
             ArchiveFormat::Tar,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
         let full_accounts_hash = bank
@@ -2310,8 +2286,6 @@ mod tests {
             &full_snapshot_archives_dir,
             &incremental_snapshot_archives_dir,
             ArchiveFormat::Tar,
-            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
         let incremental_accounts_hash = bank

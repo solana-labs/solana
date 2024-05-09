@@ -28,8 +28,7 @@ use {
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            is_within_range, validate_maximum_full_snapshot_archives_to_retain,
-            validate_maximum_incremental_snapshot_archives_to_retain,
+            is_within_range,
         },
     },
     solana_cli_output::OutputFormat,
@@ -84,7 +83,6 @@ use {
         ffi::OsStr,
         fs::File,
         io::{self, Write},
-        num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
         str::FromStr,
@@ -555,11 +553,6 @@ fn main() {
         unsafe { signal_hook::low_level::register(signal_hook::consts::SIGUSR1, || {}) }.unwrap();
     }
 
-    // Use std::usize::MAX for DEFAULT_MAX_*_SNAPSHOTS_TO_RETAIN such that
-    // ledger-tool commands won't accidentally remove any snapshots by default
-    const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
-    const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
-
     solana_logger::setup_with_default_filter();
 
     let no_snapshot_arg = Arg::with_name("no_snapshot")
@@ -727,35 +720,6 @@ fn main() {
             .default_value(use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool())
             .help(use_snapshot_archives_at_startup::cli::HELP)
             .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
-
-    let default_max_full_snapshot_archives_to_retain =
-        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_full_snapshot_archives_to_retain =
-        Arg::with_name("maximum_full_snapshots_to_retain")
-            .long("maximum-full-snapshots-to-retain")
-            .alias("maximum-snapshots-to-retain")
-            .value_name("NUMBER")
-            .takes_value(true)
-            .default_value(default_max_full_snapshot_archives_to_retain)
-            .validator(validate_maximum_full_snapshot_archives_to_retain)
-            .help(
-                "The maximum number of full snapshot archives to hold on to when purging older \
-                 snapshots.",
-            );
-
-    let default_max_incremental_snapshot_archives_to_retain =
-        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_incremental_snapshot_archives_to_retain =
-        Arg::with_name("maximum_incremental_snapshots_to_retain")
-            .long("maximum-incremental-snapshots-to-retain")
-            .value_name("NUMBER")
-            .takes_value(true)
-            .default_value(default_max_incremental_snapshot_archives_to_retain)
-            .validator(validate_maximum_incremental_snapshot_archives_to_retain)
-            .help(
-                "The maximum number of incremental snapshot archives to hold on to when purging \
-                 older snapshots.",
-            );
 
     let geyser_plugin_args = Arg::with_name("geyser_plugin_config")
         .long("geyser-plugin-config")
@@ -1156,8 +1120,6 @@ fn main() {
                 .arg(&hard_forks_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&snapshot_version_arg)
-                .arg(&maximum_full_snapshot_archives_to_retain)
-                .arg(&maximum_incremental_snapshot_archives_to_retain)
                 .arg(&geyser_plugin_args)
                 .arg(&log_messages_bytes_limit_arg)
                 .arg(&use_snapshot_archives_at_startup)
@@ -1938,16 +1900,6 @@ fn main() {
                         })
                     };
 
-                    let maximum_full_snapshot_archives_to_retain = value_t_or_exit!(
-                        arg_matches,
-                        "maximum_full_snapshots_to_retain",
-                        NonZeroUsize
-                    );
-                    let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
-                        arg_matches,
-                        "maximum_incremental_snapshots_to_retain",
-                        NonZeroUsize
-                    );
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     let mut process_options = parse_process_options(&ledger_path, arg_matches);
 
@@ -2326,8 +2278,6 @@ fn main() {
                                 output_directory.clone(),
                                 output_directory,
                                 snapshot_archive_format,
-                                maximum_full_snapshot_archives_to_retain,
-                                maximum_incremental_snapshot_archives_to_retain,
                             )
                             .unwrap_or_else(|err| {
                                 eprintln!("Unable to create incremental snapshot: {err}");
@@ -2351,8 +2301,6 @@ fn main() {
                                 output_directory.clone(),
                                 output_directory,
                                 snapshot_archive_format,
-                                maximum_full_snapshot_archives_to_retain,
-                                maximum_incremental_snapshot_archives_to_retain,
                             )
                             .unwrap_or_else(|err| {
                                 eprintln!("Unable to create snapshot: {err}");

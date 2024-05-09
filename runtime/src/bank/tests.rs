@@ -12786,8 +12786,6 @@ fn test_rebuild_skipped_rewrites() {
         full_snapshot_archives_dir.path(),
         incremental_snapshot_archives_dir.path(),
         snapshot_utils::ArchiveFormat::Tar,
-        snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     )
     .unwrap();
 

@@ -2118,12 +2118,6 @@ fn maybe_warp_slot(
             &config.snapshot_config.full_snapshot_archives_dir,
             &config.snapshot_config.incremental_snapshot_archives_dir,
             config.snapshot_config.archive_format,
-            config
-                .snapshot_config
-                .maximum_full_snapshot_archives_to_retain,
-            config
-                .snapshot_config
-                .maximum_incremental_snapshot_archives_to_retain,
         ) {
             Ok(archive_info) => archive_info,
             Err(e) => return Err(format!("Unable to create snapshot: {e}")),

@@ -38,7 +38,6 @@ mod tests {
         },
         std::{
             io::{Cursor, Read, Write},
-            num::NonZeroUsize,
             ops::RangeFull,
             path::Path,
             sync::{Arc, RwLock},
@@ -429,8 +428,6 @@ mod tests {
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
             ArchiveFormat::Tar,
-            NonZeroUsize::new(1).unwrap(),
-            NonZeroUsize::new(1).unwrap(),
         )
         .unwrap();
 
