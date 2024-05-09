@@ -7871,20 +7871,12 @@ impl AccountsDb {
         true
     }
 
-    fn is_candidate_for_shrink(
-        &self,
-        store: &AccountStorageEntry,
-        allow_shrink_ancient: bool,
-    ) -> bool {
+    fn is_candidate_for_shrink(&self, store: &AccountStorageEntry) -> bool {
         // appended ancient append vecs should not be shrunk by the normal shrink codepath.
         // It is not possible to identify ancient append vecs when we pack, so no check for ancient when we are not appending.
         let total_bytes = if self.create_ancient_storage == CreateAncientStorage::Append
             && is_ancient(&store.accounts)
         {
-            if !allow_shrink_ancient {
-                return false;
-            }
-
             store.written_bytes()
         } else {
             store.capacity()
@@ -7952,7 +7944,7 @@ impl AccountsDb {
                     let dead_bytes = store.accounts.get_account_sizes(&offsets).iter().sum();
                     store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
                     if Self::is_shrinking_productive(*slot, &store)
-                        && self.is_candidate_for_shrink(&store, false)
+                        && self.is_candidate_for_shrink(&store)
                     {
                         // Checking that this single storage entry is ready for shrinking,
                         // should be a sufficient indication that the slot is ready to be shrunk
@@ -15126,14 +15118,14 @@ pub mod tests {
             }
         }
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry, false));
+        assert!(accounts.is_candidate_for_shrink(&entry));
         entry.alive_bytes.store(5000, Ordering::Release);
-        assert!(!accounts.is_candidate_for_shrink(&entry, false));
+        assert!(!accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry, false));
+        assert!(accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio: 0.3 };
-        assert!(!accounts.is_candidate_for_shrink(&entry, false));
+        assert!(!accounts.is_candidate_for_shrink(&entry));
     }
 
     define_accounts_db_test!(test_calculate_storage_count_and_alive_bytes, |accounts| {
