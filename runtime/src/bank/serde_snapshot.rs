@@ -18,7 +18,6 @@ mod tests {
             },
             status_cache::StatusCache,
         },
-        assert_matches::assert_matches,
         solana_accounts_db::{
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts_db::{
@@ -531,11 +530,9 @@ mod tests {
         // Defaults to 0
         assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
 
-        // epoch_reward status should default to `Inactive`
-        let epoch_reward_status = dbank
-            .get_epoch_reward_status_to_serialize()
-            .unwrap_or(&EpochRewardStatus::Inactive);
-        assert_matches!(epoch_reward_status, EpochRewardStatus::Inactive);
+        // The snapshot epoch_reward_status always equals `None`, so the bank
+        // field should default to `Inactive`
+        assert_eq!(dbank.epoch_reward_status, EpochRewardStatus::Inactive);
     }
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -544,7 +541,7 @@ mod tests {
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
-        #[frozen_abi(digest = "ENUEoDA5CYu9NLLCuaj23qpfKBZzCvxK3T5VsUFA9sti")]
+        #[frozen_abi(digest = "8pZwgyMdvxExLgN9GMKnCdofb5CQJgsZ8Dt88hfVd9bf")]
         #[derive(Serialize, AbiExample)]
         pub struct BankAbiTestWrapperNewer {
             #[serde(serialize_with = "wrapper_newer")]

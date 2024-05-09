@@ -201,9 +201,6 @@ impl<'a> TypeContext<'a> for Context {
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
-        let epoch_reward_status = serializable_bank
-            .bank
-            .get_epoch_reward_status_to_serialize();
         match get_serialize_bank_fields(
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
@@ -221,7 +218,7 @@ impl<'a> TypeContext<'a> for Context {
                 .bank
                 .get_epoch_accounts_hash_to_serialize()
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
-            epoch_reward_status,
+            None, // epoch_reward_status always unpopulated
         ) {
             BankFieldsToSerialize::WithoutEpochRewardStatus(data) => data.serialize(serializer),
             BankFieldsToSerialize::WithEpochRewardStatus(data) => data.serialize(serializer),
@@ -380,7 +377,6 @@ impl<'a> TypeContext<'a> for Context {
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
-        let epoch_reward_status = rhs.epoch_reward_status;
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -423,8 +419,7 @@ impl<'a> TypeContext<'a> for Context {
             lamports_per_signature,
             incremental_snapshot_persistence.cloned(),
             epoch_accounts_hash.copied(),
-            matches!(epoch_reward_status, EpochRewardStatus::Active(_))
-                .then_some(&epoch_reward_status),
+            None, // epoch_reward_status always unpopulated
         ) {
             BankFieldsToSerialize::WithoutEpochRewardStatus(data) => {
                 bincode::serialize_into(stream_writer, &data)
