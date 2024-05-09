@@ -605,6 +605,7 @@ mod test {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(path.clone())
                 .unwrap();
             _ = file.write_all(&vec![1u8; len]);

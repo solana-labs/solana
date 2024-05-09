@@ -178,7 +178,7 @@ impl CacheHashDataFile {
         let mut data = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true)
+            .create_new(true)
             .open(file)?;
 
         // Theoretical performance optimization: write a zero to the end of
