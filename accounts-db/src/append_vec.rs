@@ -203,6 +203,27 @@ struct AccountOffsets {
     stored_size_aligned: usize,
 }
 
+#[derive(Debug)]
+enum InternalFileOrMmap<'a> {
+    /// A file-backed block of memory that is used to store the data for each appended item.
+    Mmap(&'a MmapMut),
+}
+
+#[derive(Debug, AbiExample)]
+enum AppendVecFileBacking {
+    /// A file-backed block of memory that is used to store the data for each appended item.
+    MmapOnly(MmapMut),
+}
+
+impl AppendVecFileBacking {
+    /// access the backing
+    fn get<T>(&self, mut callback: impl for<'local> FnMut(InternalFileOrMmap<'local>) -> T) -> T {
+        match self {
+            AppendVecFileBacking::MmapOnly(mmap) => callback(InternalFileOrMmap::Mmap(mmap)),
+        }
+    }
+}
+
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
 /// are serialized such that only one thread updates the internal `append_lock` at a time. No
 /// restrictions are placed on reading. That is, one may read items from one thread while another
@@ -212,8 +233,8 @@ pub struct AppendVec {
     /// The file path where the data is stored.
     path: PathBuf,
 
-    /// A file-backed block of memory that is used to store the data for each appended item.
-    map: MmapMut,
+    /// access the file data
+    backing: AppendVecFileBacking,
 
     /// A lock used to serialize append operations.
     append_lock: Mutex<()>,
@@ -277,8 +298,8 @@ impl AppendVec {
         data.flush().unwrap();
 
         //UNSAFE: Required to create a Mmap
-        let map = unsafe { MmapMut::map_mut(&data) };
-        let map = map.unwrap_or_else(|e| {
+        let mmap = unsafe { MmapMut::map_mut(&data) };
+        let mmap = mmap.unwrap_or_else(|e| {
             error!(
                 "Failed to map the data file (size: {}): {}.\n
                     Please increase sysctl vm.max_map_count or equivalent for your platform.",
@@ -290,7 +311,7 @@ impl AppendVec {
 
         AppendVec {
             path: file,
-            map,
+            backing: AppendVecFileBacking::MmapOnly(mmap),
             // This mutex forces append to be single threaded, but concurrent with reads
             // See UNSAFE usage in `append_ptr`
             append_lock: Mutex::new(()),
@@ -321,8 +342,9 @@ impl AppendVec {
     }
 
     pub fn flush(&self) -> Result<()> {
-        self.map.flush()?;
-        Ok(())
+        self.backing.get(|file_or_mmap| match file_or_mmap {
+            InternalFileOrMmap::Mmap(mmap) => Ok(mmap.flush()?),
+        })
     }
 
     pub fn reset(&self) {
@@ -378,7 +400,7 @@ impl AppendVec {
             .create(false)
             .open(&path)?;
 
-        let map = unsafe {
+        let mmap = unsafe {
             let result = MmapMut::map_mut(&data);
             if result.is_err() {
                 // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
@@ -390,7 +412,7 @@ impl AppendVec {
 
         Ok(AppendVec {
             path,
-            map,
+            backing: AppendVecFileBacking::MmapOnly(mmap),
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
             file_size,
@@ -431,30 +453,40 @@ impl AppendVec {
         if overflow || next > self.len() {
             return None;
         }
-        let data = &self.map[offset..next];
-        let next = u64_align!(next);
+        self.backing.get(|file_or_mmap| {
+            match file_or_mmap {
+                InternalFileOrMmap::Mmap(mmap) => {
+                    let data = &mmap[offset..next];
+                    let next = u64_align!(next);
 
-        Some((
-            //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
-            //The lifetime of this slice is tied to &self, since it points to self.map memory
-            unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
-            next,
-        ))
+                    Some((
+                        //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
+                        //The lifetime of this slice is tied to &self, since it points to self.map memory
+                        unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
+                        next,
+                    ))
+                }
+            }
+        })
     }
 
     /// Copy `len` bytes from `src` to the first 64-byte boundary after position `offset` of
     /// the internal buffer. Then update `offset` to the first byte after the copied data.
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
         let pos = u64_align!(*offset);
-        let data = &self.map[pos..(pos + len)];
-        //UNSAFE: This mut append is safe because only 1 thread can append at a time
-        //Mutex<()> guarantees exclusive write access to the memory occupied in
-        //the range.
-        unsafe {
-            let dst = data.as_ptr() as *mut _;
-            ptr::copy(src, dst, len);
-        };
-        *offset = pos + len;
+        self.backing.get(|file_or_mmap| match file_or_mmap {
+            InternalFileOrMmap::Mmap(mmap) => {
+                let data = &mmap[pos..(pos + len)];
+                //UNSAFE: This mut append is safe because only 1 thread can append at a time
+                //Mutex<()> guarantees exclusive write access to the memory occupied in
+                //the range.
+                unsafe {
+                    let dst = data.as_ptr() as *mut _;
+                    ptr::copy(src, dst, len);
+                };
+                *offset = pos + len;
+            }
+        })
     }
 
     /// Copy each value in `vals`, in order, to the first 64-byte boundary after position `offset`.
@@ -791,7 +823,9 @@ impl AppendVec {
 
     /// Returns a slice suitable for use when archiving append vecs
     pub fn data_for_archive(&self) -> &[u8] {
-        self.map.as_ref()
+        match &self.backing {
+            AppendVecFileBacking::MmapOnly(mmap) => mmap.as_ref(),
+        }
     }
 }
 
