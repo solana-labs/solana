@@ -1416,32 +1416,30 @@ impl Blockstore {
 
         if !erasure_meta.check_coding_shred(&shred) {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
-            let conflicting_shred = self.find_conflicting_coding_shred(
-                &shred,
-                slot,
-                erasure_meta,
-                just_received_shreds,
-            );
-            if let Some(conflicting_shred) = conflicting_shred {
-                if !self.has_duplicate_shreds_in_slot(slot) {
-                    if self
-                        .store_duplicate_slot(
-                            slot,
-                            conflicting_shred.clone(),
-                            shred.payload().clone(),
-                        )
-                        .is_err()
-                    {
-                        warn!("bad duplicate store..");
+            if !self.has_duplicate_shreds_in_slot(slot) {
+                if let Some(conflicting_shred) = self
+                    .find_conflicting_coding_shred(&shred, slot, erasure_meta, just_received_shreds)
+                    .map(Cow::into_owned)
+                {
+                    if let Err(e) = self.store_duplicate_slot(
+                        slot,
+                        conflicting_shred.clone(),
+                        shred.payload().clone(),
+                    ) {
+                        warn!("Unable to store conflicting erasure meta duplicate proof for {slot} {erasure_set:?} {e}");
                     }
 
                     duplicate_shreds.push(PossibleDuplicateShred::ErasureConflict(
                         shred.clone(),
                         conflicting_shred,
                     ));
+                } else {
+                    error!(
+                        "Unable to find the conflicting coding shred that set {erasure_meta:?}.
+                        This should only happen in extreme cases where blockstore cleanup has caught up to the root.
+                        Skipping the erasure meta duplicate shred check"
+                    );
                 }
-            } else {
-                datapoint_info!("bad-conflict-shred", ("slot", slot, i64));
             }
 
             // ToDo: This is a potential slashing condition
@@ -1484,28 +1482,39 @@ impl Blockstore {
         result
     }
 
-    fn find_conflicting_coding_shred(
-        &self,
+    fn find_conflicting_coding_shred<'a>(
+        &'a self,
         shred: &Shred,
         slot: Slot,
         erasure_meta: &ErasureMeta,
-        just_received_shreds: &HashMap<ShredId, Shred>,
-    ) -> Option<Vec<u8>> {
+        just_received_shreds: &'a HashMap<ShredId, Shred>,
+    ) -> Option<Cow<Vec<u8>>> {
         // Search for the shred which set the initial erasure config, either inserted,
         // or in the current batch in just_received_shreds.
+        let index = erasure_meta.first_received_coding_shred_index()?;
+        let shred_id = ShredId::new(slot, index, ShredType::Code);
+        let maybe_shred = self.get_shred_from_just_inserted_or_db(just_received_shreds, shred_id);
+
+        if index != 0 || maybe_shred.is_some() {
+            return maybe_shred;
+        }
+
+        // If we are using a blockstore created from an earlier version than 1.18.12,
+        // `index` will be 0 as it was not yet populated, revert to a scan until  we no longer support
+        // those blockstore versions.
         for coding_index in erasure_meta.coding_shreds_indices() {
             let maybe_shred = self.get_coding_shred(slot, coding_index);
             if let Ok(Some(shred_data)) = maybe_shred {
                 let potential_shred = Shred::new_from_serialized_shred(shred_data).unwrap();
                 if shred.erasure_mismatch(&potential_shred).unwrap() {
-                    return Some(potential_shred.into_payload());
+                    return Some(Cow::Owned(potential_shred.into_payload()));
                 }
             } else if let Some(potential_shred) = {
                 let key = ShredId::new(slot, u32::try_from(coding_index).unwrap(), ShredType::Code);
                 just_received_shreds.get(&key)
             } {
                 if shred.erasure_mismatch(potential_shred).unwrap() {
-                    return Some(potential_shred.payload().clone());
+                    return Some(Cow::Borrowed(potential_shred.payload()));
                 }
             }
         }
