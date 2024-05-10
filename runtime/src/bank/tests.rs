@@ -7070,15 +7070,19 @@ fn test_reconfigure_token2_native_mint() {
 fn test_bank_load_program() {
     solana_logger::setup();
 
-    let (genesis_config, _) = create_genesis_config(1);
+    let (genesis_config, mint_keypair) = create_genesis_config_no_tx_fee(1_000_000_000);
     let bank = Bank::new_for_tests(&genesis_config);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    goto_end_of_slot(bank.clone());
+    let bank = new_bank_from_parent_with_bank_forks(&bank_forks, bank, &Pubkey::default(), 42);
+    let bank = new_bank_from_parent_with_bank_forks(&bank_forks, bank, &Pubkey::default(), 50);
 
-    let key1 = solana_sdk::pubkey::new_rand();
+    let program_key = solana_sdk::pubkey::new_rand();
+    let programdata_key = solana_sdk::pubkey::new_rand();
 
     let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    let programdata_key = solana_sdk::pubkey::new_rand();
     let mut program_account = AccountSharedData::new_data(
         40,
         &UpgradeableLoaderState::Program {
@@ -7103,14 +7107,30 @@ fn test_bank_load_program() {
         .unwrap();
     programdata_account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&elf);
     programdata_account.set_rent_epoch(1);
-    bank.store_account_and_update_capitalization(&key1, &program_account);
+    bank.store_account_and_update_capitalization(&program_key, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1, false, bank.epoch()).unwrap();
-    assert_matches!(program.program, ProgramCacheEntryType::Loaded(_));
-    assert_eq!(
-        program.account_size,
-        program_account.data().len() + programdata_account.data().len()
+
+    let instruction = Instruction::new_with_bytes(program_key, &[], Vec::new());
+    let invocation_message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let binding = mint_keypair.insecure_clone();
+    let transaction = Transaction::new(
+        &[&binding],
+        invocation_message.clone(),
+        bank.last_blockhash(),
     );
+    assert!(bank.process_transaction(&transaction).is_ok());
+
+    {
+        let program_cache = bank.transaction_processor.program_cache.read().unwrap();
+        let [program] = program_cache.get_slot_versions_for_tests(&program_key) else {
+            panic!();
+        };
+        assert_matches!(program.program, ProgramCacheEntryType::Loaded(_));
+        assert_eq!(
+            program.account_size,
+            program_account.data().len() + programdata_account.data().len()
+        );
+    }
 }
 
 #[test]
