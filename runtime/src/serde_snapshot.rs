@@ -21,7 +21,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
             AccountsFileId, AtomicAccountsFileId, BankHashStats, IndexGenerationInfo,
         },
-        accounts_file::AccountsFile,
+        accounts_file::{AccountsFile, StorageAccess},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -647,8 +647,10 @@ pub(crate) fn reconstruct_single_storage(
     append_vec_path: &Path,
     current_len: usize,
     append_vec_id: AccountsFileId,
+    storage_access: StorageAccess,
 ) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
-    let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
+    let (accounts_file, num_accounts) =
+        AccountsFile::new_from_file(append_vec_path, current_len, storage_access)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
@@ -731,6 +733,7 @@ pub(crate) fn remap_and_reconstruct_single_storage(
     append_vec_path: &Path,
     next_append_vec_id: &AtomicAccountsFileId,
     num_collisions: &AtomicUsize,
+    storage_access: StorageAccess,
 ) -> Result<Arc<AccountStorageEntry>, SnapshotError> {
     let (remapped_append_vec_id, remapped_append_vec_path) = remap_append_vec_file(
         slot,
@@ -744,6 +747,7 @@ pub(crate) fn remap_and_reconstruct_single_storage(
         &remapped_append_vec_path,
         current_len,
         remapped_append_vec_id,
+        storage_access,
     )?;
     Ok(storage)
 }

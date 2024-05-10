@@ -20,7 +20,7 @@ use {
     solana_accounts_db::{
         account_storage::AccountStorageMap,
         accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
-        accounts_file::{AccountsFile, AccountsFileError},
+        accounts_file::{AccountsFile, AccountsFileError, StorageAccess},
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         utils::{move_and_async_delete_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
@@ -1289,6 +1289,7 @@ pub fn verify_and_unarchive_snapshots(
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
     account_paths: &[PathBuf],
+    storage_access: StorageAccess,
 ) -> Result<(
     UnarchivedSnapshot,
     Option<UnarchivedSnapshot>,
@@ -1311,6 +1312,7 @@ pub fn verify_and_unarchive_snapshots(
         full_snapshot_archive_info.archive_format(),
         parallel_divisions,
         next_append_vec_id.clone(),
+        storage_access,
     )?;
 
     let unarchived_incremental_snapshot =
@@ -1324,6 +1326,7 @@ pub fn verify_and_unarchive_snapshots(
                 incremental_snapshot_archive_info.archive_format(),
                 parallel_divisions,
                 next_append_vec_id.clone(),
+                storage_access,
             )?;
             Some(unarchived_incremental_snapshot)
         } else {
@@ -1449,6 +1452,7 @@ fn unarchive_snapshot(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
     next_append_vec_id: Arc<AtomicAccountsFileId>,
+    storage_access: StorageAccess,
 ) -> Result<UnarchivedSnapshot> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(unpacked_snapshots_dir_prefix)
@@ -1474,6 +1478,7 @@ fn unarchive_snapshot(
             num_rebuilder_threads,
             next_append_vec_id,
             SnapshotFrom::Archive,
+            storage_access,
         )?,
         measure_name
     );
@@ -1524,6 +1529,7 @@ pub fn rebuild_storages_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAccountsFileId>,
+    storage_access: StorageAccess,
 ) -> Result<AccountStorageMap> {
     let bank_snapshot_dir = &snapshot_info.snapshot_dir;
     let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
@@ -1596,6 +1602,7 @@ pub fn rebuild_storages_from_snapshot_dir(
         num_rebuilder_threads,
         next_append_vec_id,
         SnapshotFrom::Dir,
+        storage_access,
     )?;
 
     let RebuiltSnapshotStorage {

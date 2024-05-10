@@ -17,6 +17,7 @@ use {
     solana_accounts_db::{
         account_storage::{AccountStorageMap, AccountStorageReference},
         accounts_db::{AccountStorageEntry, AccountsFileId, AtomicAccountsFileId},
+        accounts_file::StorageAccess,
     },
     solana_sdk::clock::Slot,
     std::{
@@ -67,6 +68,8 @@ pub(crate) struct SnapshotStorageRebuilder {
     num_collisions: AtomicUsize,
     /// Rebuild from the snapshot files or archives
     snapshot_from: SnapshotFrom,
+    /// specify how storages are accessed
+    storage_access: StorageAccess,
 }
 
 impl SnapshotStorageRebuilder {
@@ -76,6 +79,7 @@ impl SnapshotStorageRebuilder {
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAccountsFileId>,
         snapshot_from: SnapshotFrom,
+        storage_access: StorageAccess,
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
@@ -95,6 +99,7 @@ impl SnapshotStorageRebuilder {
             snapshot_storage_lengths,
             append_vec_files,
             snapshot_from,
+            storage_access,
         )?;
 
         Ok(RebuiltSnapshotStorage {
@@ -111,6 +116,7 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAccountsFileId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         snapshot_from: SnapshotFrom,
+        storage_access: StorageAccess,
     ) -> Self {
         let storage = DashMap::with_capacity(snapshot_storage_lengths.len());
         let storage_paths: DashMap<_, _> = snapshot_storage_lengths
@@ -129,6 +135,7 @@ impl SnapshotStorageRebuilder {
             processed_slot_count: AtomicUsize::new(0),
             num_collisions: AtomicUsize::new(0),
             snapshot_from,
+            storage_access,
         }
     }
 
@@ -202,6 +209,7 @@ impl SnapshotStorageRebuilder {
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
         snapshot_from: SnapshotFrom,
+        storage_access: StorageAccess,
     ) -> Result<AccountStorageMap, SnapshotError> {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
@@ -209,6 +217,7 @@ impl SnapshotStorageRebuilder {
             next_append_vec_id,
             snapshot_storage_lengths,
             snapshot_from,
+            storage_access,
         ));
 
         let thread_pool = rebuilder.build_thread_pool();
@@ -318,12 +327,14 @@ impl SnapshotStorageRebuilder {
                         path.as_path(),
                         &self.next_append_vec_id,
                         &self.num_collisions,
+                        self.storage_access,
                     )?,
                     SnapshotFrom::Dir => reconstruct_single_storage(
                         &slot,
                         path.as_path(),
                         current_len,
                         old_append_vec_id as AccountsFileId,
+                        self.storage_access,
                     )?,
                 };
 

@@ -10,7 +10,9 @@ use {
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
     log::*,
-    solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
+    solana_accounts_db::{
+        accounts_file::StorageAccess, accounts_update_notifier_interface::AccountsUpdateNotifier,
+    },
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank_forks::BankForks,
@@ -292,6 +294,7 @@ fn bank_forks_from_snapshot(
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
             exit,
+            StorageAccess::default(),
         )
         .map_err(|err| BankForksUtilsError::BankFromSnapshotsDirectory {
             source: err,

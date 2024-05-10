@@ -40,7 +40,12 @@ fn main() {
     // When the AppendVec is dropped, the backing file will be removed.  We do not want to remove
     // the backing file here in the store-tool, so prevent dropping.
     let store = ManuallyDrop::new(
-        AppendVec::new_from_file_unchecked(file, len).expect("new AppendVec from file"),
+        AppendVec::new_from_file_unchecked(
+            file,
+            len,
+            solana_accounts_db::accounts_file::StorageAccess::default(),
+        )
+        .expect("new AppendVec from file"),
     );
     info!("store: len: {} capacity: {}", store.len(), store.capacity());
     let mut num_accounts: usize = 0;
