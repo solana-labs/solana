@@ -120,7 +120,7 @@ use {
     solana_turbine::{self, broadcast_stage::BroadcastStageType},
     solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::vote_state,
-    solana_wen_restart::wen_restart::wait_for_wen_restart,
+    solana_wen_restart::wen_restart::{wait_for_wen_restart, WenRestartConfig},
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -1325,7 +1325,7 @@ impl Validator {
             &max_slots,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-            accounts_background_request_sender,
+            accounts_background_request_sender.clone(),
             config.runtime_config.log_messages_bytes_limit,
             json_rpc_service.is_some().then_some(&connection_cache), // for the cache warmer only used for STS for RPC service
             &prioritization_fee_cache,
@@ -1340,16 +1340,20 @@ impl Validator {
 
         if in_wen_restart {
             info!("Waiting for wen_restart phase one to finish");
-            match wait_for_wen_restart(
-                &config.wen_restart_proto_path.clone().unwrap(),
+            match wait_for_wen_restart(WenRestartConfig {
+                wen_restart_path: config.wen_restart_proto_path.clone().unwrap(),
                 last_vote,
-                blockstore.clone(),
-                cluster_info.clone(),
-                bank_forks.clone(),
-                wen_restart_repair_slots.clone(),
-                WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT,
-                exit.clone(),
-            ) {
+                blockstore: blockstore.clone(),
+                cluster_info: cluster_info.clone(),
+                bank_forks: bank_forks.clone(),
+                wen_restart_repair_slots: wen_restart_repair_slots.clone(),
+                wait_for_supermajority_threshold_percent:
+                    WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT,
+                snapshot_config: config.snapshot_config.clone(),
+                accounts_background_request_sender: accounts_background_request_sender.clone(),
+                genesis_config_hash: genesis_config.hash(),
+                exit: exit.clone(),
+            }) {
                 Ok(()) => {
                     return Err("wen_restart phase one completedy".to_string());
                 }

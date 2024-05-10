@@ -5,10 +5,9 @@ enum State {
     INIT = 0;
     LAST_VOTED_FORK_SLOTS = 1;
     HEAVIEST_FORK = 2;
-    GENERATING_SNAPSHOT = 3;
-    FINISHED_SNAPSHOT = 4;
-    WAITING_FOR_SUPERMAJORITY = 5;
-    DONE = 6;
+    GENERATE_SNAPSHOT = 3;
+    WAITING_FOR_SUPERMAJORITY = 4;
+    DONE = 5;
 }
 
 message LastVotedForkSlotsRecord {
@@ -47,10 +46,18 @@ message HeaviestForkAggregateRecord {
     optional HeaviestForkAggregateFinal final_result = 2;
 }
 
+message GenerateSnapshotRecord {
+    string path = 1;
+    uint64 slot = 2;
+    string bankhash = 3;
+    uint32 shred_version = 4;
+}
+
 message WenRestartProgress {
     State state = 1;
     optional LastVotedForkSlotsRecord my_last_voted_fork_slots = 2;
     optional LastVotedForkSlotsAggregateRecord last_voted_fork_slots_aggregate = 3;
     optional HeaviestForkRecord my_heaviest_fork = 4;
     optional HeaviestForkAggregateRecord heaviest_fork_aggregate = 5;
+    optional GenerateSnapshotRecord my_snapshot = 6;
 }
