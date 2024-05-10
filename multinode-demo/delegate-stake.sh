@@ -124,4 +124,4 @@ $solana_cli "${common_args[@]}" \
   create-stake-account "$stake_account" "$stake_sol"
 $solana_cli "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_account" "$vote_account"
-$solana_cli "${common_args[@]}" stakes "$stake_account"
+$solana_cli "${common_args[@]}" stake-account "$stake_account"
