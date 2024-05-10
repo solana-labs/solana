@@ -385,6 +385,8 @@ impl SchedulerController {
                 if result.is_err() {
                     saturating_add_assign!(num_dropped_on_age_and_status, 1);
                     self.container.remove_by_id(&id.id);
+                } else {
+                    self.container.push_id_into_queue(*id);
                 }
             }
         }
