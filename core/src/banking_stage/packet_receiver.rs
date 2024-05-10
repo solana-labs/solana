@@ -77,8 +77,11 @@ impl PacketReceiver {
     fn get_receive_timeout(
         unprocessed_transaction_storage: &UnprocessedTransactionStorage,
     ) -> Duration {
-        // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-        if !unprocessed_transaction_storage.is_empty() {
+        // Gossip thread (does not process) should not continuously receive with 0 duration.
+        // This can cause the thread to run at 100% CPU because it is continuously polling.
+        if !unprocessed_transaction_storage.should_not_process()
+            && !unprocessed_transaction_storage.is_empty()
+        {
             // If there are buffered packets, run the equivalent of try_recv to try reading more
             // packets. This prevents starving BankingStage::consume_buffered_packets due to
             // buffered_packet_batches containing transactions that exceed the cost model for
