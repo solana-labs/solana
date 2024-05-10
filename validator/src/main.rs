@@ -1248,6 +1248,17 @@ pub fn main() {
                 }
             }
         });
+    let create_ancient_storage = matches
+        .value_of("accounts_db_squash_storages_method")
+        .map(|method| match method {
+            "pack" => CreateAncientStorage::Pack,
+            "append" => CreateAncientStorage::Append,
+            _ => {
+                // clap will enforce one of the above values is given
+                unreachable!("invalid value given to accounts-db-squash-storages-method")
+            }
+        })
+        .unwrap_or_default();
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
@@ -1260,10 +1271,7 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
-        create_ancient_storage: matches
-            .is_present("accounts_db_create_ancient_storage_packed")
-            .then_some(CreateAncientStorage::Pack)
-            .unwrap_or_default(),
+        create_ancient_storage,
         test_partitioned_epoch_rewards,
         test_skip_rewrites_but_include_in_bank_hash: matches
             .is_present("accounts_db_test_skip_rewrites"),

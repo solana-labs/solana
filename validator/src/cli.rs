@@ -1327,9 +1327,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .conflicts_with("accounts_db_skip_shrink"),
         )
         .arg(
-            Arg::with_name("accounts_db_create_ancient_storage_packed")
-                .long("accounts-db-create-ancient-storage-packed")
-                .help("Create ancient storages in one shot instead of appending.")
+            Arg::with_name("accounts_db_squash_storages_method")
+                .long("accounts-db-squash-storages-method")
+                .value_name("METHOD")
+                .takes_value(true)
+                .possible_values(&["pack", "append"])
+                .help("Squash multiple account storage files together using this method")
                 .hidden(hidden_unless_forced()),
         )
         .arg(
