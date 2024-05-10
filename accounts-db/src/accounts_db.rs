@@ -2349,8 +2349,8 @@ impl AccountsDb {
 
     // The default high and low watermark sizes for the accounts read cache.
     // If the cache size exceeds MAX_SIZE_HI, it'll evict entries until the size is <= MAX_SIZE_LO.
-    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO: usize = 400_000_000;
-    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI: usize = 400_000_000;
+    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO: usize = 400 * 1024 * 1024;
+    const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI: usize = 410 * 1024 * 1024;
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
