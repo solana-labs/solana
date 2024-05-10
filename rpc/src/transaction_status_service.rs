@@ -218,8 +218,6 @@ pub(crate) mod tests {
             account_utils::StateMut,
             clock::Slot,
             hash::Hash,
-            instruction::CompiledInstruction,
-            message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce::{self, state::DurableNonce},
             nonce_account,
             pubkey::Pubkey,
@@ -301,23 +299,6 @@ pub(crate) mod tests {
         system_transaction::transfer(&keypair1, &pubkey1, 42, zero)
     }
 
-    fn build_message() -> Message {
-        Message {
-            header: MessageHeader {
-                num_readonly_signed_accounts: 11,
-                num_readonly_unsigned_accounts: 12,
-                num_required_signatures: 13,
-            },
-            account_keys: vec![Pubkey::new_unique()],
-            recent_blockhash: Hash::new_unique(),
-            instructions: vec![CompiledInstruction {
-                program_id_index: 1,
-                accounts: vec![1, 2, 3],
-                data: vec![4, 5, 6],
-            }],
-        }
-    }
-
     #[test]
     fn test_notify_transaction() {
         let genesis_config = create_genesis_config(2).genesis_config;
@@ -352,29 +333,23 @@ pub(crate) mod tests {
             )))
             .unwrap();
 
-        let message = build_message();
-
         let rollback_partial = NoncePartial::new(pubkey, nonce_account.clone());
 
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
+        let fee_payer_address = &pubkey;
+        let fee_payer_account = nonce_account;
         let transaction_result = Some(TransactionExecutionDetails {
             status: Ok(()),
             log_messages: None,
             inner_instructions: None,
-            durable_nonce_fee: Some(DurableNonceFee::from(
-                &NonceFull::from_partial(
-                    &rollback_partial,
-                    &SanitizedMessage::Legacy(LegacyMessage::new(
-                        message,
-                        &ReservedAccountKeys::empty_key_set(),
-                    )),
-                    &[(pubkey, nonce_account)],
-                    &rent_debits,
-                )
-                .unwrap(),
-            )),
+            durable_nonce_fee: Some(DurableNonceFee::from(&NonceFull::from_partial(
+                &rollback_partial,
+                fee_payer_address,
+                fee_payer_account,
+                &rent_debits,
+            ))),
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,

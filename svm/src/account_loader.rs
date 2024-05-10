@@ -48,6 +48,12 @@ pub struct LoadedTransaction {
     pub rent_debits: RentDebits,
 }
 
+impl LoadedTransaction {
+    pub fn fee_payer_account(&self) -> Option<&TransactionAccount> {
+        self.accounts.first()
+    }
+}
+
 /// Check whether the payer_account is capable of paying the fee. The
 /// side effect is to subtract the fee amount from the payer_account
 /// balance of lamports. If the payer_acount is not able to pay the
@@ -151,21 +157,22 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                 };
 
                 // Update nonce with fee-subtracted accounts
-                let nonce = if let Some(nonce) = nonce {
-                    match NonceFull::from_partial(
-                        nonce,
-                        message,
-                        &loaded_transaction.accounts,
-                        &loaded_transaction.rent_debits,
-                    ) {
-                        Ok(nonce) => Some(nonce),
-                        // This error branch is never reached, because `load_transaction_accounts`
-                        // already validates the fee payer account.
-                        Err(e) => return (Err(e), None),
-                    }
-                } else {
-                    None
+                let Some((fee_payer_address, fee_payer_account)) =
+                    loaded_transaction.fee_payer_account()
+                else {
+                    // This error branch is never reached, because `load_transaction_accounts`
+                    // already validates the fee payer account.
+                    return (Err(TransactionError::AccountNotFound), None);
                 };
+
+                let nonce = nonce.as_ref().map(|nonce| {
+                    NonceFull::from_partial(
+                        nonce,
+                        fee_payer_address,
+                        fee_payer_account.clone(),
+                        &loaded_transaction.rent_debits,
+                    )
+                });
 
                 (Ok(loaded_transaction), nonce)
             }
