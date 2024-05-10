@@ -1,5 +1,3 @@
-#![allow(clippy::arithmetic_side_effects)]
-
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
@@ -38,7 +36,7 @@ use {
         },
         filter::{Memcmp, RpcFilterType},
         request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-        response::SlotInfo,
+        response::{RpcPerfSample, RpcPrioritizationFee, SlotInfo},
     },
     solana_sdk::{
         account::from_account,
@@ -68,6 +66,7 @@ use {
     std::{
         collections::{BTreeMap, HashMap, HashSet, VecDeque},
         fmt,
+        num::Saturating,
         rc::Rc,
         str::FromStr,
         sync::{
@@ -751,7 +750,7 @@ pub fn process_catchup(
     our_localhost_port: Option<u16>,
     log: bool,
 ) -> ProcessResult {
-    let sleep_interval = 5;
+    let sleep_interval = Duration::from_secs(5);
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
@@ -805,7 +804,7 @@ pub fn process_catchup(
                     progress_bar
                         .set_message(format!("Contact information not found for {node_pubkey}"));
                 }
-                sleep(Duration::from_secs(sleep_interval as u64));
+                sleep(sleep_interval);
             };
 
             (RpcClient::new_socket(rpc_addr), node_pubkey)
@@ -820,7 +819,7 @@ pub fn process_catchup(
             Err(err) => {
                 if let ClientErrorKind::Reqwest(err) = err.kind() {
                     progress_bar.set_message(format!("Connection failed: {err}"));
-                    sleep(Duration::from_secs(sleep_interval as u64));
+                    sleep(sleep_interval);
                     continue;
                 }
                 return Err(Box::new(err));
@@ -844,9 +843,9 @@ pub fn process_catchup(
         );
     }
 
-    let mut previous_rpc_slot = std::u64::MAX;
-    let mut previous_slot_distance = 0;
-    let mut retry_count = 0;
+    let mut previous_rpc_slot = std::i64::MAX;
+    let mut previous_slot_distance: i64 = 0;
+    let mut retry_count: u64 = 0;
     let max_retry_count = 5;
     let mut get_slot_while_retrying = |client: &RpcClient| {
         loop {
@@ -859,7 +858,7 @@ pub fn process_catchup(
                     if retry_count >= max_retry_count {
                         return Err(e);
                     }
-                    retry_count += 1;
+                    retry_count = retry_count.saturating_add(1);
                     if log {
                         // go to new line to leave this message on console
                         println!("Retrying({retry_count}/{max_retry_count}): {e}\n");
@@ -870,15 +869,15 @@ pub fn process_catchup(
         }
     };
 
-    let start_node_slot = get_slot_while_retrying(&node_client)?;
-    let start_rpc_slot = get_slot_while_retrying(rpc_client)?;
-    let start_slot_distance = start_rpc_slot as i64 - start_node_slot as i64;
-    let mut total_sleep_interval = 0;
+    let start_node_slot: i64 = get_slot_while_retrying(&node_client)?.try_into()?;
+    let start_rpc_slot: i64 = get_slot_while_retrying(rpc_client)?.try_into()?;
+    let start_slot_distance = start_rpc_slot.saturating_sub(start_node_slot);
+    let mut total_sleep_interval = Duration::ZERO;
     loop {
         // humbly retry; the reference node (rpc_client) could be spotty,
         // especially if pointing to api.meinnet-beta.solana.com at times
-        let rpc_slot = get_slot_while_retrying(rpc_client)?;
-        let node_slot = get_slot_while_retrying(&node_client)?;
+        let rpc_slot: i64 = get_slot_while_retrying(rpc_client)?.try_into()?;
+        let node_slot: i64 = get_slot_while_retrying(&node_client)?.try_into()?;
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
@@ -886,16 +885,16 @@ pub fn process_catchup(
             ));
         }
 
-        let slot_distance = rpc_slot as i64 - node_slot as i64;
-        let slots_per_second =
-            (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
+        let slot_distance = rpc_slot.saturating_sub(node_slot);
+        let slots_per_second = previous_slot_distance.saturating_sub(slot_distance) as f64
+            / sleep_interval.as_secs_f64();
 
-        let average_time_remaining = if slot_distance == 0 || total_sleep_interval == 0 {
+        let average_time_remaining = if slot_distance == 0 || total_sleep_interval.is_zero() {
             "".to_string()
         } else {
-            let distance_delta = start_slot_distance - slot_distance;
+            let distance_delta = start_slot_distance.saturating_sub(slot_distance);
             let average_catchup_slots_per_second =
-                distance_delta as f64 / f64::from(total_sleep_interval);
+                distance_delta as f64 / total_sleep_interval.as_secs_f64();
             let average_time_remaining =
                 (slot_distance as f64 / average_catchup_slots_per_second).round();
             if !average_time_remaining.is_normal() {
@@ -904,9 +903,9 @@ pub fn process_catchup(
                 format!(" (AVG: {average_catchup_slots_per_second:.1} slots/second (falling))")
             } else {
                 // important not to miss next scheduled lead slots
-                let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
+                let total_node_slot_delta = node_slot.saturating_sub(start_node_slot);
                 let average_node_slots_per_second =
-                    total_node_slot_delta as f64 / f64::from(total_sleep_interval);
+                    total_node_slot_delta as f64 / total_sleep_interval.as_secs_f64();
                 let expected_finish_slot = (node_slot as f64
                     + average_time_remaining * average_node_slots_per_second)
                     .round();
@@ -929,7 +928,7 @@ pub fn process_catchup(
             },
             node_slot,
             rpc_slot,
-            if slot_distance == 0 || previous_rpc_slot == std::u64::MAX {
+            if slot_distance == 0 || previous_rpc_slot == std::i64::MAX {
                 "".to_string()
             } else {
                 format!(
@@ -949,10 +948,10 @@ pub fn process_catchup(
             println!();
         }
 
-        sleep(Duration::from_secs(sleep_interval as u64));
+        sleep(sleep_interval);
         previous_rpc_slot = rpc_slot;
         previous_slot_distance = slot_distance;
-        total_sleep_interval += sleep_interval;
+        total_sleep_interval = total_sleep_interval.saturating_add(sleep_interval);
     }
 }
 
@@ -1037,7 +1036,7 @@ pub fn process_leader_schedule(
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
-    if epoch > (epoch_info.epoch + 1) {
+    if epoch > epoch_info.epoch.saturating_add(1) {
         return Err(format!("Epoch {epoch} is more than one epoch in the future").into());
     }
 
@@ -1056,7 +1055,7 @@ pub fn process_leader_schedule(
     for (pubkey, leader_slots) in leader_schedule.iter() {
         for slot_index in leader_slots.iter() {
             if *slot_index >= leader_per_slot_index.len() {
-                leader_per_slot_index.resize(*slot_index + 1, "?");
+                leader_per_slot_index.resize(slot_index.saturating_add(1), "?");
             }
             leader_per_slot_index[*slot_index] = pubkey;
         }
@@ -1065,7 +1064,7 @@ pub fn process_leader_schedule(
     let mut leader_schedule_entries = vec![];
     for (slot_index, leader) in leader_per_slot_index.iter().enumerate() {
         leader_schedule_entries.push(CliLeaderScheduleEntry {
-            slot: first_slot_in_epoch + slot_index as u64,
+            slot: first_slot_in_epoch.saturating_add(slot_index as u64),
             leader: leader.to_string(),
         });
     }
@@ -1085,19 +1084,24 @@ pub fn process_get_recent_priority_fees(
     let fees = rpc_client.get_recent_prioritization_fees(accounts)?;
     let mut min = u64::MAX;
     let mut max = 0;
-    let mut total = 0;
-    let num_slots = limit_num_slots
-        .unwrap_or(fees.len() as u64)
-        .min(fees.len() as u64)
-        .max(1) as usize;
+    let mut total = Saturating(0);
+    let fees_len: u64 = fees.len().try_into().unwrap();
+    let num_slots = limit_num_slots.unwrap_or(fees_len).min(fees_len).max(1);
+
     let mut cli_fees = Vec::with_capacity(fees.len());
-    for fee in fees.iter().skip(fees.len().saturating_sub(num_slots)) {
-        min = min.min(fee.prioritization_fee);
-        max = max.max(fee.prioritization_fee);
-        total += fee.prioritization_fee;
+    for RpcPrioritizationFee {
+        slot,
+        prioritization_fee,
+    } in fees
+        .into_iter()
+        .skip(fees_len.saturating_sub(num_slots) as usize)
+    {
+        min = min.min(prioritization_fee);
+        max = max.max(prioritization_fee);
+        total += prioritization_fee;
         cli_fees.push(CliPrioritizationFee {
-            slot: fee.slot,
-            prioritization_fee: fee.prioritization_fee,
+            slot,
+            prioritization_fee,
         });
     }
     Ok(config
@@ -1106,8 +1110,8 @@ pub fn process_get_recent_priority_fees(
             fees: cli_fees,
             min,
             max,
-            average: total / num_slots as u64,
-            num_slots: num_slots as u64,
+            average: total.0.checked_div(num_slots).unwrap_or(0),
+            num_slots,
         }))
 }
 
@@ -1179,13 +1183,26 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
                 .get_recent_performance_samples(Some(60))
                 .ok()
                 .and_then(|samples| {
-                    let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
-                        (slots + sample.num_slots, secs + sample.sample_period_secs)
-                    });
-                    (secs as u64).saturating_mul(1000).checked_div(slots)
+                    let (slots, secs) = samples.iter().fold(
+                        (0, 0u64),
+                        |(slots, secs): (u64, u64),
+                         RpcPerfSample {
+                             num_slots,
+                             sample_period_secs,
+                             ..
+                         }| {
+                            (
+                                slots.saturating_add(*num_slots),
+                                secs.saturating_add((*sample_period_secs).into()),
+                            )
+                        },
+                    );
+                    secs.saturating_mul(1000).checked_div(slots)
                 })
                 .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
-            let epoch_expected_start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
+            let epoch_expected_start_slot = epoch_info
+                .absolute_slot
+                .saturating_sub(epoch_info.slot_index);
             let first_block_in_epoch = rpc_client
                 .get_blocks_with_limit(epoch_expected_start_slot, 1)
                 .ok()
@@ -1196,9 +1213,12 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
                     .get_block_time(first_block_in_epoch)
                     .ok()
                     .map(|time| {
-                        time - (((first_block_in_epoch - epoch_expected_start_slot)
-                            * average_slot_time_ms)
-                            / 1000) as i64
+                        time.saturating_sub(
+                            first_block_in_epoch
+                                .saturating_sub(epoch_expected_start_slot)
+                                .saturating_mul(average_slot_time_ms)
+                                .saturating_div(1000) as i64,
+                        )
                     });
             let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
 
@@ -1314,12 +1334,14 @@ pub fn process_show_block_production(
             (confirmed_blocks, start_slot)
         };
 
-    let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
-    let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
-    let total_slots = end_slot_index - start_slot_index + 1;
+    let start_slot_index = start_slot.saturating_sub(first_slot_in_epoch) as usize;
+    let end_slot_index = end_slot.saturating_sub(first_slot_in_epoch) as usize;
+    let total_slots = end_slot_index
+        .saturating_sub(start_slot_index)
+        .saturating_add(1);
     let total_blocks_produced = confirmed_blocks.len();
     assert!(total_blocks_produced <= total_slots);
-    let total_slots_skipped = total_slots - total_blocks_produced;
+    let total_slots_skipped = total_slots.saturating_sub(total_blocks_produced);
     let mut leader_slot_count = HashMap::new();
     let mut leader_skipped_slots = HashMap::new();
 
@@ -1337,7 +1359,8 @@ pub fn process_show_block_production(
         let pubkey = format_labeled_address(pubkey, &config.address_labels);
         for slot_index in leader_slots.iter() {
             if *slot_index >= start_slot_index && *slot_index <= end_slot_index {
-                leader_per_slot_index[*slot_index - start_slot_index].clone_from(&pubkey);
+                leader_per_slot_index[slot_index.saturating_sub(start_slot_index)]
+                    .clone_from(&pubkey);
             }
         }
     }
@@ -1349,17 +1372,17 @@ pub fn process_show_block_production(
 
     let mut confirmed_blocks_index = 0;
     let mut individual_slot_status = vec![];
-    for (slot_index, leader) in leader_per_slot_index.iter().enumerate() {
-        let slot = start_slot + slot_index as u64;
-        let slot_count = leader_slot_count.entry(leader).or_insert(0);
-        *slot_count += 1;
-        let skipped_slots = leader_skipped_slots.entry(leader).or_insert(0);
+    for (leader, slot_index) in leader_per_slot_index.iter().zip(0u64..) {
+        let slot = start_slot.saturating_add(slot_index);
+        let slot_count: &mut u64 = leader_slot_count.entry(leader).or_insert(0);
+        *slot_count = slot_count.saturating_add(1);
+        let skipped_slots: &mut u64 = leader_skipped_slots.entry(leader).or_insert(0);
 
         loop {
             if confirmed_blocks_index < confirmed_blocks.len() {
                 let slot_of_next_confirmed_block = confirmed_blocks[confirmed_blocks_index];
                 if slot_of_next_confirmed_block < slot {
-                    confirmed_blocks_index += 1;
+                    confirmed_blocks_index = confirmed_blocks_index.saturating_add(1);
                     continue;
                 }
                 if slot_of_next_confirmed_block == slot {
@@ -1371,7 +1394,7 @@ pub fn process_show_block_production(
                     break;
                 }
             }
-            *skipped_slots += 1;
+            *skipped_slots = skipped_slots.saturating_add(1);
             individual_slot_status.push(CliSlotStatus {
                 slot,
                 leader: (*leader).to_string(),
@@ -1386,13 +1409,13 @@ pub fn process_show_block_production(
     let mut leaders: Vec<CliBlockProductionEntry> = leader_slot_count
         .iter()
         .map(|(leader, leader_slots)| {
-            let skipped_slots = leader_skipped_slots.get(leader).unwrap();
-            let blocks_produced = leader_slots - skipped_slots;
+            let skipped_slots = *leader_skipped_slots.get(leader).unwrap();
+            let blocks_produced = leader_slots.saturating_sub(skipped_slots);
             CliBlockProductionEntry {
                 identity_pubkey: (**leader).to_string(),
                 leader_slots: *leader_slots,
                 blocks_produced,
-                skipped_slots: *skipped_slots,
+                skipped_slots,
             }
         })
         .collect();
@@ -1465,12 +1488,12 @@ pub fn process_ping(
 
     let mut cli_pings = vec![];
 
-    let mut submit_count = 0;
-    let mut confirmed_count = 0;
+    let mut submit_count: u32 = 0;
+    let mut confirmed_count: u32 = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
     let mut blockhash = rpc_client.get_latest_blockhash()?;
-    let mut lamports = 0;
+    let mut lamports: u64 = 0;
     let mut blockhash_acquired = Instant::now();
     let mut blockhash_from_cluster = false;
     if let Some(fixed_blockhash) = fixed_blockhash {
@@ -1492,7 +1515,7 @@ pub fn process_ping(
         }
 
         let to = config.signers[0].pubkey();
-        lamports += 1;
+        lamports = lamports.saturating_add(1);
 
         let build_message = |lamports| {
             let ixs = vec![system_instruction::transfer(
@@ -1546,7 +1569,7 @@ pub fn process_ping(
                                 };
                                 eprint!("{cli_ping_data}");
                                 cli_pings.push(cli_ping_data);
-                                confirmed_count += 1;
+                                confirmed_count = confirmed_count.saturating_add(1);
                             }
                             Err(err) => {
                                 let cli_ping_data = CliPingData {
@@ -1606,7 +1629,7 @@ pub fn process_ping(
                 cli_pings.push(cli_ping_data);
             }
         }
-        submit_count += 1;
+        submit_count = submit_count.saturating_add(1);
 
         if signal_receiver.recv_timeout(*interval).is_ok() {
             break 'mainloop;
@@ -1740,8 +1763,8 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                 }
                 if last_root_update.elapsed().as_secs() >= 5 {
                     let root = new_info.root;
-                    slots_per_second =
-                        (root - last_root) as f64 / last_root_update.elapsed().as_secs() as f64;
+                    slots_per_second = root.saturating_sub(last_root) as f64
+                        / last_root_update.elapsed().as_secs() as f64;
                     last_root_update = Instant::now();
                     last_root = root;
                 }
@@ -1756,8 +1779,8 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                 slot_progress.set_message(message.clone());
 
                 if let Some(previous) = current {
-                    let slot_delta: i64 = new_info.slot as i64 - previous.slot as i64;
-                    let root_delta: i64 = new_info.root as i64 - previous.root as i64;
+                    let slot_delta = (new_info.slot as i64).saturating_sub(previous.slot as i64);
+                    let root_delta = (new_info.root as i64).saturating_sub(previous.root as i64);
 
                     //
                     // if slot has advanced out of step with the root, we detect
@@ -2012,14 +2035,14 @@ pub fn process_show_validators(
         .iter()
         .chain(vote_accounts.delinquent.iter())
         .map(|vote_account| vote_account.activated_stake)
-        .sum();
+        .sum::<u64>();
 
     let total_delinquent_stake = vote_accounts
         .delinquent
         .iter()
         .map(|vote_account| vote_account.activated_stake)
         .sum();
-    let total_current_stake = total_active_stake - total_delinquent_stake;
+    let total_current_stake = total_active_stake.saturating_sub(total_delinquent_stake);
 
     let current_validators: Vec<CliValidator> = vote_accounts
         .current
@@ -2056,18 +2079,27 @@ pub fn process_show_validators(
 
     let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
-        let entry = stake_by_version
+        let CliValidatorsStakeByVersion {
+            current_validators,
+            current_active_stake,
+            ..
+        } = stake_by_version
             .entry(validator.version.clone())
             .or_default();
-        entry.current_validators += 1;
-        entry.current_active_stake += validator.activated_stake;
+        *current_validators = current_validators.saturating_add(1);
+        *current_active_stake = current_active_stake.saturating_add(validator.activated_stake);
     }
     for validator in delinquent_validators.iter() {
-        let entry = stake_by_version
+        let CliValidatorsStakeByVersion {
+            delinquent_validators,
+            delinquent_active_stake,
+            ..
+        } = stake_by_version
             .entry(validator.version.clone())
             .or_default();
-        entry.delinquent_validators += 1;
-        entry.delinquent_active_stake += validator.activated_stake;
+        *delinquent_validators = delinquent_validators.saturating_add(1);
+        *delinquent_active_stake =
+            delinquent_active_stake.saturating_add(validator.activated_stake);
     }
 
     let validators: Vec<_> = current_validators
@@ -2076,13 +2108,13 @@ pub fn process_show_validators(
         .collect();
 
     let (average_skip_rate, average_stake_weighted_skip_rate) = {
-        let mut skip_rate_len = 0;
+        let mut skip_rate_len: u64 = 0;
         let mut skip_rate_sum = 0.;
         let mut skip_rate_weighted_sum = 0.;
         for validator in validators.iter() {
             if let Some(skip_rate) = validator.skip_rate {
                 skip_rate_sum += skip_rate;
-                skip_rate_len += 1;
+                skip_rate_len = skip_rate_len.saturating_add(1);
                 skip_rate_weighted_sum += skip_rate * validator.activated_stake as f64;
             }
         }
