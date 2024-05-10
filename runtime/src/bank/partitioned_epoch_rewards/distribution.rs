@@ -234,7 +234,9 @@ mod tests {
     use {
         super::*,
         crate::bank::{
-            partitioned_epoch_rewards::epoch_rewards_hasher::hash_rewards_into_partitions,
+            partitioned_epoch_rewards::{
+                epoch_rewards_hasher::hash_rewards_into_partitions, REWARD_CALCULATION_NUM_BLOCKS,
+            },
             tests::create_genesis_config,
         },
         rand::Rng,
@@ -271,7 +273,10 @@ mod tests {
 
         let stake_rewards = hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 2);
 
-        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards);
+        bank.set_epoch_reward_status_active(
+            bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,
+            stake_rewards,
+        );
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -294,7 +299,10 @@ mod tests {
             bank.epoch_schedule().slots_per_epoch as usize + 1,
         );
 
-        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards);
+        bank.set_epoch_reward_status_active(
+            bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,
+            stake_rewards,
+        );
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -304,7 +312,10 @@ mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
         let mut bank = Bank::new_for_tests(&genesis_config);
 
-        bank.set_epoch_reward_status_active(bank.block_height() + 1, vec![]);
+        bank.set_epoch_reward_status_active(
+            bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,
+            vec![],
+        );
 
         bank.distribute_partitioned_epoch_rewards();
     }
@@ -410,7 +421,10 @@ mod tests {
 
         let stake_rewards_bucket =
             hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 100);
-        bank.set_epoch_reward_status_active(bank.block_height() + 1, stake_rewards_bucket.clone());
+        bank.set_epoch_reward_status_active(
+            bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,
+            stake_rewards_bucket.clone(),
+        );
 
         // Test partitioned stores
         let mut total_rewards = 0;

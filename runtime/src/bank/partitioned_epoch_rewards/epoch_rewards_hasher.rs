@@ -27,7 +27,10 @@ pub(in crate::bank::partitioned_epoch_rewards) fn hash_rewards_into_partitions(
 mod tests {
     use {
         super::*,
-        crate::bank::{tests::create_genesis_config, Bank},
+        crate::bank::{
+            partitioned_epoch_rewards::REWARD_CALCULATION_NUM_BLOCKS, tests::create_genesis_config,
+            Bank,
+        },
         solana_accounts_db::stake_rewards::StakeReward,
         solana_sdk::{epoch_schedule::EpochSchedule, native_token::LAMPORTS_PER_SOL},
         std::collections::HashMap,
@@ -109,7 +112,10 @@ mod tests {
         let stake_rewards_bucket =
             hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
 
-        bank.set_epoch_reward_status_active(bank.block_height(), stake_rewards_bucket.clone());
+        bank.set_epoch_reward_status_active(
+            bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,
+            stake_rewards_bucket.clone(),
+        );
 
         // This call should panic, i.e. 15 is out of the num_credit_blocks
         let _range = &stake_rewards_bucket[15];
