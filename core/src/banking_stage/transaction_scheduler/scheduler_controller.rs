@@ -99,7 +99,7 @@ impl SchedulerController {
             // are different, since new BankingStage will not forward packets.
             // For `Forward` and `ForwardAndHold`, we want to receive packets but will not
             // forward them to the next leader. In this case, `ForwardAndHold` is
-            // indistiguishable from `Hold`.
+            // indistinguishable from `Hold`.
             //
             // `Forward` will drop packets from the buffer instead of forwarding.
             // During receiving, since packets would be dropped from buffer anyway, we can

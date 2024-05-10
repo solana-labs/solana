@@ -137,7 +137,7 @@ struct LeaderSlotPacketCountMetrics {
     committed_transactions_with_successful_result_count: u64,
 
     // total number of transactions that were not executed or failed commit, BUT were added back to the buffered
-    // queue becaus they were retryable errors
+    // queue because they were retryable errors
     retryable_errored_transaction_count: u64,
 
     // The size of the unprocessed buffer at the end of the slot
@@ -1164,7 +1164,7 @@ mod tests {
             mut leader_slot_metrics_tracker,
         } = setup_test_slot_boundary_banks();
         // Test case where the thread has a leader bank, and now detects there's a new leader bank
-        // for a samller slot, implying the slot has ended. Metrics should be reported for the
+        // for a smaller slot, implying the slot has ended. Metrics should be reported for the
         // bigger slot
         {
             // Setup with next_bank
