@@ -478,7 +478,6 @@ pub struct BankFieldsToDeserialize {
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
-    pub(crate) epoch_reward_status: EpochRewardStatus,
 }
 
 /// Bank's common fields shared by all supported snapshot versions for serialization.

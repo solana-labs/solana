@@ -4,10 +4,7 @@ use {
         utils::{serialize_iter_as_map, serialize_iter_as_seq},
         *,
     },
-    crate::{
-        bank::partitioned_epoch_rewards::EpochRewardStatus,
-        stakes::{serde_stakes_enum_compat, StakesEnum},
-    },
+    crate::stakes::{serde_stakes_enum_compat, StakesEnum},
     solana_accounts_db::{accounts_hash::AccountsHash, ancestors::AncestorsForSerialization},
     solana_measure::measure::Measure,
     solana_sdk::{deserialize_utils::ignore_eof_error, stake::state::Delegation},
@@ -99,7 +96,6 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
-            epoch_reward_status: EpochRewardStatus::Inactive,
         }
     }
 }
@@ -337,9 +333,6 @@ impl<'a> TypeContext<'a> for Context {
 
         let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
-
-        let epoch_reward_status = ignore_eof_error(deserialize_from(&mut stream))?;
-        bank_fields.epoch_reward_status = epoch_reward_status;
 
         Ok((bank_fields, accounts_db_fields))
     }
