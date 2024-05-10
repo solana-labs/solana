@@ -22,6 +22,7 @@
 pub mod elgamal_program;
 pub mod encryption;
 pub mod errors;
+pub mod pod;
 mod range_proof;
 mod sigma_proofs;
 mod transcript;

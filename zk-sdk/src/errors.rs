@@ -36,3 +36,11 @@ pub enum TranscriptError {
     #[error("point is the identity")]
     ValidationError,
 }
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum ParseError {
+    #[error("String is the wrong size")]
+    WrongSize,
+    #[error("Invalid Base64 string")]
+    Invalid,
+}
