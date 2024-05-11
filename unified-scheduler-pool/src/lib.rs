@@ -757,7 +757,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
                         // There's something special called dummy_unblocked_task_receiver here.
                         // This odd pattern was needed to react to newly unblocked tasks from
                         // _not-crossbeam-channel_ event sources, precisely at the specified
-                        // precedence among other selectors, while delegating the conrol flow to
+                        // precedence among other selectors, while delegating the control flow to
                         // select_biased!.
                         //
                         // In this way, hot looping is avoided and overall control flow is much
@@ -1237,8 +1237,8 @@ mod tests {
         scheduler.pause_for_recent_blockhash();
         // transaction_count should remain same as scheduler should be bailing out.
         // That's because we're testing the serialized failing execution case in this test.
-        // However, currently threaded impl can't properly abort in this situtation..
-        // so, 1 should be observed, intead of 0.
+        // However, currently threaded impl can't properly abort in this situation..
+        // so, 1 should be observed, instead of 0.
         // Also note that bank.transaction_count() is generally racy by nature, because
         // blockstore_processor and unified_scheduler both tend to process non-conflicting batches
         // in parallel as part of the normal operation.

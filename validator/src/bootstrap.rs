@@ -868,7 +868,7 @@ fn get_peer_snapshot_hashes(
         // being selected.  For example, if there are two peer snapshot hashes:
         // (A) full snapshot slot: 100, incremental snapshot slot: 160
         // (B) full snapshot slot: 150, incremental snapshot slot: None
-        // Then (A) has the highest overall snapshot slot.  But if we're not downlading and
+        // Then (A) has the highest overall snapshot slot.  But if we're not downloading and
         // incremental snapshot, (B) should be selected since it's full snapshot of 150 is highest.
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
