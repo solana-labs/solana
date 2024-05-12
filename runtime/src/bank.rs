@@ -1812,7 +1812,11 @@ impl Bank {
 
     /// computed unix_timestamp at this slot height
     pub fn unix_timestamp_from_genesis(&self) -> i64 {
-        self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
+        self.genesis_creation_time.saturating_add(
+            (self.slot as u128)
+                .saturating_mul(self.ns_per_slot)
+                .saturating_div(1_000_000_000) as i64,
+        )
     }
 
     fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F)
