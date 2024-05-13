@@ -3403,13 +3403,6 @@ mod tests {
         src_rewards.distributed_rewards = 10;
         src_rewards.active = true;
 
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(src_clock.clone());
-        sysvar_cache.set_epoch_schedule(src_epochschedule.clone());
-        sysvar_cache.set_fees(src_fees.clone());
-        sysvar_cache.set_rent(src_rent.clone());
-        sysvar_cache.set_epoch_rewards(src_rewards.clone());
-
         let transaction_accounts = vec![
             (
                 sysvar::clock::id(),
