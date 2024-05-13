@@ -77,6 +77,9 @@ fn bench_write_accounts_file(c: &mut Criterion) {
                     let res = hot_storage.write_accounts(&storable_accounts, 0).unwrap();
                     let accounts_written_count = res.offsets.len();
                     assert_eq!(accounts_written_count, accounts_count);
+                    // Purposely do not call hot_storage.flush() here, since it will impact the
+                    // bench.  Flushing will be handled by Drop, which is *not* timed (and that's
+                    // what we want).
                 },
                 BatchSize::SmallInput,
             );

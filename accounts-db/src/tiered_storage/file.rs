@@ -157,6 +157,19 @@ impl TieredWritableFile {
     }
 }
 
+impl Drop for TieredWritableFile {
+    fn drop(&mut self) {
+        // BufWriter flushes on Drop, but swallows any errors.
+        // Users should always flush explicitly, so errors can be handled.
+        // However, if flush wasn't called, do it here and panic on error.
+        // This is a programmer bug; it means we have forgotten to call flush somewhere.
+        let result = self.0.flush();
+        if let Err(err) = result {
+            panic!("failed to flush TieredWritableFile on drop: {err}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {

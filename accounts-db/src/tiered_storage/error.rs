@@ -31,4 +31,7 @@ pub enum TieredStorageError {
 
     #[error("OffsetAlignmentError: offset {0} must be multiple of {1}")]
     OffsetAlignmentError(usize, usize),
+
+    #[error("failed to flush hot storage writer: {0}")]
+    FlushHotWriter(#[source] std::io::Error),
 }

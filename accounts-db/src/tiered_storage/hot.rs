@@ -28,7 +28,7 @@ use {
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
         stake_history::Epoch,
     },
-    std::{option::Option, path::Path},
+    std::{io::Write, option::Option, path::Path},
 };
 
 pub const HOT_FORMAT: TieredStorageFormat = TieredStorageFormat {
@@ -806,6 +806,14 @@ impl HotStorageWriter {
             size: cursor,
         })
     }
+
+    /// Flushes any buffered data to the file
+    pub fn flush(&mut self) -> TieredStorageResult<()> {
+        self.storage
+            .0
+            .flush()
+            .map_err(TieredStorageError::FlushHotWriter)
+    }
 }
 
 #[cfg(test)]
@@ -1527,7 +1535,9 @@ mod tests {
         let path = temp_dir.path().join("test_write_account_and_index_blocks");
         let stored_accounts_info = {
             let mut writer = HotStorageWriter::new(&path).unwrap();
-            writer.write_accounts(&storable_accounts, 0).unwrap()
+            let stored_accounts_info = writer.write_accounts(&storable_accounts, 0).unwrap();
+            writer.flush().unwrap();
+            stored_accounts_info
         };
 
         let file = TieredReadableFile::new(&path).unwrap();

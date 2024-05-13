@@ -118,9 +118,11 @@ impl TieredStorage {
         }
 
         if format == &HOT_FORMAT {
-            let result = {
+            let stored_accounts_info = {
                 let mut writer = HotStorageWriter::new(&self.path)?;
-                writer.write_accounts(accounts, skip)
+                let stored_accounts_info = writer.write_accounts(accounts, skip)?;
+                writer.flush()?;
+                stored_accounts_info
             };
 
             // panic here if self.reader.get() is not None as self.reader can only be
@@ -131,7 +133,7 @@ impl TieredStorage {
                 .set(TieredStorageReader::new_from_path(&self.path)?)
                 .unwrap();
 
-            result
+            Ok(stored_accounts_info)
         } else {
             Err(TieredStorageError::UnknownFormat(self.path.to_path_buf()))
         }
