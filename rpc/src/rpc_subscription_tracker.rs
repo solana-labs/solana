@@ -575,6 +575,9 @@ impl Drop for SubscriptionTokenInner {
     }
 }
 
+// allowing dead code here to appease clippy, but unsure if/how the CounterToken is actually used.
+// further investigation would be necessary before removing
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct SubscriptionToken(Arc<SubscriptionTokenInner>, CounterToken);
 

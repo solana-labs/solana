@@ -170,7 +170,7 @@ impl Default for GraphVoteAccountMode {
     }
 }
 
-struct GraphVoteAccountModeError(String);
+struct GraphVoteAccountModeError;
 
 impl FromStr for GraphVoteAccountMode {
     type Err = GraphVoteAccountModeError;
@@ -179,7 +179,7 @@ impl FromStr for GraphVoteAccountMode {
             Self::DISABLED => Ok(Self::Disabled),
             Self::LAST_ONLY => Ok(Self::LastOnly),
             Self::WITH_HISTORY => Ok(Self::WithHistory),
-            _ => Err(GraphVoteAccountModeError(s.to_string())),
+            _ => Err(GraphVoteAccountModeError),
         }
     }
 }
