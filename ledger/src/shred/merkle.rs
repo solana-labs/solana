@@ -332,6 +332,39 @@ impl ShredData {
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
     }
+
+    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
+        let offset = self.retransmitter_signature_offset()?;
+        self.payload
+            .get(offset..offset + SIZE_OF_SIGNATURE)
+            .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
+            .map(Signature::from)
+            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
+    }
+
+    fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
+        let ShredVariant::MerkleData {
+            proof_size,
+            chained,
+            resigned,
+        } = self.common_header.shred_variant
+        else {
+            return Err(Error::InvalidShredVariant);
+        };
+        Self::get_retransmitter_signature_offset(proof_size, chained, resigned)
+    }
+
+    pub(super) fn get_retransmitter_signature_offset(
+        proof_size: u8,
+        chained: bool,
+        resigned: bool,
+    ) -> Result<usize, Error> {
+        if !resigned {
+            return Err(Error::InvalidShredVariant);
+        }
+        let proof_offset = Self::get_proof_offset(proof_size, chained, resigned)?;
+        Ok(proof_offset + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY)
+    }
 }
 
 impl ShredCode {
@@ -523,6 +556,39 @@ impl ShredCode {
         let proof = get_merkle_proof(shred, proof_offset, proof_size).ok()?;
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
+    }
+
+    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
+        let offset = self.retransmitter_signature_offset()?;
+        self.payload
+            .get(offset..offset + SIZE_OF_SIGNATURE)
+            .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
+            .map(Signature::from)
+            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
+    }
+
+    fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
+        let ShredVariant::MerkleCode {
+            proof_size,
+            chained,
+            resigned,
+        } = self.common_header.shred_variant
+        else {
+            return Err(Error::InvalidShredVariant);
+        };
+        Self::get_retransmitter_signature_offset(proof_size, chained, resigned)
+    }
+
+    pub(super) fn get_retransmitter_signature_offset(
+        proof_size: u8,
+        chained: bool,
+        resigned: bool,
+    ) -> Result<usize, Error> {
+        if !resigned {
+            return Err(Error::InvalidShredVariant);
+        }
+        let proof_offset = Self::get_proof_offset(proof_size, chained, resigned)?;
+        Ok(proof_offset + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY)
     }
 }
 

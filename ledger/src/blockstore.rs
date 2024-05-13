@@ -3828,18 +3828,25 @@ impl Blockstore {
             .expect("fetch from DuplicateSlots column family failed")
     }
 
-    // `new_shred` is assumed to have slot and index equal to the given slot and index.
-    // Returns the existing shred if `new_shred` is not equal to the existing shred at the
-    // given slot and index as this implies the leader generated two different shreds with
-    // the same slot and index
-    pub fn is_shred_duplicate(&self, new_shred: &Shred) -> Option<Vec<u8>> {
-        let (slot, index, shred_type) = new_shred.id().unpack();
-        let existing_shred = match shred_type {
-            ShredType::Data => self.get_data_shred(slot, index as u64),
-            ShredType::Code => self.get_coding_shred(slot, index as u64),
+    /// Returns the shred already stored in blockstore if it has a different
+    /// payload than the given `shred` but the same (slot, index, shred-type).
+    /// This implies the leader generated two different shreds with the same
+    /// slot, index and shred-type.
+    /// The payload is modified so that it has the same retransmitter's
+    /// signature as the `shred` argument.
+    pub fn is_shred_duplicate(&self, shred: &Shred) -> Option<Vec<u8>> {
+        let (slot, index, shred_type) = shred.id().unpack();
+        let mut other = match shred_type {
+            ShredType::Data => self.get_data_shred(slot, u64::from(index)),
+            ShredType::Code => self.get_coding_shred(slot, u64::from(index)),
         }
         .expect("fetch from DuplicateSlots column family failed")?;
-        (existing_shred != *new_shred.payload()).then_some(existing_shred)
+        if let Ok(signature) = shred.retransmitter_signature() {
+            if let Err(err) = shred::layout::set_retransmitter_signature(&mut other, &signature) {
+                error!("set retransmitter signature failed: {err:?}");
+            }
+        }
+        (&other != shred.payload()).then_some(other)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {

@@ -143,6 +143,13 @@ impl ShredData {
             Self::Merkle(_) => panic!("Not Implemented!"),
         }
     }
+
+    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
+        match self {
+            Self::Legacy(_) => Err(Error::InvalidShredVariant),
+            Self::Merkle(shred) => shred.retransmitter_signature(),
+        }
+    }
 }
 
 impl From<legacy::ShredData> for ShredData {

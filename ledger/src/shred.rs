@@ -355,6 +355,7 @@ impl Shred {
     dispatch!(pub(crate) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
     // Returns the shard index within the erasure coding set.
     dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
+    dispatch!(pub(crate) fn retransmitter_signature(&self) -> Result<Signature, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
     dispatch!(pub fn merkle_root(&self) -> Result<Hash, Error>);
@@ -749,6 +750,34 @@ pub mod layout {
         shred
             .get(offset..offset + SIZE_OF_MERKLE_ROOT)
             .map(Hash::new)
+    }
+
+    pub(crate) fn set_retransmitter_signature(
+        shred: &mut [u8],
+        signature: &Signature,
+    ) -> Result<(), Error> {
+        let offset = match get_shred_variant(shred)? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => Err(Error::InvalidShredVariant),
+            ShredVariant::MerkleCode {
+                proof_size,
+                chained,
+                resigned,
+            } => {
+                merkle::ShredCode::get_retransmitter_signature_offset(proof_size, chained, resigned)
+            }
+            ShredVariant::MerkleData {
+                proof_size,
+                chained,
+                resigned,
+            } => {
+                merkle::ShredData::get_retransmitter_signature_offset(proof_size, chained, resigned)
+            }
+        }?;
+        let Some(buffer) = shred.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
+        };
+        buffer.copy_from_slice(signature.as_ref());
+        Ok(())
     }
 
     // Minimally corrupts the packet so that the signature no longer verifies.

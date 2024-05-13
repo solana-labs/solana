@@ -106,6 +106,13 @@ impl ShredCode {
             }
         }
     }
+
+    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
+        match self {
+            Self::Legacy(_) => Err(Error::InvalidShredVariant),
+            Self::Merkle(shred) => shred.retransmitter_signature(),
+        }
+    }
 }
 
 impl From<legacy::ShredCode> for ShredCode {
